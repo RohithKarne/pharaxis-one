@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MIMS — Dashboard</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+  <!--
+    DASHBOARD PAGE
+    This is the main screen after login. It has:
+    - A sidebar with navigation links (will expand as we add modules)
+    - A top bar with the page title and user info
+    - A main content area with summary stats cards
+
+    LAYOUT PATTERN:
+    .app-wrapper (flex row)
+      ├── .sidebar (fixed width, left)
+      └── .main-content (flexible, right)
+            ├── .topbar (fixed height, top)
+            └── .page-content (scrollable area)
+  -->
+
+  <div class="app-wrapper">
+
+    <!-- ── SIDEBAR ── -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-title">MIMS</div>
+        <div class="logo-subtitle">Medical Info Management</div>
+      </div>
+
+      <nav class="sidebar-nav">
+
+        <div class="nav-section-label">Main</div>
+
+        <div class="nav-item active" onclick="navigateTo('dashboard', this)">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Dashboard</span>
+        </div>
+
+        <div class="nav-item" onclick="navigateTo('inbox', this)">
+          <span class="nav-icon">📥</span>
+          <span class="nav-label">Inbox</span>
+        </div>
+
+        <!-- Case Management — expandable with sub-items -->
+        <div class="nav-item" onclick="toggleSubNav('case-mgmt-sub', this)">
+          <span class="nav-icon">📁</span>
+          <span class="nav-label">Case Management</span>
+          <span class="expand-arrow">▾</span>
+        </div>
+        <div class="sub-nav" id="case-mgmt-sub">
+          <div class="sub-nav-item" onclick="navigateTo('unassigned-cases', this)">
+            📂 Unassigned Cases
+          </div>
+          <div class="sub-nav-item" onclick="navigateTo('my-cases', this)">
+            📂 My Cases
+          </div>
+          <div class="sub-nav-item" onclick="navigateTo('team-cases', this)">
+            📂 Team Cases
+          </div>
+        </div>
+
+        <div class="nav-item" onclick="navigateTo('case-query', this)">
+          <span class="nav-icon">🔍</span>
+          <span class="nav-label">Case Query</span>
+        </div>
+
+        <div class="nav-item" onclick="navigateTo('utilities', this)">
+          <span class="nav-icon">🔧</span>
+          <span class="nav-label">Utilities</span>
+        </div>
+
+        <div class="nav-item" onclick="navigateTo('transmissions', this)">
+          <span class="nav-icon">📤</span>
+          <span class="nav-label">Transmissions</span>
+        </div>
+
+        <div class="nav-item" onclick="navigateTo('browse-content', this)">
+          <span class="nav-icon">📚</span>
+          <span class="nav-label">Browse Content</span>
+        </div>
+
+        <div class="nav-item" onclick="navigateTo('analytics', this)">
+          <span class="nav-icon">📈</span>
+          <span class="nav-label">Analytics</span>
+        </div>
+
+        <div class="nav-section-label">Management</div>
+
+        <div class="nav-item" onclick="navigateTo('users', this)">
+          <span class="nav-icon">👥</span>
+          <span class="nav-label">User Management</span>
+        </div>
+
+        <div class="nav-section-label">System</div>
+
+        <div class="nav-item" onclick="navigateTo('admin', this)">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label">Admin Console</span>
+        </div>
+
+      </nav>
+
+      <!-- Sidebar Footer: Theme Switcher -->
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-label" style="font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--sidebar-text); opacity: 0.5;">
+          Theme
+        </div>
+        <div class="theme-switcher">
+          <button class="theme-btn active" id="theme-light-btn" onclick="setTheme('light')">
+            ☀️ <span class="theme-label">Light</span>
+          </button>
+          <button class="theme-btn" id="theme-dark-btn" onclick="setTheme('dark')">
+            🌙 <span class="theme-label">Dark</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── MAIN CONTENT ── -->
+    <div class="main-content">
+
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <!-- Sidebar toggle button -->
+          <button class="btn-sidebar-toggle" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+          <div class="topbar-title" id="page-title">Dashboard</div>
+        </div>
+
+        <!-- Right side: date + profile + sign out -->
+        <div class="topbar-actions">
+          <span class="text-muted text-small" id="current-date"></span>
+          <div class="topbar-divider"></div>
+          <div class="topbar-profile">
+            <div class="topbar-avatar" id="topbar-avatar">--</div>
+            <div class="topbar-user-info">
+              <div class="topbar-user-name" id="topbar-user-name">Loading...</div>
+              <div class="topbar-user-role" id="topbar-user-role">--</div>
+            </div>
+          </div>
+          <button class="btn-signout" onclick="logout()">Sign Out</button>
+        </div>
+      </header>
+
+      <!-- Page Content -->
+      <main class="page-content" id="page-content">
+
+        <!-- Welcome Banner -->
+        <div class="card mb-16" style="margin-bottom: 20px; background: linear-gradient(135deg, #1a5276, #2471a3); color: white; border: none;">
+          <div class="card-body" style="padding: 24px;">
+            <div style="font-size: 20px; font-weight: 700;" id="welcome-msg">Welcome back!</div>
+            <div style="opacity: 0.8; margin-top: 4px; font-size: 13px;">
+              Here's your MIMS overview for today.
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Inquiries</div>
+            <div class="stat-value">0</div>
+            <div class="stat-sub">All time</div>
+          </div>
+          <div class="stat-card accent">
+            <div class="stat-label">Open Cases</div>
+            <div class="stat-value">0</div>
+            <div class="stat-sub">Needs attention</div>
+          </div>
+          <div class="stat-card warning">
+            <div class="stat-label">Pending Review</div>
+            <div class="stat-value">0</div>
+            <div class="stat-sub">Awaiting reviewer</div>
+          </div>
+          <div class="stat-card success">
+            <div class="stat-label">Closed Today</div>
+            <div class="stat-value">0</div>
+            <div class="stat-sub">Completed</div>
+          </div>
+        </div>
+
+        <!-- Two-column section: Recent Inquiries + Quick Actions -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px;">
+
+          <!-- Recent Inquiries -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Recent Inquiries</h3>
+              <button class="btn btn-outline" style="font-size: 12px; padding: 4px 12px;">View All</button>
+            </div>
+            <div class="card-body">
+              <div style="text-align: center; color: var(--text-muted); padding: 32px 0;">
+                <div style="font-size: 32px; margin-bottom: 8px;">📋</div>
+                <div style="font-size: 13px;">No inquiries yet.</div>
+                <div style="font-size: 12px; margin-top: 4px;">Inquiries from email, phone, and the CP portal will appear here.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Quick Actions</h3>
+            </div>
+            <div class="card-body" style="display: flex; flex-direction: column; gap: 10px;">
+              <button class="btn btn-primary" onclick="navigateTo('inquiries')">
+                + New Inquiry
+              </button>
+              <button class="btn btn-outline" onclick="navigateTo('cases')">
+                📁 Case Queue
+              </button>
+              <button class="btn btn-outline" onclick="navigateTo('users')">
+                👥 Manage Users
+              </button>
+              <button class="btn btn-outline" onclick="navigateTo('content')">
+                📚 Content Library
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Coming Soon notice -->
+        <div class="card mt-16" style="margin-top: 16px;">
+          <div class="card-body" style="text-align: center; padding: 24px; color: var(--text-muted);">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">
+              🚧 Modules Under Development
+            </div>
+            <div style="font-size: 12px;">
+              Inquiry Intake → Case Queue → Response Module → Content Management → Admin Console
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="../js/dashboard.js"></script>
+</body>
+</html>
