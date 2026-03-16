@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import UserTypeGate from './UserTypeGate'
+import ConsentBanner from './ConsentBanner'
 
 export default function PortalLayout({ children }) {
   const { portalConfig, user, logout, isFeatureEnabled, clientCode, showGate } = usePortal()
+  const has_active_safety_alert = portalConfig?.has_active_safety_alert
   const [mobileOpen, setMobileOpen] = useState(false)
   const navigate   = useNavigate()
   const location   = useLocation()
@@ -17,6 +19,9 @@ export default function PortalLayout({ children }) {
     { label: 'Resources',         path: 'resources',         feature: 'resources' },
     { label: 'Drug Information',  path: 'drug-info',         feature: 'drug_information' },
     { label: 'Find an MSL',       path: 'find-msl',          feature: 'find_msl' },
+    { label: 'Safety',            path: 'safety',            feature: null },
+    { label: 'News',              path: 'news',              feature: 'news_announcements' },
+    { label: 'Documents',         path: 'documents',         feature: 'document_library' },
     { label: 'Contact Us',        path: 'contact',           feature: null },
   ].filter(n => !n.feature || isFeatureEnabled(n.feature))
 
@@ -32,6 +37,12 @@ export default function PortalLayout({ children }) {
 
   return (
     <div className="pp-root">
+      {has_active_safety_alert && (
+        <div className="pp-safety-banner" role="alert">
+          <span>⚠ Important Safety Information — </span>
+          <Link to={`${base}/safety`} className="pp-safety-banner-link">View Safety Alerts</Link>
+        </div>
+      )}
       <header className="pp-header">
         <div className="pp-header-inner">
           <Link to={base} className="pp-logo">
@@ -69,7 +80,7 @@ export default function PortalLayout({ children }) {
             ) : (
               <Link to={`${base}/login`} className="pp-btn pp-btn-outline">Sign In</Link>
             )}
-            <button className="pp-mobile-menu-btn" onClick={() => setMobileOpen(!mobileOpen)}>☰</button>
+            <button className="pp-mobile-menu-btn" aria-label="Toggle navigation menu" onClick={() => setMobileOpen(!mobileOpen)}>☰</button>
           </div>
         </div>
       </header>
@@ -99,6 +110,7 @@ export default function PortalLayout({ children }) {
 
       {isFeatureEnabled('chatbox') && <ChatboxWidget clientCode={clientCode} />}
       {showGate && <UserTypeGate />}
+      <ConsentBanner />
     </div>
   )
 }
@@ -143,7 +155,7 @@ function ChatboxWidget({ clientCode }) {
         <div className="pp-chat-window">
           <div className="pp-chat-header">
             <span>AI Medical Assistant</span>
-            <button onClick={() => setOpen(false)}>✕</button>
+            <button onClick={() => setOpen(false)} aria-label="Close chat">✕</button>
           </div>
           <div className="pp-chat-body">
             {messages.map((m, i) => (
@@ -159,7 +171,7 @@ function ChatboxWidget({ clientCode }) {
           </form>
         </div>
       ) : (
-        <button className="pp-chat-fab" onClick={openChat} title="AI Medical Assistant">
+        <button className="pp-chat-fab" onClick={openChat} title="AI Medical Assistant" aria-label="Open AI Medical Assistant">
           <span>💬</span>
         </button>
       )}
