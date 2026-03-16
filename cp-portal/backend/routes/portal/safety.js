@@ -77,7 +77,7 @@ router.get('/:alertId/attachment', requirePortalAuth, (req, res) => {
   const filePath = path.join(__dirname, '../../', alert.attachment_path);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });
 
-  res.setHeader('Content-Disposition', `attachment; filename="${alert.attachment_name}"`);
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(alert.attachment_name)}`);
   res.setHeader('Content-Type', 'application/pdf');
   fs.createReadStream(filePath).pipe(res);
 });
