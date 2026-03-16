@@ -37,8 +37,9 @@ router.get('/', requirePortalAuth, (req, res) => {
 
   const total = filtered.length;
   const paged = filtered.slice(offset, offset + limit);
+  const allCategories = [...new Set(filtered.map(p => p.category).filter(Boolean))];
 
-  res.json({ posts: paged, total, page, limit });
+  res.json({ posts: paged, total, page, limit, allCategories });
 });
 
 // GET /api/portal/news/:postId?clientCode=xxx — single post + increment view_count

@@ -4,7 +4,11 @@ import { usePortal } from '../context/PortalContext'
 
 function stripHtml(html) {
   if (!html) return ''
-  return html.replace(/<[^>]+>/g, '')
+  return html
+    .replace(/<\/(p|div|li|h[1-6])[^>]*>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ').trim()
 }
 
 export default function NewsPage() {
@@ -16,6 +20,7 @@ export default function NewsPage() {
   const [error, setError]         = useState('')
   const [page, setPage]           = useState(1)
   const [activeCategory, setActiveCategory] = useState('All')
+  const [allCategories, setAllCategories]   = useState([])
 
   const limit = 10
 
@@ -30,6 +35,7 @@ export default function NewsPage() {
         const d = await res.json()
         setPosts(d.posts || [])
         setTotal(d.total || 0)
+        if (page === 1) setAllCategories(d.allCategories || [])
       } catch {
         setError('Unable to load news.')
       }
@@ -38,7 +44,7 @@ export default function NewsPage() {
     if (clientCode) load()
   }, [clientCode, page])
 
-  const categories = ['All', ...Array.from(new Set(posts.map(p => p.category).filter(Boolean)))]
+  const categories = ['All', ...allCategories]
 
   const filtered = activeCategory === 'All'
     ? posts
