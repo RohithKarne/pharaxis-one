@@ -23,12 +23,23 @@ export default function ConsentBanner() {
   const [step, setStep]     = useState('banner') // 'banner' | 'preferences'
   const [choices, setChoices] = useState(DEFAULT_CHOICES)
   const [saving, setSaving] = useState(false)
-
   useEffect(() => {
     if (!compliance) return
     const stored = localStorage.getItem(`cp_consent_v${version}`)
     if (!stored) setShow(true)
   }, [compliance, version])
+
+  // A-02: hide background content from screen readers when overlay is open
+  useEffect(() => {
+    const appRoot = document.getElementById('root')
+    if (!appRoot) return
+    if (show) {
+      appRoot.setAttribute('aria-hidden', 'true')
+    } else {
+      appRoot.removeAttribute('aria-hidden')
+    }
+    return () => appRoot.removeAttribute('aria-hidden')
+  }, [show])
 
   async function saveConsent(finalChoices) {
     setSaving(true)
