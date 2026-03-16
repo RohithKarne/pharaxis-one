@@ -14,7 +14,7 @@ jobs:
       run:
         working-directory: cp-portal/backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -40,7 +40,7 @@ jobs:
       run:
         working-directory: cp-portal/frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
