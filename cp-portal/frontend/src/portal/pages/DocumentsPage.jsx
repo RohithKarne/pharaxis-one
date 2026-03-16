@@ -60,8 +60,13 @@ export default function DocumentsPage() {
 
   function handleDownload(doc) {
     const token = localStorage.getItem('cp_portal_token')
-    const url = `/api/portal/documents/${doc.id}/download?clientCode=${clientCode}`
-    window.open(url, '_blank')
+    const url = `/api/portal/documents/${doc.id}/download?clientCode=${clientCode}${token ? `&token=${token}` : ''}`
+    const a = document.createElement('a')
+    a.href = url
+    a.download = doc.file_name || doc.title
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   if (loading) return <div className="pp-docs-page"><div className="pp-loading">Loading…</div></div>

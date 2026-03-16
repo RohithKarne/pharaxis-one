@@ -34,7 +34,9 @@ router.get('/', requirePortalAuth, (req, res) => {
     return visibleTo.length === 0 || visibleTo.includes(userType);
   });
 
-  const categories = db.prepare('SELECT * FROM cp_document_categories WHERE client_id = ? ORDER BY sort_order ASC').all(client.id);
+  const visibleCategoryNames = new Set(filtered.map(d => d.category).filter(Boolean));
+  const allCategories = db.prepare('SELECT * FROM cp_document_categories WHERE client_id = ? ORDER BY sort_order ASC').all(client.id);
+  const categories = allCategories.filter(c => visibleCategoryNames.has(c.name));
 
   res.json({ documents: filtered, categories });
 });
