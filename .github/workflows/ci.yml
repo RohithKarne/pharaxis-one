@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend — Install & Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cp-portal/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cp-portal/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify server starts
+        run: timeout 5 node server.js || true
+        env:
+          CP_PORT: 4001
+          CP_ADMIN_JWT_SECRET: ci-secret-admin
+          CP_PORTAL_SECRET: ci-secret-portal
+
+  frontend:
+    name: Frontend — Install & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cp-portal/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cp-portal/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build

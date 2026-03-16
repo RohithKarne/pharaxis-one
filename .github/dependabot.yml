@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # Backend — Node/Express
+  - package-ecosystem: "npm"
+    directory: "/cp-portal/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+
+  # Frontend — React/Vite
+  - package-ecosystem: "npm"
+    directory: "/cp-portal/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "ci"
