@@ -42,12 +42,27 @@ router.get('/:clientCode', (req, res) => {
     };
   }
 
+  // F-13: Safety banner flag — true if any critical/high alert is active
+  const activeSafetyAlert = db.prepare(`
+    SELECT COUNT(*) as cnt FROM cp_safety_alerts
+    WHERE client_id = ? AND status = 'active' AND severity IN ('critical','high')
+  `).get(client.id);
+  const has_active_safety_alert = (activeSafetyAlert?.cnt || 0) > 0;
+
+  // F-02: Compliance config — jurisdictions + version (no banner body exposed here)
+  const complianceRow = db.prepare('SELECT jurisdictions_json, version, require_reconsent FROM cp_compliance_config WHERE client_id = ?').get(client.id);
+  const compliance = complianceRow && JSON.parse(complianceRow.jurisdictions_json || '[]').length > 0
+    ? { jurisdictions: JSON.parse(complianceRow.jurisdictions_json), version: complianceRow.version, require_reconsent: !!complianceRow.require_reconsent }
+    : null;
+
   res.json({
     client:   { id: client.id, name: client.name, code: client.code },
     branding: branding || {},
     features: enabledFeatures,
     chatbox,
     gate,
+    has_active_safety_alert,
+    compliance,
   });
 });
 
