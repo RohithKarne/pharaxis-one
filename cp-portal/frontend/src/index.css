@@ -585,6 +585,7 @@ body { background: var(--cp-bg); }
 .pp-nav-link:hover, .pp-nav-link-active { background: rgba(255,255,255,0.15); color: #fff; }
 .pp-header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .pp-mobile-menu-btn { display: none; background: none; border: none; color: var(--pp-header-text); font-size: 22px; cursor: pointer; padding: 4px; }
+.pp-mobile-menu-btn:focus-visible { outline: 2px solid var(--pp-header-text, #fff); outline-offset: 2px; -webkit-focus-ring-color: var(--pp-header-text, #fff); }
 
 /* ── Buttons ──────────────────────────────────────────────── */
 .pp-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: var(--pp-radius); font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s, box-shadow 0.15s; white-space: nowrap; text-decoration: none; }
@@ -993,7 +994,7 @@ textarea:focus-visible {
 .badge-critical      { background: #FEE2E2; color: #DC2626; }
 .badge-high          { background: #FEF3C7; color: #D97706; }
 .badge-medium        { background: #DBEAFE; color: #2563EB; }
-.badge-informational { background: #F3F4F6; color: #6B7280; }
+.badge-informational { background: #F3F4F6; color: #595959; }
 
 /* ── F-05: News Cards ──────────────────────────────────────────── */
 
