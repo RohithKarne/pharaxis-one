@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MIMS — Login</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!--
+    LOGIN PAGE
+    This is the entry point of the MIMS application.
+    It has two tabs: Login (returning users) and Register (first-time setup).
+
+    HOW IT WORKS:
+    1. User fills in the form and clicks the button
+    2. app.js captures the form data
+    3. app.js sends it to the backend API (POST /api/auth/login or /api/auth/register)
+    4. If successful: saves the JWT token and redirects to dashboard.html
+    5. If failed: shows an error message below the form
+  -->
+
+  <div class="login-page">
+    <div class="login-card">
+
+      <!-- Card Header: Branding -->
+      <div class="login-card-header">
+        <div class="app-name">MIMS</div>
+        <div class="app-tagline">Medical Information Management System</div>
+      </div>
+
+      <!-- Card Body: Login / Register Tabs -->
+      <div class="login-card-body">
+
+        <!-- Tab Switcher -->
+        <div class="tab-group">
+          <button class="tab-btn active" id="tab-login" onclick="switchTab('login')">Sign In</button>
+          <button class="tab-btn" id="tab-register" onclick="switchTab('register')">Register</button>
+        </div>
+
+        <!-- Error / Success Alert Banner -->
+        <div class="alert alert-error" id="alert-box"></div>
+
+        <!-- ── LOGIN FORM ── -->
+        <form id="login-form">
+          <div class="form-group">
+            <label for="login-email">Email Address</label>
+            <input
+              type="email"
+              id="login-email"
+              class="form-control"
+              placeholder="you@company.com"
+              required
+              autocomplete="email"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input
+              type="password"
+              id="login-password"
+              class="form-control"
+              placeholder="Enter your password"
+              required
+              autocomplete="current-password"
+            />
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block mt-8" id="login-btn">
+            Sign In
+          </button>
+        </form>
+
+        <!-- ── REGISTER FORM (hidden by default) ── -->
+        <form id="register-form" class="hidden">
+          <div class="form-group">
+            <label for="reg-name">Full Name</label>
+            <input
+              type="text"
+              id="reg-name"
+              class="form-control"
+              placeholder="Dr. Jane Smith"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="reg-email">Email Address</label>
+            <input
+              type="email"
+              id="reg-email"
+              class="form-control"
+              placeholder="you@company.com"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="reg-password">Password <span class="text-muted">(min 8 characters)</span></label>
+            <input
+              type="password"
+              id="reg-password"
+              class="form-control"
+              placeholder="Create a secure password"
+              required
+              minlength="8"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="reg-role">Role</label>
+            <select id="reg-role" class="form-control">
+              <option value="agent">Agent</option>
+              <option value="reviewer">Reviewer</option>
+              <option value="content_manager">Content Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-accent btn-block mt-8" id="register-btn">
+            Create Account
+          </button>
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
