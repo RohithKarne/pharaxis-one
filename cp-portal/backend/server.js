@@ -36,6 +36,7 @@ app.use('/api/admin/integration', require('./routes/admin/integration'));
 app.use('/api/admin/users',       require('./routes/admin/portalUsers'));
 app.use('/api/admin/templates',   require('./routes/admin/templates'));
 app.use('/api/admin/chatbox',     require('./routes/admin/chatbox'));
+app.use('/api/admin/gate',        require('./routes/admin/gate'));
 
 // ── Public Portal Routes ──────────────────────────────────────
 app.use('/api/portal/config',     require('./routes/portal/config'));

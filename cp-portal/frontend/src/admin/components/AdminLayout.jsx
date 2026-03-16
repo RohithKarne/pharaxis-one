@@ -16,6 +16,7 @@ const CLIENT_NAV = (id) => [
   { to: `/admin/clients/${id}/integration`, label: 'Integration', icon: '🔗' },
   { to: `/admin/clients/${id}/users`,       label: 'Portal Users', icon: '👥' },
   { to: `/admin/clients/${id}/chatbox`,     label: 'Chatbox AI',  icon: '🤖' },
+  { to: `/admin/clients/${id}/gate`,        label: 'User Gate',   icon: '🚪' },
 ]
 
 export default function AdminLayout({ children, title }) {

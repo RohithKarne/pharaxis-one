@@ -11,6 +11,17 @@ export function PortalProvider({ children }) {
   const [user, setUser]                 = useState(() => {
     try { return JSON.parse(localStorage.getItem('cp_portal_user') || 'null') } catch { return null }
   })
+  const [showGate, setShowGate]         = useState(false)
+
+  // Show gate when: gate is enabled, user is logged in, user hasn't confirmed type yet
+  useEffect(() => {
+    if (!portalConfig?.gate) { setShowGate(false); return }
+    if (user && user.user_type_confirmed === 0) {
+      setShowGate(true)
+    } else {
+      setShowGate(false)
+    }
+  }, [portalConfig, user])
 
   useEffect(() => {
     if (!clientCode) return
@@ -57,13 +68,22 @@ export function PortalProvider({ children }) {
 
   function isFeatureEnabled(key) {
     if (!portalConfig?.features) return false
-    return portalConfig.features.some(f => f.feature_key === key && f.is_enabled)
+    const featureOn = portalConfig.features.some(f => f.feature_key === key && f.is_enabled)
+    if (!featureOn) return false
+    // If gate is active and user has confirmed their type, check access matrix
+    if (portalConfig.gate && user?.user_type_confirmed && user.user_type) {
+      const accessMap = portalConfig.gate.accessMap
+      if (accessMap?.[key]?.[user.user_type] === false) return false
+    }
+    return true
   }
 
   function login(userData, token) {
     localStorage.setItem('cp_portal_token', token)
     localStorage.setItem('cp_portal_user', JSON.stringify(userData))
     setUser(userData)
+    // Hide gate immediately after confirm-type saves (user_type_confirmed becomes 1)
+    if (userData.user_type_confirmed) setShowGate(false)
   }
 
   function logout() {
@@ -73,7 +93,7 @@ export function PortalProvider({ children }) {
   }
 
   return (
-    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, portalHeaders, isFeatureEnabled, clientCode }}>
+    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, portalHeaders, isFeatureEnabled, clientCode, showGate }}>
       {children}
     </PortalContext.Provider>
   )

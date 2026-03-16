@@ -40,6 +40,12 @@ export default function FormsPage() {
     loadFields()
   }
 
+  async function saveFieldInline(fieldId, field, value) {
+    await fetch(`/api/admin/forms/${clientId}/${fieldId}`, {
+      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ [field]: value }),
+    })
+  }
+
   async function handleAdd(e) {
     e.preventDefault(); setSaving(true)
     const options = optionsInput.split('\n').map(s => s.trim()).filter(Boolean)
@@ -120,13 +126,27 @@ export default function FormsPage() {
 
       {loading ? <div className="cp-loading">Loading…</div> : (
         <table className="cp-table">
-          <thead><tr><th>Order</th><th>Key</th><th>Label</th><th>Type</th><th>Required</th><th>Active</th></tr></thead>
+          <thead><tr><th>Order</th><th>Key</th><th>Label</th><th>Placeholder</th><th>Type</th><th>Required</th><th>Active</th></tr></thead>
           <tbody>
             {fields.map(f => (
-              <tr key={f.id} className={!f.is_active ? 'row-inactive' : ''}>
+              <tr key={`${f.id}-${f.field_label}-${f.placeholder || ''}`} className={!f.is_active ? 'row-inactive' : ''}>
                 <td>{f.display_order}</td>
                 <td><code>{f.field_key}</code></td>
-                <td>{f.field_label}</td>
+                <td>
+                  <input
+                    className="cp-inline-edit"
+                    defaultValue={f.field_label}
+                    onBlur={e => { if (e.target.value !== f.field_label) saveFieldInline(f.id, 'field_label', e.target.value) }}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="cp-inline-edit cp-inline-edit-muted"
+                    defaultValue={f.placeholder || ''}
+                    placeholder="—"
+                    onBlur={e => { if (e.target.value !== (f.placeholder || '')) saveFieldInline(f.id, 'placeholder', e.target.value) }}
+                  />
+                </td>
                 <td><span className="cp-type-badge">{f.field_type}</span></td>
                 <td>
                   <label className="cp-toggle-switch cp-toggle-sm">

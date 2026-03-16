@@ -181,6 +181,15 @@ export default function BrandingPage() {
           </div>
         </div>
 
+        <div className="cp-card">
+          <div className="cp-card-title">Submission Confirmation</div>
+          <div className="cp-field">
+            <label>SLA Response Time Text</label>
+            <input value={branding.sla_response_text || ''} onChange={e => set('sla_response_text', e.target.value)} placeholder="Our team will review your submission and respond within 5–7 business days." />
+          </div>
+          <small className="cp-help-text">Shown on the submission success screen. Leave blank for the default message.</small>
+        </div>
+
         {error && <div className="cp-error">{error}</div>}
         {saved && <div className="cp-success">✓ Branding saved.</div>}
 

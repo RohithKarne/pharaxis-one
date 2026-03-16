@@ -27,6 +27,7 @@ router.patch('/:clientId', authenticateAdmin, (req, res) => {
     'button_bg', 'button_text', 'link_color', 'border_color',
     'font_family', 'heading_font', 'base_font_size', 'border_radius',
     'header_style', 'footer_text_content', 'copyright_text', 'show_powered_by',
+    'sla_response_text',
   ];
 
   const updates = [], params = [];

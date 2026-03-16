@@ -1,6 +1,6 @@
 /**
  * Portal Auth — /api/portal/auth
- * Registration and login for portal-facing users
+ * Registration, login, profile, and gate confirmation for portal users
  */
 
 const express = require('express');
@@ -9,6 +9,22 @@ const jwt     = require('jsonwebtoken');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { requirePortalAuth, authenticatePortal, PORTAL_SECRET } = require('../../middleware/auth');
+
+const DEFAULT_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other'];
+
+function getValidTypes(clientId) {
+  const gateTypes = db.prepare('SELECT type_key FROM cp_gate_user_types WHERE client_id = ? AND is_enabled = 1').all(clientId);
+  const keys = gateTypes.map(r => r.type_key);
+  return keys.length > 0 ? [...new Set([...DEFAULT_TYPES, ...keys])] : DEFAULT_TYPES;
+}
+
+function makeToken(user, clientId) {
+  return jwt.sign(
+    { userId: user.id, clientId, email: user.email, name: `${user.first_name} ${user.last_name}`, user_type: user.user_type },
+    PORTAL_SECRET,
+    { expiresIn: '24h' }
+  );
+}
 
 // POST /api/portal/auth/register
 router.post('/register', (req, res) => {
@@ -28,12 +44,8 @@ router.post('/register', (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(client.id, first_name, last_name, email, hash, user_type || 'other', specialty || null, country || null, phone || null);
 
-  const token = jwt.sign(
-    { userId: info.lastInsertRowid, clientId: client.id, email, name: `${first_name} ${last_name}`, user_type: user_type || 'other' },
-    PORTAL_SECRET,
-    { expiresIn: '24h' }
-  );
-  res.status(201).json({ token, user: { id: info.lastInsertRowid, first_name, last_name, email, user_type: user_type || 'other' } });
+  const newUser = { id: info.lastInsertRowid, first_name, last_name, email, user_type: user_type || 'other', user_type_confirmed: 0 };
+  res.status(201).json({ token: makeToken(newUser, client.id), user: newUser });
 });
 
 // POST /api/portal/auth/login
@@ -49,19 +61,47 @@ router.post('/login', (req, res) => {
 
   db.prepare(`UPDATE cp_portal_users SET last_login_at = datetime('now') WHERE id = ?`).run(user.id);
 
-  const token = jwt.sign(
-    { userId: user.id, clientId: client.id, email, name: `${user.first_name} ${user.last_name}`, user_type: user.user_type },
-    PORTAL_SECRET,
-    { expiresIn: '24h' }
-  );
-  res.json({ token, user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email, user_type: user.user_type } });
+  const safe = { id: user.id, first_name: user.first_name, last_name: user.last_name, email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed };
+  res.json({ token: makeToken(user, client.id), user: safe });
 });
 
-// GET /api/portal/auth/me — get current user's submission history
+// GET /api/portal/auth/me — current user profile + submission history
 router.get('/me', authenticatePortal, requirePortalAuth, (req, res) => {
-  const user = db.prepare('SELECT id, first_name, last_name, email, user_type, specialty, country, created_at FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId);
+  const user = db.prepare('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, specialty, country, created_at FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId);
   const submissions = db.prepare('SELECT id, submission_type, status, external_ref, submitted_at FROM cp_submissions WHERE user_id = ? ORDER BY submitted_at DESC').all(req.portalUser.userId);
   res.json({ user, submissions });
+});
+
+// PATCH /api/portal/auth/confirm-type — one-time gate confirmation (sets user_type_confirmed = 1)
+router.patch('/confirm-type', authenticatePortal, requirePortalAuth, (req, res) => {
+  const { user_type } = req.body;
+  if (!user_type || !getValidTypes(req.portalUser.clientId).includes(user_type)) return res.status(400).json({ error: 'Invalid user_type.' });
+
+  db.prepare(`UPDATE cp_portal_users SET user_type = ?, user_type_confirmed = 1 WHERE id = ?`).run(user_type, req.portalUser.userId);
+
+  const updated = db.prepare('SELECT id, first_name, last_name, email, user_type, user_type_confirmed FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId);
+  res.json({ message: 'Type confirmed.', token: makeToken(updated, req.portalUser.clientId), user: updated });
+});
+
+// PATCH /api/portal/auth/profile — user updates their own profile (including changing user_type)
+router.patch('/profile', authenticatePortal, requirePortalAuth, (req, res) => {
+  const { first_name, last_name, country, specialty, user_type } = req.body;
+  const updates = [], params = [];
+  if (first_name !== undefined) { updates.push('first_name = ?'); params.push(first_name); }
+  if (last_name  !== undefined) { updates.push('last_name = ?');  params.push(last_name); }
+  if (country    !== undefined) { updates.push('country = ?');    params.push(country); }
+  if (specialty  !== undefined) { updates.push('specialty = ?');  params.push(specialty); }
+  if (user_type  !== undefined && getValidTypes(req.portalUser.clientId).includes(user_type)) {
+    updates.push('user_type = ?');
+    updates.push('user_type_confirmed = 1');
+    params.push(user_type);
+  }
+  if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+  params.push(req.portalUser.userId);
+  db.prepare(`UPDATE cp_portal_users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+  const updated = db.prepare('SELECT id, first_name, last_name, email, user_type, user_type_confirmed FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId);
+  res.json({ message: 'Profile updated.', token: makeToken(updated, req.portalUser.clientId), user: updated });
 });
 
 module.exports = router;

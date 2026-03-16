@@ -123,6 +123,26 @@ router.post('/', authenticateAdmin, (req, res) => {
   // Seed empty chatbox config
   db.prepare(`INSERT INTO cp_chatbox_config (client_id) VALUES (?)`).run(clientId);
 
+  // Seed gate config (off by default)
+  db.prepare(`INSERT INTO cp_gate_config (client_id) VALUES (?)`).run(clientId);
+
+  // Seed default gate user types
+  const DEFAULT_GATE_TYPES = [
+    { key: 'hcp',       label: 'Healthcare Professional (HCP)', desc: 'Licensed physician, nurse, pharmacist, or other credentialed healthcare provider.', icon: '🩺', order: 1 },
+    { key: 'physician', label: 'Physician / Specialist',        desc: 'Medical doctor or specialist with prescribing authority.',                          icon: '👨‍⚕️', order: 2 },
+    { key: 'patient',   label: 'Patient / Caregiver',           desc: 'Patient, family member, or caregiver seeking product or disease information.',       icon: '🙋', order: 3 },
+    { key: 'non_hcp',   label: 'Non-HCP Professional',          desc: 'Healthcare-adjacent professional such as administrator, researcher, or student.',     icon: '💼', order: 4 },
+    { key: 'other',     label: 'Other',                         desc: 'General member of the public or other interested party.',                            icon: '👤', order: 5 },
+  ];
+  const insGateType = db.prepare(`INSERT INTO cp_gate_user_types (client_id, type_key, label, description, icon, display_order) VALUES (?,?,?,?,?,?)`);
+  for (const t of DEFAULT_GATE_TYPES) insGateType.run(clientId, t.key, t.label, t.desc, t.icon, t.order);
+
+  // Seed feature access — all features allowed for all user types by default
+  const insAccess = db.prepare(`INSERT OR IGNORE INTO cp_feature_access (client_id, feature_key, type_key, is_allowed) VALUES (?,?,?,1)`);
+  for (const f of DEFAULT_FEATURES) {
+    for (const t of DEFAULT_GATE_TYPES) insAccess.run(clientId, f.key, t.key);
+  }
+
   audit(req.admin, 'CREATE', 'client', clientId, { name, code });
   res.status(201).json({ id: clientId, message: 'Client created with default configuration.' });
 });

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 
 const FORM_TYPES = [
@@ -9,7 +10,8 @@ const FORM_TYPES = [
 ]
 
 export default function SubmitPage() {
-  const { clientCode, portalHeaders, isFeatureEnabled } = usePortal()
+  const { clientCode, portalHeaders, isFeatureEnabled, portalConfig } = usePortal()
+  const slaText = portalConfig?.branding?.sla_response_text || 'Our medical affairs team will review your submission and respond within 5–7 business days.'
   const [selectedType, setSelectedType] = useState(null)
   const [formFields, setFormFields]     = useState([])
   const [formValues, setFormValues]     = useState({})
@@ -61,9 +63,10 @@ export default function SubmitPage() {
           <div className="pp-success-icon">✓</div>
           <h2>Submission Received</h2>
           <p>Your reference number is <strong>{submitted.reference}</strong></p>
-          <p className="pp-success-sub">Our medical affairs team will review your submission and respond within 5–7 business days.</p>
+          <p className="pp-success-sub">{slaText}</p>
           <div className="pp-success-actions">
             <button className="pp-btn pp-btn-outline" onClick={() => { setSubmitted(null); setSelectedType(null) }}>Submit Another</button>
+            <Link to={`/portal/${clientCode}`} className="pp-btn pp-btn-primary">Back to Home</Link>
           </div>
         </div>
       </div>

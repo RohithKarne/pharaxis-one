@@ -14,6 +14,7 @@ import MSLPage              from './admin/pages/MSLPage'
 import IntegrationPage      from './admin/pages/IntegrationPage'
 import PortalUsersPage      from './admin/pages/PortalUsersPage'
 import ChatboxConfigPage    from './admin/pages/ChatboxConfigPage'
+import GatePage             from './admin/pages/GatePage'
 
 // Portal pages
 import { PortalProvider }       from './portal/context/PortalContext'
@@ -74,6 +75,7 @@ export default function App() {
         <Route path="/admin/clients/:clientId/integration" element={<AdminGuard><IntegrationPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/users" element={<AdminGuard><PortalUsersPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/chatbox" element={<AdminGuard><ChatboxConfigPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/gate" element={<AdminGuard><GatePage /></AdminGuard>} />
 
         {/* Public Portal — multi-tenant by clientCode */}
         <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />

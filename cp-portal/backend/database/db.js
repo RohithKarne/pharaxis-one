@@ -357,6 +357,59 @@ function initializeDatabase() {
     );
   `);
 
+  // ── USER TYPE GATE CONFIG — per client gate settings ──────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_gate_config (
+      id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id               INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id),
+      is_enabled              INTEGER NOT NULL DEFAULT 0,
+      gate_title              TEXT    NOT NULL DEFAULT 'Welcome — Please Identify Yourself',
+      gate_subtitle           TEXT    NOT NULL DEFAULT 'To provide you with the most relevant information, please select the option that best describes you.',
+      disclaimer_text         TEXT    NOT NULL DEFAULT 'By confirming your selection, you declare that the information you have provided is accurate. Content on this portal is tailored based on your declared role.',
+      require_disclaimer      INTEGER NOT NULL DEFAULT 1,
+      updated_at              TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // ── GATE USER TYPES — configurable type options per client ─────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_gate_user_types (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id     INTEGER NOT NULL REFERENCES cp_clients(id),
+      type_key      TEXT    NOT NULL,
+      label         TEXT    NOT NULL,
+      description   TEXT,
+      icon          TEXT    NOT NULL DEFAULT '👤',
+      display_order INTEGER NOT NULL DEFAULT 0,
+      is_enabled    INTEGER NOT NULL DEFAULT 1,
+      UNIQUE(client_id, type_key)
+    );
+  `);
+
+  // ── FEATURE ACCESS MATRIX — which user types can see which features
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_feature_access (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id   INTEGER NOT NULL REFERENCES cp_clients(id),
+      feature_key TEXT    NOT NULL,
+      type_key    TEXT    NOT NULL,
+      is_allowed  INTEGER NOT NULL DEFAULT 1,
+      UNIQUE(client_id, feature_key, type_key)
+    );
+  `);
+
+  // Safe migration: add user_type_confirmed to portal users if not present
+  const puCols = db.prepare("PRAGMA table_info(cp_portal_users)").all().map(c => c.name);
+  if (!puCols.includes('user_type_confirmed')) {
+    db.exec(`ALTER TABLE cp_portal_users ADD COLUMN user_type_confirmed INTEGER NOT NULL DEFAULT 0`);
+  }
+
+  // Safe migration: add sla_response_text to branding if not present
+  const bCols = db.prepare("PRAGMA table_info(cp_branding)").all().map(c => c.name);
+  if (!bCols.includes('sla_response_text')) {
+    db.exec(`ALTER TABLE cp_branding ADD COLUMN sla_response_text TEXT`);
+  }
+
   // ── AUDIT LOGS — every admin action logged ────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_audit_logs (

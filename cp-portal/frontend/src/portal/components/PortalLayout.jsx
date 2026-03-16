@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import UserTypeGate from './UserTypeGate'
 
 export default function PortalLayout({ children }) {
-  const { portalConfig, user, logout, isFeatureEnabled, clientCode } = usePortal()
+  const { portalConfig, user, logout, isFeatureEnabled, clientCode, showGate } = usePortal()
   const [mobileOpen, setMobileOpen] = useState(false)
   const navigate   = useNavigate()
   const location   = useLocation()
@@ -97,6 +98,7 @@ export default function PortalLayout({ children }) {
       </footer>
 
       {isFeatureEnabled('chatbox') && <ChatboxWidget clientCode={clientCode} />}
+      {showGate && <UserTypeGate />}
     </div>
   )
 }
