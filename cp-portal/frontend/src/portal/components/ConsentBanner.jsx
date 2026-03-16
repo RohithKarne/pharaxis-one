@@ -17,7 +17,7 @@ const PREFERENCE_TOGGLES = [
 export default function ConsentBanner() {
   const { portalConfig, clientCode } = usePortal()
   const compliance = portalConfig?.compliance
-  const version    = compliance?.version || 'v1.0'
+  const version    = (compliance?.version || '1.0').replace(/^v/i, '')
 
   const [show, setShow]     = useState(false)
   const [step, setStep]     = useState('banner') // 'banner' | 'preferences'
