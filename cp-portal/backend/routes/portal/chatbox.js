@@ -24,8 +24,19 @@ router.post('/:clientCode', async (req, res) => {
   const config = db.prepare('SELECT * FROM cp_chatbox_config WHERE client_id = ? AND is_active = 1').get(client.id);
   if (!config || !config.api_key) return res.status(503).json({ error: 'Chatbox is not configured for this portal.' });
 
-  const { messages } = req.body; // [{ role: 'user'|'assistant', content: string }]
+  let { messages } = req.body; // [{ role: 'user'|'assistant', content: string }]
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages array is required.' });
+  }
+
+  // SEC-05: Sanitize incoming messages to prevent prompt injection and context overflow
+  messages = messages
+    .filter(m => m != null)                                           // strip null/undefined
+    .filter(m => m.role === 'user' || m.role === 'assistant')         // only valid roles
+    .map(m => ({ role: m.role, content: String(m.content || '').slice(0, 2000) })) // cap content length
+    .slice(-20);                                                       // cap to last 20 messages
+
+  if (messages.length === 0) {
     return res.status(400).json({ error: 'messages array is required.' });
   }
 

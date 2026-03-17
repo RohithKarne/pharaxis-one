@@ -14,8 +14,10 @@ router.get('/:clientCode', (req, res) => {
   if (!client) return res.status(404).json({ error: 'Portal not found.' });
 
   const branding  = db.prepare('SELECT * FROM cp_branding WHERE client_id = ?').get(client.id);
-  const features  = db.prepare('SELECT feature_key, is_enabled, display_name, display_order, icon FROM cp_features WHERE client_id = ? ORDER BY display_order ASC').all(client.id);
-  const enabledFeatures = features.filter(f => f.is_enabled);
+  // API-03: Return features as a simple { feature_key: is_enabled } map — no internal IDs or metadata
+  const featuresRaw = db.prepare('SELECT feature_key, is_enabled FROM cp_features WHERE client_id = ?').all(client.id);
+  const featuresMap = {};
+  for (const f of featuresRaw) { featuresMap[f.feature_key] = !!f.is_enabled; }
 
   // Chatbox — never expose api_key
   const chatboxRow = db.prepare('SELECT welcome_message, is_active FROM cp_chatbox_config WHERE client_id = ?').get(client.id);
@@ -56,9 +58,10 @@ router.get('/:clientCode', (req, res) => {
     : null;
 
   res.json({
-    client:   { id: client.id, name: client.name, code: client.code },
+    // API-03: omit internal client.id — only public-safe identifiers
+    client:   { name: client.name, code: client.code },
     branding: branding || {},
-    features: enabledFeatures,
+    features: featuresMap,
     chatbox,
     gate,
     has_active_safety_alert,

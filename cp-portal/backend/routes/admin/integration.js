@@ -8,11 +8,22 @@ const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin } = require('../../middleware/auth');
 
+// Mask a secret field — show only last 4 chars with **** prefix
+function maskSecret(value) {
+  if (!value) return value;
+  return '****' + String(value).slice(-4);
+}
+
 // GET /api/admin/integration/:clientId
 router.get('/:clientId', authenticateAdmin, (req, res) => {
   const config  = db.prepare('SELECT * FROM cp_integration_config WHERE client_id = ?').all(req.params.clientId);
+  const masked  = config.map(c => ({
+    ...c,
+    api_key:    maskSecret(c.api_key),
+    api_secret: maskSecret(c.api_secret),
+  }));
   const mapping = db.prepare('SELECT * FROM cp_field_mapping WHERE client_id = ? ORDER BY form_type, cp_field ASC').all(req.params.clientId);
-  res.json({ integrations: config, mappings: mapping });
+  res.json({ integrations: masked, mappings: mapping });
 });
 
 // POST /api/admin/integration/:clientId — add integration
@@ -31,7 +42,11 @@ router.patch('/:clientId/:integrationId', authenticateAdmin, (req, res) => {
   const allowed = ['system_name', 'api_base_url', 'api_key', 'api_secret', 'auth_type', 'is_active'];
   const updates = [], params = [];
   for (const key of allowed) {
-    if (req.body[key] !== undefined) { updates.push(`${key} = ?`); params.push(req.body[key]); }
+    if (req.body[key] !== undefined) {
+      // SEC-02: skip secret fields if the frontend is echoing back a masked display value
+      if ((key === 'api_key' || key === 'api_secret') && String(req.body[key]).startsWith('****')) continue;
+      updates.push(`${key} = ?`); params.push(req.body[key]);
+    }
   }
   if (req.body.extra_headers !== undefined) { updates.push('extra_headers = ?'); params.push(JSON.stringify(req.body.extra_headers)); }
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });

@@ -169,8 +169,24 @@ router.patch('/:id', authenticateAdmin, (req, res) => {
 
 // DELETE /api/admin/clients/:id — soft delete
 router.delete('/:id', authenticateAdmin, (req, res) => {
-  db.prepare(`UPDATE cp_clients SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(req.params.id);
-  audit(req.admin, 'DELETE', 'client', Number(req.params.id), {});
+  const clientId = Number(req.params.id);
+  db.prepare(`UPDATE cp_clients SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(clientId);
+
+  // SYNC-01: Verify cascade health — soft delete does not fire SQLite CASCADE; hard delete does.
+  // Log a warning if key child records remain after a hard delete would have been attempted.
+  // For soft delete this is informational: child rows are expected to remain (they belong to the client).
+  // If a future hard-delete path is used, these counts should be 0.
+  try {
+    const submissionCount = db.prepare('SELECT COUNT(*) as cnt FROM cp_submissions WHERE client_id = ?').get(clientId)?.cnt || 0;
+    const userCount       = db.prepare('SELECT COUNT(*) as cnt FROM cp_portal_users WHERE client_id = ?').get(clientId)?.cnt || 0;
+    if (submissionCount > 0 || userCount > 0) {
+      console.warn(`[SYNC-01] Client ${clientId} deactivated — ${submissionCount} submission(s) and ${userCount} portal user(s) remain in child tables (expected for soft delete; would cascade on hard delete).`);
+    }
+  } catch (verifyErr) {
+    console.error(`[SYNC-01] Cascade verification query failed for client ${clientId}:`, verifyErr.message);
+  }
+
+  audit(req.admin, 'DELETE', 'client', clientId, {});
   res.json({ message: 'Client deactivated.' });
 });
 

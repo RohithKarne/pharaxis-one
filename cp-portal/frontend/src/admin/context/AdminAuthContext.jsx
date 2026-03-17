@@ -1,8 +1,10 @@
 import { createContext, useContext, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 const AdminAuthContext = createContext(null)
 
 export function AdminAuthProvider({ children }) {
+  const navigate = useNavigate()
   const [admin, setAdmin] = useState(() => {
     try { return JSON.parse(localStorage.getItem('cp_admin') || 'null') } catch { return null }
   })
@@ -19,8 +21,27 @@ export function AdminAuthProvider({ children }) {
     setAdmin(null)
   }
 
+  // AUTH-06: central fetch helper — attaches admin auth header and auto-logs out on 401
+  async function adminFetch(url, options = {}) {
+    const token = localStorage.getItem('cp_admin_token')
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    })
+    if (res.status === 401) {
+      logout()
+      navigate('/admin/login', { replace: true })
+      return res
+    }
+    return res
+  }
+
   return (
-    <AdminAuthContext.Provider value={{ admin, login, logout }}>
+    <AdminAuthContext.Provider value={{ admin, login, logout, adminFetch }}>
       {children}
     </AdminAuthContext.Provider>
   )

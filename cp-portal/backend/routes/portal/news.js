@@ -31,11 +31,12 @@ router.get('/', authenticatePortal, (req, res) => {
     return res.status(403).json({ error: 'News feature is not enabled for this portal.' });
   }
 
-  const page   = Math.max(1, parseInt(req.query.page) || 1);
-  const limit  = Math.min(50, parseInt(req.query.limit) || 10);
-  const offset = (page - 1) * limit;
+  const page     = Math.max(1, parseInt(req.query.page) || 1);
+  const limit    = Math.min(50, parseInt(req.query.limit) || 10);
+  const offset   = (page - 1) * limit;
   const userType = req.portalUser?.user_type || 'other';
-  const now    = new Date().toISOString();
+  const now      = new Date().toISOString();
+  const category = req.query.category || null;
 
   const allPosts = db.prepare(`
     SELECT id, title, body_html, category, thumbnail_path, target_types_json, publish_at, view_count, created_at
@@ -45,14 +46,19 @@ router.get('/', authenticatePortal, (req, res) => {
   `).all(client.id, now);
 
   // Filter by user_type: empty array = visible to all
-  const filtered = allPosts.filter(p => {
+  const visiblePosts = allPosts.filter(p => {
     const types = JSON.parse(p.target_types_json || '[]');
     return types.length === 0 || types.includes(userType);
   });
 
+  // allCategories always reflects the full visible set (not the category-filtered subset)
+  const allCategories = [...new Set(visiblePosts.map(p => p.category).filter(Boolean))];
+
+  // Apply server-side category filter after computing allCategories
+  const filtered = category ? visiblePosts.filter(p => p.category === category) : visiblePosts;
+
   const total = filtered.length;
   const paged = filtered.slice(offset, offset + limit).map(p => ({ ...p, thumbnail_url: toUrl(p.thumbnail_path) }));
-  const allCategories = [...new Set(filtered.map(p => p.category).filter(Boolean))];
 
   res.json({ posts: paged, total, page, limit, allCategories });
 });

@@ -145,6 +145,7 @@ function initializeDatabase() {
   `);
 
   // ── INTEGRATION CONFIG — MIMS or third-party system ───────────
+  // TODO Sprint 3: encrypt api_key and api_secret at rest using AES-256 with server-side key from env
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_integration_config (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,

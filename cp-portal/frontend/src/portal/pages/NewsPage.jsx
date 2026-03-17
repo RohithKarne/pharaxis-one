@@ -29,26 +29,27 @@ export default function NewsPage() {
       setLoading(true)
       try {
         const token = localStorage.getItem('cp_portal_token')
-        const res = await fetch(`/api/portal/news?clientCode=${clientCode}&page=${page}&limit=${limit}`, {
+        const categoryParam = activeCategory !== 'All' ? `&category=${encodeURIComponent(activeCategory)}` : ''
+        const res = await fetch(`/api/portal/news?clientCode=${clientCode}&page=${page}&limit=${limit}${categoryParam}`, {
           headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         })
         const d = await res.json()
         setPosts(d.posts || [])
         setTotal(d.total || 0)
-        if (page === 1) setAllCategories(d.allCategories || [])
+        // PERF-02: preserve allCategories across page changes — only update when response has data
+        if (d.allCategories?.length) setAllCategories(d.allCategories)
       } catch {
         setError('Unable to load news.')
       }
       setLoading(false)
     }
     if (clientCode) load()
-  }, [clientCode, page])
+  }, [clientCode, page, activeCategory])
 
   const categories = ['All', ...allCategories]
 
-  const filtered = activeCategory === 'All'
-    ? posts
-    : posts.filter(p => p.category === activeCategory)
+  // Filtering is now done server-side; posts already match activeCategory
+  const filtered = posts
 
   const totalPages = Math.ceil(total / limit)
 
@@ -67,7 +68,7 @@ export default function NewsPage() {
             <button
               key={cat}
               className={`pp-filter-btn ${activeCategory === cat ? 'active' : ''}`}
-              onClick={() => setActiveCategory(cat)}
+              onClick={() => { setActiveCategory(cat); setPage(1) }}
             >
               {cat}
             </button>
