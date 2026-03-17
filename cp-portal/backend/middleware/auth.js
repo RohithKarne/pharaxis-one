@@ -8,9 +8,9 @@
 
 const jwt = require('jsonwebtoken');
 
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
   if (!process.env.CP_ADMIN_JWT_SECRET || !process.env.CP_PORTAL_JWT_SECRET) {
-    console.error('FATAL: CP_ADMIN_JWT_SECRET and CP_PORTAL_JWT_SECRET env vars must be set in production.');
+    console.error('FATAL: CP_ADMIN_JWT_SECRET and CP_PORTAL_JWT_SECRET env vars must be set in non-development environments.');
     process.exit(1);
   }
 }

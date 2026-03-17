@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 
 export default function LoginPage() {
   const { clientCode, login } = usePortal()
   const navigate              = useNavigate()
+  const location              = useLocation()
   const base                  = `/portal/${clientCode}`
+  const returnTo              = location.state?.from || base
   const [tab, setTab]         = useState('login')
   const [form, setForm]       = useState({ email: '', password: '', first_name: '', last_name: '', user_type: 'hcp', country: '' })
   const [loading, setLoading] = useState(false)
@@ -23,7 +25,7 @@ export default function LoginPage() {
     setLoading(false)
     if (!res.ok) { setError(data.error || 'Login failed.'); return }
     login(data.user, data.token)
-    navigate(base)
+    navigate(returnTo, { replace: true })
   }
 
   async function handleRegister(e) {
@@ -36,7 +38,7 @@ export default function LoginPage() {
     setLoading(false)
     if (!res.ok) { setError(data.error || 'Registration failed.'); return }
     login(data.user, data.token)
-    navigate(base)
+    navigate(returnTo, { replace: true })
   }
 
   return (

@@ -7,10 +7,19 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 
+function isFeatureEnabled(clientId, featureKey) {
+  const row = db.prepare('SELECT is_enabled FROM cp_features WHERE client_id = ? AND feature_key = ?').get(clientId, featureKey);
+  return row ? row.is_enabled === 1 : false;
+}
+
 // POST /api/portal/chatbox/:clientCode
 router.post('/:clientCode', async (req, res) => {
   const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(req.params.clientCode);
   if (!client) return res.status(404).json({ error: 'Portal not found.' });
+
+  if (!isFeatureEnabled(client.id, 'chatbox')) {
+    return res.status(403).json({ error: 'Chatbox is not enabled for this portal.' });
+  }
 
   const config = db.prepare('SELECT * FROM cp_chatbox_config WHERE client_id = ? AND is_active = 1').get(client.id);
   if (!config || !config.api_key) return res.status(503).json({ error: 'Chatbox is not configured for this portal.' });

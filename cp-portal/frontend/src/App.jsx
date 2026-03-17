@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AdminAuthProvider, useAdminAuth } from './admin/context/AdminAuthContext'
 
 // Admin pages
@@ -47,15 +47,16 @@ function AdminGuard({ children }) {
 
 function FeatureGuard({ featureKey, children }) {
   const { isFeatureEnabled, clientCode, loading } = usePortal()
-  if (loading) return null
+  if (loading) return <div className="pp-loading">Loading…</div>
   if (!isFeatureEnabled(featureKey)) return <Navigate to={`/portal/${clientCode}`} replace />
   return children
 }
 
 function PortalAuthGuard({ children }) {
   const { user, clientCode, loading } = usePortal()
-  if (loading) return null
-  if (!user) return <Navigate to={`/portal/${clientCode}/login`} replace />
+  const location = useLocation()
+  if (loading) return <div className="pp-loading">Loading…</div>
+  if (!user) return <Navigate to={`/portal/${clientCode}/login`} replace state={{ from: location.pathname }} />
   return children
 }
 
