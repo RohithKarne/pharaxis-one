@@ -10,6 +10,11 @@ const { requirePortalAuth } = require('../../middleware/auth');
 const path    = require('path');
 const fs      = require('fs');
 
+function isFeatureEnabled(clientId, featureKey) {
+  const row = db.prepare('SELECT is_enabled FROM cp_features WHERE client_id = ? AND feature_key = ?').get(clientId, featureKey);
+  return row ? row.is_enabled === 1 : false;
+}
+
 // GET /api/portal/documents?clientCode=xxx
 // Returns active documents visible to the user's user_type
 router.get('/', requirePortalAuth, (req, res) => {
@@ -18,6 +23,10 @@ router.get('/', requirePortalAuth, (req, res) => {
 
   const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(clientCode);
   if (!client) return res.status(404).json({ error: 'Client not found.' });
+
+  if (!isFeatureEnabled(client.id, 'document_library')) {
+    return res.status(403).json({ error: 'Document library is not enabled for this portal.' });
+  }
 
   const userType = req.portalUser?.user_type || 'other';
 

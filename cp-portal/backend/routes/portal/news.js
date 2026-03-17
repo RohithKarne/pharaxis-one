@@ -6,15 +6,29 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
-const { requirePortalAuth } = require('../../middleware/auth');
+const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
+
+function toUrl(thumbnailPath) {
+  if (!thumbnailPath) return null;
+  return thumbnailPath.startsWith('/') ? thumbnailPath : `/${thumbnailPath}`;
+}
+
+function isFeatureEnabled(clientId, featureKey) {
+  const row = db.prepare('SELECT is_enabled FROM cp_features WHERE client_id = ? AND feature_key = ?').get(clientId, featureKey);
+  return row ? row.is_enabled === 1 : false;
+}
 
 // GET /api/portal/news?clientCode=xxx&page=1&limit=10
-router.get('/', requirePortalAuth, (req, res) => {
+router.get('/', authenticatePortal, (req, res) => {
   const { clientCode } = req.query;
   if (!clientCode) return res.status(400).json({ error: 'clientCode required.' });
 
   const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(clientCode);
   if (!client) return res.status(404).json({ error: 'Client not found.' });
+
+  if (!isFeatureEnabled(client.id, 'news_announcements')) {
+    return res.status(403).json({ error: 'News feature is not enabled for this portal.' });
+  }
 
   const page   = Math.max(1, parseInt(req.query.page) || 1);
   const limit  = Math.min(50, parseInt(req.query.limit) || 10);
@@ -36,19 +50,23 @@ router.get('/', requirePortalAuth, (req, res) => {
   });
 
   const total = filtered.length;
-  const paged = filtered.slice(offset, offset + limit);
+  const paged = filtered.slice(offset, offset + limit).map(p => ({ ...p, thumbnail_url: toUrl(p.thumbnail_path) }));
   const allCategories = [...new Set(filtered.map(p => p.category).filter(Boolean))];
 
   res.json({ posts: paged, total, page, limit, allCategories });
 });
 
 // GET /api/portal/news/:postId?clientCode=xxx — single post + increment view_count
-router.get('/:postId', requirePortalAuth, (req, res) => {
+router.get('/:postId', authenticatePortal, (req, res) => {
   const { clientCode } = req.query;
   if (!clientCode) return res.status(400).json({ error: 'clientCode required.' });
 
   const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(clientCode);
   if (!client) return res.status(404).json({ error: 'Client not found.' });
+
+  if (!isFeatureEnabled(client.id, 'news_announcements')) {
+    return res.status(403).json({ error: 'News feature is not enabled for this portal.' });
+  }
 
   const post = db.prepare(`
     SELECT * FROM cp_news_posts
@@ -64,7 +82,7 @@ router.get('/:postId', requirePortalAuth, (req, res) => {
   // Increment view count (only on portal detail, not admin preview)
   db.prepare('UPDATE cp_news_posts SET view_count = view_count + 1 WHERE id = ?').run(post.id);
 
-  res.json({ post });
+  res.json({ post: { ...post, thumbnail_url: toUrl(post.thumbnail_path) } });
 });
 
 // GET /api/portal/news/preview/:postId — admin preview, does NOT increment view_count
