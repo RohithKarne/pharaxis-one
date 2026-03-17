@@ -15,6 +15,10 @@ import IntegrationPage      from './admin/pages/IntegrationPage'
 import PortalUsersPage      from './admin/pages/PortalUsersPage'
 import ChatboxConfigPage    from './admin/pages/ChatboxConfigPage'
 import GatePage             from './admin/pages/GatePage'
+import SafetyAdminPage      from './admin/pages/SafetyPage'
+import NewsAdminPage        from './admin/pages/NewsPage'
+import DocumentsAdminPage   from './admin/pages/DocumentsPage'
+import CompliancePage       from './admin/pages/CompliancePage'
 
 // Portal pages
 import { PortalProvider }       from './portal/context/PortalContext'
@@ -30,6 +34,10 @@ import FindMSLPage              from './portal/pages/FindMSLPage'
 import MySubmissionsPage        from './portal/pages/MySubmissionsPage'
 import ContactPage              from './portal/pages/ContactPage'
 import PortalNotFoundPage       from './portal/pages/PortalNotFoundPage'
+import SafetyPortalPage         from './portal/pages/SafetyPage'
+import NewsPortalPage           from './portal/pages/NewsPage'
+import NewsDetailPage           from './portal/pages/NewsDetailPage'
+import DocumentsPortalPage      from './portal/pages/DocumentsPage'
 
 function AdminGuard({ children }) {
   const { admin } = useAdminAuth()
@@ -51,6 +59,10 @@ function PortalRoutes() {
           <Route path="find-msl"          element={<FindMSLPage />} />
           <Route path="my-submissions"    element={<MySubmissionsPage />} />
           <Route path="contact"           element={<ContactPage />} />
+          <Route path="safety"            element={<SafetyPortalPage />} />
+          <Route path="news"              element={<NewsPortalPage />} />
+          <Route path="news/:postId"      element={<NewsDetailPage />} />
+          <Route path="documents"         element={<DocumentsPortalPage />} />
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
       </PortalLayout>
@@ -75,7 +87,11 @@ export default function App() {
         <Route path="/admin/clients/:clientId/integration" element={<AdminGuard><IntegrationPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/users" element={<AdminGuard><PortalUsersPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/chatbox" element={<AdminGuard><ChatboxConfigPage /></AdminGuard>} />
-        <Route path="/admin/clients/:clientId/gate" element={<AdminGuard><GatePage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/gate"       element={<AdminGuard><GatePage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/safety"     element={<AdminGuard><SafetyAdminPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/news"       element={<AdminGuard><NewsAdminPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/documents"  element={<AdminGuard><DocumentsAdminPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/compliance" element={<AdminGuard><CompliancePage /></AdminGuard>} />
 
         {/* Public Portal — multi-tenant by clientCode */}
         <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />

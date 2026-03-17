@@ -17,6 +17,10 @@ const CLIENT_NAV = (id) => [
   { to: `/admin/clients/${id}/users`,       label: 'Portal Users', icon: '👥' },
   { to: `/admin/clients/${id}/chatbox`,     label: 'Chatbox AI',  icon: '🤖' },
   { to: `/admin/clients/${id}/gate`,        label: 'User Gate',   icon: '🚪' },
+  { to: `/admin/clients/${id}/safety`,      label: 'Safety Alerts', icon: '⚠️' },
+  { to: `/admin/clients/${id}/news`,        label: 'News',          icon: '📰' },
+  { to: `/admin/clients/${id}/documents`,   label: 'Documents',     icon: '📁' },
+  { to: `/admin/clients/${id}/compliance`,  label: 'Compliance',    icon: '🔒' },
 ]
 
 export default function AdminLayout({ children, title }) {
