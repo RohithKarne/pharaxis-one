@@ -3,6 +3,14 @@ import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 
+function formatTherapeuticAreas(val) {
+  if (!val) return '—'
+  try {
+    const arr = typeof val === 'string' ? JSON.parse(val) : val
+    return Array.isArray(arr) ? arr.join(', ') : String(val)
+  } catch { return String(val) }
+}
+
 export default function MSLPage() {
   const { clientId }  = useParams()
   const [msls, setMSLs]     = useState([])
@@ -71,7 +79,7 @@ export default function MSLPage() {
         <div className="cp-empty"><div style={{ fontSize: 40 }}>👤</div><p>No MSLs added yet.</p></div>
       ) : (
         <table className="cp-table">
-          <thead><tr><th>Name</th><th>Title</th><th>Region</th><th>Specialty</th><th>Email</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Title</th><th>Region</th><th>Specialty</th><th>Therapeutic Areas</th><th>Email</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {msls.map(m => (
               <tr key={m.id}>
@@ -79,6 +87,7 @@ export default function MSLPage() {
                 <td>{m.title || '—'}</td>
                 <td>{m.region || '—'}</td>
                 <td>{m.specialty || '—'}</td>
+                <td>{formatTherapeuticAreas(m.therapeutic_areas)}</td>
                 <td>{m.email || '—'}</td>
                 <td><span className={`cp-badge ${m.is_active ? 'badge-active' : 'badge-inactive'}`}>{m.is_active ? 'Active' : 'Inactive'}</span></td>
                 <td><button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deactivate(m.id)}>Remove</button></td>

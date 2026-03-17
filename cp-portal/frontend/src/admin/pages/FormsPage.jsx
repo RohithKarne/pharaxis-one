@@ -4,7 +4,7 @@ import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 
 const FORM_TYPES = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry']
-const FIELD_TYPES = ['text', 'email', 'phone', 'textarea', 'select', 'multiselect', 'checkbox', 'date', 'file']
+const FIELD_TYPES = ['text', 'textarea', 'email', 'phone', 'number', 'date', 'select', 'multiselect', 'radio', 'checkbox', 'file', 'hidden']
 
 function parseOptions(opts) {
   if (!opts) return []
@@ -85,17 +85,17 @@ export default function FormsPage() {
             <form onSubmit={handleAdd} className="cp-modal-body">
               <div className="cp-field-row">
                 <div className="cp-field">
-                  <label>Field Key *</label>
+                  <label>Field Key <span className="cp-required" aria-hidden="true">*</span></label>
                   <input required value={newField.field_key} onChange={e => setNewField(f => ({ ...f, field_key: e.target.value.toLowerCase().replace(/\s/g, '_') }))} placeholder="e.g. patient_age" />
                 </div>
                 <div className="cp-field">
-                  <label>Field Label *</label>
+                  <label>Field Label <span className="cp-required" aria-hidden="true">*</span></label>
                   <input required value={newField.field_label} onChange={e => setNewField(f => ({ ...f, field_label: e.target.value }))} placeholder="e.g. Patient Age" />
                 </div>
               </div>
               <div className="cp-field-row">
                 <div className="cp-field">
-                  <label>Field Type</label>
+                  <label>Field Type <span className="cp-required" aria-hidden="true">*</span></label>
                   <select value={newField.field_type} onChange={e => setNewField(f => ({ ...f, field_type: e.target.value }))}>
                     {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>

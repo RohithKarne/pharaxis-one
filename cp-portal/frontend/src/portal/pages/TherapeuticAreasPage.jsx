@@ -10,6 +10,9 @@ export default function TherapeuticAreasPage() {
   const [drugs, setDrugs]   = useState([])
   const [drugsLoading, setDrugsLoading] = useState(false)
 
+  // LOW-05: set document title
+  useEffect(() => { document.title = 'Therapeutic Areas | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/therapeutic-areas`)
       .then(r => r.json()).then(d => { setAreas(d.items || []); setLoading(false) }).catch(() => setLoading(false))
@@ -49,6 +52,7 @@ export default function TherapeuticAreasPage() {
               <div className="pp-ta-placeholder"><span>🧬</span><p>Select a therapeutic area to explore.</p></div>
             ) : (
               <>
+                {selected.image_url && <img src={selected.image_url} alt={selected.name} className="pp-ta-image" loading="lazy" />}
                 <h2 className="pp-ta-detail-title">{selected.name}</h2>
                 {selected.description && <p className="pp-ta-detail-desc">{selected.description}</p>}
                 {selected.overview    && <div className="pp-ta-overview">{selected.overview}</div>}

@@ -1,5 +1,6 @@
 import { NavLink, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
+import { useEffect } from 'react'
 
 const NAV_ITEMS = [
   { to: '/admin',          label: 'Dashboard',      icon: '🏠', exact: true },
@@ -49,14 +50,19 @@ export default function AdminLayout({ children }) {
 
   const derivedTitle = Object.entries(PAGE_TITLES).find(([path]) => location.pathname.startsWith(path))?.[1] || 'Admin'
 
+  useEffect(() => {
+    const title = Object.entries(PAGE_TITLES).reverse().find(([p]) => location.pathname.startsWith(p))?.[1] || 'Admin'
+    document.title = `${title} | CP Admin`
+  }, [location.pathname])
+
   function handleLogout() { logout(); navigate('/admin/login') }
 
   return (
     <div className="cp-admin-wrapper">
       <aside className="cp-admin-sidebar">
         <div className="cp-sidebar-brand">
-          <span className="cp-brand-icon">⚕</span>
-          <span className="cp-brand-name">CP Portal<br /><small>Admin Console</small></span>
+          <span className="cp-brand-icon">&#9877;</span>
+          <span className="cp-brand-name">CP Portal<br /><span className="cp-brand-small">Admin Console</span></span>
         </div>
 
         <nav className="cp-sidebar-nav">

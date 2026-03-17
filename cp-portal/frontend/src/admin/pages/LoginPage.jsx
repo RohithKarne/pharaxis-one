@@ -10,10 +10,11 @@ export default function LoginPage() {
   useEffect(() => {
     if (admin) navigate('/admin', { replace: true })
   }, [admin, navigate])
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError]       = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [email, setEmail]         = useState('')
+  const [password, setPassword]   = useState('')
+  const [error, setError]         = useState('')
+  const [loading, setLoading]     = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -25,7 +26,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Login failed.'); return }
+      if (!res.ok) { setError(data.error || 'Login failed.'); setPassword(''); return }
       login(data.token, data.admin)
       navigate('/admin')
     } catch {
@@ -39,7 +40,7 @@ export default function LoginPage() {
     <div className="cp-login-page">
       <div className="cp-login-card">
         <div className="cp-login-brand">
-          <span className="cp-login-icon">⚕</span>
+          <span className="cp-login-icon">&#9877;</span>
           <h1>CP Portal</h1>
           <p>Admin Console</p>
         </div>
@@ -49,10 +50,21 @@ export default function LoginPage() {
             <input type="text" value={email} onChange={e => setEmail(e.target.value)}
               placeholder="cpadmin" autoFocus required />
           </div>
-          <div className="cp-field">
+          <div className="cp-field cp-field-password">
             <label>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••" required />
+            <div className="cp-input-wrapper" style={{ position: 'relative' }}>
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••" required />
+              <button
+                type="button"
+                className="cp-password-toggle"
+                style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer' }}
+                onClick={() => setShowPassword(s => !s)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
           {error && <div className="cp-error">{error}</div>}
           <button type="submit" className="cp-btn cp-btn-primary" disabled={loading}>

@@ -1,7 +1,17 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
 
-const RESOURCE_ICONS = { publication: '📄', document: '📑', video: '🎥', link: '🔗', other: '📎' }
+// LOW-15: resource_type icon map (extended)
+const TYPE_ICON = {
+  pdf: '📄',
+  video: '🎬',
+  link: '🔗',
+  document: '📝',
+  presentation: '📊',
+  image: '🖼️',
+  publication: '📄',
+  other: '📎',
+}
 
 export default function ResourcesPage() {
   const { clientCode } = usePortal()
@@ -9,6 +19,9 @@ export default function ResourcesPage() {
   const [loading, setLoading]     = useState(true)
   const [filter, setFilter]       = useState('')
   const [search, setSearch]       = useState('')
+
+  // LOW-05: set document title
+  useEffect(() => { document.title = 'Resources | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/resources`)
@@ -19,6 +32,18 @@ export default function ResourcesPage() {
   const filtered = resources
     .filter(r => !filter || r.resource_type === filter)
     .filter(r => !search  || r.title.toLowerCase().includes(search.toLowerCase()) || (r.description || '').toLowerCase().includes(search.toLowerCase()))
+
+  // LOW-36: group by category, null/empty → 'General'
+  const grouped = filtered.reduce((acc, r) => {
+    const cat = r.category || 'General'
+    ;(acc[cat] = acc[cat] || []).push(r)
+    return acc
+  }, {})
+  const groupKeys = Object.keys(grouped).sort((a, b) => {
+    if (a === 'General') return 1
+    if (b === 'General') return -1
+    return a.localeCompare(b)
+  })
 
   return (
     <div className="pp-container pp-page-content">
@@ -38,24 +63,29 @@ export default function ResourcesPage() {
       {loading ? <div className="pp-loading">Loading…</div> : filtered.length === 0 ? (
         <div className="pp-empty-state"><span>📚</span><p>No resources found.</p></div>
       ) : (
-        <div className="pp-resource-grid">
-          {filtered.map(r => (
-            <div key={r.id} className="pp-resource-card">
-              <div className="pp-resource-icon">{RESOURCE_ICONS[r.resource_type] || '📎'}</div>
-              <div className="pp-resource-body">
-                <div className="pp-resource-type">{r.resource_type || 'Resource'}</div>
-                <h3 className="pp-resource-title">{r.title}</h3>
-                {r.description && <p className="pp-resource-desc">{r.description}</p>}
-                {r.category    && <span className="pp-resource-year">{r.category}</span>}
-              </div>
-              {(r.url || r.file_path) && (
-                <a href={r.url || r.file_path} target="_blank" rel="noopener noreferrer" className="pp-resource-link">
-                  View →
-                </a>
-              )}
+        groupKeys.map(cat => (
+          <div key={cat} className="pp-resource-group">
+            <h2 className="pp-resource-group-heading">{cat}</h2>
+            <div className="pp-resource-grid">
+              {grouped[cat].map(r => (
+                <div key={r.id} className="pp-resource-card">
+                  {/* LOW-15: resource_type icon */}
+                  <span className="pp-resource-icon">{TYPE_ICON[r.resource_type?.toLowerCase()] || '📎'}</span>
+                  <div className="pp-resource-body">
+                    <div className="pp-resource-type">{r.resource_type || 'Resource'}</div>
+                    <h3 className="pp-resource-title">{r.title}</h3>
+                    {r.description && <p className="pp-resource-desc">{r.description}</p>}
+                  </div>
+                  {(r.url || r.file_path) && (
+                    <a href={r.url || r.file_path} target="_blank" rel="noopener noreferrer" className="pp-resource-link">
+                      View →
+                    </a>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))
       )}
     </div>
   )

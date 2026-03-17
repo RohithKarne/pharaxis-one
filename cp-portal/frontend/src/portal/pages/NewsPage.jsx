@@ -24,6 +24,9 @@ export default function NewsPage() {
 
   const limit = 10
 
+  // LOW-05: set document title
+  useEffect(() => { document.title = 'News | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+
   useEffect(() => {
     async function load() {
       setLoading(true)
@@ -68,6 +71,7 @@ export default function NewsPage() {
             <button
               key={cat}
               className={`pp-filter-btn ${activeCategory === cat ? 'active' : ''}`}
+              aria-pressed={activeCategory === cat}
               onClick={() => { setActiveCategory(cat); setPage(1) }}
             >
               {cat}
@@ -87,7 +91,7 @@ export default function NewsPage() {
               className="pp-news-card"
             >
               {post.thumbnail_url
-                ? <img src={post.thumbnail_url} alt={post.title} className="pp-news-card-img" />
+                ? <img src={post.thumbnail_url} alt={post.title} className="pp-news-card-img" loading="lazy" />
                 : <div className="pp-news-card-img-placeholder" />
               }
               <div className="pp-news-card-body">

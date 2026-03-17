@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
 
 export default function ContactPage() {
-  const { portalConfig, clientCode, isFeatureEnabled, user } = usePortal()
+  const { portalConfig, clientCode, isFeatureEnabled, user, config } = usePortal()
   const client   = portalConfig?.client   || {}
   const branding = portalConfig?.branding || {}
+
+  // LOW-05: set document title
+  useEffect(() => { document.title = 'Contact Us | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
 
   const [name,    setName]    = useState('')
   const [email,   setEmail]   = useState('')
@@ -57,14 +60,24 @@ export default function ContactPage() {
           <div className="pp-contact-icon">🏥</div>
           <h3>Medical Information</h3>
           <p>For medical information requests and clinical inquiries, please use our submission portal.</p>
-          {client.contact_email && (
-            <a href={`mailto:${client.contact_email}`} className="pp-contact-link">{client.contact_email}</a>
+          {/* LOW-22: use config contact_email, fall back to client.contact_email */}
+          {(config?.contact_email || client.contact_email) && (
+            <a href={`mailto:${config?.contact_email || client.contact_email}`} className="pp-contact-link">
+              {config?.contact_email || client.contact_email}
+            </a>
+          )}
+          {!(config?.contact_email || client.contact_email) && (
+            <a href="mailto:contact@example.com" className="pp-contact-link">contact@example.com</a>
           )}
         </div>
         <div className="pp-contact-card">
           <div className="pp-contact-icon">📞</div>
           <h3>Phone Support</h3>
           <p>Our medical affairs team is available Monday through Friday, 9 AM – 5 PM EST.</p>
+          {/* LOW-22: use config contact_phone */}
+          {config?.contact_phone && (
+            <p className="pp-contact-phone">{config.contact_phone}</p>
+          )}
         </div>
         <div className="pp-contact-card">
           <div className="pp-contact-icon">⚠️</div>

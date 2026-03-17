@@ -13,10 +13,17 @@ export default function LoginPage() {
   useEffect(() => {
     if (user) navigate(base, { replace: true })
   }, [user, base, navigate])
+
+  // LOW-05: set document title
+  useEffect(() => { document.title = 'Sign In | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+
   const [tab, setTab]         = useState('login')
   const [form, setForm]       = useState({ email: '', password: '', first_name: '', last_name: '', user_type: 'hcp', country: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  // LOW-09: show/hide password toggle
+  const [showLoginPassword, setShowLoginPassword]       = useState(false)
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false)
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); setError('') }
 
@@ -28,7 +35,12 @@ export default function LoginPage() {
     })
     const data = await res.json()
     setLoading(false)
-    if (!res.ok) { setError(data.error || 'Login failed.'); return }
+    if (!res.ok) {
+      setError(data.error || 'Login failed.')
+      // LOW-35: clear password on failed login
+      setForm(f => ({ ...f, password: '' }))
+      return
+    }
     login(data.user, data.token)
     navigate(returnTo, { replace: true })
   }
@@ -72,9 +84,15 @@ export default function LoginPage() {
               <label>Email Address</label>
               <input type="email" required value={form.email} onChange={e => set('email', e.target.value)} placeholder="you@example.com" />
             </div>
-            <div className="pp-field">
+            {/* LOW-09: password show/hide toggle */}
+            <div className="pp-field pp-field-password">
               <label>Password</label>
-              <input type="password" required value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" />
+              <div className="pp-input-wrapper">
+                <input type={showLoginPassword ? 'text' : 'password'} required value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" />
+                <button type="button" className="pp-password-toggle" onClick={() => setShowLoginPassword(s => !s)} aria-label={showLoginPassword ? 'Hide password' : 'Show password'}>
+                  {showLoginPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </div>
             <button type="submit" className="pp-btn pp-btn-primary pp-btn-full" disabled={loading}>
               {loading ? 'Signing in…' : 'Sign In'}
@@ -97,9 +115,15 @@ export default function LoginPage() {
               <label>Email Address *</label>
               <input type="email" required value={form.email} onChange={e => set('email', e.target.value)} />
             </div>
-            <div className="pp-field">
+            {/* LOW-09: password show/hide toggle for register */}
+            <div className="pp-field pp-field-password">
               <label>Password *</label>
-              <input type="password" required minLength={8} value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min. 8 characters, 1 uppercase, 1 number" />
+              <div className="pp-input-wrapper">
+                <input type={showRegisterPassword ? 'text' : 'password'} required minLength={8} value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min. 8 characters, 1 uppercase, 1 number" />
+                <button type="button" className="pp-password-toggle" onClick={() => setShowRegisterPassword(s => !s)} aria-label={showRegisterPassword ? 'Hide password' : 'Show password'}>
+                  {showRegisterPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </div>
             <div className="pp-field-row">
               <div className="pp-field">
@@ -112,9 +136,23 @@ export default function LoginPage() {
                   <option value="other">Other</option>
                 </select>
               </div>
+              {/* LOW-21: country select dropdown */}
               <div className="pp-field">
                 <label>Country</label>
-                <input value={form.country} onChange={e => set('country', e.target.value)} placeholder="e.g. United States" />
+                <select value={form.country} onChange={e => set('country', e.target.value)}>
+                  <option value="">Select country…</option>
+                  <option value="United States">United States</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="Canada">Canada</option>
+                  <option value="Australia">Australia</option>
+                  <option value="Germany">Germany</option>
+                  <option value="France">France</option>
+                  <option value="India">India</option>
+                  <option value="Japan">Japan</option>
+                  <option value="Brazil">Brazil</option>
+                  <option value="Mexico">Mexico</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
             </div>
             <button type="submit" className="pp-btn pp-btn-primary pp-btn-full" disabled={loading}>

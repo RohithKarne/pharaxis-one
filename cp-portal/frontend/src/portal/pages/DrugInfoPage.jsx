@@ -8,6 +8,9 @@ export default function DrugInfoPage() {
   const [search, setSearch]     = useState('')
   const [selected, setSelected] = useState(null)
 
+  // LOW-05: set document title
+  useEffect(() => { document.title = 'Drug Information | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/drugs`)
       .then(r => r.json()).then(d => { setDrugs(d.items || []); setLoading(false) }).catch(() => setLoading(false))
@@ -46,6 +49,7 @@ export default function DrugInfoPage() {
               <div className="pp-ta-placeholder"><span>💊</span><p>Select a product to view details.</p></div>
             ) : (
               <div className="pp-drug-detail-content">
+                {selected.image_url && <img src={selected.image_url} alt={selected.brand_name} className="pp-drug-image" loading="lazy" />}
                 <div className="pp-drug-detail-header">
                   <h2>{selected.brand_name || selected.generic_name}</h2>
                   {selected.brand_name && selected.generic_name && <p className="pp-drug-detail-generic">{selected.generic_name}</p>}

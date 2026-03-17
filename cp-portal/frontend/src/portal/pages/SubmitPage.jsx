@@ -122,7 +122,7 @@ export default function SubmitPage() {
                 <div key={field.field_key} className={`pp-field${fieldErrors[field.field_key] ? ' pp-field-error' : ''}`}>
                   <label>
                     {field.label}
-                    {field.is_required ? <span className="pp-required"> *</span> : null}
+                    {field.is_required ? <span className="pp-required" aria-hidden="true"> *</span> : null}
                   </label>
                   {field.field_type === 'textarea' ? (
                     <textarea

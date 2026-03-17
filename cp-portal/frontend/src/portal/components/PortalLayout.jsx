@@ -8,6 +8,7 @@ export default function PortalLayout({ children }) {
   const { portalConfig, loading, user, logout, isFeatureEnabled, clientCode, showGate } = usePortal()
   const has_active_safety_alert = portalConfig?.has_active_safety_alert
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const navigate   = useNavigate()
   const location   = useLocation()
 
@@ -72,14 +73,25 @@ export default function PortalLayout({ children }) {
             )}
             {user ? (
               <div className="pp-user-menu">
-                <button className="pp-user-btn">
+                <button
+                  className="pp-user-btn"
+                  aria-haspopup="true"
+                  aria-expanded={userMenuOpen}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') setUserMenuOpen(false);
+                    if (e.key === 'Enter' || e.key === ' ') setUserMenuOpen(o => !o);
+                  }}
+                  onClick={() => setUserMenuOpen(o => !o)}
+                >
                   <span className="pp-user-avatar">{user.first_name?.[0]}{user.last_name?.[0]}</span>
                   <span>{user.first_name}</span>
                 </button>
-                <div className="pp-user-dropdown">
-                  <Link to={`${base}/my-submissions`} className="pp-dropdown-item">My Submissions</Link>
-                  <button className="pp-dropdown-item pp-dropdown-item-danger" onClick={handleLogout}>Sign Out</button>
-                </div>
+                {userMenuOpen && (
+                  <div className="pp-user-dropdown" role="menu">
+                    <Link to={`${base}/my-submissions`} className="pp-dropdown-item" role="menuitem">My Submissions</Link>
+                    <button className="pp-dropdown-item pp-dropdown-item-danger" role="menuitem" onClick={handleLogout}>Sign Out</button>
+                  </div>
+                )}
               </div>
             ) : (
               <Link to={`${base}/login`} className="pp-btn pp-btn-outline">Sign In</Link>
@@ -124,6 +136,7 @@ function ChatboxWidget({ clientCode }) {
   const [messages, setMessages] = useState([])
   const [input, setInput]   = useState('')
   const [loading, setLoading] = useState(false)
+  const [sendCooldown, setSendCooldown] = useState(false)
   const { portalConfig }    = usePortal()
   const welcomeMsg = portalConfig?.chatbox?.welcome_message || 'Hello! How can I help you today?'
 
@@ -134,7 +147,9 @@ function ChatboxWidget({ clientCode }) {
 
   async function sendMessage(e) {
     e.preventDefault()
-    if (!input.trim() || loading) return
+    if (sendCooldown || !input.trim() || loading) return
+    setSendCooldown(true)
+    setTimeout(() => setSendCooldown(false), 2000)
     const userMsg = input.trim()
     setInput('')
     setMessages(m => [...m, { role: 'user', text: userMsg }])
@@ -170,8 +185,9 @@ function ChatboxWidget({ clientCode }) {
             {loading && <div className="pp-chat-msg pp-chat-msg-assistant" role="status" aria-live="polite" aria-busy="true"><div className="pp-chat-bubble pp-chat-typing">…</div></div>}
           </div>
           <form className="pp-chat-input-row" onSubmit={sendMessage}>
-            <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask a medical question…" disabled={loading} />
-            <button type="submit" disabled={loading || !input.trim()}>Send</button>
+            <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask a medical question…" disabled={loading} maxLength={500} />
+            <span className="pp-chat-counter">{input.length}/500</span>
+            <button type="submit" disabled={sendCooldown || loading || !input.trim()}>Send</button>
           </form>
         </div>
       ) : (

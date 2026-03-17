@@ -13,6 +13,7 @@ const express   = require('express');
 const cors      = require('cors');
 const path      = require('path');
 const rateLimit = require('express-rate-limit');
+const db        = require('./database/db');
 
 const app  = express();
 const PORT = process.env.CP_PORT || 4000;
@@ -90,7 +91,20 @@ app.use('/api/portal/safety',     require('./routes/portal/safety'));
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'cp-portal', ts: new Date().toISOString() });
+  let dbStatus = 'ok';
+  let dbVersion = null;
+  try {
+    const row = db.prepare('SELECT sqlite_version() as v').get();
+    dbVersion = row?.v || 'unknown';
+  } catch (e) {
+    dbStatus = 'error';
+  }
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    db: { status: dbStatus, engine: 'SQLite', version: dbVersion },
+    version: process.env.npm_package_version || '1.0.0',
+  });
 });
 
 // ── 404 ───────────────────────────────────────────────────────

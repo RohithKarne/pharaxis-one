@@ -126,14 +126,17 @@ export default function BrandingPage() {
           <div className="cp-field-row">
             <div className="cp-field">
               <label>Body Font</label>
-              <select value={branding.font_family || 'Inter, sans-serif'} onChange={e => set('font_family', e.target.value)}>
+              <select value={branding.font_family || ''} onChange={e => set('font_family', e.target.value)}>
+                <option value="">Default (System Font)</option>
                 <option value="Inter, sans-serif">Inter</option>
                 <option value="'Roboto', sans-serif">Roboto</option>
                 <option value="'Open Sans', sans-serif">Open Sans</option>
                 <option value="'Lato', sans-serif">Lato</option>
                 <option value="'Montserrat', sans-serif">Montserrat</option>
+                <option value="'Poppins', sans-serif">Poppins</option>
                 <option value="'Source Sans Pro', sans-serif">Source Sans Pro</option>
-                <option value="Georgia, serif">Georgia (serif)</option>
+                <option value="Georgia, serif">Georgia (Serif)</option>
+                <option value="'Times New Roman', serif">Times New Roman (Serif)</option>
               </select>
             </div>
             <div className="cp-field">

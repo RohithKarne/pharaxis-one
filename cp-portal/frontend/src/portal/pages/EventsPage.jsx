@@ -7,19 +7,33 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter]   = useState('upcoming')
 
+  // LOW-05: set document title
+  useEffect(() => { document.title = 'Events | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/events`)
-      .then(r => r.json()).then(d => { setEvents(d.items || []); setLoading(false) }).catch(() => setLoading(false))
+      .then(r => r.json()).then(d => {
+        const items = d.items || []
+        // LOW-12: sort — upcoming soonest first, past most-recent first
+        const now = new Date()
+        const sorted = [...items].sort((a, b) => {
+          const da = new Date(a.event_date || a.start_date)
+          const db_ = new Date(b.event_date || b.start_date)
+          const aIsPast = da < now
+          const bIsPast = db_ < now
+          if (aIsPast !== bIsPast) return aIsPast ? 1 : -1
+          return aIsPast ? db_ - da : da - db_
+        })
+        setEvents(sorted)
+        setLoading(false)
+      }).catch(() => setLoading(false))
   }, [clientCode])
 
   const now       = new Date()
   const filtered  = events.filter(e => {
     const d = new Date(e.start_date)
     return filter === 'upcoming' ? d >= now : d < now
-  }).sort((a, b) => filter === 'upcoming'
-    ? new Date(a.start_date) - new Date(b.start_date)
-    : new Date(b.start_date) - new Date(a.start_date)
-  )
+  })
 
   function formatDate(str) {
     if (!str) return '—'
@@ -42,8 +56,11 @@ export default function EventsPage() {
         <div className="pp-empty-state"><span>📅</span><p>No {filter} events found.</p></div>
       ) : (
         <div className="pp-event-list">
-          {filtered.map(ev => (
-            <div key={ev.id} className="pp-event-card">
+          {filtered.map(ev => {
+            const isPast = new Date(ev.event_date || ev.start_date) < now
+            return (
+            <div key={ev.id} className={`pp-event-card ${isPast ? 'pp-event-past' : ''}`}>
+              {isPast && <span className="pp-badge pp-badge-past">Past Event</span>}
               <div className="pp-event-date-badge">
                 <div className="pp-event-month">{formatDate(ev.start_date).split(' ')[0]}</div>
                 <div className="pp-event-day">{ev.start_date ? new Date(ev.start_date).getDate() : '—'}</div>
@@ -64,7 +81,8 @@ export default function EventsPage() {
                 )}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

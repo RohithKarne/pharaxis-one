@@ -11,6 +11,12 @@ export default function NewsDetailPage() {
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
 
+  // LOW-05 + LOW-27: set document title to post title when loaded
+  useEffect(() => {
+    if (post?.title) document.title = `${post.title} | CP Portal`
+    return () => { document.title = 'CP Portal' }
+  }, [post?.title])
+
   useEffect(() => {
     async function load() {
       setLoading(true)
@@ -44,7 +50,7 @@ export default function NewsDetailPage() {
         <div className="pp-article-date">{new Date(post.publish_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
       )}
       {post.thumbnail_url && (
-        <img src={post.thumbnail_url} alt={post.title} className="pp-article-img" />
+        <img src={post.thumbnail_url} alt={post.title} className="pp-article-img" loading="lazy" />
       )}
       {post.body_html && (
         <div className="pp-article-body" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.body_html) }} />

@@ -77,6 +77,10 @@ export default function CompliancePage() {
 
   async function handleSave(e) {
     e.preventDefault()
+    if (config.version && !/^\d+(\.\d+)*$/.test(config.version)) {
+      setError('Version must be in format: 1.0 or 2.1.3')
+      return
+    }
     setError(''); setSaving(true)
     try {
       const res = await fetch(`/api/admin/compliance/${clientId}`, {
@@ -164,7 +168,14 @@ export default function CompliancePage() {
           <div className="cp-field-row">
             <div className="cp-field">
               <label>Consent Version</label>
-              <input value={config.version || 'v1.0'} onChange={e => setTopField('version', e.target.value)} placeholder="v1.0" />
+              <input
+                type="text"
+                placeholder="e.g. 1.0, 2.1.3"
+                pattern="^\d+(\.\d+)*$"
+                title="Version must be numbers separated by dots (e.g. 1.0)"
+                value={config.version || ''}
+                onChange={e => setTopField('version', e.target.value)}
+              />
             </div>
           </div>
           <div className="cp-field cp-field-checkbox" style={{ marginTop: 8 }}>

@@ -82,8 +82,8 @@ export default function ConsentBanner() {
   if (!show || !compliance) return null
 
   const bannerConfig = compliance.banner_config || {}
-  const title        = bannerConfig.title        || 'We use cookies'
-  const body         = bannerConfig.body         || 'We use cookies and similar technologies to improve your experience on this portal. Please choose your preferences below.'
+  const title        = bannerConfig.title        || portalConfig?.consent_banner_title || portalConfig?.banner_title || 'We use cookies'
+  const body         = bannerConfig.body         || portalConfig?.consent_banner_text  || portalConfig?.banner_text  || 'We use cookies and similar technologies to improve your experience on this portal. Please choose your preferences below.'
   const acceptLabel  = bannerConfig.accept_label  || 'Accept All'
   const declineLabel = bannerConfig.decline_label || 'Necessary Only'
   const manageLabel  = bannerConfig.manage_label  || 'Manage Preferences'

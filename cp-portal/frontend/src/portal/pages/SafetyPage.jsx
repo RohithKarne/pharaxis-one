@@ -26,6 +26,9 @@ export default function SafetyPage() {
     if (clientCode) load()
   }, [clientCode])
 
+  // LOW-05: set document title
+  useEffect(() => { document.title = 'Safety Alerts | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+
   const active   = alerts.filter(a => a.status === 'active')
   const resolved = alerts.filter(a => a.status === 'resolved')
 
@@ -57,7 +60,7 @@ export default function SafetyPage() {
           </div>
         )}
         {alert.effective_date && (
-          <div className="pp-alert-meta">Effective: {alert.effective_date.slice(0, 10)}</div>
+          <div className="pp-alert-meta">Effective: {new Date(alert.effective_date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
         )}
         {alert.body_html && (
           <div
