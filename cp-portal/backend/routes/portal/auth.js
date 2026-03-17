@@ -40,6 +40,9 @@ router.post('/register', (req, res) => {
   if (last_name.length  > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
   if (country   && country.length   > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
   if (specialty && specialty.length > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+  if (req.body.phone && String(req.body.phone).length > 100) {
+    return res.status(400).json({ error: 'Phone number exceeds maximum length.' });
+  }
 
   const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(client_code);
   if (!client) return res.status(404).json({ error: 'Portal not found.' });

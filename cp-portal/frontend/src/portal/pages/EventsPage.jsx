@@ -17,8 +17,8 @@ export default function EventsPage() {
         // LOW-12: sort — upcoming soonest first, past most-recent first
         const now = new Date()
         const sorted = [...items].sort((a, b) => {
-          const da = new Date(a.event_date || a.start_date)
-          const db_ = new Date(b.event_date || b.start_date)
+          const da = new Date(getEventDate(a))
+          const db_ = new Date(getEventDate(b))
           const aIsPast = da < now
           const bIsPast = db_ < now
           if (aIsPast !== bIsPast) return aIsPast ? 1 : -1
@@ -29,9 +29,11 @@ export default function EventsPage() {
       }).catch(() => setLoading(false))
   }, [clientCode])
 
+  function getEventDate(e) { return e.start_date || e.event_date }
+
   const now       = new Date()
   const filtered  = events.filter(e => {
-    const d = new Date(e.start_date)
+    const d = new Date(getEventDate(e))
     return filter === 'upcoming' ? d >= now : d < now
   })
 
@@ -48,8 +50,8 @@ export default function EventsPage() {
       </div>
 
       <div className="pp-tab-bar">
-        <button className={`pp-tab ${filter === 'upcoming' ? 'pp-tab-active' : ''}`} onClick={() => setFilter('upcoming')}>Upcoming</button>
-        <button className={`pp-tab ${filter === 'past'     ? 'pp-tab-active' : ''}`} onClick={() => setFilter('past')}>Past Events</button>
+        <button className={`pp-tab ${filter === 'upcoming' ? 'pp-tab-active' : ''}`} aria-pressed={filter === 'upcoming'} onClick={() => setFilter('upcoming')}>Upcoming</button>
+        <button className={`pp-tab ${filter === 'past'     ? 'pp-tab-active' : ''}`} aria-pressed={filter === 'past'}     onClick={() => setFilter('past')}>Past Events</button>
       </div>
 
       {loading ? <div className="pp-loading">Loading…</div> : filtered.length === 0 ? (
@@ -57,7 +59,7 @@ export default function EventsPage() {
       ) : (
         <div className="pp-event-list">
           {filtered.map(ev => {
-            const isPast = new Date(ev.event_date || ev.start_date) < now
+            const isPast = new Date(getEventDate(ev)) < now
             return (
             <div key={ev.id} className={`pp-event-card ${isPast ? 'pp-event-past' : ''}`}>
               {isPast && <span className="pp-badge pp-badge-past">Past Event</span>}

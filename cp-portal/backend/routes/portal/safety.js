@@ -86,9 +86,18 @@ router.get('/:alertId/attachment', authenticatePortal, (req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });
 
   // MED-37: RFC 5987 dual encoding — legacy filename= for old clients, filename*= for RFC 5987 compliant clients
-  const encodedName = encodeURIComponent(alert.attachment_name);
-  res.setHeader('Content-Disposition', `attachment; filename="${alert.attachment_name}"; filename*=UTF-8''${encodedName}`);
-  res.setHeader('Content-Type', 'application/pdf');
+  const safeName    = (alert.attachment_name || 'attachment').replace(/["\\]/g, '_');
+  const encodedName = encodeURIComponent(alert.attachment_name || 'attachment');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${encodedName}`);
+
+  const ext = (alert.attachment_name || '').split('.').pop().toLowerCase();
+  const CONTENT_TYPES = {
+    pdf:  'application/pdf',
+    doc:  'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    txt:  'text/plain',
+  };
+  res.setHeader('Content-Type', CONTENT_TYPES[ext] || 'application/octet-stream');
   fs.createReadStream(filePath).pipe(res);
 });
 

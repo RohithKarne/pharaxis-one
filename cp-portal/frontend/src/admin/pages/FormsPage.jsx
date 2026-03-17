@@ -105,7 +105,7 @@ export default function FormsPage() {
                   <label htmlFor="req">Required</label>
                 </div>
               </div>
-              {(newField.field_type === 'select' || newField.field_type === 'multiselect') && (
+              {(newField.field_type === 'select' || newField.field_type === 'multiselect' || newField.field_type === 'radio') && (
                 <div className="cp-field">
                   <label>Options (one per line)</label>
                   <textarea rows={4} value={optionsInput} onChange={e => setOptionsInput(e.target.value)} placeholder={"Option A\nOption B\nOption C"} />
@@ -155,7 +155,7 @@ export default function FormsPage() {
                 </td>
                 <td>
                   <span className="cp-type-badge">{f.field_type}</span>
-                  {(f.field_type === 'select' || f.field_type === 'multiselect') && parseOptions(f.field_options).length > 0 && (
+                  {(f.field_type === 'select' || f.field_type === 'multiselect' || f.field_type === 'radio') && parseOptions(f.field_options).length > 0 && (
                     <span className="cp-options-hint" title={parseOptions(f.field_options).join(', ')} style={{ marginLeft: 4, fontSize: 11, color: 'var(--cp-text-muted)' }}>
                       ({parseOptions(f.field_options).length} opts)
                     </span>
@@ -163,13 +163,13 @@ export default function FormsPage() {
                 </td>
                 <td>
                   <label className="cp-toggle-switch cp-toggle-sm">
-                    <input type="checkbox" checked={!!f.is_required} onChange={() => toggleRequired(f.id, f.is_required)} />
+                    <input type="checkbox" aria-label={`Toggle required for ${f.field_label}`} checked={!!f.is_required} onChange={() => toggleRequired(f.id, f.is_required)} />
                     <span className="cp-toggle-slider" />
                   </label>
                 </td>
                 <td>
                   <label className="cp-toggle-switch cp-toggle-sm">
-                    <input type="checkbox" checked={!!f.is_active} onChange={() => toggleField(f.id, f.is_active)} />
+                    <input type="checkbox" aria-label={`Toggle active for ${f.field_label}`} checked={!!f.is_active} onChange={() => toggleField(f.id, f.is_active)} />
                     <span className="cp-toggle-slider" />
                   </label>
                 </td>

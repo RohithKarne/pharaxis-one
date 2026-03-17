@@ -63,7 +63,16 @@ router.get('/', authenticatePortal, (req, res) => {
   res.json({ posts: paged, total, page, limit, allCategories });
 });
 
+// GET /api/portal/news/preview/:postId — admin preview, does NOT increment view_count
+// NOTE: this route must be registered BEFORE /:postId to avoid being shadowed by the catch-all route
+router.get('/preview/:postId', authenticatePortal, requirePortalAuth, (req, res) => {
+  const post = db.prepare('SELECT * FROM cp_news_posts WHERE id = ?').get(req.params.postId);
+  if (!post) return res.status(404).json({ error: 'Post not found.' });
+  res.json({ post });
+});
+
 // GET /api/portal/news/:postId?clientCode=xxx — single post + increment view_count
+// NOTE: any preview route must be registered BEFORE this catch-all route
 router.get('/:postId', authenticatePortal, (req, res) => {
   const { clientCode } = req.query;
   if (!clientCode) return res.status(400).json({ error: 'clientCode required.' });
@@ -97,13 +106,6 @@ router.post('/:clientCode/posts/:id/view', authenticatePortal, (req, res) => {
   if (!client) return res.status(404).json({ error: 'Portal not found.' });
   db.prepare('UPDATE cp_news_posts SET view_count = view_count + 1 WHERE id = ? AND client_id = ?').run(req.params.id, client.id);
   res.json({ ok: true });
-});
-
-// GET /api/portal/news/preview/:postId — admin preview, does NOT increment view_count
-router.get('/preview/:postId', requirePortalAuth, (req, res) => {
-  const post = db.prepare('SELECT * FROM cp_news_posts WHERE id = ?').get(req.params.postId);
-  if (!post) return res.status(404).json({ error: 'Post not found.' });
-  res.json({ post });
 });
 
 module.exports = router;

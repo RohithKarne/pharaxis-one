@@ -60,23 +60,24 @@ export default function ContactPage() {
           <div className="pp-contact-icon">🏥</div>
           <h3>Medical Information</h3>
           <p>For medical information requests and clinical inquiries, please use our submission portal.</p>
-          {/* LOW-22: use config contact_email, fall back to client.contact_email */}
-          {(config?.contact_email || client.contact_email) && (
+          {/* BLOCKER fix: no hardcoded fallback — only render if email exists */}
+          {(config?.contact_email || client.contact_email) ? (
             <a href={`mailto:${config?.contact_email || client.contact_email}`} className="pp-contact-link">
               {config?.contact_email || client.contact_email}
             </a>
-          )}
-          {!(config?.contact_email || client.contact_email) && (
-            <a href="mailto:contact@example.com" className="pp-contact-link">contact@example.com</a>
+          ) : (
+            <span className="pp-text-muted">Contact information not available.</span>
           )}
         </div>
         <div className="pp-contact-card">
           <div className="pp-contact-icon">📞</div>
           <h3>Phone Support</h3>
           <p>Our medical affairs team is available Monday through Friday, 9 AM – 5 PM EST.</p>
-          {/* LOW-22: use config contact_phone */}
-          {config?.contact_phone && (
-            <p className="pp-contact-phone">{config.contact_phone}</p>
+          {/* BLOCKER fix: only render phone if it exists */}
+          {(config?.contact_phone || client.contact_phone) ? (
+            <p className="pp-contact-phone">{config?.contact_phone || client.contact_phone}</p>
+          ) : (
+            <span className="pp-text-muted">Contact information not available.</span>
           )}
         </div>
         <div className="pp-contact-card">

@@ -24,8 +24,18 @@ router.post('/:clientCode', async (req, res) => {
   const config = db.prepare('SELECT * FROM cp_chatbox_config WHERE client_id = ? AND is_active = 1').get(client.id);
   if (!config || !config.api_key) return res.status(503).json({ error: 'Chatbox is not configured for this portal.' });
 
-  let { messages } = req.body; // [{ role: 'user'|'assistant', content: string }]
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+  // Accept either {messages} array OR {message + history} format from frontend
+  let messages;
+  if (Array.isArray(req.body.messages) && req.body.messages.length > 0) {
+    // Normalized format: [{role, content}]
+    messages = req.body.messages;
+  } else if (req.body.message && typeof req.body.message === 'string') {
+    // Legacy frontend format: {message, history: [{role, text}]}
+    const history = Array.isArray(req.body.history) ? req.body.history : [];
+    // Convert history {role, text} → {role, content}
+    const historyNormalized = history.map(m => ({ role: m.role, content: m.text || m.content || '' }));
+    messages = [...historyNormalized, { role: 'user', content: req.body.message }];
+  } else {
     return res.status(400).json({ error: 'messages array is required.' });
   }
 

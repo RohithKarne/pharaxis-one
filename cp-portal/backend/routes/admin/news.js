@@ -8,11 +8,8 @@ const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 
-// Sanitise HTML — allowlist-based, strips dangerous tags/attrs/protocols
-const ALLOWED_TAGS = /^(p|br|strong|em|ul|ol|li|h2|h3|h4|blockquote|a|span|div)$/i;
-const ALLOWED_ATTRS = /^(href|target|rel|class)$/i;
-
 function sanitiseHtml(dirty) {
+  // Blocklist-based sanitizer: strips dangerous tags and attributes
   if (!dirty) return '';
   // Strip script/style/iframe/object/embed tags completely (including content)
   let clean = dirty.replace(/<(script|style|iframe|object|embed|form|input|button)[^>]*>[\s\S]*?<\/\1>/gi, '');
@@ -38,14 +35,16 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
 
 // POST /api/admin/news/:clientId
 router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
-  const { title, body_html, category, thumbnail_path, target_types, status, publish_at } = req.body;
+  const { title, body_html, category, thumbnail_path, target_types, status } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required.' });
 
+  let publishAtIso = new Date().toISOString();
   if (req.body.publish_at) {
     const d = new Date(req.body.publish_at);
     if (isNaN(d.getTime())) {
       return res.status(400).json({ error: 'publish_at must be a valid datetime string.' });
     }
+    publishAtIso = d.toISOString();
   }
 
   const result = db.prepare(`
@@ -59,7 +58,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
     thumbnail_path || null,
     JSON.stringify(target_types || []),
     status || 'draft',
-    publish_at || new Date().toISOString(),
+    publishAtIso,
   );
 
   res.json({ post: db.prepare('SELECT * FROM cp_news_posts WHERE id = ?').get(result.lastInsertRowid) });
@@ -67,14 +66,16 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
 
 // PUT /api/admin/news/:clientId/:postId
 router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, res) => {
-  const { title, body_html, category, thumbnail_path, target_types, status, publish_at } = req.body;
+  const { title, body_html, category, thumbnail_path, target_types, status } = req.body;
   const fields = [], values = [];
 
-  if (req.body.publish_at) {
+  let publishAtIso;
+  if (req.body.publish_at !== undefined) {
     const d = new Date(req.body.publish_at);
     if (isNaN(d.getTime())) {
       return res.status(400).json({ error: 'publish_at must be a valid datetime string.' });
     }
+    publishAtIso = d.toISOString();
   }
 
   if (title !== undefined)        { fields.push('title = ?');              values.push(title); }
@@ -87,7 +88,7 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, r
   }
   if (target_types !== undefined) { fields.push('target_types_json = ?'); values.push(JSON.stringify(target_types)); }
   if (status !== undefined)       { fields.push('status = ?');             values.push(status); }
-  if (publish_at !== undefined)   { fields.push('publish_at = ?');         values.push(publish_at); }
+  if (publishAtIso !== undefined) { fields.push('publish_at = ?');         values.push(publishAtIso); }
 
   if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
   fields.push("updated_at = datetime('now')");

@@ -40,11 +40,8 @@ const upload = multer({
   },
 });
 
-// Sanitise HTML — allowlist-based, strips dangerous tags/attrs/protocols
-const ALLOWED_TAGS = /^(p|br|strong|em|ul|ol|li|h2|h3|h4|blockquote|a|span|div)$/i;
-const ALLOWED_ATTRS = /^(href|target|rel|class)$/i;
-
 function sanitiseHtml(dirty) {
+  // Blocklist-based sanitizer: strips dangerous tags and attributes
   if (!dirty) return '';
   // Strip script/style/iframe/object/embed tags completely (including content)
   let clean = dirty.replace(/<(script|style|iframe|object|embed|form|input|button)[^>]*>[\s\S]*?<\/\1>/gi, '');
@@ -107,6 +104,13 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
 router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types, status } = req.body;
   const fields = [], values = [];
+
+  if (req.body.alert_type && !VALID_TYPES.includes(req.body.alert_type)) {
+    return res.status(400).json({ error: `Invalid alert_type. Must be one of: ${VALID_TYPES.join(', ')}` });
+  }
+  if (req.body.severity && !VALID_SEVERITIES.includes(req.body.severity)) {
+    return res.status(400).json({ error: `Invalid severity. Must be one of: ${VALID_SEVERITIES.join(', ')}` });
+  }
 
   if (title !== undefined)          { fields.push('title = ?');              values.push(title); }
   if (alert_type !== undefined)     { fields.push('alert_type = ?');         values.push(alert_type); }

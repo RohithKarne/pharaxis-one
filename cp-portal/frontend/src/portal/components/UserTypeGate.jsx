@@ -50,7 +50,7 @@ export default function UserTypeGate() {
           )}
         </div>
 
-        <div className="pp-gate-type-grid">
+        <div className="pp-gate-type-grid" role="radiogroup" aria-label="Select your user type">
           {gate.userTypes.map(t => (
             <button
               key={t.type_key}

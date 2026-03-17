@@ -24,22 +24,27 @@ const CLIENT_NAV = (id) => [
   { to: `/admin/clients/${id}/compliance`,  label: 'Compliance',    icon: '🔒' },
 ]
 
-const PAGE_TITLES = {
-  '/admin/clients':    'Clients',
-  '/admin/branding':   'Branding',
-  '/admin/content':    'Content',
-  '/admin/news':       'News & Announcements',
-  '/admin/safety':     'Safety Communications',
-  '/admin/documents':  'Documents',
-  '/admin/forms':      'Forms',
-  '/admin/features':   'Features',
-  '/admin/gate':       'Access Gate',
-  '/admin/integration':'Integration',
-  '/admin/chatbox':    'Chatbox Config',
-  '/admin/compliance': 'Compliance',
-  '/admin/users':      'Portal Users',
-  '/admin/msls':       'MSL Management',
-  '/admin':            'Dashboard',
+const SEGMENT_TITLES = {
+  branding:    'Branding',
+  content:     'Content',
+  news:        'News',
+  safety:      'Safety',
+  documents:   'Documents',
+  forms:       'Forms',
+  features:    'Features',
+  gate:        'Access Gate',
+  integration: 'Integration',
+  chatbox:     'Chatbox',
+  compliance:  'Compliance',
+  users:       'Portal Users',
+  msls:        'MSL Management',
+  clients:     'Clients',
+}
+
+function deriveTitle(pathname) {
+  if (pathname === '/admin' || pathname === '/admin/') return 'Dashboard'
+  const lastSegment = pathname.split('/').filter(Boolean).pop() || ''
+  return SEGMENT_TITLES[lastSegment] || 'Admin'
 }
 
 export default function AdminLayout({ children }) {
@@ -48,12 +53,11 @@ export default function AdminLayout({ children }) {
   const { clientId } = useParams()
   const location = useLocation()
 
-  const derivedTitle = Object.entries(PAGE_TITLES).find(([path]) => location.pathname.startsWith(path))?.[1] || 'Admin'
+  const pageTitle = deriveTitle(location.pathname)
 
   useEffect(() => {
-    const title = Object.entries(PAGE_TITLES).reverse().find(([p]) => location.pathname.startsWith(p))?.[1] || 'Admin'
-    document.title = `${title} | CP Admin`
-  }, [location.pathname])
+    document.title = `${pageTitle} | CP Admin`
+  }, [pageTitle])
 
   function handleLogout() { logout(); navigate('/admin/login') }
 
@@ -99,7 +103,7 @@ export default function AdminLayout({ children }) {
 
       <div className="cp-admin-main">
         <div className="cp-admin-topbar">
-          <h1 className="cp-topbar-title">{derivedTitle}</h1>
+          <h1 className="cp-topbar-title">{pageTitle}</h1>
         </div>
         <div className="cp-admin-content">
           {children}

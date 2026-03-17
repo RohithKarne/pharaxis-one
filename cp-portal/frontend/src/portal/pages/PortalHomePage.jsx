@@ -85,7 +85,7 @@ export default function PortalHomePage() {
     { key: 'events',             label: 'Events',    path: 'events' },
     { key: 'resources',          label: 'Resources', path: 'resources' },
     { key: 'find_msl',           label: 'Find MSL',  path: 'find-msl' },
-  ].filter(l => isFeatureEnabled(l.key) !== false)
+  ].filter(l => isFeatureEnabled(l.key) === true)
 
   const heroTitle    = portalConfig?.welcome_title || `Welcome to ${branding.portal_name || client.name || 'the Medical Portal'}`
   const heroSubtitle = portalConfig?.welcome_message || branding.tagline || 'Your trusted source for medical information, resources, and support.'

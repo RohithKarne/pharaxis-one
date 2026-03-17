@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import UserTypeGate from './UserTypeGate'
@@ -9,12 +9,24 @@ export default function PortalLayout({ children }) {
   const has_active_safety_alert = portalConfig?.has_active_safety_alert
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef(null)
   const navigate   = useNavigate()
   const location   = useLocation()
 
   useEffect(() => {
     setMobileOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    if (!userMenuOpen) return
+    function handleClickOutside(e) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [userMenuOpen])
   const branding   = portalConfig?.branding || {}
   const client     = portalConfig?.client   || {}
 
@@ -72,7 +84,7 @@ export default function PortalLayout({ children }) {
               </button>
             )}
             {user ? (
-              <div className="pp-user-menu">
+              <div className="pp-user-menu" ref={userMenuRef}>
                 <button
                   className="pp-user-btn"
                   aria-haspopup="true"
@@ -142,7 +154,7 @@ function ChatboxWidget({ clientCode }) {
 
   function openChat() {
     setOpen(true)
-    if (messages.length === 0) setMessages([{ role: 'assistant', text: welcomeMsg }])
+    if (messages.length === 0) setMessages([{ role: 'assistant', content: welcomeMsg }])
   }
 
   async function sendMessage(e) {
@@ -152,18 +164,21 @@ function ChatboxWidget({ clientCode }) {
     setTimeout(() => setSendCooldown(false), 2000)
     const userMsg = input.trim()
     setInput('')
-    setMessages(m => [...m, { role: 'user', text: userMsg }])
+    setMessages(m => [...m, { role: 'user', content: userMsg }])
     setLoading(true)
     try {
+      // Build messages array in {role, content} format expected by backend
+      const history = messages.slice(-8).map(m => ({ role: m.role, content: m.content || m.text || '' }))
+      const payload = { messages: [...history, { role: 'user', content: userMsg }] }
       const res  = await fetch(`/api/portal/chatbox/${clientCode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg, history: messages.slice(-8) })
+        body: JSON.stringify(payload)
       })
       const data = await res.json()
-      setMessages(m => [...m, { role: 'assistant', text: data.reply || 'Sorry, I could not process that.' }])
+      setMessages(m => [...m, { role: 'assistant', content: data.reply || 'Sorry, I could not process that.' }])
     } catch {
-      setMessages(m => [...m, { role: 'assistant', text: 'Connection error. Please try again.' }])
+      setMessages(m => [...m, { role: 'assistant', content: 'Connection error. Please try again.' }])
     }
     setLoading(false)
   }
@@ -179,7 +194,7 @@ function ChatboxWidget({ clientCode }) {
           <div className="pp-chat-body">
             {messages.map((m, i) => (
               <div key={i} className={`pp-chat-msg pp-chat-msg-${m.role}`}>
-                <div className="pp-chat-bubble">{m.text}</div>
+                <div className="pp-chat-bubble">{m.content}</div>
               </div>
             ))}
             {loading && <div className="pp-chat-msg pp-chat-msg-assistant" role="status" aria-live="polite" aria-busy="true"><div className="pp-chat-bubble pp-chat-typing">…</div></div>}
