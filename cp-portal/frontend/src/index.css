@@ -914,3 +914,175 @@ body { background: var(--cp-bg); }
   .pp-chat-window { width: calc(100vw - 32px); right: 16px; bottom: 16px; }
   .pp-event-card { flex-direction: column; gap: 14px; }
 }
+
+/* ── F-17: Accessibility — Focus Ring (global) ────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--pp-primary, #6B3FA0);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--pp-primary, #6B3FA0);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ── F-13: Safety Banner (portal-wide top bar) ─────────────────── */
+
+.pp-safety-banner {
+  background: #DC2626;
+  color: #fff;
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+.pp-safety-banner-link {
+  color: #fff;
+  text-decoration: underline;
+  font-weight: 700;
+}
+.pp-safety-banner-link:hover { opacity: 0.85; }
+
+/* ── F-13: Safety Alert Cards ──────────────────────────────────── */
+
+.pp-safety-page { max-width: 860px; margin: 0 auto; padding: 32px 24px; }
+.pp-safety-section-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--pp-text, #1A1A2E); }
+.pp-safety-resolved-title { font-size: 16px; font-weight: 600; margin: 32px 0 12px; color: #6B7280; }
+.pp-safety-empty { color: #6B7280; font-size: 14px; padding: 24px 0; }
+
+.pp-alert-card {
+  background: var(--pp-surface, #fff);
+  border: 1px solid var(--pp-border, #E5E7EB);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 14px;
+  border-left: 4px solid #6B7280;
+}
+.pp-alert-card.severity-critical { border-left-color: #DC2626; }
+.pp-alert-card.severity-high     { border-left-color: #D97706; }
+.pp-alert-card.severity-medium   { border-left-color: #2563EB; }
+.pp-alert-card.severity-informational { border-left-color: #6B7280; }
+.pp-alert-card.resolved { opacity: 0.7; }
+
+.pp-alert-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.pp-alert-title  { font-size: 16px; font-weight: 700; color: var(--pp-text, #1A1A2E); flex: 1; }
+.pp-alert-meta   { font-size: 12px; color: #6B7280; margin-bottom: 10px; }
+.pp-alert-body   { font-size: 14px; color: var(--pp-text, #1A1A2E); line-height: 1.6; margin-bottom: 12px; }
+.pp-alert-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.pp-severity-badge {
+  display: inline-flex; align-items: center; padding: 2px 10px;
+  border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+}
+.pp-severity-badge.critical     { background: #FEE2E2; color: #DC2626; }
+.pp-severity-badge.high         { background: #FEF3C7; color: #D97706; }
+.pp-severity-badge.medium       { background: #DBEAFE; color: #2563EB; }
+.pp-severity-badge.informational{ background: #F3F4F6; color: #6B7280; }
+.pp-severity-badge.resolved     { background: #F3F4F6; color: #9CA3AF; }
+
+/* admin safety severity badges */
+.badge-critical      { background: #FEE2E2; color: #DC2626; }
+.badge-high          { background: #FEF3C7; color: #D97706; }
+.badge-medium        { background: #DBEAFE; color: #2563EB; }
+.badge-informational { background: #F3F4F6; color: #6B7280; }
+
+/* ── F-05: News Cards ──────────────────────────────────────────── */
+
+.pp-news-page  { max-width: 860px; margin: 0 auto; padding: 32px 24px; }
+.pp-news-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
+.pp-news-card  {
+  background: var(--pp-surface, #fff); border: 1px solid var(--pp-border, #E5E7EB);
+  border-radius: 10px; overflow: hidden; cursor: pointer;
+  transition: box-shadow 0.15s; text-decoration: none; color: inherit; display: block;
+}
+.pp-news-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.10); }
+.pp-news-card-img  { width: 100%; height: 160px; object-fit: cover; background: var(--pp-surface, #f3f4f6); }
+.pp-news-card-img-placeholder { height: 6px; background: var(--pp-primary, #6B3FA0); }
+.pp-news-card-body { padding: 16px; }
+.pp-news-card-cat  { font-size: 11px; font-weight: 700; color: var(--pp-primary, #6B3FA0); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.pp-news-card-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--pp-text, #1A1A2E); line-height: 1.4; }
+.pp-news-card-excerpt { font-size: 13px; color: #6B7280; line-height: 1.5; margin-bottom: 10px; }
+.pp-news-card-date { font-size: 11px; color: #9CA3AF; }
+
+.pp-news-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.pp-filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--pp-border, #E5E7EB); background: transparent; font-size: 12px; cursor: pointer; color: var(--pp-text, #1A1A2E); transition: all 0.15s; }
+.pp-filter-btn.active { background: var(--pp-primary, #6B3FA0); color: #fff; border-color: var(--pp-primary, #6B3FA0); }
+.pp-news-pagination { display: flex; justify-content: center; gap: 12px; margin-top: 28px; }
+
+.pp-article-page  { max-width: 720px; margin: 0 auto; padding: 32px 24px; }
+.pp-article-back  { font-size: 13px; color: var(--pp-primary, #6B3FA0); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 24px; }
+.pp-article-back:hover { text-decoration: underline; }
+.pp-article-cat   { font-size: 11px; font-weight: 700; color: var(--pp-primary, #6B3FA0); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.pp-article-title { font-size: 26px; font-weight: 800; color: var(--pp-text, #1A1A2E); line-height: 1.3; margin-bottom: 10px; }
+.pp-article-date  { font-size: 13px; color: #9CA3AF; margin-bottom: 20px; }
+.pp-article-img   { width: 100%; border-radius: 10px; margin-bottom: 24px; }
+.pp-article-body  { font-size: 15px; line-height: 1.8; color: var(--pp-text, #1A1A2E); }
+.pp-article-body p  { margin-bottom: 14px; }
+.pp-article-body h2 { font-size: 18px; font-weight: 700; margin: 24px 0 10px; }
+.pp-article-body ul { padding-left: 20px; margin-bottom: 14px; }
+.pp-article-body li { margin-bottom: 6px; }
+
+/* ── F-04: Documents Page ──────────────────────────────────────── */
+
+.pp-docs-page    { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+.pp-docs-search  { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
+.pp-docs-search input { flex: 1; padding: 9px 14px; border: 1px solid var(--pp-border, #E5E7EB); border-radius: 8px; font-size: 14px; }
+.pp-docs-grid    { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
+.pp-doc-card     {
+  background: var(--pp-surface, #fff); border: 1px solid var(--pp-border, #E5E7EB);
+  border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 10px;
+}
+.pp-doc-type-badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+.pp-doc-type-badge.smpc             { background: #EDE9FE; color: #7C3AED; }
+.pp-doc-type-badge.pil              { background: #DBEAFE; color: #2563EB; }
+.pp-doc-type-badge.ifu              { background: #DCFCE7; color: #16A34A; }
+.pp-doc-type-badge.clinical_summary { background: #FEF3C7; color: #D97706; }
+.pp-doc-type-badge.other            { background: #F3F4F6; color: #6B7280; }
+.pp-doc-title    { font-size: 14px; font-weight: 700; color: var(--pp-text, #1A1A2E); }
+.pp-doc-meta     { font-size: 12px; color: #6B7280; }
+.pp-doc-download { margin-top: auto; }
+
+/* ── F-02: Consent Banner ──────────────────────────────────────── */
+
+.pp-consent-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.65);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.pp-consent-modal {
+  background: #fff; border-radius: 14px; padding: 32px;
+  max-width: 520px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+.pp-consent-title    { font-size: 20px; font-weight: 800; color: #1A1A2E; margin-bottom: 10px; }
+.pp-consent-body     { font-size: 14px; color: #374151; line-height: 1.6; margin-bottom: 24px; }
+.pp-consent-actions  { display: flex; flex-direction: column; gap: 10px; }
+.pp-consent-btn-primary  { padding: 12px; border-radius: 8px; border: none; background: var(--pp-primary, #6B3FA0); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
+.pp-consent-btn-secondary{ padding: 12px; border-radius: 8px; border: 1px solid #E5E7EB; background: #fff; color: #374151; font-size: 14px; cursor: pointer; }
+.pp-consent-btn-link     { background: none; border: none; color: var(--pp-primary, #6B3FA0); font-size: 13px; cursor: pointer; text-decoration: underline; padding: 4px 0; }
+
+.pp-consent-toggle-row   { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #F3F4F6; }
+.pp-consent-toggle-label { font-size: 14px; font-weight: 600; color: #1A1A2E; }
+.pp-consent-toggle-desc  { font-size: 12px; color: #6B7280; margin-top: 2px; }
+.pp-consent-toggle input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+
+/* ── News homepage widget ──────────────────────────────────────── */
+.pp-news-widget        { margin-top: 40px; }
+.pp-news-widget-title  { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--pp-text, #1A1A2E); }
+.pp-news-widget-grid   { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.pp-news-widget-card   { background: var(--pp-surface, #fff); border: 1px solid var(--pp-border, #E5E7EB); border-radius: 8px; padding: 16px; cursor: pointer; transition: box-shadow 0.15s; text-decoration: none; color: inherit; display: block; }
+.pp-news-widget-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+.pp-news-widget-cat    { font-size: 10px; font-weight: 700; color: var(--pp-primary, #6B3FA0); text-transform: uppercase; margin-bottom: 4px; }
+.pp-news-widget-title2 { font-size: 13px; font-weight: 700; color: var(--pp-text, #1A1A2E); margin-bottom: 6px; line-height: 1.4; }
+.pp-news-widget-date   { font-size: 11px; color: #9CA3AF; }
+.pp-news-widget-more   { margin-top: 12px; font-size: 13px; color: var(--pp-primary, #6B3FA0); text-decoration: none; font-weight: 600; }
+.pp-news-widget-more:hover { text-decoration: underline; }

@@ -50,6 +50,8 @@ export default function UserTypeGate() {
             <button
               key={t.type_key}
               type="button"
+              role="radio"
+              aria-checked={selected === t.type_key}
               className={`pp-gate-type-card ${selected === t.type_key ? 'pp-gate-type-selected' : ''}`}
               onClick={() => setSelected(t.type_key)}
             >
