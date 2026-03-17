@@ -18,6 +18,7 @@ export default function SubmitPage() {
   const [submitting, setSubmitting]     = useState(false)
   const [submitted, setSubmitted]       = useState(null)
   const [error, setError]               = useState('')
+  const [fieldErrors, setFieldErrors]   = useState({})
 
   useEffect(() => {
     if (!selectedType) return
@@ -26,16 +27,30 @@ export default function SubmitPage() {
       .then(d => {
         setFormFields(d.fields || [])
         setFormValues({})
+        setFieldErrors({})
       })
       .catch(() => {})
   }, [selectedType, clientCode])
 
   function handleFieldChange(key, value) {
     setFormValues(v => ({ ...v, [key]: value }))
+    if (fieldErrors[key]) setFieldErrors(prev => ({ ...prev, [key]: undefined }))
+  }
+
+  function validate() {
+    const errors = {}
+    formFields.filter(f => f.is_required && f.is_active).forEach(f => {
+      if (!formValues[f.field_key] || String(formValues[f.field_key]).trim() === '') {
+        errors[f.field_key] = `${f.field_label || f.label} is required.`
+      }
+    })
+    setFieldErrors(errors)
+    return Object.keys(errors).length === 0
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!validate()) return
     setSubmitting(true); setError('')
     const res  = await fetch(`/api/portal/submit/${clientCode}/${selectedType}`, {
       method: 'POST',
@@ -104,7 +119,7 @@ export default function SubmitPage() {
           ) : (
             <form onSubmit={handleSubmit} className="pp-submission-form">
               {formFields.filter(f => f.is_active).map(field => (
-                <div key={field.field_key} className="pp-field">
+                <div key={field.field_key} className={`pp-field${fieldErrors[field.field_key] ? ' pp-field-error' : ''}`}>
                   <label>
                     {field.label}
                     {field.is_required ? <span className="pp-required"> *</span> : null}
@@ -112,14 +127,12 @@ export default function SubmitPage() {
                   {field.field_type === 'textarea' ? (
                     <textarea
                       rows={4}
-                      required={!!field.is_required}
                       value={formValues[field.field_key] || ''}
                       onChange={e => handleFieldChange(field.field_key, e.target.value)}
                       placeholder={field.placeholder || ''}
                     />
                   ) : field.field_type === 'select' ? (
                     <select
-                      required={!!field.is_required}
                       value={formValues[field.field_key] || ''}
                       onChange={e => handleFieldChange(field.field_key, e.target.value)}>
                       <option value="">-- Select --</option>
@@ -139,11 +152,13 @@ export default function SubmitPage() {
                   ) : (
                     <input
                       type={field.field_type === 'email' ? 'email' : field.field_type === 'phone' ? 'tel' : 'text'}
-                      required={!!field.is_required}
                       value={formValues[field.field_key] || ''}
                       onChange={e => handleFieldChange(field.field_key, e.target.value)}
                       placeholder={field.placeholder || ''}
                     />
+                  )}
+                  {fieldErrors[field.field_key] && (
+                    <span className="pp-field-error-msg">{fieldErrors[field.field_key]}</span>
                   )}
                 </div>
               ))}

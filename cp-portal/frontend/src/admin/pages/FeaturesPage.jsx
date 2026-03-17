@@ -8,6 +8,8 @@ export default function FeaturesPage() {
   const [features, setFeatures] = useState([])
   const [loading, setLoading]   = useState(true)
   const [saving, setSaving]     = useState(null)
+  const [error, setError]       = useState('')
+  const [saved, setSaved]       = useState(false)
 
   useEffect(() => {
     fetch(`/api/admin/features/${clientId}`, { headers: adminHeaders() })
@@ -16,19 +18,26 @@ export default function FeaturesPage() {
   }, [clientId])
 
   async function toggle(featureKey, current) {
-    setSaving(featureKey)
-    await fetch(`/api/admin/features/${clientId}/${featureKey}`, {
+    setSaving(featureKey); setError(''); setSaved(false)
+    const res = await fetch(`/api/admin/features/${clientId}/${featureKey}`, {
       method: 'PATCH', headers: adminHeaders(),
       body: JSON.stringify({ is_enabled: !current }),
     })
-    setFeatures(prev => prev.map(f => f.feature_key === featureKey ? { ...f, is_enabled: !current ? 1 : 0 } : f))
+    const data = await res.json()
     setSaving(null)
+    if (!res.ok) { setError(data.error || 'Failed to update feature.'); return }
+    setFeatures(prev => prev.map(f => f.feature_key === featureKey ? { ...f, is_enabled: !current ? 1 : 0 } : f))
+    setSaved(true)
   }
 
   async function updateLabel(featureKey, display_name) {
-    await fetch(`/api/admin/features/${clientId}/${featureKey}`, {
+    setError(''); setSaved(false)
+    const res = await fetch(`/api/admin/features/${clientId}/${featureKey}`, {
       method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ display_name }),
     })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error || 'Failed to update label.'); return }
+    setSaved(true)
   }
 
   if (loading) return <AdminLayout title="Features"><div className="cp-loading">Loading…</div></AdminLayout>
@@ -43,6 +52,9 @@ export default function FeaturesPage() {
         <span className="cp-badge badge-active">{enabled.length} enabled</span>
         <span className="cp-badge badge-inactive">{disabled.length} disabled</span>
       </div>
+
+      {error && <div className="cp-error">{error}</div>}
+      {saved && <div className="cp-success">✓ Feature updated.</div>}
 
       <div className="cp-features-list">
         {features.map(f => (

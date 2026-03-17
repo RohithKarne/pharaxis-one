@@ -7,6 +7,7 @@
  */
 
 const jwt = require('jsonwebtoken');
+const db  = require('../database/db');
 
 if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
   if (!process.env.CP_ADMIN_JWT_SECRET || !process.env.CP_PORTAL_JWT_SECRET) {
@@ -36,6 +37,11 @@ function authenticatePortal(req, res, next) {
   if (header?.startsWith('Bearer ')) {
     try {
       req.portalUser = jwt.verify(header.slice(7), PORTAL_SECRET);
+      // Sprint 2: DB check to honour immediate deactivation without a token blocklist
+      const userRecord = db.prepare('SELECT is_active FROM cp_portal_users WHERE id = ?').get(req.portalUser.id);
+      if (!userRecord || !userRecord.is_active) {
+        req.portalUser = null; // treat as anonymous
+      }
     } catch {
       // ignore invalid token for anonymous access
     }
@@ -46,6 +52,11 @@ function authenticatePortal(req, res, next) {
 function requirePortalAuth(req, res, next) {
   if (!req.portalUser) {
     return res.status(401).json({ error: 'Portal login required.' });
+  }
+  // Sprint 2: re-check is_active so deactivated users with valid JWTs are rejected
+  const userRecord = db.prepare('SELECT is_active FROM cp_portal_users WHERE id = ?').get(req.portalUser.id);
+  if (!userRecord || !userRecord.is_active) {
+    return res.status(401).json({ error: 'Your account has been deactivated.' });
   }
   next();
 }

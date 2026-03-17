@@ -87,7 +87,7 @@ export default function SafetyPage() {
         if (k === 'target_types') fd.append(k, JSON.stringify(v))
         else fd.append(k, v ?? '')
       })
-      if (fileInput) fd.append('file', fileInput)
+      if (fileInput) fd.append('attachment', fileInput)
 
       const url    = editAlert
         ? `/api/admin/safety/${clientId}/${editAlert.id}`
