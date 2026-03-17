@@ -37,6 +37,10 @@ app.use('/api/admin/users',       require('./routes/admin/portalUsers'));
 app.use('/api/admin/templates',   require('./routes/admin/templates'));
 app.use('/api/admin/chatbox',     require('./routes/admin/chatbox'));
 app.use('/api/admin/gate',        require('./routes/admin/gate'));
+app.use('/api/admin/compliance',  require('./routes/admin/compliance'));
+app.use('/api/admin/documents',   require('./routes/admin/documents'));
+app.use('/api/admin/news',        require('./routes/admin/news'));
+app.use('/api/admin/safety',      require('./routes/admin/safety'));
 
 // ── Public Portal Routes ──────────────────────────────────────
 app.use('/api/portal/config',     require('./routes/portal/config'));
@@ -44,6 +48,10 @@ app.use('/api/portal/auth',       require('./routes/portal/auth'));
 app.use('/api/portal/submit',     require('./routes/portal/submit'));
 app.use('/api/portal/content',    require('./routes/portal/content'));
 app.use('/api/portal/chatbox',    require('./routes/portal/chatbox'));
+app.use('/api/portal/consent',    require('./routes/portal/consent'));
+app.use('/api/portal/documents',  require('./routes/portal/documents'));
+app.use('/api/portal/news',       require('./routes/portal/news'));
+app.use('/api/portal/safety',     require('./routes/portal/safety'));
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {

@@ -410,6 +410,124 @@ function initializeDatabase() {
     db.exec(`ALTER TABLE cp_branding ADD COLUMN sla_response_text TEXT`);
   }
 
+  // ── F-02: COMPLIANCE CONFIG — jurisdiction + banner per client ─
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_compliance_config (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id           INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id),
+      jurisdictions_json  TEXT    NOT NULL DEFAULT '[]',
+      -- e.g. ["gdpr","ccpa","pdpb","apac"]  — strictest governs banner
+      banner_config_json  TEXT    NOT NULL DEFAULT '{}',
+      -- { title, body, accept_label, decline_label, manage_label }
+      version             TEXT    NOT NULL DEFAULT 'v1.0',
+      require_reconsent   INTEGER NOT NULL DEFAULT 0,
+      updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // ── F-02: CONSENT RECORDS — per user consent audit trail ──────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_consent_records (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id    INTEGER NOT NULL REFERENCES cp_clients(id),
+      user_id      INTEGER,   -- NULL for anonymous visitors
+      ip_hash      TEXT,      -- hashed IP for anonymous records (no PII)
+      version      TEXT    NOT NULL,
+      choices_json TEXT    NOT NULL DEFAULT '{}',
+      -- { necessary: true, functional: true, analytics: false, marketing: false }
+      consented_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_cp_consent_client  ON cp_consent_records(client_id);
+    CREATE INDEX IF NOT EXISTS idx_cp_consent_user    ON cp_consent_records(user_id);
+  `);
+
+  // ── F-04: DOCUMENT CATEGORIES — admin-defined per client ──────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_document_categories (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id    INTEGER NOT NULL REFERENCES cp_clients(id),
+      name         TEXT    NOT NULL,
+      sort_order   INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(client_id, name)
+    );
+  `);
+
+  // ── F-04: DOCUMENTS — medical doc library per client ──────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_documents (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id        INTEGER NOT NULL REFERENCES cp_clients(id),
+      title            TEXT    NOT NULL,
+      category         TEXT,
+      doc_type         TEXT    NOT NULL DEFAULT 'other',
+      -- doc_type: smpc | pil | ifu | clinical_summary | other
+      file_path        TEXT    NOT NULL,
+      file_name        TEXT    NOT NULL,
+      file_size        INTEGER NOT NULL DEFAULT 0,
+      mime_type        TEXT    NOT NULL,
+      visible_to_json  TEXT    NOT NULL DEFAULT '[]',
+      -- [] = all user types; ["hcp","physician"] = restricted
+      source           TEXT    NOT NULL DEFAULT 'manual',
+      -- source: manual | mims
+      mims_ref_id      TEXT,   -- future MIMS sync reference
+      is_active        INTEGER NOT NULL DEFAULT 1,
+      created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_cp_docs_client ON cp_documents(client_id);
+  `);
+
+  // ── F-05: NEWS POSTS — news & announcements per client ────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_news_posts (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id        INTEGER NOT NULL REFERENCES cp_clients(id),
+      title            TEXT    NOT NULL,
+      body_html        TEXT    NOT NULL DEFAULT '',
+      category         TEXT,
+      thumbnail_path   TEXT,
+      target_types_json TEXT   NOT NULL DEFAULT '[]',
+      -- [] = all user types; ["hcp"] = HCP only
+      status           TEXT    NOT NULL DEFAULT 'draft',
+      -- status: draft | scheduled | published | archived
+      publish_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+      view_count       INTEGER NOT NULL DEFAULT 0,
+      created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_cp_news_client ON cp_news_posts(client_id);
+    CREATE INDEX IF NOT EXISTS idx_cp_news_status ON cp_news_posts(status);
+  `);
+
+  // ── F-13: SAFETY ALERTS — regulatory communications per client ─
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_safety_alerts (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id        INTEGER NOT NULL REFERENCES cp_clients(id),
+      title            TEXT    NOT NULL,
+      alert_type       TEXT    NOT NULL DEFAULT 'other',
+      -- alert_type: dhcp_letter | product_recall | urgent_safety_restriction | field_safety_notice | other
+      severity         TEXT    NOT NULL DEFAULT 'informational'
+                       CHECK(severity IN ('critical','high','medium','informational')),
+      product_name     TEXT,
+      ref_number       TEXT,
+      body_html        TEXT    NOT NULL DEFAULT '',
+      effective_date   TEXT    NOT NULL DEFAULT (datetime('now')),
+      target_types_json TEXT   NOT NULL DEFAULT '[]',
+      -- [] = all user types
+      attachment_path  TEXT,
+      attachment_name  TEXT,
+      status           TEXT    NOT NULL DEFAULT 'active'
+                       CHECK(status IN ('active','resolved','archived')),
+      view_count       INTEGER NOT NULL DEFAULT 0,
+      created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_cp_safety_client   ON cp_safety_alerts(client_id);
+    CREATE INDEX IF NOT EXISTS idx_cp_safety_status   ON cp_safety_alerts(status);
+    CREATE INDEX IF NOT EXISTS idx_cp_safety_severity ON cp_safety_alerts(severity);
+  `);
+
   // ── AUDIT LOGS — every admin action logged ────────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_audit_logs (
