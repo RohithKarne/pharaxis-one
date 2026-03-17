@@ -6,12 +6,12 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
-const { requirePortalAuth } = require('../../middleware/auth');
+const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const path    = require('path');
 const fs      = require('fs');
 
 // GET /api/portal/safety?clientCode=xxx
-router.get('/', requirePortalAuth, (req, res) => {
+router.get('/', authenticatePortal, (req, res) => {
   const { clientCode } = req.query;
   if (!clientCode) return res.status(400).json({ error: 'clientCode required.' });
 
@@ -40,7 +40,7 @@ router.get('/', requirePortalAuth, (req, res) => {
 });
 
 // GET /api/portal/safety/:alertId?clientCode=xxx — single alert + increment view_count
-router.get('/:alertId', requirePortalAuth, (req, res) => {
+router.get('/:alertId', authenticatePortal, (req, res) => {
   const { clientCode } = req.query;
   if (!clientCode) return res.status(400).json({ error: 'clientCode required.' });
 
@@ -64,7 +64,7 @@ router.get('/:alertId', requirePortalAuth, (req, res) => {
 });
 
 // GET /api/portal/safety/:alertId/attachment?clientCode=xxx
-router.get('/:alertId/attachment', requirePortalAuth, (req, res) => {
+router.get('/:alertId/attachment', authenticatePortal, (req, res) => {
   const { clientCode } = req.query;
   if (!clientCode) return res.status(400).json({ error: 'clientCode required.' });
 

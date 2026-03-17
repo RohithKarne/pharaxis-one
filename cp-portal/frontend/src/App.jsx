@@ -22,6 +22,7 @@ import CompliancePage       from './admin/pages/CompliancePage'
 
 // Portal pages
 import { PortalProvider }       from './portal/context/PortalContext'
+import { usePortal }            from './portal/context/PortalContext'
 import PortalLayout             from './portal/components/PortalLayout'
 import PortalHomePage           from './portal/pages/PortalHomePage'
 import PortalLoginPage          from './portal/pages/LoginPage'
@@ -44,6 +45,20 @@ function AdminGuard({ children }) {
   return admin ? children : <Navigate to="/admin/login" replace />
 }
 
+function FeatureGuard({ featureKey, children }) {
+  const { isFeatureEnabled, clientCode, loading } = usePortal()
+  if (loading) return null
+  if (!isFeatureEnabled(featureKey)) return <Navigate to={`/portal/${clientCode}`} replace />
+  return children
+}
+
+function PortalAuthGuard({ children }) {
+  const { user, clientCode, loading } = usePortal()
+  if (loading) return null
+  if (!user) return <Navigate to={`/portal/${clientCode}/login`} replace />
+  return children
+}
+
 function PortalRoutes() {
   return (
     <PortalProvider>
@@ -51,18 +66,18 @@ function PortalRoutes() {
         <Routes>
           <Route index                    element={<PortalHomePage />} />
           <Route path="login"             element={<PortalLoginPage />} />
-          <Route path="submit"            element={<SubmitPage />} />
-          <Route path="therapeutic-areas" element={<TherapeuticAreasPage />} />
-          <Route path="events"            element={<EventsPage />} />
-          <Route path="resources"         element={<ResourcesPage />} />
-          <Route path="drug-info"         element={<DrugInfoPage />} />
-          <Route path="find-msl"          element={<FindMSLPage />} />
-          <Route path="my-submissions"    element={<MySubmissionsPage />} />
+          <Route path="submit"            element={<FeatureGuard featureKey="medical_inquiry"><SubmitPage /></FeatureGuard>} />
+          <Route path="therapeutic-areas" element={<FeatureGuard featureKey="therapeutic_areas"><TherapeuticAreasPage /></FeatureGuard>} />
+          <Route path="events"            element={<FeatureGuard featureKey="events"><EventsPage /></FeatureGuard>} />
+          <Route path="resources"         element={<FeatureGuard featureKey="resources"><ResourcesPage /></FeatureGuard>} />
+          <Route path="drug-info"         element={<FeatureGuard featureKey="drug_information"><DrugInfoPage /></FeatureGuard>} />
+          <Route path="find-msl"          element={<FeatureGuard featureKey="find_msl"><FindMSLPage /></FeatureGuard>} />
+          <Route path="my-submissions"    element={<PortalAuthGuard><MySubmissionsPage /></PortalAuthGuard>} />
           <Route path="contact"           element={<ContactPage />} />
           <Route path="safety"            element={<SafetyPortalPage />} />
-          <Route path="news"              element={<NewsPortalPage />} />
-          <Route path="news/:postId"      element={<NewsDetailPage />} />
-          <Route path="documents"         element={<DocumentsPortalPage />} />
+          <Route path="news"              element={<FeatureGuard featureKey="news_announcements"><NewsPortalPage /></FeatureGuard>} />
+          <Route path="news/:postId"      element={<FeatureGuard featureKey="news_announcements"><NewsDetailPage /></FeatureGuard>} />
+          <Route path="documents"         element={<FeatureGuard featureKey="document_library"><DocumentsPortalPage /></FeatureGuard>} />
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
       </PortalLayout>

@@ -9,15 +9,45 @@
  */
 
 require('dotenv').config();
-const express = require('express');
-const cors    = require('cors');
-const path    = require('path');
+const express   = require('express');
+const cors      = require('cors');
+const path      = require('path');
+const rateLimit = require('express-rate-limit');
 
 const app  = express();
 const PORT = process.env.CP_PORT || 4000;
 
+// ── Rate limiters ─────────────────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+});
+
+const submitLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Submission limit reached. Please try again later.' },
+});
+
 // ── Middleware ────────────────────────────────────────────────
-app.use(cors({ origin: '*', credentials: true }));
+const ALLOWED_ORIGINS = process.env.CP_CORS_ORIGINS
+  ? process.env.CP_CORS_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:3000'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (server-to-server, mobile apps, curl)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -25,7 +55,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ── Admin Console Routes ──────────────────────────────────────
-app.use('/api/admin/auth',        require('./routes/admin/auth'));
+app.use('/api/admin/auth',        authLimiter, require('./routes/admin/auth'));
 app.use('/api/admin/clients',     require('./routes/admin/clients'));
 app.use('/api/admin/branding',    require('./routes/admin/branding'));
 app.use('/api/admin/features',    require('./routes/admin/features'));
@@ -44,8 +74,8 @@ app.use('/api/admin/safety',      require('./routes/admin/safety'));
 
 // ── Public Portal Routes ──────────────────────────────────────
 app.use('/api/portal/config',     require('./routes/portal/config'));
-app.use('/api/portal/auth',       require('./routes/portal/auth'));
-app.use('/api/portal/submit',     require('./routes/portal/submit'));
+app.use('/api/portal/auth',       authLimiter, require('./routes/portal/auth'));
+app.use('/api/portal/submit',     submitLimiter, require('./routes/portal/submit'));
 app.use('/api/portal/content',    require('./routes/portal/content'));
 app.use('/api/portal/chatbox',    require('./routes/portal/chatbox'));
 app.use('/api/portal/consent',    require('./routes/portal/consent'));

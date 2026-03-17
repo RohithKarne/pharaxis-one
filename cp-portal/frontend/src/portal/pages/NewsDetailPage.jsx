@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
 
 export default function NewsDetailPage() {
@@ -47,7 +48,7 @@ export default function NewsDetailPage() {
         <img src={post.thumbnail_url} alt={post.title} className="pp-article-img" />
       )}
       {post.body_html && (
-        <div className="pp-article-body" dangerouslySetInnerHTML={{ __html: post.body_html }} />
+        <div className="pp-article-body" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.body_html) }} />
       )}
     </div>
   )

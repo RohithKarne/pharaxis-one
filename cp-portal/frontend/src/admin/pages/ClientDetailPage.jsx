@@ -12,6 +12,11 @@ const CONFIG_SECTIONS = [
   { path: 'integration', icon: '🔗', label: 'Integration',         desc: 'MIMS or third-party system connection' },
   { path: 'users',       icon: '👥', label: 'Portal Users',        desc: 'Manage registered portal users' },
   { path: 'chatbox',     icon: '🤖', label: 'Chatbox AI',          desc: 'AI chatbox provider and system prompt' },
+  { path: 'gate',        icon: '🚪', label: 'User Gate',           desc: 'User type confirmation and access control' },
+  { path: 'safety',      icon: '⚠️', label: 'Safety Alerts',       desc: 'Drug safety communications and recalls' },
+  { path: 'news',        icon: '📰', label: 'News & Announcements', desc: 'Publish news posts and updates' },
+  { path: 'documents',   icon: '📁', label: 'Document Library',    desc: 'Upload and manage client documents' },
+  { path: 'compliance',  icon: '🔒', label: 'Compliance',          desc: 'Consent management and cookie policy' },
 ]
 
 export default function ClientDetailPage() {

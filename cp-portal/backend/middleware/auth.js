@@ -8,8 +8,14 @@
 
 const jwt = require('jsonwebtoken');
 
-const ADMIN_SECRET  = process.env.CP_ADMIN_JWT_SECRET  || 'cp-admin-secret-dev-change-in-prod';
-const PORTAL_SECRET = process.env.CP_PORTAL_JWT_SECRET || 'cp-portal-secret-dev-change-in-prod';
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.CP_ADMIN_JWT_SECRET || !process.env.CP_PORTAL_JWT_SECRET) {
+    console.error('FATAL: CP_ADMIN_JWT_SECRET and CP_PORTAL_JWT_SECRET env vars must be set in production.');
+    process.exit(1);
+  }
+}
+const ADMIN_SECRET  = process.env.CP_ADMIN_JWT_SECRET  || 'cp-admin-insecure-dev-only';
+const PORTAL_SECRET = process.env.CP_PORTAL_JWT_SECRET || 'cp-portal-insecure-dev-only';
 
 function authenticateAdmin(req, res, next) {
   const header = req.headers.authorization;

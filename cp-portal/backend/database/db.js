@@ -13,6 +13,7 @@ const path     = require('path');
 const DB_PATH = path.join(__dirname, 'cp-portal.db');
 const db      = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 function initializeDatabase() {
 
@@ -62,7 +63,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_branding (
       id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id          INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id),
+      client_id          INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id) ON DELETE CASCADE,
 
       -- Identity
       portal_name        TEXT    NOT NULL DEFAULT 'Medical Portal',
@@ -108,7 +109,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_features (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id      INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id      INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       feature_key    TEXT    NOT NULL,
       -- Keys: therapeutic_areas | events | medical_inquiry | adverse_event |
       --       product_complaint | other_inquiry | find_msl | resources |
@@ -125,7 +126,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_form_config (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id      INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id      INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       form_type      TEXT    NOT NULL,
       -- form_type: medical_inquiry | adverse_event | product_complaint | other_inquiry
       field_key      TEXT    NOT NULL,
@@ -146,7 +147,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_integration_config (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id    INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id    INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       system_name  TEXT    NOT NULL DEFAULT 'MIMS',  -- 'MIMS' | 'custom'
       api_base_url TEXT,
       api_key      TEXT,
@@ -163,8 +164,8 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_field_mapping (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id        INTEGER NOT NULL REFERENCES cp_clients(id),
-      integration_id   INTEGER NOT NULL REFERENCES cp_integration_config(id),
+      client_id        INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
+      integration_id   INTEGER NOT NULL REFERENCES cp_integration_config(id) ON DELETE CASCADE,
       form_type        TEXT    NOT NULL,
       cp_field         TEXT    NOT NULL,   -- CP portal form field key
       target_field     TEXT    NOT NULL,   -- target system field key
@@ -178,7 +179,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_portal_users (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id      INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id      INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       first_name     TEXT    NOT NULL,
       last_name      TEXT    NOT NULL,
       email          TEXT    NOT NULL,
@@ -200,10 +201,10 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_submissions (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id        INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id        INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       submission_type  TEXT    NOT NULL,
       -- submission_type: medical_inquiry | adverse_event | product_complaint | other_inquiry
-      user_id          INTEGER REFERENCES cp_portal_users(id),  -- null if anonymous
+      user_id          INTEGER REFERENCES cp_portal_users(id) ON DELETE SET NULL,  -- null if anonymous
       submitter_name   TEXT,
       submitter_email  TEXT,
       submitter_type   TEXT,   -- hcp | patient | physician | other
@@ -227,7 +228,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_therapeutic_areas (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id       INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id       INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       name            TEXT    NOT NULL,
       slug            TEXT    NOT NULL,
       short_desc      TEXT,
@@ -245,8 +246,8 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_drugs (
       id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id             INTEGER NOT NULL REFERENCES cp_clients(id),
-      therapeutic_area_id   INTEGER REFERENCES cp_therapeutic_areas(id),
+      client_id             INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
+      therapeutic_area_id   INTEGER REFERENCES cp_therapeutic_areas(id) ON DELETE SET NULL,
       brand_name            TEXT    NOT NULL,
       generic_name          TEXT,
       indication            TEXT,
@@ -267,7 +268,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_events (
       id                INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id         INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id         INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       title             TEXT    NOT NULL,
       description       TEXT,
       event_type        TEXT    NOT NULL DEFAULT 'conference',
@@ -291,7 +292,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_msls (
       id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id            INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id            INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       name                 TEXT    NOT NULL,
       title                TEXT,
       specialty            TEXT,
@@ -312,7 +313,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_resources (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id      INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id      INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       title          TEXT    NOT NULL,
       description    TEXT,
       resource_type  TEXT    NOT NULL DEFAULT 'document',
@@ -331,7 +332,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_chatbox_config (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id       INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id),
+      client_id       INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id) ON DELETE CASCADE,
       ai_provider     TEXT    NOT NULL DEFAULT 'anthropic',  -- 'anthropic' | 'openai'
       model           TEXT    NOT NULL DEFAULT 'claude-haiku-4-5-20251001',
       system_prompt   TEXT,   -- AI persona and context
@@ -346,7 +347,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_templates (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id  INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id  INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       name       TEXT    NOT NULL,
       subject    TEXT,
       body       TEXT    NOT NULL,
@@ -361,7 +362,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_gate_config (
       id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id               INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id),
+      client_id               INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id) ON DELETE CASCADE,
       is_enabled              INTEGER NOT NULL DEFAULT 0,
       gate_title              TEXT    NOT NULL DEFAULT 'Welcome — Please Identify Yourself',
       gate_subtitle           TEXT    NOT NULL DEFAULT 'To provide you with the most relevant information, please select the option that best describes you.',
@@ -375,7 +376,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_gate_user_types (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id     INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id     INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       type_key      TEXT    NOT NULL,
       label         TEXT    NOT NULL,
       description   TEXT,
@@ -390,7 +391,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_feature_access (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id   INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id   INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       feature_key TEXT    NOT NULL,
       type_key    TEXT    NOT NULL,
       is_allowed  INTEGER NOT NULL DEFAULT 1,
@@ -414,7 +415,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_compliance_config (
       id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id           INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id),
+      client_id           INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id) ON DELETE CASCADE,
       jurisdictions_json  TEXT    NOT NULL DEFAULT '[]',
       -- e.g. ["gdpr","ccpa","pdpb","apac"]  — strictest governs banner
       banner_config_json  TEXT    NOT NULL DEFAULT '{}',
@@ -429,7 +430,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_consent_records (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id    INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id    INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       user_id      INTEGER,   -- NULL for anonymous visitors
       ip_hash      TEXT,      -- hashed IP for anonymous records (no PII)
       version      TEXT    NOT NULL,
@@ -445,7 +446,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_document_categories (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id    INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id    INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       name         TEXT    NOT NULL,
       sort_order   INTEGER NOT NULL DEFAULT 0,
       UNIQUE(client_id, name)
@@ -456,7 +457,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_documents (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id        INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id        INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       title            TEXT    NOT NULL,
       category         TEXT,
       doc_type         TEXT    NOT NULL DEFAULT 'other',
@@ -481,7 +482,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_news_posts (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id        INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id        INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       title            TEXT    NOT NULL,
       body_html        TEXT    NOT NULL DEFAULT '',
       category         TEXT,
@@ -503,7 +504,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_safety_alerts (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id        INTEGER NOT NULL REFERENCES cp_clients(id),
+      client_id        INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
       title            TEXT    NOT NULL,
       alert_type       TEXT    NOT NULL DEFAULT 'other',
       -- alert_type: dhcp_letter | product_recall | urgent_safety_restriction | field_safety_notice | other
@@ -532,7 +533,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_audit_logs (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      admin_id     INTEGER REFERENCES cp_admin_users(id),
+      admin_id     INTEGER REFERENCES cp_admin_users(id) ON DELETE SET NULL,
       admin_name   TEXT,
       action       TEXT    NOT NULL,
       entity       TEXT    NOT NULL,

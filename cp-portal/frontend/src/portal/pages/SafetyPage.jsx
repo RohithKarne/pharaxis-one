@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
 
 export default function SafetyPage() {
@@ -60,7 +61,7 @@ export default function SafetyPage() {
         {alert.body_html && (
           <div
             className="pp-alert-body"
-            dangerouslySetInnerHTML={{ __html: alert.body_html }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(alert.body_html) }}
           />
         )}
         {alert.attachment_name && (
