@@ -6,7 +6,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
-const { requirePortalAuth } = require('../../middleware/auth');
+const { requirePortalAuth, PORTAL_SECRET } = require('../../middleware/auth');
 const crypto  = require('crypto');
 
 // Jurisdiction strictness ranking — highest index = strictest
@@ -63,7 +63,7 @@ router.post('/', (req, res) => {
   if (authHeader?.startsWith('Bearer ')) {
     try {
       const jwt = require('jsonwebtoken');
-      const decoded = jwt.verify(authHeader.slice(7), process.env.PORTAL_JWT_SECRET || 'portal_secret');
+      const decoded = jwt.verify(authHeader.slice(7), PORTAL_SECRET);
       userId = decoded.userId || null;
     } catch (_) {}
   }

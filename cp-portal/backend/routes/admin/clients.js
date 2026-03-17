@@ -22,6 +22,8 @@ const DEFAULT_FEATURES = [
   { key: 'user_auth',           label: 'User Login / Registration',     order: 11 },
   { key: 'hcp_gate',            label: 'HCP Confirmation Gate',         order: 12 },
   { key: 'homepage_quicklinks', label: 'Homepage Quick Links',          order: 0 },
+  { key: 'news_announcements', label: 'News & Announcements',           order: 13 },
+  { key: 'document_library',   label: 'Document Library',               order: 14 },
 ];
 
 const DEFAULT_FORM_FIELDS = {

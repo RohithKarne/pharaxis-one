@@ -10,6 +10,7 @@ const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth
 
 function toUrl(thumbnailPath) {
   if (!thumbnailPath) return null;
+  if (thumbnailPath.startsWith('http://') || thumbnailPath.startsWith('https://')) return thumbnailPath;
   return thumbnailPath.startsWith('/') ? thumbnailPath : `/${thumbnailPath}`;
 }
 
