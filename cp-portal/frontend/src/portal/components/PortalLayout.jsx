@@ -1,15 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import UserTypeGate from './UserTypeGate'
 import ConsentBanner from './ConsentBanner'
 
 export default function PortalLayout({ children }) {
-  const { portalConfig, user, logout, isFeatureEnabled, clientCode, showGate } = usePortal()
+  const { portalConfig, loading, user, logout, isFeatureEnabled, clientCode, showGate } = usePortal()
   const has_active_safety_alert = portalConfig?.has_active_safety_alert
   const [mobileOpen, setMobileOpen] = useState(false)
   const navigate   = useNavigate()
   const location   = useLocation()
+
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [location.pathname])
   const branding   = portalConfig?.branding || {}
   const client     = portalConfig?.client   || {}
 
@@ -46,7 +50,7 @@ export default function PortalLayout({ children }) {
       <header className="pp-header">
         <div className="pp-header-inner">
           <Link to={base} className="pp-logo">
-            {logoUrl ? <img src={logoUrl} alt={logoText} className="pp-logo-img" /> : null}
+            {logoUrl ? <img src={logoUrl} alt={logoText} className="pp-logo-img" width="160" height="40" style={{ objectFit: 'contain' }} /> : null}
             <span className="pp-logo-text">{logoText}</span>
           </Link>
 
@@ -109,8 +113,8 @@ export default function PortalLayout({ children }) {
       </footer>
 
       {isFeatureEnabled('chatbox') && <ChatboxWidget clientCode={clientCode} />}
-      {showGate && <UserTypeGate />}
-      <ConsentBanner />
+      {!loading && showGate && <UserTypeGate />}
+      {!loading && <ConsentBanner />}
     </div>
   )
 }
@@ -163,7 +167,7 @@ function ChatboxWidget({ clientCode }) {
                 <div className="pp-chat-bubble">{m.text}</div>
               </div>
             ))}
-            {loading && <div className="pp-chat-msg pp-chat-msg-assistant"><div className="pp-chat-bubble pp-chat-typing">…</div></div>}
+            {loading && <div className="pp-chat-msg pp-chat-msg-assistant" role="status" aria-live="polite" aria-busy="true"><div className="pp-chat-bubble pp-chat-typing">…</div></div>}
           </div>
           <form className="pp-chat-input-row" onSubmit={sendMessage}>
             <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask a medical question…" disabled={loading} />

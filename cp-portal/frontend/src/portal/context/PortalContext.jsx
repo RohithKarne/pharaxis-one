@@ -1,10 +1,11 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 
 const PortalContext = createContext(null)
 
 export function PortalProvider({ children }) {
-  const { clientCode } = useParams()
+  const { clientCode: rawClientCode } = useParams()
+  const clientCode = /^[a-zA-Z0-9_-]+$/.test(rawClientCode || '') ? rawClientCode : null
   const navigate = useNavigate()
   const [portalConfig, setPortalConfig] = useState(null)
   const [loading, setLoading]           = useState(true)
@@ -60,14 +61,13 @@ export function PortalProvider({ children }) {
     if (b.border_radius)     r.setProperty('--pp-radius',       b.border_radius)
   }
 
-  function portalHeaders() {
+  const portalHeaders = useCallback(() => {
     const token = localStorage.getItem('cp_portal_token')
-    const h = { 'Content-Type': 'application/json' }
-    if (token) h['Authorization'] = `Bearer ${token}`
-    return h
-  }
+    return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+  }, [])
 
   function isFeatureEnabled(key) {
+    if (loading) return null // still loading — callers should treat null as loading
     if (!portalConfig?.features) return false
     const featureOn = portalConfig.features.some(f => f.feature_key === key && f.is_enabled)
     if (!featureOn) return false

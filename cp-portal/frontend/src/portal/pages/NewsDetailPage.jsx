@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
 
 export default function NewsDetailPage() {
   const { postId }              = useParams()
+  const navigate                = useNavigate()
   const { clientCode }          = usePortal()
   const [post, setPost]         = useState(null)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
-
-  const base = `/portal/${clientCode}`
 
   useEffect(() => {
     async function load() {
@@ -37,7 +36,7 @@ export default function NewsDetailPage() {
 
   return (
     <div className="pp-article-page">
-      <Link to={`${base}/news`} className="pp-article-back">← Back to News</Link>
+      <button onClick={() => navigate(-1)} className="pp-back-btn">← Back to News</button>
 
       {post.category && <div className="pp-article-cat">{post.category}</div>}
       <h1 className="pp-article-title">{post.title}</h1>

@@ -8,14 +8,22 @@ const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 
-// Sanitise HTML — strip dangerous tags and event attributes
-function sanitiseHtml(html) {
-  if (!html) return '';
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/javascript:/gi, '');
+// Sanitise HTML — allowlist-based, strips dangerous tags/attrs/protocols
+const ALLOWED_TAGS = /^(p|br|strong|em|ul|ol|li|h2|h3|h4|blockquote|a|span|div)$/i;
+const ALLOWED_ATTRS = /^(href|target|rel|class)$/i;
+
+function sanitiseHtml(dirty) {
+  if (!dirty) return '';
+  // Strip script/style/iframe/object/embed tags completely (including content)
+  let clean = dirty.replace(/<(script|style|iframe|object|embed|form|input|button)[^>]*>[\s\S]*?<\/\1>/gi, '');
+  // Remove event handler attributes (on*)
+  clean = clean.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+  clean = clean.replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '');
+  // Remove javascript: hrefs
+  clean = clean.replace(/href\s*=\s*["']\s*javascript:[^"']*["']/gi, '');
+  // Remove data: URIs in src/href
+  clean = clean.replace(/(src|href)\s*=\s*["']\s*data:[^"']*["']/gi, '');
+  return clean;
 }
 
 // GET /api/admin/news/:clientId
@@ -32,6 +40,13 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
 router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { title, body_html, category, thumbnail_path, target_types, status, publish_at } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required.' });
+
+  if (req.body.publish_at) {
+    const d = new Date(req.body.publish_at);
+    if (isNaN(d.getTime())) {
+      return res.status(400).json({ error: 'publish_at must be a valid datetime string.' });
+    }
+  }
 
   const result = db.prepare(`
     INSERT INTO cp_news_posts (client_id, title, body_html, category, thumbnail_path, target_types_json, status, publish_at)
@@ -55,10 +70,21 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, r
   const { title, body_html, category, thumbnail_path, target_types, status, publish_at } = req.body;
   const fields = [], values = [];
 
+  if (req.body.publish_at) {
+    const d = new Date(req.body.publish_at);
+    if (isNaN(d.getTime())) {
+      return res.status(400).json({ error: 'publish_at must be a valid datetime string.' });
+    }
+  }
+
   if (title !== undefined)        { fields.push('title = ?');              values.push(title); }
   if (body_html !== undefined)    { fields.push('body_html = ?');          values.push(sanitiseHtml(body_html)); }
   if (category !== undefined)     { fields.push('category = ?');           values.push(category); }
-  if (thumbnail_path !== undefined){ fields.push('thumbnail_path = ?');   values.push(thumbnail_path); }
+  if (thumbnail_path !== undefined) {
+    fields.push('thumbnail_path = ?');
+    // Explicitly clearing (null or '') stores null; non-empty string stores as-is
+    values.push(thumbnail_path === null || thumbnail_path === '' ? null : thumbnail_path);
+  }
   if (target_types !== undefined) { fields.push('target_types_json = ?'); values.push(JSON.stringify(target_types)); }
   if (status !== undefined)       { fields.push('status = ?');             values.push(status); }
   if (publish_at !== undefined)   { fields.push('publish_at = ?');         values.push(publish_at); }

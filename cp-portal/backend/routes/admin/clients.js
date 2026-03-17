@@ -65,6 +65,11 @@ const DEFAULT_FORM_FIELDS = {
   ],
 };
 
+// MED-33: cp_portal_users is NOT joined in any SELECT query in this file.
+// The only reference to cp_portal_users is a COUNT(*) query in the soft-delete handler
+// for cascade verification — it never returns user rows or password_hash to the API response.
+// No password_hash stripping is required here.
+
 // GET /api/admin/clients
 router.get('/', authenticateAdmin, (_req, res) => {
   const rows = db.prepare(`

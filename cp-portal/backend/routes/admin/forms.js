@@ -49,6 +49,7 @@ router.patch('/:clientId/:fieldId', authenticateAdmin, (req, res) => {
   if (is_active !== undefined)     { updates.push('is_active = ?');     params.push(is_active ? 1 : 0); }
   if (display_order !== undefined) { updates.push('display_order = ?'); params.push(display_order); }
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
+  updates.push(`updated_at = datetime('now')`);
   params.push(req.params.fieldId, req.params.clientId);
   db.prepare(`UPDATE cp_form_config SET ${updates.join(', ')} WHERE id = ? AND client_id = ?`).run(...params);
   res.json({ message: 'Field updated.' });
@@ -64,7 +65,7 @@ router.delete('/:clientId/:fieldId', authenticateAdmin, (req, res) => {
 router.post('/:clientId/reorder', authenticateAdmin, (req, res) => {
   const { fields } = req.body; // [{ id, display_order }]
   if (!Array.isArray(fields)) return res.status(400).json({ error: 'fields must be an array.' });
-  const upd = db.prepare('UPDATE cp_form_config SET display_order = ? WHERE id = ? AND client_id = ?');
+  const upd = db.prepare(`UPDATE cp_form_config SET display_order = ?, updated_at = datetime('now') WHERE id = ? AND client_id = ?`);
   const tx  = db.transaction(() => fields.forEach(f => upd.run(f.display_order, f.id, req.params.clientId)));
   tx();
   res.json({ message: 'Order updated.' });

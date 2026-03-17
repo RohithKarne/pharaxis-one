@@ -6,6 +6,12 @@ import { adminHeaders } from '../context/AdminAuthContext'
 const FORM_TYPES = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry']
 const FIELD_TYPES = ['text', 'email', 'phone', 'textarea', 'select', 'multiselect', 'checkbox', 'date', 'file']
 
+function parseOptions(opts) {
+  if (!opts) return []
+  if (Array.isArray(opts)) return opts
+  try { return JSON.parse(opts) } catch { return [] }
+}
+
 export default function FormsPage() {
   const { clientId }    = useParams()
   const [formType, setFormType] = useState('medical_inquiry')
@@ -49,7 +55,7 @@ export default function FormsPage() {
   async function handleAdd(e) {
     e.preventDefault(); setSaving(true)
     const options = optionsInput.split('\n').map(s => s.trim()).filter(Boolean)
-    const payload = { ...newField, form_type: formType, field_options: options.length ? options : undefined }
+    const payload = { ...newField, form_type: formType, field_options: options.length ? JSON.stringify(options) : undefined }
     await fetch(`/api/admin/forms/${clientId}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(payload) })
     setSaving(false); setShowAdd(false)
     setNewField({ field_key: '', field_label: '', field_type: 'text', is_required: false, placeholder: '', help_text: '' })
@@ -147,7 +153,14 @@ export default function FormsPage() {
                     onBlur={e => { if (e.target.value !== (f.placeholder || '')) saveFieldInline(f.id, 'placeholder', e.target.value) }}
                   />
                 </td>
-                <td><span className="cp-type-badge">{f.field_type}</span></td>
+                <td>
+                  <span className="cp-type-badge">{f.field_type}</span>
+                  {(f.field_type === 'select' || f.field_type === 'multiselect') && parseOptions(f.field_options).length > 0 && (
+                    <span className="cp-options-hint" title={parseOptions(f.field_options).join(', ')} style={{ marginLeft: 4, fontSize: 11, color: 'var(--cp-text-muted)' }}>
+                      ({parseOptions(f.field_options).length} opts)
+                    </span>
+                  )}
+                </td>
                 <td>
                   <label className="cp-toggle-switch cp-toggle-sm">
                     <input type="checkbox" checked={!!f.is_required} onChange={() => toggleRequired(f.id, f.is_required)} />

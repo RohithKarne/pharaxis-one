@@ -13,6 +13,11 @@ export default function ContentPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm]   = useState({})
   const [saving, setSaving] = useState(false)
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false)
+
+  function toSlug(str) {
+    return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  }
 
   useEffect(() => { loadAll() }, [clientId])
 
@@ -50,7 +55,7 @@ export default function ContentPage() {
 
       <div className="cp-section-header">
         <h3>{tab}</h3>
-        <button className="cp-btn cp-btn-primary" onClick={() => { setForm({}); setShowForm(true) }}>+ Add</button>
+        <button className="cp-btn cp-btn-primary" onClick={() => { setForm({}); setSlugManuallyEdited(false); setShowForm(true) }}>+ Add</button>
       </div>
 
       {showForm && (
@@ -60,8 +65,8 @@ export default function ContentPage() {
             <form onSubmit={handleSubmit} className="cp-modal-body">
               {tab === 'Therapeutic Areas' && <>
                 <div className="cp-field-row">
-                  <div className="cp-field"><label>Name *</label><input required value={form.name||''} onChange={e=>setForm(f=>({...f,name:e.target.value}))} /></div>
-                  <div className="cp-field"><label>Slug *</label><input required value={form.slug||''} onChange={e=>setForm(f=>({...f,slug:e.target.value.toLowerCase().replace(/\s/g,'-')}))} placeholder="nephrology" /></div>
+                  <div className="cp-field"><label>Name *</label><input required value={form.name||''} onChange={e=>{const val=e.target.value;setForm(f=>({...f,name:val,...(!slugManuallyEdited&&{slug:toSlug(val)})}))}} /></div>
+                  <div className="cp-field"><label>Slug *</label><input required value={form.slug||''} onChange={e=>{setSlugManuallyEdited(true);setForm(f=>({...f,slug:e.target.value.toLowerCase().replace(/\s/g,'-')}))}} placeholder="nephrology" /></div>
                 </div>
                 <div className="cp-field"><label>Short Description</label><textarea rows={2} value={form.short_desc||''} onChange={e=>setForm(f=>({...f,short_desc:e.target.value}))} /></div>
                 <div className="cp-field"><label>Image URL</label><input value={form.image_url||''} onChange={e=>setForm(f=>({...f,image_url:e.target.value}))} /></div>

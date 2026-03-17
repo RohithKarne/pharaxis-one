@@ -60,7 +60,8 @@ export default function DocumentsPage() {
 
   function handleDownload(doc) {
     const token = localStorage.getItem('cp_portal_token')
-    const url = `/api/portal/documents/${doc.id}/download?clientCode=${clientCode}${token ? `&token=${token}` : ''}`
+    // Use portal's clientCode from URL param (not user JWT clientId) to avoid mismatch
+    const url = `/api/portal/documents/${clientCode}/download/${doc.id}${token ? `?token=${token}` : ''}`
     const a = document.createElement('a')
     a.href = url
     a.download = doc.file_name || doc.title
@@ -84,19 +85,17 @@ export default function DocumentsPage() {
         />
       </div>
 
-      {allCategories.length > 1 && (
-        <div className="pp-news-filters" style={{ marginBottom: 16 }}>
-          {allCategories.map(cat => (
-            <button
-              key={cat}
-              className={`pp-filter-btn ${activeCategory === cat ? 'active' : ''}`}
-              onClick={() => setActiveCategory(cat)}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="pp-news-filters" style={{ marginBottom: 16 }}>
+        {allCategories.map(cat => (
+          <button
+            key={cat}
+            className={`pp-filter-btn ${activeCategory === cat ? 'active' : ''}`}
+            onClick={() => setActiveCategory(cat)}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
 
       {filtered.length === 0 ? (
         <div className="pp-empty-state"><span>📁</span><p>No documents found.</p></div>

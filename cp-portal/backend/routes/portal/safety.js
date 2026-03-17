@@ -58,9 +58,17 @@ router.get('/:alertId', authenticatePortal, (req, res) => {
   const userType = req.portalUser?.user_type || 'other';
   if (types.length > 0 && !types.includes(userType)) return res.status(403).json({ error: 'Access denied.' });
 
-  db.prepare('UPDATE cp_safety_alerts SET view_count = view_count + 1 WHERE id = ?').run(alert.id);
+  // MED-48: view_count increment removed from GET — use POST /:clientCode/alerts/:id/view instead
 
   res.json({ alert });
+});
+
+// POST /api/portal/safety/:clientCode/alerts/:id/view — increment view count (idempotent intent; called once per session by frontend)
+router.post('/:clientCode/alerts/:id/view', authenticatePortal, (req, res) => {
+  const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(req.params.clientCode);
+  if (!client) return res.status(404).json({ error: 'Portal not found.' });
+  db.prepare('UPDATE cp_safety_alerts SET view_count = view_count + 1 WHERE id = ? AND client_id = ?').run(req.params.id, client.id);
+  res.json({ ok: true });
 });
 
 // GET /api/portal/safety/:alertId/attachment?clientCode=xxx
@@ -77,7 +85,9 @@ router.get('/:alertId/attachment', authenticatePortal, (req, res) => {
   const filePath = path.join(__dirname, '../../', alert.attachment_path);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });
 
-  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(alert.attachment_name)}`);
+  // MED-37: RFC 5987 dual encoding — legacy filename= for old clients, filename*= for RFC 5987 compliant clients
+  const encodedName = encodeURIComponent(alert.attachment_name);
+  res.setHeader('Content-Disposition', `attachment; filename="${alert.attachment_name}"; filename*=UTF-8''${encodedName}`);
   res.setHeader('Content-Type', 'application/pdf');
   fs.createReadStream(filePath).pipe(res);
 });

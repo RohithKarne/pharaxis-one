@@ -10,6 +10,7 @@ export default function ClientsPage() {
   const [form, setForm]       = useState({ name: '', code: '', description: '', contact_name: '', contact_email: '' })
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState('')
+  const [search, setSearch]   = useState('')
   const navigate = useNavigate()
 
   useEffect(() => { loadClients() }, [])
@@ -24,7 +25,12 @@ export default function ClientsPage() {
 
   async function handleAdd(e) {
     e.preventDefault()
-    setError(''); setSaving(true)
+    setError('')
+    if (clients.some(c => c.code?.toLowerCase() === form.code?.toLowerCase())) {
+      setError('Client code already exists. Please choose a unique code.')
+      return
+    }
+    setSaving(true)
     const res  = await fetch('/api/admin/clients', { method: 'POST', headers: adminHeaders(), body: JSON.stringify(form) })
     const data = await res.json()
     setSaving(false)
@@ -54,7 +60,7 @@ export default function ClientsPage() {
               <span>Add New Client</span>
               <button className="cp-modal-close" onClick={() => setShowAdd(false)}>✕</button>
             </div>
-            <form onSubmit={handleAdd} className="cp-modal-body">
+            <form onSubmit={handleAdd} className="cp-modal-body" autoComplete="off">
               <div className="cp-field-row">
                 <div className="cp-field">
                   <label>Company Name *</label>
@@ -90,13 +96,23 @@ export default function ClientsPage() {
         </div>
       )}
 
+      {!loading && (
+        <input
+          type="text"
+          placeholder="Search clients…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="cp-search-input"
+        />
+      )}
+
       {loading ? <div className="cp-loading">Loading…</div> : (
         <table className="cp-table">
           <thead>
             <tr><th>Name</th><th>Code</th><th>Contact</th><th>Submissions</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
-            {clients.map(c => (
+            {clients.filter(c => !search || c.name?.toLowerCase().includes(search.toLowerCase()) || c.code?.toLowerCase().includes(search.toLowerCase())).map(c => (
               <tr key={c.id}>
                 <td><button className="cp-link-btn" onClick={() => navigate(`/admin/clients/${c.id}`)}>{c.name}</button></td>
                 <td><code>{c.code}</code></td>

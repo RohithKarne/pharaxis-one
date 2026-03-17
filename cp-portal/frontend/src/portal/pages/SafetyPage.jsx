@@ -30,8 +30,9 @@ export default function SafetyPage() {
   const resolved = alerts.filter(a => a.status === 'resolved')
 
   function SeverityBadge({ severity }) {
+    const normalized = (severity || 'unknown').toLowerCase().replace(/\s+/g, '-')
     return (
-      <span className={`pp-severity-badge ${severity}`}>
+      <span className={`pp-severity-badge pp-severity-${normalized}`}>
         {severity}
       </span>
     )

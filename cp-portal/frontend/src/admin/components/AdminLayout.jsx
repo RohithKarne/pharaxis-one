@@ -1,4 +1,4 @@
-import { NavLink, useNavigate, useParams } from 'react-router-dom'
+import { NavLink, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 
 const NAV_ITEMS = [
@@ -23,10 +23,31 @@ const CLIENT_NAV = (id) => [
   { to: `/admin/clients/${id}/compliance`,  label: 'Compliance',    icon: '🔒' },
 ]
 
-export default function AdminLayout({ children, title }) {
+const PAGE_TITLES = {
+  '/admin/clients':    'Clients',
+  '/admin/branding':   'Branding',
+  '/admin/content':    'Content',
+  '/admin/news':       'News & Announcements',
+  '/admin/safety':     'Safety Communications',
+  '/admin/documents':  'Documents',
+  '/admin/forms':      'Forms',
+  '/admin/features':   'Features',
+  '/admin/gate':       'Access Gate',
+  '/admin/integration':'Integration',
+  '/admin/chatbox':    'Chatbox Config',
+  '/admin/compliance': 'Compliance',
+  '/admin/users':      'Portal Users',
+  '/admin/msls':       'MSL Management',
+  '/admin':            'Dashboard',
+}
+
+export default function AdminLayout({ children }) {
   const { admin, logout } = useAdminAuth()
   const navigate = useNavigate()
   const { clientId } = useParams()
+  const location = useLocation()
+
+  const derivedTitle = Object.entries(PAGE_TITLES).find(([path]) => location.pathname.startsWith(path))?.[1] || 'Admin'
 
   function handleLogout() { logout(); navigate('/admin/login') }
 
@@ -54,8 +75,7 @@ export default function AdminLayout({ children, title }) {
               <div className="cp-nav-section-label" style={{ marginTop: 16 }}>Client Config</div>
               {CLIENT_NAV(clientId).map(item => (
                 <NavLink key={item.to} to={item.to}
-                  className={({ isActive }) => `cp-nav-item ${isActive ? 'active' : ''}`}
-                  end>
+                  className={({ isActive }) => `cp-nav-item ${isActive ? 'active' : ''}`}>
                   <span className="cp-nav-icon">{item.icon}</span>
                   {item.label}
                 </NavLink>
@@ -73,7 +93,7 @@ export default function AdminLayout({ children, title }) {
 
       <div className="cp-admin-main">
         <div className="cp-admin-topbar">
-          <h1 className="cp-topbar-title">{title}</h1>
+          <h1 className="cp-topbar-title">{derivedTitle}</h1>
         </div>
         <div className="cp-admin-content">
           {children}

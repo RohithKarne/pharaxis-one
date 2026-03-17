@@ -48,8 +48,10 @@ router.post('/:clientCode', async (req, res) => {
   if (therapeuticAreas.length) contextLines.push(`Therapeutic Areas: ${therapeuticAreas.map(a => a.name).join(', ')}`);
   if (drugs.length) contextLines.push(`Products: ${drugs.map(d => d.brand_name).join(', ')}`);
 
+  const safeSystemPrompt = (config.system_prompt || 'You are a helpful medical information assistant for a pharmaceutical company.').slice(0, 2000);
+
   const systemPrompt = [
-    config.system_prompt || 'You are a helpful medical information assistant for a pharmaceutical company.',
+    safeSystemPrompt,
     contextLines.length ? `\nContext about this portal:\n${contextLines.join('\n')}` : '',
     '\nIMPORTANT: You provide general information only. Always advise users to consult their healthcare provider for medical decisions. Do not provide specific medical diagnoses or treatment recommendations.',
   ].join('');
@@ -83,6 +85,7 @@ router.post('/:clientCode', async (req, res) => {
 
     res.status(400).json({ error: 'Unsupported AI provider.' });
   } catch (err) {
+    console.error('Chatbox AI error:', err);
     res.status(502).json({ error: 'AI service error. Please try again.' });
   }
 });

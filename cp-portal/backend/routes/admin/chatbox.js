@@ -15,6 +15,15 @@ router.get('/:clientId', authenticateAdmin, (req, res) => {
 });
 
 router.patch('/:clientId', authenticateAdmin, (req, res) => {
+  // MED-31: validate model field against known Anthropic / OpenAI models
+  const VALID_ANTHROPIC_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-6'];
+  const VALID_OPENAI_MODELS    = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+  const VALID_MODELS           = [...VALID_ANTHROPIC_MODELS, ...VALID_OPENAI_MODELS];
+
+  if (req.body.model && !VALID_MODELS.includes(req.body.model)) {
+    return res.status(400).json({ error: `Invalid model. Supported: ${VALID_MODELS.join(', ')}` });
+  }
+
   const allowed = ['ai_provider', 'model', 'system_prompt', 'welcome_message', 'max_tokens', 'is_active'];
   const updates = [], params = [];
   for (const key of allowed) {

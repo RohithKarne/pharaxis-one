@@ -40,13 +40,22 @@ const upload = multer({
   },
 });
 
-function sanitiseHtml(html) {
-  if (!html) return '';
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/javascript:/gi, '');
+// Sanitise HTML — allowlist-based, strips dangerous tags/attrs/protocols
+const ALLOWED_TAGS = /^(p|br|strong|em|ul|ol|li|h2|h3|h4|blockquote|a|span|div)$/i;
+const ALLOWED_ATTRS = /^(href|target|rel|class)$/i;
+
+function sanitiseHtml(dirty) {
+  if (!dirty) return '';
+  // Strip script/style/iframe/object/embed tags completely (including content)
+  let clean = dirty.replace(/<(script|style|iframe|object|embed|form|input|button)[^>]*>[\s\S]*?<\/\1>/gi, '');
+  // Remove event handler attributes (on*)
+  clean = clean.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+  clean = clean.replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '');
+  // Remove javascript: hrefs
+  clean = clean.replace(/href\s*=\s*["']\s*javascript:[^"']*["']/gi, '');
+  // Remove data: URIs in src/href
+  clean = clean.replace(/(src|href)\s*=\s*["']\s*data:[^"']*["']/gi, '');
+  return clean;
 }
 
 const VALID_TYPES     = ['dhcp_letter','product_recall','urgent_safety_restriction','field_safety_notice','other'];

@@ -61,7 +61,7 @@ export default function BrandingPage() {
 
   return (
     <AdminLayout title="Branding & Theme">
-      <form onSubmit={handleSave}>
+      <form onSubmit={handleSave} autoComplete="off">
         {/* Identity */}
         <div className="cp-card">
           <div className="cp-card-title">Portal Identity</div>
@@ -103,6 +103,20 @@ export default function BrandingPage() {
                 onChange={hex => set(f.key, hex)}
               />
             ))}
+          </div>
+        </div>
+
+        {/* Color Preview */}
+        <div className="cp-card">
+          <div className="cp-card-title">Color Preview</div>
+          <div className="cp-branding-preview" style={{
+            '--pp-primary':   branding.primary_color   || '#0066cc',
+            '--pp-secondary': branding.secondary_color || '#333333',
+            '--pp-accent':    branding.accent_color    || '#ff6600',
+          }}>
+            <div style={{ background: 'var(--pp-primary)', padding: '1rem', color: '#fff', borderRadius: 4, marginBottom: 8 }}>Primary Color Preview</div>
+            <div style={{ background: 'var(--pp-secondary)', padding: '1rem', color: '#fff', borderRadius: 4, marginBottom: 8 }}>Secondary Color Preview</div>
+            <div style={{ background: 'var(--pp-accent)', padding: '1rem', color: '#fff', borderRadius: 4 }}>Accent Color Preview</div>
           </div>
         </div>
 

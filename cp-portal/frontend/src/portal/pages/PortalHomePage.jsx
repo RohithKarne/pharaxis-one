@@ -54,8 +54,8 @@ export default function PortalHomePage() {
     },
   ].filter(c => isFeatureEnabled(c.key))
 
-  const heroTitle    = `Welcome to ${branding.portal_name || client.name || 'the Medical Portal'}`
-  const heroSubtitle = branding.tagline || 'Your trusted source for medical information, resources, and support.'
+  const heroTitle    = portalConfig?.welcome_title || `Welcome to ${branding.portal_name || client.name || 'the Medical Portal'}`
+  const heroSubtitle = portalConfig?.welcome_message || branding.tagline || 'Your trusted source for medical information, resources, and support.'
 
   return (
     <div className="pp-home">

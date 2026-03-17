@@ -19,7 +19,10 @@ export default function ConsentBanner() {
   const compliance = portalConfig?.compliance
   const version    = (compliance?.version || '1.0').replace(/^v/i, '')
 
-  const [show, setShow]     = useState(false)
+  const [show, setShow]     = useState(() => {
+    if (!compliance) return false
+    return !localStorage.getItem(`cp_consent_v${version}`)
+  })
   const [step, setStep]     = useState('banner') // 'banner' | 'preferences'
   const [choices, setChoices] = useState(DEFAULT_CHOICES)
   const [saving, setSaving] = useState(false)

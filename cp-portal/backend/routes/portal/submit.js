@@ -22,14 +22,17 @@ router.post('/:clientCode/:formType', authenticatePortal, async (req, res) => {
     .get(client.id, formType === 'other_inquiry' ? 'other_inquiry' : formType);
   if (!feature) return res.status(403).json({ error: 'This submission type is not enabled.' });
 
-  const { form_data, submitter_name, submitter_email, submitter_type } = req.body;
+  const { form_data, submitter_email, submitter_type } = req.body;
   if (!form_data) return res.status(400).json({ error: 'form_data is required.' });
 
   // API-07: Input length validation — prevent oversized payloads filling the database
   const formDataStr = typeof form_data === 'string' ? form_data : JSON.stringify(form_data);
   if (formDataStr.length > 50000) return res.status(400).json({ error: 'Input exceeds maximum length.' });
 
-  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null;
+  const rawIp = req.ip || '';
+  const ip_address = rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
+
+  const submitter_name = (req.body.submitter_name || '').trim() || null;
 
   const info = db.prepare(`
     INSERT INTO cp_submissions (client_id, submission_type, user_id, submitter_name, submitter_email, submitter_type, form_data, ip_address)
@@ -37,9 +40,9 @@ router.post('/:clientCode/:formType', authenticatePortal, async (req, res) => {
   `).run(
     client.id, formType,
     req.portalUser?.userId || null,
-    submitter_name || null, submitter_email || null, submitter_type || null,
+    submitter_name, submitter_email || null, submitter_type || null,
     formDataStr,
-    ip
+    ip_address
   );
 
   const submissionId = info.lastInsertRowid;

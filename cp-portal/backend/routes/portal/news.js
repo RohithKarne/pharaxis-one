@@ -86,10 +86,17 @@ router.get('/:postId', authenticatePortal, (req, res) => {
   const userType = req.portalUser?.user_type || 'other';
   if (types.length > 0 && !types.includes(userType)) return res.status(403).json({ error: 'Access denied.' });
 
-  // Increment view count (only on portal detail, not admin preview)
-  db.prepare('UPDATE cp_news_posts SET view_count = view_count + 1 WHERE id = ?').run(post.id);
+  // MED-49: view_count increment removed from GET — use POST /:clientCode/posts/:id/view instead
 
   res.json({ post: { ...post, thumbnail_url: toUrl(post.thumbnail_path) } });
+});
+
+// POST /api/portal/news/:clientCode/posts/:id/view — increment view count (idempotent intent; called once per session by frontend)
+router.post('/:clientCode/posts/:id/view', authenticatePortal, (req, res) => {
+  const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(req.params.clientCode);
+  if (!client) return res.status(404).json({ error: 'Portal not found.' });
+  db.prepare('UPDATE cp_news_posts SET view_count = view_count + 1 WHERE id = ? AND client_id = ?').run(req.params.id, client.id);
+  res.json({ ok: true });
 });
 
 // GET /api/portal/news/preview/:postId — admin preview, does NOT increment view_count

@@ -80,7 +80,7 @@ router.post('/login', (req, res) => {
   if (!client) return res.status(404).json({ error: 'Portal not found.' });
 
   const user = db.prepare('SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ? AND is_active = 1').get(client.id, email);
-  if (!user || !bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Invalid credentials.' });
+  if (!user || !bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Invalid email or password.' });
 
   db.prepare(`UPDATE cp_portal_users SET last_login_at = datetime('now') WHERE id = ?`).run(user.id);
 
