@@ -431,7 +431,7 @@ function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS cp_consent_records (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id    INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
-      user_id      INTEGER,   -- NULL for anonymous visitors
+      user_id      INTEGER REFERENCES cp_portal_users(id) ON DELETE SET NULL,  -- NULL for anonymous visitors
       ip_hash      TEXT,      -- hashed IP for anonymous records (no PII)
       version      TEXT    NOT NULL,
       choices_json TEXT    NOT NULL DEFAULT '{}',
