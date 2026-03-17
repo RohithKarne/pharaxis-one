@@ -6,13 +6,19 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
-const { authenticateAdmin } = require('../../middleware/auth');
+const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 
-const ALLOWED_MIME = 'application/pdf';
-const MAX_SIZE     = 10 * 1024 * 1024;
+// SEC-03: allow PDF and standard document types for safety attachments
+const ALLOWED_MIMES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+];
+const MAX_SIZE = 10 * 1024 * 1024;
 
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
@@ -29,8 +35,8 @@ const upload = multer({
   storage,
   limits: { fileSize: MAX_SIZE },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === ALLOWED_MIME) return cb(null, true);
-    cb(new Error('Only PDF attachments are allowed.'));
+    if (ALLOWED_MIMES.includes(file.mimetype)) return cb(null, true);
+    cb(new Error('Only PDF and document files are allowed as attachments.'));
   },
 });
 
@@ -47,7 +53,7 @@ const VALID_TYPES     = ['dhcp_letter','product_recall','urgent_safety_restricti
 const VALID_SEVERITIES = ['critical','high','medium','informational'];
 
 // GET /api/admin/safety/:clientId
-router.get('/:clientId', authenticateAdmin, (req, res) => {
+router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { status } = req.query;
   let query = 'SELECT * FROM cp_safety_alerts WHERE client_id = ?';
   const params = [req.params.clientId];
@@ -57,7 +63,7 @@ router.get('/:clientId', authenticateAdmin, (req, res) => {
 });
 
 // POST /api/admin/safety/:clientId — create with optional PDF attachment
-router.post('/:clientId', authenticateAdmin, (req, res) => {
+router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   upload.single('attachment')(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
 
@@ -89,7 +95,7 @@ router.post('/:clientId', authenticateAdmin, (req, res) => {
 });
 
 // PUT /api/admin/safety/:clientId/:alertId
-router.put('/:clientId/:alertId', authenticateAdmin, (req, res) => {
+router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types, status } = req.body;
   const fields = [], values = [];
 
@@ -112,7 +118,7 @@ router.put('/:clientId/:alertId', authenticateAdmin, (req, res) => {
 });
 
 // PATCH /api/admin/safety/:clientId/:alertId/resolve — mark as resolved
-router.patch('/:clientId/:alertId/resolve', authenticateAdmin, (req, res) => {
+router.patch('/:clientId/:alertId/resolve', authenticateAdmin, requireClientAccess, (req, res) => {
   db.prepare("UPDATE cp_safety_alerts SET status = 'resolved', updated_at = datetime('now') WHERE id = ? AND client_id = ?")
     .run(req.params.alertId, req.params.clientId);
   res.json({ ok: true });

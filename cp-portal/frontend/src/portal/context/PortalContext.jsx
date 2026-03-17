@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 
 const PortalContext = createContext(null)
 
 export function PortalProvider({ children }) {
   const { clientCode } = useParams()
+  const navigate = useNavigate()
   const [portalConfig, setPortalConfig] = useState(null)
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState(null)
@@ -92,8 +93,27 @@ export function PortalProvider({ children }) {
     setUser(null)
   }
 
+  // AUTH-05: central fetch helper — attaches auth header and auto-logs out on 401
+  async function portalFetch(url, options = {}) {
+    const token = localStorage.getItem('cp_portal_token')
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    })
+    if (res.status === 401) {
+      logout()
+      navigate(`/portal/${clientCode}/login`, { replace: true })
+      return res
+    }
+    return res
+  }
+
   return (
-    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, portalHeaders, isFeatureEnabled, clientCode, showGate }}>
+    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, portalHeaders, portalFetch, isFeatureEnabled, clientCode, showGate }}>
       {children}
     </PortalContext.Provider>
   )

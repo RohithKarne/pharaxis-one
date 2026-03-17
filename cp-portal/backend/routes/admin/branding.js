@@ -6,17 +6,17 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
-const { authenticateAdmin } = require('../../middleware/auth');
+const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 
 // GET /api/admin/branding/:clientId
-router.get('/:clientId', authenticateAdmin, (req, res) => {
+router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   const row = db.prepare('SELECT * FROM cp_branding WHERE client_id = ?').get(req.params.clientId);
   if (!row) return res.status(404).json({ error: 'Branding config not found.' });
   res.json({ branding: row });
 });
 
 // PATCH /api/admin/branding/:clientId — update any branding fields
-router.patch('/:clientId', authenticateAdmin, (req, res) => {
+router.patch('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { clientId } = req.params;
 
   const allowed = [
@@ -45,7 +45,7 @@ router.patch('/:clientId', authenticateAdmin, (req, res) => {
 });
 
 // POST /api/admin/branding/:clientId/reset — reset to defaults
-router.post('/:clientId/reset', authenticateAdmin, (req, res) => {
+router.post('/:clientId/reset', authenticateAdmin, requireClientAccess, (req, res) => {
   db.prepare(`
     UPDATE cp_branding SET
       primary_color='#6B3FA0', secondary_color='#4A2D7A', accent_color='#9B6FCC',

@@ -1,13 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 
 export default function LoginPage() {
-  const { clientCode, login } = usePortal()
+  const { clientCode, login, user } = usePortal()
   const navigate              = useNavigate()
   const location              = useLocation()
   const base                  = `/portal/${clientCode}`
   const returnTo              = location.state?.from || base
+
+  // AUTH-03: redirect already-authenticated users away from the login page
+  useEffect(() => {
+    if (user) navigate(base, { replace: true })
+  }, [user, base, navigate])
   const [tab, setTab]         = useState('login')
   const [form, setForm]       = useState({ email: '', password: '', first_name: '', last_name: '', user_type: 'hcp', country: '' })
   const [loading, setLoading] = useState(false)
@@ -29,7 +34,17 @@ export default function LoginPage() {
   }
 
   async function handleRegister(e) {
-    e.preventDefault(); setLoading(true); setError('')
+    e.preventDefault(); setError('')
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters.'); return
+    }
+    if (!/[A-Z]/.test(form.password)) {
+      setError('Password must contain at least one uppercase letter.'); return
+    }
+    if (!/[0-9]/.test(form.password)) {
+      setError('Password must contain at least one number.'); return
+    }
+    setLoading(true)
     const res  = await fetch(`/api/portal/auth/register`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form, client_code: clientCode })
@@ -84,7 +99,7 @@ export default function LoginPage() {
             </div>
             <div className="pp-field">
               <label>Password *</label>
-              <input type="password" required minLength={6} value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min. 6 characters" />
+              <input type="password" required minLength={8} value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min. 8 characters, 1 uppercase, 1 number" />
             </div>
             <div className="pp-field-row">
               <div className="pp-field">

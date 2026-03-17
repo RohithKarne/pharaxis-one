@@ -31,15 +31,16 @@ function initializeDatabase() {
     );
   `);
 
-  // Seed default superadmin
+  // Seed default superadmin — only set password on first insert, never overwrite on restart
   const DEFAULT_EMAIL    = 'cpadmin';
   const DEFAULT_PASSWORD = 'Admin@123';
-  const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 10);
   const existing = db.prepare('SELECT id FROM cp_admin_users WHERE email = ?').get(DEFAULT_EMAIL);
   if (existing) {
-    db.prepare(`UPDATE cp_admin_users SET name=?, password=?, role='superadmin', is_active=1, updated_at=datetime('now') WHERE id=?`)
-      .run('CP Superadmin', hash, existing.id);
+    // SEC-01: Do NOT touch the password — admin may have changed it. Only ensure role/active state.
+    db.prepare(`UPDATE cp_admin_users SET name=?, role='superadmin', is_active=1, updated_at=datetime('now') WHERE id=?`)
+      .run('CP Superadmin', existing.id);
   } else {
+    const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 10);
     db.prepare(`INSERT INTO cp_admin_users (name, email, password, role) VALUES (?, ?, ?, 'superadmin')`)
       .run('CP Superadmin', DEFAULT_EMAIL, hash);
   }
@@ -176,6 +177,9 @@ function initializeDatabase() {
   `);
 
   // ── PORTAL USERS — patients, HCPs, physicians etc. ────────────
+  // DB-02: UNIQUE(client_id, email) creates an implicit B-tree index in SQLite —
+  // no separate CREATE INDEX needed for the login query:
+  //   SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ?
   db.exec(`
     CREATE TABLE IF NOT EXISTS cp_portal_users (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -193,7 +197,7 @@ function initializeDatabase() {
       is_verified    INTEGER NOT NULL DEFAULT 0,
       last_login_at  TEXT,
       created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(client_id, email)
+      UNIQUE(client_id, email)  -- implicit index covers login lookup on (client_id, email)
     );
   `);
 
@@ -222,6 +226,7 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_cp_submissions_client   ON cp_submissions(client_id);
     CREATE INDEX IF NOT EXISTS idx_cp_submissions_status   ON cp_submissions(status);
     CREATE INDEX IF NOT EXISTS idx_cp_submissions_type     ON cp_submissions(submission_type);
+    CREATE INDEX IF NOT EXISTS idx_cp_submissions_user     ON cp_submissions(user_id);
   `);
 
   // ── THERAPEUTIC AREAS — content per client ────────────────────
@@ -410,6 +415,11 @@ function initializeDatabase() {
   if (!bCols.includes('sla_response_text')) {
     db.exec(`ALTER TABLE cp_branding ADD COLUMN sla_response_text TEXT`);
   }
+
+  // DB-03: Safe migration — ensure user_id index exists on cp_submissions for My Submissions query:
+  //   SELECT * FROM cp_submissions WHERE user_id = ? ORDER BY submitted_at DESC
+  // IF NOT EXISTS makes this a no-op on fresh databases (index already in CREATE TABLE above).
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_cp_submissions_user ON cp_submissions(user_id)`);
 
   // ── F-02: COMPLIANCE CONFIG — jurisdiction + banner per client ─
   db.exec(`

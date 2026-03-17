@@ -6,7 +6,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
-const { authenticateAdmin } = require('../../middleware/auth');
+const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 
 // Sanitise HTML — strip dangerous tags and event attributes
 function sanitiseHtml(html) {
@@ -19,7 +19,7 @@ function sanitiseHtml(html) {
 }
 
 // GET /api/admin/news/:clientId
-router.get('/:clientId', authenticateAdmin, (req, res) => {
+router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { status } = req.query;
   let query = 'SELECT * FROM cp_news_posts WHERE client_id = ?';
   const params = [req.params.clientId];
@@ -29,7 +29,7 @@ router.get('/:clientId', authenticateAdmin, (req, res) => {
 });
 
 // POST /api/admin/news/:clientId
-router.post('/:clientId', authenticateAdmin, (req, res) => {
+router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { title, body_html, category, thumbnail_path, target_types, status, publish_at } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required.' });
 
@@ -51,7 +51,7 @@ router.post('/:clientId', authenticateAdmin, (req, res) => {
 });
 
 // PUT /api/admin/news/:clientId/:postId
-router.put('/:clientId/:postId', authenticateAdmin, (req, res) => {
+router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { title, body_html, category, thumbnail_path, target_types, status, publish_at } = req.body;
   const fields = [], values = [];
 
@@ -72,7 +72,7 @@ router.put('/:clientId/:postId', authenticateAdmin, (req, res) => {
 });
 
 // DELETE /api/admin/news/:clientId/:postId — archive (soft delete)
-router.delete('/:clientId/:postId', authenticateAdmin, (req, res) => {
+router.delete('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, res) => {
   db.prepare("UPDATE cp_news_posts SET status = 'archived', updated_at = datetime('now') WHERE id = ? AND client_id = ?")
     .run(req.params.postId, req.params.clientId);
   res.json({ ok: true });

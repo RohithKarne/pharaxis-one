@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 
 export default function LoginPage() {
-  const { login } = useAdminAuth()
+  const { login, admin } = useAdminAuth()
   const navigate = useNavigate()
+
+  // AUTH-04: redirect already-authenticated admins away from the login page
+  useEffect(() => {
+    if (admin) navigate('/admin', { replace: true })
+  }, [admin, navigate])
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')

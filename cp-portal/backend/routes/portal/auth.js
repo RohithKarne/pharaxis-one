@@ -32,8 +32,27 @@ router.post('/register', (req, res) => {
   if (!client_code || !first_name || !last_name || !email || !password) {
     return res.status(400).json({ error: 'client_code, first_name, last_name, email and password are required.' });
   }
+
+  // API-07: Input length validation
+  if (email.length      > 254) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+  if (password.length   > 128) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+  if (first_name.length > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+  if (last_name.length  > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+  if (country   && country.length   > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+  if (specialty && specialty.length > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+
   const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(client_code);
   if (!client) return res.status(404).json({ error: 'Portal not found.' });
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+  if (!/[A-Z]/.test(password)) {
+    return res.status(400).json({ error: 'Password must contain at least one uppercase letter.' });
+  }
+  if (!/[0-9]/.test(password)) {
+    return res.status(400).json({ error: 'Password must contain at least one number.' });
+  }
 
   const existing = db.prepare('SELECT id FROM cp_portal_users WHERE client_id = ? AND email = ?').get(client.id, email);
   if (existing) return res.status(409).json({ error: 'Email already registered.' });
@@ -52,6 +71,10 @@ router.post('/register', (req, res) => {
 router.post('/login', (req, res) => {
   const { client_code, email, password } = req.body;
   if (!client_code || !email || !password) return res.status(400).json({ error: 'client_code, email and password are required.' });
+
+  // API-07: Input length validation
+  if (email.length    > 254) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+  if (password.length > 128) return res.status(400).json({ error: 'Input exceeds maximum length.' });
 
   const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(client_code);
   if (!client) return res.status(404).json({ error: 'Portal not found.' });

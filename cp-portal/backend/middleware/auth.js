@@ -50,4 +50,39 @@ function requirePortalAuth(req, res, next) {
   next();
 }
 
-module.exports = { authenticateAdmin, authenticatePortal, requirePortalAuth, ADMIN_SECRET, PORTAL_SECRET };
+/**
+ * requireClientAccess — API-02: client ownership validation.
+ *
+ * Usage: router.get('/:clientId', authenticateAdmin, requireClientAccess, handler)
+ *
+ * - superadmin: full access to any client.
+ * - admin: must have a clientId claim in their JWT that matches req.params.clientId.
+ *
+ * NOTE (Sprint 2 gap): cp_admin_users has no client_id column and the login JWT does
+ * not embed clientId for regular admins. Until the schema is extended and the login
+ * endpoint is updated to embed clientId, regular admins will receive 403. This is the
+ * safe-fail posture — better to block than to allow cross-client data access.
+ */
+function requireClientAccess(req, res, next) {
+  if (!req.admin) return res.status(401).json({ error: 'Admin authentication required.' });
+
+  // Superadmins manage all clients — pass through.
+  if (req.admin.role === 'superadmin') return next();
+
+  // Regular admin: check their JWT clientId against the requested clientId.
+  const requestedClientId = String(req.params.clientId || req.query.clientId || '');
+  const adminClientId     = req.admin.clientId != null ? String(req.admin.clientId) : null;
+
+  if (!adminClientId) {
+    // No client scope in token — deny until schema + login are updated (Sprint 2 gap).
+    return res.status(403).json({ error: 'Access denied. Your account has no client scope assigned.' });
+  }
+
+  if (adminClientId !== requestedClientId) {
+    return res.status(403).json({ error: 'Access denied. You can only manage your own client.' });
+  }
+
+  next();
+}
+
+module.exports = { authenticateAdmin, authenticatePortal, requirePortalAuth, requireClientAccess, ADMIN_SECRET, PORTAL_SECRET };

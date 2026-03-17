@@ -25,6 +25,10 @@ router.post('/:clientCode/:formType', authenticatePortal, async (req, res) => {
   const { form_data, submitter_name, submitter_email, submitter_type } = req.body;
   if (!form_data) return res.status(400).json({ error: 'form_data is required.' });
 
+  // API-07: Input length validation — prevent oversized payloads filling the database
+  const formDataStr = typeof form_data === 'string' ? form_data : JSON.stringify(form_data);
+  if (formDataStr.length > 50000) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+
   const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null;
 
   const info = db.prepare(`
@@ -34,7 +38,7 @@ router.post('/:clientCode/:formType', authenticatePortal, async (req, res) => {
     client.id, formType,
     req.portalUser?.userId || null,
     submitter_name || null, submitter_email || null, submitter_type || null,
-    typeof form_data === 'string' ? form_data : JSON.stringify(form_data),
+    formDataStr,
     ip
   );
 

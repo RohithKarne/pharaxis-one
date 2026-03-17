@@ -52,8 +52,12 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Static uploads (logos, resources, etc.)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Static uploads — public assets (branding, logos) only.
+// SEC-04: Block direct access to private document files; those are served via authenticated API.
+app.use('/uploads', (req, res, next) => {
+  if (req.path.startsWith('/private/')) return res.status(403).json({ error: 'Access denied.' });
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // ── Admin Console Routes ──────────────────────────────────────
 app.use('/api/admin/auth',        authLimiter, require('./routes/admin/auth'));

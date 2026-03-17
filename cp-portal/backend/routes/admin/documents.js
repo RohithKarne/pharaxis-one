@@ -6,20 +6,24 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
-const { authenticateAdmin } = require('../../middleware/auth');
+const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 
+// SEC-03: only allow safe document MIME types
 const ALLOWED_MIMES = [
   'application/pdf',
+  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
 ];
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const dir = path.join(__dirname, '../../uploads/documents', req.params.clientId);
+    // SEC-04: store documents under private/ so direct URL access is blocked by server.js
+    const dir = path.join(__dirname, '../../uploads/private/docs', req.params.clientId);
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -41,13 +45,13 @@ const upload = multer({
 // ── CATEGORIES ────────────────────────────────────────────────
 
 // GET /api/admin/documents/:clientId/categories
-router.get('/:clientId/categories', authenticateAdmin, (req, res) => {
+router.get('/:clientId/categories', authenticateAdmin, requireClientAccess, (req, res) => {
   const rows = db.prepare('SELECT * FROM cp_document_categories WHERE client_id = ? ORDER BY sort_order ASC').all(req.params.clientId);
   res.json({ categories: rows });
 });
 
 // POST /api/admin/documents/:clientId/categories
-router.post('/:clientId/categories', authenticateAdmin, (req, res) => {
+router.post('/:clientId/categories', authenticateAdmin, requireClientAccess, (req, res) => {
   const { name, sort_order } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required.' });
   try {
@@ -59,7 +63,7 @@ router.post('/:clientId/categories', authenticateAdmin, (req, res) => {
 });
 
 // PUT /api/admin/documents/:clientId/categories/:catId
-router.put('/:clientId/categories/:catId', authenticateAdmin, (req, res) => {
+router.put('/:clientId/categories/:catId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { name, sort_order } = req.body;
   const fields = [], values = [];
   if (name !== undefined) { fields.push('name = ?'); values.push(name.trim()); }
@@ -71,7 +75,7 @@ router.put('/:clientId/categories/:catId', authenticateAdmin, (req, res) => {
 });
 
 // DELETE /api/admin/documents/:clientId/categories/:catId
-router.delete('/:clientId/categories/:catId', authenticateAdmin, (req, res) => {
+router.delete('/:clientId/categories/:catId', authenticateAdmin, requireClientAccess, (req, res) => {
   db.prepare('DELETE FROM cp_document_categories WHERE id = ? AND client_id = ?').run(req.params.catId, req.params.clientId);
   res.json({ ok: true });
 });
@@ -79,13 +83,13 @@ router.delete('/:clientId/categories/:catId', authenticateAdmin, (req, res) => {
 // ── DOCUMENTS ─────────────────────────────────────────────────
 
 // GET /api/admin/documents/:clientId
-router.get('/:clientId', authenticateAdmin, (req, res) => {
+router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   const rows = db.prepare('SELECT * FROM cp_documents WHERE client_id = ? ORDER BY created_at DESC').all(req.params.clientId);
   res.json({ documents: rows });
 });
 
 // POST /api/admin/documents/:clientId — upload
-router.post('/:clientId', authenticateAdmin, (req, res) => {
+router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   upload.single('file')(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'File is required.' });
@@ -103,7 +107,7 @@ router.post('/:clientId', authenticateAdmin, (req, res) => {
     }
 
     const visible_to_json = visible_to ? JSON.stringify(typeof visible_to === 'string' ? JSON.parse(visible_to) : visible_to) : '[]';
-    const filePath = `/uploads/documents/${req.params.clientId}/${req.file.filename}`;
+    const filePath = `/uploads/private/docs/${req.params.clientId}/${req.file.filename}`;
 
     const result = db.prepare(`
       INSERT INTO cp_documents (client_id, title, category, doc_type, file_path, file_name, file_size, mime_type, visible_to_json, source)
@@ -115,7 +119,7 @@ router.post('/:clientId', authenticateAdmin, (req, res) => {
 });
 
 // PUT /api/admin/documents/:clientId/:docId — update metadata (no file re-upload)
-router.put('/:clientId/:docId', authenticateAdmin, (req, res) => {
+router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { title, category, doc_type, visible_to, source, is_active } = req.body;
   const fields = [], values = [];
   if (title !== undefined)      { fields.push('title = ?');           values.push(title); }
@@ -132,7 +136,7 @@ router.put('/:clientId/:docId', authenticateAdmin, (req, res) => {
 });
 
 // DELETE /api/admin/documents/:clientId/:docId — soft delete (sets is_active = 0)
-router.delete('/:clientId/:docId', authenticateAdmin, (req, res) => {
+router.delete('/:clientId/:docId', authenticateAdmin, requireClientAccess, (req, res) => {
   db.prepare("UPDATE cp_documents SET is_active = 0, updated_at = datetime('now') WHERE id = ? AND client_id = ?").run(req.params.docId, req.params.clientId);
   res.json({ ok: true });
 });
