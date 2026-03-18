@@ -24,14 +24,18 @@ const COLOR_FIELDS = [
 
 export default function BrandingPage() {
   const { clientId } = useParams()
-  const [branding, setBranding] = useState(null)
-  const [saving, setSaving]     = useState(false)
-  const [saved, setSaved]       = useState(false)
-  const [error, setError]       = useState('')
+  const [branding, setBranding]     = useState(null)
+  const [clientCode, setClientCode] = useState('')
+  const [copied, setCopied]         = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [saved, setSaved]           = useState(false)
+  const [error, setError]           = useState('')
 
   useEffect(() => {
     fetch(`/api/admin/branding/${clientId}`, { headers: adminHeaders() })
       .then(r => r.json()).then(d => setBranding(d.branding || {})).catch(() => {})
+    fetch(`/api/admin/clients/${clientId}`, { headers: adminHeaders() })
+      .then(r => r.json()).then(d => setClientCode(d.client?.code || '')).catch(() => {})
   }, [clientId])
 
   function set(key, value) { setBranding(b => ({ ...b, [key]: value })); setSaved(false) }
@@ -57,11 +61,44 @@ export default function BrandingPage() {
     setSaved(true)
   }
 
+  function handleCopy() {
+    const url = `${window.location.origin}/portal/${clientCode}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
   if (!branding) return <AdminLayout title="Branding"><div className="cp-loading">Loading…</div></AdminLayout>
 
   return (
     <AdminLayout title="Branding & Theme">
       <form onSubmit={handleSave} autoComplete="off">
+        {/* Portal Live URL */}
+        {clientCode && (
+          <div className="cp-card">
+            <div className="cp-card-title">Portal Live URL</div>
+            <div className="cp-field-row" style={{ alignItems: 'flex-end' }}>
+              <div className="cp-field" style={{ flex: 1 }}>
+                <label>Live URL</label>
+                <input
+                  readOnly
+                  value={`${window.location.origin}/portal/${clientCode}`}
+                  style={{ background: 'var(--cp-surface, #f5f5f5)', cursor: 'default' }}
+                />
+              </div>
+              <button
+                type="button"
+                className="cp-btn cp-btn-outline"
+                onClick={handleCopy}
+                style={{ marginBottom: 0, whiteSpace: 'nowrap' }}
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Identity */}
         <div className="cp-card">
           <div className="cp-card-title">Portal Identity</div>

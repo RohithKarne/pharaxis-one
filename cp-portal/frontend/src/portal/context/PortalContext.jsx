@@ -76,6 +76,15 @@ export function PortalProvider({ children }) {
     if (b.font_family)       r.setProperty('--pp-font',         b.font_family)
     if (b.base_font_size)    r.setProperty('--pp-font-size',    b.base_font_size)
     if (b.border_radius)     r.setProperty('--pp-radius',       b.border_radius)
+    if (b.favicon_url) {
+      let link = document.querySelector("link[rel~='icon']")
+      if (!link) {
+        link = document.createElement('link')
+        link.rel = 'icon'
+        document.head.appendChild(link)
+      }
+      link.href = b.favicon_url
+    }
   }
 
   const portalHeaders = useCallback(() => {
