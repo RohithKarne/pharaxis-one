@@ -1,18 +1,15 @@
 import { useState } from 'react'
 import { usePortal } from '../context/PortalContext'
 
-const TYPE_KEY = 'cp_user_type_confirmed'
-
 export default function UserTypeGate() {
   const { portalConfig, clientCode, login } = usePortal()
   const gate = portalConfig?.gate
-  const [confirmed, setConfirmed]   = useState(() => !!localStorage.getItem(TYPE_KEY))
   const [selected, setSelected]     = useState(null)
   const [accepted, setAccepted]     = useState(false)
   const [saving, setSaving]         = useState(false)
   const [error, setError]           = useState(null)
 
-  if (!gate || confirmed) return null
+  if (!gate) return null
 
   const canConfirm = selected && (!gate.require_disclaimer || accepted)
 
@@ -29,8 +26,6 @@ export default function UserTypeGate() {
       })
       const d = await res.json()
       if (!res.ok) { setError(d.error || 'Failed to save. Please try again.'); setSaving(false); return }
-      localStorage.setItem(TYPE_KEY, selected)
-      setConfirmed(true)
       login(d.user, d.token)
     } catch {
       setError('Network error. Please try again.')

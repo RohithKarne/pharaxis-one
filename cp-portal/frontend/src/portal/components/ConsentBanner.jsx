@@ -15,22 +15,30 @@ const PREFERENCE_TOGGLES = [
 ]
 
 export default function ConsentBanner() {
-  const { portalConfig, clientCode } = usePortal()
+  const { portalConfig, clientCode, user, portalFetch } = usePortal()
   const compliance = portalConfig?.compliance
   const version    = (compliance?.version || '1.0').replace(/^v/i, '')
 
-  const [show, setShow]     = useState(() => {
-    if (!compliance) return false
-    return !localStorage.getItem(`cp_consent_v${version}`)
-  })
-  const [step, setStep]     = useState('banner') // 'banner' | 'preferences'
+  const [show, setShow]       = useState(false)
+  const [step, setStep]       = useState('banner') // 'banner' | 'preferences'
   const [choices, setChoices] = useState(DEFAULT_CHOICES)
-  const [saving, setSaving] = useState(false)
+  const [saving, setSaving]   = useState(false)
+
   useEffect(() => {
     if (!compliance) return
-    const stored = localStorage.getItem(`cp_consent_v${version}`)
-    if (!stored) setShow(true)
-  }, [compliance, version])
+    // Already dismissed in this browser session
+    if (localStorage.getItem(`cp_consent_v${version}`)) return
+    // Signed-in user — check DB first
+    if (user) {
+      portalFetch(`/api/portal/consent/check?clientCode=${clientCode}&version=${version}`)
+        .then(r => r.json())
+        .then(d => { if (!d.consented) setShow(true) })
+        .catch(() => setShow(true)) // fallback: show banner on error
+      return
+    }
+    // Anonymous user — only localStorage
+    setShow(true)
+  }, [compliance, user, clientCode, version])
 
   // A-02: hide background content from screen readers when overlay is open
   useEffect(() => {

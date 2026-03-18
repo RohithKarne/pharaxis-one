@@ -49,6 +49,32 @@ router.get('/current', (req, res) => {
   });
 });
 
+// GET /api/portal/consent/check?clientCode=xxx&version=xxx
+// Returns { consented: true/false } for the currently signed-in user
+router.get('/check', (req, res) => {
+  const { clientCode, version } = req.query;
+  if (!clientCode || !version) return res.status(400).json({ error: 'clientCode and version required.' });
+
+  // Must be authenticated
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return res.json({ consented: false });
+
+  let userId = null;
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(authHeader.slice(7), PORTAL_SECRET);
+    userId = decoded.userId || null;
+  } catch (_) { return res.json({ consented: false }); }
+
+  if (!userId) return res.json({ consented: false });
+
+  const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(clientCode);
+  if (!client) return res.json({ consented: false });
+
+  const record = db.prepare('SELECT id FROM cp_consent_records WHERE client_id = ? AND user_id = ? AND version = ?').get(client.id, userId, version);
+  res.json({ consented: !!record });
+});
+
 // POST /api/portal/consent — save consent record (auth optional)
 router.post('/', (req, res) => {
   const { clientCode, choices, version } = req.body;
