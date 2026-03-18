@@ -34,7 +34,7 @@ export default function PortalLayout({ children }) {
     { label: 'Therapeutic Areas', path: 'therapeutic-areas', feature: 'therapeutic_areas' },
     { label: 'Events',            path: 'events',            feature: 'events' },
     { label: 'Resources',         path: 'resources',         feature: 'resources' },
-    { label: 'Drug Information',  path: 'drug-info',         feature: 'drug_information' },
+    { label: 'Drug Information',  path: 'drug-info',         feature: 'drug_info' },
     { label: 'Find an MSL',       path: 'find-msl',          feature: 'find_msl' },
     { label: 'Safety',            path: 'safety',            feature: null },
     { label: 'News',              path: 'news',              feature: 'news_announcements' },
