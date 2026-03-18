@@ -12,8 +12,9 @@ require('dotenv').config();
 const express   = require('express');
 const cors      = require('cors');
 const path      = require('path');
-const rateLimit = require('express-rate-limit');
-const db        = require('./database/db');
+const rateLimit    = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
+const db           = require('./database/db');
 
 const app  = express();
 const PORT = process.env.CP_PORT || 4000;
@@ -52,6 +53,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Static uploads — public assets (branding, logos) only.
 // SEC-04: Block direct access to private document files; those are served via authenticated API.

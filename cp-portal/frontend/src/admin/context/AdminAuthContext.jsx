@@ -1,13 +1,11 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 const AdminAuthContext = createContext(null)
 
 export function AdminAuthProvider({ children }) {
   const navigate = useNavigate()
-  const [admin, setAdmin] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('cp_admin') || 'null') } catch { return null }
-  })
+  const [admin, setAdmin] = useState(null)
 
   function login(token, adminData) {
     localStorage.setItem('cp_admin_token', token)
@@ -39,6 +37,21 @@ export function AdminAuthProvider({ children }) {
     }
     return res
   }
+
+  // Restore admin session from server on mount — handles case where localStorage
+  // was cleared but the auth cookie / token is still valid.
+  useEffect(() => {
+    adminFetch('/api/admin/auth/me')
+      .then(async (res) => {
+        if (res.status === 200) {
+          const d = await res.json()
+          setAdmin(d.admin)
+        } else {
+          logout()
+        }
+      })
+      .catch(() => logout())
+  }, [])
 
   return (
     <AdminAuthContext.Provider value={{ admin, login, logout, adminFetch }}>

@@ -10,6 +10,8 @@ const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, ADMIN_SECRET } = require('../../middleware/auth');
 
+const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' }
+
 // POST /api/admin/auth/login
 router.post('/login', (req, res) => {
   const { email, password } = req.body;
@@ -29,10 +31,8 @@ router.post('/login', (req, res) => {
 
   db.prepare(`UPDATE cp_admin_users SET updated_at = datetime('now') WHERE id = ?`).run(user.id);
 
-  res.json({
-    token,
-    admin: { id: user.id, name: user.name, email: user.email, role: user.role },
-  });
+  res.cookie('cp_admin_token', token, { ...COOKIE_OPTS, maxAge: 12 * 60 * 60 * 1000 })
+     .json({ token, admin: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 
 // GET /api/admin/auth/me
@@ -54,6 +54,12 @@ router.patch('/password', authenticateAdmin, (req, res) => {
   const hash = bcrypt.hashSync(new_password, 10);
   db.prepare(`UPDATE cp_admin_users SET password = ?, updated_at = datetime('now') WHERE id = ?`).run(hash, user.id);
   res.json({ message: 'Password updated.' });
+});
+
+// POST /api/admin/auth/logout — clear auth cookie
+router.post('/logout', (req, res) => {
+  res.clearCookie('cp_admin_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
+     .json({ message: 'Logged out.' });
 });
 
 module.exports = router;

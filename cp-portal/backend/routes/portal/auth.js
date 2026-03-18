@@ -10,6 +10,8 @@ const router  = express.Router();
 const db      = require('../../database/db');
 const { requirePortalAuth, authenticatePortal, PORTAL_SECRET } = require('../../middleware/auth');
 
+const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' }
+
 const DEFAULT_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other'];
 
 function getValidTypes(clientId) {
@@ -67,7 +69,9 @@ router.post('/register', (req, res) => {
   `).run(client.id, first_name, last_name, email, hash, user_type || 'other', specialty || null, country || null, phone || null);
 
   const newUser = { id: info.lastInsertRowid, first_name, last_name, email, user_type: user_type || 'other', user_type_confirmed: 0 };
-  res.status(201).json({ token: makeToken(newUser, client.id), user: newUser });
+  const regToken = makeToken(newUser, client.id);
+  res.cookie('cp_portal_token', regToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
+     .status(201).json({ token: regToken, user: newUser });
 });
 
 // POST /api/portal/auth/login
@@ -88,7 +92,9 @@ router.post('/login', (req, res) => {
   db.prepare(`UPDATE cp_portal_users SET last_login_at = datetime('now') WHERE id = ?`).run(user.id);
 
   const safe = { id: user.id, first_name: user.first_name, last_name: user.last_name, email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed };
-  res.json({ token: makeToken(user, client.id), user: safe });
+  const token = makeToken(user, client.id);
+  res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
+     .json({ token, user: safe });
 });
 
 // GET /api/portal/auth/me — current user profile + submission history
@@ -106,7 +112,9 @@ router.patch('/confirm-type', authenticatePortal, requirePortalAuth, (req, res) 
   db.prepare(`UPDATE cp_portal_users SET user_type = ?, user_type_confirmed = 1 WHERE id = ?`).run(user_type, req.portalUser.userId);
 
   const updated = db.prepare('SELECT id, first_name, last_name, email, user_type, user_type_confirmed FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId);
-  res.json({ message: 'Type confirmed.', token: makeToken(updated, req.portalUser.clientId), user: updated });
+  const newToken = makeToken(updated, req.portalUser.clientId);
+  res.cookie('cp_portal_token', newToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
+     .json({ message: 'Type confirmed.', token: newToken, user: updated });
 });
 
 // PATCH /api/portal/auth/profile — user updates their own profile (including changing user_type)
@@ -128,6 +136,12 @@ router.patch('/profile', authenticatePortal, requirePortalAuth, (req, res) => {
 
   const updated = db.prepare('SELECT id, first_name, last_name, email, user_type, user_type_confirmed FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId);
   res.json({ message: 'Profile updated.', token: makeToken(updated, req.portalUser.clientId), user: updated });
+});
+
+// POST /api/portal/auth/logout — clear auth cookie
+router.post('/logout', (req, res) => {
+  res.clearCookie('cp_portal_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
+     .json({ message: 'Logged out.' });
 });
 
 module.exports = router;

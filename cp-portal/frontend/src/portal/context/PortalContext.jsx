@@ -11,9 +11,7 @@ export function PortalProvider({ children }) {
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState(null)
   const portalConfigRef                 = useRef(null)
-  const [user, setUser]                 = useState(() => {
-    try { return JSON.parse(localStorage.getItem('cp_portal_user') || 'null') } catch { return null }
-  })
+  const [user, setUser]                 = useState(null)
   const [showGate, setShowGate]         = useState(false)
 
   // Show gate when: gate is enabled, user is logged in, user hasn't confirmed type yet
@@ -137,6 +135,23 @@ export function PortalProvider({ children }) {
     }
     return res
   }
+
+  // Restore signed-in user from DB on mount/refresh — localStorage alone is not the source of truth
+  useEffect(() => {
+    if (!clientCode) return
+    portalFetch(`/api/portal/auth/me`)
+      .then(async res => {
+        if (res.status === 200) {
+          const d = await res.json()
+          setUser(d.user)
+        } else if (res.status === 401) {
+          logout()
+        }
+      })
+      .catch(() => {
+        // network error — leave user as null, do not logout
+      })
+  }, [clientCode])
 
   return (
     <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, portalHeaders, portalFetch, isFeatureEnabled, clientCode, showGate, refetchConfig: fetchConfig }}>

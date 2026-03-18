@@ -19,12 +19,10 @@ const ADMIN_SECRET  = process.env.CP_ADMIN_JWT_SECRET  || 'cp-admin-insecure-dev
 const PORTAL_SECRET = process.env.CP_PORTAL_JWT_SECRET || 'cp-portal-insecure-dev-only';
 
 function authenticateAdmin(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Admin authentication required.' });
-  }
+  const token = req.cookies?.cp_admin_token || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+  if (!token) return res.status(401).json({ error: 'Admin authentication required.' });
   try {
-    req.admin = jwt.verify(header.slice(7), ADMIN_SECRET);
+    req.admin = jwt.verify(token, ADMIN_SECRET);
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired admin token.' });
@@ -33,10 +31,10 @@ function authenticateAdmin(req, res, next) {
 
 function authenticatePortal(req, res, next) {
   // Optional auth — anonymous users can still submit
-  const header = req.headers.authorization;
-  if (header?.startsWith('Bearer ')) {
+  const token = req.cookies?.cp_portal_token || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+  if (token) {
     try {
-      req.portalUser = jwt.verify(header.slice(7), PORTAL_SECRET);
+      req.portalUser = jwt.verify(token, PORTAL_SECRET);
       // Sprint 2: DB check to honour immediate deactivation without a token blocklist
       const userRecord = db.prepare('SELECT is_active FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId);
       if (!userRecord || !userRecord.is_active) {

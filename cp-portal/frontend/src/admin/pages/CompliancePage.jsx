@@ -42,7 +42,15 @@ export default function CompliancePage() {
     try {
       const res = await fetch(`/api/admin/compliance/${clientId}`, { headers: adminHeaders() })
       const d   = await res.json()
-      if (d.config) setConfig(d.config)
+      const row = d.compliance || d.config
+      if (row) {
+        setConfig({
+          jurisdictions:    JSON.parse(row.jurisdictions_json  || '[]'),
+          banner_config:    JSON.parse(row.banner_config_json  || '{}'),
+          version:          row.version          || 'v1.0',
+          require_reconsent: !!row.require_reconsent,
+        })
+      }
     } catch { /* ignore */ }
     setLoading(false)
   }
