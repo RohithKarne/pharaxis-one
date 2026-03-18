@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
 
 // GET /api/admin/branding/:clientId
 router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
@@ -41,6 +42,7 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, (req, res) =>
   updates.push(`updated_at = datetime('now')`);
   params.push(clientId);
   db.prepare(`UPDATE cp_branding SET ${updates.join(', ')} WHERE client_id = ?`).run(...params);
+  audit(req.admin, clientId, 'UPDATE', 'branding', clientId, { fields: Object.keys(req.body) });
   res.json({ message: 'Branding updated.' });
 });
 

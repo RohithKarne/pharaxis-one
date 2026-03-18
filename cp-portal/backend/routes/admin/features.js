@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
 
 // GET /api/admin/features/:clientId
 router.get('/:clientId', authenticateAdmin, (req, res) => {
@@ -26,6 +27,7 @@ router.patch('/:clientId/:featureKey', authenticateAdmin, (req, res) => {
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
   params.push(clientId, featureKey);
   db.prepare(`UPDATE cp_features SET ${updates.join(', ')} WHERE client_id = ? AND feature_key = ?`).run(...params);
+  audit(req.admin, clientId, is_enabled !== undefined ? (is_enabled ? 'ENABLE' : 'DISABLE') : 'UPDATE', 'feature', featureKey, { feature_key: featureKey, ...req.body });
   res.json({ message: 'Feature updated.' });
 });
 
@@ -36,6 +38,7 @@ router.post('/:clientId/reorder', authenticateAdmin, (req, res) => {
   const upd = db.prepare('UPDATE cp_features SET display_order = ? WHERE client_id = ? AND feature_key = ?');
   const tx  = db.transaction(() => { order.forEach(o => upd.run(o.display_order, req.params.clientId, o.feature_key)) });
   tx();
+  audit(req.admin, req.params.clientId, 'UPDATE', 'feature', null, { action: 'reorder' });
   res.json({ message: 'Order updated.' });
 });
 

@@ -79,6 +79,7 @@ app.use('/api/admin/compliance',  require('./routes/admin/compliance'));
 app.use('/api/admin/documents',   require('./routes/admin/documents'));
 app.use('/api/admin/news',        require('./routes/admin/news'));
 app.use('/api/admin/safety',      require('./routes/admin/safety'));
+app.use('/api/admin/audit',       require('./routes/admin/audit'));
 
 // ── Public Portal Routes ──────────────────────────────────────
 app.use('/api/portal/config',     require('./routes/portal/config'));

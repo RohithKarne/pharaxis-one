@@ -19,6 +19,7 @@ import SafetyAdminPage      from './admin/pages/SafetyPage'
 import NewsAdminPage        from './admin/pages/NewsPage'
 import DocumentsAdminPage   from './admin/pages/DocumentsPage'
 import CompliancePage       from './admin/pages/CompliancePage'
+import AuditTrailPage       from './admin/pages/AuditTrailPage'
 
 // Portal pages
 import { PortalProvider }       from './portal/context/PortalContext'
@@ -108,6 +109,7 @@ export default function App() {
         <Route path="/admin/clients/:clientId/news"       element={<AdminGuard><NewsAdminPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/documents"  element={<AdminGuard><DocumentsAdminPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/compliance" element={<AdminGuard><CompliancePage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/audit"      element={<AdminGuard><AuditTrailPage /></AdminGuard>} />
 
         {/* Public Portal — multi-tenant by clientCode */}
         <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />

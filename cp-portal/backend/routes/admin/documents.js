@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -114,7 +115,9 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(req.params.clientId, title, category || null, doc_type || 'other', filePath, req.file.originalname, req.file.size, req.file.mimetype, visible_to_json, source || 'manual');
 
-    res.json({ document: db.prepare('SELECT * FROM cp_documents WHERE id = ?').get(result.lastInsertRowid) });
+    const doc = db.prepare('SELECT * FROM cp_documents WHERE id = ?').get(result.lastInsertRowid);
+    audit(req.admin, req.params.clientId, 'UPLOAD', 'document', doc.id, { title: doc.title });
+    res.json({ document: doc });
   });
 });
 
@@ -132,12 +135,14 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, (req, re
   fields.push("updated_at = datetime('now')");
   values.push(req.params.docId, req.params.clientId);
   db.prepare(`UPDATE cp_documents SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`).run(...values);
+  audit(req.admin, req.params.clientId, 'UPDATE', 'document', req.params.docId, { fields: Object.keys(req.body) });
   res.json({ ok: true });
 });
 
 // DELETE /api/admin/documents/:clientId/:docId — soft delete (sets is_active = 0)
 router.delete('/:clientId/:docId', authenticateAdmin, requireClientAccess, (req, res) => {
   db.prepare("UPDATE cp_documents SET is_active = 0, updated_at = datetime('now') WHERE id = ? AND client_id = ?").run(req.params.docId, req.params.clientId);
+  audit(req.admin, req.params.clientId, 'DELETE', 'document', req.params.docId, {});
   res.json({ ok: true });
 });
 

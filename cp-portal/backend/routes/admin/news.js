@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
 
 function sanitiseHtml(dirty) {
   // Blocklist-based sanitizer: strips dangerous tags and attributes
@@ -61,6 +62,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
     publishAtIso,
   );
 
+  audit(req.admin, req.params.clientId, 'CREATE', 'news', result.lastInsertRowid, { title });
   res.json({ post: db.prepare('SELECT * FROM cp_news_posts WHERE id = ?').get(result.lastInsertRowid) });
 });
 
@@ -95,6 +97,7 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, r
   values.push(req.params.postId, req.params.clientId);
 
   db.prepare(`UPDATE cp_news_posts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`).run(...values);
+  audit(req.admin, req.params.clientId, 'UPDATE', 'news', req.params.postId, { fields: Object.keys(req.body) });
   res.json({ ok: true });
 });
 
@@ -102,6 +105,7 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, r
 router.delete('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, res) => {
   db.prepare("UPDATE cp_news_posts SET status = 'archived', updated_at = datetime('now') WHERE id = ? AND client_id = ?")
     .run(req.params.postId, req.params.clientId);
+  audit(req.admin, req.params.clientId, 'DELETE', 'news', req.params.postId, {});
   res.json({ ok: true });
 });
 

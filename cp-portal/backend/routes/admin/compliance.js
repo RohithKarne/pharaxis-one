@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
 
 // GET /api/admin/compliance/:clientId — get compliance config
 router.get('/:clientId', authenticateAdmin, (req, res) => {
@@ -58,6 +59,7 @@ router.patch('/:clientId', authenticateAdmin, (req, res) => {
   db.prepare(`UPDATE cp_compliance_config SET ${fields.join(', ')} WHERE client_id = ?`).run(...values);
 
   const updated = db.prepare('SELECT * FROM cp_compliance_config WHERE client_id = ?').get(clientId);
+  audit(req.admin, clientId, 'UPDATE', 'compliance', clientId, { jurisdictions, version });
   res.json({ compliance: updated });
 });
 

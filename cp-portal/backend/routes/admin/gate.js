@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
 
 // GET /api/admin/gate/:clientId — full gate config + user types + feature access matrix
 router.get('/:clientId', authenticateAdmin, (req, res) => {
@@ -45,6 +46,7 @@ router.patch('/:clientId', authenticateAdmin, (req, res) => {
   } else {
     db.prepare(`INSERT INTO cp_gate_config (client_id, ${ALLOWED.filter(k => req.body[k] !== undefined).join(', ')}) VALUES (?, ${ALLOWED.filter(k => req.body[k] !== undefined).map(() => '?').join(', ')})`).run(clientId, ...params.slice(0, -1));
   }
+  audit(req.admin, clientId, 'UPDATE', 'gate', clientId, { fields: Object.keys(req.body) });
   res.json({ message: 'Gate config updated.' });
 });
 
@@ -65,6 +67,7 @@ router.patch('/:clientId/user-types/:typeId', authenticateAdmin, (req, res) => {
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
   params.push(typeId, clientId);
   db.prepare(`UPDATE cp_gate_user_types SET ${updates.join(', ')} WHERE id = ? AND client_id = ?`).run(...params);
+  audit(req.admin, clientId, 'UPDATE', 'gate', typeId, { entity: 'user_type', fields: Object.keys(req.body) });
   res.json({ message: 'User type updated.' });
 });
 
@@ -84,6 +87,7 @@ router.patch('/:clientId/access', authenticateAdmin, (req, res) => {
     for (const u of updates) upsert.run(clientId, u.feature_key, u.type_key, u.is_allowed ? 1 : 0);
   });
   txn();
+  audit(req.admin, clientId, 'UPDATE', 'gate', null, { entity: 'access_matrix', count: updates.length });
   res.json({ message: `${updates.length} access rules updated.` });
 });
 

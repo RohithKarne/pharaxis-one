@@ -22,6 +22,7 @@ const CLIENT_NAV = (id) => [
   { to: `/admin/clients/${id}/news`,        label: 'News',          icon: '📰' },
   { to: `/admin/clients/${id}/documents`,   label: 'Documents',     icon: '📁' },
   { to: `/admin/clients/${id}/compliance`,  label: 'Compliance',    icon: '🔒' },
+  { to: `/admin/clients/${id}/audit`,       label: 'Audit Trail',   icon: '📋' },
 ]
 
 const SEGMENT_TITLES = {
@@ -39,6 +40,7 @@ const SEGMENT_TITLES = {
   users:       'Portal Users',
   msls:        'MSL Management',
   clients:     'Clients',
+  audit:       'Audit Trail',
 }
 
 function deriveTitle(pathname) {

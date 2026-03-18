@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -96,6 +97,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       status || 'active',
     );
 
+    audit(req.admin, req.params.clientId, 'CREATE', 'safety_alert', result.lastInsertRowid, { title });
     res.json({ alert: db.prepare('SELECT * FROM cp_safety_alerts WHERE id = ?').get(result.lastInsertRowid) });
   });
 });
@@ -127,6 +129,7 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, 
   values.push(req.params.alertId, req.params.clientId);
 
   db.prepare(`UPDATE cp_safety_alerts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`).run(...values);
+  audit(req.admin, req.params.clientId, 'UPDATE', 'safety_alert', req.params.alertId, { fields: Object.keys(req.body) });
   res.json({ ok: true });
 });
 
@@ -134,6 +137,7 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, 
 router.patch('/:clientId/:alertId/resolve', authenticateAdmin, requireClientAccess, (req, res) => {
   db.prepare("UPDATE cp_safety_alerts SET status = 'resolved', updated_at = datetime('now') WHERE id = ? AND client_id = ?")
     .run(req.params.alertId, req.params.clientId);
+  audit(req.admin, req.params.clientId, 'UPDATE', 'safety_alert', req.params.alertId, { status: 'resolved' });
   res.json({ ok: true });
 });
 

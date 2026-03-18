@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
 
 const VALID_PROVIDERS = ['anthropic', 'openai'];
 
@@ -41,6 +42,7 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
   updates.push(`updated_at = datetime('now')`);
   params.push(req.params.clientId);
   db.prepare(`UPDATE cp_chatbox_config SET ${updates.join(', ')} WHERE client_id = ?`).run(...params);
+  audit(req.admin, req.params.clientId, 'UPDATE', 'chatbox', req.params.clientId, { fields: Object.keys(req.body).filter(k => k !== 'api_key') });
   res.json({ message: 'Chatbox config updated.' });
 });
 

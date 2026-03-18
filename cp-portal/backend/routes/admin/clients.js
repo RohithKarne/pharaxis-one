@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
 
 const DEFAULT_FEATURES = [
   { key: 'therapeutic_areas',   label: 'Therapeutic Areas & Research', order: 1 },
@@ -150,7 +151,7 @@ router.post('/', authenticateAdmin, (req, res) => {
     for (const t of DEFAULT_GATE_TYPES) insAccess.run(clientId, f.key, t.key);
   }
 
-  audit(req.admin, 'CREATE', 'client', clientId, { name, code });
+  audit(req.admin, clientId, 'CREATE', 'client', clientId, { name, code });
   res.status(201).json({ id: clientId, message: 'Client created with default configuration.' });
 });
 
@@ -168,7 +169,7 @@ router.patch('/:id', authenticateAdmin, (req, res) => {
   updates.push(`updated_at = datetime('now')`);
   params.push(id);
   db.prepare(`UPDATE cp_clients SET ${updates.join(', ')} WHERE id = ?`).run(...params);
-  audit(req.admin, 'UPDATE', 'client', Number(id), req.body);
+  audit(req.admin, Number(id), 'UPDATE', 'client', Number(id), req.body);
   res.json({ message: 'Client updated.' });
 });
 
@@ -191,15 +192,8 @@ router.delete('/:id', authenticateAdmin, (req, res) => {
     console.error(`[SYNC-01] Cascade verification query failed for client ${clientId}:`, verifyErr.message);
   }
 
-  audit(req.admin, 'DELETE', 'client', clientId, {});
+  audit(req.admin, clientId, 'DELETE', 'client', clientId, {});
   res.json({ message: 'Client deactivated.' });
 });
-
-function audit(admin, action, entity, entityId, details) {
-  try {
-    db.prepare(`INSERT INTO cp_audit_logs (admin_id, admin_name, action, entity, entity_id, details) VALUES (?,?,?,?,?,?)`)
-      .run(admin?.adminId || null, admin?.name || 'unknown', action, entity, entityId, JSON.stringify(details || {}));
-  } catch (_) {}
-}
 
 module.exports = router;
