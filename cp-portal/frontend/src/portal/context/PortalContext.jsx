@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 
 const PortalContext = createContext(null)
@@ -10,6 +10,7 @@ export function PortalProvider({ children }) {
   const [portalConfig, setPortalConfig] = useState(null)
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState(null)
+  const portalConfigRef                 = useRef(null)
   const [user, setUser]                 = useState(() => {
     try { return JSON.parse(localStorage.getItem('cp_portal_user') || 'null') } catch { return null }
   })
@@ -25,17 +26,33 @@ export function PortalProvider({ children }) {
     }
   }, [portalConfig, user])
 
-  useEffect(() => {
+  const fetchConfig = useCallback(() => {
     if (!clientCode) return
+    // Only show the loading spinner on initial load; background refetches are silent
+    if (portalConfigRef.current === null) setLoading(true)
     fetch(`/api/portal/config/${clientCode}`)
       .then(r => r.json())
       .then(d => {
         if (d.error) { setError(d.error); setLoading(false); return }
+        portalConfigRef.current = d
         setPortalConfig(d)
         applyBranding(d.branding)
         setLoading(false)
       })
       .catch(() => { setError('Unable to load portal configuration.'); setLoading(false) })
+  }, [clientCode])
+
+  useEffect(() => {
+    if (!clientCode) return
+
+    fetchConfig()
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') fetchConfig()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [clientCode])
 
   function applyBranding(b) {
@@ -69,7 +86,7 @@ export function PortalProvider({ children }) {
   function isFeatureEnabled(key) {
     if (loading) return null // still loading — callers should treat null as loading
     if (!portalConfig?.features) return false
-    const featureOn = portalConfig.features.some(f => f.feature_key === key && f.is_enabled)
+    const featureOn = !!portalConfig.features[key]
     if (!featureOn) return false
     // If gate is active and user has confirmed their type, check access matrix
     if (portalConfig.gate && user?.user_type_confirmed && user.user_type) {
@@ -113,7 +130,7 @@ export function PortalProvider({ children }) {
   }
 
   return (
-    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, portalHeaders, portalFetch, isFeatureEnabled, clientCode, showGate }}>
+    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, portalHeaders, portalFetch, isFeatureEnabled, clientCode, showGate, refetchConfig: fetchConfig }}>
       {children}
     </PortalContext.Provider>
   )
