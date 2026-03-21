@@ -24,7 +24,7 @@ router.post('/login', (req, res) => {
   if (!valid) return res.status(401).json({ error: 'Invalid credentials.' });
 
   const token = jwt.sign(
-    { adminId: user.id, email: user.email, name: user.name, role: user.role },
+    { adminId: user.id, email: user.email, name: user.name, role: user.role, clientId: user.client_id ?? null },
     ADMIN_SECRET,
     { expiresIn: '12h' }
   );
@@ -32,14 +32,14 @@ router.post('/login', (req, res) => {
   db.prepare(`UPDATE cp_admin_users SET updated_at = datetime('now') WHERE id = ?`).run(user.id);
 
   res.cookie('cp_admin_token', token, { ...COOKIE_OPTS, maxAge: 12 * 60 * 60 * 1000 })
-     .json({ token, admin: { id: user.id, name: user.name, email: user.email, role: user.role } });
+     .json({ token, admin: { id: user.id, name: user.name, email: user.email, role: user.role, clientId: user.client_id ?? null } });
 });
 
 // GET /api/admin/auth/me
 router.get('/me', authenticateAdmin, (req, res) => {
-  const user = db.prepare('SELECT id, name, email, role, created_at FROM cp_admin_users WHERE id = ?').get(req.admin.adminId);
+  const user = db.prepare('SELECT id, name, email, role, client_id, created_at FROM cp_admin_users WHERE id = ?').get(req.admin.adminId);
   if (!user) return res.status(404).json({ error: 'Admin user not found.' });
-  res.json({ admin: user });
+  res.json({ admin: { ...user, clientId: user.client_id ?? null } });
 });
 
 // PATCH /api/admin/auth/password

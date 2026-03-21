@@ -6,9 +6,11 @@
 const express = require('express');
 const bcrypt  = require('bcrypt');
 const jwt     = require('jsonwebtoken');
+const crypto  = require('crypto');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { requirePortalAuth, authenticatePortal, PORTAL_SECRET } = require('../../middleware/auth');
+const { sendEmail } = require('../../utils/mailer');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' }
 
@@ -62,16 +64,26 @@ router.post('/register', (req, res) => {
   const existing = db.prepare('SELECT id FROM cp_portal_users WHERE client_id = ? AND email = ?').get(client.id, email);
   if (existing) return res.status(409).json({ error: 'Email already registered.' });
 
-  const hash = bcrypt.hashSync(password, 10);
-  const info = db.prepare(`
-    INSERT INTO cp_portal_users (client_id, first_name, last_name, email, password, user_type, specialty, country, phone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(client.id, first_name, last_name, email, hash, user_type || 'other', specialty || null, country || null, phone || null);
+  const hash  = bcrypt.hashSync(password, 10);
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
 
-  const newUser = { id: info.lastInsertRowid, first_name, last_name, email, user_type: user_type || 'other', user_type_confirmed: 0 };
-  const regToken = makeToken(newUser, client.id);
-  res.cookie('cp_portal_token', regToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
-     .status(201).json({ token: regToken, user: newUser });
+  const info = db.prepare(`
+    INSERT INTO cp_portal_users (client_id, first_name, last_name, email, password, user_type, specialty, country, phone, email_verified, verification_token, verification_token_expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+  `).run(client.id, first_name, last_name, email, hash, user_type || 'other', specialty || null, country || null, phone || null, token, expires);
+
+  // Send verification email — fire-and-forget, non-fatal
+  const origin = req.headers.origin || `http://localhost:5174`
+  const verifyUrl = `${origin}/portal/${client_code}/verify-email?token=${token}`
+  sendEmail(client.id, {
+    to: email,
+    subject: 'Verify your email address',
+    html: `<p>Hi ${first_name},</p><p>Thank you for registering. Please verify your email address by clicking the link below:</p><p><a href="${verifyUrl}" style="background:#6B3FA0;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Verify Email</a></p><p>This link expires in 24 hours.</p><p>If you did not register, please ignore this email.</p>`,
+    text: `Hi ${first_name}, verify your email: ${verifyUrl}`,
+  }).catch(() => {})
+
+  res.status(201).json({ pending: true, message: 'Registration successful. Please check your email to verify your account.' });
 });
 
 // POST /api/portal/auth/login
@@ -88,6 +100,7 @@ router.post('/login', (req, res) => {
 
   const user = db.prepare('SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ? AND is_active = 1').get(client.id, email);
   if (!user || !bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Invalid email or password.' });
+  if (!user.email_verified) return res.status(403).json({ error: 'Please verify your email address before signing in. Check your inbox for the verification link.', unverified: true });
 
   db.prepare(`UPDATE cp_portal_users SET last_login_at = datetime('now') WHERE id = ?`).run(user.id);
 
@@ -137,6 +150,56 @@ router.patch('/profile', authenticatePortal, requirePortalAuth, (req, res) => {
   const updated = db.prepare('SELECT id, first_name, last_name, email, user_type, user_type_confirmed FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId);
   res.json({ message: 'Profile updated.', token: makeToken(updated, req.portalUser.clientId), user: updated });
 });
+
+// GET /api/portal/auth/verify-email?token=xxx — confirm email + auto-login
+router.get('/verify-email', (req, res) => {
+  const { token } = req.query
+  if (!token) return res.status(400).json({ error: 'Verification token is required.' })
+
+  const user = db.prepare(`
+    SELECT * FROM cp_portal_users
+    WHERE verification_token = ? AND email_verified = 0
+  `).get(token)
+
+  if (!user) return res.status(400).json({ error: 'Invalid or already used verification link.' })
+  if (user.verification_token_expires_at && new Date(user.verification_token_expires_at) < new Date()) {
+    return res.status(400).json({ error: 'Verification link has expired. Please request a new one.', expired: true })
+  }
+
+  db.prepare(`UPDATE cp_portal_users SET email_verified=1, verification_token=NULL, verification_token_expires_at=NULL WHERE id=?`).run(user.id)
+
+  const authToken = makeToken(user, user.client_id)
+  res.cookie('cp_portal_token', authToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
+     .json({ message: 'Email verified successfully.', token: authToken, user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed } })
+})
+
+// POST /api/portal/auth/resend-verification — resend verification email
+router.post('/resend-verification', (req, res) => {
+  const { client_code, email } = req.body
+  if (!client_code || !email) return res.status(400).json({ error: 'client_code and email are required.' })
+
+  const client = db.prepare('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1').get(client_code)
+  if (!client) return res.status(404).json({ error: 'Portal not found.' })
+
+  const user = db.prepare('SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ? AND email_verified = 0 AND is_active = 1').get(client.id, email)
+  // Return same message regardless — prevents email enumeration
+  if (!user) return res.json({ message: 'If that email is registered and unverified, a new link has been sent.' })
+
+  const token   = crypto.randomBytes(32).toString('hex')
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  db.prepare(`UPDATE cp_portal_users SET verification_token=?, verification_token_expires_at=? WHERE id=?`).run(token, expires, user.id)
+
+  const origin = req.headers.origin || `http://localhost:5174`
+  const verifyUrl = `${origin}/portal/${client_code}/verify-email?token=${token}`
+  sendEmail(client.id, {
+    to: email,
+    subject: 'Verify your email address',
+    html: `<p>Hi ${user.first_name},</p><p>Here is your new verification link:</p><p><a href="${verifyUrl}" style="background:#6B3FA0;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Verify Email</a></p><p>This link expires in 24 hours.</p>`,
+    text: `Hi ${user.first_name}, verify your email: ${verifyUrl}`,
+  }).catch(() => {})
+
+  res.json({ message: 'If that email is registered and unverified, a new link has been sent.' })
+})
 
 // POST /api/portal/auth/logout — clear auth cookie
 router.post('/logout', (req, res) => {

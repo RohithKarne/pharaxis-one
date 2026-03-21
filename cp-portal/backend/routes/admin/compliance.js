@@ -63,6 +63,29 @@ router.patch('/:clientId', authenticateAdmin, (req, res) => {
   res.json({ compliance: updated });
 });
 
+// POST /api/admin/compliance/:clientId/trigger-reconsent — bump version to invalidate all existing consents
+router.post('/:clientId/trigger-reconsent', authenticateAdmin, (req, res) => {
+  const { clientId } = req.params
+
+  let row = db.prepare('SELECT * FROM cp_compliance_config WHERE client_id = ?').get(clientId)
+  if (!row) {
+    db.prepare(`INSERT INTO cp_compliance_config (client_id) VALUES (?)`).run(clientId)
+    row = db.prepare('SELECT * FROM cp_compliance_config WHERE client_id = ?').get(clientId)
+  }
+
+  // Bump the patch version: 1.0 → 1.1, 1.9 → 1.10, 2 → 2.1
+  const current = (row.version || '1.0').replace(/^v/i, '')
+  const parts   = current.split('.')
+  parts[parts.length - 1] = String(Number(parts[parts.length - 1]) + 1)
+  const newVersion = parts.join('.')
+
+  db.prepare(`UPDATE cp_compliance_config SET version=?, require_reconsent=1, updated_at=datetime('now') WHERE client_id=?`)
+    .run(newVersion, clientId)
+
+  audit(req.admin, clientId, 'TRIGGER_RECONSENT', 'compliance', clientId, { old_version: current, new_version: newVersion })
+  res.json({ ok: true, new_version: newVersion, message: `Re-acceptance triggered. All portal users will be prompted to re-consent (version ${newVersion}).` })
+})
+
 // GET /api/admin/compliance/:clientId/consent-records — audit log (paginated)
 router.get('/:clientId/consent-records', authenticateAdmin, (req, res) => {
   const { clientId } = req.params;

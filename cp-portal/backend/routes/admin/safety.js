@@ -8,6 +8,8 @@ const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const { notifyPortalUsers } = require('../../utils/notify');
+const { autoTranslate } = require('../../utils/translator');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -98,13 +100,15 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
     );
 
     audit(req.admin, req.params.clientId, 'CREATE', 'safety_alert', result.lastInsertRowid, { title });
+    if ((status || 'active') === 'active') notifyPortalUsers(req.params.clientId, 'safety', title, result.lastInsertRowid);
+    autoTranslate(req.params.clientId, 'cp_safety_alerts', result.lastInsertRowid, { title, body_html: sanitiseHtml(body_html) }).catch(() => {});
     res.json({ alert: db.prepare('SELECT * FROM cp_safety_alerts WHERE id = ?').get(result.lastInsertRowid) });
   });
 });
 
 // PUT /api/admin/safety/:clientId/:alertId
 router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, res) => {
-  const { title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types, status } = req.body;
+  const { title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types, status, publish_at } = req.body;
   const fields = [], values = [];
 
   if (req.body.alert_type && !VALID_TYPES.includes(req.body.alert_type)) {
@@ -123,6 +127,7 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, 
   if (effective_date !== undefined) { fields.push('effective_date = ?');     values.push(effective_date); }
   if (target_types !== undefined)   { fields.push('target_types_json = ?'); values.push(JSON.stringify(target_types)); }
   if (status !== undefined)         { fields.push('status = ?');             values.push(status); }
+  if (publish_at !== undefined)     { fields.push('publish_at = ?');         values.push(publish_at || null); }
 
   if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
   fields.push("updated_at = datetime('now')");
@@ -130,6 +135,10 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, 
 
   db.prepare(`UPDATE cp_safety_alerts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`).run(...values);
   audit(req.admin, req.params.clientId, 'UPDATE', 'safety_alert', req.params.alertId, { fields: Object.keys(req.body) });
+  const transFields = {};
+  if (title     !== undefined) transFields.title     = title;
+  if (body_html !== undefined) transFields.body_html = sanitiseHtml(body_html);
+  if (Object.keys(transFields).length) autoTranslate(req.params.clientId, 'cp_safety_alerts', req.params.alertId, transFields).catch(() => {});
   res.json({ ok: true });
 });
 

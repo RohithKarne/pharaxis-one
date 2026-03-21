@@ -1,12 +1,21 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
 
+const EMPTY_BOOKING = { requester_name: '', requester_email: '', preferred_date: '', topic: '', message: '' }
+
 export default function FindMSLPage() {
-  const { clientCode } = usePortal()
+  const { clientCode, user } = usePortal()
   const [msls, setMSLs]       = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
   const [region, setRegion]   = useState('')
+
+  // Booking modal state
+  const [bookingMSL,   setBookingMSL]   = useState(null)
+  const [bookingForm,  setBookingForm]  = useState(EMPTY_BOOKING)
+  const [bookingError, setBookingError] = useState('')
+  const [bookingDone,  setBookingDone]  = useState(false)
+  const [bookingBusy,  setBookingBusy]  = useState(false)
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/msls`)
@@ -19,6 +28,34 @@ export default function FindMSLPage() {
     .filter(m => !search  || m.name.toLowerCase().includes(search.toLowerCase())
       || (m.specialty || '').toLowerCase().includes(search.toLowerCase())
       || (m.territory || '').toLowerCase().includes(search.toLowerCase()))
+
+  function openBooking(msl) {
+    setBookingMSL(msl)
+    setBookingForm({
+      ...EMPTY_BOOKING,
+      requester_name:  user?.full_name || user?.name || '',
+      requester_email: user?.email || '',
+    })
+    setBookingError('')
+    setBookingDone(false)
+  }
+
+  async function handleBookingSubmit(e) {
+    e.preventDefault()
+    setBookingError(''); setBookingBusy(true)
+    try {
+      const token = localStorage.getItem('cp_portal_token')
+      const res = await fetch(`/api/portal/bookings/${clientCode}/${bookingMSL.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(bookingForm),
+      })
+      const d = await res.json()
+      if (!res.ok) { setBookingError(d.error || 'Submission failed.'); setBookingBusy(false); return }
+      setBookingDone(true)
+    } catch { setBookingError('Network error. Please try again.') }
+    setBookingBusy(false)
+  }
 
   return (
     <div className="pp-container pp-page-content">
@@ -49,15 +86,73 @@ export default function FindMSLPage() {
                 {m.title     && <div className="pp-msl-title">{m.title}</div>}
                 {m.specialty && <div className="pp-msl-specialty">🔬 {m.specialty}</div>}
                 {m.region    && <div className="pp-msl-region">📍 {m.region}{m.territory ? ` · ${m.territory}` : ''}</div>}
-                {m.email     && (
-                  <a href={`mailto:${m.email}`} className="pp-msl-email">
-                    ✉️ {m.email}
-                  </a>
-                )}
+                {m.email     && <a href={`mailto:${m.email}`} className="pp-msl-email">✉️ {m.email}</a>}
                 {m.phone     && <div className="pp-msl-phone">📞 {m.phone}</div>}
+                <button
+                  onClick={() => openBooking(m)}
+                  style={{ marginTop: 10, padding: '6px 14px', background: '#6B3FA0', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}
+                >
+                  Request Meeting
+                </button>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Booking Modal */}
+      {bookingMSL && (
+        <div className="cp-modal-overlay" onClick={() => setBookingMSL(null)}>
+          <div className="cp-modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <div className="cp-modal-header">
+              <span>Request Meeting with {bookingMSL.name}</span>
+              <button className="cp-modal-close" onClick={() => setBookingMSL(null)}>✕</button>
+            </div>
+            {bookingDone ? (
+              <div className="cp-modal-body" style={{ textAlign: 'center', padding: '32px 24px' }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+                <div style={{ fontWeight: 700, fontSize: 17, color: '#1A1A2E', marginBottom: 8 }}>Meeting request sent!</div>
+                <div style={{ color: '#6B7280', fontSize: 14, marginBottom: 24 }}>
+                  Your request has been received. The MSL team will follow up with you shortly.
+                </div>
+                <button className="cp-btn cp-btn-primary" onClick={() => setBookingMSL(null)}>Close</button>
+              </div>
+            ) : (
+              <form onSubmit={handleBookingSubmit} className="cp-modal-body">
+                <div className="cp-field-row">
+                  <div className="cp-field">
+                    <label>Your Name *</label>
+                    <input required value={bookingForm.requester_name} onChange={e => setBookingForm(f => ({ ...f, requester_name: e.target.value }))} placeholder="Full name" />
+                  </div>
+                  <div className="cp-field">
+                    <label>Your Email *</label>
+                    <input required type="email" value={bookingForm.requester_email} onChange={e => setBookingForm(f => ({ ...f, requester_email: e.target.value }))} placeholder="you@example.com" />
+                  </div>
+                </div>
+                <div className="cp-field-row">
+                  <div className="cp-field">
+                    <label>Preferred Date</label>
+                    <input type="date" value={bookingForm.preferred_date} onChange={e => setBookingForm(f => ({ ...f, preferred_date: e.target.value }))} min={new Date().toISOString().slice(0, 10)} />
+                  </div>
+                  <div className="cp-field">
+                    <label>Topic / Area of Interest</label>
+                    <input value={bookingForm.topic} onChange={e => setBookingForm(f => ({ ...f, topic: e.target.value }))} placeholder="e.g. Clinical data, pipeline product…" />
+                  </div>
+                </div>
+                <div className="cp-field">
+                  <label>Additional Message</label>
+                  <textarea rows={3} value={bookingForm.message} onChange={e => setBookingForm(f => ({ ...f, message: e.target.value }))} placeholder="Any additional context or questions…" maxLength={500} />
+                </div>
+                {bookingError && <div className="cp-error">{bookingError}</div>}
+                <div className="cp-modal-footer">
+                  <button type="submit" className="cp-btn cp-btn-primary" disabled={bookingBusy}>
+                    {bookingBusy ? 'Sending…' : 'Send Request'}
+                  </button>
+                  <button type="button" className="cp-btn cp-btn-outline" onClick={() => setBookingMSL(null)}>Cancel</button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </div>

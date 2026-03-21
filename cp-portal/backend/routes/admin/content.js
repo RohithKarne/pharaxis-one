@@ -26,7 +26,7 @@ router.post('/:clientId/therapeutic-areas', authenticateAdmin, (req, res) => {
 });
 
 router.patch('/:clientId/therapeutic-areas/:id', authenticateAdmin, (req, res) => {
-  const allowed = ['name', 'slug', 'short_desc', 'content', 'image_url', 'is_active', 'display_order'];
+  const allowed = ['name', 'slug', 'short_desc', 'content', 'image_url', 'is_active', 'display_order', 'status'];
   const { updates, params } = buildUpdate(req.body, allowed);
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
   params.push(req.params.id, req.params.clientId);
@@ -57,7 +57,7 @@ router.post('/:clientId/drugs', authenticateAdmin, (req, res) => {
 });
 
 router.patch('/:clientId/drugs/:id', authenticateAdmin, (req, res) => {
-  const allowed = ['therapeutic_area_id', 'brand_name', 'generic_name', 'indication', 'prescribing_info_url', 'storage_conditions', 'dosage_info', 'contraindications', 'side_effects', 'image_url', 'is_active', 'display_order'];
+  const allowed = ['therapeutic_area_id', 'brand_name', 'generic_name', 'indication', 'prescribing_info_url', 'storage_conditions', 'dosage_info', 'contraindications', 'side_effects', 'image_url', 'is_active', 'display_order', 'status'];
   const { updates, params } = buildUpdate(req.body, allowed);
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
   params.push(req.params.id, req.params.clientId);
@@ -88,7 +88,7 @@ router.post('/:clientId/events', authenticateAdmin, (req, res) => {
 });
 
 router.patch('/:clientId/events/:id', authenticateAdmin, (req, res) => {
-  const allowed = ['title', 'description', 'event_type', 'venue', 'city', 'country', 'start_date', 'end_date', 'registration_url', 'image_url', 'is_active', 'is_featured', 'display_order'];
+  const allowed = ['title', 'description', 'event_type', 'venue', 'city', 'country', 'start_date', 'end_date', 'registration_url', 'image_url', 'is_active', 'is_featured', 'display_order', 'status'];
   const { updates, params } = buildUpdate(req.body, allowed);
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
   params.push(req.params.id, req.params.clientId);
@@ -119,7 +119,7 @@ router.post('/:clientId/resources', authenticateAdmin, (req, res) => {
 });
 
 router.patch('/:clientId/resources/:id', authenticateAdmin, (req, res) => {
-  const allowed = ['title', 'description', 'resource_type', 'url', 'category', 'is_active', 'display_order'];
+  const allowed = ['title', 'description', 'resource_type', 'url', 'category', 'is_active', 'display_order', 'status'];
   const { updates, params } = buildUpdate(req.body, allowed);
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
   params.push(req.params.id, req.params.clientId);

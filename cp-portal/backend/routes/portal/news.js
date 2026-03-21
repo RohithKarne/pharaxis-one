@@ -7,6 +7,9 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
+const { applyTranslation } = require('../../utils/translator');
+
+const NEWS_TRANS_FIELDS = ['title', 'body_html'];
 
 function toUrl(thumbnailPath) {
   if (!thumbnailPath) return null;
@@ -38,11 +41,13 @@ router.get('/', authenticatePortal, (req, res) => {
   const now      = new Date().toISOString();
   const category = req.query.category || null;
 
+  const lang = req.query.lang || 'en';
+
   const allPosts = db.prepare(`
-    SELECT id, title, body_html, category, thumbnail_path, target_types_json, publish_at, view_count, created_at
+    SELECT id, title, body_html, category, thumbnail_path, target_types_json, publish_at, view_count, is_pinned, created_at, translations_json
     FROM cp_news_posts
     WHERE client_id = ? AND status = 'published' AND publish_at <= ?
-    ORDER BY publish_at DESC
+    ORDER BY is_pinned DESC, publish_at DESC
   `).all(client.id, now);
 
   // Filter by user_type: empty array = visible to all
@@ -58,7 +63,10 @@ router.get('/', authenticatePortal, (req, res) => {
   const filtered = category ? visiblePosts.filter(p => p.category === category) : visiblePosts;
 
   const total = filtered.length;
-  const paged = filtered.slice(offset, offset + limit).map(p => ({ ...p, thumbnail_url: toUrl(p.thumbnail_path) }));
+  const paged = filtered.slice(offset, offset + limit).map(p => {
+    const translated = applyTranslation(p, lang, NEWS_TRANS_FIELDS);
+    return { ...translated, thumbnail_url: toUrl(p.thumbnail_path) };
+  });
 
   res.json({ posts: paged, total, page, limit, allCategories });
 });
@@ -97,7 +105,9 @@ router.get('/:postId', authenticatePortal, (req, res) => {
 
   // MED-49: view_count increment removed from GET — use POST /:clientCode/posts/:id/view instead
 
-  res.json({ post: { ...post, thumbnail_url: toUrl(post.thumbnail_path) } });
+  const lang2       = req.query.lang || 'en';
+  const translated  = applyTranslation(post, lang2, NEWS_TRANS_FIELDS);
+  res.json({ post: { ...translated, thumbnail_url: toUrl(post.thumbnail_path) } });
 });
 
 // POST /api/portal/news/:clientCode/posts/:id/view — increment view count (idempotent intent; called once per session by frontend)

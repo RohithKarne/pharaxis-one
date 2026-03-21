@@ -53,8 +53,20 @@ export function AdminAuthProvider({ children }) {
       .catch(() => logout())
   }, [])
 
+  // S4-10: role helper — true if the signed-in admin has one of the given roles
+  function hasRole(...roles) {
+    return roles.includes(admin?.role);
+  }
+
+  // S4-10: true if admin can write content (create/edit/publish)
+  const canWrite    = hasRole('superadmin', 'admin', 'content_manager');
+  // S4-10: true if admin can approve/reject review queue items
+  const canApprove  = hasRole('superadmin', 'admin', 'reviewer');
+  // S4-10: true if admin can publish / archive content
+  const canPublish  = hasRole('superadmin', 'admin');
+
   return (
-    <AdminAuthContext.Provider value={{ admin, login, logout, adminFetch }}>
+    <AdminAuthContext.Provider value={{ admin, login, logout, adminFetch, hasRole, canWrite, canApprove, canPublish }}>
       {children}
     </AdminAuthContext.Provider>
   )

@@ -7,7 +7,32 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { autoTranslate } = require('../../utils/translator');
+
+// S4-8: Approval workflow — valid status transitions
+const ALLOWED_TRANSITIONS = {
+  draft:     ['review'],
+  review:    ['approved', 'draft'],
+  approved:  ['published', 'scheduled', 'draft'],
+  published: ['archived'],
+  scheduled: ['published', 'archived'],
+  archived:  ['draft'],
+};
+
+// Which roles are required to set each target status
+const PUBLISH_ROLES  = ['superadmin', 'admin'];
+const APPROVE_ROLES  = ['superadmin', 'admin', 'reviewer'];
+const SUBMIT_ROLES   = ['superadmin', 'admin', 'content_manager'];
+const STATUS_ALLOWED_ROLES = {
+  review:    SUBMIT_ROLES,
+  approved:  APPROVE_ROLES,
+  published: PUBLISH_ROLES,
+  scheduled: PUBLISH_ROLES,
+  archived:  PUBLISH_ROLES,
+  draft:     APPROVE_ROLES,  // reject (going back to draft from review/approved)
+};
 const { audit } = require('../../utils/audit');
+const { notifyPortalUsers } = require('../../utils/notify');
 
 function sanitiseHtml(dirty) {
   // Blocklist-based sanitizer: strips dangerous tags and attributes
@@ -36,8 +61,17 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
 
 // POST /api/admin/news/:clientId
 router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
-  const { title, body_html, category, thumbnail_path, target_types, status } = req.body;
+  const { title, body_html, category, thumbnail_path, target_types, status, is_pinned } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required.' });
+
+  // S4-8: content_manager can only create as draft or review
+  const initialStatus = status || 'draft';
+  if (!SUBMIT_ROLES.includes(req.admin.role)) {
+    return res.status(403).json({ error: 'Insufficient permissions to create news posts.' });
+  }
+  if (!PUBLISH_ROLES.includes(req.admin.role) && !['draft', 'review'].includes(initialStatus)) {
+    return res.status(403).json({ error: `Your role cannot create posts with status '${initialStatus}'.` });
+  }
 
   let publishAtIso = new Date().toISOString();
   if (req.body.publish_at) {
@@ -48,9 +82,16 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
     publishAtIso = d.toISOString();
   }
 
+  if (is_pinned) {
+    const pinnedCount = db.prepare('SELECT COUNT(*) as cnt FROM cp_news_posts WHERE client_id = ? AND is_pinned = 1 AND status != ?').get(req.params.clientId, 'archived');
+    if (pinnedCount.cnt >= 10) {
+      return res.status(400).json({ error: 'Maximum of 10 pinned posts allowed. Unpin an existing post first.' });
+    }
+  }
+
   const result = db.prepare(`
-    INSERT INTO cp_news_posts (client_id, title, body_html, category, thumbnail_path, target_types_json, status, publish_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO cp_news_posts (client_id, title, body_html, category, thumbnail_path, target_types_json, status, publish_at, is_pinned)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     req.params.clientId,
     title,
@@ -60,11 +101,31 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
     JSON.stringify(target_types || []),
     status || 'draft',
     publishAtIso,
+    is_pinned ? 1 : 0,
   );
 
   audit(req.admin, req.params.clientId, 'CREATE', 'news', result.lastInsertRowid, { title });
+  if ((status || 'draft') === 'published') notifyPortalUsers(req.params.clientId, 'news', title, result.lastInsertRowid);
+  autoTranslate(req.params.clientId, 'cp_news_posts', result.lastInsertRowid, { title, body_html: sanitiseHtml(body_html) }).catch(() => {});
   res.json({ post: db.prepare('SELECT * FROM cp_news_posts WHERE id = ?').get(result.lastInsertRowid) });
 });
+
+// POST /api/admin/news/:clientId/bulk — bulk action on multiple posts
+router.post('/:clientId/bulk', authenticateAdmin, requireClientAccess, (req, res) => {
+  const { ids, action } = req.body
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array is required.' })
+  if (!['publish', 'archive', 'delete'].includes(action)) return res.status(400).json({ error: 'action must be publish, archive, or delete.' })
+  if (!PUBLISH_ROLES.includes(req.admin.role)) return res.status(403).json({ error: 'Only admins can perform bulk actions.' })
+
+  const placeholders = ids.map(() => '?').join(',')
+  if (action === 'publish') {
+    db.prepare(`UPDATE cp_news_posts SET status='published', updated_at=datetime('now') WHERE id IN (${placeholders}) AND client_id=?`).run(...ids, req.params.clientId)
+  } else {
+    db.prepare(`UPDATE cp_news_posts SET status='archived', updated_at=datetime('now') WHERE id IN (${placeholders}) AND client_id=?`).run(...ids, req.params.clientId)
+  }
+  audit(req.admin, req.params.clientId, `BULK_${action.toUpperCase()}`, 'news', null, { ids })
+  res.json({ ok: true, affected: ids.length })
+})
 
 // PUT /api/admin/news/:clientId/:postId
 router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, res) => {
@@ -80,9 +141,33 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, r
     publishAtIso = d.toISOString();
   }
 
+  const { is_pinned } = req.body;
+  if (is_pinned) {
+    const pinnedCount = db.prepare('SELECT COUNT(*) as cnt FROM cp_news_posts WHERE client_id = ? AND is_pinned = 1 AND status != ? AND id != ?').get(req.params.clientId, 'archived', req.params.postId);
+    if (pinnedCount.cnt >= 10) {
+      return res.status(400).json({ error: 'Maximum of 10 pinned posts allowed. Unpin an existing post first.' });
+    }
+  }
+  // S4-8: validate status transition + role permission
+  if (status !== undefined) {
+    const current = db.prepare('SELECT status FROM cp_news_posts WHERE id = ? AND client_id = ?').get(req.params.postId, req.params.clientId);
+    if (!current) return res.status(404).json({ error: 'Post not found.' });
+    if (current.status !== status) {
+      const allowed = ALLOWED_TRANSITIONS[current.status] || [];
+      if (!allowed.includes(status)) {
+        return res.status(400).json({ error: `Invalid transition: ${current.status} → ${status}.` });
+      }
+      const requiredRoles = STATUS_ALLOWED_ROLES[status] || PUBLISH_ROLES;
+      if (!requiredRoles.includes(req.admin.role)) {
+        return res.status(403).json({ error: `Your role cannot set status to '${status}'.` });
+      }
+    }
+  }
+
   if (title !== undefined)        { fields.push('title = ?');              values.push(title); }
   if (body_html !== undefined)    { fields.push('body_html = ?');          values.push(sanitiseHtml(body_html)); }
   if (category !== undefined)     { fields.push('category = ?');           values.push(category); }
+  if (is_pinned !== undefined)    { fields.push('is_pinned = ?');          values.push(is_pinned ? 1 : 0); }
   if (thumbnail_path !== undefined) {
     fields.push('thumbnail_path = ?');
     // Explicitly clearing (null or '') stores null; non-empty string stores as-is
@@ -98,11 +183,20 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, r
 
   db.prepare(`UPDATE cp_news_posts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`).run(...values);
   audit(req.admin, req.params.clientId, 'UPDATE', 'news', req.params.postId, { fields: Object.keys(req.body) });
+  if (status === 'published' && title) notifyPortalUsers(req.params.clientId, 'news', title, req.params.postId);
+  // Re-translate whenever title or body changes
+  const transFields = {};
+  if (title !== undefined)     transFields.title     = title;
+  if (body_html !== undefined) transFields.body_html = sanitiseHtml(body_html);
+  if (Object.keys(transFields).length) autoTranslate(req.params.clientId, 'cp_news_posts', req.params.postId, transFields).catch(() => {});
   res.json({ ok: true });
 });
 
-// DELETE /api/admin/news/:clientId/:postId — archive (soft delete)
+// DELETE /api/admin/news/:clientId/:postId — archive (soft delete), admin+ only
 router.delete('/:clientId/:postId', authenticateAdmin, requireClientAccess, (req, res) => {
+  if (!PUBLISH_ROLES.includes(req.admin.role)) {
+    return res.status(403).json({ error: 'Only admins can archive posts.' });
+  }
   db.prepare("UPDATE cp_news_posts SET status = 'archived', updated_at = datetime('now') WHERE id = ? AND client_id = ?")
     .run(req.params.postId, req.params.clientId);
   audit(req.admin, req.params.clientId, 'DELETE', 'news', req.params.postId, {});

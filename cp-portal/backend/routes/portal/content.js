@@ -16,7 +16,7 @@ router.get('/:clientCode/therapeutic-areas', (req, res) => {
   const client = getClient(req.params.clientCode);
   if (!client) return res.status(404).json({ error: 'Portal not found.' });
   const rows = db.prepare(
-    'SELECT id, name, slug, short_desc AS description, content AS overview, image_url, display_order FROM cp_therapeutic_areas WHERE client_id=? AND is_active=1 ORDER BY display_order ASC'
+    "SELECT id, name, slug, short_desc AS description, content AS overview, image_url, display_order FROM cp_therapeutic_areas WHERE client_id=? AND is_active=1 AND status='published' ORDER BY display_order ASC"
   ).all(client.id);
   res.json({ items: rows });
 });
@@ -25,7 +25,7 @@ router.get('/:clientCode/therapeutic-areas/:slug', (req, res) => {
   const client = getClient(req.params.clientCode);
   if (!client) return res.status(404).json({ error: 'Portal not found.' });
   const row = db.prepare(
-    'SELECT id, name, slug, short_desc AS description, content AS overview, image_url FROM cp_therapeutic_areas WHERE client_id=? AND slug=? AND is_active=1'
+    "SELECT id, name, slug, short_desc AS description, content AS overview, image_url FROM cp_therapeutic_areas WHERE client_id=? AND slug=? AND is_active=1 AND status='published'"
   ).get(client.id, req.params.slug);
   if (!row) return res.status(404).json({ error: 'Not found.' });
   res.json({ item: row });
@@ -40,7 +40,7 @@ router.get('/:clientCode/drugs', (req, res) => {
                       dosage_info, contraindications, side_effects,
                       prescribing_info_url, storage_conditions, image_url,
                       therapeutic_area_id, display_order
-               FROM cp_drugs WHERE client_id=? AND is_active=1`;
+               FROM cp_drugs WHERE client_id=? AND is_active=1 AND status='published'`;
   const params = [client.id];
   if (therapeutic_area_id) { query += ' AND therapeutic_area_id=?'; params.push(therapeutic_area_id); }
   query += ' ORDER BY display_order ASC';
@@ -55,7 +55,7 @@ router.get('/:clientCode/events', (req, res) => {
     `SELECT id, title, description, event_type,
             venue, city, country, start_date, end_date,
             registration_url, image_url, is_featured
-     FROM cp_events WHERE client_id=? AND is_active=1 ORDER BY start_date ASC`
+     FROM cp_events WHERE client_id=? AND is_active=1 AND status='published' ORDER BY start_date ASC`
   ).all(client.id);
   res.json({ items: rows });
 });
@@ -75,7 +75,7 @@ router.get('/:clientCode/resources', (req, res) => {
   const client = getClient(req.params.clientCode);
   if (!client) return res.status(404).json({ error: 'Portal not found.' });
   const rows = db.prepare(
-    'SELECT id, title, description, resource_type, url, file_path, category, display_order FROM cp_resources WHERE client_id=? AND is_active=1 ORDER BY display_order ASC'
+    "SELECT id, title, description, resource_type, url, file_path, category, display_order FROM cp_resources WHERE client_id=? AND is_active=1 AND status='published' ORDER BY display_order ASC"
   ).all(client.id);
   res.json({ items: rows });
 });

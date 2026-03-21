@@ -94,4 +94,21 @@ function requireClientAccess(req, res, next) {
   next();
 }
 
-module.exports = { authenticateAdmin, authenticatePortal, requirePortalAuth, requireClientAccess, ADMIN_SECRET, PORTAL_SECRET };
+/**
+ * requireRole — S4-10: role-based access control.
+ *
+ * Usage: router.post('/', authenticateAdmin, requireClientAccess, requireRole('admin','superadmin'), handler)
+ *
+ * Allowed role values: superadmin | admin | content_manager | reviewer | viewer
+ */
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.admin) return res.status(401).json({ error: 'Admin authentication required.' });
+    if (!roles.includes(req.admin.role)) {
+      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+    }
+    next();
+  };
+}
+
+module.exports = { authenticateAdmin, authenticatePortal, requirePortalAuth, requireClientAccess, requireRole, ADMIN_SECRET, PORTAL_SECRET };

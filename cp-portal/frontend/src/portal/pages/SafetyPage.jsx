@@ -3,7 +3,7 @@ import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
 
 export default function SafetyPage() {
-  const { clientCode, portalHeaders } = usePortal()
+  const { clientCode, portalHeaders, language } = usePortal()
   const [alerts, setAlerts]           = useState([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState('')
@@ -13,18 +13,23 @@ export default function SafetyPage() {
       setLoading(true)
       try {
         const token = localStorage.getItem('cp_portal_token')
-        const res = await fetch(`/api/portal/safety?clientCode=${clientCode}`, {
+        const langParam = language && language !== 'en' ? `&lang=${language}` : ''
+        const res = await fetch(`/api/portal/safety?clientCode=${clientCode}${langParam}`, {
           headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         })
         const d = await res.json()
         setAlerts(d.alerts || [])
+        // increment view count for each alert visible on this page load
+        ;(d.alerts || []).forEach(a => {
+          fetch(`/api/portal/safety/${clientCode}/alerts/${a.id}/view`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } }).catch(() => {})
+        })
       } catch {
         setError('Unable to load safety alerts.')
       }
       setLoading(false)
     }
     if (clientCode) load()
-  }, [clientCode])
+  }, [clientCode, language])
 
   // LOW-05: set document title
   useEffect(() => { document.title = 'Safety Alerts | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])

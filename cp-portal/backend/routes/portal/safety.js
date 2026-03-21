@@ -7,6 +7,9 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
+const { applyTranslation } = require('../../utils/translator');
+
+const SAFETY_TRANS_FIELDS = ['title', 'body_html'];
 const path    = require('path');
 const fs      = require('fs');
 
@@ -20,21 +23,27 @@ router.get('/', authenticatePortal, (req, res) => {
 
   const userType = req.portalUser?.user_type || 'other';
 
+  const lang = req.query.lang || 'en';
+
   const alerts = db.prepare(`
     SELECT id, title, alert_type, severity, product_name, ref_number, body_html,
-           effective_date, target_types_json, attachment_name, status, view_count, created_at
+           effective_date, target_types_json, attachment_name, status, view_count, created_at,
+           translations_json
     FROM cp_safety_alerts
     WHERE client_id = ? AND status IN ('active', 'resolved')
+      AND (publish_at IS NULL OR publish_at <= datetime('now'))
     ORDER BY
       CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
       effective_date DESC
   `).all(client.id);
 
-  // Filter by user_type
-  const filtered = alerts.filter(a => {
-    const types = JSON.parse(a.target_types_json || '[]');
-    return types.length === 0 || types.includes(userType);
-  });
+  // Filter by user_type, then apply translations
+  const filtered = alerts
+    .filter(a => {
+      const types = JSON.parse(a.target_types_json || '[]');
+      return types.length === 0 || types.includes(userType);
+    })
+    .map(a => applyTranslation(a, lang, SAFETY_TRANS_FIELDS));
 
   res.json({ alerts: filtered });
 });

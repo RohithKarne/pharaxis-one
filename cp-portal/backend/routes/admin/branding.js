@@ -4,16 +4,50 @@
  */
 
 const express = require('express');
+const multer  = require('multer');
+const path    = require('path');
+const fs      = require('fs');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+
+// Multer — logo uploads only (5 MB, images only)
+const logoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../../uploads/logos');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.png';
+    cb(null, `client-${req.params.clientId}-logo${ext}`);
+  },
+});
+const uploadLogo = multer({
+  storage: logoStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 // GET /api/admin/branding/:clientId
 router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   const row = db.prepare('SELECT * FROM cp_branding WHERE client_id = ?').get(req.params.clientId);
   if (!row) return res.status(404).json({ error: 'Branding config not found.' });
   res.json({ branding: row });
+});
+
+// POST /api/admin/branding/:clientId/upload-logo — logo file upload
+router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, uploadLogo.single('logo'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No valid image file provided. Allowed: PNG, JPG, GIF, WebP, SVG (max 5 MB).' });
+  const logoUrl = `/uploads/logos/${req.file.filename}`;
+  db.prepare(`UPDATE cp_branding SET logo_url = ?, updated_at = datetime('now') WHERE client_id = ?`)
+    .run(logoUrl, req.params.clientId);
+  audit(req.admin, req.params.clientId, 'UPLOAD', 'branding', req.params.clientId, { logo_url: logoUrl });
+  res.json({ logo_url: logoUrl });
 });
 
 // PATCH /api/admin/branding/:clientId — update any branding fields

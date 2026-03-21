@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 
 export default function PortalHomePage() {
-  const { portalConfig, isFeatureEnabled, clientCode } = usePortal()
+  const { portalConfig, isFeatureEnabled, clientCode, user, portalHeaders } = usePortal()
   const navigate  = useNavigate()
   const branding  = portalConfig?.branding || {}
   const client    = portalConfig?.client   || {}
@@ -11,6 +11,21 @@ export default function PortalHomePage() {
 
   // LOW-05: set document title
   useEffect(() => { document.title = 'Home | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+
+  // S4-9: fetch "For You" content — news + documents matched to user's type
+  const [forYouNews, setForYouNews]   = useState([])
+  const [forYouDocs, setForYouDocs]   = useState([])
+  useEffect(() => {
+    if (!clientCode || !user) return
+    fetch(`/api/portal/news?clientCode=${clientCode}&limit=3`, { headers: portalHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.posts) setForYouNews(d.posts.slice(0, 3)) })
+      .catch(() => {})
+    fetch(`/api/portal/documents?clientCode=${clientCode}`, { headers: portalHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.documents) setForYouDocs(d.documents.slice(0, 3)) })
+      .catch(() => {})
+  }, [clientCode, user])
 
   // LOW-16: fetch upcoming events from API
   const [upcomingEvents, setUpcomingEvents] = useState([])
@@ -69,23 +84,13 @@ export default function PortalHomePage() {
       path:  'resources',
     },
     {
-      key:   'drug_information',
+      key:   'drug_info',
       icon:  '💊',
       title: 'Drug Information',
       desc:  'Review approved prescribing information and clinical summaries.',
       path:  'drug-info',
     },
   ].filter(c => isFeatureEnabled(c.key))
-
-  // LOW-17: quick links filtered to enabled features only
-  const quickLinks = [
-    { key: 'news_announcements', label: 'News',      path: 'news' },
-    { key: 'document_library',   label: 'Documents', path: 'documents' },
-    { key: 'safety_communications', label: 'Safety', path: 'safety' },
-    { key: 'events',             label: 'Events',    path: 'events' },
-    { key: 'resources',          label: 'Resources', path: 'resources' },
-    { key: 'find_msl',           label: 'Find MSL',  path: 'find-msl' },
-  ].filter(l => isFeatureEnabled(l.key) === true)
 
   const heroTitle    = portalConfig?.welcome_title || `Welcome to ${branding.portal_name || client.name || 'the Medical Portal'}`
   const heroSubtitle = portalConfig?.welcome_message || branding.tagline || 'Your trusted source for medical information, resources, and support.'
@@ -101,30 +106,55 @@ export default function PortalHomePage() {
         <div className="pp-hero-inner">
           <h1 className="pp-hero-title">{heroTitle}</h1>
           <p className="pp-hero-subtitle">{heroSubtitle}</p>
-          {isFeatureEnabled('medical_inquiry') && (
-            <div className="pp-hero-actions">
-              <button className="pp-btn pp-btn-primary pp-btn-lg" onClick={() => navigate(`${base}/submit`)}>
-                Submit an Inquiry
-              </button>
-              <button className="pp-btn pp-btn-outline pp-btn-lg" onClick={() => navigate(`${base}/therapeutic-areas`)}>
-                Learn More
-              </button>
-            </div>
-          )}
+          <div className="pp-hero-actions">
+            <button className="pp-btn pp-btn-primary pp-btn-lg" onClick={() => navigate(`${base}/submit`)}>
+              Submit an Inquiry
+            </button>
+            <button className="pp-btn pp-btn-outline pp-btn-lg" onClick={() => navigate(`${base}/therapeutic-areas`)}>
+              Learn More
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* LOW-17: quick links — only enabled features */}
-      {quickLinks.length > 0 && (
-        <section className="pp-quicklinks-section">
+      {/* S4-9: Personalised greeting + For You section (signed-in users only) */}
+      {user && (
+        <section style={{ background: '#F8F9FF', borderBottom: '1px solid #E5E7EB', padding: '20px 0' }}>
           <div className="pp-container">
-            <div className="pp-quicklinks-bar">
-              {quickLinks.map(l => (
-                <Link key={l.key} to={`${base}/${l.path}`} className="pp-quicklink">
-                  {l.label}
-                </Link>
-              ))}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: forYouNews.length || forYouDocs.length ? 20 : 0 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1A1A2E' }}>
+                  Welcome back, {user.first_name}!
+                </h2>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
+                  Here's what's relevant for you today.
+                </p>
+              </div>
+              <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#6B7280', textDecoration: 'none' }}>
+                ⚙ Notification preferences
+              </Link>
             </div>
+
+            {(forYouNews.length > 0 || forYouDocs.length > 0) && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+                {forYouNews.map(post => (
+                  <Link key={`n-${post.id}`} to={`${base}/news/${post.id}`}
+                    style={{ display: 'block', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '12px 14px', textDecoration: 'none', color: 'inherit' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>News</div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E', lineHeight: 1.4 }}>{post.title}</div>
+                    {post.category && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>{post.category}</div>}
+                  </Link>
+                ))}
+                {forYouDocs.map(doc => (
+                  <Link key={`d-${doc.id}`} to={`${base}/documents`}
+                    style={{ display: 'block', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '12px 14px', textDecoration: 'none', color: 'inherit' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Document</div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#1A1A2E', lineHeight: 1.4 }}>{doc.title}</div>
+                    {doc.doc_type && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, textTransform: 'uppercase' }}>{doc.doc_type}</div>}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       )}

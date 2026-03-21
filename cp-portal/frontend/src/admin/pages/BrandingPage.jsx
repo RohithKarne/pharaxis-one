@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 import ColorPicker from '../components/ColorPicker'
+import LoadingButton from '../components/LoadingButton'
 
 const COLOR_FIELDS = [
   { key: 'primary_color',     label: 'Primary Color' },
@@ -24,32 +25,68 @@ const COLOR_FIELDS = [
 
 export default function BrandingPage() {
   const { clientId } = useParams()
-  const [branding, setBranding]     = useState(null)
-  const [clientCode, setClientCode] = useState('')
-  const [copied, setCopied]         = useState(false)
-  const [saving, setSaving]         = useState(false)
-  const [saved, setSaved]           = useState(false)
-  const [error, setError]           = useState('')
+  const [branding, setBranding]           = useState(null)
+  const [saving, setSaving]               = useState(false)
+  const [saved, setSaved]                 = useState(false)
+  const [error, setError]                 = useState('')
+  const [logoPreview, setLogoPreview]     = useState(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoError, setLogoError]         = useState('')
+  const logoInputRef = useRef(null)
 
   useEffect(() => {
     fetch(`/api/admin/branding/${clientId}`, { headers: adminHeaders() })
-      .then(r => r.json()).then(d => setBranding(d.branding || {})).catch(() => {})
-    fetch(`/api/admin/clients/${clientId}`, { headers: adminHeaders() })
-      .then(r => r.json()).then(d => setClientCode(d.client?.code || '')).catch(() => {})
+      .then(r => r.json())
+      .then(d => {
+        setBranding(d.branding || {})
+        setLogoPreview(d.branding?.logo_url || null)
+      })
+      .catch(() => {})
   }, [clientId])
 
   function set(key, value) { setBranding(b => ({ ...b, [key]: value })); setSaved(false) }
 
-  async function handleSave(e) {
-    e.preventDefault()
+  async function handleSave() {
     setError(''); setSaving(true)
-    const res = await fetch(`/api/admin/branding/${clientId}`, {
-      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(branding)
-    })
-    const data = await res.json()
-    setSaving(false)
-    if (!res.ok) { setError(data.error || 'Save failed.'); return }
-    setSaved(true)
+    try {
+      const res = await fetch(`/api/admin/branding/${clientId}`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(branding),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Save failed.'); return }
+      setSaved(true)
+    } catch {
+      setError('Network error — please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleLogoUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoError(''); setLogoUploading(true)
+    // Show local preview immediately
+    setLogoPreview(URL.createObjectURL(file))
+    try {
+      const form = new FormData()
+      form.append('logo', file)
+      const res = await fetch(`/api/admin/branding/${clientId}/upload-logo`, {
+        method: 'POST',
+        headers: { Authorization: adminHeaders().Authorization },
+        body: form,
+      })
+      const data = await res.json()
+      if (!res.ok) { setLogoError(data.error || 'Upload failed.'); setLogoPreview(branding?.logo_url || null); return }
+      setLogoPreview(data.logo_url)
+      setBranding(b => ({ ...b, logo_url: data.logo_url }))
+    } catch {
+      setLogoError('Upload failed — network error.')
+      setLogoPreview(branding?.logo_url || null)
+    } finally {
+      setLogoUploading(false)
+      if (logoInputRef.current) logoInputRef.current.value = ''
+    }
   }
 
   async function handleReset() {
@@ -58,47 +95,15 @@ export default function BrandingPage() {
     const res = await fetch(`/api/admin/branding/${clientId}`, { headers: adminHeaders() })
     const d   = await res.json()
     setBranding(d.branding || {})
+    setLogoPreview(d.branding?.logo_url || null)
     setSaved(true)
-  }
-
-  function handleCopy() {
-    const url = `${window.location.origin}/portal/${clientCode}`
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
   }
 
   if (!branding) return <AdminLayout title="Branding"><div className="cp-loading">Loading…</div></AdminLayout>
 
   return (
     <AdminLayout title="Branding & Theme">
-      <form onSubmit={handleSave} autoComplete="off">
-        {/* Portal Live URL */}
-        {clientCode && (
-          <div className="cp-card">
-            <div className="cp-card-title">Portal Live URL</div>
-            <div className="cp-field-row" style={{ alignItems: 'flex-end' }}>
-              <div className="cp-field" style={{ flex: 1 }}>
-                <label>Live URL</label>
-                <input
-                  readOnly
-                  value={`${window.location.origin}/portal/${clientCode}`}
-                  style={{ background: 'var(--cp-surface, #f5f5f5)', cursor: 'default' }}
-                />
-              </div>
-              <button
-                type="button"
-                className="cp-btn cp-btn-outline"
-                onClick={handleCopy}
-                style={{ marginBottom: 0, whiteSpace: 'nowrap' }}
-              >
-                {copied ? 'Copied!' : 'Copy'}
-              </button>
-            </div>
-          </div>
-        )}
-
+      <div>
         {/* Identity */}
         <div className="cp-card">
           <div className="cp-card-title">Portal Identity</div>
@@ -111,20 +116,60 @@ export default function BrandingPage() {
               <label>Tagline</label>
               <input value={branding.tagline || ''} onChange={e => set('tagline', e.target.value)} placeholder="Trusted Medical Information" />
             </div>
-          </div>
-          <div className="cp-field-row">
-            <div className="cp-field">
-              <label>Logo URL</label>
-              <input value={branding.logo_url || ''} onChange={e => set('logo_url', e.target.value)} placeholder="https://..." />
-            </div>
-            <div className="cp-field">
-              <label>Favicon URL</label>
-              <input value={branding.favicon_url || ''} onChange={e => set('favicon_url', e.target.value)} placeholder="https://..." />
-            </div>
             <div className="cp-field">
               <label>Custom Domain</label>
               <input value={branding.custom_domain || ''} onChange={e => set('custom_domain', e.target.value)} placeholder="medical.clientname.com" />
             </div>
+          </div>
+
+          {/* Logo Upload */}
+          <div className="cp-field" style={{ marginTop: 8 }}>
+            <label>Portal Logo</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              {/* Preview */}
+              <div style={{
+                width: 120, height: 60, border: '1px dashed #D1D5DB', borderRadius: 8,
+                background: '#F9FAFB', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden', flexShrink: 0,
+              }}>
+                {logoPreview
+                  ? <img src={logoPreview} alt="Logo preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} onError={() => setLogoPreview(null)} />
+                  : <span style={{ fontSize: 11, color: '#9CA3AF' }}>No logo</span>
+                }
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                  style={{ display: 'none' }}
+                  onChange={handleLogoUpload}
+                />
+                <button
+                  type="button"
+                  className="cp-btn cp-btn-outline"
+                  style={{ fontSize: 13 }}
+                  disabled={logoUploading}
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  {logoUploading ? 'Uploading…' : logoPreview ? 'Replace Logo' : 'Upload Logo'}
+                </button>
+                {logoPreview && (
+                  <button
+                    type="button"
+                    style={{ fontSize: 12, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}
+                    onClick={() => {
+                      setLogoPreview(null)
+                      set('logo_url', null)
+                    }}
+                  >
+                    Remove logo
+                  </button>
+                )}
+                <span style={{ fontSize: 11, color: '#6B7280' }}>PNG, JPG, SVG, WebP · max 5 MB</span>
+              </div>
+            </div>
+            {logoError && <div style={{ color: '#EF4444', fontSize: 12, marginTop: 4 }}>{logoError}</div>}
           </div>
         </div>
 
@@ -248,10 +293,10 @@ export default function BrandingPage() {
         {saved && <div className="cp-success">✓ Branding saved.</div>}
 
         <div className="cp-form-actions">
-          <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Branding'}</button>
+          <LoadingButton onClick={handleSave} disabled={saving}>Save Branding</LoadingButton>
           <button type="button" className="cp-btn cp-btn-outline" onClick={handleReset}>Reset to Defaults</button>
         </div>
-      </form>
+      </div>
     </AdminLayout>
   )
 }

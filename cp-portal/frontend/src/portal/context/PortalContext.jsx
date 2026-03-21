@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { translate } from '../utils/translations'
 
 const PortalContext = createContext(null)
 
@@ -13,6 +14,7 @@ export function PortalProvider({ children }) {
   const portalConfigRef                 = useRef(null)
   const [user, setUser]                 = useState(null)
   const [showGate, setShowGate]         = useState(false)
+  const [language, setLanguageState]    = useState(() => localStorage.getItem(`cp_lang_${rawClientCode}`) || 'en')
 
   // Show gate when: gate is enabled, user is logged in, user hasn't confirmed type yet
   useEffect(() => {
@@ -117,6 +119,15 @@ export function PortalProvider({ children }) {
     setUser(null)
   }
 
+  function setLanguage(lang) {
+    localStorage.setItem(`cp_lang_${rawClientCode}`, lang)
+    setLanguageState(lang)
+  }
+
+  function t(key) {
+    return translate(language, key)
+  }
+
   // AUTH-05: central fetch helper — attaches auth header and auto-logs out on 401
   async function portalFetch(url, options = {}) {
     const token = localStorage.getItem('cp_portal_token')
@@ -154,7 +165,7 @@ export function PortalProvider({ children }) {
   }, [clientCode])
 
   return (
-    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, portalHeaders, portalFetch, isFeatureEnabled, clientCode, showGate, refetchConfig: fetchConfig }}>
+    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, portalHeaders, portalFetch, isFeatureEnabled, clientCode, showGate, refetchConfig: fetchConfig, language, setLanguage, t }}>
       {children}
     </PortalContext.Provider>
   )

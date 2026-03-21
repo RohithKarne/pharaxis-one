@@ -33,6 +33,8 @@ export default function CompliancePage() {
   const [records, setRecords] = useState([])
   const [recPage, setRecPage] = useState(1)
   const [recTotal, setRecTotal] = useState(0)
+  const [triggering, setTriggering] = useState(false)
+  const [triggerMsg, setTriggerMsg] = useState(null)
 
   useEffect(() => { load() }, [clientId])
   useEffect(() => { loadRecords() }, [clientId, recPage])
@@ -62,6 +64,18 @@ export default function CompliancePage() {
       setRecords(d.records || [])
       setRecTotal(d.total || 0)
     } catch { /* ignore */ }
+  }
+
+  async function handleTriggerReconsent() {
+    if (!confirm('This will bump the consent version and require ALL portal users to re-accept consent on their next visit. Proceed?')) return
+    setTriggering(true); setTriggerMsg(null)
+    try {
+      const res = await fetch(`/api/admin/compliance/${clientId}/trigger-reconsent`, { method: 'POST', headers: adminHeaders() })
+      const d   = await res.json()
+      if (res.ok) { setTriggerMsg({ type: 'success', text: d.message }); load() }
+      else setTriggerMsg({ type: 'error', text: d.error || 'Failed to trigger re-acceptance.' })
+    } catch { setTriggerMsg({ type: 'error', text: 'Network error.' }) }
+    setTriggering(false)
   }
 
   function setBannerField(key, value) {
@@ -203,6 +217,30 @@ export default function CompliancePage() {
           <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Settings'}</button>
         </div>
       </form>
+
+      {/* S5-13: Re-acceptance trigger */}
+      <div className="cp-card" style={{ marginTop: 24, borderLeft: '4px solid #F59E0B' }}>
+        <div className="cp-card-title">Force Re-acceptance</div>
+        <p style={{ fontSize: 13, color: '#6B7280', margin: '0 0 16px' }}>
+          Bumps the consent version and requires all portal users to re-accept on their next visit. Use this when your privacy policy or terms have materially changed.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="cp-btn"
+            style={{ background: '#F59E0B', color: '#fff', border: 'none' }}
+            onClick={handleTriggerReconsent}
+            disabled={triggering}
+          >
+            {triggering ? 'Triggering…' : 'Trigger Re-acceptance Now'}
+          </button>
+          {triggerMsg && (
+            <span style={{ fontSize: 13, fontWeight: 500, color: triggerMsg.type === 'success' ? '#16A34A' : '#DC2626' }}>
+              {triggerMsg.type === 'success' ? '✓ ' : '✗ '}{triggerMsg.text}
+            </span>
+          )}
+        </div>
+      </div>
 
       {/* Audit Log */}
       <div className="cp-card" style={{ marginTop: 24 }}>

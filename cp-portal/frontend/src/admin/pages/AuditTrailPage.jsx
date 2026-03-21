@@ -42,6 +42,7 @@ export default function AuditTrailPage() {
   const [page, setPage]         = useState(1)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
+  const [detailRecord, setDetailRecord] = useState(null)
 
   const [filterEntity, setFilterEntity] = useState('All')
   const [filterAction, setFilterAction] = useState('All')
@@ -79,7 +80,6 @@ export default function AuditTrailPage() {
 
   function handleApplyFilters() {
     setPage(1)
-    loadRecords()
   }
 
   function handleClearFilters() {
@@ -100,6 +100,30 @@ export default function AuditTrailPage() {
 
   return (
     <AdminLayout title="Audit Trail">
+
+      {detailRecord && (
+        <div className="cp-modal-overlay" onClick={() => setDetailRecord(null)}>
+          <div className="cp-modal" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
+            <div className="cp-modal-header">
+              <span>Audit Detail</span>
+              <button className="cp-modal-close" onClick={() => setDetailRecord(null)}>✕</button>
+            </div>
+            <div className="cp-modal-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginBottom: 16 }}>
+                <div><span style={{ fontWeight: 600, fontSize: 12, color: '#64748B' }}>Entity</span><div>{detailRecord.entity || '—'}</div></div>
+                <div><span style={{ fontWeight: 600, fontSize: 12, color: '#64748B' }}>Action</span><div>{detailRecord.action || '—'}</div></div>
+                <div><span style={{ fontWeight: 600, fontSize: 12, color: '#64748B' }}>Entity ID</span><div style={{ fontFamily: 'monospace' }}>{detailRecord.entity_id != null ? detailRecord.entity_id : '—'}</div></div>
+                <div><span style={{ fontWeight: 600, fontSize: 12, color: '#64748B' }}>Performed by</span><div>{detailRecord.admin_name || detailRecord.admin_email || '—'}</div></div>
+                <div style={{ gridColumn: '1 / -1' }}><span style={{ fontWeight: 600, fontSize: 12, color: '#64748B' }}>Timestamp</span><div>{detailRecord.created_at ? new Date(detailRecord.created_at).toLocaleString() : '—'}</div></div>
+              </div>
+              <div style={{ fontWeight: 600, fontSize: 12, color: '#64748B', marginBottom: 6 }}>Details</div>
+              <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, background: '#F8FAFC', padding: 12, borderRadius: 6, border: '1px solid #E2E8F0', maxHeight: 400, overflowY: 'auto' }}>
+                {detailRecord.details ? (() => { try { return JSON.stringify(typeof detailRecord.details === 'string' ? JSON.parse(detailRecord.details) : detailRecord.details, null, 2) } catch { return String(detailRecord.details) } })() : '—'}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="cp-card">
@@ -171,6 +195,7 @@ export default function AuditTrailPage() {
                   <th>Entity</th>
                   <th>Entity ID</th>
                   <th>Details</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -201,6 +226,9 @@ export default function AuditTrailPage() {
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--cp-text-muted)', maxWidth: 320, wordBreak: 'break-word' }}>
                       {formatDetails(r.details)}
+                    </td>
+                    <td>
+                      <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => setDetailRecord(r)}>View</button>
                     </td>
                   </tr>
                 ))}

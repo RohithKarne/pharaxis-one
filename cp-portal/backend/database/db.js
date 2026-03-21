@@ -555,6 +555,252 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_cp_audit_created ON cp_audit_logs(created_at);
   `);
 
+  // Add status column to content tables (safe migration)
+  const contentTables = ['cp_therapeutic_areas', 'cp_drugs', 'cp_events', 'cp_resources']
+  for (const table of contentTables) {
+    try { db.exec(`ALTER TABLE ${table} ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'`) } catch {}
+  }
+
+  // Backfill: existing active content that has status='draft' (pre-dates status field) → publish it
+  // so the portal doesn't go empty after the published-only filter was applied.
+  for (const table of contentTables) {
+    try { db.exec(`UPDATE ${table} SET status='published' WHERE is_active=1 AND status='draft'`) } catch {}
+  }
+
+  // ── F3: Document lifecycle columns (safe migration) ───────────────────────
+  try { db.exec(`ALTER TABLE cp_documents ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'`) } catch {}
+  try { db.exec(`ALTER TABLE cp_documents ADD COLUMN expires_at TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE cp_documents ADD COLUMN version TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE cp_documents ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0`) } catch {}
+  // Backfill: active docs were uploaded before status field existed — publish them
+  try { db.exec(`UPDATE cp_documents SET status='published' WHERE is_active=1 AND status='draft'`) } catch {}
+
+  // ── F4: Pin news posts (safe migration) ───────────────────────────────────
+  try { db.exec(`ALTER TABLE cp_news_posts ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0`) } catch {}
+
+  // ── S4-1: Saved items / bookmarks ─────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_saved_items (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      portal_user_id INTEGER NOT NULL REFERENCES cp_portal_users(id) ON DELETE CASCADE,
+      client_id      INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
+      item_type      TEXT    NOT NULL CHECK(item_type IN ('news','document')),
+      item_id        INTEGER NOT NULL,
+      created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(portal_user_id, item_type, item_id)
+    );
+  `);
+
+  // ── S4-2: Integration health sync columns (safe migration) ────────────────
+  try { db.exec(`ALTER TABLE cp_integration_config ADD COLUMN last_sync_at TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE cp_integration_config ADD COLUMN last_sync_status TEXT NOT NULL DEFAULT 'unknown'`) } catch {}
+  try { db.exec(`ALTER TABLE cp_integration_config ADD COLUMN last_sync_error TEXT`) } catch {}
+
+  // ── S4-3: Portal notifications ────────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_notifications (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      portal_user_id INTEGER NOT NULL REFERENCES cp_portal_users(id) ON DELETE CASCADE,
+      client_id      INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
+      type           TEXT    NOT NULL CHECK(type IN ('news','document','safety')),
+      title          TEXT    NOT NULL,
+      item_id        INTEGER NOT NULL,
+      is_read        INTEGER NOT NULL DEFAULT 0,
+      created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_cp_notif_user ON cp_notifications(portal_user_id, is_read);
+  `);
+
+  // ── S4-5: Scheduled publish columns (safe migration) ──────────────────────
+  try { db.exec(`ALTER TABLE cp_documents ADD COLUMN publish_at TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE cp_safety_alerts ADD COLUMN publish_at TEXT`) } catch {}
+  // Backfill: existing published content has no scheduled publish — set to now so filters pass
+  try { db.exec(`UPDATE cp_documents SET publish_at = created_at WHERE publish_at IS NULL`) } catch {}
+  try { db.exec(`UPDATE cp_safety_alerts SET publish_at = created_at WHERE publish_at IS NULL`) } catch {}
+
+  // ── S5: Email service config — SMTP settings per client ──────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_email_config (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id         INTEGER NOT NULL UNIQUE REFERENCES cp_clients(id) ON DELETE CASCADE,
+      smtp_host         TEXT,
+      smtp_port         INTEGER NOT NULL DEFAULT 587,
+      smtp_encryption   TEXT    NOT NULL DEFAULT 'STARTTLS',
+      -- smtp_encryption: STARTTLS | SSL/TLS | None
+      smtp_username     TEXT,
+      smtp_password     TEXT,
+      from_email        TEXT,
+      from_name         TEXT,
+      is_active         INTEGER NOT NULL DEFAULT 0,
+      updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ── S5: Custom report dashboards ──────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_custom_reports (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id    INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
+      name         TEXT    NOT NULL,
+      layout_json  TEXT    NOT NULL DEFAULT '[]',
+      widgets_json TEXT    NOT NULL DEFAULT '[]',
+      created_by   INTEGER REFERENCES cp_admin_users(id) ON DELETE SET NULL,
+      created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ── S5-1: Feedback Widget ─────────────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_feedback (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id    INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
+      user_id      INTEGER REFERENCES cp_portal_users(id) ON DELETE SET NULL,
+      rating       INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+      message      TEXT,
+      page_url     TEXT,
+      submitted_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ── S5-5: FAQ v1 ──────────────────────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_faq_items (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id    INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
+      question     TEXT    NOT NULL,
+      answer       TEXT    NOT NULL,
+      category     TEXT,
+      sort_order   INTEGER NOT NULL DEFAULT 0,
+      is_published INTEGER NOT NULL DEFAULT 1,
+      created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ── S5-8: MSL Booking requests ────────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_msl_bookings (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id           INTEGER NOT NULL REFERENCES cp_clients(id) ON DELETE CASCADE,
+      msl_id              INTEGER NOT NULL REFERENCES cp_msls(id) ON DELETE CASCADE,
+      portal_user_id      INTEGER REFERENCES cp_portal_users(id) ON DELETE SET NULL,
+      requester_name      TEXT    NOT NULL,
+      requester_email     TEXT    NOT NULL,
+      requester_user_type TEXT,
+      preferred_date      TEXT,
+      topic               TEXT,
+      message             TEXT,
+      status              TEXT    NOT NULL DEFAULT 'pending',
+      admin_notes         TEXT,
+      created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // ── Process Explorer: full API activity log (admin + portal) ─────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cp_process_logs (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      source          TEXT    NOT NULL DEFAULT 'admin',  -- 'admin' | 'portal'
+      method          TEXT    NOT NULL,
+      path            TEXT    NOT NULL,
+      path_pattern    TEXT,
+      status_code     INTEGER,
+      duration_ms     INTEGER,
+      admin_id        INTEGER REFERENCES cp_admin_users(id) ON DELETE SET NULL,
+      portal_user_id  INTEGER REFERENCES cp_portal_users(id) ON DELETE SET NULL,
+      client_id       INTEGER REFERENCES cp_clients(id) ON DELETE SET NULL,
+      payload_summary TEXT,
+      created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_cp_process_logs_ts ON cp_process_logs(created_at DESC);
+  `);
+
+  // ── Process Explorer: add error_message column (safe migration) ──────────────
+  try { db.exec(`ALTER TABLE cp_process_logs ADD COLUMN error_message TEXT`) } catch {}
+
+  // ── S4-10: Role-based admin access — client_id on admin users (safe migration) ──
+  // Fixes Sprint 2 gap: requireClientAccess was blocking regular admins because no clientId
+  // was stored. NULL = superadmin (cross-client), non-null = scoped to that client.
+  try { db.exec(`ALTER TABLE cp_admin_users ADD COLUMN client_id INTEGER REFERENCES cp_clients(id) ON DELETE SET NULL`) } catch {}
+
+  // ── S4-9: User notification preferences (safe migration) ──────────────────
+  try { db.exec(`ALTER TABLE cp_portal_users ADD COLUMN notif_prefs_json TEXT NOT NULL DEFAULT '{"news":true,"documents":true,"safety":true}'`) } catch {}
+
+  // ── S5-9: Multi-language config (safe migration) ──────────────────────────
+  try { db.exec(`ALTER TABLE cp_clients ADD COLUMN language_config_json TEXT NOT NULL DEFAULT '{"default":"en","enabled":["en"]}'`) } catch {}
+
+  // ── Auto-translation storage (safe migration) ──────────────────────────────
+  // translations_json stores { "fr": { "title": "...", "body_html": "..." }, "de": {...} }
+  try { db.exec(`ALTER TABLE cp_news_posts    ADD COLUMN translations_json TEXT NOT NULL DEFAULT '{}'`) } catch {}
+  try { db.exec(`ALTER TABLE cp_safety_alerts ADD COLUMN translations_json TEXT NOT NULL DEFAULT '{}'`) } catch {}
+  try { db.exec(`ALTER TABLE cp_faq_items     ADD COLUMN translations_json TEXT NOT NULL DEFAULT '{}'`) } catch {}
+  try { db.exec(`ALTER TABLE cp_documents     ADD COLUMN translations_json TEXT NOT NULL DEFAULT '{}'`) } catch {}
+
+  // ── S5-7: Email verification (safe migration) ─────────────────────────────
+  // Default 1 so existing users are not locked out on upgrade
+  try { db.exec(`ALTER TABLE cp_portal_users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1`) } catch {}
+  try { db.exec(`ALTER TABLE cp_portal_users ADD COLUMN verification_token TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE cp_portal_users ADD COLUMN verification_token_expires_at TEXT`) } catch {}
+
+  // ── Safe migration: seed default form fields for all active clients ──────
+  // Runs once per client+formType — skips if any fields already exist for that combo.
+  const DEFAULT_FORM_FIELDS = {
+    medical_inquiry: [
+      { key: 'first_name',       label: 'First Name',         type: 'text',     required: 1, order: 1, placeholder: 'Enter your first name' },
+      { key: 'last_name',        label: 'Last Name',          type: 'text',     required: 1, order: 2, placeholder: 'Enter your last name' },
+      { key: 'email',            label: 'Email Address',      type: 'email',    required: 1, order: 3, placeholder: 'your@email.com' },
+      { key: 'phone',            label: 'Phone Number',       type: 'phone',    required: 0, order: 4, placeholder: 'Optional' },
+      { key: 'organization',     label: 'Organization',       type: 'text',     required: 0, order: 5, placeholder: 'Hospital, clinic, or company name' },
+      { key: 'product_name',     label: 'Product / Drug Name',type: 'text',     required: 1, order: 6, placeholder: 'Name of the product' },
+      { key: 'inquiry_details',  label: 'Inquiry Details',    type: 'textarea', required: 1, order: 7, placeholder: 'Please describe your medical inquiry in detail' },
+    ],
+    adverse_event: [
+      { key: 'first_name',         label: 'First Name',          type: 'text',     required: 1, order: 1, placeholder: 'Enter your first name' },
+      { key: 'last_name',          label: 'Last Name',           type: 'text',     required: 1, order: 2, placeholder: 'Enter your last name' },
+      { key: 'email',              label: 'Email Address',       type: 'email',    required: 1, order: 3, placeholder: 'your@email.com' },
+      { key: 'phone',              label: 'Phone Number',        type: 'phone',    required: 0, order: 4, placeholder: 'Optional' },
+      { key: 'product_name',       label: 'Product Name',        type: 'text',     required: 1, order: 5, placeholder: 'Product involved in the adverse event' },
+      { key: 'lot_number',         label: 'Lot / Batch Number',  type: 'text',     required: 0, order: 6, placeholder: 'If available' },
+      { key: 'event_date',         label: 'Date of Event',       type: 'text',     required: 0, order: 7, placeholder: 'DD/MM/YYYY' },
+      { key: 'event_description',  label: 'Event Description',   type: 'textarea', required: 1, order: 8, placeholder: 'Describe the adverse event in detail' },
+      { key: 'patient_age',        label: 'Patient Age',         type: 'text',     required: 0, order: 9, placeholder: 'Optional' },
+    ],
+    product_complaint: [
+      { key: 'first_name',         label: 'First Name',          type: 'text',     required: 1, order: 1, placeholder: 'Enter your first name' },
+      { key: 'last_name',          label: 'Last Name',           type: 'text',     required: 1, order: 2, placeholder: 'Enter your last name' },
+      { key: 'email',              label: 'Email Address',       type: 'email',    required: 1, order: 3, placeholder: 'your@email.com' },
+      { key: 'product_name',       label: 'Product Name',        type: 'text',     required: 1, order: 4, placeholder: 'Name of the product' },
+      { key: 'lot_number',         label: 'Lot / Batch Number',  type: 'text',     required: 0, order: 5, placeholder: 'If available' },
+      { key: 'complaint_details',  label: 'Complaint Details',   type: 'textarea', required: 1, order: 6, placeholder: 'Describe the product complaint in detail' },
+    ],
+    other_inquiry: [
+      { key: 'first_name',      label: 'First Name',      type: 'text',     required: 1, order: 1, placeholder: 'Enter your first name' },
+      { key: 'last_name',       label: 'Last Name',       type: 'text',     required: 1, order: 2, placeholder: 'Enter your last name' },
+      { key: 'email',           label: 'Email Address',   type: 'email',    required: 1, order: 3, placeholder: 'your@email.com' },
+      { key: 'inquiry_details', label: 'Inquiry Details', type: 'textarea', required: 1, order: 4, placeholder: 'Please describe your inquiry' },
+    ],
+  };
+
+  const insertField = db.prepare(`
+    INSERT OR IGNORE INTO cp_form_config
+      (client_id, form_type, field_key, field_label, field_type, placeholder, is_required, is_active, display_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+  `);
+
+  const activeClients = db.prepare('SELECT id FROM cp_clients WHERE is_active = 1').all();
+  for (const client of activeClients) {
+    for (const [formType, fields] of Object.entries(DEFAULT_FORM_FIELDS)) {
+      const existing = db.prepare('SELECT COUNT(*) as cnt FROM cp_form_config WHERE client_id = ? AND form_type = ?').get(client.id, formType);
+      if (existing.cnt === 0) {
+        for (const f of fields) {
+          insertField.run(client.id, formType, f.key, f.label, f.type, f.placeholder, f.required, f.order);
+        }
+      }
+    }
+  }
+
   console.log('✅ CP Portal database initialized — tables ready');
 }
 

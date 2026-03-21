@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
-import { adminHeaders } from '../context/AdminAuthContext'
+import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
+import LoadingButton from '../components/LoadingButton'
 
 const TARGET_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
@@ -12,10 +13,12 @@ const EMPTY_FORM = {
   publish_at: '',
   target_types: [],
   status: 'draft',
+  is_pinned: false,
 }
 
 export default function NewsPage() {
   const { clientId }              = useParams()
+  const { canWrite, canPublish, canApprove } = useAdminAuth()
   const [posts, setPosts]         = useState([])
   const [loading, setLoading]     = useState(true)
   const [showForm, setShowForm]   = useState(false)
@@ -23,17 +26,38 @@ export default function NewsPage() {
   const [saving, setSaving]       = useState(false)
   const [form, setForm]           = useState(EMPTY_FORM)
   const [error, setError]         = useState('')
+  const [selectedIds, setSelectedIds] = useState([])
 
   useEffect(() => { load() }, [clientId])
 
   async function load() {
     setLoading(true)
+    setSelectedIds([])
     try {
       const res = await fetch(`/api/admin/news/${clientId}`, { headers: adminHeaders() })
       const d   = await res.json()
       setPosts(d.posts || [])
     } catch { /* ignore */ }
     setLoading(false)
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds(prev => prev.length === posts.length ? [] : posts.map(p => p.id))
+  }
+
+  async function bulkAction(action) {
+    if (!selectedIds.length) return
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${selectedIds.length} post(s)?`)) return
+    await fetch(`/api/admin/news/${clientId}/bulk`, {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ ids: selectedIds, action }),
+    })
+    load()
   }
 
   function openCreate() {
@@ -50,8 +74,9 @@ export default function NewsPage() {
       body_html:    post.body_html || '',
       category:     post.category || '',
       publish_at:   post.publish_at ? post.publish_at.slice(0, 16) : '',
-      target_types: post.target_types ? (Array.isArray(post.target_types) ? post.target_types : JSON.parse(post.target_types)) : [],
+      target_types: post.target_types_json ? (Array.isArray(post.target_types_json) ? post.target_types_json : JSON.parse(post.target_types_json)) : [],
       status:       post.status || 'draft',
+      is_pinned:    !!post.is_pinned,
     })
     setError('')
     setShowForm(true)
@@ -100,16 +125,29 @@ export default function NewsPage() {
     load()
   }
 
+  // S4-8: quick status change without opening modal
+  async function quickAction(post, newStatus) {
+    await fetch(`/api/admin/news/${clientId}/${post.id}`, {
+      method: 'PUT',
+      headers: adminHeaders(),
+      body: JSON.stringify({ ...post, target_types: post.target_types_json ? JSON.parse(post.target_types_json) : [], status: newStatus }),
+    })
+    load()
+  }
+
   function statusBadgeStyle(status) {
     if (status === 'published') return { background: '#DCFCE7', color: '#16A34A' }
     if (status === 'draft')     return { background: '#F3F4F6', color: '#6B7280' }
     if (status === 'scheduled') return { background: '#DBEAFE', color: '#2563EB' }
     if (status === 'archived')  return { background: '#F3F4F6', color: '#9CA3AF', opacity: 0.7 }
+    if (status === 'review')    return { background: '#FEF3C7', color: '#D97706' }   // S4-8
+    if (status === 'approved')  return { background: '#CCFBF1', color: '#0D9488' }   // S4-8
     return {}
   }
 
   function targetSummary(post) {
-    const tt = post.target_types ? (Array.isArray(post.target_types) ? post.target_types : JSON.parse(post.target_types)) : []
+    const raw = post.target_types_json || post.target_types
+    const tt = raw ? (Array.isArray(raw) ? raw : JSON.parse(raw)) : []
     return tt.length ? tt.join(', ') : 'All'
   }
 
@@ -119,7 +157,7 @@ export default function NewsPage() {
     <AdminLayout title="News & Announcements">
       <div className="cp-section-header">
         <h2>News & Announcements</h2>
-        <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New Post</button>
+        {canWrite && <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New Post</button>}
       </div>
 
       {showForm && (
@@ -147,9 +185,11 @@ export default function NewsPage() {
                   <label>Status</label>
                   <select value={form.status} onChange={e => setField('status', e.target.value)}>
                     <option value="draft">Draft</option>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="published">Published</option>
-                    <option value="archived">Archived</option>
+                    <option value="review">In Review</option>
+                    {canPublish && <option value="approved">Approved</option>}
+                    {canPublish && <option value="scheduled">Scheduled</option>}
+                    {canPublish && <option value="published">Published</option>}
+                    {canPublish && <option value="archived">Archived</option>}
                   </select>
                 </div>
               </div>
@@ -168,13 +208,29 @@ export default function NewsPage() {
                   ))}
                 </div>
               </div>
+              <div className="cp-field">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="checkbox" checked={!!form.is_pinned} onChange={e => setField('is_pinned', e.target.checked)} />
+                  Pin to top (shows above other posts in portal)
+                </label>
+              </div>
               {error && <div className="cp-error">{error}</div>}
               <div className="cp-modal-footer">
-                <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : editPost ? 'Save Changes' : 'Create Post'}</button>
+                <LoadingButton type="submit" disabled={saving}>{editPost ? 'Save Changes' : 'Create Post'}</LoadingButton>
                 <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* S5-11: Bulk action bar */}
+      {canPublish && selectedIds.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
+          <span style={{ fontSize: 13, color: '#1E40AF', fontWeight: 500 }}>{selectedIds.length} selected</span>
+          <button className="cp-btn cp-btn-sm" style={{ background: '#16A34A', color: '#fff', border: 'none' }} onClick={() => bulkAction('publish')}>Publish</button>
+          <button className="cp-btn cp-btn-sm" style={{ background: '#6B7280', color: '#fff', border: 'none' }} onClick={() => bulkAction('archive')}>Archive</button>
+          <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ marginLeft: 'auto' }} onClick={() => setSelectedIds([])}>Clear</button>
         </div>
       )}
 
@@ -185,9 +241,15 @@ export default function NewsPage() {
           <table className="cp-table">
             <thead>
               <tr>
+                {canPublish && (
+                  <th style={{ width: 36 }}>
+                    <input type="checkbox" checked={selectedIds.length === posts.length && posts.length > 0} onChange={toggleSelectAll} aria-label="Select all" />
+                  </th>
+                )}
                 <th>Title</th>
                 <th>Category</th>
                 <th>Status</th>
+                <th>Pinned</th>
                 <th>Targets</th>
                 <th>Publish At</th>
                 <th>Views</th>
@@ -196,7 +258,12 @@ export default function NewsPage() {
             </thead>
             <tbody>
               {posts.map(p => (
-                <tr key={p.id}>
+                <tr key={p.id} style={{ background: selectedIds.includes(p.id) ? '#EFF6FF' : undefined }}>
+                  {canPublish && (
+                    <td>
+                      <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => toggleSelect(p.id)} aria-label={`Select ${p.title}`} />
+                    </td>
+                  )}
                   <td>{p.title}</td>
                   <td>{p.category || '—'}</td>
                   <td>
@@ -204,12 +271,22 @@ export default function NewsPage() {
                       {p.status}
                     </span>
                   </td>
+                  <td>{p.is_pinned ? '📌' : '—'}</td>
                   <td>{targetSummary(p)}</td>
                   <td>{p.publish_at ? p.publish_at.slice(0, 16).replace('T', ' ') : '—'}</td>
                   <td>{p.view_count || 0}</td>
-                  <td style={{ display: 'flex', gap: 6 }}>
-                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(p)}>Edit</button>
-                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => handleArchive(p)}>Archive</button>
+                  <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {canWrite && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(p)}>Edit</button>}
+                    {canWrite && p.status === 'draft' && (
+                      <button className="cp-btn cp-btn-sm" style={{ background: '#FEF3C7', color: '#D97706', border: '1px solid #FDE68A' }} onClick={() => quickAction(p, 'review')}>Submit for Review</button>
+                    )}
+                    {canApprove && p.status === 'review' && (
+                      <>
+                        <button className="cp-btn cp-btn-sm" style={{ background: '#CCFBF1', color: '#0D9488', border: '1px solid #99F6E4' }} onClick={() => quickAction(p, 'approved')}>Approve</button>
+                        <button className="cp-btn cp-btn-sm" style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }} onClick={() => quickAction(p, 'draft')}>Reject</button>
+                      </>
+                    )}
+                    {canPublish && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => handleArchive(p)}>Archive</button>}
                   </td>
                 </tr>
               ))}

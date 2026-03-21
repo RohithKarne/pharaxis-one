@@ -20,6 +20,9 @@ import NewsAdminPage        from './admin/pages/NewsPage'
 import DocumentsAdminPage   from './admin/pages/DocumentsPage'
 import CompliancePage       from './admin/pages/CompliancePage'
 import AuditTrailPage       from './admin/pages/AuditTrailPage'
+import SubmissionsPage      from './admin/pages/SubmissionsPage'
+import AdminUsersPage      from './admin/pages/AdminUsersPage'
+import ReviewQueuePage     from './admin/pages/ReviewQueuePage'
 
 // Portal pages
 import { PortalProvider }       from './portal/context/PortalContext'
@@ -40,6 +43,17 @@ import SafetyPortalPage         from './portal/pages/SafetyPage'
 import NewsPortalPage           from './portal/pages/NewsPage'
 import NewsDetailPage           from './portal/pages/NewsDetailPage'
 import DocumentsPortalPage      from './portal/pages/DocumentsPage'
+import SavedItemsPage           from './portal/pages/SavedItemsPage'
+import VerifyEmailPage          from './portal/pages/VerifyEmailPage'
+import PreferencesPage         from './portal/pages/PreferencesPage'
+import AnalyticsPage            from './admin/pages/AnalyticsPage'
+import FeedbackPage             from './admin/pages/FeedbackPage'
+import CustomReportsPage        from './admin/pages/CustomReportsPage'
+import EmailSettingsPage        from './admin/pages/EmailSettingsPage'
+import FAQAdminPage            from './admin/pages/FAQPage'
+import FAQPortalPage           from './portal/pages/FAQPage'
+import LanguagePage            from './admin/pages/LanguagePage'
+import ProcessExplorerPage    from './admin/pages/ProcessExplorerPage'
 
 function AdminGuard({ children }) {
   const { admin } = useAdminAuth()
@@ -68,11 +82,12 @@ function PortalRoutes() {
         <Routes>
           <Route index                    element={<PortalHomePage />} />
           <Route path="login"             element={<PortalLoginPage />} />
+          <Route path="verify-email"     element={<VerifyEmailPage />} />
           <Route path="submit"            element={<FeatureGuard featureKey="medical_inquiry"><SubmitPage /></FeatureGuard>} />
           <Route path="therapeutic-areas" element={<FeatureGuard featureKey="therapeutic_areas"><TherapeuticAreasPage /></FeatureGuard>} />
           <Route path="events"            element={<FeatureGuard featureKey="events"><EventsPage /></FeatureGuard>} />
           <Route path="resources"         element={<FeatureGuard featureKey="resources"><ResourcesPage /></FeatureGuard>} />
-          <Route path="drug-info"         element={<FeatureGuard featureKey="drug_information"><DrugInfoPage /></FeatureGuard>} />
+          <Route path="drug-info"         element={<FeatureGuard featureKey="drug_info"><DrugInfoPage /></FeatureGuard>} />
           <Route path="find-msl"          element={<FeatureGuard featureKey="find_msl"><FindMSLPage /></FeatureGuard>} />
           <Route path="my-submissions"    element={<PortalAuthGuard><MySubmissionsPage /></PortalAuthGuard>} />
           <Route path="contact"           element={<ContactPage />} />
@@ -80,6 +95,9 @@ function PortalRoutes() {
           <Route path="news"              element={<FeatureGuard featureKey="news_announcements"><NewsPortalPage /></FeatureGuard>} />
           <Route path="news/:postId"      element={<FeatureGuard featureKey="news_announcements"><NewsDetailPage /></FeatureGuard>} />
           <Route path="documents"         element={<FeatureGuard featureKey="document_library"><DocumentsPortalPage /></FeatureGuard>} />
+          <Route path="saved"             element={<PortalAuthGuard><SavedItemsPage /></PortalAuthGuard>} />
+          <Route path="preferences"     element={<PortalAuthGuard><PreferencesPage /></PortalAuthGuard>} />
+          <Route path="faq"             element={<FAQPortalPage />} />
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
       </PortalLayout>
@@ -108,8 +126,18 @@ export default function App() {
         <Route path="/admin/clients/:clientId/safety"     element={<AdminGuard><SafetyAdminPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/news"       element={<AdminGuard><NewsAdminPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/documents"  element={<AdminGuard><DocumentsAdminPage /></AdminGuard>} />
-        <Route path="/admin/clients/:clientId/compliance" element={<AdminGuard><CompliancePage /></AdminGuard>} />
-        <Route path="/admin/clients/:clientId/audit"      element={<AdminGuard><AuditTrailPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/compliance"   element={<AdminGuard><CompliancePage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/audit"       element={<AdminGuard><AuditTrailPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/submissions" element={<AdminGuard><SubmissionsPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/analytics"    element={<AdminGuard><AnalyticsPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/feedback"     element={<AdminGuard><FeedbackPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/reports"     element={<AdminGuard><CustomReportsPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/admin-users"  element={<AdminGuard><AdminUsersPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/review-queue"    element={<AdminGuard><ReviewQueuePage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/email-settings" element={<AdminGuard><EmailSettingsPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/faq"           element={<AdminGuard><FAQAdminPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/language"      element={<AdminGuard><LanguagePage /></AdminGuard>} />
+        <Route path="/admin/process-explorer"              element={<AdminGuard><ProcessExplorerPage /></AdminGuard>} />
 
         {/* Public Portal — multi-tenant by clientCode */}
         <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />

@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [form, setForm]       = useState({ email: '', password: '', first_name: '', last_name: '', user_type: 'hcp', country: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [registered, setRegistered] = useState(false)
   // LOW-09: show/hide password toggle
   const [showLoginPassword, setShowLoginPassword]       = useState(false)
   const [showRegisterPassword, setShowRegisterPassword] = useState(false)
@@ -64,9 +65,24 @@ export default function LoginPage() {
     const data = await res.json()
     setLoading(false)
     if (!res.ok) { setError(data.error || 'Registration failed.'); return }
+    if (data.pending) { setRegistered(true); return }
     login(data.user, data.token)
     navigate(returnTo, { replace: true })
   }
+
+  if (registered) return (
+    <div className="pp-auth-page">
+      <div className="pp-auth-card" style={{ textAlign: 'center', padding: '40px 32px' }}>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>📧</div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20 }}>Check your email</h2>
+        <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 20 }}>
+          We sent a verification link to <strong>{form.email}</strong>.<br />
+          Click it to activate your account.
+        </p>
+        <button className="pp-link-btn" style={{ fontSize: 13 }} onClick={() => setTab('login')}>Back to Sign In</button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="pp-auth-page">

@@ -3,13 +3,71 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import UserTypeGate from './UserTypeGate'
 import ConsentBanner from './ConsentBanner'
+import FeedbackWidget from './FeedbackWidget'
+import { SUPPORTED_LANGUAGES } from '../utils/translations'
+
+function timeAgo(dateStr) {
+  if (!dateStr) return ''
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1)   return 'just now'
+  if (mins < 60)  return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24)   return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
+}
+
+const NOTIF_ICONS = { news: '📰', document: '📁', safety: '⚠️' }
+
+function NavDropdown({ label, items, base, location, onNavigate }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const isActive = items.some(i => location.pathname.includes(i.path))
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  return (
+    <div className="pp-nav-dropdown" ref={ref} style={{ position: 'relative' }}>
+      <button
+        className={`pp-nav-link pp-nav-dropdown-btn ${isActive ? 'pp-nav-link-active' : ''}`}
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        {label} <span style={{ fontSize: 10, marginLeft: 3 }}>▾</span>
+      </button>
+      {open && (
+        <div className="pp-nav-dropdown-menu" role="menu">
+          {items.map(i => (
+            <Link key={i.path} to={`${base}/${i.path}`} className="pp-nav-dropdown-item" role="menuitem"
+              onClick={() => { setOpen(false); onNavigate && onNavigate() }}>
+              {i.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function PortalLayout({ children }) {
-  const { portalConfig, loading, user, logout, isFeatureEnabled, clientCode, showGate } = usePortal()
+  const { portalConfig, loading, user, logout, isFeatureEnabled, clientCode, showGate, language, setLanguage, t } = usePortal()
   const has_active_safety_alert = portalConfig?.has_active_safety_alert
+  const [bannerDismissed, setBannerDismissed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [bellOpen, setBellOpen] = useState(false)
+  const [, setTimeTick] = useState(0)
   const userMenuRef = useRef(null)
+  const bellRef     = useRef(null)
   const navigate   = useNavigate()
   const location   = useLocation()
 
@@ -27,20 +85,76 @@ export default function PortalLayout({ children }) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [userMenuOpen])
+
+  useEffect(() => {
+    if (!bellOpen) return
+    function handleClickOutside(e) {
+      if (bellRef.current && !bellRef.current.contains(e.target)) {
+        setBellOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [bellOpen])
+
+  // Refresh timeAgo display every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(() => setTimeTick(t => t + 1), 60000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    if (!user || !clientCode) return
+    async function loadNotifications() {
+      try {
+        const token = localStorage.getItem('cp_portal_token')
+        const res = await fetch(`/api/portal/notifications?clientCode=${clientCode}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const d = await res.json()
+        const list = d.notifications || []
+        setNotifications(list.slice(0, 10))
+        setUnreadCount(list.filter(n => !n.is_read).length)
+      } catch { /* silently fail */ }
+    }
+    loadNotifications()
+  }, [user, clientCode])
+
+  async function markAllRead() {
+    try {
+      const token = localStorage.getItem('cp_portal_token')
+      await fetch('/api/portal/notifications/read-all', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ clientCode }),
+      })
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+      setUnreadCount(0)
+    } catch { /* silently fail */ }
+  }
   const branding   = portalConfig?.branding || {}
   const client     = portalConfig?.client   || {}
 
-  const navItems = [
-    { label: 'Therapeutic Areas', path: 'therapeutic-areas', feature: 'therapeutic_areas' },
-    { label: 'Events',            path: 'events',            feature: 'events' },
-    { label: 'Resources',         path: 'resources',         feature: 'resources' },
-    { label: 'Drug Information',  path: 'drug-info',         feature: 'drug_info' },
-    { label: 'Find an MSL',       path: 'find-msl',          feature: 'find_msl' },
-    { label: 'Safety',            path: 'safety',            feature: null },
-    { label: 'News',              path: 'news',              feature: 'news_announcements' },
-    { label: 'Documents',         path: 'documents',         feature: 'document_library' },
-    { label: 'Contact Us',        path: 'contact',           feature: null },
-  ].filter(n => !n.feature || isFeatureEnabled(n.feature))
+  // F6-01: Consolidated nav — Science (TAs + Drug Info), Resources (Docs + Resources),
+  // Events, Safety, News, Find MSL, Contact. Submit Inquiry stays as header CTA.
+  const scienceItems = [
+    isFeatureEnabled('therapeutic_areas') && { label: t('nav.therapeutic_areas'), path: 'therapeutic-areas' },
+    isFeatureEnabled('drug_info')         && { label: t('nav.drug_info'),          path: 'drug-info' },
+  ].filter(Boolean)
+
+  const resourceItems = [
+    isFeatureEnabled('resources')        && { label: t('nav.resources'),  path: 'resources' },
+    isFeatureEnabled('document_library') && { label: t('nav.documents'),  path: 'documents' },
+  ].filter(Boolean)
+
+  const flatNavItems = [
+    isFeatureEnabled('events')             && { label: t('nav.events'),    path: 'events' },
+    { label: t('nav.safety'),   path: 'safety' },
+    isFeatureEnabled('news_announcements') && { label: t('nav.news'),      path: 'news' },
+    isFeatureEnabled('find_msl')           && { label: t('nav.find_msl'),  path: 'find-msl' },
+    { label: t('nav.faq'),      path: 'faq' },
+    { label: t('nav.contact'),  path: 'contact' },
+  ].filter(Boolean)
 
   const base = `/portal/${clientCode}`
 
@@ -54,10 +168,15 @@ export default function PortalLayout({ children }) {
 
   return (
     <div className="pp-root">
-      {has_active_safety_alert && (
+      {has_active_safety_alert && !bannerDismissed && (
         <div className="pp-safety-banner" role="alert">
           <span>⚠ Important Safety Information — </span>
           <Link to={`${base}/safety`} className="pp-safety-banner-link">View Safety Alerts</Link>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            aria-label="Dismiss safety banner"
+            style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 18, marginLeft: 'auto', padding: '0 8px', lineHeight: 1 }}
+          >×</button>
         </div>
       )}
       <header className="pp-header">
@@ -68,7 +187,13 @@ export default function PortalLayout({ children }) {
           </Link>
 
           <nav className={`pp-nav ${mobileOpen ? 'pp-nav-open' : ''}`}>
-            {navItems.map(n => (
+            {scienceItems.length > 0 && (
+              <NavDropdown label={t('nav.science')} items={scienceItems} base={base} location={location} onNavigate={() => setMobileOpen(false)} />
+            )}
+            {resourceItems.length > 0 && (
+              <NavDropdown label={t('nav.resources')} items={resourceItems} base={base} location={location} onNavigate={() => setMobileOpen(false)} />
+            )}
+            {flatNavItems.map(n => (
               <Link key={n.path} to={`${base}/${n.path}`}
                 className={`pp-nav-link ${location.pathname.includes(n.path) ? 'pp-nav-link-active' : ''}`}
                 onClick={() => setMobileOpen(false)}>
@@ -78,12 +203,89 @@ export default function PortalLayout({ children }) {
           </nav>
 
           <div className="pp-header-actions">
+            {/* S5-9: Language switcher — only shown when multiple languages enabled */}
+            {(portalConfig?.language?.enabled?.length || 0) > 1 && (
+              <select
+                value={language}
+                onChange={e => setLanguage(e.target.value)}
+                style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--pp-border, #E5E7EB)', background: 'transparent', cursor: 'pointer', color: 'var(--pp-header-text, inherit)' }}
+                aria-label="Select language"
+              >
+                {SUPPORTED_LANGUAGES
+                  .filter(l => (portalConfig?.language?.enabled || ['en']).includes(l.code))
+                  .map(l => (
+                    <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
+                  ))
+                }
+              </select>
+            )}
             {isFeatureEnabled('medical_inquiry') && (
               <button className="pp-btn pp-btn-primary" onClick={() => navigate(`${base}/submit`)}>
-                Submit Inquiry
+                {t('btn.submit_inquiry')}
               </button>
             )}
-            {user ? (
+
+            {/* S4-3: Notification Bell */}
+            {user && (
+              <div style={{ position: 'relative' }} ref={bellRef}>
+                <button
+                  className="pp-bell-btn"
+                  aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
+                  onClick={() => setBellOpen(o => !o)}
+                >
+                  🔔
+                  {unreadCount > 0 && (
+                    <span className="pp-bell-badge">{unreadCount}</span>
+                  )}
+                </button>
+                {bellOpen && (
+                  <div className="pp-notif-dropdown">
+                    <div className="pp-notif-header">
+                      <span>{t('notif.title')}</span>
+                      {unreadCount > 0 && (
+                        <button
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#2563EB', fontWeight: 600 }}
+                          onClick={markAllRead}
+                        >
+                          {t('notif.mark_all_read')}
+                        </button>
+                      )}
+                    </div>
+                    {notifications.length === 0 ? (
+                      <div className="pp-notif-empty">{t('notif.none')}</div>
+                    ) : (
+                      <div role="list">
+                        {notifications.map((n, i) => {
+                          const href = n.type === 'news' ? `${base}/news/${n.item_id}`
+                                     : n.type === 'document' ? `${base}/documents`
+                                     : n.type === 'safety' ? `${base}/safety`
+                                     : null
+                          return (
+                            <div
+                              key={n.id || i}
+                              role="listitem"
+                              className={`pp-notif-item${!n.is_read ? ' unread' : ''}${href ? ' pp-notif-item-clickable' : ''}`}
+                              onClick={() => { if (href) { setBellOpen(false); navigate(href) } }}
+                              style={{ cursor: href ? 'pointer' : 'default' }}
+                            >
+                              <span style={{ fontSize: 18, lineHeight: 1 }}>
+                                {NOTIF_ICONS[n.type] || '🔔'}
+                              </span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="pp-notif-title">{n.title || n.message || 'Notification'}</div>
+                                <div className="pp-notif-time">{timeAgo(n.created_at)}</div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isFeatureEnabled('user_auth') !== false && (user ? (
               <div className="pp-user-menu" ref={userMenuRef}>
                 <button
                   className="pp-user-btn"
@@ -100,14 +302,16 @@ export default function PortalLayout({ children }) {
                 </button>
                 {userMenuOpen && (
                   <div className="pp-user-dropdown" role="menu">
-                    <Link to={`${base}/my-submissions`} className="pp-dropdown-item" role="menuitem">My Submissions</Link>
-                    <button className="pp-dropdown-item pp-dropdown-item-danger" role="menuitem" onClick={handleLogout}>Sign Out</button>
+                    <Link to={`${base}/my-submissions`} className="pp-dropdown-item" role="menuitem">{t('btn.my_submissions')}</Link>
+                    <Link to={`${base}/saved`} className="pp-dropdown-item" role="menuitem">{t('btn.saved_items')}</Link>
+                    <Link to={`${base}/preferences`} className="pp-dropdown-item" role="menuitem">{t('btn.preferences')}</Link>
+                    <button className="pp-dropdown-item pp-dropdown-item-danger" role="menuitem" onClick={handleLogout}>{t('btn.sign_out')}</button>
                   </div>
                 )}
               </div>
             ) : (
-              <Link to={`${base}/login`} className="pp-btn pp-btn-outline">Sign In</Link>
-            )}
+              <Link to={`${base}/login`} className="pp-btn pp-btn-outline">{t('btn.sign_in')}</Link>
+            ))}
             <button className="pp-mobile-menu-btn" aria-label="Toggle navigation menu" onClick={() => setMobileOpen(!mobileOpen)}>☰</button>
           </div>
         </div>
@@ -120,7 +324,10 @@ export default function PortalLayout({ children }) {
       <footer className="pp-footer">
         <div className="pp-footer-inner">
           <div className="pp-footer-brand">
-            <span className="pp-footer-logo">{logoText}</span>
+            {logoUrl
+              ? <img src={logoUrl} alt={logoText} className="pp-footer-logo-img" style={{ maxHeight: 36, maxWidth: 140, objectFit: 'contain', display: 'block', marginBottom: 6 }} />
+              : <span className="pp-footer-logo">{logoText}</span>
+            }
             {branding.tagline && <p className="pp-footer-tagline">{branding.tagline}</p>}
           </div>
           <div className="pp-footer-links">
@@ -139,6 +346,7 @@ export default function PortalLayout({ children }) {
       {isFeatureEnabled('chatbox') && <ChatboxWidget clientCode={clientCode} />}
       {!loading && showGate && <UserTypeGate />}
       {!loading && <ConsentBanner />}
+      {!loading && <FeedbackWidget />}
     </div>
   )
 }

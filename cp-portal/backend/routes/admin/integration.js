@@ -6,7 +6,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
-const { authenticateAdmin } = require('../../middleware/auth');
+const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 
 // Mask a secret field — show only last 4 chars with **** prefix
 function maskSecret(value) {
@@ -15,7 +15,7 @@ function maskSecret(value) {
 }
 
 // GET /api/admin/integration/:clientId
-router.get('/:clientId', authenticateAdmin, (req, res) => {
+router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   const config  = db.prepare('SELECT * FROM cp_integration_config WHERE client_id = ?').all(req.params.clientId);
   const masked  = config.map(c => ({
     ...c,
@@ -27,7 +27,7 @@ router.get('/:clientId', authenticateAdmin, (req, res) => {
 });
 
 // POST /api/admin/integration/:clientId — add integration
-router.post('/:clientId', authenticateAdmin, (req, res) => {
+router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
   const { system_name, api_base_url, api_key, api_secret, auth_type, extra_headers } = req.body;
   if (!api_base_url) return res.status(400).json({ error: 'api_base_url is required.' });
   const info = db.prepare(`
@@ -38,7 +38,7 @@ router.post('/:clientId', authenticateAdmin, (req, res) => {
 });
 
 // PATCH /api/admin/integration/:clientId/:integrationId
-router.patch('/:clientId/:integrationId', authenticateAdmin, (req, res) => {
+router.patch('/:clientId/:integrationId', authenticateAdmin, requireClientAccess, (req, res) => {
   const allowed = ['system_name', 'api_base_url', 'api_key', 'api_secret', 'auth_type', 'is_active'];
   const updates = [], params = [];
   for (const key of allowed) {
@@ -57,13 +57,13 @@ router.patch('/:clientId/:integrationId', authenticateAdmin, (req, res) => {
 });
 
 // DELETE /api/admin/integration/:clientId/:integrationId
-router.delete('/:clientId/:integrationId', authenticateAdmin, (req, res) => {
+router.delete('/:clientId/:integrationId', authenticateAdmin, requireClientAccess, (req, res) => {
   db.prepare('UPDATE cp_integration_config SET is_active=0 WHERE id=? AND client_id=?').run(req.params.integrationId, req.params.clientId);
   res.json({ message: 'Integration deactivated.' });
 });
 
 // POST /api/admin/integration/:clientId/:integrationId/test — test connectivity
-router.post('/:clientId/:integrationId/test', authenticateAdmin, async (req, res) => {
+router.post('/:clientId/:integrationId/test', authenticateAdmin, requireClientAccess, async (req, res) => {
   const cfg = db.prepare('SELECT * FROM cp_integration_config WHERE id=? AND client_id=?').get(req.params.integrationId, req.params.clientId);
   if (!cfg) return res.status(404).json({ error: 'Integration not found.' });
   try {
@@ -74,8 +74,11 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, async (req, res
     const timeout = setTimeout(() => controller.abort(), 5000);
     const r = await fetch(`${cfg.api_base_url}/api/health`, { headers, signal: controller.signal });
     clearTimeout(timeout);
+    const syncStatus = r.ok ? 'success' : 'failure';
+    db.prepare(`UPDATE cp_integration_config SET last_sync_at = datetime('now'), last_sync_status = ?, last_sync_error = NULL WHERE id = ?`).run(syncStatus, cfg.id);
     res.json({ success: r.ok, status: r.status });
   } catch (err) {
+    db.prepare(`UPDATE cp_integration_config SET last_sync_at = datetime('now'), last_sync_status = 'failure', last_sync_error = ? WHERE id = ?`).run(String(err.message).slice(0, 500), cfg.id);
     res.json({ success: false, error: err.message });
   }
 });
@@ -83,13 +86,13 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, async (req, res
 // ── Field Mapping ─────────────────────────────────────────────
 
 // GET /api/admin/integration/:clientId/mapping/:integrationId
-router.get('/:clientId/mapping/:integrationId', authenticateAdmin, (req, res) => {
+router.get('/:clientId/mapping/:integrationId', authenticateAdmin, requireClientAccess, (req, res) => {
   const rows = db.prepare('SELECT * FROM cp_field_mapping WHERE client_id=? AND integration_id=? ORDER BY form_type, cp_field').all(req.params.clientId, req.params.integrationId);
   res.json({ mappings: rows });
 });
 
 // POST /api/admin/integration/:clientId/mapping
-router.post('/:clientId/mapping', authenticateAdmin, (req, res) => {
+router.post('/:clientId/mapping', authenticateAdmin, requireClientAccess, (req, res) => {
   const { integration_id, form_type, cp_field, target_field, transform, default_value } = req.body;
   if (!integration_id || !form_type || !cp_field || !target_field) return res.status(400).json({ error: 'integration_id, form_type, cp_field and target_field are required.' });
   const info = db.prepare(`
@@ -100,7 +103,7 @@ router.post('/:clientId/mapping', authenticateAdmin, (req, res) => {
 });
 
 // DELETE /api/admin/integration/:clientId/mapping/:mappingId
-router.delete('/:clientId/mapping/:mappingId', authenticateAdmin, (req, res) => {
+router.delete('/:clientId/mapping/:mappingId', authenticateAdmin, requireClientAccess, (req, res) => {
   db.prepare('DELETE FROM cp_field_mapping WHERE id=? AND client_id=?').run(req.params.mappingId, req.params.clientId);
   res.json({ message: 'Mapping removed.' });
 });

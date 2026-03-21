@@ -19,9 +19,11 @@ export default function SubmitPage() {
   const [submitted, setSubmitted]       = useState(null)
   const [error, setError]               = useState('')
   const [fieldErrors, setFieldErrors]   = useState({})
+  const [fieldsLoading, setFieldsLoading] = useState(false)
 
   useEffect(() => {
     if (!selectedType) return
+    setFieldsLoading(true)
     fetch(`/api/portal/content/${clientCode}/forms/${selectedType}`)
       .then(r => r.json())
       .then(d => {
@@ -30,6 +32,7 @@ export default function SubmitPage() {
         setFieldErrors({})
       })
       .catch(() => {})
+      .finally(() => setFieldsLoading(false))
   }, [selectedType, clientCode])
 
   function handleFieldChange(key, value) {
@@ -39,7 +42,7 @@ export default function SubmitPage() {
 
   function validate() {
     const errors = {}
-    formFields.filter(f => f.is_required && f.is_active).forEach(f => {
+    formFields.filter(f => f.is_required).forEach(f => {
       if (!formValues[f.field_key] || String(formValues[f.field_key]).trim() === '') {
         errors[f.field_key] = `${f.field_label || f.label} is required.`
       }
@@ -114,11 +117,13 @@ export default function SubmitPage() {
 
           {error && <div className="pp-error-msg">{error}</div>}
 
-          {formFields.length === 0 ? (
+          {fieldsLoading ? (
             <div className="pp-loading">Loading form…</div>
+          ) : formFields.length === 0 ? (
+            <div className="pp-info-box">No form fields have been configured for this submission type. Please contact your administrator.</div>
           ) : (
             <form onSubmit={handleSubmit} className="pp-submission-form">
-              {formFields.filter(f => f.is_active).map(field => (
+              {formFields.map(field => (
                 <div key={field.field_key} className={`pp-field${fieldErrors[field.field_key] ? ' pp-field-error' : ''}`}>
                   <label>
                     {field.label}

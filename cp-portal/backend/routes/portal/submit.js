@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../../database/db');
 const { authenticatePortal } = require('../../middleware/auth');
+const { sendEmail } = require('../../utils/mailer');
 
 // POST /api/portal/submit/:clientCode/:formType
 router.post('/:clientCode/:formType', authenticatePortal, async (req, res) => {
@@ -48,7 +49,20 @@ router.post('/:clientCode/:formType', authenticatePortal, async (req, res) => {
   const submissionId = info.lastInsertRowid;
 
   // Auto-sync to integrated system if configured
-  syncToIntegration(client.id, submissionId, formType).catch(() => {});
+  syncToIntegration(client.id, submissionId, formType).catch(() => {})
+
+  // Send submission confirmation email — fire-and-forget, non-fatal
+  const recipientEmail = submitter_email || (req.portalUser ? db.prepare('SELECT email FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId)?.email : null)
+  if (recipientEmail) {
+    const ref = `CP-${String(submissionId).padStart(6, '0')}`
+    const typeLabel = { medical_inquiry: 'Medical Inquiry', adverse_event: 'Adverse Event', product_complaint: 'Product Complaint', other_inquiry: 'Other Inquiry' }[formType] || formType
+    sendEmail(client.id, {
+      to: recipientEmail,
+      subject: `Submission Received — ${typeLabel} (${ref})`,
+      html: `<p>Thank you for your submission.</p><p>Your reference number is <strong>${ref}</strong>.</p><p>We will review your ${typeLabel} and respond as soon as possible.</p>`,
+      text: `Thank you for your submission. Your reference number is ${ref}. We will review your ${typeLabel} and respond as soon as possible.`,
+    }).catch(() => {}) // never block the response
+  }
 
   res.status(201).json({
     id: submissionId,

@@ -57,6 +57,9 @@ router.get('/:clientCode', (req, res) => {
     ? { jurisdictions: JSON.parse(complianceRow.jurisdictions_json), version: complianceRow.version, require_reconsent: !!complianceRow.require_reconsent }
     : null;
 
+  let language = { default: 'en', enabled: ['en'] };
+  try { language = JSON.parse(client.language_config_json || '{}'); } catch {}
+
   res.json({
     // API-03: omit internal client.id — only public-safe identifiers
     client:   { name: client.name, code: client.code },
@@ -66,6 +69,7 @@ router.get('/:clientCode', (req, res) => {
     gate,
     has_active_safety_alert,
     compliance,
+    language,
   });
 });
 

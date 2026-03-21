@@ -6,7 +6,7 @@ import { usePortal } from '../context/PortalContext'
 export default function NewsDetailPage() {
   const { postId }              = useParams()
   const navigate                = useNavigate()
-  const { clientCode }          = usePortal()
+  const { clientCode, language } = usePortal()
   const [post, setPost]         = useState(null)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -22,19 +22,21 @@ export default function NewsDetailPage() {
       setLoading(true)
       try {
         const token = localStorage.getItem('cp_portal_token')
-        const res = await fetch(`/api/portal/news/${postId}?clientCode=${clientCode}`, {
-          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        })
+        const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        const langParam = language && language !== 'en' ? `&lang=${language}` : ''
+        const res = await fetch(`/api/portal/news/${postId}?clientCode=${clientCode}${langParam}`, { headers })
         const d = await res.json()
         if (!res.ok) { setError(d.error || 'Post not found.'); setLoading(false); return }
         setPost(d.post || d)
+        // increment view count once per page load
+        fetch(`/api/portal/news/${clientCode}/posts/${postId}/view`, { method: 'POST', headers }).catch(() => {})
       } catch {
         setError('Unable to load article.')
       }
       setLoading(false)
     }
     if (clientCode && postId) load()
-  }, [clientCode, postId])
+  }, [clientCode, postId, language])
 
   if (loading) return <div className="pp-article-page"><div className="pp-loading">Loading…</div></div>
   if (error)   return <div className="pp-article-page"><div className="pp-error-state">{error}</div></div>

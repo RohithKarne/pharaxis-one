@@ -3,6 +3,21 @@ import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 
+const FEATURE_DESCRIPTIONS = {
+  therapeutic_areas:     'Browse disease areas and treatment categories',
+  medical_inquiry:       'Submit medical information requests',
+  events:                'Upcoming conferences, webinars, and workshops',
+  find_msl:             'Connect with Medical Science Liaisons',
+  resources:             'Publications, clinical data, and materials',
+  drug_info:            'Drug prescribing information and summaries',
+  news_announcements:   'Latest news and announcements',
+  document_library:     'Managed document repository',
+  safety_communications:'Safety alerts and drug recalls',
+  chatbox:              'AI-powered medical assistant',
+  user_auth:            'Portal user login and registration',
+  hcp_gate:             'HCP identity confirmation on first visit',
+}
+
 export default function FeaturesPage() {
   const { clientId } = useParams()
   const [features, setFeatures] = useState([])
@@ -28,6 +43,12 @@ export default function FeaturesPage() {
     if (!res.ok) { setError(data.error || 'Failed to update feature.'); return }
     setFeatures(prev => prev.map(f => f.feature_key === featureKey ? { ...f, is_enabled: !current ? 1 : 0 } : f))
     setSaved(true)
+    if (featureKey === 'hcp_gate' && current) {
+      await fetch(`/api/admin/gate/${clientId}`, {
+        method: 'PATCH', headers: adminHeaders(),
+        body: JSON.stringify({ is_enabled: 0 }),
+      })
+    }
   }
 
   async function updateLabel(featureKey, display_name) {
@@ -68,11 +89,17 @@ export default function FeaturesPage() {
             </div>
             <div className="cp-feature-info">
               <div className="cp-feature-key">{f.feature_key}</div>
+              {FEATURE_DESCRIPTIONS[f.feature_key] && (
+                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{FEATURE_DESCRIPTIONS[f.feature_key]}</div>
+              )}
               <input className="cp-feature-label-input" defaultValue={f.display_name || ''}
                 onBlur={e => updateLabel(f.feature_key, e.target.value)}
                 placeholder="Display label…" />
             </div>
-            <div className="cp-feature-order">Order: {f.display_order}</div>
+            <div className="cp-feature-order" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>Order: {f.display_order}</span>
+              <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: f.is_enabled ? '#DCFCE7' : '#F3F4F6', color: f.is_enabled ? '#16A34A' : '#6B7280' }}>{f.is_enabled ? 'Enabled' : 'Disabled'}</span>
+            </div>
           </div>
         ))}
       </div>

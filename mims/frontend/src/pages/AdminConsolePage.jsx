@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
 import Topbar from '../components/Topbar'
@@ -75,7 +76,8 @@ const ROLES = ['admin', 'agent', 'reviewer', 'content_manager']
 const ROLE_LABELS = { admin: 'Administrator', agent: 'MI Agent', reviewer: 'Reviewer', content_manager: 'Content Manager' }
 
 export default function AdminConsolePage() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('mims_sidebar_collapsed') === 'true')
   const [theme, setThemeState] = useState(() => localStorage.getItem('mims_theme') || 'light')
   const [activeSection, setActiveSection] = useState('overview')
@@ -145,14 +147,31 @@ export default function AdminConsolePage() {
 
   async function loadAll() {
     try {
+      const responses = await Promise.all([
+        fetch('/api/admin/orgs', { headers: H }),
+        fetch('/api/admin/workflow-states', { headers: H }),
+        fetch('/api/admin/source-types', { headers: H }),
+        fetch('/api/admin/products', { headers: H }),
+        fetch('/api/admin/audit-logs', { headers: H }),
+        fetch('/api/admin/permissions', { headers: H }),
+        fetch('/api/admin/users', { headers: H }),
+      ])
+
+      // Detect expired/invalid session — 401 means the JWT expired, not empty data
+      if (responses.some(r => r.status === 401)) {
+        await logout()
+        navigate('/login')
+        return
+      }
+
       const [o, wf, src, p, a, perm, u] = await Promise.all([
-        fetch('/api/admin/orgs', { headers: H }).then(r => r.json()).catch(() => ({ orgs: [] })),
-        fetch('/api/admin/workflow-states', { headers: H }).then(r => r.json()).catch(() => ({ states: [] })),
-        fetch('/api/admin/source-types', { headers: H }).then(r => r.json()).catch(() => ({ sources: [] })),
-        fetch('/api/admin/products', { headers: H }).then(r => r.json()).catch(() => ({ products: [] })),
-        fetch('/api/admin/audit-logs', { headers: H }).then(r => r.json()).catch(() => ({ logs: [] })),
-        fetch('/api/admin/permissions', { headers: H }).then(r => r.json()).catch(() => ({ permissions: [] })),
-        fetch('/api/admin/users', { headers: H }).then(r => r.json()).catch(() => ({ users: [] })),
+        responses[0].json().catch(() => ({ orgs: [] })),
+        responses[1].json().catch(() => ({ states: [] })),
+        responses[2].json().catch(() => ({ sources: [] })),
+        responses[3].json().catch(() => ({ products: [] })),
+        responses[4].json().catch(() => ({ logs: [] })),
+        responses[5].json().catch(() => ({ permissions: [] })),
+        responses[6].json().catch(() => ({ users: [] })),
       ])
       setOrgs(o.orgs || [])
       setWorkflowStates(wf.states || [])

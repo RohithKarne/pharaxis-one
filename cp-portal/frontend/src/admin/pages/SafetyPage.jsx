@@ -1,25 +1,28 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
-import { adminHeaders } from '../context/AdminAuthContext'
+import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 
 const TARGET_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
 const EMPTY_FORM = {
   title: '',
   alert_type: 'dhcp_letter',
-  severity: 'high',
+  severity: 'medium',
   product_name: '',
   ref_number: '',
   body_html: '',
   effective_date: '',
   target_types: [],
   status: 'active',
+  publish_at: '',
 }
 
 export default function SafetyPage() {
   const { clientId }                = useParams()
+  const { canWrite, canPublish }    = useAdminAuth()
   const [alerts, setAlerts]         = useState([])
+  const [drugs, setDrugs]           = useState([])
   const [loading, setLoading]       = useState(true)
   const [saving, setSaving]         = useState(false)
   const [error, setError]           = useState('')
@@ -27,8 +30,13 @@ export default function SafetyPage() {
   const [editAlert, setEditAlert]   = useState(null)
   const [form, setForm]             = useState(EMPTY_FORM)
   const [fileInput, setFileInput]   = useState(null)
+  const [productManual, setProductManual] = useState(false)
 
   useEffect(() => { load() }, [clientId])
+  useEffect(() => {
+    fetch(`/api/admin/content/${clientId}/drugs`, { headers: adminHeaders() })
+      .then(r => r.json()).then(d => setDrugs(d.drugs || [])).catch(() => {})
+  }, [clientId])
 
   async function load() {
     setLoading(true)
@@ -45,6 +53,7 @@ export default function SafetyPage() {
     setForm(EMPTY_FORM)
     setFileInput(null)
     setError('')
+    setProductManual(false)
     setShowForm(true)
   }
 
@@ -58,11 +67,13 @@ export default function SafetyPage() {
       ref_number:    alert.ref_number || '',
       body_html:     alert.body_html || '',
       effective_date: alert.effective_date ? alert.effective_date.slice(0, 10) : '',
-      target_types:  alert.target_types ? (Array.isArray(alert.target_types) ? alert.target_types : JSON.parse(alert.target_types)) : [],
+      target_types:  alert.target_types_json ? (Array.isArray(alert.target_types_json) ? alert.target_types_json : JSON.parse(alert.target_types_json)) : [],
       status:        alert.status || 'active',
+      publish_at:    alert.publish_at ? alert.publish_at.slice(0, 16) : '',
     })
     setFileInput(null)
     setError('')
+    setProductManual(alert.product_name ? !drugs.some(d => d.brand_name === alert.product_name) : false)
     setShowForm(true)
   }
 
@@ -135,7 +146,7 @@ export default function SafetyPage() {
     <AdminLayout title="Safety Alerts">
       <div className="cp-section-header">
         <h2>Safety Alerts</h2>
-        <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New Alert</button>
+        {canWrite && <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New Alert</button>}
       </div>
 
       {showForm && (
@@ -174,7 +185,15 @@ export default function SafetyPage() {
               <div className="cp-field-row">
                 <div className="cp-field">
                   <label>Product Name</label>
-                  <input value={form.product_name} onChange={e => setField('product_name', e.target.value)} />
+                  <select value={productManual ? '__manual__' : (form.product_name || '')} onChange={e => {
+                    if (e.target.value === '__manual__') { setProductManual(true); setField('product_name', '') }
+                    else { setProductManual(false); setField('product_name', e.target.value) }
+                  }}>
+                    <option value="">— Select Drug —</option>
+                    {drugs.map(d => <option key={d.id} value={d.brand_name}>{d.brand_name}</option>)}
+                    <option value="__manual__">Other (manual)</option>
+                  </select>
+                  {productManual && <input style={{ marginTop: 6 }} value={form.product_name} onChange={e => setField('product_name', e.target.value)} placeholder="Enter product name…" />}
                 </div>
                 <div className="cp-field">
                   <label>Reference Number</label>
@@ -198,6 +217,25 @@ export default function SafetyPage() {
                     <option value="archived">Archived</option>
                   </select>
                 </div>
+              </div>
+              <div className="cp-field">
+                <label>Schedule Publish At (optional)</label>
+                <input
+                  type="datetime-local"
+                  value={form.publish_at}
+                  onChange={e => {
+                    const val = e.target.value
+                    if (val && new Date(val) < new Date()) {
+                      e.target.setCustomValidity('Publish date must be in the future.')
+                    } else {
+                      e.target.setCustomValidity('')
+                    }
+                    setField('publish_at', val)
+                  }}
+                />
+                {form.publish_at && new Date(form.publish_at) < new Date() && (
+                  <span style={{ fontSize: 12, color: '#B45309' }}>⚠ Date is in the past — alert will publish immediately.</span>
+                )}
               </div>
               <div className="cp-field">
                 <label>Target Types (empty = all)</label>
@@ -260,10 +298,10 @@ export default function SafetyPage() {
                   </td>
                   <td>{a.view_count || 0}</td>
                   <td style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
-                    {a.status === 'active' && (
+                    {canPublish && a.status === 'active' && (
                       <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => handleResolve(a)}>Resolve</button>
                     )}
-                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(a)}>Edit</button>
+                    {canWrite && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(a)}>Edit</button>}
                   </td>
                 </tr>
               ))}
