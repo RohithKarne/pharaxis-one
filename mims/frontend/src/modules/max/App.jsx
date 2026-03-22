@@ -5,6 +5,9 @@ import ModuleAccessGuard from '../../shared/components/ModuleAccessGuard'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import InboxPage from './pages/InboxPage'
+import AdminConsoleRouter from '../admin/AdminConsoleRouter'
+import ContentPage from '../content/pages/ContentPage'
+import AnalyticsPage from '../dv/pages/AnalyticsPage'
 
 export default function App() {
   return (
@@ -27,7 +30,32 @@ export default function App() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="/admin-console/*" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <AdminConsoleRouter />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/content" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="content_mgmt">
+                <ContentPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/analytics" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="data_visualization">
+                <AnalyticsPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="*" element={
+            <ProtectedRoute>
+              <Navigate to="/dashboard" replace />
+            </ProtectedRoute>
+          } />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

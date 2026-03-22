@@ -43,18 +43,19 @@ function initializeDatabase() {
     );
   `);
 
-  // Bootstrap: ensure default Superadmin account always exists with known credentials
+  // Bootstrap: ensure default Superadmin account exists on first run only.
+  // Do NOT reset password on subsequent restarts — password changes must persist.
   const DEFAULT_SUPERADMIN_EMAIL = 'superadmin';
-  const DEFAULT_SUPERADMIN_PASSWORD = 'Manager@123';
-  const defaultHash = bcrypt.hashSync(DEFAULT_SUPERADMIN_PASSWORD, 10);
   const existingSuperadmin = db.prepare('SELECT id FROM users WHERE email = ?').get(DEFAULT_SUPERADMIN_EMAIL);
   if (existingSuperadmin) {
+    // Only enforce role + active status — never touch the password
     db.prepare(`
       UPDATE users
-      SET name = ?, password = ?, role = 'superadmin', is_active = 1, updated_at = datetime('now')
+      SET name = ?, role = 'superadmin', is_active = 1, updated_at = datetime('now')
       WHERE id = ?
-    `).run('Superadmin', defaultHash, existingSuperadmin.id);
+    `).run('Superadmin', existingSuperadmin.id);
   } else {
+    const defaultHash = bcrypt.hashSync('Manager@123', 10);
     db.prepare(`
       INSERT INTO users (name, email, password, role, is_active)
       VALUES (?, ?, ?, 'superadmin', 1)

@@ -21,9 +21,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
-        admin: resolve(__dirname, 'admin.html'),
-        content: resolve(__dirname, 'content.html'),
-        dv: resolve(__dirname, 'dv.html'),
         superadmin: resolve(__dirname, 'superadmin.html'),
       }
     }

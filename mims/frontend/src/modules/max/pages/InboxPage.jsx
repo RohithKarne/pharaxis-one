@@ -7,8 +7,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
-import Sidebar from '../components/Sidebar'
-import Topbar from '../../../shared/components/Topbar'
+import MIMSLayout from '../../../shared/components/MIMSLayout'
 
 const PAGE_SIZE = 50
 const TABS = ['Inbox', 'Pending', 'Processed', 'Non-Processed', 'Sent']
@@ -20,8 +19,6 @@ const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 export default function InboxPage() {
   const { user } = useAuth()
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('mims_sidebar_collapsed') === 'true')
-  const [theme, setThemeState] = useState(() => localStorage.getItem('mims_theme') || 'light')
 
   const STORAGE_KEY = `mims_inbox_${user?.id || 'guest'}`
   const VIEWS_KEY   = `mims_inbox_views_${user?.id || 'guest'}`
@@ -70,11 +67,6 @@ export default function InboxPage() {
   const [savingNote, setSavingNote]         = useState(false)
   const [threadItems, setThreadItems]       = useState([])   // F12
   const [threadExpanded, setThreadExpanded] = useState(true)
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('mims_theme', theme)
-  }, [theme])
 
   useEffect(() => {
     try { setSavedViews(JSON.parse(localStorage.getItem(VIEWS_KEY) || '[]')) } catch { /* ignore */ }
@@ -403,12 +395,6 @@ export default function InboxPage() {
 
   // ── Helpers ───────────────────────────────────────────────────
 
-  function toggleSidebar() {
-    const next = !collapsed
-    setCollapsed(next)
-    localStorage.setItem('mims_sidebar_collapsed', next)
-  }
-
   function formatTime(dateStr) {
     const d = new Date(dateStr)
     if (d.toDateString() === today) return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
@@ -438,14 +424,9 @@ export default function InboxPage() {
   // ── Render ────────────────────────────────────────────────────
 
   return (
-    <div className="app-wrapper">
-      <Sidebar collapsed={collapsed} onCollapse={toggleSidebar} theme={theme} setTheme={setThemeState} />
-
-      <div className="main-content">
-        <Topbar title="Inbox" onToggleSidebar={toggleSidebar} />
-
-        <div className="page-content" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div className="inbox-wrapper">
+    <MIMSLayout>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="inbox-wrapper">
 
             {/* ── LEFT PANEL: List ── */}
             <div className="inbox-list-panel">
@@ -872,7 +853,6 @@ export default function InboxPage() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* ── Compose Modal (Reply / Forward) ── */}
       {compose && (
@@ -938,6 +918,6 @@ export default function InboxPage() {
           </div>
         </div>
       )}
-    </div>
+    </MIMSLayout>
   )
 }

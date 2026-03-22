@@ -4,20 +4,37 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
-import Topbar from '../../../shared/components/Topbar'
+import MIMSLayout from '../../../shared/components/MIMSLayout'
 
-const TABS = [
-  { key: 'service-log',       label: 'Service Log' },
-  { key: 'system-activity',   label: 'System Activity' },
-  { key: 'service-dashboard', label: 'Service Dashboard' },
-  { key: 'configuration',     label: 'Configuration' },
-  { key: 'escalation',        label: 'Escalation' },
-  { key: 'documents',         label: 'Documents' },
-  { key: 'tables',            label: 'Tables' },
-  { key: 'system',            label: 'System' },
-  { key: 'help',              label: 'Help' },
-]
+const SLUG_MAP = {
+  'email-accounts':       'email-accounts',
+  'sites-setup':          'sites',
+  'workflow-setup':       'workflow',
+  'source-types':         'source-types',
+  'product-dictionary':   'products',
+  'user-security-groups': 'user-security',
+  'user-configuration':   'user-config',
+  'admin-audit-trail':    'audit-admin',
+  'login-audit-trail':    'audit-login',
+  'service-log':          'service-log',
+  'system-activity':      'system-activity',
+}
+
+const SECTION_LABELS = {
+  'email-accounts':       'Email Accounts',
+  'sites-setup':          'Sites Setup',
+  'workflow-setup':       'Workflow Setup',
+  'source-types':         'Source Types',
+  'product-dictionary':   'Product Dictionary',
+  'user-security-groups': 'User Security Groups',
+  'user-configuration':   'User Configuration',
+  'admin-audit-trail':    'Admin Audit Trail',
+  'login-audit-trail':    'Login Audit Trail',
+  'service-log':          'Service Log',
+  'system-activity':      'System Activity',
+}
 
 const STATUS_COLORS = {
   success: { bg: '#e6f4ee', color: '#007a5a', label: 'Success' },
@@ -453,10 +470,13 @@ const ROLES = ['admin', 'agent', 'reviewer', 'content_manager']
 const ROLE_LABELS = { admin: 'Administrator', agent: 'MI Agent', reviewer: 'Reviewer', content_manager: 'Content Manager' }
 
 export default function AdminConsolePage() {
-  const { user, token } = useAuth()
-  const [activeTab, setActiveTab] = useState('configuration')
-  const [theme, setThemeState] = useState(() => localStorage.getItem('mims_theme') || 'light')
-  const [activeSection, setActiveSection] = useState('overview')
+  const { section: urlSection } = useParams()
+  const navigate = useNavigate()
+  const { token } = useAuth()
+  const [theme] = useState(() => localStorage.getItem('mims_theme') || 'light')
+
+  const activeSection = SLUG_MAP[urlSection] || urlSection || ''
+  const sectionLabel  = SECTION_LABELS[urlSection] || urlSection || 'Admin Console'
 
   // Data
   const [orgs, setOrgs] = useState([])
@@ -533,22 +553,13 @@ export default function AdminConsolePage() {
 
   useEffect(() => { loadAll() }, [])
 
-  // Fix: Auto-load audit data when section changes (no manual Search needed)
   useEffect(() => {
-    if (activeSection === 'audit-login') loadLoginAudit()
-    if (activeSection === 'audit-admin') loadAuditLogs()
-    if (activeSection === 'email-accounts') loadEmailAccounts()
+    if (activeSection === 'audit-login')     loadLoginAudit()
+    if (activeSection === 'audit-admin')     loadAuditLogs()
+    if (activeSection === 'email-accounts')  loadEmailAccounts()
+    if (activeSection === 'service-log')     loadServiceLogs()
+    if (activeSection === 'system-activity') loadSystemActivity()
   }, [activeSection])
-
-  // Service Log tab — load on first visit, reload on tab switch
-  useEffect(() => {
-    if (activeTab === 'service-log') loadServiceLogs()
-  }, [activeTab])
-
-  // System Activity tab — load on first visit, reload on tab switch
-  useEffect(() => {
-    if (activeTab === 'system-activity') loadSystemActivity()
-  }, [activeTab])
 
   async function loadAll() {
     try {
@@ -1447,41 +1458,14 @@ export default function AdminConsolePage() {
   }
 
   return (
-    <div className="app-wrapper">
-      <div className="main-content">
-        <Topbar title="Admin Console" />
-        <div className="admin-top-tabs">
-          {TABS.map(tab => (
-            <button
-              key={tab.key}
-              className={`admin-tab ${activeTab === tab.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              {tab.label}
-            </button>
-          ))}
+    <MIMSLayout showStatStrip={false}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="admin-back-bar">
+          <button className="admin-back-btn" onClick={() => navigate('/admin-console')}>← Admin Console</button>
+          <span className="admin-back-title">{sectionLabel}</span>
         </div>
-        <div className="page-content" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {activeTab === 'configuration' ? (
-            <div className="admin-wrapper">
-              <nav className="admin-nav">
-                {ADMIN_SECTIONS.map(section => (
-                  <div key={section.group}>
-                    <div className="admin-nav-section">{section.group}</div>
-                    {section.items.map(item => (
-                      <div key={item.key}
-                        className={`admin-nav-item ${activeSection === item.key ? 'active' : ''}`}
-                        onClick={() => setActiveSection(item.key)}>
-                        {item.active ? '✅ ' : ''}{item.label}
-                        {!item.active && <span className="coming-badge">Soon</span>}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </nav>
-              <div className="admin-content">{renderContent()}</div>
-            </div>
-          ) : activeTab === 'service-log' ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {activeSection === 'service-log' ? (
             <ServiceLogTab
               logs={svcLogs}
               sources={svcSources}
@@ -1496,7 +1480,7 @@ export default function AdminConsolePage() {
               onPageChange={p => { setSvcPage(p); loadServiceLogs({ page: p }) }}
               onPageSizeChange={ps => { setSvcPage(1); setSvcPageSize(ps); loadServiceLogs({ page: 1, page_size: ps }) }}
             />
-          ) : activeTab === 'system-activity' ? (
+          ) : activeSection === 'system-activity' ? (
             <SystemActivityTab
               rows={sysRows}
               summary={sysSummary}
@@ -1513,7 +1497,9 @@ export default function AdminConsolePage() {
               onPageSizeChange={ps => { setSysPage(1); setSysPageSize(ps); loadSystemActivity({ page: 1, page_size: ps }) }}
             />
           ) : (
-            <SkeletonTab label={TABS.find(t => t.key === activeTab)?.label} />
+            <div className="page-content" style={{ padding: 0, flex: 1, overflow: 'auto' }}>
+              {renderContent()}
+            </div>
           )}
         </div>
       </div>
@@ -1775,6 +1761,7 @@ export default function AdminConsolePage() {
           </div>
         </div>
       )}
-    </div>
+    </MIMSLayout>
   )
 }
+
