@@ -7,59 +7,75 @@ const express = require('express');
 const bcrypt  = require('bcrypt');
 const jwt     = require('jsonwebtoken');
 const router  = express.Router();
-const db      = require('../../database/db');
+const { pool } = require('../../database/db');
 const { authenticateAdmin, ADMIN_SECRET } = require('../../middleware/auth');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' }
 
 // POST /api/admin/auth/login
-router.post('/login', (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
 
-  const user = db.prepare('SELECT * FROM cp_admin_users WHERE email = ? AND is_active = 1').get(email);
-  if (!user) return res.status(401).json({ error: 'Invalid credentials.' });
+    const [[user]] = await pool.execute('SELECT * FROM cp_admin_users WHERE email = ? AND is_active = 1', [email]);
+    if (!user) return res.status(401).json({ error: 'Invalid credentials.' });
 
-  const valid = bcrypt.compareSync(password, user.password);
-  if (!valid) return res.status(401).json({ error: 'Invalid credentials.' });
+    const valid = bcrypt.compareSync(password, user.password);
+    if (!valid) return res.status(401).json({ error: 'Invalid credentials.' });
 
-  const token = jwt.sign(
-    { adminId: user.id, email: user.email, name: user.name, role: user.role, clientId: user.client_id ?? null },
-    ADMIN_SECRET,
-    { expiresIn: '12h' }
-  );
+    const token = jwt.sign(
+      { adminId: user.id, email: user.email, name: user.name, role: user.role, clientId: user.client_id ?? null },
+      ADMIN_SECRET,
+      { expiresIn: '12h' }
+    );
 
-  db.prepare(`UPDATE cp_admin_users SET updated_at = datetime('now') WHERE id = ?`).run(user.id);
+    await pool.execute(`UPDATE cp_admin_users SET updated_at = NOW() WHERE id = ?`, [user.id]);
 
-  res.cookie('cp_admin_token', token, { ...COOKIE_OPTS, maxAge: 12 * 60 * 60 * 1000 })
-     .json({ token, admin: { id: user.id, name: user.name, email: user.email, role: user.role, clientId: user.client_id ?? null } });
+    res.cookie('cp_admin_token', token, { ...COOKIE_OPTS, maxAge: 12 * 60 * 60 * 1000 })
+       .json({ token, admin: { id: user.id, name: user.name, email: user.email, role: user.role, clientId: user.client_id ?? null } });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // GET /api/admin/auth/me
-router.get('/me', authenticateAdmin, (req, res) => {
-  const user = db.prepare('SELECT id, name, email, role, client_id, created_at FROM cp_admin_users WHERE id = ?').get(req.admin.adminId);
-  if (!user) return res.status(404).json({ error: 'Admin user not found.' });
-  res.json({ admin: { ...user, clientId: user.client_id ?? null } });
+router.get('/me', authenticateAdmin, async (req, res) => {
+  try {
+    const [[user]] = await pool.execute('SELECT id, name, email, role, client_id, created_at FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);
+    if (!user) return res.status(404).json({ error: 'Admin user not found.' });
+    res.json({ admin: { ...user, clientId: user.client_id ?? null } });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // PATCH /api/admin/auth/password
-router.patch('/password', authenticateAdmin, (req, res) => {
-  const { current_password, new_password } = req.body;
-  if (!current_password || !new_password) return res.status(400).json({ error: 'Both passwords are required.' });
-  if (new_password.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+router.patch('/password', authenticateAdmin, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+    if (!current_password || !new_password) return res.status(400).json({ error: 'Both passwords are required.' });
+    if (new_password.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
 
-  const user = db.prepare('SELECT * FROM cp_admin_users WHERE id = ?').get(req.admin.adminId);
-  if (!bcrypt.compareSync(current_password, user.password)) return res.status(401).json({ error: 'Current password incorrect.' });
+    const [[user]] = await pool.execute('SELECT * FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);
+    if (!bcrypt.compareSync(current_password, user.password)) return res.status(401).json({ error: 'Current password incorrect.' });
 
-  const hash = bcrypt.hashSync(new_password, 10);
-  db.prepare(`UPDATE cp_admin_users SET password = ?, updated_at = datetime('now') WHERE id = ?`).run(hash, user.id);
-  res.json({ message: 'Password updated.' });
+    const hash = bcrypt.hashSync(new_password, 10);
+    await pool.execute(`UPDATE cp_admin_users SET password = ?, updated_at = NOW() WHERE id = ?`, [hash, user.id]);
+    res.json({ message: 'Password updated.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // POST /api/admin/auth/logout — clear auth cookie
-router.post('/logout', (req, res) => {
-  res.clearCookie('cp_admin_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
-     .json({ message: 'Logged out.' });
+router.post('/logout', async (_req, res) => {
+  try {
+    res.clearCookie('cp_admin_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
+       .json({ message: 'Logged out.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 module.exports = router;

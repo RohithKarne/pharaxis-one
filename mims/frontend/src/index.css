@@ -1522,7 +1522,7 @@ a:hover { text-decoration: underline; }
 .ac-left-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 10px 14px;
   font-size: 13px;
   font-weight: 500;
@@ -1536,14 +1536,14 @@ a:hover { text-decoration: underline; }
 
 /* Card grid */
 .ac-card-grid {
-  flex: 1;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, max-content);
   gap: 16px;
   align-content: start;
   align-items: start;
 }
 .ac-card {
+  min-width: 200px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -1562,7 +1562,7 @@ a:hover { text-decoration: underline; }
 .ac-card-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 9px 14px;
   font-size: 13px;
   color: var(--text-primary);

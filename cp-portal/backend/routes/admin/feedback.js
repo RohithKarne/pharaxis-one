@@ -5,37 +5,45 @@
 
 const express = require('express');
 const router  = express.Router();
-const db      = require('../../database/db');
+const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 
 // GET /api/admin/feedback/:clientId — paginated feedback list with avg rating
-router.get('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => {
-  const { clientId } = req.params;
-  const page  = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(100, parseInt(req.query.limit) || 20);
-  const offset = (page - 1) * limit;
+router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const page  = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const offset = (page - 1) * limit;
 
-  const { avg, total } = db.prepare(`
-    SELECT ROUND(AVG(rating), 1) as avg, COUNT(*) as total
-    FROM cp_feedback WHERE client_id = ?
-  `).get(clientId);
+    const [[{ avg, total }]] = await pool.execute(`
+      SELECT ROUND(AVG(rating), 1) as avg, COUNT(*) as total
+      FROM cp_feedback WHERE client_id = ?
+    `, [clientId]);
 
-  const rows = db.prepare(`
-    SELECT f.*, u.email as user_email, u.first_name, u.last_name
-    FROM cp_feedback f
-    LEFT JOIN cp_portal_users u ON u.id = f.user_id
-    WHERE f.client_id = ?
-    ORDER BY f.submitted_at DESC
-    LIMIT ? OFFSET ?
-  `).all(clientId, limit, offset);
+    const [rows] = await pool.execute(`
+      SELECT f.*, u.email as user_email, u.first_name, u.last_name
+      FROM cp_feedback f
+      LEFT JOIN cp_portal_users u ON u.id = f.user_id
+      WHERE f.client_id = ?
+      ORDER BY f.submitted_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `, [clientId]);
 
-  res.json({ feedback: rows, avg_rating: avg || null, total, page, limit });
+    res.json({ feedback: rows, avg_rating: avg || null, total, page, limit });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // DELETE /api/admin/feedback/:clientId/:feedbackId
-router.delete('/:clientId/:feedbackId', authenticateAdmin, requireClientAccess, (req, res) => {
-  db.prepare('DELETE FROM cp_feedback WHERE id = ? AND client_id = ?').run(req.params.feedbackId, req.params.clientId);
-  res.json({ ok: true });
+router.delete('/:clientId/:feedbackId', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    await pool.execute('DELETE FROM cp_feedback WHERE id = ? AND client_id = ?', [req.params.feedbackId, req.params.clientId]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 module.exports = router;

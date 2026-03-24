@@ -7,7 +7,7 @@
  * - Uses JWT (JSON Web Token) to issue a session token after login
  *
  * HOW IT FITS TOGETHER:
- *   Browser → routes/auth.js → authController.js → userModel.js → SQLite DB
+ *   Browser → routes/auth.js → authController.js → userModel.js → MySQL DB
  *
  * KEY CONCEPTS:
  * - bcrypt: Never store plain passwords. bcrypt hashes them so even if the DB
@@ -19,12 +19,16 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
-const db = require('../database/db');
+const pool = require('../database/db');
 
 // Helper: write to login_audit table (21 CFR Part 11 — AUD-02, AUD-03, AUD-04)
-function logLoginAudit({ userId, userName, role, status, failReason }) {
-  db.prepare(`INSERT INTO login_audit (user_id, user_name, role, status, fail_reason)
-    VALUES (?, ?, ?, ?, ?)`).run(userId || null, userName || null, role || null, status, failReason || null);
+async function logLoginAudit({ userId, userName, role, status, failReason }) {
+  try {
+    await pool.execute(
+      `INSERT INTO login_audit (user_id, user_name, role, status, fail_reason) VALUES (?, ?, ?, ?, ?)`,
+      [userId || null, userName || null, role || null, status, failReason || null]
+    );
+  } catch (_) {}
 }
 
 // Secret key used to sign JWT tokens — in production this goes in a .env file
@@ -54,7 +58,7 @@ const authController = {
       const userRole = role && validRoles.includes(role) ? role : 'agent';
 
       // Check if email is already registered
-      if (userModel.emailExists(email)) {
+      if (await userModel.emailExists(email)) {
         return res.status(409).json({ error: 'An account with this email already exists.' });
       }
 
@@ -62,7 +66,7 @@ const authController = {
       const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
       // --- Save to database ---
-      const newUser = userModel.create({
+      const newUser = await userModel.create({
         name,
         email: email.toLowerCase().trim(),
         password: hashedPassword,
@@ -94,7 +98,7 @@ const authController = {
       }
 
       // --- Look up user ---
-      const user = userModel.findByEmail(email.toLowerCase().trim());
+      const user = await userModel.findByEmail(email.toLowerCase().trim());
 
       if (!user) {
         // Log failed attempt — email not found (AUD-04)
@@ -127,12 +131,19 @@ const authController = {
       logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'success' });
 
       // Fetch module permissions for this user (assigned by Superadmin)
-      const userModules = db.prepare(
-        'SELECT module FROM user_module_permissions WHERE user_id = ? AND can_access = 1'
-      ).all(user.id).map(r => r.module);
-      const modules = user.role === 'superadmin'
-        ? db.prepare('SELECT DISTINCT module FROM role_permissions').all().map(r => r.module)
-        : userModules;
+      const [userModulesRows] = await pool.execute(
+        'SELECT module FROM user_module_permissions WHERE user_id = ? AND can_access = 1',
+        [user.id]
+      );
+      const userModules = userModulesRows.map(r => r.module);
+
+      let modules;
+      if (user.role === 'superadmin') {
+        const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
+        modules = distRows.map(r => r.module);
+      } else {
+        modules = userModules;
+      }
 
       return res.status(200).json({
         message: 'Login successful.',
@@ -151,9 +162,9 @@ const authController = {
    * GET /api/auth/me
    * Returns the currently logged-in user's details (requires valid JWT)
    */
-  me(req, res) {
+  async me(req, res) {
     // req.user is set by the auth middleware (see server.js)
-    const user = userModel.findById(req.user.userId);
+    const user = await userModel.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
     return res.status(200).json({ user });
   }

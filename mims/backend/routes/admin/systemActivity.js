@@ -15,7 +15,7 @@
 
 const express = require('express')
 const router = express.Router()
-const db = require('../../database/db')
+const pool = require('../../database/db')
 const { authenticate, requireRole } = require('../../middleware/auth')
 
 const ALLOWED_PAGE_SIZES = [10, 20, 50]
@@ -31,7 +31,7 @@ function parseCountFromDescription(desc) {
   return m ? parseInt(m[1], 10) : null
 }
 
-router.get('/system-activity', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
+router.get('/system-activity', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const {
       status    = '',
@@ -54,29 +54,33 @@ router.get('/system-activity', authenticate, requireRole('admin', 'superadmin'),
     const params = [...baseParams]
 
     if (status)    { conditions.push('status = ?');                  params.push(status) }
-    if (date_from) { conditions.push("date(created_at) >= date(?)"); params.push(date_from) }
+    if (date_from) { conditions.push('DATE(created_at) >= DATE(?)'); params.push(date_from) }
 
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const where     = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
     const baseWhere = baseConditions.length ? `WHERE ${baseConditions.join(' AND ')}` : ''
 
-    const total = db.prepare(
-      `SELECT COUNT(*) as c FROM service_logs ${where}`
-    ).get(...params).c
+    const [[{ c: total }]] = await pool.execute(
+      `SELECT COUNT(*) as c FROM service_logs ${where}`,
+      params
+    )
 
-    const rows = db.prepare(
+    const [rows] = await pool.execute(
       `SELECT id, source, service_type, description, details, status, created_at
        FROM service_logs ${where}
        ORDER BY created_at DESC
-       LIMIT ? OFFSET ?`
-    ).all(...params, ps, offset)
+       LIMIT ${ps} OFFSET ${offset}`,
+      params
+    )
 
-    const summaryRows = db.prepare(
-      `SELECT status, COUNT(*) as c FROM service_logs ${baseWhere} GROUP BY status`
-    ).all(...baseParams)
+    const [summaryRows] = await pool.execute(
+      `SELECT status, COUNT(*) as c FROM service_logs ${baseWhere} GROUP BY status`,
+      baseParams
+    )
 
-    const summaryTotal = db.prepare(
-      `SELECT COUNT(*) as c FROM service_logs ${baseWhere}`
-    ).get(...baseParams).c
+    const [[{ c: summaryTotal }]] = await pool.execute(
+      `SELECT COUNT(*) as c FROM service_logs ${baseWhere}`,
+      baseParams
+    )
 
     const summary = { total: summaryTotal, success: 0, failed: 0, warning: 0 }
     for (const r of summaryRows) {

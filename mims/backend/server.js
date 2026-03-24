@@ -61,31 +61,37 @@ app.use('/api/superadmin', require('./routes/superadmin'));
 
 // ─── Email Poller ────────────────────────────────────────────────────────────
 const { startPoller, stopPoller } = require('./services/emailPoller');
-startPoller();
 
-// ─── Start Server ─────────────────────────────────────────────────────────────
-const server = app.listen(PORT, HOST, () => {
-  console.log('');
-  console.log('🏥 MIMS — Medical Information Management System');
-  console.log(`🚀 Server running at: http://${HOST}:${PORT}`);
-  console.log(`📁 Serving frontend from: ${path.join(__dirname, '../frontend')}`);
-  console.log('');
+// ─── Start Server (after DB is ready) ────────────────────────────────────────
+// Wait for MySQL schema initialization before accepting requests or starting poller.
+const { initPromise } = require('./database/db');
+let server;
+initPromise.then(() => {
+  startPoller();
+  server = app.listen(PORT, HOST, () => {
+    console.log('');
+    console.log('🏥 MIMS — Medical Information Management System');
+    console.log(`🚀 Server running at: http://${HOST}:${PORT}`);
+    console.log(`📁 Serving frontend from: ${path.join(__dirname, '../frontend')}`);
+    console.log('');
+  });
+  server.on('error', (err) => {
+    if (err?.code === 'EADDRINUSE') {
+      console.error(`❌ Port already in use: http://${HOST}:${PORT}`)
+      console.error('   Stop the other server process (or change PORT) and restart.')
+      process.exit(1)
+    }
+    console.error('❌ Server error:', err)
+    process.exit(1)
+  })
 });
 
-server.on('error', (err) => {
-  if (err?.code === 'EADDRINUSE') {
-    console.error(`❌ Port already in use: http://${HOST}:${PORT}`)
-    console.error('   Stop the other server process (or change PORT) and restart.')
-    process.exit(1)
-  }
-  console.error('❌ Server error:', err)
-  process.exit(1)
-})
 
 function shutdown(signal) {
   console.log(`\n🛑 Shutting down (${signal})...`)
   try { stopPoller() } catch (_) {}
-  server.close(() => process.exit(0))
+  if (server) server.close(() => process.exit(0))
+  else process.exit(0)
   // Force-exit if close hangs (e.g. open sockets)
   setTimeout(() => process.exit(0), 1500).unref()
 }

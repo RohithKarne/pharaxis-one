@@ -28,14 +28,15 @@ router.post('/login', authController.login);
 router.get('/me', authenticate, authController.me);
 
 // POST /api/auth/logout — records logout time in login_audit (AUD-03)
-router.post('/logout', authenticate, (req, res) => {
-  const db = require('../database/db');
+router.post('/logout', authenticate, async (req, res) => {
+  const pool = require('../database/db');
   // Update the most recent login_audit record for this user with logout time
-  db.prepare(`
-    UPDATE login_audit SET logout_time = datetime('now')
-    WHERE user_id = ? AND logout_time IS NULL
-    ORDER BY login_time DESC LIMIT 1
-  `).run(req.user.userId);
+  await pool.execute(
+    `UPDATE login_audit SET logout_time = NOW()
+     WHERE user_id = ? AND logout_time IS NULL
+     ORDER BY login_time DESC LIMIT 1`,
+    [req.user.userId]
+  );
   res.json({ message: 'Logged out.' });
 });
 

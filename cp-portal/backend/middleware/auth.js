@@ -1,13 +1,13 @@
 /**
- * auth.js — CP Portal Authentication Middleware
+ * auth.js — CP Portal Authentication Middleware (MySQL async)
  *
  * Two separate auth contexts:
  *   authenticateAdmin  — CP Admin Console JWT
  *   authenticatePortal — CP Portal user JWT (optional for anonymous submissions)
  */
 
-const jwt = require('jsonwebtoken');
-const db  = require('../database/db');
+const jwt        = require('jsonwebtoken');
+const { pool }   = require('../database/db');
 
 if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
   if (!process.env.CP_ADMIN_JWT_SECRET || !process.env.CP_PORTAL_JWT_SECRET) {
@@ -19,7 +19,8 @@ const ADMIN_SECRET  = process.env.CP_ADMIN_JWT_SECRET  || 'cp-admin-insecure-dev
 const PORTAL_SECRET = process.env.CP_PORTAL_JWT_SECRET || 'cp-portal-insecure-dev-only';
 
 function authenticateAdmin(req, res, next) {
-  const token = req.cookies?.cp_admin_token || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+  const token = req.cookies?.cp_admin_token ||
+    (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
   if (!token) return res.status(401).json({ error: 'Admin authentication required.' });
   try {
     req.admin = jwt.verify(token, ADMIN_SECRET);
@@ -29,78 +30,63 @@ function authenticateAdmin(req, res, next) {
   }
 }
 
-function authenticatePortal(req, res, next) {
+async function authenticatePortal(req, _res, next) {
   // Optional auth — anonymous users can still submit
-  const token = req.cookies?.cp_portal_token || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+  const token = req.cookies?.cp_portal_token ||
+    (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
   if (token) {
     try {
-      req.portalUser = jwt.verify(token, PORTAL_SECRET);
-      // Sprint 2: DB check to honour immediate deactivation without a token blocklist
-      const userRecord = db.prepare('SELECT is_active FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId);
+      const payload = jwt.verify(token, PORTAL_SECRET);
+      payload.id = payload.userId; // alias: routes use req.portalUser.id
+      req.portalUser = payload;
+      const [[userRecord]] = await pool.execute(
+        'SELECT is_active FROM cp_portal_users WHERE id = ?',
+        [req.portalUser.userId]
+      );
       if (!userRecord || !userRecord.is_active) {
         req.portalUser = null; // treat as anonymous
       }
     } catch {
-      // ignore invalid token for anonymous access
+      req.portalUser = null; // ignore invalid token for anonymous access
     }
   }
   next();
 }
 
-function requirePortalAuth(req, res, next) {
+async function requirePortalAuth(req, res, next) {
   if (!req.portalUser) {
     return res.status(401).json({ error: 'Portal login required.' });
   }
-  // Sprint 2: re-check is_active so deactivated users with valid JWTs are rejected
-  const userRecord = db.prepare('SELECT is_active FROM cp_portal_users WHERE id = ?').get(req.portalUser.userId);
-  if (!userRecord || !userRecord.is_active) {
-    return res.status(401).json({ error: 'Your account has been deactivated.' });
+  try {
+    const [[userRecord]] = await pool.execute(
+      'SELECT is_active FROM cp_portal_users WHERE id = ?',
+      [req.portalUser.userId]
+    );
+    if (!userRecord || !userRecord.is_active) {
+      return res.status(401).json({ error: 'Your account has been deactivated.' });
+    }
+    next();
+  } catch (err) {
+    next(err);
   }
-  next();
 }
 
-/**
- * requireClientAccess — API-02: client ownership validation.
- *
- * Usage: router.get('/:clientId', authenticateAdmin, requireClientAccess, handler)
- *
- * - superadmin: full access to any client.
- * - admin: must have a clientId claim in their JWT that matches req.params.clientId.
- *
- * NOTE (Sprint 2 gap): cp_admin_users has no client_id column and the login JWT does
- * not embed clientId for regular admins. Until the schema is extended and the login
- * endpoint is updated to embed clientId, regular admins will receive 403. This is the
- * safe-fail posture — better to block than to allow cross-client data access.
- */
 function requireClientAccess(req, res, next) {
   if (!req.admin) return res.status(401).json({ error: 'Admin authentication required.' });
-
-  // Superadmins manage all clients — pass through.
   if (req.admin.role === 'superadmin') return next();
 
-  // Regular admin: check their JWT clientId against the requested clientId.
   const requestedClientId = String(req.params.clientId || req.query.clientId || '');
   const adminClientId     = req.admin.clientId != null ? String(req.admin.clientId) : null;
 
   if (!adminClientId) {
-    // No client scope in token — deny until schema + login are updated (Sprint 2 gap).
     return res.status(403).json({ error: 'Access denied. Your account has no client scope assigned.' });
   }
-
   if (adminClientId !== requestedClientId) {
     return res.status(403).json({ error: 'Access denied. You can only manage your own client.' });
   }
-
   next();
 }
 
-/**
- * requireRole — S4-10: role-based access control.
- *
- * Usage: router.post('/', authenticateAdmin, requireClientAccess, requireRole('admin','superadmin'), handler)
- *
- * Allowed role values: superadmin | admin | content_manager | reviewer | viewer
- */
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.admin) return res.status(401).json({ error: 'Admin authentication required.' });

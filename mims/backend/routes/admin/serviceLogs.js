@@ -16,12 +16,12 @@
 
 const express = require('express')
 const router = express.Router()
-const db = require('../../database/db')
+const pool = require('../../database/db')
 const { authenticate, requireRole } = require('../../middleware/auth')
 
 const ALLOWED_PAGE_SIZES = [10, 20, 50]
 
-router.get('/service-logs', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
+router.get('/service-logs', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const {
       source    = '',
@@ -41,29 +41,31 @@ router.get('/service-logs', authenticate, requireRole('admin', 'superadmin'), (r
     const conditions = []
     const params = []
 
-    if (source)    { conditions.push('source = ?');                         params.push(source) }
-    if (status)    { conditions.push('status = ?');                         params.push(status) }
-    if (date_from) { conditions.push("date(created_at) >= date(?)");        params.push(date_from) }
-    if (date_to)   { conditions.push("date(created_at) <= date(?)");        params.push(date_to) }
+    if (source)    { conditions.push('source = ?');                      params.push(source) }
+    if (status)    { conditions.push('status = ?');                      params.push(status) }
+    if (date_from) { conditions.push('DATE(created_at) >= DATE(?)');     params.push(date_from) }
+    if (date_to)   { conditions.push('DATE(created_at) <= DATE(?)');     params.push(date_to) }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
-    const total = db.prepare(
-      `SELECT COUNT(*) as c FROM service_logs ${where}`
-    ).get(...params).c
+    const [[{ c: total }]] = await pool.execute(
+      `SELECT COUNT(*) as c FROM service_logs ${where}`,
+      params
+    )
 
-    const data = db.prepare(
+    const [data] = await pool.execute(
       `SELECT id, source, service_type, description, details, status, created_at
        FROM service_logs ${where}
        ORDER BY created_at DESC
-       LIMIT ? OFFSET ?`
-    ).all(...params, ps, offset)
+       LIMIT ${ps} OFFSET ${offset}`,
+      params
+    )
 
     // Distinct source values for the filter dropdown
-    const sources = db
-      .prepare(`SELECT DISTINCT source FROM service_logs ORDER BY source`)
-      .all()
-      .map(r => r.source)
+    const [sourceRows] = await pool.execute(
+      'SELECT DISTINCT source FROM service_logs ORDER BY source'
+    )
+    const sources = sourceRows.map(r => r.source)
 
     res.json({
       data,

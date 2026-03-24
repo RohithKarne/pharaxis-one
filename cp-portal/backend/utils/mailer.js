@@ -2,7 +2,6 @@
  * utils/mailer.js — CP Portal Outbound Email Utility
  *
  * Sends transactional emails using per-client SMTP configuration.
- * Pattern borrowed from MIMS emailPoller/inbox SMTP send.
  *
  * Usage:
  *   const { sendEmail } = require('./mailer')
@@ -12,28 +11,29 @@
  */
 
 const nodemailer = require('nodemailer')
-const db = require('../database/db')
+const { pool }   = require('../database/db')
 
 /**
  * Resolve the active SMTP config for a given client.
  * Returns null if none configured or not active.
  */
-function getEmailConfig(clientId) {
-  return db.prepare(`
+async function getEmailConfig(clientId) {
+  const [[row]] = await pool.execute(`
     SELECT smtp_host, smtp_port, smtp_encryption, smtp_username, smtp_password,
            from_email, from_name
     FROM cp_email_config
     WHERE client_id = ? AND is_active = 1
       AND smtp_host IS NOT NULL AND smtp_username IS NOT NULL AND smtp_password IS NOT NULL
     LIMIT 1
-  `).get(clientId)
+  `, [clientId])
+  return row || null
 }
 
 /**
  * Build a nodemailer transporter from a config row.
  */
 function buildTransporter(config) {
-  const secure = config.smtp_encryption === 'SSL/TLS'
+  const secure     = config.smtp_encryption === 'SSL/TLS'
   const requireTLS = config.smtp_encryption === 'STARTTLS'
   return nodemailer.createTransport({
     host: config.smtp_host,
@@ -54,7 +54,7 @@ function buildTransporter(config) {
  * @throws if no active email config or SMTP send fails
  */
 async function sendEmail(clientId, { to, subject, html, text }) {
-  const config = getEmailConfig(clientId)
+  const config = await getEmailConfig(clientId)
   if (!config) throw new Error('No active email configuration for this client.')
 
   const transporter = buildTransporter(config)

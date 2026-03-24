@@ -10,59 +10,73 @@
  * If the database structure changes, you only update this file — not every controller.
  */
 
-const db = require('../database/db');
+const pool = require('../database/db');
 
 const userModel = {
   /**
    * Find a user by their email address
    * Used during login to look up the user
    */
-  findByEmail(email) {
-    return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  async findByEmail(email) {
+    const [[row]] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
+    return row || null;
   },
 
   /**
    * Find a user by their ID
    * Used after login to fetch user details
    */
-  findById(id) {
-    return db.prepare('SELECT id, name, email, role, is_active, created_at FROM users WHERE id = ?').get(id);
+  async findById(id) {
+    const [[row]] = await pool.execute(
+      'SELECT id, name, email, role, is_active, created_at FROM users WHERE id = ?', [id]
+    );
+    return row || null;
   },
 
   /**
    * Get all users (for admin user management)
    * Returns all fields except password for security
    */
-  findAll() {
-    return db.prepare('SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC').all();
+  async findAll() {
+    const [rows] = await pool.execute(
+      'SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC'
+    );
+    return rows;
   },
 
   /**
    * Create a new user
    * password should already be hashed before calling this
    */
-  create({ name, email, password, role = 'agent' }) {
-    const stmt = db.prepare(`
-      INSERT INTO users (name, email, password, role)
-      VALUES (?, ?, ?, ?)
-    `);
-    const result = stmt.run(name, email, password, role);
-    return { id: result.lastInsertRowid, name, email, role };
+  async create({ name, email, password, role = 'agent' }) {
+    const [result] = await pool.execute(
+      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+      [name, email, password, role]
+    );
+    const [[row]] = await pool.execute(
+      'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
+      [result.insertId]
+    );
+    return row;
   },
 
   /**
    * Update a user's active status (enable/disable account)
    */
-  setActiveStatus(id, isActive) {
-    return db.prepare('UPDATE users SET is_active = ?, updated_at = datetime("now") WHERE id = ?').run(isActive ? 1 : 0, id);
+  async setActiveStatus(id, isActive) {
+    const [result] = await pool.execute(
+      'UPDATE users SET is_active = ?, updated_at = NOW() WHERE id = ?',
+      [isActive ? 1 : 0, id]
+    );
+    return result;
   },
 
   /**
    * Check if a user with this email already exists
    */
-  emailExists(email) {
-    const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-    return !!user;
+  async emailExists(email) {
+    const [[row]] = await pool.execute('SELECT id FROM users WHERE email = ?', [email]);
+    return !!row;
   }
 };
 

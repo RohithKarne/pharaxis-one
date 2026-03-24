@@ -3,8 +3,8 @@
  * Translates content fields and stores results in translations_json columns.
  */
 
-const https = require('https');
-const db    = require('../database/db');
+const https      = require('https');
+const { pool }   = require('../database/db');
 
 // Split long text into ≤450-char chunks at word/tag boundaries
 function chunkText(text, max = 450) {
@@ -61,9 +61,9 @@ async function translateText(text, targetLang, sourceLang = 'en') {
 }
 
 // Get languages to translate into (all enabled minus the source/default)
-function getTargetLangs(clientId) {
+async function getTargetLangs(clientId) {
   try {
-    const row = db.prepare('SELECT language_config_json FROM cp_clients WHERE id = ?').get(clientId);
+    const [[row]] = await pool.execute('SELECT language_config_json FROM cp_clients WHERE id = ?', [clientId]);
     if (!row?.language_config_json) return [];
     const cfg    = JSON.parse(row.language_config_json);
     const source = cfg.default || 'en';
@@ -82,7 +82,7 @@ function getTargetLangs(clientId) {
  * @param {string} sourceLang - language the content was written in (default 'en')
  */
 async function autoTranslate(clientId, table, rowId, fields, sourceLang = 'en') {
-  const targetLangs = getTargetLangs(clientId);
+  const targetLangs = await getTargetLangs(clientId);
   if (!targetLangs.length) return;
   try {
     const translations = {};
@@ -95,11 +95,11 @@ async function autoTranslate(clientId, table, rowId, fields, sourceLang = 'en') 
       }
     }
     // Merge with any existing translations (e.g. partial update)
-    const existing = db.prepare(`SELECT translations_json FROM ${table} WHERE id = ?`).get(rowId);
+    const [[existing]] = await pool.execute(`SELECT translations_json FROM \`${table}\` WHERE id = ?`, [rowId]);
     let prev = {};
     try { prev = JSON.parse(existing?.translations_json || '{}'); } catch {}
-    db.prepare(`UPDATE ${table} SET translations_json = ? WHERE id = ?`)
-      .run(JSON.stringify({ ...prev, ...translations }), rowId);
+    await pool.execute(`UPDATE \`${table}\` SET translations_json = ? WHERE id = ?`,
+      [JSON.stringify({ ...prev, ...translations }), rowId]);
   } catch (err) {
     console.error(`[translator] ${table}#${rowId}:`, err.message);
   }

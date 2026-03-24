@@ -8,7 +8,7 @@
  */
 
 const cron = require('node-cron')
-const db = require('../database/db')
+const pool = require('../database/db')
 const { logService } = require('./serviceLogger')
 const crypto = require('crypto')
 const fs = require('fs')
@@ -69,7 +69,7 @@ async function ingestAccount(account, sinceDt) {
 
       if (!uids || uids.length === 0) return 0
 
-      // Cap per-run to 25 to avoid overloading; dedup (INSERT OR IGNORE) handles re-fetched overlaps.
+      // Cap per-run to 25 to avoid overloading; dedup (INSERT IGNORE) handles re-fetched overlaps.
       const maxPerRun = 25
       const toFetch = uids.length > maxPerRun ? uids.slice(-maxPerRun) : uids
 
@@ -93,18 +93,18 @@ async function ingestAccount(account, sinceDt) {
           20000
         )
 
-        // Count attachments from imapflow bodyStructure
+        // Count attachments from parsedEmail
         const attachments_count = parsedEmail?.attachments?.length || 0
 
         const message_hash = messageId ? null : hashFallback({ sender, subject, receivedAt, body: bodyText })
 
-        const info = db.prepare(`
-          INSERT OR IGNORE INTO inquiries (
+        const [result] = await pool.execute(`
+          INSERT IGNORE INTO inquiries (
             org_id, email_account_id, message_id, message_hash,
             sender, recipient, subject, body, received_at,
             status, attachments_count, source_tag
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'inbox', ?, ?)
-        `).run(
+        `, [
           account.org_id || null,
           account.id,
           messageId,
@@ -116,14 +116,14 @@ async function ingestAccount(account, sinceDt) {
           receivedAt,
           attachments_count,
           'Email'
-        )
+        ])
 
-        if (info.changes) {
+        if (result.affectedRows) {
           inserted += 1
 
           // Save attachments if enabled and present
           if (account.ingest_attachments && parsedEmail?.attachments?.length > 0) {
-            const inquiry = db.prepare(`
+            const [[inquiry]] = await pool.execute(`
               SELECT id FROM inquiries
               WHERE email_account_id = ?
                 AND (
@@ -131,7 +131,7 @@ async function ingestAccount(account, sinceDt) {
                   OR (message_hash IS NOT NULL AND message_hash = ?)
                 )
               ORDER BY id DESC LIMIT 1
-            `).get(account.id, messageId, message_hash)
+            `, [account.id, messageId, message_hash])
 
             if (inquiry?.id) {
               const maxBytes = (account.max_attachment_mb || 10) * 1024 * 1024
@@ -145,10 +145,10 @@ async function ingestAccount(account, sinceDt) {
                   const destPath = path.join(baseDir, `${Date.now()}-${safeName}`)
                   const buf = att.content
                   await fs.promises.writeFile(destPath, buf)
-                  db.prepare(`
-                    INSERT INTO inquiry_attachments (inquiry_id, filename, mime_type, size_bytes, storage_path)
-                    VALUES (?, ?, ?, ?, ?)
-                  `).run(inquiry.id, safeName, att.contentType || null, buf.length, destPath)
+                  await pool.execute(
+                    `INSERT INTO inquiry_attachments (inquiry_id, filename, mime_type, size_bytes, storage_path) VALUES (?, ?, ?, ?, ?)`,
+                    [inquiry.id, safeName, att.contentType || null, buf.length, destPath]
+                  )
                 } catch (e) {
                   console.log(`[POLLER] Attachment save fail: inquiry ${inquiry.id} ${safeText(e?.message || e, 160)}`)
                 }
@@ -184,13 +184,13 @@ function startPoller() {
       running = true
 
       try {
-        const accounts = db.prepare(`
+        const [accounts] = await pool.execute(`
           SELECT *
           FROM email_accounts
           WHERE is_active = 1 AND direction IN ('Inbound', 'Both')
             AND imap_host IS NOT NULL AND imap_port IS NOT NULL
             AND imap_username IS NOT NULL AND imap_password IS NOT NULL
-        `).all()
+        `)
 
         const now = new Date()
 
@@ -207,7 +207,10 @@ function startPoller() {
           try {
             const n = await ingestAccount(account, sinceDt)
             const runEndedAt = new Date().toISOString()
-            db.prepare(`UPDATE email_accounts SET last_ingest_at = ? WHERE id = ?`).run(runEndedAt, account.id)
+            await pool.execute(
+              `UPDATE email_accounts SET last_ingest_at = ? WHERE id = ?`,
+              [runEndedAt, account.id]
+            )
             console.log(`[POLLER] Ingest done: account ${account.id} inserted ${n}`)
             logService({
               source: 'Email Accounts',

@@ -5,68 +5,87 @@
 
 const express = require('express');
 const router = express.Router();
-const db = require('../../database/db');
+const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 
-// Helper: log to audit trail
-function audit(userId, userName, action, entity, entityId, details) {
-  db.prepare(`INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
-    VALUES (?, ?, ?, ?, ?, ?)`).run(userId, userName, action, entity, entityId, JSON.stringify(details));
+async function audit(userId, userName, action, entity, entityId, details) {
+  try {
+    await pool.execute(
+      `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)`,
+      [userId, userName, action, entity, entityId, JSON.stringify(details)]
+    );
+  } catch (_) {}
 }
 
 // GET /api/admin/orgs — list all
-router.get('/', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
-  const orgs = db.prepare('SELECT * FROM organisations ORDER BY name').all();
-  res.json({ orgs });
+router.get('/', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+  try {
+    const [orgs] = await pool.execute('SELECT * FROM organisations ORDER BY name');
+    res.json({ orgs });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // POST /api/admin/orgs — create
-router.post('/', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
+router.post('/', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Organisation name is required.' });
   try {
-    const result = db.prepare('INSERT INTO organisations (name) VALUES (?)').run(name.trim());
-    audit(req.user.userId, req.user.email, 'CREATE', 'organisation', result.lastInsertRowid, { name });
-    const created_at = db.prepare('SELECT created_at FROM organisations WHERE id = ?').get(result.lastInsertRowid).created_at;
-    res.status(201).json({ id: result.lastInsertRowid, name, is_active: 1, created_at });
+    const [result] = await pool.execute('INSERT INTO organisations (name) VALUES (?)', [name.trim()]);
+    await audit(req.user.userId, req.user.email, 'CREATE', 'organisation', result.insertId, { name });
+    const [[row]] = await pool.execute('SELECT created_at FROM organisations WHERE id = ?', [result.insertId]);
+    res.status(201).json({ id: result.insertId, name, is_active: 1, created_at: row.created_at });
   } catch (e) {
     res.status(409).json({ error: 'Organisation name already exists.' });
   }
 });
 
 // PUT /api/admin/orgs/:id — update
-router.put('/:id', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
-  const { name, is_active } = req.body;
-  db.prepare('UPDATE organisations SET name = ?, is_active = ?, updated_at = datetime("now") WHERE id = ?')
-    .run(name, is_active ? 1 : 0, req.params.id);
-  audit(req.user.userId, req.user.email, 'UPDATE', 'organisation', req.params.id, { name, is_active });
-  res.json({ message: 'Updated.' });
+router.put('/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { name, is_active } = req.body;
+    await pool.execute(
+      'UPDATE organisations SET name = ?, is_active = ?, updated_at = NOW() WHERE id = ?',
+      [name ?? null, is_active ? 1 : 0, req.params.id]
+    );
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'organisation', req.params.id, { name, is_active });
+    res.json({ message: 'Updated.' });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // GET /api/admin/orgs/:id/sites — list sites for an org
-router.get('/:id/sites', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
-  const sites = db.prepare('SELECT * FROM sites WHERE org_id = ? ORDER BY name').all(req.params.id);
-  res.json({ sites });
+router.get('/:id/sites', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const [sites] = await pool.execute('SELECT * FROM sites WHERE org_id = ? ORDER BY name', [req.params.id]);
+    res.json({ sites });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // POST /api/admin/orgs/:id/sites — create site
-router.post('/:id/sites', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
-  const { name, country, is_primary } = req.body;
-  if (!name) return res.status(400).json({ error: 'Site name is required.' });
-  const result = db.prepare('INSERT INTO sites (org_id, name, country, is_primary) VALUES (?, ?, ?, ?)')
-    .run(req.params.id, name.trim(), country || null, is_primary ? 1 : 0);
-  audit(req.user.userId, req.user.email, 'CREATE', 'site', result.lastInsertRowid, { name, country });
-  const created_at = db.prepare('SELECT created_at FROM sites WHERE id = ?').get(result.lastInsertRowid).created_at;
-  res.status(201).json({ id: result.lastInsertRowid, name, country, is_primary, is_active: 1, created_at });
+router.post('/:id/sites', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { name, country, is_primary } = req.body;
+    if (!name) return res.status(400).json({ error: 'Site name is required.' });
+    const [result] = await pool.execute(
+      'INSERT INTO sites (org_id, name, country, is_primary) VALUES (?, ?, ?, ?)',
+      [req.params.id, name.trim(), country || null, is_primary ? 1 : 0]
+    );
+    await audit(req.user.userId, req.user.email, 'CREATE', 'site', result.insertId, { name, country });
+    const [[row]] = await pool.execute('SELECT created_at FROM sites WHERE id = ?', [result.insertId]);
+    res.status(201).json({ id: result.insertId, name, country, is_primary, is_active: 1, created_at: row.created_at });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // PUT /api/admin/sites/:id — update site
-router.put('/sites/:id', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
-  const { name, country, is_primary, is_active } = req.body;
-  db.prepare('UPDATE sites SET name = ?, country = ?, is_primary = ?, is_active = ? WHERE id = ?')
-    .run(name, country, is_primary ? 1 : 0, is_active ? 1 : 0, req.params.id);
-  audit(req.user.userId, req.user.email, 'UPDATE', 'site', req.params.id, req.body);
-  res.json({ message: 'Updated.' });
+router.put('/sites/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { name, country, is_primary, is_active } = req.body;
+    await pool.execute(
+      'UPDATE sites SET name = ?, country = ?, is_primary = ?, is_active = ? WHERE id = ?',
+      [name ?? null, country ?? null, is_primary ? 1 : 0, is_active ? 1 : 0, req.params.id]
+    );
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'site', req.params.id, req.body);
+    res.json({ message: 'Updated.' });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 module.exports = router;
