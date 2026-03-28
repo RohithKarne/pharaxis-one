@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../shared/context/AuthContext'
 import Sidebar from '../components/Sidebar'
 import Topbar from '../components/Topbar'
 

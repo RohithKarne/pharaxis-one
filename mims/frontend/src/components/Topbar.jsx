@@ -2,12 +2,12 @@
  * Topbar.jsx — Top Header Bar Component
  */
 
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../shared/context/AuthContext'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 export default function Topbar({ title, onToggleSidebar }) {
-  const { user, logout, getInitials, formatRole } = useAuth()
+  const { user, orgName, logout, getInitials, formatRole } = useAuth()
   const navigate = useNavigate()
   const [backendOnline, setBackendOnline] = useState(null)
 
@@ -61,6 +61,12 @@ export default function Topbar({ title, onToggleSidebar }) {
           </span>
         </div>
         <div className="topbar-divider"></div>
+        {orgName && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 10px', background: 'var(--primary-light, #e8f0fe)', borderRadius: 6, fontSize: 12, color: 'var(--primary, #4f46e5)', fontWeight: 600 }}>
+            <span>🏢</span>
+            <span>{orgName}</span>
+          </div>
+        )}
         <div className="topbar-profile">
           <div className="topbar-avatar">{getInitials()}</div>
           <div className="topbar-user-info">

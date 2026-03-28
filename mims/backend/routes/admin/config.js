@@ -7,7 +7,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const bcrypt = require('bcrypt');
 const userModel = require('../../models/userModel');
-const { authenticate, requireRole } = require('../../middleware/auth');
+const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { logService } = require('../../services/serviceLogger');
 
 async function audit(userId, userName, action, entity, entityId, details) {
@@ -19,28 +19,49 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
+function isSuperadmin(req) {
+  return req.user.role === 'superadmin';
+}
+
+function getScopedOrgId(req, providedOrgId = null) {
+  return isSuperadmin(req) ? (providedOrgId || null) : req.user.orgId;
+}
+
 // ─── WORKFLOW STATES ────────────────────────────────────────
-router.get('/workflow-states', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+router.get('/workflow-states', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
-    const [states] = await pool.execute('SELECT * FROM workflow_states ORDER BY name');
+    const [states] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT * FROM workflow_states ORDER BY name'
+        : 'SELECT * FROM workflow_states WHERE org_id = ? ORDER BY name',
+      isSuperadmin(req) ? [] : [req.user.orgId]
+    );
     res.json({ states });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.post('/workflow-states', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/workflow-states', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
-    const [result] = await pool.execute('INSERT INTO workflow_states (name) VALUES (?)', [name.trim()]);
+    const orgId = getScopedOrgId(req, req.body.org_id);
+    const [result] = await pool.execute('INSERT INTO workflow_states (name, org_id) VALUES (?, ?)', [name.trim(), orgId]);
     await audit(req.user.userId, req.user.email, 'CREATE', 'workflow_state', result.insertId, { name });
     const [[row]] = await pool.execute('SELECT created_at FROM workflow_states WHERE id = ?', [result.insertId]);
     res.status(201).json({ id: result.insertId, name, is_active: 1, created_at: row.created_at });
   } catch { res.status(409).json({ error: 'Workflow state already exists.' }); }
 });
 
-router.put('/workflow-states/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/workflow-states/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const { name, is_active } = req.body;
+    const [[existing]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT id FROM workflow_states WHERE id = ?'
+        : 'SELECT id FROM workflow_states WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+    );
+    if (!existing) return res.status(404).json({ error: 'Workflow state not found.' });
     await pool.execute(
       'UPDATE workflow_states SET name = ?, is_active = ? WHERE id = ?',
       [name ?? null, is_active ? 1 : 0, req.params.id]
@@ -51,27 +72,40 @@ router.put('/workflow-states/:id', authenticate, requireRole('admin', 'superadmi
 });
 
 // ─── SOURCE TYPES ────────────────────────────────────────────
-router.get('/source-types', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+router.get('/source-types', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
-    const [sources] = await pool.execute('SELECT * FROM source_types ORDER BY name');
+    const [sources] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT * FROM source_types ORDER BY name'
+        : 'SELECT * FROM source_types WHERE org_id = ? ORDER BY name',
+      isSuperadmin(req) ? [] : [req.user.orgId]
+    );
     res.json({ sources });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.post('/source-types', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/source-types', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
-    const [result] = await pool.execute('INSERT INTO source_types (name) VALUES (?)', [name.trim()]);
+    const orgId = getScopedOrgId(req, req.body.org_id);
+    const [result] = await pool.execute('INSERT INTO source_types (name, org_id) VALUES (?, ?)', [name.trim(), orgId]);
     await audit(req.user.userId, req.user.email, 'CREATE', 'source_type', result.insertId, { name });
     const [[row]] = await pool.execute('SELECT created_at FROM source_types WHERE id = ?', [result.insertId]);
     res.status(201).json({ id: result.insertId, name, is_active: 1, created_at: row.created_at });
   } catch { res.status(409).json({ error: 'Source type already exists.' }); }
 });
 
-router.put('/source-types/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/source-types/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const { name, is_active } = req.body;
+    const [[existing]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT id FROM source_types WHERE id = ?'
+        : 'SELECT id FROM source_types WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+    );
+    if (!existing) return res.status(404).json({ error: 'Source type not found.' });
     await pool.execute(
       'UPDATE source_types SET name = ?, is_active = ? WHERE id = ?',
       [name ?? null, is_active ? 1 : 0, req.params.id]
@@ -82,24 +116,31 @@ router.put('/source-types/:id', authenticate, requireRole('admin', 'superadmin')
 });
 
 // ─── PRODUCTS ─────────────────────────────────────────────────
-router.get('/products', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+router.get('/products', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
-    const [products] = await pool.execute(`
-      SELECT p.*, o.name as org_name
-      FROM products p LEFT JOIN organisations o ON p.org_id = o.id
-      ORDER BY p.trade_name
-    `);
+    const [products] = await pool.execute(
+      isSuperadmin(req)
+        ? `SELECT p.*, o.name as org_name
+           FROM products p LEFT JOIN organisations o ON p.org_id = o.id
+           ORDER BY p.trade_name`
+        : `SELECT p.*, o.name as org_name
+           FROM products p LEFT JOIN organisations o ON p.org_id = o.id
+           WHERE p.org_id = ?
+           ORDER BY p.trade_name`,
+      isSuperadmin(req) ? [] : [req.user.orgId]
+    );
     res.json({ products });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.post('/products', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/products', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
-    const { trade_name, org_id } = req.body;
+    const { trade_name } = req.body;
     if (!trade_name) return res.status(400).json({ error: 'Trade name is required.' });
+    const orgId = getScopedOrgId(req, req.body.org_id);
     const [result] = await pool.execute(
       'INSERT INTO products (trade_name, org_id) VALUES (?, ?)',
-      [trade_name.trim(), org_id || null]
+      [trade_name.trim(), orgId]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'product', result.insertId, { trade_name });
     const [[row]] = await pool.execute('SELECT created_at FROM products WHERE id = ?', [result.insertId]);
@@ -107,12 +148,20 @@ router.post('/products', authenticate, requireRole('admin', 'superadmin'), async
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.put('/products/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/products/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
-    const { trade_name, org_id, is_active } = req.body;
+    const { trade_name, is_active } = req.body;
+    const [[existing]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT id FROM products WHERE id = ?'
+        : 'SELECT id FROM products WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+    );
+    if (!existing) return res.status(404).json({ error: 'Product not found.' });
+    const orgId = getScopedOrgId(req, req.body.org_id);
     await pool.execute(
       'UPDATE products SET trade_name = ?, org_id = ?, is_active = ? WHERE id = ?',
-      [trade_name ?? null, org_id ?? null, is_active ? 1 : 0, req.params.id]
+      [trade_name ?? null, orgId, is_active ? 1 : 0, req.params.id]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'product', req.params.id, req.body);
     res.json({ message: 'Updated.' });
@@ -138,10 +187,17 @@ router.get('/audit-logs', authenticate, requireRole('admin', 'superadmin'), asyn
 });
 
 // ─── USERS (admin view) ───────────────────────────────────────
-router.get('/users', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+router.get('/users', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const [users] = await pool.execute(
-      'SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC'
+      isSuperadmin(req)
+        ? 'SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC'
+        : `SELECT DISTINCT u.id, u.name, u.email, u.role, u.is_active, u.created_at
+           FROM users u
+           INNER JOIN user_org_access uoa ON uoa.user_id = u.id
+           WHERE uoa.org_id = ? AND uoa.is_active = 1
+           ORDER BY u.created_at DESC`,
+      isSuperadmin(req) ? [] : [req.user.orgId]
     );
     res.json({ users });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
@@ -236,31 +292,39 @@ function maskAccount(a) {
 }
 
 // GET — list all accounts (passwords always null)
-router.get('/email-accounts', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+router.get('/email-accounts', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
-    const [accounts] = await pool.execute(`
-      SELECT ea.*, o.name as org_name
-      FROM email_accounts ea
-      LEFT JOIN organisations o ON ea.org_id = o.id
-      ORDER BY o.name, ea.account_name
-    `);
+    const [accounts] = await pool.execute(
+      isSuperadmin(req)
+        ? `SELECT ea.*, o.name as org_name
+           FROM email_accounts ea
+           LEFT JOIN organisations o ON ea.org_id = o.id
+           ORDER BY o.name, ea.account_name`
+        : `SELECT ea.*, o.name as org_name
+           FROM email_accounts ea
+           LEFT JOIN organisations o ON ea.org_id = o.id
+           WHERE ea.org_id = ?
+           ORDER BY o.name, ea.account_name`,
+      isSuperadmin(req) ? [] : [req.user.orgId]
+    );
     res.json({ accounts: accounts.map(maskAccount) });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // POST — create account
-router.post('/email-accounts', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/email-accounts', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const {
-      org_id, account_name, provider, direction, is_active,
+      account_name, provider, direction, is_active,
       mailbox_email, from_email, display_name, is_default_outbound,
       imap_host, imap_port, imap_encryption, imap_username, imap_password,
       smtp_host, smtp_port, smtp_encryption, smtp_username, smtp_password,
       polling_interval_min, initial_fetch_days, mailbox_folder,
       ingest_attachments, max_attachment_mb
     } = req.body;
+    const orgId = getScopedOrgId(req, req.body.org_id);
 
-    if (!org_id || !account_name || !provider || !direction)
+    if (!orgId || !account_name || !provider || !direction)
       return res.status(400).json({ error: 'org_id, account_name, provider, and direction are required.' });
     if (!['Gmail', 'Microsoft365', 'Generic'].includes(provider))
       return res.status(400).json({ error: 'Invalid provider.' });
@@ -281,7 +345,7 @@ router.post('/email-accounts', authenticate, requireRole('admin', 'superadmin'),
         ingest_attachments, max_attachment_mb
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      org_id, account_name, provider, direction,
+      orgId, account_name, provider, direction,
       (is_active === undefined || is_active === null) ? 1 : (is_active ? 1 : 0),
       mailbox_email || null, from_email || null, display_name || null,
       is_default_outbound ? 1 : 0,
@@ -297,12 +361,12 @@ router.post('/email-accounts', authenticate, requireRole('admin', 'superadmin'),
     if (is_default_outbound) {
       await pool.execute(
         `UPDATE email_accounts SET is_default_outbound = 0 WHERE org_id = ? AND id != ?`,
-        [org_id, result.insertId]
+        [orgId, result.insertId]
       );
     }
 
     await audit(req.user.userId, req.user.email, 'CREATE', 'email_account', result.insertId,
-      { account_name, org_id, provider, direction });
+      { account_name, org_id: orgId, provider, direction });
 
     const [[created]] = await pool.execute(
       'SELECT ea.*, o.name as org_name FROM email_accounts ea LEFT JOIN organisations o ON ea.org_id = o.id WHERE ea.id = ?',
@@ -313,20 +377,26 @@ router.post('/email-accounts', authenticate, requireRole('admin', 'superadmin'),
 });
 
 // PUT — update account (passwords replace-only: blank = keep existing)
-router.put('/email-accounts/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/email-accounts/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
-    const [[existing]] = await pool.execute('SELECT * FROM email_accounts WHERE id = ?', [id]);
+    const [[existing]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT * FROM email_accounts WHERE id = ?'
+        : 'SELECT * FROM email_accounts WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+    );
     if (!existing) return res.status(404).json({ error: 'Account not found.' });
 
     const {
-      org_id, account_name, provider, direction, is_active,
+      account_name, provider, direction, is_active,
       mailbox_email, from_email, display_name, is_default_outbound,
       imap_host, imap_port, imap_encryption, imap_username,
       smtp_host, smtp_port, smtp_encryption, smtp_username,
       polling_interval_min, initial_fetch_days, mailbox_folder,
       ingest_attachments, max_attachment_mb
     } = req.body;
+    const orgId = getScopedOrgId(req, req.body.org_id || existing.org_id);
 
     // Replace-only: keep existing password if blank/absent
     const imapPwd = req.body.imap_password || existing.imap_password;
@@ -348,7 +418,7 @@ router.put('/email-accounts/:id', authenticate, requireRole('admin', 'superadmin
         updated_at = NOW()
       WHERE id = ?
     `, [
-      org_id, account_name, provider, direction, is_active ? 1 : 0,
+      orgId, account_name, provider, direction, is_active ? 1 : 0,
       mailbox_email || null, from_email || null, display_name || null,
       is_default_outbound ? 1 : 0,
       imap_host || null, imap_port || null, imap_encryption || null,
@@ -364,22 +434,27 @@ router.put('/email-accounts/:id', authenticate, requireRole('admin', 'superadmin
     if (is_default_outbound) {
       await pool.execute(
         `UPDATE email_accounts SET is_default_outbound = 0 WHERE org_id = ? AND id != ?`,
-        [org_id, id]
+        [orgId, id]
       );
     }
 
     await audit(req.user.userId, req.user.email, 'UPDATE', 'email_account', Number(id),
-      { account_name, org_id, provider, direction });
+      { account_name, org_id: orgId, provider, direction });
 
     res.json({ message: 'Email account updated.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // PATCH — toggle active status
-router.patch('/email-accounts/:id/toggle', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.patch('/email-accounts/:id/toggle', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
-    const [[account]] = await pool.execute('SELECT id, is_active FROM email_accounts WHERE id = ?', [id]);
+    const [[account]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT id, is_active FROM email_accounts WHERE id = ?'
+        : 'SELECT id, is_active FROM email_accounts WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+    );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
 
     const newActive = account.is_active ? 0 : 1;
@@ -393,10 +468,15 @@ router.patch('/email-accounts/:id/toggle', authenticate, requireRole('admin', 's
 });
 
 // DELETE — remove account (credentials deleted from storage)
-router.delete('/email-accounts/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/email-accounts/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
-    const [[account]] = await pool.execute('SELECT id, account_name, org_id FROM email_accounts WHERE id = ?', [id]);
+    const [[account]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT id, account_name, org_id FROM email_accounts WHERE id = ?'
+        : 'SELECT id, account_name, org_id FROM email_accounts WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+    );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
 
     const fs = require('fs');
@@ -437,10 +517,15 @@ router.delete('/email-accounts/:id', authenticate, requireRole('admin', 'superad
 });
 
 // POST — test IMAP connection
-router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
-    const [[account]] = await pool.execute('SELECT * FROM email_accounts WHERE id = ?', [id]);
+    const [[account]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT * FROM email_accounts WHERE id = ?'
+        : 'SELECT * FROM email_accounts WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+    );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
     if (!['Inbound', 'Both'].includes(account.direction))
       return res.status(400).json({ error: 'Account is not configured for inbound.' });
@@ -501,10 +586,15 @@ router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 
 });
 
 // POST — test SMTP connection
-router.post('/email-accounts/:id/test-smtp', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/email-accounts/:id/test-smtp', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
-    const [[account]] = await pool.execute('SELECT * FROM email_accounts WHERE id = ?', [id]);
+    const [[account]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT * FROM email_accounts WHERE id = ?'
+        : 'SELECT * FROM email_accounts WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+    );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
     if (!['Outbound', 'Both'].includes(account.direction))
       return res.status(400).json({ error: 'Account is not configured for outbound.' });
@@ -548,13 +638,18 @@ router.post('/email-accounts/:id/test-smtp', authenticate, requireRole('admin', 
 });
 
 // POST — send test email
-router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const { recipient } = req.body;
     if (!recipient) return res.status(400).json({ error: 'Recipient email is required.' });
 
-    const [[account]] = await pool.execute('SELECT * FROM email_accounts WHERE id = ?', [id]);
+    const [[account]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT * FROM email_accounts WHERE id = ?'
+        : 'SELECT * FROM email_accounts WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+    );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
     if (!['Outbound', 'Both'].includes(account.direction))
       return res.status(400).json({ error: 'Account is not configured for outbound.' });
@@ -604,10 +699,15 @@ router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 
 });
 
 // POST — fetch emails now (immediate IMAP ingest, bypasses polling interval)
-router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
-    const [[account]] = await pool.execute('SELECT * FROM email_accounts WHERE id = ?', [id]);
+    const [[account]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT * FROM email_accounts WHERE id = ?'
+        : 'SELECT * FROM email_accounts WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+    );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
     if (!['Inbound', 'Both'].includes(account.direction))
       return res.status(400).json({ error: 'Account is not configured for inbound.' });

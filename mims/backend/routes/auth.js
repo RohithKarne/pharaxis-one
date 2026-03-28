@@ -1,36 +1,30 @@
-/**
- * routes/auth.js — Authentication Routes (v1.0)
- *
- * WHAT THIS FILE DOES:
- * - Defines the URL endpoints (routes) for authentication
- * - Maps each URL + HTTP method to the right controller function
- *
- * ROUTE OVERVIEW:
- *   POST /api/auth/register  → Create a new user account
- *   POST /api/auth/login     → Login and receive a JWT token
- *   GET  /api/auth/me        → Get current logged-in user (protected)
- *
- * HOW EXPRESS ROUTING WORKS:
- * When the browser sends a request to /api/auth/login, Express matches it
- * to the route below and calls authController.login to handle it.
- */
+'use strict';
 
-const express = require('express');
-const router = express.Router();
+const express        = require('express');
+const router         = express.Router();
 const authController = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 
-// Public routes (no login required)
-router.post('/register', authController.register);
-router.post('/login', authController.login);
+// Public
+router.post('/register',       authController.register);
+router.post('/login',          authController.login);
+router.post('/forgot-password/send-code', authController.sendForgotPasswordCode);
+router.post('/forgot-password/verify-code', authController.verifyForgotPasswordCode);
+router.post('/forgot-password/reset', authController.completeForgotPasswordReset);
+router.post('/2fa/send-email-code', authController.sendTwoFactorEmailCode);
+router.post('/2fa/setup/totp', authController.beginTotpSetup);
+router.post('/2fa/verify',     authController.verifyTwoFactor);
+router.post('/2fa/skip-setup', authController.skipTwoFactorSetup);
 
-// Protected route (must be logged in — sends JWT token in Authorization header)
-router.get('/me', authenticate, authController.me);
+// Protected
+router.get('/me',              authenticate, authController.me);
+router.post('/switch-org',     authenticate, authController.switchOrg);
+router.post('/reset-password', authenticate, authController.resetPassword);
+router.post('/change-password', authenticate, authController.changePassword);
 
-// POST /api/auth/logout — records logout time in login_audit (AUD-03)
+// Logout — records logout time in login_audit (AUD-03)
 router.post('/logout', authenticate, async (req, res) => {
   const pool = require('../database/db');
-  // Update the most recent login_audit record for this user with logout time
   await pool.execute(
     `UPDATE login_audit SET logout_time = NOW()
      WHERE user_id = ? AND logout_time IS NULL

@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { authenticate, requireRole } = require('../../middleware/auth');
+const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -17,16 +17,21 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-// GET /api/admin/orgs — list all
-router.get('/', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+// GET /api/admin/orgs — list all (superadmin sees all; admin sees only their org)
+router.get('/', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
-    const [orgs] = await pool.execute('SELECT * FROM organisations ORDER BY name');
+    const isSA = req.user.role === 'superadmin';
+    const [orgs] = await pool.execute(
+      isSA ? 'SELECT * FROM organisations ORDER BY name'
+           : 'SELECT * FROM organisations WHERE id = ? ORDER BY name',
+      isSA ? [] : [req.user.orgId]
+    );
     res.json({ orgs });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// POST /api/admin/orgs — create
-router.post('/', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// POST /api/admin/orgs — create (superadmin only — clients cannot self-provision)
+router.post('/', authenticate, requireRole('superadmin'), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Organisation name is required.' });
   try {
@@ -39,8 +44,8 @@ router.post('/', authenticate, requireRole('admin', 'superadmin'), async (req, r
   }
 });
 
-// PUT /api/admin/orgs/:id — update
-router.put('/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// PUT /api/admin/orgs/:id — update (superadmin only)
+router.put('/:id', authenticate, requireRole('superadmin'), async (req, res) => {
   try {
     const { name, is_active } = req.body;
     await pool.execute(
@@ -60,8 +65,8 @@ router.get('/:id/sites', authenticate, requireRole('admin', 'superadmin'), async
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// POST /api/admin/orgs/:id/sites — create site
-router.post('/:id/sites', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// POST /api/admin/orgs/:id/sites — create site (superadmin only)
+router.post('/:id/sites', authenticate, requireRole('superadmin'), async (req, res) => {
   try {
     const { name, country, is_primary } = req.body;
     if (!name) return res.status(400).json({ error: 'Site name is required.' });
@@ -75,8 +80,8 @@ router.post('/:id/sites', authenticate, requireRole('admin', 'superadmin'), asyn
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// PUT /api/admin/sites/:id — update site
-router.put('/sites/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// PUT /api/admin/sites/:id — update site (superadmin only)
+router.put('/sites/:id', authenticate, requireRole('superadmin'), async (req, res) => {
   try {
     const { name, country, is_primary, is_active } = req.body;
     await pool.execute(

@@ -39,6 +39,37 @@ app.use(express.json());
 // Parse URL-encoded form data (for HTML form submissions)
 app.use(express.urlencoded({ extended: true }));
 
+// ─── Admin Console — Extended Routes ────────────────────────────────────────
+app.use('/api/admin', require('./routes/admin/picklists'));
+app.use('/api/admin', require('./routes/admin/fieldSetup'));
+app.use('/api/admin', require('./routes/admin/securityGroups'));
+app.use('/api/admin', require('./routes/admin/contacts'));
+app.use('/api/admin', require('./routes/admin/siteConfig'));
+app.use('/api/admin', require('./routes/admin/productDictionary'));
+app.use('/api/admin', require('./routes/admin/caseNumbering'));
+app.use('/api/admin', require('./routes/admin/caseFormDefinition'));
+app.use('/api/admin', require('./routes/admin/workflowActivities'));
+app.use('/api/admin', require('./routes/admin/caseAuditTrail'));
+app.use('/api/admin', require('./routes/admin/transmissionAuditTrail'));
+
+// ─── Case Management Routes (Phase 2) ────────────────────────────────────────
+app.use('/api', require('./routes/cases'));          // F-13 + F-15
+app.use('/api', require('./routes/caseContacts'));   // F-14
+app.use('/api', require('./routes/caseMI'));         // F-16
+app.use('/api', require('./routes/caseAE'));         // F-17
+app.use('/api', require('./routes/casePC'));         // F-18
+
+// ─── Content Management Routes ───────────────────────────────────────────────
+app.use('/api/cm', require('./routes/cm/folders'));
+app.use('/api/cm', require('./routes/cm/documents'));
+app.use('/api/cm', require('./routes/cm/faqs'));
+app.use('/api/cm', require('./routes/cm/mergeReports'));
+app.use('/api/cm', require('./routes/cm/templates'));
+app.use('/api/cm', require('./routes/cm/reviews'));
+
+// Serve CM document uploads as static files
+app.use('/uploads/cm', express.static(path.join(__dirname, 'storage/cm_documents')));
+
 // ─── Serve Static Frontend Files ─────────────────────────────────────────────
 // This tells Express to serve all files in the /frontend folder
 // When the browser goes to http://localhost:3000 it gets index.html automatically
@@ -49,6 +80,20 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/inbox', require('./routes/inbox'));
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() })
+});
+
+// GET /api/users — active users list (for case owner dropdown in CaseFormPage)
+const { authenticate } = require('./middleware/auth');
+const pool = require('./database/db');
+app.get('/api/users', authenticate, async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, name, email, role FROM users WHERE is_active = 1 ORDER BY name ASC'
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Admin Console routes (admin role required)

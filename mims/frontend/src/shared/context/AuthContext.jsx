@@ -1,143 +1,140 @@
+'use strict'
 /**
- * AuthContext.jsx — Global Authentication State
- *
- * WHAT IS CONTEXT?
- * In React, if you want to share data between multiple components,
- * you use Context. Think of it as a global variable that any
- * component in the app can read.
- *
- * WHAT THIS FILE DOES:
- * - Stores the currently logged-in user (name, email, role, token)
- * - Provides login() and logout() functions any component can call
- * - Reads saved user from localStorage on app startup (so refresh = stay logged in)
+ * AuthContext.jsx — Global Authentication State (Sprint 7: Multi-Org)
+ * Stores: user, token, modules, orgId, siteId, orgName, allOrgs
+ * Provides: login(), logout(), switchOrg(), getInitials(), formatRole(), hasModuleAccess()
  */
 
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState } from 'react'
 
-// Create the context (an empty container for now)
-const AuthContext = createContext(null);
+const AuthContext = createContext(null)
 
-// AuthProvider wraps the whole app — any component inside can access auth data
 export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPrefixes = [] }) {
-  const disableFallbackKey = `${storageKeyPrefix}_disable_fallback`;
+  const KEY = storageKeyPrefix
+  const disableFallbackKey = `${KEY}_disable_fallback`
 
   function loadFromPrefix(prefix) {
-    const savedUser = localStorage.getItem(`${prefix}_user`);
-    if (!savedUser) return null;
+    const savedUser = localStorage.getItem(`${prefix}_user`)
+    if (!savedUser) return null
     return {
-      user: JSON.parse(savedUser),
-      token: localStorage.getItem(`${prefix}_token`) || null,
+      user:    JSON.parse(savedUser),
+      token:   localStorage.getItem(`${prefix}_token`) || null,
       modules: JSON.parse(localStorage.getItem(`${prefix}_modules`) || '[]'),
-      prefix
-    };
+      orgId:   localStorage.getItem(`${prefix}_org_id`) ? Number(localStorage.getItem(`${prefix}_org_id`)) : null,
+      siteId:  localStorage.getItem(`${prefix}_site_id`) ? Number(localStorage.getItem(`${prefix}_site_id`)) : null,
+      orgName:  localStorage.getItem(`${prefix}_org_name`)  || null,
+      siteName: localStorage.getItem(`${prefix}_site_name`) || null,
+      allOrgs:  JSON.parse(localStorage.getItem(`${prefix}_all_orgs`) || '[]'),
+    }
   }
 
-  // Initialize from localStorage — so user stays logged in after refresh
-  const [user, setUser] = useState(() => {
-    const primary = loadFromPrefix(storageKeyPrefix);
-    if (primary) return primary.user;
-    const disableFallback = localStorage.getItem(disableFallbackKey) === '1';
+  function initState(field) {
+    const primary = loadFromPrefix(KEY)
+    if (primary) return primary[field]
+    const disableFallback = localStorage.getItem(disableFallbackKey) === '1'
     if (!disableFallback) {
       for (const p of fallbackPrefixes) {
-        const fallback = loadFromPrefix(p);
-        if (fallback) return fallback.user;
+        const fallback = loadFromPrefix(p)
+        if (fallback) return fallback[field]
       }
     }
-    return null;
-  });
-
-  const [token, setToken] = useState(() => {
-    const primary = loadFromPrefix(storageKeyPrefix);
-    if (primary) return primary.token;
-    const disableFallback = localStorage.getItem(disableFallbackKey) === '1';
-    if (!disableFallback) {
-      for (const p of fallbackPrefixes) {
-        const fallback = loadFromPrefix(p);
-        if (fallback) return fallback.token;
-      }
-    }
-    return null;
-  });
-
-  const [modules, setModules] = useState(() => {
-    const primary = loadFromPrefix(storageKeyPrefix);
-    if (primary) return primary.modules;
-    const disableFallback = localStorage.getItem(disableFallbackKey) === '1';
-    if (!disableFallback) {
-      for (const p of fallbackPrefixes) {
-        const fallback = loadFromPrefix(p);
-        if (fallback) return fallback.modules;
-      }
-    }
-    return [];
-  });
-
-  // Called after successful login — saves user + token + allowed modules
-  function login(userData, authToken, allowedModules = []) {
-    setUser(userData);
-    setToken(authToken);
-    setModules(allowedModules);
-    localStorage.setItem(`${storageKeyPrefix}_user`, JSON.stringify(userData));
-    localStorage.setItem(`${storageKeyPrefix}_token`, authToken);
-    localStorage.setItem(`${storageKeyPrefix}_modules`, JSON.stringify(allowedModules));
-    localStorage.removeItem(disableFallbackKey);
+    return field === 'modules' || field === 'allOrgs' ? [] : null
   }
 
-  // Called on sign out — records logout in audit trail (AUD-03) then clears session
+  const [user,    setUser]    = useState(() => initState('user'))
+  const [token,   setToken]   = useState(() => initState('token'))
+  const [modules, setModules] = useState(() => initState('modules'))
+  const [orgId,   setOrgId]   = useState(() => initState('orgId'))
+  const [siteId,  setSiteId]  = useState(() => initState('siteId'))
+  const [orgName,  setOrgName]  = useState(() => initState('orgName'))
+  const [siteName, setSiteName] = useState(() => initState('siteName'))
+  const [allOrgs,       setAllOrgs]       = useState(() => initState('allOrgs'))
+  const [sessionTimeout, setSessionTimeout] = useState(() => {
+    const saved = localStorage.getItem(`${KEY}_session_timeout`)
+    return saved ? parseInt(saved) : 30
+  })
+
+  function login(userData, authToken, allowedModules = [], orgData = {}) {
+    const { orgId: oid = null, siteId: sid = null, orgName: oname = null, siteName: sname = null, allOrgs: all = [], sessionTimeout: timeout = 30 } = orgData
+    setUser(userData)
+    setToken(authToken)
+    setModules(allowedModules)
+    setOrgId(oid)
+    setSiteId(sid)
+    setOrgName(oname)
+    setSiteName(sname)
+    setAllOrgs(all)
+    setSessionTimeout(timeout)
+    localStorage.setItem(`${KEY}_user`,            JSON.stringify(userData))
+    localStorage.setItem(`${KEY}_token`,           authToken)
+    localStorage.setItem(`${KEY}_modules`,         JSON.stringify(allowedModules))
+    localStorage.setItem(`${KEY}_org_id`,          oid   ?? '')
+    localStorage.setItem(`${KEY}_site_id`,         sid   ?? '')
+    localStorage.setItem(`${KEY}_org_name`,        oname ?? '')
+    localStorage.setItem(`${KEY}_site_name`,       sname ?? '')
+    localStorage.setItem(`${KEY}_all_orgs`,        JSON.stringify(all))
+    localStorage.setItem(`${KEY}_session_timeout`, String(timeout))
+    localStorage.removeItem(disableFallbackKey)
+  }
+
   async function logout() {
     try {
-      const savedToken = localStorage.getItem(`${storageKeyPrefix}_token`);
+      const savedToken = localStorage.getItem(`${KEY}_token`)
       if (savedToken) {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${savedToken}` }
-        });
+        await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${savedToken}` } })
       }
-    } catch { /* silent — logout proceeds even if API fails */ }
-    setUser(null);
-    setToken(null);
-    setModules([]);
-    localStorage.removeItem(`${storageKeyPrefix}_user`);
-    localStorage.removeItem(`${storageKeyPrefix}_token`);
-    localStorage.removeItem(`${storageKeyPrefix}_modules`);
-    if (fallbackPrefixes.length > 0) {
-      localStorage.setItem(disableFallbackKey, '1');
-    }
+    } catch { /* silent */ }
+    setUser(null); setToken(null); setModules([]); setOrgId(null); setSiteId(null); setOrgName(null); setSiteName(null); setAllOrgs([]); setSessionTimeout(30)
+    ;[`${KEY}_user`,`${KEY}_token`,`${KEY}_modules`,`${KEY}_org_id`,`${KEY}_site_id`,`${KEY}_org_name`,`${KEY}_site_name`,`${KEY}_all_orgs`,`${KEY}_session_timeout`]
+      .forEach(k => localStorage.removeItem(k))
+    if (fallbackPrefixes.length > 0) localStorage.setItem(disableFallbackKey, '1')
   }
 
-  // Helper: get initials from name (e.g. "John Smith" → "JS")
+  // Switch active org — calls API, stores new token + org info, reloads app
+  async function switchOrg(newOrgId) {
+    const savedToken = localStorage.getItem(`${KEY}_token`)
+    const res  = await fetch('/api/auth/switch-org', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${savedToken}` },
+      body: JSON.stringify({ orgId: newOrgId })
+    })
+    if (!res.ok) return
+    const data = await res.json()
+    localStorage.setItem(`${KEY}_token`,           data.token)
+    localStorage.setItem(`${KEY}_org_id`,          data.orgId   ?? '')
+    localStorage.setItem(`${KEY}_site_id`,         data.siteId  ?? '')
+    localStorage.setItem(`${KEY}_org_name`,        data.orgName ?? '')
+    localStorage.setItem(`${KEY}_session_timeout`, String(data.sessionTimeout ?? 30))
+    window.location.reload()
+  }
+
   function getInitials() {
-    if (!user?.name) return '?';
-    return user.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    if (!user?.name) return '?'
+    return user.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
   }
 
-  // Helper: format role for display
   function formatRole(role) {
     const labels = {
-      superadmin: 'Super Administrator',
-      admin: 'Administrator',
-      agent: 'MI Agent',
-      reviewer: 'Reviewer',
-      content_manager: 'Content Manager'
-    };
-    return labels[role] || role;
+      superadmin: 'Super Administrator', admin: 'Administrator',
+      agent: 'MI Agent', reviewer: 'Reviewer', content_manager: 'Content Manager'
+    }
+    return labels[role] || role
   }
 
-  // Helper: check if user has access to a given module key
   function hasModuleAccess(module) {
-    if (!user) return false;
-    if (user.role === 'superadmin') return true;
-    return modules.includes(module);
+    if (!user) return false
+    if (user.role === 'superadmin') return true
+    return modules.includes(module)
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, modules, login, logout, getInitials, formatRole, hasModuleAccess }}>
+    <AuthContext.Provider value={{
+      user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout,
+      login, logout, switchOrg, getInitials, formatRole, hasModuleAccess
+    }}>
       {children}
     </AuthContext.Provider>
-  );
+  )
 }
 
-// Custom hook — any component calls useAuth() to get user/login/logout
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export function useAuth() { return useContext(AuthContext) }

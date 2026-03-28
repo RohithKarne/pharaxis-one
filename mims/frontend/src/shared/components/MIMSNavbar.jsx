@@ -8,6 +8,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+const CASE_MGMT_ROUTES  = { 'My Cases': '/cases?tab=my', 'Unassigned Cases': '/cases?tab=unassigned', 'Deleted Cases': '/cases?tab=deleted' }
 const CASE_MGMT_ITEMS   = ['My Cases', 'Unassigned Cases', 'Deleted Cases']
 const UTILITIES_ITEMS   = ['Response Log', 'CDR Log', 'Schedule CDR', 'Case Audit Trail', 'Transmission Audit Trail', 'Non Relevant Emails']
 
@@ -73,8 +74,12 @@ export default function MIMSNavbar() {
         {caseMgmtOpen && (
           <div className="mims-nav-dropdown">
             {CASE_MGMT_ITEMS.map(item => (
-              <div key={item} className="mims-nav-dropdown-item coming-soon">
-                {item} <span className="mims-coming-tag">Soon</span>
+              <div
+                key={item}
+                className="mims-nav-dropdown-item"
+                onClick={() => { setCaseMgmtOpen(false); navigate(CASE_MGMT_ROUTES[item]) }}
+              >
+                {item}
               </div>
             ))}
           </div>
@@ -118,7 +123,7 @@ export default function MIMSNavbar() {
       <div style={{ flex: 1 }} />
 
       {/* + New Case */}
-      <button className="mims-new-case-btn" disabled title="Coming soon — Case Management sprint">
+      <button className="mims-new-case-btn" onClick={() => navigate('/cases')}>
         + New Case
       </button>
     </nav>

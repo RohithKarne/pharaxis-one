@@ -3,6 +3,67 @@
 
 ---
 
+## Sprint 7 — Team SOP Pack (2026-03-27)
+> Requested by Rohith after Sprint 7 live testing escalation. Purpose: formalize team communication, verification, and review-readiness rules.
+
+### Scope
+- Create a single SOP reference for Dev, QA, Product, and Project Management.
+- Convert the existing protocol rules into explicit operating steps.
+- Add mandatory pre-review checks to prevent repeat of the Sprint 7 release-readiness failure.
+
+### Implementation Tasks
+- [x] Draft SOP for feature lifecycle and gate approvals.
+- [x] Draft SOP for live team communication and role ownership.
+- [x] Draft SOP for engineering verification before Gate 2 and product review.
+- [x] Draft SOP for QA planning, execution, and evidence.
+- [x] Draft SOP for product walkthrough readiness and escalation handling.
+
+### Review / Evidence
+- [x] SOP document created in repo and aligned with current protocols.
+- [x] Check content against working agreement, dev standards, QA standards, and dev communication protocol.
+
+---
+
+## Sprint 7 — Dedicated Team Operating SOP (2026-03-27)
+> Requested by Rohith. Purpose: create a team-centered SOP covering structure, protocols, approvals, live communication, and accountability across all teams.
+
+### Scope
+- Create a dedicated team operations SOP, not only an execution checklist.
+- Cover team structure, reporting lines, mandatory protocols, approvals, communication, escalation, and accountability.
+- Keep this as the main team reference for daily operating discipline.
+
+### Implementation Tasks
+- [x] Review existing SOP and identify team-coverage gaps.
+- [x] Draft dedicated team operating SOP.
+- [x] Include team structure, role responsibilities, and reporting lines.
+- [x] Include approvals, live communication rules, escalation flow, and accountability rules.
+
+### Review / Evidence
+- [x] Dedicated team SOP added to repo.
+- [x] Content checked against active protocol files and current team structure.
+
+---
+
+## Sprint 7 — MIMS Org Isolation Fix (2026-03-27)
+> Requested by Rohith after org switching showed shared data across Admin Console and Content Management.
+
+### Scope
+- Investigate active org switching and identify routes returning cross-org data.
+- Enforce organization-level data isolation across affected Admin Console and Content Management APIs.
+- Verify that switched org context returns only that org's data for non-superadmin users.
+
+### Implementation Tasks
+- [x] Trace org switch state and affected API calls.
+- [x] Patch admin routes that ignore active org scoping.
+- [x] Patch content management routes that ignore active org scoping.
+- [x] Run targeted verification for switched-org data visibility.
+
+### Review / Evidence
+- [x] Root cause documented from route analysis.
+- [x] Verification completed for affected org-scoped endpoints.
+
+---
+
 ## Process Explorer UI Tweaks — Plan (2026-03-21)
 > Awaiting Rohith sign-off before implementation.
 

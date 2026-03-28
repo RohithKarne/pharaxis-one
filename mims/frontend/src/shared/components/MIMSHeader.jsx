@@ -8,19 +8,26 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function MIMSHeader({ onBellClick }) {
-  const { user, logout, getInitials, hasModuleAccess } = useAuth()
+  const { user, token, orgName, siteName, allOrgs, switchOrg, logout, getInitials, hasModuleAccess } = useAuth()
   const navigate = useNavigate()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [userOpen, setUserOpen] = useState(false)
+  const [userOpen,     setUserOpen]     = useState(false)
+  const [orgOpen,      setOrgOpen]      = useState(false)
+  const [passwordOpen, setPasswordOpen] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [passwordMsg, setPasswordMsg] = useState({ type: '', text: '' })
+  const [savingPassword, setSavingPassword] = useState(false)
   const settingsRef = useRef(null)
-  const userRef = useRef(null)
+  const userRef     = useRef(null)
+  const orgRef      = useRef(null)
 
   // Close dropdowns on outside click
   useEffect(() => {
     function handler(e) {
       if (settingsRef.current && !settingsRef.current.contains(e.target)) setSettingsOpen(false)
-      if (userRef.current && !userRef.current.contains(e.target)) setUserOpen(false)
+      if (userRef.current    && !userRef.current.contains(e.target))    setUserOpen(false)
+      if (orgRef.current     && !orgRef.current.contains(e.target))     setOrgOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -33,6 +40,45 @@ export default function MIMSHeader({ onBellClick }) {
   function handleLogout() {
     logout()
     navigate('/login')
+  }
+
+  async function handleChangePassword() {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      return setPasswordMsg({ type: 'error', text: 'New password and confirm password must match.' })
+    }
+    if ((passwordForm.newPassword || '').length < 8) {
+      return setPasswordMsg({ type: 'error', text: 'Password must be at least 8 characters.' })
+    }
+
+    setSavingPassword(true)
+    setPasswordMsg({ type: '', text: '' })
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        return setPasswordMsg({ type: 'error', text: data.error || 'Could not change password.' })
+      }
+      setPasswordMsg({ type: 'success', text: data.message || 'Password updated successfully.' })
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      setTimeout(() => {
+        setPasswordOpen(false)
+        setPasswordMsg({ type: '', text: '' })
+      }, 1200)
+    } catch {
+      setPasswordMsg({ type: 'error', text: 'Cannot connect to server.' })
+    } finally {
+      setSavingPassword(false)
+    }
   }
 
   const canAccessAdmin   = hasModuleAccess('admin_console')
@@ -66,7 +112,11 @@ export default function MIMSHeader({ onBellClick }) {
               <div className="mims-dropdown-item" onClick={() => { setUserOpen(false) }}>
                 👤 My Profile
               </div>
-              <div className="mims-dropdown-item" onClick={() => { setUserOpen(false) }}>
+              <div className="mims-dropdown-item" onClick={() => {
+                setUserOpen(false)
+                setPasswordOpen(true)
+                setPasswordMsg({ type: '', text: '' })
+              }}>
                 🔑 Change Password
               </div>
               <div className="mims-dropdown-divider" />
@@ -79,16 +129,36 @@ export default function MIMSHeader({ onBellClick }) {
 
         <div className="mims-header-divider" />
 
-        {/* Org */}
-        <div className="mims-header-meta">
-          <span className="mims-meta-label">Organization</span>
-          <span className="mims-meta-value">{user?.org_name || 'MIMS'}</span>
+        {/* Org — clickable switcher if user has multiple orgs */}
+        <div className="mims-header-meta" ref={orgRef}
+          style={{ cursor: allOrgs.length > 1 ? 'pointer' : 'default', position: 'relative', userSelect: 'none' }}
+          onClick={() => allOrgs.length > 1 && setOrgOpen(o => !o)}
+        >
+          <span className="mims-meta-label">
+            Organization {allOrgs.length > 1 && <span style={{ fontSize: 10 }}>▾</span>}
+          </span>
+          <span className="mims-meta-value" style={{ color: allOrgs.length > 1 ? 'var(--primary, #4f46e5)' : undefined }}>
+            {orgName || 'MIMS'}
+          </span>
+          {orgOpen && allOrgs.length > 1 && (
+            <div className="mims-dropdown" style={{ minWidth: 180, top: '100%', left: 0 }}>
+              {allOrgs.map(o => (
+                <div key={o.orgId} className="mims-dropdown-item"
+                  style={{ fontWeight: o.orgName === orgName ? 700 : 400 }}
+                  onClick={() => { setOrgOpen(false); if (o.orgName !== orgName) switchOrg(o.orgId) }}
+                >
+                  {o.orgName === orgName && <span style={{ marginRight: 6 }}>✓</span>}
+                  {o.orgName}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Primary Site */}
         <div className="mims-header-meta">
           <span className="mims-meta-label">Primary Site</span>
-          <span className="mims-meta-value">{user?.site_name || 'Global'}</span>
+          <span className="mims-meta-value">{siteName || 'Global'}</span>
         </div>
 
         <div className="mims-header-divider" />
@@ -125,6 +195,72 @@ export default function MIMSHeader({ onBellClick }) {
           )}
         </div>
       </div>
+
+      {passwordOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 24
+        }}>
+          <div style={{
+            width: '100%', maxWidth: 420, background: '#fff', borderRadius: 12,
+            border: '1px solid #ddd', padding: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.15)'
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Change Password</div>
+            <div style={{ fontSize: 12, color: '#666', marginBottom: 16 }}>
+              Update your MIMS password from inside the application.
+            </div>
+
+            {passwordMsg.text && (
+              <div className={`alert alert-${passwordMsg.type === 'success' ? 'success' : 'error'}`} style={{ marginBottom: 12 }}>
+                {passwordMsg.text}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label>Current Password</label>
+              <input
+                className="form-control"
+                type="password"
+                value={passwordForm.currentPassword}
+                onChange={e => setPasswordForm(f => ({ ...f, currentPassword: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
+              <label>New Password</label>
+              <input
+                className="form-control"
+                type="password"
+                minLength={8}
+                value={passwordForm.newPassword}
+                onChange={e => setPasswordForm(f => ({ ...f, newPassword: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
+              <label>Confirm Password</label>
+              <input
+                className="form-control"
+                type="password"
+                minLength={8}
+                value={passwordForm.confirmPassword}
+                onChange={e => setPasswordForm(f => ({ ...f, confirmPassword: e.target.value }))}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button className="btn btn-primary" type="button" onClick={handleChangePassword} disabled={savingPassword}>
+                {savingPassword ? 'Updating...' : 'Update Password'}
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={() => {
+                setPasswordOpen(false)
+                setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+                setPasswordMsg({ type: '', text: '' })
+              }} disabled={savingPassword}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   )
 }

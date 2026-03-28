@@ -18,6 +18,8 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import InboxPage from './pages/InboxPage'
 import AdminConsolePage from './pages/AdminConsolePage'
+import CasesPage from './modules/cases/pages/CasesPage'
+import CaseFormPage from './modules/cases/pages/CaseFormPage'
 
 export default function App() {
   return (
@@ -27,6 +29,8 @@ export default function App() {
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       <Route path="/inbox" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminConsolePage /></ProtectedRoute>} />
+      <Route path="/cases" element={<ProtectedRoute><CasesPage /></ProtectedRoute>} />
+      <Route path="/cases/:id" element={<ProtectedRoute><CaseFormPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )

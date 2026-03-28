@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../shared/context/AuthContext'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -62,7 +62,21 @@ export default function LoginPage() {
 
       if (!res.ok) return showAlert(data.error || 'Login failed.')
 
-      login(data.user, data.token)
+      // No org assigned — block access
+      if (data.noOrgAccess) return navigate('/no-access')
+
+      // First login — mandatory password reset
+      if (data.passwordResetRequired) {
+        login(data.user, data.token, [], {})
+        return navigate('/reset-password')
+      }
+
+      login(
+        data.user,
+        data.token,
+        data.modules || [],
+        { orgId: data.orgId, siteId: data.siteId, orgName: data.orgName, allOrgs: data.allOrgs || [] }
+      )
       navigate('/dashboard')
     } catch {
       showAlert('Cannot connect to server.')

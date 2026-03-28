@@ -4,14 +4,13 @@
  * :section → AdminConsolePage (section detail with back button)
  */
 
-import { Routes, Route } from 'react-router-dom'
-import AdminConsoleOverview from './pages/AdminConsoleOverview'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import AdminConsolePage from './pages/AdminConsolePage'
 
 export default function AdminConsoleRouter() {
   return (
     <Routes>
-      <Route index element={<AdminConsoleOverview />} />
+      <Route index element={<Navigate to="sites-setup" replace />} />
       <Route path=":section" element={<AdminConsolePage />} />
     </Routes>
   )
