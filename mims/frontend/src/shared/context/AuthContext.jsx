@@ -2,7 +2,7 @@
 /**
  * AuthContext.jsx — Global Authentication State (Sprint 7: Multi-Org)
  * Stores: user, token, modules, orgId, siteId, orgName, allOrgs
- * Provides: login(), logout(), switchOrg(), getInitials(), formatRole(), hasModuleAccess()
+ * Provides: login(), logout(), switchOrg(), refreshOrgAccess(), getInitials(), formatRole(), hasModuleAccess()
  */
 
 import { createContext, useContext, useState } from 'react'
@@ -104,7 +104,48 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     localStorage.setItem(`${KEY}_org_id`,          data.orgId   ?? '')
     localStorage.setItem(`${KEY}_site_id`,         data.siteId  ?? '')
     localStorage.setItem(`${KEY}_org_name`,        data.orgName ?? '')
+    localStorage.setItem(`${KEY}_site_name`,       data.siteName ?? '')
+    localStorage.setItem(`${KEY}_all_orgs`,        JSON.stringify(data.allOrgs || []))
     localStorage.setItem(`${KEY}_session_timeout`, String(data.sessionTimeout ?? 30))
+    window.location.reload()
+  }
+
+  async function refreshOrgAccess() {
+    const savedToken = localStorage.getItem(`${KEY}_token`)
+    if (!savedToken || user?.role === 'superadmin') return
+
+    const res = await fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${savedToken}` },
+    })
+    if (!res.ok) return
+    const data = await res.json()
+    const nextOrgs = Array.isArray(data.allOrgs) ? data.allOrgs : []
+    setAllOrgs(nextOrgs)
+    localStorage.setItem(`${KEY}_all_orgs`, JSON.stringify(nextOrgs))
+
+    if (data.currentOrgActive) return
+    if (!nextOrgs.length) return
+
+    const fallbackOrgId = nextOrgs[0].orgId
+    if (!fallbackOrgId) return
+
+    const switchRes = await fetch('/api/auth/switch-org', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${savedToken}`,
+      },
+      body: JSON.stringify({ orgId: fallbackOrgId })
+    })
+    if (!switchRes.ok) return
+    const switched = await switchRes.json()
+    localStorage.setItem(`${KEY}_token`,           switched.token)
+    localStorage.setItem(`${KEY}_org_id`,          switched.orgId   ?? '')
+    localStorage.setItem(`${KEY}_site_id`,         switched.siteId  ?? '')
+    localStorage.setItem(`${KEY}_org_name`,        switched.orgName ?? '')
+    localStorage.setItem(`${KEY}_site_name`,       switched.siteName ?? '')
+    localStorage.setItem(`${KEY}_all_orgs`,        JSON.stringify(switched.allOrgs || []))
+    localStorage.setItem(`${KEY}_session_timeout`, String(switched.sessionTimeout ?? 30))
     window.location.reload()
   }
 
@@ -130,7 +171,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   return (
     <AuthContext.Provider value={{
       user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout,
-      login, logout, switchOrg, getInitials, formatRole, hasModuleAccess
+      login, logout, switchOrg, refreshOrgAccess, getInitials, formatRole, hasModuleAccess
     }}>
       {children}
     </AuthContext.Provider>

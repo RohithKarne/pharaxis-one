@@ -21,16 +21,23 @@ async function audit(userId, userName, action, entity, entityId, details) {
 }
 
 // GET /api/inbox — returns persisted inquiries from DB (real emails only)
-router.get('/', authenticate, async (_req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
+    const params = [];
+    let orgClause = '';
+    if (req.user.role !== 'superadmin') {
+      orgClause = 'WHERE org_id = ?';
+      params.push(req.user.orgId);
+    }
     const [rows] = await pool.execute(`
       SELECT id, sender, recipient, subject, body, received_at, status,
              is_locked, locked_by, color, attachments_count, source_tag, is_read,
              assigned_to, priority, due_date
       FROM inquiries
+      ${orgClause}
       ORDER BY received_at DESC, created_at DESC
       LIMIT 500
-    `);
+    `, params);
 
     const inquiries = rows.map(r => ({
       id: r.id,
@@ -56,11 +63,23 @@ router.get('/', authenticate, async (_req, res) => {
 });
 
 // GET /api/inbox/users — list active users for assign dropdown (F1)
-router.get('/users', authenticate, async (_req, res) => {
+router.get('/users', authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT id, name, email, role FROM users WHERE is_active = 1 ORDER BY name ASC`
-    );
+    let rows;
+    if (req.user.role === 'superadmin') {
+      [rows] = await pool.execute(
+        `SELECT id, name, email, role FROM users WHERE is_active = 1 ORDER BY name ASC`
+      );
+    } else {
+      [rows] = await pool.execute(
+        `SELECT DISTINCT u.id, u.name, u.email, u.role
+         FROM users u
+         INNER JOIN user_org_access uoa ON uoa.user_id = u.id
+         WHERE u.is_active = 1 AND uoa.org_id = ? AND uoa.is_active = 1
+         ORDER BY u.name ASC`,
+        [req.user.orgId]
+      );
+    }
     res.json({ users: rows });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });

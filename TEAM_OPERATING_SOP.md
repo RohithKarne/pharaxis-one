@@ -58,14 +58,14 @@ If any older repo document conflicts with this SOP, the latest active protocol a
 ```text
 Saad (CEO)
 ├── Rohith (CPO)
-│   ├── Vanaja (Assoc. Director, Product Mgmt)
-│   │   └── Vinay (Principal BA)
-│   └── Bala (Director, Project Mgmt)
+│   ├── Vanaja (Director, Product Management)
+│   │   └── Vinay (Product Owner)
+│   └── Bala (Director, Project Management)
 └── Rajeev (CTO)
-    └── Varun (Director, Dev + QA + Architecture)
-        ├── Bhavya (Principal Software Engineer)
-        ├── Vivek (Senior Software Engineer)
-        ├── Karthik (QA Lead)
+    └── Varun (Senior Director, Engineering)
+        ├── Bhavya (Senior Architect)
+        ├── Vivek (Principal Software Engineer)
+        ├── Karthik (QA Manager)
         └── Shivani (Senior Test Engineer)
 ```
 
@@ -91,18 +91,18 @@ Saad (CEO)
 - Rajeev: architecture oversight, engineering accountability, technology leadership awareness
 
 ### Product and Delivery
-- Vanaja: product strategy, feature definition, prioritization, requirement quality
-- Vinay: user stories, acceptance criteria, edge cases, business rules, requirement detail
-- Bala: project management, process enforcement, milestone communication, blocker escalation, approval coordination
+- Vanaja (Director, Product Management): product strategy, feature definition, prioritization, requirement quality
+- Vinay (Product Owner): user stories, acceptance criteria, edge cases, business rules, requirement detail, sprint scope ownership
+- Bala (Director, Project Management): project management, process enforcement, milestone communication, blocker escalation, approval coordination
 
 ### Engineering
-- Varun: task assignment, technical coordination, code review, readiness sign-off before QA
-- Bhavya: technical analysis, design decisions, root cause analysis, engineering quality input
-- Vivek: implementation execution, file-level changes, fix confirmation
+- Varun (Senior Director, Engineering): task assignment, technical coordination, code review, readiness sign-off before QA, engineering leadership
+- Bhavya (Senior Architect): architecture decisions, technical analysis, root cause analysis, system design, engineering quality
+- Vivek (Principal Software Engineer): implementation ownership, file-level changes, design input alongside Bhavya, fix confirmation
 
 ### QA
-- Karthik: test strategy, test planning, QA coverage ownership, release-readiness validation
-- Shivani: test execution, defect capture, evidence collection, verification support
+- Karthik (QA Manager): test strategy, test planning, QA coverage ownership, release-readiness validation, QA process management
+- Shivani (Senior Test Engineer): test execution, defect capture, evidence collection, verification support
 
 ---
 

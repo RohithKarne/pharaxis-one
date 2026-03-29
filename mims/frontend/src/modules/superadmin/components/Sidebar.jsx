@@ -1,10 +1,12 @@
 import ThemeSwitcher from '../../../shared/components/ThemeSwitcher'
 
 const NAV_ITEMS = [
+  { key: 'dashboard',     label: 'Dashboard' },
   { key: 'organizations', label: 'Organizations' },
   { key: '2fa-config',    label: '2FA Configuration' },
   { key: 'users',         label: 'Users' },
-  { key: 'module-access', label: 'Module Access' },
+  { key: 'alerts',        label: 'Alerts' },
+  { key: 'notifications', label: 'Notifications' },
   { key: 'audit',         label: 'Audit Trail' },
   { key: 'login-audit',   label: 'Login Audit' },
 ]

@@ -14,6 +14,17 @@ const router  = express.Router();
 const pool    = require('../database/db');
 const { authenticate, requireRole, requireOrg } = require('../middleware/auth');
 
+// ─── ORG ISOLATION HELPER ────────────────────────────────────────────────────
+
+// Verify a case belongs to the requesting user's org. Returns the case row or null.
+async function verifyCaseOrg(caseId, req) {
+  const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
+  if (!c) return null;
+  if (req.user.role === 'superadmin') return c;
+  if (Number(c.org_id) !== Number(req.user.orgId)) return null;
+  return c;
+}
+
 // ─── LIST CASES ──────────────────────────────────────────────────────────────
 
 // GET /api/cases — list cases with filters
@@ -61,15 +72,21 @@ router.get('/cases/my', authenticate, async (req, res) => {
   try {
     const limit  = parseInt(req.query.limit  || 50, 10);
     const offset = parseInt(req.query.offset || 0,  10);
+    const params = [req.user.userId];
+    let orgClause = '';
+    if (req.user.role !== 'superadmin') {
+      orgClause = ' AND c.org_id = ?';
+      params.push(req.user.orgId);
+    }
     const [rows] = await pool.execute(
       `SELECT c.*, o.name AS org_name, s.name AS site_name, ws.name AS status_name
        FROM cases c
        LEFT JOIN organisations   o  ON c.org_id    = o.id
        LEFT JOIN sites           s  ON c.site_id   = s.id
        LEFT JOIN workflow_states ws ON c.status_id = ws.id
-       WHERE c.case_owner_id = ? AND c.is_deleted = 0
+       WHERE c.case_owner_id = ? AND c.is_deleted = 0${orgClause}
        ORDER BY c.updated_at DESC LIMIT ${limit} OFFSET ${offset}`,
-      [req.user.userId]
+      params
     );
     res.json(rows);
   } catch (err) {
@@ -83,15 +100,21 @@ router.get('/cases/unassigned', authenticate, async (req, res) => {
   try {
     const limit  = parseInt(req.query.limit  || 50, 10);
     const offset = parseInt(req.query.offset || 0,  10);
+    const params = [];
+    let orgClause = '';
+    if (req.user.role !== 'superadmin') {
+      orgClause = ' AND c.org_id = ?';
+      params.push(req.user.orgId);
+    }
     const [rows] = await pool.execute(
       `SELECT c.*, o.name AS org_name, s.name AS site_name, ws.name AS status_name
        FROM cases c
        LEFT JOIN organisations   o  ON c.org_id    = o.id
        LEFT JOIN sites           s  ON c.site_id   = s.id
        LEFT JOIN workflow_states ws ON c.status_id = ws.id
-       WHERE c.case_owner_id IS NULL AND c.is_deleted = 0
+       WHERE c.case_owner_id IS NULL AND c.is_deleted = 0${orgClause}
        ORDER BY c.created_at DESC LIMIT ${limit} OFFSET ${offset}`,
-      []
+      params
     );
     res.json(rows);
   } catch (err) {
@@ -118,6 +141,9 @@ router.get('/cases/:id', authenticate, async (req, res) => {
       [req.params.id]
     );
     if (!c) return res.status(404).json({ error: 'Case not found' });
+    if (req.user.role !== 'superadmin' && Number(c.org_id) !== Number(req.user.orgId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     res.json(c);
   } catch (err) {
     console.error('GET /cases/:id error:', err);
@@ -131,8 +157,8 @@ router.get('/cases/:id', authenticate, async (req, res) => {
 router.post('/cases', authenticate, requireOrg, async (req, res) => {
   try {
     const { site_id, case_type, intake_channel = 'manual', date_received } = req.body;
-    // org_id is always sourced from JWT — clients cannot spoof a different org
-    const org_id = req.user.orgId || req.body.org_id;
+    // org_id is always sourced from JWT — never from request body
+    const org_id = req.user.orgId;
     if (!org_id || !site_id || !case_type) {
       return res.status(400).json({ error: 'org_id, site_id, case_type are required' });
     }
@@ -174,6 +200,11 @@ router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
     if (!c) {
       await conn.rollback();
       return res.status(404).json({ error: 'Case not found' });
+    }
+    // Org isolation check
+    if (req.user.role !== 'superadmin' && Number(c.org_id) !== Number(req.user.orgId)) {
+      await conn.rollback();
+      return res.status(403).json({ error: 'Access denied' });
     }
     // Already numbered — return idempotently
     if (c.case_number) {
@@ -233,6 +264,9 @@ router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
 // PUT /api/cases/:id — update case info fields (also handles auto-save)
 router.put('/cases/:id', authenticate, async (req, res) => {
   try {
+    const owned = await verifyCaseOrg(req.params.id, req);
+    if (!owned) return res.status(403).json({ error: 'Access denied' });
+
     const {
       status_id, case_owner_id, priority, date_received,
       description, internal_notes, intake_channel
@@ -282,6 +316,9 @@ router.put('/cases/:id', authenticate, async (req, res) => {
 // DELETE /api/cases/:id — soft delete (admin/superadmin only)
 router.delete('/cases/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
+    const owned = await verifyCaseOrg(req.params.id, req);
+    if (!owned) return res.status(403).json({ error: 'Access denied' });
+
     await pool.execute('UPDATE cases SET is_deleted = 1 WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {

@@ -13,6 +13,7 @@
  */
 
 const pool = require('../database/db')
+const { emitSuperadminAlert } = require('./alertService')
 
 async function logService({ source, service_type, description, status = 'success', details = null }) {
   try {
@@ -21,6 +22,19 @@ async function logService({ source, service_type, description, status = 'success
       `INSERT INTO service_logs (source, service_type, description, details, status) VALUES (?, ?, ?, ?, ?)`,
       [source, service_type, description, detailsJson, status]
     )
+    if (status === 'failed') {
+      const normalizedSource = String(source || '').toLowerCase()
+      const eventType = normalizedSource.includes('mail')
+        ? 'mailbox_failure'
+        : 'service_error_threshold'
+      await emitSuperadminAlert(eventType, {
+        severity: 'high',
+        title: eventType === 'mailbox_failure' ? 'Mailbox operation failed' : 'Service error threshold breached',
+        message: description || `${source || 'Service'} reported a failure.`,
+        metadata: { source, service_type, description, details },
+        linkUrl: '/superadmin',
+      })
+    }
   } catch (err) {
     console.warn('[SERVICE_LOG] Failed to write log entry:', err?.message)
   }

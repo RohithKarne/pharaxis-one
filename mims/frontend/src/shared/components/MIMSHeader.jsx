@@ -8,9 +8,10 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function MIMSHeader({ onBellClick }) {
-  const { user, token, orgName, siteName, allOrgs, switchOrg, logout, getInitials, hasModuleAccess } = useAuth()
+  const { user, token, orgName, orgId, siteName, allOrgs, switchOrg, refreshOrgAccess, logout, getInitials, hasModuleAccess } = useAuth()
   const navigate = useNavigate()
 
+  const [orgLogoUrl, setOrgLogoUrl] = useState(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [userOpen,     setUserOpen]     = useState(false)
   const [orgOpen,      setOrgOpen]      = useState(false)
@@ -32,6 +33,18 @@ export default function MIMSHeader({ onBellClick }) {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  useEffect(() => {
+    refreshOrgAccess()
+  }, [refreshOrgAccess])
+
+  useEffect(() => {
+    if (!token) return
+    fetch('/api/auth/org-logo', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.logo_url) setOrgLogoUrl(data.logo_url) })
+      .catch(() => {})
+  }, [orgId, token])
 
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
@@ -88,12 +101,22 @@ export default function MIMSHeader({ onBellClick }) {
     <header className="mims-header">
       {/* Logo */}
       <div className="mims-header-logo">
-        <div className="mims-logo-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L3 7v10l9 5 9-5V7L12 2z" fill="#e8890c" stroke="#e8890c" strokeWidth="1"/>
-          </svg>
-        </div>
-        <span className="mims-logo-text">MIMS</span>
+        {orgLogoUrl ? (
+          <img
+            src={orgLogoUrl}
+            alt={orgName || 'Organisation logo'}
+            style={{ height: 32, maxWidth: 120, objectFit: 'contain', borderRadius: 4 }}
+          />
+        ) : (
+          <>
+            <div className="mims-logo-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L3 7v10l9 5 9-5V7L12 2z" fill="#e8890c" stroke="#e8890c" strokeWidth="1"/>
+              </svg>
+            </div>
+            <span className="mims-logo-text">MIMS</span>
+          </>
+        )}
       </div>
 
       {/* Date */}
@@ -137,7 +160,7 @@ export default function MIMSHeader({ onBellClick }) {
           <span className="mims-meta-label">
             Organization {allOrgs.length > 1 && <span style={{ fontSize: 10 }}>▾</span>}
           </span>
-          <span className="mims-meta-value" style={{ color: allOrgs.length > 1 ? 'var(--primary, #4f46e5)' : undefined }}>
+          <span className="mims-meta-value">
             {orgName || 'MIMS'}
           </span>
           {orgOpen && allOrgs.length > 1 && (

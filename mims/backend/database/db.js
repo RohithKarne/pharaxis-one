@@ -1560,6 +1560,110 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS superadmin_alert_rules (
+        id                INT           NOT NULL AUTO_INCREMENT,
+        name              VARCHAR(255)  NOT NULL,
+        event_type        VARCHAR(100)  NOT NULL,
+        severity          VARCHAR(20)   NOT NULL DEFAULT 'medium',
+        channels          VARCHAR(50)   NOT NULL DEFAULT 'email,in_app',
+        recipient_emails  TEXT,
+        threshold_value   INT           NOT NULL DEFAULT 1,
+        window_minutes    INT           NOT NULL DEFAULT 15,
+        cooldown_minutes  INT           NOT NULL DEFAULT 30,
+        is_active         TINYINT(1)    NOT NULL DEFAULT 1,
+        created_by        INT,
+        updated_by        INT,
+        created_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_sa_alert_rules_event (event_type),
+        KEY idx_sa_alert_rules_active (is_active),
+        UNIQUE KEY uq_sa_alert_rules_event_type (event_type)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS superadmin_alert_events (
+        id                INT           NOT NULL AUTO_INCREMENT,
+        rule_id           INT           DEFAULT NULL,
+        event_type        VARCHAR(100)  NOT NULL,
+        severity          VARCHAR(20)   NOT NULL DEFAULT 'medium',
+        title             VARCHAR(255)  NOT NULL,
+        message           TEXT,
+        metadata          TEXT,
+        email_status      VARCHAR(20)   NOT NULL DEFAULT 'pending',
+        in_app_status     VARCHAR(20)   NOT NULL DEFAULT 'pending',
+        created_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_sa_alert_events_rule (rule_id),
+        KEY idx_sa_alert_events_event (event_type),
+        KEY idx_sa_alert_events_created (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id           INT           NOT NULL AUTO_INCREMENT,
+        user_id      INT           NOT NULL,
+        category     VARCHAR(100)  NOT NULL DEFAULT 'general',
+        title        VARCHAR(255)  NOT NULL,
+        message      TEXT,
+        link_url     VARCHAR(500),
+        metadata     TEXT,
+        is_read      TINYINT(1)    NOT NULL DEFAULT 0,
+        created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        read_at      DATETIME      DEFAULT NULL,
+        PRIMARY KEY (id),
+        KEY idx_notifications_user (user_id),
+        KEY idx_notifications_category (category),
+        KEY idx_notifications_read (is_read),
+        KEY idx_notifications_created (created_at),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Clean up duplicate seeded rules before enforcing uniqueness on event_type.
+    await conn.execute(`
+      DELETE r1
+      FROM superadmin_alert_rules r1
+      INNER JOIN superadmin_alert_rules r2
+        ON r1.event_type = r2.event_type
+       AND r1.id > r2.id
+    `);
+
+    try {
+      await conn.execute(
+        'ALTER TABLE superadmin_alert_rules ADD UNIQUE KEY uq_sa_alert_rules_event_type (event_type)'
+      );
+    } catch (_) { /* already exists */ }
+
+    const defaultRules = [
+      ['Failed Login Spike', 'failed_login_spike', 'high', 'email,in_app', '', 5, 15, 30],
+      ['Repeated 2FA Lockouts', 'two_factor_lockout', 'high', 'email,in_app', '', 2, 30, 30],
+      ['SMTP Failure', 'smtp_failure', 'high', 'email,in_app', '', 1, 15, 15],
+      ['Mailbox Failure', 'mailbox_failure', 'high', 'email,in_app', '', 1, 15, 15],
+      ['Organisation Deactivated', 'organization_deactivated', 'medium', 'email,in_app', '', 1, 60, 10],
+      ['Site Deactivated', 'site_deactivated', 'medium', 'email,in_app', '', 1, 60, 10],
+      ['Sensitive Config Change', 'sensitive_config_change', 'medium', 'email,in_app', '', 1, 60, 10],
+      ['Service Error Threshold', 'service_error_threshold', 'high', 'email,in_app', '', 3, 30, 30],
+    ];
+    for (const rule of defaultRules) {
+      await conn.execute(
+        `INSERT INTO superadmin_alert_rules
+         (name, event_type, severity, channels, recipient_emails, threshold_value, window_minutes, cooldown_minutes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+         ON DUPLICATE KEY UPDATE
+           name = VALUES(name),
+           severity = VALUES(severity),
+           channels = VALUES(channels),
+           threshold_value = VALUES(threshold_value),
+           window_minutes = VALUES(window_minutes),
+           cooldown_minutes = VALUES(cooldown_minutes)`,
+        rule
+      );
+    }
+
     console.log('✅ Database initialized — tables ready');
 
   } finally {

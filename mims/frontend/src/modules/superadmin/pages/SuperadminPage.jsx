@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Sidebar from '../components/Sidebar'
 import Topbar from '../../../shared/components/Topbar'
 import { useAuth } from '../../../shared/context/AuthContext'
@@ -10,17 +10,30 @@ const MODULES = [
   { key: 'data_visualization', label: 'Data Visualization' },
 ]
 
+const ALERT_EVENT_OPTIONS = [
+  { value: 'failed_login_spike', label: 'Failed Login Spike', mode: 'threshold' },
+  { value: 'two_factor_lockout', label: '2FA Lockout', mode: 'threshold' },
+  { value: 'smtp_failure', label: 'SMTP Failure', mode: 'immediate' },
+  { value: 'mailbox_failure', label: 'Mailbox Failure', mode: 'immediate' },
+  { value: 'organization_deactivated', label: 'Organisation Deactivated', mode: 'immediate' },
+  { value: 'site_deactivated', label: 'Site Deactivated', mode: 'immediate' },
+  { value: 'sensitive_config_change', label: 'Sensitive Config Change', mode: 'immediate' },
+  { value: 'service_error_threshold', label: 'Service Error Threshold', mode: 'threshold' },
+]
+
 const PAGE_TITLES = {
+  'dashboard':     'Dashboard',
   'organizations': 'Organisations & Sites',
   '2fa-config':    '2FA Configuration',
   'users':         'User Management',
-  'module-access': 'Module Access',
+  'alerts':        'Alerts',
+  'notifications': 'Notifications',
   'audit':         'Audit Trail',
   'login-audit':   'Login Audit',
 }
 
 export default function SuperadminPage() {
-  const [activePage, setActivePage] = useState('organizations')
+  const [activePage, setActivePage] = useState('dashboard')
   const [collapsed, setCollapsed] = useState(() =>
     localStorage.getItem('mims_sidebar_collapsed') === 'true'
   )
@@ -66,15 +79,110 @@ export default function SuperadminPage() {
               {msg.text}
             </div>
           )}
+          {activePage === 'dashboard'     && <DashboardView H={H} setActivePage={setActivePage} />}
           {activePage === 'organizations' && <OrganisationsView H={H} flash={flash} />}
           {activePage === '2fa-config'    && <TwoFactorConfigView H={H} flash={flash} />}
           {activePage === 'users'         && <UsersView H={H} flash={flash} />}
-          {activePage === 'module-access' && <ModuleAccessView H={H} flash={flash} />}
+          {activePage === 'alerts'        && <AlertsView H={H} flash={flash} />}
+          {activePage === 'notifications' && <NotificationsView H={H} flash={flash} />}
           {activePage === 'audit'         && <AuditView H={H} endpoint="/api/superadmin/audit" />}
           {activePage === 'login-audit'   && <LoginAuditView H={H} />}
         </main>
       </div>
     </div>
+  )
+}
+
+function downloadCsv(url) {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+function DashboardView({ H, setActivePage }) {
+  const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/superadmin/dashboard', { headers: H })
+      const data = await res.json()
+      setSummary(data)
+    } finally {
+      setLoading(false)
+    }
+  }, [H.Authorization])
+
+  useEffect(() => { load() }, [load])
+
+  const kpis = summary?.kpis || {}
+  const cards = [
+    { label: 'Organisations', value: kpis.organisations?.total || 0, note: `${kpis.organisations?.active || 0} active`, page: 'organizations' },
+    { label: 'Users', value: kpis.users?.total || 0, note: `${kpis.users?.active || 0} active`, page: 'users' },
+    { label: 'Failed Logins 24h', value: kpis.failedLogins24h || 0, note: 'Security watch', page: 'login-audit' },
+    { label: 'Locked 2FA Users', value: kpis.lockedUsers || 0, note: 'Needs review', page: 'users' },
+    { label: 'Unread Notifications', value: kpis.unreadNotifications || 0, note: 'In-app queue', page: 'notifications' },
+    { label: 'Alert Events 24h', value: kpis.alertEvents24h || 0, note: `SMTP: ${kpis.smtpStatus || 'unknown'}`, page: 'alerts' },
+  ]
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3>Platform Health</h3>
+          <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={load}>Refresh</button>
+        </div>
+        {loading && <div className="card-body" style={{ color: 'var(--text-muted)' }}>Loading dashboard…</div>}
+        {!loading && (
+          <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {cards.map(card => (
+              <div
+                key={card.label}
+                onClick={() => setActivePage(card.page)}
+                style={{
+                  border: '1px solid var(--border)', borderRadius: 10, padding: 16,
+                  background: 'var(--surface)', cursor: 'pointer', transition: 'box-shadow 0.15s, border-color 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.12)'; e.currentTarget.style.borderColor = 'var(--primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = ''; e.currentTarget.style.borderColor = 'var(--border)' }}
+              >
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>{card.label}</div>
+                <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1 }}>{card.value}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{card.note}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+        <div className="card">
+          <div className="card-header"><h3>Recent Audit Activity</h3></div>
+          <div className="card-body">
+            {loading && <div style={{ color: 'var(--text-muted)' }}>Loading…</div>}
+            {!loading && !(summary?.recentAudit || []).length && <div style={{ color: 'var(--text-muted)' }}>No audit activity yet.</div>}
+            {!loading && (summary?.recentAudit || []).map(log => (
+              <div key={log.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{log.action} on {log.entity}{log.entity_id ? ` #${log.entity_id}` : ''}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{log.user_name || 'Unknown user'} • {log.created_at}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header"><h3>Recent Login Activity</h3></div>
+          <div className="card-body">
+            {loading && <div style={{ color: 'var(--text-muted)' }}>Loading…</div>}
+            {!loading && !(summary?.recentLogins || []).length && <div style={{ color: 'var(--text-muted)' }}>No login activity yet.</div>}
+            {!loading && (summary?.recentLogins || []).map(log => (
+              <div key={log.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{log.user_name || 'Unknown user'} • {log.status}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{log.auth_event || log.fail_reason || 'login'} • {log.login_time}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -91,6 +199,11 @@ function OrganisationsView({ H, flash }) {
   const [siteForm, setSiteForm] = useState({ name: '', country: '', is_primary: false })
   const [editingTimeout, setEditingTimeout] = useState(null) // org_id or null
   const [timeoutValue, setTimeoutValue]     = useState(30)
+  const [selectedOrgIds, setSelectedOrgIds] = useState(new Set())
+  const [editingSite, setEditingSite] = useState(null) // site object or null
+  const [siteEditForm, setSiteEditForm] = useState({ name: '', country: '' })
+  const [orgLogos, setOrgLogos] = useState({}) // { orgId: logoUrl }
+  const logoInputRefs = useRef({}) // { orgId: inputElement }
 
   useEffect(() => { load() }, [])
 
@@ -99,7 +212,11 @@ function OrganisationsView({ H, flash }) {
     try {
       const res = await fetch('/api/superadmin/orgs', { headers: H })
       const data = await res.json()
-      setOrgs(data.orgs || [])
+      const orgsData = data.orgs || []
+      setOrgs(orgsData)
+      const logoMap = {}
+      orgsData.forEach(org => { if (org.logo_url) logoMap[org.id] = org.logo_url })
+      setOrgLogos(prev => ({ ...prev, ...logoMap }))
     } catch { flash('Failed to load organisations.', 'error') }
     finally { setLoading(false) }
   }
@@ -169,6 +286,71 @@ function OrganisationsView({ H, flash }) {
     load()
   }
 
+  async function saveSiteEdit() {
+    if (!editingSite) return
+    if (!siteEditForm.name.trim()) return flash('Site name is required.', 'error')
+    const res = await fetch(`/api/superadmin/sites/${editingSite.id}`, {
+      method: 'PUT',
+      headers: H,
+      body: JSON.stringify({
+        name: siteEditForm.name.trim(),
+        country: siteEditForm.country.trim(),
+        is_primary: editingSite.is_primary,
+        is_active: editingSite.is_active,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Failed to update site.', 'error')
+    flash(`Site "${siteEditForm.name.trim()}" updated.`)
+    setEditingSite(null)
+    setSiteEditForm({ name: '', country: '' })
+    load()
+  }
+
+  async function uploadOrgLogo(orgId, file) {
+    if (!file) return
+    const formData = new FormData()
+    formData.append('logo', file)
+    try {
+      const res = await fetch(`/api/superadmin/orgs/${orgId}/logo`, {
+        method: 'POST',
+        headers: { Authorization: H.Authorization },
+        body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok) return flash(data.error || 'Failed to upload logo.', 'error')
+      setOrgLogos(prev => ({ ...prev, [orgId]: data.logo_url }))
+      flash('Logo uploaded successfully.')
+    } catch {
+      flash('Failed to upload logo.', 'error')
+    }
+  }
+
+  function toggleSelectOrg(orgId) {
+    setSelectedOrgIds(prev => {
+      const next = new Set(prev)
+      if (next.has(orgId)) next.delete(orgId)
+      else next.add(orgId)
+      return next
+    })
+  }
+
+  async function bulkToggleOrgs(activate) {
+    const ids = Array.from(selectedOrgIds)
+    if (!ids.length) return flash('Select at least one organisation.', 'error')
+    for (const id of ids) {
+      const org = orgs.find(o => o.id === id)
+      if (!org) continue
+      await fetch(`/api/superadmin/orgs/${id}`, {
+        method: 'PUT', headers: H,
+        body: JSON.stringify({ name: org.name, is_active: activate ? 1 : 0 }),
+      })
+    }
+    flash(`${ids.length} organisation${ids.length !== 1 ? 's' : ''} ${activate ? 'activated' : 'deactivated'}.`)
+    setSelectedOrgIds(new Set())
+    load()
+  }
+
   async function saveTimeout(org) {
     const mins = parseInt(timeoutValue)
     if (isNaN(mins) || mins < 30) return flash('Minimum session timeout is 30 minutes.', 'error')
@@ -185,11 +367,19 @@ function OrganisationsView({ H, flash }) {
   return (
     <>
       <div className="card" style={{ marginBottom: 12 }}>
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <h3>Organisations & Sites</h3>
-          <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => setShowOrgForm(v => !v)}>
-            + New Organisation
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {selectedOrgIds.size > 0 && (
+              <>
+                <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => bulkToggleOrgs(true)}>Activate Selected ({selectedOrgIds.size})</button>
+                <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => bulkToggleOrgs(false)}>Deactivate Selected ({selectedOrgIds.size})</button>
+              </>
+            )}
+            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => setShowOrgForm(v => !v)}>
+              + New Organisation
+            </button>
+          </div>
         </div>
         {showOrgForm && (
           <div className="card-body" style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
@@ -211,6 +401,32 @@ function OrganisationsView({ H, flash }) {
         <div key={org.id} className="card" style={{ marginBottom: 8 }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
             onClick={() => setExpanded(e => e === org.id ? null : org.id)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input
+                type="checkbox"
+                checked={selectedOrgIds.has(org.id)}
+                onClick={e => e.stopPropagation()}
+                onChange={() => toggleSelectOrg(org.id)}
+                style={{ flexShrink: 0 }}
+              />
+              {orgLogos[org.id] ? (
+                <img
+                  src={orgLogos[org.id]}
+                  alt={`${org.name} logo`}
+                  style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'contain', border: '1px solid var(--border)', background: '#fff', flexShrink: 0 }}
+                />
+              ) : null}
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                ref={el => { logoInputRefs.current[org.id] = el }}
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  if (file) uploadOrgLogo(org.id, file)
+                  e.target.value = ''
+                }}
+              />
             <div>
               <strong style={{ fontSize: 14 }}>{org.name}</strong>
               <span style={{ fontSize: 11, marginLeft: 10, color: 'var(--text-muted)' }}>
@@ -228,6 +444,7 @@ function OrganisationsView({ H, flash }) {
                 🔐 2FA {org.two_factor_enabled ? 'On' : 'Off'}
               </span>
             </div>
+            </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button
                 className="btn btn-outline"
@@ -239,6 +456,17 @@ function OrganisationsView({ H, flash }) {
                 }}
               >
                 Edit
+              </button>
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: 11, padding: '3px 10px' }}
+                title="Upload logo"
+                onClick={e => {
+                  e.stopPropagation()
+                  logoInputRefs.current[org.id]?.click()
+                }}
+              >
+                📷 Logo
               </button>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{org.is_active ? 'Active' : 'Inactive'}</span>
               <div
@@ -269,33 +497,78 @@ function OrganisationsView({ H, flash }) {
                     <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No sites yet.</td></tr>
                   )}
                   {(org.sites || []).map(s => (
-                    <tr key={s.id}>
-                      <td style={{ fontSize: 13 }}>{s.name}</td>
-                      <td style={{ fontSize: 12 }}>{s.country || '—'}</td>
-                      <td style={{ fontSize: 12 }}>{s.is_primary ? 'Yes' : 'No'}</td>
-                      <td><span style={{
-                        fontSize: 11, padding: '1px 7px', borderRadius: 10,
-                        background: s.is_active ? '#d4edda' : '#f8d7da',
-                        color: s.is_active ? '#155724' : '#721c24',
-                      }}>{s.is_active ? 'Active' : 'Inactive'}</span></td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.is_active ? 'Active' : 'Inactive'}</span>
-                          <div onClick={() => toggleSite(s)} style={{
-                            width: 36, height: 20, borderRadius: 10, cursor: 'pointer',
-                            background: s.is_active ? '#28a745' : '#ccc',
-                            position: 'relative', transition: 'background 0.2s', flexShrink: 0
-                          }}>
-                            <div style={{
-                              width: 14, height: 14, borderRadius: '50%', background: '#fff',
-                              position: 'absolute', top: 3,
-                              left: s.is_active ? 19 : 3,
-                              transition: 'left 0.2s'
-                            }} />
+                    <React.Fragment key={s.id}>
+                      <tr>
+                        <td style={{ fontSize: 13 }}>{s.name}</td>
+                        <td style={{ fontSize: 12 }}>{s.country || '—'}</td>
+                        <td style={{ fontSize: 12 }}>{s.is_primary ? 'Yes' : 'No'}</td>
+                        <td><span style={{
+                          fontSize: 11, padding: '1px 7px', borderRadius: 10,
+                          background: s.is_active ? '#d4edda' : '#f8d7da',
+                          color: s.is_active ? '#155724' : '#721c24',
+                        }}>{s.is_active ? 'Active' : 'Inactive'}</span></td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <button
+                              className="btn btn-outline"
+                              style={{ fontSize: 11, padding: '2px 8px' }}
+                              title="Edit site"
+                              onClick={() => {
+                                if (editingSite?.id === s.id) {
+                                  setEditingSite(null)
+                                  setSiteEditForm({ name: '', country: '' })
+                                } else {
+                                  setEditingSite(s)
+                                  setSiteEditForm({ name: s.name, country: s.country || '' })
+                                }
+                              }}
+                            >✏</button>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.is_active ? 'Active' : 'Inactive'}</span>
+                            <div onClick={() => toggleSite(s)} style={{
+                              width: 36, height: 20, borderRadius: 10, cursor: 'pointer',
+                              background: s.is_active ? '#28a745' : '#ccc',
+                              position: 'relative', transition: 'background 0.2s', flexShrink: 0
+                            }}>
+                              <div style={{
+                                width: 14, height: 14, borderRadius: '50%', background: '#fff',
+                                position: 'absolute', top: 3,
+                                left: s.is_active ? 19 : 3,
+                                transition: 'left 0.2s'
+                              }} />
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                      </tr>
+                      {editingSite?.id === s.id && (
+                        <tr>
+                          <td colSpan={5} style={{ background: 'var(--bg-secondary)', padding: '10px 12px', borderBottom: '2px solid var(--primary)' }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                              <div>
+                                <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>Site Name</label>
+                                <input
+                                  className="form-control"
+                                  style={{ fontSize: 13, minWidth: 180 }}
+                                  value={siteEditForm.name}
+                                  onChange={e => setSiteEditForm(f => ({ ...f, name: e.target.value }))}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>Country</label>
+                                <input
+                                  className="form-control"
+                                  style={{ fontSize: 13, minWidth: 140 }}
+                                  value={siteEditForm.country}
+                                  onChange={e => setSiteEditForm(f => ({ ...f, country: e.target.value }))}
+                                  placeholder="e.g. India"
+                                />
+                              </div>
+                              <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={saveSiteEdit}>Save</button>
+                              <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => { setEditingSite(null); setSiteEditForm({ name: '', country: '' }) }}>Cancel</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
@@ -403,6 +676,8 @@ function TwoFactorConfigView({ H, flash }) {
   const [sendingTestEmail, setSendingTestEmail] = useState(false)
   const [testEmail, setTestEmail] = useState('')
   const [orgSecurityForms, setOrgSecurityForms] = useState({})
+  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(60)
+  const [savingSessionTimeout, setSavingSessionTimeout] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -426,6 +701,7 @@ function TwoFactorConfigView({ H, flash }) {
         smtp_from_email: configData.config?.smtp_from_email || '',
         smtp_from_name: configData.config?.smtp_from_name || 'MIMS Platform',
       }))
+      setSessionTimeoutMinutes(Number(configData.config?.superadmin_session_timeout_minutes) || 60)
       setOrgSecurityForms(
         (orgData.orgs || []).reduce((acc, org) => {
           acc[org.id] = {
@@ -498,6 +774,26 @@ function TwoFactorConfigView({ H, flash }) {
     } finally {
       if (mode === 'send') setSendingTestEmail(false)
       else setTestingSmtp(false)
+    }
+  }
+
+  async function saveSessionTimeout() {
+    const mins = Number(sessionTimeoutMinutes)
+    if (isNaN(mins) || mins < 15 || mins > 480) return flash('Session timeout must be between 15 and 480 minutes.', 'error')
+    setSavingSessionTimeout(true)
+    try {
+      const res = await fetch('/api/superadmin/config', {
+        method: 'PUT',
+        headers: H,
+        body: JSON.stringify({ superadmin_session_timeout_minutes: mins }),
+      })
+      const data = await res.json()
+      if (!res.ok) return flash(data.error || 'Failed to save session timeout.', 'error')
+      flash(`Superadmin session timeout set to ${mins} minutes.`)
+    } catch {
+      flash('Failed to save session timeout.', 'error')
+    } finally {
+      setSavingSessionTimeout(false)
     }
   }
 
@@ -595,6 +891,37 @@ function TwoFactorConfigView({ H, flash }) {
         </div>
       </div>
 
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="card-header"><h3>Superadmin Session Timeout</h3></div>
+        <div className="card-body">
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Set how long a superadmin session stays active before automatic logout (15–480 minutes).
+          </div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div>
+              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Timeout (minutes)</label>
+              <input
+                className="form-control"
+                type="number"
+                min={15}
+                max={480}
+                style={{ width: 140 }}
+                value={sessionTimeoutMinutes}
+                onChange={e => setSessionTimeoutMinutes(e.target.value)}
+              />
+            </div>
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 12 }}
+              onClick={saveSessionTimeout}
+              disabled={savingSessionTimeout}
+            >
+              {savingSessionTimeout ? 'Saving…' : 'Save Timeout'}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="card">
         <div className="card-header"><h3>Organisation 2FA Settings</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
@@ -684,6 +1011,9 @@ function UsersView({ H, flash }) {
   const [creating, setCreating]   = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [editForm, setEditForm] = useState({ name: '', email: '', role: 'agent', is_active: true })
+  const [selectedUserIds, setSelectedUserIds] = useState(new Set())
+  const [userSearch, setUserSearch] = useState('')
+  const [userRoleFilter, setUserRoleFilter] = useState('')
 
   // Org Assignment Panel state
   const [assignTarget, setAssignTarget]   = useState(null) // user object
@@ -697,6 +1027,8 @@ function UsersView({ H, flash }) {
   const [selectedOrgIds, setSelectedOrgIds] = useState(new Set())
   // Site tab — selected primary site per org
   const [selectedSites, setSelectedSites]   = useState({}) // { orgId: siteId }
+  // Role per org
+  const [selectedOrgRoles, setSelectedOrgRoles] = useState({}) // { orgId: role }
   // Role tab — module access (global per user, not per org)
   const [selectedModules, setSelectedModules] = useState(new Set())
 
@@ -747,6 +1079,30 @@ function UsersView({ H, flash }) {
     load()
   }
 
+  function toggleSelectedUser(userId) {
+    setSelectedUserIds(prev => {
+      const next = new Set(prev)
+      if (next.has(userId)) next.delete(userId)
+      else next.add(userId)
+      return next
+    })
+  }
+
+  async function runBulkAction(action) {
+    const userIds = Array.from(selectedUserIds)
+    if (!userIds.length) return flash('Select at least one user first.', 'error')
+    const res = await fetch('/api/superadmin/users/bulk-action', {
+      method: 'POST',
+      headers: H,
+      body: JSON.stringify({ action, userIds }),
+    })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Bulk action failed.', 'error')
+    flash(data.message || 'Bulk action completed.')
+    setSelectedUserIds(new Set())
+    load()
+  }
+
   async function openAssignPanel(user) {
     setAssignTarget(user)
     setAssignTab('org')
@@ -766,12 +1122,17 @@ function UsersView({ H, flash }) {
       // Pre-populate selections from existing assignments
       const orgIds = new Set(access.map(a => a.org_id))
       const sites  = {}
-      access.forEach(a => { sites[a.org_id] = a.primary_site_id || '' })
+      const roles  = {}
+      access.forEach(a => {
+        sites[a.org_id] = a.primary_site_id || ''
+        roles[a.org_id] = a.role_at_org || 'agent'
+      })
       // Modules are global per user — take from first row that has them
       const modRow = access.find(a => Array.isArray(a.modules) && a.modules.length > 0)
       const mods   = new Set(modRow ? modRow.modules : [])
       setSelectedOrgIds(orgIds)
       setSelectedSites(sites)
+      setSelectedOrgRoles(roles)
       setSelectedModules(mods)
     } catch { flash('Failed to load org access.', 'error') }
     finally { setAssignLoading(false) }
@@ -784,7 +1145,6 @@ function UsersView({ H, flash }) {
         next.delete(orgId)
         // clear site/module selection for removed org
         setSelectedSites(s => { const n = { ...s }; delete n[orgId]; return n })
-        setSelectedModules(m => { const n = { ...m }; delete n[orgId]; return n })
       } else {
         next.add(orgId)
       }
@@ -816,18 +1176,19 @@ function UsersView({ H, flash }) {
         }
       }
 
-      // Add/update org assignments (site only — modules handled separately)
+      // Add/update org assignments (site + role — modules handled separately)
       for (const orgId of newOrgIds) {
         const siteId = selectedSites[orgId] || null
+        const roleAtOrg = selectedOrgRoles[orgId] || 'agent'
         if (!existingOrgIds.has(orgId)) {
           await fetch(`/api/superadmin/users/${userId}/org-access`, {
             method: 'POST', headers: H,
-            body: JSON.stringify({ org_id: orgId, primary_site_id: siteId }),
+            body: JSON.stringify({ org_id: orgId, primary_site_id: siteId, role_at_org: roleAtOrg }),
           })
         } else {
           await fetch(`/api/superadmin/users/${userId}/org-access/${orgId}`, {
             method: 'PUT', headers: H,
-            body: JSON.stringify({ primary_site_id: siteId }),
+            body: JSON.stringify({ primary_site_id: siteId, role_at_org: roleAtOrg }),
           })
         }
       }
@@ -857,11 +1218,42 @@ function UsersView({ H, flash }) {
     load()
   }
 
+  async function unlockUser(user) {
+    const res = await fetch(`/api/superadmin/users/${user.id}/unlock`, {
+      method: 'POST',
+      headers: H,
+    })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Failed to unlock user.', 'error')
+    flash(data.message || `${user.name} unlocked.`)
+    load()
+  }
+
+  async function forcePasswordReset(user) {
+    const res = await fetch(`/api/superadmin/users/${user.id}/force-password-reset`, {
+      method: 'POST',
+      headers: H,
+    })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Failed to force password reset.', 'error')
+    flash(data.message || `Password reset required for ${user.name}.`)
+    load()
+  }
+
   const ASSIGN_TABS = [
     { key: 'org',  label: 'Org'  },
     { key: 'site', label: 'Site' },
     { key: 'role', label: 'Role' },
   ]
+
+  const filteredUsers = users.filter(u => {
+    const searchLower = userSearch.toLowerCase()
+    const matchesSearch = !userSearch ||
+      (u.name || '').toLowerCase().includes(searchLower) ||
+      (u.email || '').toLowerCase().includes(searchLower)
+    const matchesRole = !userRoleFilter || u.role === userRoleFilter
+    return matchesSearch && matchesRole
+  })
 
   return (
     <>
@@ -917,16 +1309,54 @@ function UsersView({ H, flash }) {
 
       {/* ── User List ── */}
       <div className="card" style={{ marginBottom: assignTarget ? 12 : 0 }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <h3>Users</h3>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => runBulkAction('activate')}>Bulk Activate</button>
+            <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => runBulkAction('deactivate')}>Bulk Deactivate</button>
+            <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => runBulkAction('force_password_reset')}>Bulk Force Reset</button>
+          </div>
+        </div>
+        <div className="card-body" style={{ borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            className="form-control"
+            style={{ maxWidth: 240, fontSize: 13 }}
+            placeholder="Search by name or email…"
+            value={userSearch}
+            onChange={e => setUserSearch(e.target.value)}
+          />
+          <select
+            className="form-control"
+            style={{ maxWidth: 180, fontSize: 13 }}
+            value={userRoleFilter}
+            onChange={e => setUserRoleFilter(e.target.value)}
+          >
+            <option value="">All roles</option>
+            <option value="admin">Admin</option>
+            <option value="agent">Agent</option>
+            <option value="reviewer">Reviewer</option>
+            <option value="content_manager">Content Manager</option>
+          </select>
+          {(userSearch || userRoleFilter) && (
+            <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => { setUserSearch(''); setUserRoleFilter('') }}>Clear</button>
+          )}
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            {filteredUsers.length} of {users.length} user{users.length !== 1 ? 's' : ''}
+          </span>
+        </div>
         <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
           <table className="admin-table">
             <thead>
-              <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>2FA</th><th>Org Assignments</th><th></th></tr>
+              <tr><th></th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>2FA</th><th>Last Login</th><th>Org Assignments</th><th></th></tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>Loading…</td></tr>}
-              {!loading && users.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No users found.</td></tr>}
-              {users.map(u => (
+              {loading && <tr><td colSpan={9} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>Loading…</td></tr>}
+              {!loading && filteredUsers.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>{users.length === 0 ? 'No users found.' : 'No users match your search.'}</td></tr>}
+              {filteredUsers.map(u => (
                 <tr key={u.id} style={{ background: assignTarget?.id === u.id ? 'var(--primary-light, #e8f0fe)' : undefined }}>
+                  <td style={{ width: 32 }}>
+                    <input type="checkbox" checked={selectedUserIds.has(u.id)} onChange={() => toggleSelectedUser(u.id)} />
+                  </td>
                   <td>
                     <strong style={{ fontSize: 13, color: assignTarget?.id === u.id ? 'var(--primary)' : undefined }}>{u.name}</strong>
                     {u.password_reset_required ? <span style={{ marginLeft: 6, fontSize: 10, background: '#fff3cd', color: '#856404', padding: '1px 6px', borderRadius: 10 }}>Reset Pending</span> : null}
@@ -946,6 +1376,15 @@ function UsersView({ H, flash }) {
                     }}>
                       {u.two_factor_enabled ? (u.two_factor_locked ? 'Locked' : 'Enabled') : 'Not Enrolled'}
                     </span>
+                  </td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                    {(() => {
+                      const raw = u.last_login_at || u.last_login
+                      if (!raw) return 'Never'
+                      const d = new Date(raw)
+                      if (isNaN(d.getTime())) return 'Never'
+                      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    })()}
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                     {u.org_name ? <span style={{ color: 'var(--text-primary)' }}>{u.org_name}</span> : <span>No org assigned</span>}
@@ -979,6 +1418,12 @@ function UsersView({ H, flash }) {
                         </button>
                         <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => resetUserTwoFactor(u)}>
                           Reset 2FA
+                        </button>
+                        <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => unlockUser(u)}>
+                          Unlock
+                        </button>
+                        <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => forcePasswordReset(u)}>
+                          Force Reset
                         </button>
                       </div>
                     )}
@@ -1063,7 +1508,7 @@ function UsersView({ H, flash }) {
             {!assignLoading && assignTab === 'site' && (
               <>
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-                  Set the primary site for each assigned organisation.
+                  Set the primary site and role for each assigned organisation.
                 </div>
                 {selectedOrgIds.size === 0
                   ? <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No organisations selected. Go to Org tab first.</div>
@@ -1072,36 +1517,55 @@ function UsersView({ H, flash }) {
                     if (!org) return null
                     const sites = Array.isArray(org.sites) ? org.sites : []
                     return (
-                      <div key={orgId} style={{ marginBottom: 20 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: 'var(--text-primary)' }}>{org.name}</div>
-                        {sites.length === 0
-                          ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No sites configured for this org.</div>
-                          : (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                              {sites.map(s => {
-                                const selected = selectedSites[orgId] === s.id
-                                return (
-                                  <label key={s.id} style={{
-                                    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13,
-                                    padding: '6px 12px', border: `1px solid ${selected ? 'var(--primary)' : 'var(--border)'}`,
-                                    borderRadius: 6, cursor: 'pointer',
-                                    background: selected ? 'var(--primary-light, #e8f0fe)' : 'var(--surface)',
-                                    color: selected ? 'var(--primary)' : 'var(--text-primary)', userSelect: 'none',
-                                  }}>
-                                    <input type="radio" name={`site-${orgId}`} style={{ display: 'none' }}
-                                      checked={selected}
-                                      onChange={() => setSelectedSites(prev => ({ ...prev, [orgId]: s.id }))} />
-                                    <span style={{ width: 14, height: 14, borderRadius: '50%', border: `1.5px solid ${selected ? 'var(--primary)' : 'var(--border)'}`, background: selected ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                      {selected && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', display: 'inline-block' }} />}
-                                    </span>
-                                    {s.name}
-                                    {s.is_primary ? <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>(Primary)</span> : null}
-                                  </label>
-                                )
-                              })}
-                            </div>
-                          )
-                        }
+                      <div key={orgId} style={{ marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: 'var(--text-primary)' }}>{org.name}</div>
+                        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1, minWidth: 200 }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Primary Site</div>
+                            {sites.length === 0
+                              ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No sites configured for this org.</div>
+                              : (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                  {sites.map(s => {
+                                    const selected = selectedSites[orgId] === s.id
+                                    return (
+                                      <label key={s.id} style={{
+                                        display: 'flex', alignItems: 'center', gap: 6, fontSize: 13,
+                                        padding: '6px 12px', border: `1px solid ${selected ? 'var(--primary)' : 'var(--border)'}`,
+                                        borderRadius: 6, cursor: 'pointer',
+                                        background: selected ? 'var(--primary-light, #e8f0fe)' : 'var(--surface)',
+                                        color: selected ? 'var(--primary)' : 'var(--text-primary)', userSelect: 'none',
+                                      }}>
+                                        <input type="radio" name={`site-${orgId}`} style={{ display: 'none' }}
+                                          checked={selected}
+                                          onChange={() => setSelectedSites(prev => ({ ...prev, [orgId]: s.id }))} />
+                                        <span style={{ width: 14, height: 14, borderRadius: '50%', border: `1.5px solid ${selected ? 'var(--primary)' : 'var(--border)'}`, background: selected ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                          {selected && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', display: 'inline-block' }} />}
+                                        </span>
+                                        {s.name}
+                                        {s.is_primary ? <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>(Primary)</span> : null}
+                                      </label>
+                                    )
+                                  })}
+                                </div>
+                              )
+                            }
+                          </div>
+                          <div style={{ minWidth: 160 }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Role at this Org</div>
+                            <select
+                              className="form-control"
+                              style={{ fontSize: 13 }}
+                              value={selectedOrgRoles[orgId] || 'agent'}
+                              onChange={e => setSelectedOrgRoles(prev => ({ ...prev, [orgId]: e.target.value }))}
+                            >
+                              <option value="admin">Admin</option>
+                              <option value="agent">Agent</option>
+                              <option value="reviewer">Reviewer</option>
+                              <option value="content_manager">Content Manager</option>
+                            </select>
+                          </div>
+                        </div>
                       </div>
                     )
                   })
@@ -1205,110 +1669,62 @@ function UsersView({ H, flash }) {
   )
 }
 
-/* ── Module Access View ─────────────────────────────────────────────────── */
-function ModuleAccessView({ H, flash }) {
-  const [users, setUsers] = useState([])
-  const [moduleMap, setModuleMap] = useState({})
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => { loadUsers() }, [])
+function AuditDetailPanel({ details }) {
+  let parsed = null
+  try {
+    parsed = typeof details === 'object' ? details : JSON.parse(details)
+  } catch { parsed = null }
 
-  async function loadUsers() {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/superadmin/users', { headers: H })
-      const data = await res.json()
-      if (!res.ok) return flash(data.error || 'Failed to load users.', 'error')
-      setUsers(data.users || [])
-      const map = {}
-      ;(data.users || []).forEach(u => { map[u.id] = new Set(u.modules || []) })
-      setModuleMap(map)
-    } catch {
-      flash('Server unreachable. Please restart the backend.', 'error')
-    } finally {
-      setLoading(false)
-    }
+  if (!parsed) {
+    return <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{String(details)}</pre>
   }
 
-  function toggleModule(userId, mod) {
-    setModuleMap(prev => {
-      const next = { ...prev }
-      const set = new Set(next[userId] || [])
-      if (set.has(mod)) set.delete(mod)
-      else set.add(mod)
-      next[userId] = set
-      return next
-    })
-  }
+  const hasDiff = parsed.before !== undefined || parsed.after !== undefined
 
-  async function saveModules(userId) {
-    const modules = Array.from(moduleMap[userId] || [])
-    const res = await fetch(`/api/superadmin/users/${userId}/modules`, {
-      method: 'PUT', headers: H, body: JSON.stringify({ modules })
-    })
-    const data = await res.json()
-    if (!res.ok) return flash(data.error || 'Failed to save modules.', 'error')
-    flash('Module access updated.')
+  if (hasDiff) {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#c0392b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Before</div>
+          <div style={{ background: '#fdf0ef', border: '1px solid #f5c6cb', borderRadius: 6, padding: 10, fontSize: 12 }}>
+            {parsed.before && typeof parsed.before === 'object'
+              ? Object.entries(parsed.before).map(([k, v]) => (
+                <div key={k} style={{ marginBottom: 4 }}><strong>{k}:</strong> {JSON.stringify(v)}</div>
+              ))
+              : <span>{String(parsed.before ?? '—')}</span>
+            }
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#155724', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>After</div>
+          <div style={{ background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: 6, padding: 10, fontSize: 12 }}>
+            {parsed.after && typeof parsed.after === 'object'
+              ? Object.entries(parsed.after).map(([k, v]) => (
+                <div key={k} style={{ marginBottom: 4 }}><strong>{k}:</strong> {JSON.stringify(v)}</div>
+              ))
+              : <span>{String(parsed.after ?? '—')}</span>
+            }
+          </div>
+        </div>
+        {Object.keys(parsed).filter(k => k !== 'before' && k !== 'after').length > 0 && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>Additional Fields</div>
+            {Object.entries(parsed).filter(([k]) => k !== 'before' && k !== 'after').map(([k, v]) => (
+              <div key={k} style={{ fontSize: 12, marginBottom: 4 }}><strong>{k}:</strong> {JSON.stringify(v)}</div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
-    <>
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header"><h3>Scope</h3></div>
-        <div className="card-body" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          Superadmin assigns module access per user. Access is based on these assignments.
-        </div>
-      </div>
-      <div className="card">
-        <div className="card-header"><h3>User Module Access</h3></div>
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Role</th>
-                {MODULES.map(m => <th key={m.key}>{m.label}</th>)}
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr><td colSpan={MODULES.length + 3} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>Loading…</td></tr>
-              )}
-              {!loading && users.length === 0 && (
-                <tr><td colSpan={MODULES.length + 3} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No users found.</td></tr>
-              )}
-              {users.map(u => (
-                <tr key={u.id}>
-                  <td>
-                    <strong>{u.name}</strong>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{u.email}</div>
-                  </td>
-                  <td style={{ fontSize: 12 }}>{u.role}</td>
-                  {MODULES.map(m => {
-                    const checked = (moduleMap[u.id] || new Set()).has(m.key)
-                    return (
-                      <td key={m.key} style={{ textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleModule(u.id, m.key)}
-                        />
-                      </td>
-                    )
-                  })}
-                  <td>
-                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => saveModules(u.id)}>
-                      Save
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
+    <div style={{ fontSize: 12 }}>
+      {Object.entries(parsed).map(([k, v]) => (
+        <div key={k} style={{ marginBottom: 4 }}><strong>{k}:</strong> {JSON.stringify(v)}</div>
+      ))}
+    </div>
   )
 }
 
@@ -1317,13 +1733,17 @@ function AuditView({ H, endpoint }) {
   const [logs, setLogs] = useState([])
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
+  const [filters, setFilters] = useState({ from: '', to: '', user: '', action: '', entity: '' })
   const [loading, setLoading] = useState(true)
+  const [expandedLogId, setExpandedLogId] = useState(null)
   const LIMIT = 50
 
   const load = useCallback(async (off = 0) => {
     setLoading(true)
     try {
-      const res = await fetch(`${endpoint}?limit=${LIMIT}&offset=${off}`, { headers: H })
+      const params = new URLSearchParams({ limit: LIMIT, offset: off })
+      Object.entries(filters).forEach(([key, value]) => value && params.set(key, value))
+      const res = await fetch(`${endpoint}?${params}`, { headers: H })
       const data = await res.json()
       setLogs(data.logs || [])
       setTotal(data.total || 0)
@@ -1331,7 +1751,7 @@ function AuditView({ H, endpoint }) {
     } finally {
       setLoading(false)
     }
-  }, [endpoint])
+  }, [endpoint, filters, H.Authorization])
 
   useEffect(() => { load(0) }, [load])
 
@@ -1339,7 +1759,28 @@ function AuditView({ H, endpoint }) {
     <div className="card">
       <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3>Audit Trail</h3>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{total} record{total !== 1 ? 's' : ''}</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{total} record{total !== 1 ? 's' : ''}</span>
+          <button
+            className="btn btn-outline"
+            style={{ fontSize: 11, padding: '4px 10px' }}
+            onClick={() => {
+              const params = new URLSearchParams({ export: 'csv' })
+              Object.entries(filters).forEach(([key, value]) => value && params.set(key, value))
+              downloadCsv(`${endpoint}?${params}`)
+            }}
+          >
+            Export CSV
+          </button>
+        </div>
+      </div>
+      <div className="card-body" style={{ borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input className="form-control" style={{ maxWidth: 150 }} type="date" value={filters.from} onChange={e => setFilters(f => ({ ...f, from: e.target.value }))} />
+        <input className="form-control" style={{ maxWidth: 150 }} type="date" value={filters.to} onChange={e => setFilters(f => ({ ...f, to: e.target.value }))} />
+        <input className="form-control" style={{ maxWidth: 150 }} placeholder="User" value={filters.user} onChange={e => setFilters(f => ({ ...f, user: e.target.value }))} />
+        <input className="form-control" style={{ maxWidth: 150 }} placeholder="Action" value={filters.action} onChange={e => setFilters(f => ({ ...f, action: e.target.value }))} />
+        <input className="form-control" style={{ maxWidth: 150 }} placeholder="Entity" value={filters.entity} onChange={e => setFilters(f => ({ ...f, entity: e.target.value }))} />
+        <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => load(0)}>Search</button>
       </div>
       <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
         <table className="admin-table">
@@ -1359,20 +1800,45 @@ function AuditView({ H, endpoint }) {
             {!loading && logs.length === 0 && (
               <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No audit records found.</td></tr>
             )}
-            {logs.map(log => (
-              <tr key={log.id}>
-                <td style={{ fontSize: 11, whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{log.created_at}</td>
-                <td>
-                  <div style={{ fontSize: 12 }}>{log.user_name}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>ID {log.user_id}</div>
-                </td>
-                <td><span className="badge">{log.action}</span></td>
-                <td style={{ fontSize: 12 }}>{log.entity}{log.entity_id ? ` #${log.entity_id}` : ''}</td>
-                <td style={{ fontSize: 11, maxWidth: 300, wordBreak: 'break-all' }}>
-                  {log.details ? (typeof log.details === 'object' ? JSON.stringify(log.details) : log.details) : '—'}
-                </td>
-              </tr>
-            ))}
+            {logs.map(log => {
+              const rawDetails = log.details ? (typeof log.details === 'object' ? JSON.stringify(log.details) : log.details) : null
+              const truncated = rawDetails ? (rawDetails.length > 60 ? rawDetails.slice(0, 60) + '…' : rawDetails) : '—'
+              const isExpanded = expandedLogId === log.id
+              return (
+                <React.Fragment key={log.id}>
+                  <tr>
+                    <td style={{ fontSize: 11, whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{log.created_at}</td>
+                    <td>
+                      <div style={{ fontSize: 12 }}>{log.user_name}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>ID {log.user_id}</div>
+                    </td>
+                    <td><span className="badge">{log.action}</span></td>
+                    <td style={{ fontSize: 12 }}>{log.entity}{log.entity_id ? ` #${log.entity_id}` : ''}</td>
+                    <td style={{ fontSize: 11, maxWidth: 300 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ wordBreak: 'break-all', color: 'var(--text-muted)' }}>{truncated}</span>
+                        {rawDetails && rawDetails.length > 0 && (
+                          <button
+                            className="btn btn-outline"
+                            style={{ fontSize: 10, padding: '2px 8px', flexShrink: 0 }}
+                            onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                          >
+                            {isExpanded ? 'Hide' : 'View'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={5} style={{ background: 'var(--bg-secondary)', padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
+                        <AuditDetailPanel details={log.details || rawDetails} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -1394,15 +1860,15 @@ function LoginAuditView({ H }) {
   const [logs, setLogs] = useState([])
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
-  const [statusFilter, setStatusFilter] = useState('')
+  const [filters, setFilters] = useState({ status: '', from: '', to: '', user: '', role: '' })
   const [loading, setLoading] = useState(true)
   const LIMIT = 50
 
-  const load = useCallback(async (off = 0, status = statusFilter) => {
+  const load = useCallback(async (off = 0, nextFilters = filters) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ limit: LIMIT, offset: off })
-      if (status) params.set('status', status)
+      Object.entries(nextFilters).forEach(([key, value]) => value && params.set(key, value))
       const res = await fetch(`/api/superadmin/login-audit?${params}`, { headers: H })
       const data = await res.json()
       setLogs(data.logs || [])
@@ -1411,14 +1877,9 @@ function LoginAuditView({ H }) {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter])
+  }, [filters, H.Authorization])
 
   useEffect(() => { load(0) }, [load])
-
-  function handleStatusChange(e) {
-    setStatusFilter(e.target.value)
-    load(0, e.target.value)
-  }
 
   return (
     <div className="card">
@@ -1426,16 +1887,36 @@ function LoginAuditView({ H }) {
         <h3>Login Audit</h3>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{total} record{total !== 1 ? 's' : ''}</span>
-          <select
-            value={statusFilter}
-            onChange={handleStatusChange}
-            style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text)' }}
+          <button
+            className="btn btn-outline"
+            style={{ fontSize: 11, padding: '4px 10px' }}
+            onClick={() => {
+              const params = new URLSearchParams({ export: 'csv' })
+              Object.entries(filters).forEach(([key, value]) => value && params.set(key, value))
+              downloadCsv(`/api/superadmin/login-audit?${params}`)
+            }}
           >
-            <option value="">All</option>
-            <option value="success">Success</option>
-            <option value="failed">Failed</option>
-          </select>
+            Export CSV
+          </button>
         </div>
+      </div>
+      <div className="card-body" style={{ borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <select
+          className="form-control"
+          style={{ maxWidth: 140 }}
+          value={filters.status}
+          onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
+        >
+          <option value="">All statuses</option>
+          <option value="success">Success</option>
+          <option value="failed">Failed</option>
+          <option value="pending">Pending</option>
+        </select>
+        <input className="form-control" style={{ maxWidth: 150 }} type="date" value={filters.from} onChange={e => setFilters(f => ({ ...f, from: e.target.value }))} />
+        <input className="form-control" style={{ maxWidth: 150 }} type="date" value={filters.to} onChange={e => setFilters(f => ({ ...f, to: e.target.value }))} />
+        <input className="form-control" style={{ maxWidth: 150 }} placeholder="User" value={filters.user} onChange={e => setFilters(f => ({ ...f, user: e.target.value }))} />
+        <input className="form-control" style={{ maxWidth: 140 }} placeholder="Role" value={filters.role} onChange={e => setFilters(f => ({ ...f, role: e.target.value }))} />
+        <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => load(0)}>Search</button>
       </div>
       <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
         <table className="admin-table">
@@ -1445,16 +1926,18 @@ function LoginAuditView({ H }) {
               <th>User</th>
               <th>Role</th>
               <th>Status</th>
+              <th>IP Address</th>
+              <th>Location</th>
               <th>Fail Reason</th>
               <th>Logout Time</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>Loading…</td></tr>
+              <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>Loading…</td></tr>
             )}
             {!loading && logs.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No login records found.</td></tr>
+              <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No login records found.</td></tr>
             )}
             {logs.map(log => (
               <tr key={log.id}>
@@ -1473,6 +1956,8 @@ function LoginAuditView({ H }) {
                     {log.status}
                   </span>
                 </td>
+                <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{log.ip_address || '—'}</td>
+                <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{log.location || '—'}</td>
                 <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{log.fail_reason || log.auth_event || '—'}</td>
                 <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{log.logout_time || '—'}</td>
               </tr>
@@ -1489,6 +1974,450 @@ function LoginAuditView({ H }) {
           <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={offset + LIMIT >= total} onClick={() => load(offset + LIMIT)}>Next →</button>
         </div>
       )}
+    </div>
+  )
+}
+
+function AlertsView({ H, flash }) {
+  const [rules, setRules] = useState([])
+  const [events, setEvents] = useState([])
+  const [eventTypeError, setEventTypeError] = useState('')
+  const [form, setForm] = useState({
+    id: null,
+    name: '',
+    event_type: 'failed_login_spike',
+    severity: 'high',
+    channels: 'email,in_app',
+    recipient_emails: '',
+    threshold_value: 1,
+    window_minutes: 15,
+    cooldown_minutes: 30,
+    is_active: true,
+  })
+
+  const [eventFilter, setEventFilter] = useState({ event_type: '', severity: '' })
+  const [eventsOffset, setEventsOffset] = useState(0)
+  const [eventsTotal, setEventsTotal] = useState(0)
+  const EVENTS_LIMIT = 20
+
+  const DEFAULT_EMAIL_SUBJECT = 'MIMS Alert: {{alert_title}}'
+  const DEFAULT_EMAIL_BODY = 'Alert: {{alert_title}}\nSeverity: {{severity}}\nOrganisation: {{org_name}}\nTriggered at: {{triggered_at}}\n\n{{message}}'
+  const [emailTemplateOpen, setEmailTemplateOpen] = useState(false)
+  const [emailTemplate, setEmailTemplate] = useState({ subject: DEFAULT_EMAIL_SUBJECT, body: DEFAULT_EMAIL_BODY })
+  const [emailTemplateSaving, setEmailTemplateSaving] = useState(false)
+
+  const loadEvents = useCallback(async (off = 0, filter = eventFilter) => {
+    const params = new URLSearchParams({ limit: EVENTS_LIMIT, offset: off })
+    if (filter.event_type) params.set('event_type', filter.event_type)
+    if (filter.severity) params.set('severity', filter.severity)
+    const res = await fetch(`/api/superadmin/alerts/events?${params}`, { headers: H })
+    const data = await res.json()
+    setEvents(data.events || [])
+    setEventsTotal(data.total || 0)
+    setEventsOffset(off)
+  }, [H.Authorization, eventFilter])
+
+  const load = useCallback(async () => {
+    const [rulesRes, templateRes] = await Promise.all([
+      fetch('/api/superadmin/alerts/rules', { headers: H }),
+      fetch('/api/superadmin/alert-email-template', { headers: H }),
+    ])
+    const rulesData = await rulesRes.json()
+    setRules(rulesData.rules || [])
+    if (templateRes.ok) {
+      const templateData = await templateRes.json()
+      if (templateData.subject || templateData.body) {
+        setEmailTemplate({
+          subject: templateData.subject || DEFAULT_EMAIL_SUBJECT,
+          body: templateData.body || DEFAULT_EMAIL_BODY,
+        })
+      }
+    }
+    loadEvents(0)
+  }, [H.Authorization, loadEvents])
+
+  useEffect(() => { load() }, [load])
+  useEffect(() => { loadEvents(0, eventFilter) }, [eventFilter])
+
+  const selectedEvent = ALERT_EVENT_OPTIONS.find(option => option.value === form.event_type)
+  const isThresholdRule = selectedEvent?.mode === 'threshold'
+
+  async function saveRule(e) {
+    e.preventDefault()
+    setEventTypeError('')
+    // Duplicate event_type guard (only for new rules)
+    if (!form.id) {
+      const duplicate = rules.find(r => r.event_type === form.event_type)
+      if (duplicate) {
+        setEventTypeError('A rule for this event type already exists.')
+        return
+      }
+    }
+    const url = form.id ? `/api/superadmin/alerts/rules/${form.id}` : '/api/superadmin/alerts/rules'
+    const method = form.id ? 'PUT' : 'POST'
+    const res = await fetch(url, {
+      method,
+      headers: H,
+      body: JSON.stringify(form),
+    })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Failed to save alert rule.', 'error')
+    flash(data.message || 'Alert rule saved.')
+    setEventTypeError('')
+    setForm({ id: null, name: '', event_type: 'failed_login_spike', severity: 'high', channels: 'email,in_app', recipient_emails: '', threshold_value: 1, window_minutes: 15, cooldown_minutes: 30, is_active: true })
+    load()
+  }
+
+  async function toggleRule(rule) {
+    const res = await fetch(`/api/superadmin/alerts/rules/${rule.id}`, {
+      method: 'PUT',
+      headers: H,
+      body: JSON.stringify({ ...rule, is_active: !rule.is_active }),
+    })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Failed to update rule.', 'error')
+    flash('Alert rule updated.')
+    load()
+  }
+
+  async function deleteRule(rule) {
+    const confirmed = window.confirm(`Delete alert rule "${rule.name}"?`)
+    if (!confirmed) return
+    const res = await fetch(`/api/superadmin/alerts/rules/${rule.id}`, {
+      method: 'DELETE',
+      headers: H,
+    })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Failed to delete rule.', 'error')
+    flash('Alert rule deleted.')
+    if (form.id === rule.id) {
+      setForm({ id: null, name: '', event_type: 'failed_login_spike', severity: 'high', channels: 'email,in_app', recipient_emails: '', threshold_value: 1, window_minutes: 15, cooldown_minutes: 30, is_active: true })
+    }
+    load()
+  }
+
+  async function saveEmailTemplate() {
+    if (!emailTemplate.subject.trim() || !emailTemplate.body.trim()) return flash('Subject and body are required.', 'error')
+    setEmailTemplateSaving(true)
+    try {
+      const res = await fetch('/api/superadmin/alert-email-template', {
+        method: 'PUT',
+        headers: H,
+        body: JSON.stringify({ subject: emailTemplate.subject, body: emailTemplate.body }),
+      })
+      const data = await res.json()
+      if (!res.ok) return flash(data.error || 'Failed to save email template.', 'error')
+      flash('Email alert template saved.')
+    } catch {
+      flash('Failed to save email template.', 'error')
+    } finally {
+      setEmailTemplateSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="card-header"><h3>Alert Rule Setup</h3></div>
+        <div className="card-body">
+          <form onSubmit={saveRule} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            <div><label style={{ fontSize: 12 }}>Rule Name</label><input className="form-control" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div><label style={{ fontSize: 12 }}>Event</label><select className="form-control" value={form.event_type} onChange={e => {
+              const eventType = e.target.value
+              const option = ALERT_EVENT_OPTIONS.find(item => item.value === eventType)
+              setForm(f => ({
+                ...f,
+                event_type: eventType,
+                threshold_value: option?.mode === 'threshold' ? (f.threshold_value || 1) : 1,
+                window_minutes: option?.mode === 'threshold' ? (f.window_minutes || 15) : 0,
+              }))
+            }}>
+              {ALERT_EVENT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select></div>
+            <div><label style={{ fontSize: 12 }}>Severity</label><select className="form-control" value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}><option value="medium">Medium</option><option value="high">High</option></select></div>
+            <div><label style={{ fontSize: 12 }}>Channels</label><select className="form-control" value={form.channels} onChange={e => setForm(f => ({ ...f, channels: e.target.value }))}><option value="email">Email only</option><option value="in_app">In-app only</option><option value="email,in_app">Email + In-app</option></select></div>
+            {isThresholdRule ? (
+              <>
+                <div><label style={{ fontSize: 12 }}>Threshold</label><input className="form-control" type="number" min="1" value={form.threshold_value} onChange={e => setForm(f => ({ ...f, threshold_value: Number(e.target.value) || 1 }))} /></div>
+                <div><label style={{ fontSize: 12 }}>Window (min)</label><input className="form-control" type="number" min="1" value={form.window_minutes} onChange={e => setForm(f => ({ ...f, window_minutes: Number(e.target.value) || 15 }))} /></div>
+              </>
+            ) : (
+              <div style={{ gridColumn: 'span 2', paddingTop: 22 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-secondary)' }}>
+                  This is an immediate event alert. It triggers when the event happens. Threshold and window settings do not apply.
+                </div>
+              </div>
+            )}
+            <div><label style={{ fontSize: 12 }}>Cooldown (min)</label><input className="form-control" type="number" min="0" value={form.cooldown_minutes} onChange={e => setForm(f => ({ ...f, cooldown_minutes: Number(e.target.value) || 0 }))} /></div>
+            <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12 }}>Recipient Emails</label><input className="form-control" placeholder="comma-separated emails" value={form.recipient_emails} onChange={e => setForm(f => ({ ...f, recipient_emails: e.target.value }))} /></div>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+              <input type="checkbox" checked={!!form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />
+              Rule active
+            </label>
+            {eventTypeError && (
+              <div style={{ gridColumn: '1 / -1', fontSize: 12, color: '#c0392b', background: '#fdf0ef', border: '1px solid #f5c6cb', borderRadius: 6, padding: '8px 12px' }}>
+                {eventTypeError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" type="submit">{form.id ? 'Update Rule' : 'Create Rule'}</button>
+              {form.id && <button className="btn btn-secondary" type="button" onClick={() => { setForm({ id: null, name: '', event_type: 'failed_login_spike', severity: 'high', channels: 'email,in_app', recipient_emails: '', threshold_value: 1, window_minutes: 15, cooldown_minutes: 30, is_active: true }); setEventTypeError('') }}>Cancel</button>}
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="card-header"><h3>Alert Rules</h3></div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="admin-table">
+            <thead><tr><th>Name</th><th>Event</th><th>Mode</th><th>Channels</th><th>Rule Logic</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {!rules.length && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No alert rules yet.</td></tr>}
+              {rules.map(rule => (
+                <tr key={rule.id}>
+                  <td>{rule.name}</td>
+                  <td style={{ fontSize: 12 }}>{rule.event_type}</td>
+                  <td style={{ fontSize: 12 }}>{ALERT_EVENT_OPTIONS.find(option => option.value === rule.event_type)?.mode === 'threshold' ? 'Threshold' : 'Immediate'}</td>
+                  <td style={{ fontSize: 12 }}>{rule.channels}</td>
+                  <td style={{ fontSize: 12 }}>
+                    {ALERT_EVENT_OPTIONS.find(option => option.value === rule.event_type)?.mode === 'threshold'
+                      ? `${rule.threshold_value} within ${rule.window_minutes}m`
+                      : `Immediate event • cooldown ${rule.cooldown_minutes}m`}
+                  </td>
+                  <td><span className="badge">{rule.is_active ? 'Active' : 'Inactive'}</span></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setForm({ ...rule, is_active: !!rule.is_active })}>Edit</button>
+                      <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => toggleRule(rule)}>{rule.is_active ? 'Disable' : 'Enable'}</button>
+                      <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => deleteRule(rule)}>Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div
+          className="card-header"
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => setEmailTemplateOpen(v => !v)}
+        >
+          <h3>Email Alert Template</h3>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emailTemplateOpen ? '▲' : '▼'}</span>
+        </div>
+        {emailTemplateOpen && (
+          <div className="card-body">
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+              Available placeholders:{' '}
+              {['{{alert_title}}', '{{severity}}', '{{org_name}}', '{{triggered_at}}', '{{message}}'].map(p => (
+                <code key={p} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontSize: 11, marginRight: 6 }}>{p}</code>
+              ))}
+            </div>
+            <div className="form-group" style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Subject</label>
+              <input
+                className="form-control"
+                style={{ fontSize: 13 }}
+                value={emailTemplate.subject}
+                onChange={e => setEmailTemplate(t => ({ ...t, subject: e.target.value }))}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Body</label>
+              <textarea
+                className="form-control"
+                rows={6}
+                style={{ fontSize: 13, fontFamily: 'monospace', resize: 'vertical' }}
+                value={emailTemplate.body}
+                onChange={e => setEmailTemplate(t => ({ ...t, body: e.target.value }))}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={saveEmailTemplate} disabled={emailTemplateSaving}>
+                {emailTemplateSaving ? 'Saving…' : 'Save Template'}
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 12 }}
+                onClick={() => setEmailTemplate({ subject: DEFAULT_EMAIL_SUBJECT, body: DEFAULT_EMAIL_BODY })}
+              >
+                Reset to Default
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3>Recent Alert Events</h3>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{eventsTotal} event{eventsTotal !== 1 ? 's' : ''}</span>
+        </div>
+        <div className="card-body" style={{ borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <select
+            className="form-control"
+            style={{ maxWidth: 220, fontSize: 13 }}
+            value={eventFilter.event_type}
+            onChange={e => setEventFilter(f => ({ ...f, event_type: e.target.value }))}
+          >
+            <option value="">All event types</option>
+            {ALERT_EVENT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
+          <select
+            className="form-control"
+            style={{ maxWidth: 160, fontSize: 13 }}
+            value={eventFilter.severity}
+            onChange={e => setEventFilter(f => ({ ...f, severity: e.target.value }))}
+          >
+            <option value="">All severities</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+          {(eventFilter.event_type || eventFilter.severity) && (
+            <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setEventFilter({ event_type: '', severity: '' })}>Clear</button>
+          )}
+        </div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="admin-table">
+            <thead><tr><th>Time</th><th>Rule</th><th>Message</th><th>Email</th><th>In-App</th></tr></thead>
+            <tbody>
+              {!events.length && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No alert events yet.</td></tr>}
+              {events.map(event => (
+                <tr key={event.id}>
+                  <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{event.created_at}</td>
+                  <td style={{ fontSize: 12 }}>{event.rule_name || event.event_type}</td>
+                  <td style={{ fontSize: 12 }}>{event.message || event.title}</td>
+                  <td style={{ fontSize: 12 }}>{event.email_status}</td>
+                  <td style={{ fontSize: 12 }}>{event.in_app_status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {eventsTotal > EVENTS_LIMIT && (
+          <div style={{ padding: '10px 16px', display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--border)' }}>
+            <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={eventsOffset === 0} onClick={() => loadEvents(eventsOffset - EVENTS_LIMIT)}>← Prev</button>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>
+              {eventsOffset + 1}–{Math.min(eventsOffset + EVENTS_LIMIT, eventsTotal)} of {eventsTotal}
+            </span>
+            <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={eventsOffset + EVENTS_LIMIT >= eventsTotal} onClick={() => loadEvents(eventsOffset + EVENTS_LIMIT)}>Next →</button>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+function NotificationsView({ H, flash }) {
+  const [rows, setRows] = useState([])
+  const [unread, setUnread] = useState(0)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+
+  const load = useCallback(async () => {
+    const res = await fetch('/api/superadmin/notifications?limit=100', { headers: H })
+    const data = await res.json()
+    setRows(data.notifications || [])
+    setUnread(data.unread || 0)
+    setSelectedIds(new Set())
+  }, [H.Authorization])
+
+  useEffect(() => { load() }, [load])
+
+  async function markRead(id) {
+    const res = await fetch(`/api/superadmin/notifications/${id}/read`, { method: 'POST', headers: H })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Failed to update notification.', 'error')
+    load()
+  }
+
+  async function deleteNotification(id) {
+    const res = await fetch(`/api/superadmin/notifications/${id}`, { method: 'DELETE', headers: H })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Failed to delete notification.', 'error')
+    flash('Notification deleted.')
+    load()
+  }
+
+  async function clearAllRead() {
+    const res = await fetch('/api/superadmin/notifications/read', { method: 'DELETE', headers: H })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Failed to clear read notifications.', 'error')
+    flash(data.message || 'All read notifications cleared.')
+    load()
+  }
+
+  async function deleteSelected() {
+    const ids = Array.from(selectedIds)
+    if (!ids.length) return
+    for (const id of ids) {
+      await fetch(`/api/superadmin/notifications/${id}`, { method: 'DELETE', headers: H })
+    }
+    flash(`${ids.length} notification${ids.length !== 1 ? 's' : ''} deleted.`)
+    load()
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div className="card">
+      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h3>Notifications</h3>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{unread} unread</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {selectedIds.size > 0 && (
+            <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={deleteSelected}>
+              Delete Selected ({selectedIds.size})
+            </button>
+          )}
+          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={clearAllRead}>
+            Clear All Read
+          </button>
+        </div>
+      </div>
+      <div className="card-body">
+        {!rows.length && <div style={{ color: 'var(--text-muted)' }}>No notifications yet.</div>}
+        {rows.map(row => (
+          <div key={row.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flex: 1 }}>
+              <input
+                type="checkbox"
+                checked={selectedIds.has(row.id)}
+                onChange={() => toggleSelect(row.id)}
+                style={{ marginTop: 3, flexShrink: 0 }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: row.is_read ? 500 : 700 }}>{row.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{row.message || 'No message'}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{row.created_at}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              {!row.is_read && (
+                <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => markRead(row.id)}>Mark Read</button>
+              )}
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: 11, padding: '4px 10px', color: '#c0392b', borderColor: '#c0392b' }}
+                onClick={() => deleteNotification(row.id)}
+                title="Delete"
+              >✕</button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

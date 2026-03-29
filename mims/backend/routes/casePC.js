@@ -13,11 +13,33 @@ const router  = express.Router();
 const pool    = require('../database/db');
 const { authenticate } = require('../middleware/auth');
 
+// ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
+
+async function verifyCaseOrg(caseId, req) {
+  const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
+  if (!c) return false;
+  if (req.user.role === 'superadmin') return true;
+  return Number(c.org_id) === Number(req.user.orgId);
+}
+
+async function verifyVersionOrg(versionId, req) {
+  const [[row]] = await pool.execute(
+    `SELECT c.org_id FROM case_pc_versions v JOIN cases c ON v.case_id = c.id WHERE v.id = ?`,
+    [versionId]
+  );
+  if (!row) return false;
+  if (req.user.role === 'superadmin') return true;
+  return Number(row.org_id) === Number(req.user.orgId);
+}
+
 // ─── VERSION MANAGEMENT ───────────────────────────────────────────────────────
 
 // GET /api/cases/:id/pc/versions
 router.get('/cases/:id/pc/versions', authenticate, async (req, res) => {
   try {
+    if (!await verifyCaseOrg(req.params.id, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const [rows] = await pool.execute(
       `SELECT v.*, u.name AS created_by_name
        FROM case_pc_versions v
@@ -37,6 +59,10 @@ router.get('/cases/:id/pc/versions', authenticate, async (req, res) => {
 router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
   const conn = await pool.getConnection();
   try {
+    if (!await verifyCaseOrg(req.params.id, req)) {
+      conn.release();
+      return res.status(403).json({ error: 'Access denied' });
+    }
     await conn.beginTransaction();
 
     const [existing] = await conn.execute(
@@ -108,6 +134,7 @@ router.put('/cases/pc/versions/:versionId/status', authenticate, async (req, res
 
 router.get('/cases/pc/versions/:versionId/general', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_general WHERE version_id = ?', [req.params.versionId]
     );
@@ -117,6 +144,7 @@ router.get('/cases/pc/versions/:versionId/general', authenticate, async (req, re
 
 router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { complaint_description, pc_category, date_of_complaint, date_received, severity, additional_info } = req.body;
     await pool.execute(
@@ -142,6 +170,7 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
 
 router.get('/cases/pc/versions/:versionId/patient-info', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_patient_info WHERE version_id = ?', [req.params.versionId]
     );
@@ -151,6 +180,7 @@ router.get('/cases/pc/versions/:versionId/patient-info', authenticate, async (re
 
 router.put('/cases/pc/versions/:versionId/patient-info', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { age, age_unit, sex, weight_kg, therapy_start_date, therapy_end_date, indication, additional_info } = req.body;
     await pool.execute(
@@ -177,6 +207,7 @@ router.put('/cases/pc/versions/:versionId/patient-info', authenticate, async (re
 
 router.get('/cases/pc/versions/:versionId/product-info', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [[row]] = await pool.execute(
       `SELECT pi.*, p.trade_name AS product_trade_name
        FROM case_pc_product_info pi
@@ -190,6 +221,7 @@ router.get('/cases/pc/versions/:versionId/product-info', authenticate, async (re
 
 router.put('/cases/pc/versions/:versionId/product-info', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { product_id, product_name, lot_number, expiry_date, quantity_available, storage_conditions, additional_info } = req.body;
     await pool.execute(
@@ -216,6 +248,7 @@ router.put('/cases/pc/versions/:versionId/product-info', authenticate, async (re
 
 router.get('/cases/pc/versions/:versionId/return-retrieval', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_return_retrieval WHERE version_id = ?', [req.params.versionId]
     );
@@ -225,6 +258,7 @@ router.get('/cases/pc/versions/:versionId/return-retrieval', authenticate, async
 
 router.put('/cases/pc/versions/:versionId/return-retrieval', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { return_requested, return_date, return_method, retrieval_requested, retrieval_date, retrieval_method, tracking_number, notes } = req.body;
     await pool.execute(
@@ -252,6 +286,7 @@ router.put('/cases/pc/versions/:versionId/return-retrieval', authenticate, async
 
 router.get('/cases/pc/versions/:versionId/replacement', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_replacement WHERE version_id = ?', [req.params.versionId]
     );
@@ -261,6 +296,7 @@ router.get('/cases/pc/versions/:versionId/replacement', authenticate, async (req
 
 router.put('/cases/pc/versions/:versionId/replacement', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { replacement_requested, replacement_approved, replacement_date, replacement_product, quantity, notes } = req.body;
     await pool.execute(
@@ -289,6 +325,7 @@ router.put('/cases/pc/versions/:versionId/replacement', authenticate, async (req
 
 router.get('/cases/pc/versions/:versionId/refund-credit', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_refund_credit WHERE version_id = ?', [req.params.versionId]
     );
@@ -298,6 +335,7 @@ router.get('/cases/pc/versions/:versionId/refund-credit', authenticate, async (r
 
 router.put('/cases/pc/versions/:versionId/refund-credit', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { refund_requested, refund_approved, refund_amount, credit_requested, credit_approved, credit_amount, notes } = req.body;
     await pool.execute(

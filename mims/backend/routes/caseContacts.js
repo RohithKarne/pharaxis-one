@@ -13,9 +13,35 @@ const router  = express.Router();
 const pool    = require('../database/db');
 const { authenticate } = require('../middleware/auth');
 
+// ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
+
+// Verify parent case belongs to requesting user's org
+async function verifyCaseOrg(caseId, req) {
+  const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
+  if (!c) return false;
+  if (req.user.role === 'superadmin') return true;
+  return Number(c.org_id) === Number(req.user.orgId);
+}
+
+// Verify a case_contact row belongs to requesting user's org (via its parent case)
+async function verifyCaseContactOrg(ccId, req) {
+  const [[row]] = await pool.execute(
+    `SELECT c.org_id FROM case_contacts cc
+     JOIN cases c ON cc.case_id = c.id
+     WHERE cc.id = ?`,
+    [ccId]
+  );
+  if (!row) return false;
+  if (req.user.role === 'superadmin') return true;
+  return Number(row.org_id) === Number(req.user.orgId);
+}
+
 // GET /api/cases/:id/contacts — list contacts attached to a case
 router.get('/cases/:id/contacts', authenticate, async (req, res) => {
   try {
+    if (!await verifyCaseOrg(req.params.id, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const [rows] = await pool.execute(
       `SELECT cc.*, c.email AS master_email, c.phone AS master_phone
        FROM case_contacts cc
@@ -34,6 +60,9 @@ router.get('/cases/:id/contacts', authenticate, async (req, res) => {
 // POST /api/cases/:id/contacts — add a contact to the case
 router.post('/cases/:id/contacts', authenticate, async (req, res) => {
   try {
+    if (!await verifyCaseOrg(req.params.id, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const {
       contact_id, contact_role = 'reporter',
       do_not_update_master = 0, is_primary = 0,
@@ -73,6 +102,9 @@ router.post('/cases/:id/contacts', authenticate, async (req, res) => {
 // PUT /api/cases/contacts/:ccId — update a specific case contact entry
 router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
   try {
+    if (!await verifyCaseContactOrg(req.params.ccId, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const {
       contact_role, do_not_update_master, is_primary,
       first_name, last_name, contact_type,
@@ -128,6 +160,9 @@ router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
 // DELETE /api/cases/contacts/:ccId — remove contact from case
 router.delete('/cases/contacts/:ccId', authenticate, async (req, res) => {
   try {
+    if (!await verifyCaseContactOrg(req.params.ccId, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     await pool.execute('DELETE FROM case_contacts WHERE id = ?', [req.params.ccId]);
     res.json({ success: true });
   } catch (err) {
@@ -144,14 +179,21 @@ router.get('/cases/contacts/search', authenticate, async (req, res) => {
     const { q } = req.query;
     if (!q || q.trim().length < 2) return res.json([]);
     const term = `%${q.trim()}%`;
+    const params = [term, term, term, term];
+    let orgClause = '';
+    if (req.user.role !== 'superadmin') {
+      orgClause = ' AND org_id = ?';
+      params.push(req.user.orgId);
+    }
     const [rows] = await pool.execute(
       `SELECT id, first_name, last_name, type, specialty, institution, phone, email, address,
               do_not_update_master
        FROM contacts
        WHERE is_active = 1
          AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?)
+         ${orgClause}
        LIMIT 20`,
-      [term, term, term, term]
+      params
     );
     res.json(rows);
   } catch (err) {

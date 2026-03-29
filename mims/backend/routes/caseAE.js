@@ -18,11 +18,33 @@ const router  = express.Router();
 const pool    = require('../database/db');
 const { authenticate } = require('../middleware/auth');
 
+// ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
+
+async function verifyCaseOrg(caseId, req) {
+  const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
+  if (!c) return false;
+  if (req.user.role === 'superadmin') return true;
+  return Number(c.org_id) === Number(req.user.orgId);
+}
+
+async function verifyVersionOrg(versionId, req) {
+  const [[row]] = await pool.execute(
+    `SELECT c.org_id FROM case_ae_versions v JOIN cases c ON v.case_id = c.id WHERE v.id = ?`,
+    [versionId]
+  );
+  if (!row) return false;
+  if (req.user.role === 'superadmin') return true;
+  return Number(row.org_id) === Number(req.user.orgId);
+}
+
 // ─── VERSION MANAGEMENT ───────────────────────────────────────────────────────
 
 // GET /api/cases/:id/ae/versions — list all versions for a case
 router.get('/cases/:id/ae/versions', authenticate, async (req, res) => {
   try {
+    if (!await verifyCaseOrg(req.params.id, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const [rows] = await pool.execute(
       `SELECT v.*, u.name AS created_by_name
        FROM case_ae_versions v
@@ -42,6 +64,10 @@ router.get('/cases/:id/ae/versions', authenticate, async (req, res) => {
 router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
   const conn = await pool.getConnection();
   try {
+    if (!await verifyCaseOrg(req.params.id, req)) {
+      conn.release();
+      return res.status(403).json({ error: 'Access denied' });
+    }
     await conn.beginTransaction();
 
     // Lock + get the current latest version
@@ -103,6 +129,7 @@ router.put('/cases/ae/versions/:versionId/status', authenticate, async (req, res
 
 router.get('/cases/ae/versions/:versionId/general', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_general WHERE version_id = ?', [req.params.versionId]
     );
@@ -112,6 +139,7 @@ router.get('/cases/ae/versions/:versionId/general', authenticate, async (req, re
 
 router.put('/cases/ae/versions/:versionId/general', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { report_type, date_of_onset, date_of_report, reporter_awareness_date, additional_info } = req.body;
     await pool.execute(
@@ -135,6 +163,7 @@ router.put('/cases/ae/versions/:versionId/general', authenticate, async (req, re
 
 router.get('/cases/ae/versions/:versionId/events', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [rows] = await pool.execute(
       'SELECT * FROM case_ae_events WHERE version_id = ? ORDER BY id ASC',
       [req.params.versionId]
@@ -145,6 +174,7 @@ router.get('/cases/ae/versions/:versionId/events', authenticate, async (req, res
 
 router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const {
       event_description, outcome, start_date, end_date,
@@ -222,6 +252,7 @@ router.delete('/cases/ae/events/:eventId', authenticate, async (req, res) => {
 
 router.get('/cases/ae/versions/:versionId/patient-info', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_patient_info WHERE version_id = ?', [req.params.versionId]
     );
@@ -231,6 +262,7 @@ router.get('/cases/ae/versions/:versionId/patient-info', authenticate, async (re
 
 router.put('/cases/ae/versions/:versionId/patient-info', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { age, age_unit, sex, weight_kg, height_cm, ethnicity, pregnant, last_menstrual_date, additional_info } = req.body;
     await pool.execute(
@@ -257,6 +289,7 @@ router.put('/cases/ae/versions/:versionId/patient-info', authenticate, async (re
 
 router.get('/cases/ae/versions/:versionId/lab-results', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [rows] = await pool.execute(
       'SELECT * FROM case_ae_lab_results WHERE version_id = ? ORDER BY id ASC',
       [req.params.versionId]
@@ -267,6 +300,7 @@ router.get('/cases/ae/versions/:versionId/lab-results', authenticate, async (req
 
 router.post('/cases/ae/versions/:versionId/lab-results', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { test_name, result, unit, normal_range, test_date } = req.body;
     const [ins] = await pool.execute(
@@ -289,6 +323,7 @@ router.delete('/cases/ae/lab-results/:labId', authenticate, async (req, res) => 
 
 router.get('/cases/ae/versions/:versionId/lab-notes', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_lab_notes WHERE version_id = ?', [req.params.versionId]
     );
@@ -298,6 +333,7 @@ router.get('/cases/ae/versions/:versionId/lab-notes', authenticate, async (req, 
 
 router.put('/cases/ae/versions/:versionId/lab-notes', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { notes } = req.body;
     await pool.execute(
@@ -316,6 +352,7 @@ router.put('/cases/ae/versions/:versionId/lab-notes', authenticate, async (req, 
 
 router.get('/cases/ae/versions/:versionId/medical-history', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [rows] = await pool.execute(
       'SELECT * FROM case_ae_medical_history WHERE version_id = ? ORDER BY id ASC',
       [req.params.versionId]
@@ -326,6 +363,7 @@ router.get('/cases/ae/versions/:versionId/medical-history', authenticate, async 
 
 router.post('/cases/ae/versions/:versionId/medical-history', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { condition_name, start_date, end_date, is_ongoing = 0, notes } = req.body;
     const [ins] = await pool.execute(
@@ -348,6 +386,7 @@ router.delete('/cases/ae/medical-history/:mhId', authenticate, async (req, res) 
 
 router.get('/cases/ae/versions/:versionId/medical-notes', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_medical_notes WHERE version_id = ?', [req.params.versionId]
     );
@@ -357,6 +396,7 @@ router.get('/cases/ae/versions/:versionId/medical-notes', authenticate, async (r
 
 router.put('/cases/ae/versions/:versionId/medical-notes', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const { notes } = req.body;
     await pool.execute(
@@ -375,6 +415,7 @@ router.put('/cases/ae/versions/:versionId/medical-notes', authenticate, async (r
 
 router.get('/cases/ae/versions/:versionId/product-info', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     const [rows] = await pool.execute(
       `SELECT pi.*, p.trade_name AS product_trade_name
        FROM case_ae_product_info pi
@@ -389,6 +430,7 @@ router.get('/cases/ae/versions/:versionId/product-info', authenticate, async (re
 
 router.post('/cases/ae/versions/:versionId/product-info', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const {
       product_id, product_name, dose, dose_unit, route_of_admin,

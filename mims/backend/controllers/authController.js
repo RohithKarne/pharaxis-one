@@ -19,14 +19,32 @@ const {
   maskEmail,
   sendEmailOtp,
 } = require('../services/twoFactorService');
+const { emitSuperadminAlert } = require('../services/alertService');
+const geoip = require('geoip-lite');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'mims-dev-secret-change-in-production';
 const SALT_ROUNDS = 10;
 
-async function logLoginAudit({ userId, userName, role, status, failReason, authEvent = null, metadata = null }) {
+function resolveIp(req) {
+  const forwarded = req?.headers?.['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return req?.connection?.remoteAddress || req?.socket?.remoteAddress || null;
+}
+
+function resolveLocation(ip) {
+  if (!ip || ip === '::1' || ip === '127.0.0.1') return 'localhost';
+  const geo = geoip.lookup(ip);
+  if (!geo) return null;
+  const parts = [geo.city, geo.region, geo.country].filter(Boolean);
+  return parts.join(', ') || null;
+}
+
+async function logLoginAudit({ userId, userName, role, status, failReason, authEvent = null, metadata = null, req = null }) {
   try {
+    const ip = resolveIp(req);
+    const location = resolveLocation(ip);
     await pool.execute(
-      `INSERT INTO login_audit (user_id, user_name, role, status, fail_reason, auth_event, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO login_audit (user_id, user_name, role, status, fail_reason, auth_event, ip_address, location, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId || null,
         userName || null,
@@ -34,9 +52,29 @@ async function logLoginAudit({ userId, userName, role, status, failReason, authE
         status,
         failReason || null,
         authEvent,
+        ip || null,
+        location || null,
         metadata ? JSON.stringify(metadata) : null,
       ]
     );
+    if (status === 'failed' && authEvent === 'password_login_failed') {
+      await emitSuperadminAlert('failed_login_spike', {
+        severity: 'high',
+        title: 'Failed login spike detected',
+        message: failReason || 'Multiple failed login attempts detected.',
+        metadata: { userId: userId || null, userName: userName || null, authEvent, details: metadata || null },
+        linkUrl: '/superadmin',
+      });
+    }
+    if (authEvent === '2fa_locked') {
+      await emitSuperadminAlert('two_factor_lockout', {
+        severity: 'high',
+        title: 'Repeated 2FA lockouts detected',
+        message: failReason || '2FA lockout triggered.',
+        metadata: { userId: userId || null, userName: userName || null, authEvent, details: metadata || null },
+        linkUrl: '/superadmin',
+      });
+    }
   } catch (_) {}
 }
 
@@ -84,10 +122,11 @@ async function findUserByLoginIdentifier(identifier) {
 
 async function getLatestActiveOrgIdForUser(userId) {
   const [[row]] = await pool.execute(
-    `SELECT org_id
-     FROM user_org_access
-     WHERE user_id = ? AND is_active = 1
-     ORDER BY last_accessed_at DESC, id DESC
+    `SELECT uoa.org_id
+     FROM user_org_access uoa
+     JOIN organisations o ON o.id = uoa.org_id
+     WHERE uoa.user_id = ? AND uoa.is_active = 1 AND o.is_active = 1
+     ORDER BY uoa.last_accessed_at DESC, uoa.id DESC
      LIMIT 1`,
     [userId]
   );
@@ -179,7 +218,7 @@ async function getUserModules(userId) {
   return rows.map(r => r.module);
 }
 
-async function resolveRegularLoginContext(user) {
+async function getActiveOrgRowsForUser(userId) {
   const [orgRows] = await pool.execute(
     `SELECT uoa.org_id, uoa.primary_site_id, uoa.role_at_org, uoa.site_permission, uoa.last_accessed_at,
             o.name AS org_name, o.session_timeout_minutes, o.two_factor_enabled, o.two_factor_methods, o.two_factor_remember_days,
@@ -187,10 +226,15 @@ async function resolveRegularLoginContext(user) {
      FROM user_org_access uoa
      JOIN organisations o ON o.id = uoa.org_id
      LEFT JOIN sites s ON s.id = uoa.primary_site_id
-     WHERE uoa.user_id = ? AND uoa.is_active = 1
+     WHERE uoa.user_id = ? AND uoa.is_active = 1 AND o.is_active = 1
      ORDER BY uoa.last_accessed_at DESC`,
-    [user.id]
+    [userId]
   );
+  return orgRows;
+}
+
+async function resolveRegularLoginContext(user) {
+  const orgRows = await getActiveOrgRowsForUser(user.id);
 
   if (orgRows.length === 0) return { noOrgAccess: true };
 
@@ -215,11 +259,11 @@ async function resolveRegularLoginContext(user) {
   };
 }
 
-function buildLoginResponse({ user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, extra = {} }) {
+function buildLoginResponse({ user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, roleForOrg, extra = {} }) {
   return {
     message: 'Login successful.',
     token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    user: { id: user.id, name: user.name, email: user.email, role: roleForOrg || user.role },
     modules,
     orgId,
     siteId,
@@ -235,7 +279,7 @@ function makeTwoFactorPayload(user, context, mode) {
   return {
     userId: user.id,
     email: user.email,
-    role: user.role,
+    role: context.selected?.role_at_org || user.role,
     orgId: context.orgId,
     siteId: context.siteId,
     orgName: context.orgName,
@@ -246,6 +290,7 @@ function makeTwoFactorPayload(user, context, mode) {
       orgName: o.org_name,
       siteId: o.primary_site_id,
       siteName: o.site_name,
+      roleAtOrg: o.role_at_org || user.role,
     })),
     sessionTimeout: context.sessionTimeout,
     twoFactorMethods: context.twoFactorMethods,
@@ -254,11 +299,12 @@ function makeTwoFactorPayload(user, context, mode) {
   };
 }
 
-async function finalizeRegularLogin({ res, user, context, trustedDeviceToken = null, authEvent = 'login_success' }) {
+async function finalizeRegularLogin({ res, req, user, context, trustedDeviceToken = null, authEvent = 'login_success' }) {
+  const roleForOrg = context.selected?.role_at_org || user.role;
   const token = issueToken({
     userId: user.id,
     email: user.email,
-    role: user.role,
+    role: roleForOrg,
     orgId: context.orgId,
     siteId: context.siteId,
   });
@@ -266,10 +312,11 @@ async function finalizeRegularLogin({ res, user, context, trustedDeviceToken = n
   await logLoginAudit({
     userId: user.id,
     userName: user.email,
-    role: user.role,
+    role: roleForOrg,
     status: 'success',
     authEvent,
     metadata: { orgId: context.orgId },
+    req,
   });
 
   const allOrgs = (context.orgRows || []).map(o => ({
@@ -277,6 +324,7 @@ async function finalizeRegularLogin({ res, user, context, trustedDeviceToken = n
     orgName: o.orgName ?? o.org_name,
     siteId: o.siteId ?? o.primary_site_id,
     siteName: o.siteName ?? o.site_name,
+    roleAtOrg: o.role_at_org || user.role,
   }));
 
   return res.status(200).json(buildLoginResponse({
@@ -289,6 +337,7 @@ async function finalizeRegularLogin({ res, user, context, trustedDeviceToken = n
     siteName: context.siteName,
     allOrgs,
     sessionTimeout: context.sessionTimeout,
+    roleForOrg,
     extra: trustedDeviceToken ? { rememberedDeviceToken: trustedDeviceToken } : {},
   }));
 }
@@ -502,17 +551,17 @@ const authController = {
       const identity = email.toLowerCase().trim();
       const user = await userModel.findByEmail(identity);
       if (!user) {
-        await logLoginAudit({ userName: email, status: 'failed', failReason: 'User not found', authEvent: 'password_login_failed' });
+        await logLoginAudit({ userName: email, status: 'failed', failReason: 'User not found', authEvent: 'password_login_failed', req });
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
       if (!user.is_active) {
-        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Account deactivated', authEvent: 'password_login_failed' });
+        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Account deactivated', authEvent: 'password_login_failed', req });
         return res.status(403).json({ error: 'Your account has been deactivated. Contact your administrator.' });
       }
 
       const passwordMatch = await bcrypt.compare(password, user.password);
       if (!passwordMatch) {
-        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Wrong password', authEvent: 'password_login_failed' });
+        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Wrong password', authEvent: 'password_login_failed', req });
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
 
@@ -530,7 +579,7 @@ const authController = {
         const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
         const config = await getSystemConfig();
         const sessionTimeout = parseInt(config.superadmin_session_timeout_minutes || '60', 10);
-        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'success', authEvent: 'login_success' });
+        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'success', authEvent: 'login_success', req });
         return res.status(200).json({
           message: 'Login successful.',
           token,
@@ -544,12 +593,12 @@ const authController = {
 
       const context = await resolveRegularLoginContext(user);
       if (context.noOrgAccess) {
-        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'No org assigned', authEvent: 'password_login_failed' });
+        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'No org assigned', authEvent: 'password_login_failed', req });
         return res.status(200).json({ noOrgAccess: true });
       }
 
       if (!context.twoFactorEnabled) {
-        return finalizeRegularLogin({ res, user, context });
+        return finalizeRegularLogin({ res, req, user, context });
       }
 
       const settings = await getUser2faSettings(user.id, context.orgId);
@@ -567,7 +616,7 @@ const authController = {
       }
 
       if (settings?.is_enabled && await isTrustedDevice(user.id, context.orgId, rememberedDeviceToken)) {
-        return finalizeRegularLogin({ res, user, context, authEvent: '2fa_trusted_device_bypass' });
+        return finalizeRegularLogin({ res, req, user, context, authEvent: '2fa_trusted_device_bypass' });
       }
 
       const challengeToken = issueTwoFactorToken(makeTwoFactorPayload(
@@ -659,7 +708,7 @@ const authController = {
         orgRows: pending.allOrgs || [],
         sessionTimeout: pending.sessionTimeout ?? 30,
       };
-      return finalizeRegularLogin({ res, user: { ...user, email: pending.email, role: pending.role }, context, authEvent: '2fa_setup_skipped' });
+      return finalizeRegularLogin({ res, req, user: { ...user, email: pending.email, role: pending.role }, context, authEvent: '2fa_setup_skipped' });
     } catch (err) {
       console.error('skipTwoFactorSetup error:', err);
       return res.status(400).json({ error: err.message || 'Could not skip 2FA setup.' });
@@ -788,7 +837,27 @@ const authController = {
   async me(req, res) {
     const user = await userModel.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
-    return res.status(200).json({ user });
+    if (user.role === 'superadmin') {
+      return res.status(200).json({ user, allOrgs: [], orgId: null, siteId: null, orgName: null, siteName: null });
+    }
+
+    const orgRows = await getActiveOrgRowsForUser(user.id);
+    const allOrgs = orgRows.map(o => ({
+      orgId: o.org_id,
+      orgName: o.org_name,
+      siteId: o.primary_site_id,
+      siteName: o.site_name,
+    }));
+    const current = allOrgs.find(o => Number(o.orgId) === Number(req.user.orgId)) || allOrgs[0] || null;
+    return res.status(200).json({
+      user,
+      allOrgs,
+      orgId: current?.orgId ?? null,
+      siteId: current?.siteId ?? null,
+      orgName: current?.orgName ?? null,
+      siteName: current?.siteName ?? null,
+      currentOrgActive: !!current && Number(current.orgId) === Number(req.user.orgId),
+    });
   },
 
   async switchOrg(req, res) {
@@ -802,11 +871,20 @@ const authController = {
          FROM user_org_access uoa
          JOIN organisations o ON o.id = uoa.org_id
          LEFT JOIN sites s ON s.id = uoa.primary_site_id
-         WHERE uoa.user_id = ? AND uoa.org_id = ? AND uoa.is_active = 1`,
+         WHERE uoa.user_id = ? AND uoa.org_id = ? AND uoa.is_active = 1 AND o.is_active = 1`,
         [req.user.userId, orgId]
       );
 
       if (!access) return res.status(403).json({ error: 'You do not have access to this organisation.' });
+
+      const orgRows = await getActiveOrgRowsForUser(req.user.userId);
+      const allOrgs = orgRows.map(o => ({
+        orgId: o.org_id,
+        orgName: o.org_name,
+        siteId: o.primary_site_id,
+        siteName: o.site_name,
+        roleAtOrg: o.role_at_org,
+      }));
 
       await pool.execute(
         'UPDATE user_org_access SET last_accessed_at = NOW() WHERE user_id = ? AND org_id = ?',
@@ -814,12 +892,23 @@ const authController = {
       );
 
       const siteId = access.primary_site_id;
+      const roleForOrg = access.role_at_org || req.user.role;
       const token = issueToken({
         userId: req.user.userId,
         email: req.user.email,
-        role: req.user.role,
+        role: roleForOrg,
         orgId: Number(orgId),
         siteId,
+      });
+
+      await logLoginAudit({
+        userId: req.user.userId,
+        userName: req.user.email,
+        role: roleForOrg,
+        status: 'success',
+        authEvent: 'org_switch',
+        metadata: { fromOrgId: req.user.orgId, toOrgId: Number(orgId) },
+        req,
       });
 
       return res.status(200).json({
@@ -829,7 +918,9 @@ const authController = {
         siteId,
         orgName: access.org_name,
         siteName: access.site_name,
+        allOrgs,
         sessionTimeout: access.session_timeout_minutes ?? 30,
+        role: roleForOrg,
       });
     } catch (err) {
       console.error('Switch-org error:', err);

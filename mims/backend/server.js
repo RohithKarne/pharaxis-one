@@ -70,6 +70,9 @@ app.use('/api/cm', require('./routes/cm/reviews'));
 // Serve CM document uploads as static files
 app.use('/uploads/cm', express.static(path.join(__dirname, 'storage/cm_documents')));
 
+// Serve org logos
+app.use('/storage/org_logos', express.static(path.join(__dirname, 'storage/org_logos')));
+
 // ─── Serve Static Frontend Files ─────────────────────────────────────────────
 // This tells Express to serve all files in the /frontend folder
 // When the browser goes to http://localhost:3000 it gets index.html automatically
@@ -85,11 +88,23 @@ app.get('/api/health', (_req, res) => {
 // GET /api/users — active users list (for case owner dropdown in CaseFormPage)
 const { authenticate } = require('./middleware/auth');
 const pool = require('./database/db');
-app.get('/api/users', authenticate, async (_req, res) => {
+app.get('/api/users', authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      'SELECT id, name, email, role FROM users WHERE is_active = 1 ORDER BY name ASC'
-    );
+    let rows;
+    if (req.user.role === 'superadmin') {
+      [rows] = await pool.execute(
+        'SELECT id, name, email, role FROM users WHERE is_active = 1 ORDER BY name ASC'
+      );
+    } else {
+      [rows] = await pool.execute(
+        `SELECT DISTINCT u.id, u.name, u.email, u.role
+         FROM users u
+         INNER JOIN user_org_access uoa ON uoa.user_id = u.id
+         WHERE u.is_active = 1 AND uoa.org_id = ? AND uoa.is_active = 1
+         ORDER BY u.name ASC`,
+        [req.user.orgId]
+      );
+    }
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -4,6 +4,7 @@ const express        = require('express');
 const router         = express.Router();
 const authController = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
+const pool           = require('../database/db');
 
 // Public
 router.post('/register',       authController.register);
@@ -32,6 +33,20 @@ router.post('/logout', authenticate, async (req, res) => {
     [req.user.userId]
   );
   res.json({ message: 'Logged out.' });
+});
+
+// GET /api/auth/org-logo — returns logo_url for the current user's active org
+router.get('/org-logo', authenticate, async (req, res) => {
+  try {
+    if (!req.user.orgId) return res.json({ logo_url: null });
+    const [[org]] = await pool.execute(
+      'SELECT logo_url FROM organisations WHERE id = ?',
+      [req.user.orgId]
+    );
+    res.json({ logo_url: org?.logo_url || null });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 module.exports = router;

@@ -15,6 +15,9 @@
 | 2026-03-28 | Bala | Password recovery and password-history update: forgot-password flow, in-app change-password flow, and backend enforcement preventing reuse of current + last 5 passwords. |
 | 2026-03-28 | Bala | Reshape: audit + login-audit endpoints added to Section 7. Superadmin console pages table added to Section 8. Sprint 8 summary in Section 10 expanded. Section 11 deliverables, DB changes, and API endpoint list brought current with live code (2FA infra, SMTP, reset-2fa, audit endpoints). |
 | 2026-03-28 | Bala | Section 11 trimmed — verbose sprint-scoped blocks removed (deliverables, DB changes, API list, live data, QA results). All content already in permanent sections 7–9 and 13. Section 11 now holds current sprint status only. |
+| 2026-03-28 | Bala | Team promotions effective: Varun → Senior Director Engineering, Bhavya → Senior Architect, Vivek → Principal SWE, Karthik → QA Manager, Vanaja → Director Product Management, Vinay → Product Owner. Org chart and role descriptions updated in Section 5. |
+| 2026-03-28 | Bala | Sprint 9 closed: SuperAdmin dashboard, advanced audit filters + CSV export, user lifecycle controls, alerts engine, in-app notifications, duplicate alert-rule fix, and latest sprint status updated across Sections 7–13. |
+| 2026-03-28 | Bala | Sprint 9 DB reference enriched: superadmin_alert_rules, superadmin_alert_events, notifications descriptions expanded. Existing tables affected by Sprint 9 documented (users, login_audit, audit_logs, user_2fa_settings, organisations, sites, system_config, service_logs, email_accounts). |
 
 ---
 
@@ -210,14 +213,14 @@ if (req.user.role !== 'superadmin') {
 ```
 Saad (CEO)
 ├── Rohith (CPO — Final product authority, approval gates, sign-offs)
-│   ├── Vanaja (Assoc. Director, Product Management)
-│   │   └── Vinay (Principal BA — user stories, AC, edge cases, business rules)
+│   ├── Vanaja (Director, Product Management)
+│   │   └── Vinay (Product Owner — user stories, AC, edge cases, business rules)
 │   └── Bala (Director, Project Management — gates, communication, escalation)
 └── Rajeev (CTO — architecture oversight, engineering accountability)
-    └── Varun (Director, Dev + QA + Architecture — task assignment, code review, sign-off)
-        ├── Bhavya (Principal Software Engineer — technical analysis, root cause, design)
-        ├── Vivek (Senior Software Engineer — implementation, file-level changes)
-        ├── Karthik (QA Lead — test strategy, QA coverage, release-readiness)
+    └── Varun (Senior Director, Engineering — task assignment, code review, sign-off)
+        ├── Bhavya (Senior Architect — technical analysis, root cause, design)
+        ├── Vivek (Principal Software Engineer — implementation, ownership)
+        ├── Karthik (QA Manager — test strategy, QA coverage, release-readiness)
         └── Shivani (Senior Test Engineer — test execution, defect capture, evidence)
 ```
 
@@ -225,6 +228,7 @@ Saad (CEO)
 - Kavya is no longer in role. Bala carries PM + Scrum responsibilities.
 - Rajeev is CTO — NOT a hands-on bug fixer. Defects are fixed by Varun / Bhavya / Vivek.
 - Bala does not speak on technical matters. Engineering team speaks for engineering.
+- Promotions effective 2026-03-28: Varun → Senior Director, Bhavya → Senior Architect, Vivek → Principal SWE, Karthik → QA Manager, Vanaja → Director, Vinay → Product Owner.
 
 ---
 
@@ -331,8 +335,16 @@ Backend runs on port 3000. All routes under `/api/`.
 | GET | `/api/superadmin/config` | Get system config (superadmin timeout + platform SMTP) |
 | PUT | `/api/superadmin/config` | Update system config (superadmin timeout + platform SMTP) |
 | POST | `/api/superadmin/config/test-email` | Test SMTP connection or send a test email from SuperAdmin 2FA Configuration |
+| GET | `/api/superadmin/dashboard` | SuperAdmin dashboard KPIs + recent audit/login activity |
+| POST | `/api/superadmin/users/:id/force-password-reset` | Force selected user to reset password on next login |
+| POST | `/api/superadmin/users/:id/unlock` | Clear user security lock state / 2FA failed-attempt lock |
+| POST | `/api/superadmin/users/bulk-action` | Bulk activate, deactivate, or force password reset |
 | GET | `/api/superadmin/audit` | Paginated general audit log — all entity changes. Params: `limit` (max 200), `offset` |
 | GET | `/api/superadmin/login-audit` | Paginated login/logout event log. Params: `limit`, `offset`, `status` filter |
+| GET/POST/PUT | `/api/superadmin/alerts/rules` | List, create, and update SuperAdmin alert rules |
+| GET | `/api/superadmin/alerts/events` | Alert event history with delivery statuses |
+| GET | `/api/superadmin/notifications` | SuperAdmin in-app notifications |
+| POST | `/api/superadmin/notifications/:id/read` | Mark notification as read |
 
 ### Content Management
 | Method | Path | Purpose |
@@ -386,10 +398,13 @@ Accessible at `/superadmin` (requires `superadmin` role). Navigation is sidebar-
 
 | Page Key | Sidebar Label | What It Shows |
 |----------|--------------|---------------|
+| `dashboard` | Dashboard | Platform KPIs, failed logins, unread notifications, recent audit, recent login activity |
 | `organizations` | Organizations | Org cards with site lists, active/inactive toggles, session timeout editor, add site form |
 | `2fa-config` | 2FA Configuration | Platform SMTP config form + test/send buttons; per-org 2FA enable/methods/remember-days table |
 | `users` | Users | User list with 2FA status, org assignments, Reset 2FA button; create user form; org assignment panel (Org / Site / Role tabs) |
 | `module-access` | Module Access | Per-user module checkboxes (mims_core, admin_console, content_mgmt, data_visualization) |
+| `alerts` | Alerts | Alert rule setup, enable/disable, thresholds, recipients, recent alert event history |
+| `notifications` | Notifications | In-app notification inbox for SuperAdmin alerts with read/unread state |
 | `audit` | Audit Trail | Paginated general audit log — entity changes across platform |
 | `login-audit` | Login Audit | Paginated login/logout event log with status filter |
 
@@ -403,6 +418,7 @@ Accessible at `/superadmin` (requires `superadmin` role). Navigation is sidebar-
 | `users` | System users — email, role, password hash, active, password_reset_required |
 | `sessions` | Active login session tracking |
 | `login_audit` | Login/logout + auth event records for 21 CFR Part 11 compliance |
+| `notifications` | In-app notifications for users. Created in Sprint 9. Stores SuperAdmin alert-triggered notifications with read/unread state. SuperAdmin notification inbox reads from this table. |
 | `user_org_access` | Multi-org: maps user → org → site → role → permission (Sprint 7) |
 | `user_module_permissions` | Per-user module access — overrides default role permissions |
 | `user_password_history` | Previous password hashes per user. Used to block reuse of current + last 5 passwords |
@@ -495,9 +511,27 @@ Accessible at `/superadmin` (requires `superadmin` role). Navigation is sidebar-
 | Table | Purpose |
 |-------|---------|
 | `audit_logs` | General audit — case operations and entity changes |
+| `superadmin_alert_rules` | Created Sprint 9. Alert rule master data — event type, severity, delivery channels (email/in-app), recipients, threshold, time window, cooldown period, active/inactive state |
+| `superadmin_alert_events` | Created Sprint 9. Each alert event that fires — includes per-channel delivery status (email delivered/failed, in-app created/failed) |
 | `case_audit_trail` | Immutable field-level change log per case (F-09) |
 | `transmission_audit_trail` | Immutable outbound transmission log per case (F-10) |
 | `service_logs` | Platform-wide service events |
+
+### Sprint 9 — Existing Tables Affected
+
+No schema changes. These tables are read or written by Sprint 9 features:
+
+| Table | How Sprint 9 Uses It |
+|-------|----------------------|
+| `users` | Force password reset, activate/deactivate, bulk actions; identifies superadmin recipients for notifications |
+| `login_audit` | Dashboard failed-login metrics; login audit filter/export; failed-login and 2FA-lock alert detection |
+| `audit_logs` | Dashboard recent activity; audit trail filter/export; receives new audit entries for Sprint 9 actions |
+| `user_2fa_settings` | Unlock flow; locked-user detection for dashboard metrics and alerts |
+| `organisations` | Dashboard org counts; org deactivation alert trigger |
+| `sites` | Site deactivation alert trigger |
+| `system_config` | Platform SMTP config reused for alert emails (same SMTP as 2FA and forgot-password) |
+| `service_logs` | Service-failure and mailbox-failure alert detection |
+| `email_accounts` | Indirect — mail/SMTP health status shown on SuperAdmin dashboard |
 
 ---
 
@@ -513,14 +547,15 @@ Accessible at `/superadmin` (requires `superadmin` role). Navigation is sidebar-
 | Sprint 6 | Admin Console + Case Form | CLOSED — Gate 2 approved 2026-03-25 | Phase 1A: Admin Console redesign (165/166 QA). Phase 1B: Extended admin features. Phase 2: Full case form (F-13 to F-18, 195/195 QA). 6 bugs fixed during QA. | Phase 3 (Argus/Veeva integration) — deferred to future sprint |
 | Sprint 7 | Multi-Org Architecture | CLOSED — 2026-03-27 | Multi-org DB, JWT org context, switch-org API, superadmin user+org management, password reset flow, data isolation on all routes, org switcher UI, 7 bugs fixed during product testing | None |
 | Sprint 8 | Security + Data Integrity | CLOSED — 2026-03-28 | Session timeout per org + superadmin global timeout, 2FA infrastructure (user_2fa_settings, backup codes, trusted devices, challenges, password history), per-org 2FA config (on/off, email OTP + TOTP, remember-device days), platform SMTP config + test-email, superadmin audit + login-audit pages, superadmin lockdown, org/site toggles, site uniqueness, data cleanup. 20/20 QA tests passing. | None |
+| Sprint 9 | SuperAdmin Control, Audit, and Alerts | CLOSED — 2026-03-28 | SuperAdmin dashboard, advanced audit/login-audit filters + CSV export, user lifecycle controls (force password reset, unlock, bulk actions), alerts engine, alert rules/events, in-app notifications, org/site deactivation alerts, duplicate alert-rule fix. QA substantially passed and product review accepted. | Small future polish only — clarify alert-rule activation/default behavior in UX copy |
 
 ---
 
 ## 11. Current Sprint
 
-**Sprint 9 — Not yet started.** Awaiting Rohith's direction on scope and priorities.
+**Sprint 10 — Not yet started.** Awaiting Rohith's direction on scope and priorities.
 
-Sprint 8 is CLOSED — 2026-03-28. Full history in Section 10. All Sprint 8 artifacts are in their permanent locations: APIs in Section 7, superadmin pages in Section 8, DB tables in Section 9, technical rules in Section 13.
+Sprint 9 is CLOSED — 2026-03-28. Full history in Section 10. All Sprint 9 artifacts are in their permanent locations: APIs in Section 7, superadmin pages in Section 8, DB tables in Section 9, technical rules in Section 13.
 
 ---
 
@@ -561,8 +596,10 @@ These are non-negotiable. Ignoring them causes bugs.
 | Session timeout | Login + switch-org responses must always include `sessionTimeout`. AuthContext must always store it in `mims_session_timeout` localStorage key. |
 | User 2FA scope | 2FA applies to MIMS users only. Superadmin login does not use 2FA. |
 | Platform SMTP vs MIMS Email Accounts | Platform SMTP in Superadmin is for user 2FA emails. Admin Console Email Accounts remain org-specific operational mailboxes. Do not mix them. |
+| Platform SMTP reuse | The same platform SMTP is currently used for user 2FA, forgot-password emails, and SuperAdmin alert emails. There is no separate alert SMTP config in Sprint 9. |
 | 2FA expiry handling | Use DB-time expiry (`NOW()` / `DATE_ADD`) for challenges and trusted devices. Do not rely on JS Date values written directly into MySQL DATETIME for auth expiry logic. |
 | Password reuse policy | Backend must block reuse of the current password and previous 5 passwords across first-login reset, forgot-password reset, and in-app change password. This is hardcoded server behavior, not a UI setting. |
+| SuperAdmin alerts | Alert rules are configurable and can be enabled/disabled. If a rule is inactive, the related alert event and notification will not fire. |
 | QA status wording | For auth/email/security changes, always state whether status is backend smoke, browser verification, or full sign-off. |
 
 ---

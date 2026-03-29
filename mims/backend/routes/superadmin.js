@@ -10,9 +10,11 @@ const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const pool = require('../database/db');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { emitSuperadminAlert, getSystemConfig, parseJson } = require('../services/alertService');
 
 const ALLOWED_MODULES = ['mims_core', 'admin_console', 'content_mgmt', 'data_visualization'];
 const ASSIGNABLE_ROLES = ['admin', 'agent', 'reviewer', 'content_manager'];
+const THRESHOLD_ALERT_EVENTS = new Set(['failed_login_spike', 'two_factor_lockout', 'service_error_threshold']);
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -21,6 +23,114 @@ async function audit(userId, userName, action, entity, entityId, details) {
       [userId, userName, action, entity, entityId, JSON.stringify(details)]
     );
   } catch (_) {}
+}
+
+function parseIntSafe(value, fallback) {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeAlertRulePayload(input, fallback = {}) {
+  const eventType = input.event_type ?? fallback.event_type;
+  const isThresholdRule = THRESHOLD_ALERT_EVENTS.has(eventType);
+  return {
+    name: input.name ?? fallback.name,
+    event_type: eventType,
+    severity: input.severity ?? fallback.severity ?? 'medium',
+    channels: input.channels ?? fallback.channels ?? 'email,in_app',
+    recipient_emails: input.recipient_emails ?? fallback.recipient_emails ?? '',
+    threshold_value: isThresholdRule ? parseIntSafe(input.threshold_value, fallback.threshold_value ?? 1) : 1,
+    window_minutes: isThresholdRule ? parseIntSafe(input.window_minutes, fallback.window_minutes ?? 15) : 0,
+    cooldown_minutes: parseIntSafe(input.cooldown_minutes, fallback.cooldown_minutes ?? 30),
+    is_active: input.is_active !== undefined ? (input.is_active ? 1 : 0) : (fallback.is_active ?? 1),
+  };
+}
+
+function csvEscape(value) {
+  const normalized = value === undefined || value === null ? '' : String(value);
+  if (normalized.includes('"') || normalized.includes(',') || normalized.includes('\n')) {
+    return `"${normalized.replace(/"/g, '""')}"`;
+  }
+  return normalized;
+}
+
+function sendCsv(res, filename, rows) {
+  if (!rows.length) {
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send('No data\n');
+  }
+  const headers = Object.keys(rows[0]);
+  const lines = [
+    headers.join(','),
+    ...rows.map(row => headers.map(key => csvEscape(row[key])).join(',')),
+  ];
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  return res.send(lines.join('\n'));
+}
+
+async function getDashboardSummary() {
+  const [
+    [[orgTotals]],
+    [[userTotals]],
+    [[failedLogins]],
+    [[lockedUsers]],
+    [recentAudit],
+    [recentLogins],
+    [[smtpStatus]],
+    [[unreadNotifications]],
+    [[alertEvents]],
+  ] = await Promise.all([
+    pool.execute(`SELECT COUNT(*) AS total,
+                         SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active,
+                         SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive
+                  FROM organisations`),
+    pool.execute(`SELECT COUNT(*) AS total,
+                         SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active,
+                         SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive
+                  FROM users
+                  WHERE role != 'superadmin'`),
+    pool.execute(`SELECT COUNT(*) AS count
+                  FROM login_audit
+                  WHERE status = 'failed'
+                    AND login_time >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`),
+    pool.execute(`SELECT COUNT(DISTINCT user_id) AS count
+                  FROM user_2fa_settings
+                  WHERE is_locked = 1`),
+    pool.execute(`SELECT id, user_name, action, entity, entity_id, created_at
+                  FROM audit_logs
+                  ORDER BY created_at DESC
+                  LIMIT 5`),
+    pool.execute(`SELECT id, user_name, status, fail_reason, auth_event, login_time
+                  FROM login_audit
+                  ORDER BY login_time DESC
+                  LIMIT 5`),
+    pool.execute(`SELECT MAX(last_smtp_test_status) AS last_status
+                  FROM email_accounts`),
+    pool.execute(`SELECT COUNT(*) AS count
+                  FROM notifications n
+                  JOIN users u ON u.id = n.user_id
+                  WHERE u.role = 'superadmin' AND n.is_read = 0`),
+    pool.execute(`SELECT COUNT(*) AS count
+                  FROM superadmin_alert_events
+                  WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`),
+  ]);
+
+  const systemConfig = await getSystemConfig();
+  return {
+    kpis: {
+      organisations: orgTotals || { total: 0, active: 0, inactive: 0 },
+      users: userTotals || { total: 0, active: 0, inactive: 0 },
+      failedLogins24h: failedLogins?.count || 0,
+      lockedUsers: lockedUsers?.count || 0,
+      unreadNotifications: unreadNotifications?.count || 0,
+      alertEvents24h: alertEvents?.count || 0,
+      smtpStatus: smtpStatus?.last_status || (systemConfig.smtp_host ? 'configured' : 'not configured'),
+    },
+    recentAudit: recentAudit || [],
+    recentLogins: recentLogins || [],
+  };
 }
 
 // GET /api/superadmin/users — list users with current module overrides (excludes superadmin system account)
@@ -81,6 +191,15 @@ router.put('/users/:id/modules', authenticate, requireRole('superadmin'), async 
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
+router.get('/dashboard', authenticate, requireRole('superadmin'), async (_req, res) => {
+  try {
+    const summary = await getDashboardSummary();
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // ── ORGANISATIONS ────────────────────────────────────────────────────────────
 
 // GET /api/superadmin/orgs — list all orgs with their sites
@@ -139,6 +258,15 @@ router.put('/orgs/:id', authenticate, requireRole('superadmin'), async (req, res
     await audit(req.user.userId, req.user.email, 'UPDATE', 'organisation', req.params.id, {
       name, is_active, session_timeout_minutes, two_factor_enabled, two_factor_methods, two_factor_remember_days,
     });
+    if (existing.is_active && is_active === 0) {
+      await emitSuperadminAlert('organization_deactivated', {
+        severity: 'medium',
+        title: 'Organisation deactivated',
+        message: `${existing.name} was deactivated by SuperAdmin.`,
+        metadata: { orgId: Number(req.params.id), orgName: existing.name, updatedBy: req.user.email },
+        linkUrl: '/superadmin',
+      });
+    }
     res.json({ message: 'Updated.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
@@ -200,6 +328,17 @@ router.put('/config', authenticate, requireRole('superadmin'), async (req, res) 
       smtp_from_email,
       smtp_from_name,
       smtp_password: smtp_password ? '[UPDATED]' : undefined,
+    });
+    await emitSuperadminAlert('sensitive_config_change', {
+      severity: 'medium',
+      title: 'Sensitive SuperAdmin configuration changed',
+      message: `System configuration was updated by ${req.user.email}.`,
+      metadata: {
+        updatedBy: req.user.email,
+        changedKeys: Object.keys(configPairs).filter(key => configPairs[key] !== undefined)
+          .concat(superadmin_session_timeout_minutes !== undefined ? ['superadmin_session_timeout_minutes'] : []),
+      },
+      linkUrl: '/superadmin',
     });
     res.json({ message: 'Config updated.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
@@ -280,6 +419,13 @@ router.post('/config/test-email', authenticate, requireRole('superadmin'), async
     });
     return res.json({ message: 'SMTP connection verified successfully.' });
   } catch (err) {
+    await emitSuperadminAlert('smtp_failure', {
+      severity: 'high',
+      title: 'SMTP verification failed',
+      message: err.message || 'SMTP test failed.',
+      metadata: { updatedBy: req.user.email },
+      linkUrl: '/superadmin',
+    });
     return res.status(400).json({ error: err.message || 'SMTP test failed.' });
   }
 });
@@ -307,11 +453,22 @@ router.post('/orgs/:id/sites', authenticate, requireRole('superadmin'), async (r
 router.put('/sites/:id', authenticate, requireRole('superadmin'), async (req, res) => {
   try {
     const { name, country, is_primary, is_active } = req.body;
+    const [[existing]] = await pool.execute('SELECT id, name, is_active FROM sites WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Site not found.' });
     await pool.execute(
       'UPDATE sites SET name = ?, country = ?, is_primary = ?, is_active = ? WHERE id = ?',
       [name ?? null, country ?? null, is_primary ? 1 : 0, is_active ? 1 : 0, req.params.id]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'site', req.params.id, req.body);
+    if (existing.is_active && is_active === 0) {
+      await emitSuperadminAlert('site_deactivated', {
+        severity: 'medium',
+        title: 'Site deactivated',
+        message: `${existing.name} was deactivated by SuperAdmin.`,
+        metadata: { siteId: Number(req.params.id), siteName: existing.name, updatedBy: req.user.email },
+        linkUrl: '/superadmin',
+      });
+    }
     res.json({ message: 'Updated.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
@@ -328,7 +485,10 @@ router.get('/all-users', authenticate, requireRole('superadmin'), async (_req, r
              (SELECT GROUP_CONCAT(o2.name ORDER BY uoa2.last_accessed_at DESC SEPARATOR ', ')
               FROM user_org_access uoa2
               JOIN organisations o2 ON o2.id = uoa2.org_id
-              WHERE uoa2.user_id = u.id AND uoa2.is_active = 1) AS org_name
+              WHERE uoa2.user_id = u.id AND uoa2.is_active = 1) AS org_name,
+             (SELECT MAX(la.login_time)
+              FROM login_audit la
+              WHERE la.user_id = u.id AND la.status = 'success') AS last_login_at
       FROM users u
       LEFT JOIN user_2fa_settings ufs ON ufs.user_id = u.id
       WHERE u.role != 'superadmin'
@@ -411,52 +571,372 @@ router.post('/users/:id/reset-2fa', authenticate, requireRole('superadmin'), asy
   }
 });
 
+router.post('/users/:id/force-password-reset', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [[user]] = await pool.execute('SELECT id, name, role FROM users WHERE id = ?', [id]);
+    if (!user || user.role === 'superadmin') return res.status(404).json({ error: 'User not found.' });
+    await pool.execute(
+      'UPDATE users SET password_reset_required = 1, updated_at = NOW() WHERE id = ?',
+      [id]
+    );
+    await audit(req.user.userId, req.user.email, 'FORCE_PASSWORD_RESET', 'user', Number(id), {});
+    res.json({ message: `${user.name} will be required to reset password on next login.` });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/users/:id/unlock', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [[user]] = await pool.execute('SELECT id, name, role FROM users WHERE id = ?', [id]);
+    if (!user || user.role === 'superadmin') return res.status(404).json({ error: 'User not found.' });
+    await pool.execute(
+      `UPDATE user_2fa_settings
+       SET failed_attempts = 0, is_locked = 0, updated_at = NOW()
+       WHERE user_id = ?`,
+      [id]
+    );
+    await audit(req.user.userId, req.user.email, 'UNLOCK_USER_SECURITY', 'user', Number(id), {});
+    res.json({ message: `${user.name} security lock state cleared.` });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/users/bulk-action', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const { userIds, action } = req.body || {};
+    const ids = Array.isArray(userIds) ? userIds.map(id => Number(id)).filter(Boolean) : [];
+    if (!ids.length) return res.status(400).json({ error: 'Select at least one user.' });
+    if (!['activate', 'deactivate', 'force_password_reset'].includes(action)) {
+      return res.status(400).json({ error: 'Unsupported bulk action.' });
+    }
+
+    if (action === 'force_password_reset') {
+      await pool.query(
+        'UPDATE users SET password_reset_required = 1, updated_at = NOW() WHERE id IN (?) AND role != "superadmin"',
+        [ids]
+      );
+    } else {
+      await pool.query(
+        'UPDATE users SET is_active = ?, updated_at = NOW() WHERE id IN (?) AND role != "superadmin"',
+        [action === 'activate' ? 1 : 0, ids]
+      );
+    }
+    await audit(req.user.userId, req.user.email, 'BULK_USER_ACTION', 'user', null, { action, userIds: ids });
+    res.json({ message: 'Bulk action completed.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // ── AUDIT ────────────────────────────────────────────────────────────────────
 
 // GET /api/superadmin/audit — general audit log (module access changes)
 router.get('/audit', authenticate, requireRole('superadmin'), async (req, res) => {
   try {
-    const limit  = Math.min(parseInt(req.query.limit)  || 50, 200);
-    const offset = parseInt(req.query.offset) || 0;
+    const limit = Math.min(parseIntSafe(req.query.limit, 50), 200);
+    const offset = parseIntSafe(req.query.offset, 0);
+    const filters = [];
+    const params = [];
+    if (req.query.user) {
+      filters.push('user_name LIKE ?');
+      params.push(`%${req.query.user.trim()}%`);
+    }
+    if (req.query.action) {
+      filters.push('action = ?');
+      params.push(req.query.action.trim());
+    }
+    if (req.query.entity) {
+      filters.push('entity = ?');
+      params.push(req.query.entity.trim());
+    }
+    if (req.query.from) {
+      filters.push('DATE(created_at) >= ?');
+      params.push(req.query.from);
+    }
+    if (req.query.to) {
+      filters.push('DATE(created_at) <= ?');
+      params.push(req.query.to);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const [rows] = await pool.execute(
       `SELECT id, user_id, user_name, action, entity, entity_id, details, created_at
        FROM audit_logs
+       ${where}
        ORDER BY created_at DESC
-       LIMIT ${limit} OFFSET ${offset}`
+       LIMIT ${limit} OFFSET ${offset}`,
+      params
     );
-    const [[{ cnt: total }]] = await pool.execute('SELECT COUNT(*) AS cnt FROM audit_logs');
-    res.json({ logs: rows.map(r => ({ ...r, details: tryParse(r.details) })), total, limit, offset });
+    const [[{ cnt: total }]] = await pool.execute(
+      `SELECT COUNT(*) AS cnt FROM audit_logs ${where}`,
+      params
+    );
+    const mapped = rows.map(r => ({ ...r, details: tryParse(r.details) }));
+    if (req.query.export === 'csv') {
+      return sendCsv(res, 'superadmin-audit.csv', mapped.map(log => ({
+        time: log.created_at,
+        user: log.user_name,
+        action: log.action,
+        entity: `${log.entity}${log.entity_id ? ` #${log.entity_id}` : ''}`,
+        details: typeof log.details === 'object' ? JSON.stringify(log.details) : (log.details || ''),
+      })));
+    }
+    res.json({ logs: mapped, total, limit, offset });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // GET /api/superadmin/login-audit — login/logout event log
 router.get('/login-audit', authenticate, requireRole('superadmin'), async (req, res) => {
   try {
-    const limit  = Math.min(parseInt(req.query.limit)  || 50, 200);
-    const offset = parseInt(req.query.offset) || 0;
-    const status = req.query.status || null;
-
-    let rows, total;
-    if (status) {
-      [rows] = await pool.execute(
-        `SELECT id, user_id, user_name, role, login_time, logout_time, status, fail_reason
-         FROM login_audit WHERE status = ? ORDER BY login_time DESC LIMIT ${limit} OFFSET ${offset}`,
-        [status]
-      );
-      const [[{ cnt }]] = await pool.execute(
-        'SELECT COUNT(*) AS cnt FROM login_audit WHERE status = ?', [status]
-      );
-      total = cnt;
-    } else {
-      [rows] = await pool.execute(
-        `SELECT id, user_id, user_name, role, login_time, logout_time, status, fail_reason
-         FROM login_audit ORDER BY login_time DESC LIMIT ${limit} OFFSET ${offset}`
-      );
-      const [[{ cnt }]] = await pool.execute('SELECT COUNT(*) AS cnt FROM login_audit');
-      total = cnt;
+    const limit = Math.min(parseIntSafe(req.query.limit, 50), 200);
+    const offset = parseIntSafe(req.query.offset, 0);
+    const filters = [];
+    const params = [];
+    if (req.query.status) {
+      filters.push('status = ?');
+      params.push(req.query.status);
+    }
+    if (req.query.user) {
+      filters.push('user_name LIKE ?');
+      params.push(`%${req.query.user.trim()}%`);
+    }
+    if (req.query.role) {
+      filters.push('role = ?');
+      params.push(req.query.role.trim());
+    }
+    if (req.query.from) {
+      filters.push('DATE(login_time) >= ?');
+      params.push(req.query.from);
+    }
+    if (req.query.to) {
+      filters.push('DATE(login_time) <= ?');
+      params.push(req.query.to);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const [rows] = await pool.execute(
+      `SELECT id, user_id, user_name, role, login_time, logout_time, status, fail_reason, auth_event, ip_address, location
+       FROM login_audit
+       ${where}
+       ORDER BY login_time DESC
+       LIMIT ${limit} OFFSET ${offset}`,
+      params
+    );
+    const [[{ cnt: total }]] = await pool.execute(
+      `SELECT COUNT(*) AS cnt FROM login_audit ${where}`,
+      params
+    );
+    if (req.query.export === 'csv') {
+      return sendCsv(res, 'superadmin-login-audit.csv', rows.map(log => ({
+        login_time: log.login_time,
+        user: log.user_name,
+        role: log.role || '',
+        status: log.status,
+        auth_event: log.auth_event || '',
+        ip_address: log.ip_address || '',
+        location: log.location || '',
+        fail_reason: log.fail_reason || '',
+        logout_time: log.logout_time || '',
+      })));
     }
     res.json({ logs: rows, total, limit, offset });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+router.get('/alerts/rules', authenticate, requireRole('superadmin'), async (_req, res) => {
+  try {
+    const [rules] = await pool.execute(
+      'SELECT * FROM superadmin_alert_rules ORDER BY is_active DESC, name ASC'
+    );
+    res.json({ rules });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/alerts/rules', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const payload = normalizeAlertRulePayload(req.body || {});
+    if (!payload.name || !payload.event_type) return res.status(400).json({ error: 'name and event_type are required.' });
+    const [result] = await pool.execute(
+      `INSERT INTO superadmin_alert_rules
+       (name, event_type, severity, channels, recipient_emails, threshold_value, window_minutes, cooldown_minutes, is_active, created_by, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        payload.name.trim(),
+        payload.event_type,
+        payload.severity,
+        payload.channels,
+        payload.recipient_emails,
+        payload.threshold_value,
+        payload.window_minutes,
+        payload.cooldown_minutes,
+        payload.is_active,
+        req.user.userId,
+        req.user.userId,
+      ]
+    );
+    await audit(req.user.userId, req.user.email, 'CREATE', 'superadmin_alert_rule', result.insertId, payload);
+    res.status(201).json({ message: 'Alert rule created.', id: result.insertId });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.put('/alerts/rules/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const [[existing]] = await pool.execute('SELECT * FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
+    const payload = normalizeAlertRulePayload(req.body || {}, existing);
+    await pool.execute(
+      `UPDATE superadmin_alert_rules
+       SET name = ?, event_type = ?, severity = ?, channels = ?, recipient_emails = ?,
+           threshold_value = ?, window_minutes = ?, cooldown_minutes = ?, is_active = ?, updated_by = ?, updated_at = NOW()
+       WHERE id = ?`,
+      [
+        payload.name,
+        payload.event_type,
+        payload.severity,
+        payload.channels,
+        payload.recipient_emails,
+        payload.threshold_value,
+        payload.window_minutes,
+        payload.cooldown_minutes,
+        payload.is_active,
+        req.user.userId,
+        req.params.id,
+      ]
+    );
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'superadmin_alert_rule', Number(req.params.id), payload);
+    res.json({ message: 'Alert rule updated.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.delete('/alerts/rules/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const [[existing]] = await pool.execute('SELECT * FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
+
+    await pool.execute('DELETE FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
+    await audit(req.user.userId, req.user.email, 'DELETE', 'superadmin_alert_rule', Number(req.params.id), {
+      name: existing.name,
+      event_type: existing.event_type,
+    });
+    res.json({ message: 'Alert rule deleted.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.get('/alerts/events', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const limit = Math.min(parseIntSafe(req.query.limit, 50), 200);
+    const offset = parseIntSafe(req.query.offset, 0);
+    const filters = [];
+    const params = [];
+    if (req.query.event_type) {
+      filters.push('e.event_type = ?');
+      params.push(req.query.event_type);
+    }
+    if (req.query.severity) {
+      filters.push('e.severity = ?');
+      params.push(req.query.severity);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const [rows] = await pool.execute(
+      `SELECT e.*, r.name AS rule_name
+       FROM superadmin_alert_events e
+       LEFT JOIN superadmin_alert_rules r ON r.id = e.rule_id
+       ${where}
+       ORDER BY e.created_at DESC
+       LIMIT ${limit} OFFSET ${offset}`,
+      params
+    );
+    const [[{ cnt: total }]] = await pool.execute(
+      `SELECT COUNT(*) AS cnt
+       FROM superadmin_alert_events e
+       ${where}`,
+      params
+    );
+    res.json({ events: rows.map(row => ({ ...row, metadata: parseJson(row.metadata, null) })), total, limit, offset });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.get('/notifications', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const limit = Math.min(parseIntSafe(req.query.limit, 50), 200);
+    const offset = parseIntSafe(req.query.offset, 0);
+    const [rows] = await pool.execute(
+      `SELECT id, title, message, link_url, metadata, is_read, created_at, read_at
+       FROM notifications
+       WHERE user_id = ?
+       ORDER BY created_at DESC
+       LIMIT ${limit} OFFSET ${offset}`,
+      [req.user.userId]
+    );
+    const [[{ cnt: total }]] = await pool.execute(
+      'SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ?',
+      [req.user.userId]
+    );
+    const [[{ cnt: unread }]] = await pool.execute(
+      'SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ? AND is_read = 0',
+      [req.user.userId]
+    );
+    res.json({
+      notifications: rows.map(row => ({ ...row, metadata: parseJson(row.metadata, null) })),
+      total,
+      unread,
+      limit,
+      offset,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/notifications/:id/read', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    await pool.execute(
+      'UPDATE notifications SET is_read = 1, read_at = NOW() WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.userId]
+    );
+    res.json({ message: 'Notification marked as read.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// DELETE /api/superadmin/notifications/read — clear all read notifications
+// MUST be registered before /:id to prevent Express matching 'read' as a param
+router.delete('/notifications/read', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const [result] = await pool.execute(
+      'DELETE FROM notifications WHERE user_id = ? AND is_read = 1',
+      [req.user.userId]
+    );
+    res.json({ success: true, deleted: result.affectedRows });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// DELETE /api/superadmin/notifications/:id — delete a single notification
+router.delete('/notifications/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    await pool.execute(
+      'DELETE FROM notifications WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.userId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // ── ORG ACCESS (user_org_access) ─────────────────────────────────────────────
@@ -546,5 +1026,83 @@ router.get('/orgs-for-assignment', authenticate, requireRole('superadmin'), asyn
 function tryParse(str) {
   try { return JSON.parse(str) } catch { return str }
 }
+
+// ── ALERT EMAIL TEMPLATE ─────────────────────────────────────────────────────
+
+const DEFAULT_ALERT_EMAIL_SUBJECT = 'MIMS Alert: {{alert_title}}';
+const DEFAULT_ALERT_EMAIL_BODY =
+  'Alert: {{alert_title}}\nSeverity: {{severity}}\nOrganisation: {{org_name}}\nTriggered at: {{triggered_at}}\n\n{{message}}';
+
+// GET /api/superadmin/alert-email-template
+router.get('/alert-email-template', authenticate, requireRole('superadmin'), async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      "SELECT config_key, config_value FROM system_config WHERE config_key IN ('alert_email_subject','alert_email_body')"
+    );
+    const map = rows.reduce((a, r) => { a[r.config_key] = r.config_value; return a; }, {});
+    res.json({
+      subject: map.alert_email_subject || DEFAULT_ALERT_EMAIL_SUBJECT,
+      body:    map.alert_email_body    || DEFAULT_ALERT_EMAIL_BODY,
+    });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+// PUT /api/superadmin/alert-email-template
+router.put('/alert-email-template', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const { subject, body } = req.body;
+    if (!subject || !body) return res.status(400).json({ error: 'subject and body are required.' });
+    await pool.execute(
+      "INSERT INTO system_config (config_key, config_value) VALUES ('alert_email_subject', ?) ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)",
+      [subject]
+    );
+    await pool.execute(
+      "INSERT INTO system_config (config_key, config_value) VALUES ('alert_email_body', ?) ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)",
+      [body]
+    );
+    res.json({ success: true, subject, body });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+// ── ORG LOGO UPLOAD ───────────────────────────────────────────────────────────
+
+const multer  = require('multer');
+const path    = require('path');
+const fs      = require('fs');
+
+const logoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.join(__dirname, '../storage/org_logos');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.png';
+    cb(null, `org_${req.params.orgId}_${Date.now()}${ext}`);
+  },
+});
+const logoUpload = multer({
+  storage: logoStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Only image files are allowed.'));
+  },
+});
+
+// POST /api/superadmin/orgs/:orgId/logo
+router.post('/orgs/:orgId/logo', authenticate, requireRole('superadmin'), logoUpload.single('logo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    const logoUrl = `/storage/org_logos/${req.file.filename}`;
+    await pool.execute(
+      'UPDATE organisations SET logo_url = ? WHERE id = ?',
+      [logoUrl, req.params.orgId]
+    );
+    res.json({ success: true, logo_url: logoUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error.' });
+  }
+});
 
 module.exports = router;

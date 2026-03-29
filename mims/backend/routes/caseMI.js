@@ -10,9 +10,32 @@ const router  = express.Router();
 const pool    = require('../database/db');
 const { authenticate } = require('../middleware/auth');
 
+// ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
+
+async function verifyCaseOrg(caseId, req) {
+  const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
+  if (!c) return false;
+  if (req.user.role === 'superadmin') return true;
+  return Number(c.org_id) === Number(req.user.orgId);
+}
+
+// Verify an MI tab belongs to requesting user's org via its parent case
+async function verifyMiOrg(miId, req) {
+  const [[row]] = await pool.execute(
+    `SELECT c.org_id FROM case_mi m JOIN cases c ON m.case_id = c.id WHERE m.id = ?`,
+    [miId]
+  );
+  if (!row) return false;
+  if (req.user.role === 'superadmin') return true;
+  return Number(row.org_id) === Number(req.user.orgId);
+}
+
 // GET /api/cases/:id/mi — list all MI tabs for a case
 router.get('/cases/:id/mi', authenticate, async (req, res) => {
   try {
+    if (!await verifyCaseOrg(req.params.id, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const [rows] = await pool.execute(
       `SELECT m.*, p.trade_name AS product_name
        FROM case_mi m
@@ -31,6 +54,9 @@ router.get('/cases/:id/mi', authenticate, async (req, res) => {
 // POST /api/cases/:id/mi — add a new MI tab to a case
 router.post('/cases/:id/mi', authenticate, async (req, res) => {
   try {
+    if (!await verifyCaseOrg(req.params.id, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const {
       mi_category, subcategory, product_id,
       question_summary, detailed_question,
@@ -73,6 +99,9 @@ router.post('/cases/:id/mi', authenticate, async (req, res) => {
 // PUT /api/cases/mi/:miId — update an MI tab
 router.put('/cases/mi/:miId', authenticate, async (req, res) => {
   try {
+    if (!await verifyMiOrg(req.params.miId, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const {
       mi_category, subcategory, product_id,
       question_summary, detailed_question,
@@ -121,6 +150,9 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
 // DELETE /api/cases/mi/:miId — remove an MI tab
 router.delete('/cases/mi/:miId', authenticate, async (req, res) => {
   try {
+    if (!await verifyMiOrg(req.params.miId, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     await pool.execute('DELETE FROM case_mi WHERE id = ?', [req.params.miId]);
     res.json({ success: true });
   } catch (err) {
