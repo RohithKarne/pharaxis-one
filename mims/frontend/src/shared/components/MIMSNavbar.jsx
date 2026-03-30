@@ -15,10 +15,11 @@ const UTILITIES_ITEMS   = ['Response Log', 'CDR Log', 'Schedule CDR', 'Case Audi
 export default function MIMSNavbar() {
   const navigate  = useNavigate()
   const location  = useLocation()
-  const { hasModuleAccess } = useAuth()
+  const { hasModuleAccess, user, token } = useAuth()
 
   const [caseMgmtOpen,  setCaseMgmtOpen]  = useState(false)
   const [utilitiesOpen, setUtilitiesOpen] = useState(false)
+  const [processExplorerEnabled, setProcessExplorerEnabled] = useState(user?.role === 'superadmin')
 
   const caseMgmtRef  = useRef(null)
   const utilitiesRef = useRef(null)
@@ -32,9 +33,38 @@ export default function MIMSNavbar() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  useEffect(() => {
+    let alive = true
+    async function loadProcessExplorerConfig() {
+      if (!token || !user) return
+      if (user.role === 'superadmin') {
+        if (alive) setProcessExplorerEnabled(true)
+        return
+      }
+      try {
+        const res = await fetch('/api/admin/process-logs/config', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!alive) return
+        if (!res.ok) {
+          setProcessExplorerEnabled(false)
+          return
+        }
+        const data = await res.json()
+        setProcessExplorerEnabled(!!data.allowed)
+      } catch (_) {
+        if (alive) setProcessExplorerEnabled(false)
+      }
+    }
+    loadProcessExplorerConfig()
+    return () => { alive = false }
+  }, [token, user?.role, user?.id, user?.email])
+
   function isActive(path) { return location.pathname === path }
+  function isCasesActive() { return location.pathname === '/cases' || location.pathname.startsWith('/cases/') }
 
   function canAccess(moduleKey) { return hasModuleAccess(moduleKey) }
+  function canAccessAny(...moduleKeys) { return moduleKeys.some(k => hasModuleAccess(k)) }
 
   function navItem(moduleKey, path, label) {
     const allowed = canAccess(moduleKey)
@@ -64,9 +94,9 @@ export default function MIMSNavbar() {
       {/* Case Management — dropdown */}
       <div className="mims-nav-dropdown-wrap" ref={caseMgmtRef}>
         <button
-          className={`mims-nav-tab ${!canAccess('case_mgmt') ? 'disabled' : ''}`}
-          onClick={() => canAccess('case_mgmt') && setCaseMgmtOpen(o => !o)}
-          title={!canAccess('case_mgmt') ? 'Access restricted' : undefined}
+          className={`mims-nav-tab ${isCasesActive() ? 'active' : ''} ${!canAccessAny('mims_core', 'case_mgmt') ? 'disabled' : ''}`}
+          onClick={() => canAccessAny('mims_core', 'case_mgmt') && setCaseMgmtOpen(o => !o)}
+          title={!canAccessAny('mims_core', 'case_mgmt') ? 'Access restricted' : undefined}
         >
           Case Management
           <span className="mims-tab-arrow">▾</span>
@@ -87,7 +117,7 @@ export default function MIMSNavbar() {
       </div>
 
       {/* Case Query */}
-      {navItem('case_query', '/case-query', 'Case Query')}
+      {navItem('mims_core', '/case-query', 'Case Query')}
 
       {/* Utilities — dropdown */}
       <div className="mims-nav-dropdown-wrap" ref={utilitiesRef}>
@@ -118,6 +148,17 @@ export default function MIMSNavbar() {
 
       {/* Analytics */}
       {navItem('data_visualization', '/analytics', 'Analytics')}
+
+      {/* Process Explorer */}
+      {(user?.role === 'admin' || user?.role === 'superadmin') && (
+        <button
+          className={`mims-nav-tab ${isActive('/process-explorer') ? 'active' : ''} ${!processExplorerEnabled ? 'disabled' : ''}`}
+          onClick={() => processExplorerEnabled && navigate('/process-explorer')}
+          title={!processExplorerEnabled ? 'Process Explorer disabled for your organisation' : undefined}
+        >
+          Process Explorer
+        </button>
+      )}
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />

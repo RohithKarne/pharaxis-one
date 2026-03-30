@@ -54,3 +54,105 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  mims_case_regression:
+    name: MIMS — Case Regression Smoke
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mims
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: mims_dev
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_DATABASE: mims_dev
+      JWT_SECRET: ci-jwt-secret
+      SESSION_SECRET: ci-session-secret
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mims/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for MySQL
+        run: |
+          node -e "
+          const mysql = require('mysql2/promise');
+          (async () => {
+            for (let i = 0; i < 30; i += 1) {
+              try {
+                const conn = await mysql.createConnection({
+                  host: process.env.MYSQL_HOST,
+                  port: Number(process.env.MYSQL_PORT),
+                  user: process.env.MYSQL_USER,
+                  password: process.env.MYSQL_PASSWORD,
+                  database: process.env.MYSQL_DATABASE,
+                });
+                await conn.ping();
+                await conn.end();
+                console.log('MySQL is ready');
+                process.exit(0);
+              } catch (_) {
+                console.log('Waiting for MySQL...');
+                await new Promise(r => setTimeout(r, 2000));
+              }
+            }
+            console.error('MySQL did not become ready in time');
+            process.exit(1);
+          })();
+          "
+
+      - name: Start MIMS backend
+        run: |
+          nohup node backend/server.js > /tmp/mims-server.log 2>&1 &
+          echo $! > /tmp/mims-server.pid
+
+      - name: Wait for API health
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://127.0.0.1:3000/api/health >/dev/null; then
+              echo "MIMS API is healthy"
+              exit 0
+            fi
+            echo "Waiting for MIMS API..."
+            sleep 2
+          done
+          echo "MIMS API failed to start"
+          cat /tmp/mims-server.log || true
+          exit 1
+
+      - name: Run case regression smoke
+        run: npm run test:smoke:case-regression
+
+      - name: Print server log on failure
+        if: failure()
+        run: cat /tmp/mims-server.log || true
+
+      - name: Stop MIMS backend
+        if: always()
+        run: |
+          if [ -f /tmp/mims-server.pid ]; then
+            kill "$(cat /tmp/mims-server.pid)" || true
+          fi

@@ -2,6 +2,7 @@
 > Effective date: 2026-03-27
 > Requested by Rohith
 > Purpose: define how the full team operates across structure, protocols, approvals, live communication, and execution discipline.
+> Revision update: 2026-03-30 (communication-quality addendum merged from `TEAM_OPERATING_SOP (Updated).md`)
 
 ---
 
@@ -1017,3 +1018,110 @@ This SOP is intended to prevent:
 - silent assumptions
 - escaped critical defects
 - unclear ownership
+
+---
+
+## 24. Communication-Quality Addendum (Mandatory)
+
+This addendum strengthens communication quality without changing the primary team structure, approval model, or execution flow already defined in this SOP.
+
+### Core Addendum Principles
+- system thinking first: discuss feature/fix as end-to-end flow, not isolated file-level change
+- root cause first: do not stop at patching symptoms
+- visible reasoning: always communicate What + Why + Impact
+- decision clarity: include trade-offs for major technical/product decisions
+- product visibility: engineering updates must be understandable to product and leadership
+
+### Debugging Transparency Rule
+During troubleshooting, teams must share in live chat:
+- current hypothesis
+- what is being checked
+- what was found
+- what changed in decision after findings
+
+Silent debugging for critical features/fixes is not acceptable.
+
+### Architecture Visibility Rule
+If more than one module can be impacted:
+- call out dependency impact explicitly
+- avoid local-only fixes that create downstream regressions
+- mention expected effect on adjacent modules
+
+### Decision Logging Rule
+Every major decision should be captured in this structure:
+
+```text
+Decision:
+Options Considered:
+Reason Chosen:
+Impact:
+```
+
+### Post-Mortem Rule (for major defects/incidents)
+Capture and share:
+
+```text
+Issue:
+Root Cause:
+Why Missed:
+Learning:
+Prevention:
+```
+
+### Enhanced Verification Expectations
+- engineering verification must confirm: end-to-end flow, system consistency, and regression awareness
+- QA verification must confirm: scenario depth, edge cases, evidence, and clear decision
+- a feature is not done unless product impact is clearly explained in communication
+
+### Communication Templates (Concise)
+
+#### Engineering Template
+```text
+Problem:
+Root Cause:
+System Flow:
+Scope / Impact:
+Files / Components:
+Fix Approach (with why):
+Risks:
+Verification:
+Product Impact:
+```
+
+#### QA Template
+```text
+Scope Tested:
+Scenarios Covered:
+Pass/Fail Summary:
+Edge Cases:
+Risks Identified:
+Evidence:
+Decision:
+```
+
+#### Product Template
+```text
+Problem:
+User Impact:
+Decision:
+Scope:
+Constraints:
+Next Action:
+```
+
+#### Project Management (Bala) Template
+```text
+Status:
+Progress:
+Blockers:
+Next Step:
+Action Needed:
+```
+
+#### Leadership Template
+```text
+Decision:
+Reason:
+Impact:
+Direction:
+```

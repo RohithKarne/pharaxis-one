@@ -6,8 +6,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
+import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
 
 const API = 'http://localhost:3000/api'
@@ -18,6 +19,7 @@ const PRIORITY_COLORS  = { normal: '#6b7280', high: '#f59e0b', urgent: '#ef4444'
 
 export default function CasesPage() {
   const navigate        = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { token }       = useAuth()
   const headers         = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
@@ -35,6 +37,19 @@ export default function CasesPage() {
   const [creating, setCreating]     = useState(false)
 
   // ── Load cases ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const tab = (searchParams.get('tab') || '').toLowerCase()
+    if (tab === 'my' || tab === 'unassigned' || tab === 'deleted') {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
+
+  function handleTabChange(tab) {
+    setActiveTab(tab)
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', tab)
+    setSearchParams(next)
+  }
 
   const loadCases = useCallback(async () => {
     setLoading(true)
@@ -105,7 +120,7 @@ export default function CasesPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create case')
       setModalOpen(false)
-      navigate(`/cases/${data.id}`)
+      navigate(`/cases/${data.id}`, { state: { from: '/cases' } })
     } catch (err) {
       alert(err.message)
     } finally {
@@ -129,6 +144,7 @@ export default function CasesPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
+    <MIMSLayout>
     <div className="cf-cases-page">
 
       {/* Header */}
@@ -148,7 +164,7 @@ export default function CasesPage() {
             <button
               key={t.key}
               className={`cf-cases-tab ${activeTab === t.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(t.key)}
+              onClick={() => handleTabChange(t.key)}
             >
               {t.label}
             </button>
@@ -191,7 +207,7 @@ export default function CasesPage() {
             </thead>
             <tbody>
               {filtered.map(c => (
-                <tr key={c.id} className="cf-cases-row" onClick={() => navigate(`/cases/${c.id}`)}>
+                <tr key={c.id} className="cf-cases-row" onClick={() => navigate(`/cases/${c.id}`, { state: { from: '/cases' } })}>
                   <td className="cf-case-num">
                     {c.case_number || <span className="cf-draft-badge">DRAFT</span>}
                   </td>
@@ -214,7 +230,7 @@ export default function CasesPage() {
                   <td>{c.date_received ? c.date_received.slice(0, 10) : '—'}</td>
                   <td>{c.owner_name || '—'}</td>
                   <td>
-                    <button className="cf-open-btn" onClick={e => { e.stopPropagation(); navigate(`/cases/${c.id}`) }}>
+                    <button className="cf-open-btn" onClick={e => { e.stopPropagation(); navigate(`/cases/${c.id}`, { state: { from: '/cases' } }) }}>
                       Open →
                     </button>
                   </td>
@@ -323,5 +339,6 @@ export default function CasesPage() {
         </div>
       )}
     </div>
+    </MIMSLayout>
   )
 }

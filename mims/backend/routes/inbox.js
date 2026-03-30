@@ -9,6 +9,14 @@ const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const pool = require('../database/db');
 
+function toMySqlDateTime(input) {
+  const dt = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(dt.getTime())) {
+    return new Date().toISOString().replace('T', ' ').substring(0, 19);
+  }
+  return dt.toISOString().replace('T', ' ').substring(0, 19);
+}
+
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
     await pool.execute(
@@ -32,7 +40,7 @@ router.get('/', authenticate, async (req, res) => {
     const [rows] = await pool.execute(`
       SELECT id, sender, recipient, subject, body, received_at, status,
              is_locked, locked_by, color, attachments_count, source_tag, is_read,
-             assigned_to, priority, due_date
+             assigned_to, priority, due_date, case_id
       FROM inquiries
       ${orgClause}
       ORDER BY received_at DESC, created_at DESC
@@ -56,10 +64,49 @@ router.get('/', authenticate, async (req, res) => {
       assigned_to: r.assigned_to || null,
       priority: r.priority || null,
       due_date: r.due_date || null,
+      case_id: r.case_id || null,
     }));
 
     res.json({ source: 'db', inquiries, total: inquiries.length });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+// GET /api/inbox/case/:caseId/correspondence — full case communication timeline
+router.get('/case/:caseId/correspondence', authenticate, async (req, res) => {
+  try {
+    const caseId = Number(req.params.caseId);
+    if (!caseId) return res.status(400).json({ error: 'Invalid case id.' });
+
+    const [[caseRow]] = await pool.execute(
+      'SELECT id, org_id, case_number, case_type FROM cases WHERE id = ?',
+      [caseId]
+    );
+    if (!caseRow) return res.status(404).json({ error: 'Case not found.' });
+    if (req.user.role !== 'superadmin' && Number(caseRow.org_id) !== Number(req.user.orgId)) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT id, sender, recipient, subject, body, received_at, status, source_tag,
+              attachments_count, is_read, assigned_to, priority, due_date, original_inquiry_id
+       FROM inquiries
+       WHERE case_id = ?
+       ORDER BY received_at DESC, created_at DESC, id DESC`,
+      [caseId]
+    );
+
+    res.json({
+      case: {
+        id: caseRow.id,
+        case_number: caseRow.case_number || null,
+        case_type: caseRow.case_type || null,
+      },
+      items: rows || [],
+      total: rows.length,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // GET /api/inbox/users — list active users for assign dropdown (F1)
@@ -154,9 +201,10 @@ router.post('/fetch', authenticate, async (req, res) => {
           : new Date(Date.now() - (account.initial_fetch_days || 7) * 24 * 60 * 60 * 1000);
         const n = await ingestAccount(account, sinceDt);
         const runEndedAt = new Date().toISOString();
+        const runEndedAtDb = toMySqlDateTime(runEndedAt);
         await pool.execute(
           `UPDATE email_accounts SET last_ingest_at = ? WHERE id = ?`,
-          [runEndedAt, account.id]
+          [runEndedAtDb, account.id]
         );
         totalIngested += n;
         logService({
@@ -340,12 +388,12 @@ async function sendViaSmtp(account, { from, to, subject, text }) {
   await transporter.sendMail({ from, to, subject, text });
 }
 
-async function insertSentItem({ from, to, subject, body, sourceTag, originalId }) {
+async function insertSentItem({ from, to, subject, body, sourceTag, originalId, caseId }) {
   const sentAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
   await pool.execute(
-    `INSERT INTO inquiries (sender, recipient, subject, body, received_at, status, attachments_count, source_tag, is_locked, locked_by, color, original_inquiry_id)
-     VALUES (?, ?, ?, ?, ?, 'outbox', 0, ?, 0, null, null, ?)`,
-    [from, to, subject, body, sentAt, sourceTag, originalId || null]
+    `INSERT INTO inquiries (sender, recipient, subject, body, received_at, status, attachments_count, source_tag, is_locked, locked_by, color, original_inquiry_id, case_id)
+     VALUES (?, ?, ?, ?, ?, 'outbox', 0, ?, 0, null, null, ?, ?)`,
+    [from, to, subject, body, sentAt, sourceTag, originalId || null, caseId || null]
   );
 }
 
@@ -356,7 +404,7 @@ router.post('/:id/reply', authenticate, async (req, res) => {
     const { to, subject, body } = req.body;
     if (!to || !subject || !body) return res.status(400).json({ error: 'to, subject, and body are required.' });
 
-    const [[inquiry]] = await pool.execute('SELECT id, recipient FROM inquiries WHERE id = ?', [id]);
+    const [[inquiry]] = await pool.execute('SELECT id, recipient, case_id FROM inquiries WHERE id = ?', [id]);
     if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
 
     const account = await getOutboundAccount(inquiry.recipient);
@@ -371,7 +419,7 @@ router.post('/:id/reply', authenticate, async (req, res) => {
     }
 
     await pool.execute(`UPDATE inquiries SET status = 'processed' WHERE id = ?`, [id]);
-    await insertSentItem({ from: fromAddr, to, subject, body, sourceTag: 'Sent Reply', originalId: Number(id) });
+    await insertSentItem({ from: fromAddr, to, subject, body, sourceTag: 'Sent Reply', originalId: Number(id), caseId: inquiry.case_id || null });
     audit(req.user?.userId || null, req.user?.email || 'unknown', 'REPLY', 'inquiry', Number(id), { to, subject });
     res.json({ message: 'Reply sent. Inquiry moved to Processed.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
@@ -384,7 +432,7 @@ router.post('/:id/forward', authenticate, async (req, res) => {
     const { to, subject, body } = req.body;
     if (!to || !subject || !body) return res.status(400).json({ error: 'to, subject, and body are required.' });
 
-    const [[inquiry]] = await pool.execute('SELECT id, recipient FROM inquiries WHERE id = ?', [id]);
+    const [[inquiry]] = await pool.execute('SELECT id, recipient, case_id FROM inquiries WHERE id = ?', [id]);
     if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
 
     const account = await getOutboundAccount(inquiry.recipient);
@@ -398,7 +446,7 @@ router.post('/:id/forward', authenticate, async (req, res) => {
       return res.status(502).json({ error: `Failed to send: ${err.message}` });
     }
 
-    await insertSentItem({ from: fromAddr, to, subject, body, sourceTag: 'Sent Forward', originalId: Number(id) });
+    await insertSentItem({ from: fromAddr, to, subject, body, sourceTag: 'Sent Forward', originalId: Number(id), caseId: inquiry.case_id || null });
     audit(req.user?.userId || null, req.user?.email || 'unknown', 'FORWARD', 'inquiry', Number(id), { to, subject });
     res.json({ message: 'Email forwarded.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
@@ -408,13 +456,16 @@ router.post('/:id/forward', authenticate, async (req, res) => {
 router.patch('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, is_locked, locked_by, color, is_read, assigned_to, priority, due_date } = req.body;
+    const { status, is_locked, locked_by, color, is_read, assigned_to, priority, due_date, case_id } = req.body;
 
     const [[row]] = await pool.execute(
-      'SELECT id, status, is_locked, locked_by, color, is_read, assigned_to, priority, due_date FROM inquiries WHERE id = ?',
+      'SELECT id, org_id, status, is_locked, locked_by, color, is_read, assigned_to, priority, due_date, case_id FROM inquiries WHERE id = ?',
       [id]
     );
     if (!row) return res.status(404).json({ error: 'Inquiry not found.' });
+    if (req.user.role !== 'superadmin' && Number(row.org_id) !== Number(req.user.orgId)) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
 
     const updates = [];
     const params = [];
@@ -427,6 +478,16 @@ router.patch('/:id', authenticate, async (req, res) => {
     if (assigned_to !== undefined) { updates.push('assigned_to = ?'); params.push(assigned_to || null); }
     if (priority !== undefined)    { updates.push('priority = ?');    params.push(priority || null); }
     if (due_date !== undefined)    { updates.push('due_date = ?');    params.push(due_date || null); }
+    if (case_id !== undefined) {
+      if (case_id) {
+        const [[caseRow]] = await pool.execute('SELECT id, org_id FROM cases WHERE id = ?', [case_id]);
+        if (!caseRow) return res.status(404).json({ error: 'Case not found.' });
+        if (req.user.role !== 'superadmin' && Number(caseRow.org_id) !== Number(req.user.orgId)) {
+          return res.status(403).json({ error: 'Cannot link inquiry to a case outside your organisation.' });
+        }
+      }
+      updates.push('case_id = ?'); params.push(case_id || null);
+    }
 
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
@@ -440,16 +501,66 @@ router.patch('/:id', authenticate, async (req, res) => {
       assigned_to: assigned_to !== undefined ? (assigned_to || null) : row.assigned_to,
       priority: priority !== undefined ? (priority || null) : row.priority,
       due_date: due_date !== undefined ? (due_date || null) : row.due_date,
+      case_id: case_id !== undefined ? (case_id || null) : row.case_id,
     };
     audit(req.user?.userId || null, req.user?.email || 'unknown', 'UPDATE', 'inquiry', Number(id), {
       from: {
         status: row.status, is_locked: row.is_locked, locked_by: row.locked_by,
-        color: row.color, assigned_to: row.assigned_to, priority: row.priority, due_date: row.due_date,
+        color: row.color, assigned_to: row.assigned_to, priority: row.priority, due_date: row.due_date, case_id: row.case_id,
       },
       to: after,
     });
     res.json({ message: 'Updated.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+// POST /api/inbox/:id/link-case — link inquiry to a case and move to processed
+router.post('/:id/link-case', authenticate, async (req, res) => {
+  try {
+    const inquiryId = Number(req.params.id);
+    const caseId = Number(req.body?.case_id);
+    if (!caseId) return res.status(400).json({ error: 'case_id is required.' });
+
+    const [[inquiry]] = await pool.execute(
+      'SELECT id, org_id, status, case_id FROM inquiries WHERE id = ?',
+      [inquiryId]
+    );
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
+    if (req.user.role !== 'superadmin' && Number(inquiry.org_id) !== Number(req.user.orgId)) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const [[caseRow]] = await pool.execute(
+      'SELECT id, org_id, case_number, case_type FROM cases WHERE id = ?',
+      [caseId]
+    );
+    if (!caseRow) return res.status(404).json({ error: 'Case not found.' });
+    if (req.user.role !== 'superadmin' && Number(caseRow.org_id) !== Number(req.user.orgId)) {
+      return res.status(403).json({ error: 'Cannot link inquiry to a case outside your organisation.' });
+    }
+
+    await pool.execute(
+      "UPDATE inquiries SET case_id = ?, status = 'processed' WHERE id = ?",
+      [caseId, inquiryId]
+    );
+
+    audit(req.user?.userId || null, req.user?.email || 'unknown', 'LINK_CASE', 'inquiry', inquiryId, {
+      from: { status: inquiry.status, case_id: inquiry.case_id || null },
+      to: { status: 'processed', case_id: caseId },
+      linked_case: { id: caseRow.id, case_number: caseRow.case_number || null, case_type: caseRow.case_type || null },
+    });
+
+    res.json({
+      message: 'Inquiry linked to case.',
+      case: {
+        id: caseRow.id,
+        case_number: caseRow.case_number || null,
+        case_type: caseRow.case_type || null,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 module.exports = router;

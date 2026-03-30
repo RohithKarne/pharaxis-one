@@ -33,7 +33,14 @@ export default function LoginPage({ redirectTo = '/dashboard', appName = 'MIMS',
       })
       const data = await res.json()
       if (!res.ok) return showAlert(data.error || 'Login failed.')
-      login(data.user, data.token, data.modules || [])
+      login(data.user, data.token, data.modules || [], {
+        orgId: data.orgId ?? null,
+        siteId: data.siteId ?? null,
+        orgName: data.orgName ?? null,
+        siteName: data.siteName ?? null,
+        allOrgs: Array.isArray(data.allOrgs) ? data.allOrgs : [],
+        sessionTimeout: data.sessionTimeout ?? 30,
+      })
       navigate(redirectTo)
     } catch {
       showAlert('Cannot connect to server.')

@@ -9,10 +9,13 @@ const request = require('supertest')
 // server.js must export `app` for this to work (see note below)
 let app
 
-beforeAll(() => {
+beforeAll(async () => {
+  process.env.NODE_ENV = 'test'
   // Suppress console output during tests
   jest.spyOn(console, 'log').mockImplementation(() => {})
   jest.spyOn(console, 'error').mockImplementation(() => {})
+  const db = require('../database/db')
+  await db.initPromise
   app = require('../server').app
 })
 
@@ -32,7 +35,7 @@ describe('POST /api/auth/login', () => {
   it('returns 200 + token for valid superadmin credentials', async () => {
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ email: 'superadmin@scimax.com', password: 'superadmin123' })
+      .send({ email: 'superadmin', password: 'Manager@123' })
     expect(res.status).toBe(200)
     expect(res.body).toHaveProperty('token')
     expect(res.body).toHaveProperty('user')
@@ -49,7 +52,7 @@ describe('GET /api/admin/orgs — auth guard', () => {
     // Login first to get token
     const login = await request(app)
       .post('/api/auth/login')
-      .send({ email: 'superadmin@scimax.com', password: 'superadmin123' })
+      .send({ email: 'superadmin', password: 'Manager@123' })
     const token = login.body.token
 
     const res = await request(app)

@@ -11,8 +11,10 @@ import InboxPage from './pages/InboxPage'
 import AdminConsoleRouter from '../admin/AdminConsoleRouter'
 import ContentPage from '../content/pages/ContentPage'
 import AnalyticsPage from '../dv/pages/AnalyticsPage'
+import ProcessExplorerPage from '../dv/pages/ProcessExplorerPage'
 import CasesPage from '../cases/pages/CasesPage'
 import CaseFormPage from '../cases/pages/CaseFormPage'
+import CaseQueryPage from '../cases/pages/CaseQueryPage'
 import NoAccessPage from '../../pages/NoAccessPage'
 import ResetPasswordPage from '../../pages/ResetPasswordPage'
 
@@ -73,6 +75,13 @@ function AppRoutes() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
+          <Route path="/process-explorer" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="mims_core">
+                <ProcessExplorerPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
           <Route path="/cases" element={
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
@@ -84,6 +93,13 @@ function AppRoutes() {
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
                 <CaseFormPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/case-query" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="mims_core">
+                <CaseQueryPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />

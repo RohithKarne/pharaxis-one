@@ -226,7 +226,15 @@ router.post('/orgs', authenticate, requireRole('superadmin'), async (req, res) =
 // PUT /api/superadmin/orgs/:id — update org (name / active status / session timeout)
 router.put('/orgs/:id', authenticate, requireRole('superadmin'), async (req, res) => {
   try {
-    const { name, is_active, session_timeout_minutes, two_factor_enabled, two_factor_methods, two_factor_remember_days } = req.body;
+    const {
+      name,
+      is_active,
+      session_timeout_minutes,
+      two_factor_enabled,
+      two_factor_methods,
+      two_factor_remember_days,
+      process_explorer_enabled,
+    } = req.body;
     const [[existing]] = await pool.execute('SELECT * FROM organisations WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Organisation not found.' });
     if (session_timeout_minutes !== undefined) {
@@ -243,6 +251,7 @@ router.put('/orgs/:id', authenticate, requireRole('superadmin'), async (req, res
       `UPDATE organisations
        SET name = ?, is_active = ?, session_timeout_minutes = ?,
            two_factor_enabled = ?, two_factor_methods = ?, two_factor_remember_days = ?,
+           process_explorer_enabled = ?,
            updated_at = NOW()
        WHERE id = ?`,
       [
@@ -252,11 +261,15 @@ router.put('/orgs/:id', authenticate, requireRole('superadmin'), async (req, res
         two_factor_enabled !== undefined ? (two_factor_enabled ? 1 : 0) : existing.two_factor_enabled,
         two_factor_methods ?? existing.two_factor_methods ?? 'email,totp',
         two_factor_remember_days ?? existing.two_factor_remember_days ?? 7,
+        process_explorer_enabled !== undefined
+          ? (process_explorer_enabled ? 1 : 0)
+          : (existing.process_explorer_enabled ?? 0),
         req.params.id,
       ]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'organisation', req.params.id, {
-      name, is_active, session_timeout_minutes, two_factor_enabled, two_factor_methods, two_factor_remember_days,
+      name, is_active, session_timeout_minutes, two_factor_enabled, two_factor_methods,
+      two_factor_remember_days, process_explorer_enabled,
     });
     if (existing.is_active && is_active === 0) {
       await emitSuperadminAlert('organization_deactivated', {

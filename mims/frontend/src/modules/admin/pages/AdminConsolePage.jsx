@@ -844,6 +844,7 @@ export default function AdminConsolePage() {
   }
 
   async function deleteSiteEmailAccount(accountId) {
+    if (!window.confirm('Delete this site email account?')) return
     const res = await fetch(`/api/admin/sites/${selectedSiteDetail.id}/email-accounts/${accountId}`, { method: 'DELETE', headers: H })
     if (res.ok) { setSiteEmailAccounts(prev => prev.filter(a => a.id !== accountId)); flash('Removed.', 'success') }
   }
@@ -877,6 +878,7 @@ export default function AdminConsolePage() {
   }
 
   async function deleteSiteAlert(alertId) {
+    if (!window.confirm('Delete this site alert?')) return
     const res = await fetch(`/api/admin/sites/${selectedSiteDetail.id}/alerts/${alertId}`, { method: 'DELETE', headers: H })
     if (res.ok) { setSiteAlerts(prev => prev.filter(a => a.id !== alertId)); flash('Deleted.', 'success') }
   }
@@ -1062,6 +1064,7 @@ export default function AdminConsolePage() {
   }
 
   async function deletePicklist(row) {
+    if (!window.confirm(`Delete picklist "${row.name}"?`)) return
     const res = await fetch(`/api/admin/picklists/${row.id}`, { method: 'DELETE', headers: H })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Delete failed.', 'error')
@@ -1188,6 +1191,7 @@ export default function AdminConsolePage() {
 
   async function deleteSecGroup() {
     if (!selectedSecGroup) return
+    if (!window.confirm(`Delete security group "${selectedSecGroup.name}"?`)) return
     const res = await fetch(`/api/admin/security-groups/${selectedSecGroup.id}`, { method: 'DELETE', headers: H })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Delete failed.', 'error')
@@ -1210,6 +1214,7 @@ export default function AdminConsolePage() {
 
   async function removeUserFromSecGroup(userId) {
     if (!selectedSecGroup) return
+    if (!window.confirm('Remove this user from selected security group?')) return
     const res = await fetch(`/api/admin/security-groups/${selectedSecGroup.id}/users/${userId}`, { method: 'DELETE', headers: H })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Failed to remove user.', 'error')
@@ -1246,6 +1251,8 @@ export default function AdminConsolePage() {
   }
 
   async function deleteContact(c) {
+    const contactName = `${c.first_name || ''} ${c.last_name || ''}`.trim() || `#${c.id}`
+    if (!window.confirm(`Delete contact "${contactName}"?`)) return
     const res = await fetch(`/api/admin/contacts/${c.id}`, { method: 'DELETE', headers: H })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Delete failed.', 'error')
@@ -1276,6 +1283,7 @@ export default function AdminConsolePage() {
   }
 
   async function deleteRep(r) {
+    if (!window.confirm(`Delete representative "${r.name}"?`)) return
     const res = await fetch(`/api/admin/company-reps/${r.id}`, { method: 'DELETE', headers: H })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Delete failed.', 'error')
@@ -1401,6 +1409,14 @@ export default function AdminConsolePage() {
   }
 
   async function runEmailAction(account, action) {
+    const actionLabel = action === 'fetch-now'
+      ? 'fetch emails now'
+      : action === 'test-imap'
+        ? 'run IMAP test'
+        : action === 'test-smtp'
+          ? 'run SMTP test'
+          : `run ${action}`
+    if (!window.confirm(`Confirm to ${actionLabel} for "${account.account_name}"?`)) return
     const key = `${action}-${account.id}`
     setEmailTestingId(key)
     try {

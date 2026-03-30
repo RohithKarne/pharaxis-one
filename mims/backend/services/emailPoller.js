@@ -14,6 +14,16 @@ const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const { simpleParser } = require('mailparser')
+const { emitProcessEvent } = require('./processExplorerService')
+
+function toMySqlDateTime(input) {
+  const dt = input instanceof Date ? input : new Date(input)
+  if (Number.isNaN(dt.getTime())) {
+    const fallback = new Date()
+    return fallback.toISOString().replace('T', ' ').substring(0, 19)
+  }
+  return dt.toISOString().replace('T', ' ').substring(0, 19)
+}
 
 function sanitizeFilename(name) {
   return String(name || 'attachment')
@@ -84,7 +94,7 @@ async function ingestAccount(account, sinceDt) {
         const sender      = parsedEmail?.from?.text || null
         const recipient   = parsedEmail?.to?.text   || account.mailbox_email || null
         const subject     = parsedEmail?.subject    || '(no subject)'
-        const receivedAt  = parsedEmail?.date ? new Date(parsedEmail.date).toISOString() : new Date().toISOString()
+        const receivedAt  = toMySqlDateTime(parsedEmail?.date || new Date())
         const messageId   = parsedEmail?.messageId  || null
 
         const bodyCandidate = parsedEmail?.text || parsedEmail?.html || ''
@@ -207,9 +217,10 @@ function startPoller() {
           try {
             const n = await ingestAccount(account, sinceDt)
             const runEndedAt = new Date().toISOString()
+            const runEndedAtDb = toMySqlDateTime(runEndedAt)
             await pool.execute(
               `UPDATE email_accounts SET last_ingest_at = ? WHERE id = ?`,
-              [runEndedAt, account.id]
+              [runEndedAtDb, account.id]
             )
             console.log(`[POLLER] Ingest done: account ${account.id} inserted ${n}`)
             logService({
@@ -230,6 +241,19 @@ function startPoller() {
                 last_activity_at: runEndedAt,
                 last_poll_at: runEndedAt,
               },
+            })
+            await emitProcessEvent({
+              orgId: account.org_id || null,
+              sourceModule: 'Background Jobs',
+              method: 'JOB',
+              path: '/jobs/email-poller',
+              statusCode: 200,
+              durationMs: Math.max(0, new Date(runEndedAt).getTime() - new Date(runStartedAt).getTime()),
+              eventType: 'job_success',
+              entityType: 'email_account',
+              entityId: String(account.id),
+              summary: `Email poller completed for account ${account.account_name} (${n} new emails)`,
+              payload: { account_id: account.id, account_name: account.account_name, inserted: n },
             })
           } catch (err) {
             const runEndedAt = new Date().toISOString()
@@ -252,6 +276,20 @@ function startPoller() {
                 last_activity_at: runEndedAt,
                 last_poll_at: runEndedAt,
               },
+            })
+            await emitProcessEvent({
+              orgId: account.org_id || null,
+              sourceModule: 'Background Jobs',
+              method: 'JOB',
+              path: '/jobs/email-poller',
+              statusCode: 500,
+              durationMs: Math.max(0, new Date(runEndedAt).getTime() - new Date(runStartedAt).getTime()),
+              eventType: 'job_failed',
+              entityType: 'email_account',
+              entityId: String(account.id),
+              summary: `Email poller failed for account ${account.account_name}`,
+              payload: { account_id: account.id, account_name: account.account_name },
+              errorMessage: safeText(err?.message || err, 255),
             })
           }
         }

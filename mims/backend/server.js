@@ -21,6 +21,17 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const pool = require('./database/db');
+const { authenticate } = require('./middleware/auth');
+const { router: processExplorerRouter } = require('./routes/admin/processExplorer');
+const {
+  inferModule,
+  deriveEntity,
+  deriveEventType,
+  shouldCaptureBusinessEvent,
+  emitProcessEvent,
+} = require('./services/processExplorerService');
+const { startSchemaTracker, stopSchemaTracker } = require('./services/schemaTracker');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,6 +49,58 @@ app.use(express.json());
 
 // Parse URL-encoded form data (for HTML form submissions)
 app.use(express.urlencoded({ extended: true }));
+
+// Process Explorer telemetry — captures all API traffic for automatic flow visibility.
+let lastProcessLogPurgeAt = 0;
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/admin/process-logs')) return next();
+
+  const start = Date.now();
+  let capturedErrorMessage = null;
+  const originalJson = res.json.bind(res);
+  res.json = function patchedJson(body) {
+    if (res.statusCode >= 400 && body) {
+      capturedErrorMessage = String(body.error || body.message || '').slice(0, 255) || null;
+    }
+    return originalJson(body);
+  };
+
+  res.on('finish', () => {
+    (async () => {
+      try {
+        const now = Date.now();
+        if (now - lastProcessLogPurgeAt > 5 * 60 * 1000) {
+          lastProcessLogPurgeAt = now;
+          await pool.execute('DELETE FROM mims_process_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)');
+        }
+
+        if (!shouldCaptureBusinessEvent(req, res)) return;
+
+        const pathOnly = req.originalUrl.split('?')[0];
+        const payload = req.body && typeof req.body === 'object' && Object.keys(req.body).length
+          ? req.body
+          : null;
+
+        await emitProcessEvent({
+          orgId: req.user?.orgId ?? null,
+          sourceModule: inferModule(pathOnly),
+          method: req.method,
+          path: pathOnly,
+          statusCode: res.statusCode,
+          durationMs: Date.now() - start,
+          eventType: deriveEventType(req.method),
+          entityType: deriveEntity(pathOnly),
+          summary: `${deriveEventType(req.method).toUpperCase()} ${deriveEntity(pathOnly)} via ${pathOnly}`,
+          payload,
+          errorMessage: res.statusCode >= 400 ? capturedErrorMessage : null,
+        });
+      } catch (_) {
+        // Log capture is best-effort only.
+      }
+    })();
+  });
+  next();
+});
 
 // ─── Admin Console — Extended Routes ────────────────────────────────────────
 app.use('/api/admin', require('./routes/admin/picklists'));
@@ -86,8 +149,6 @@ app.get('/api/health', (_req, res) => {
 });
 
 // GET /api/users — active users list (for case owner dropdown in CaseFormPage)
-const { authenticate } = require('./middleware/auth');
-const pool = require('./database/db');
 app.get('/api/users', authenticate, async (req, res) => {
   try {
     let rows;
@@ -116,6 +177,7 @@ app.use('/api/admin/orgs', require('./routes/admin/orgs'));
 app.use('/api/admin', require('./routes/admin/serviceLogs'));
 app.use('/api/admin', require('./routes/admin/systemActivity'));
 app.use('/api/admin', require('./routes/admin/config'));
+app.use('/api/admin/process-logs', processExplorerRouter);
 // Superadmin routes (superadmin role required)
 app.use('/api/superadmin', require('./routes/superadmin'));
 
@@ -126,30 +188,35 @@ const { startPoller, stopPoller } = require('./services/emailPoller');
 // Wait for MySQL schema initialization before accepting requests or starting poller.
 const { initPromise } = require('./database/db');
 let server;
-initPromise.then(() => {
-  startPoller();
-  server = app.listen(PORT, HOST, () => {
-    console.log('');
-    console.log('🏥 MIMS — Medical Information Management System');
-    console.log(`🚀 Server running at: http://${HOST}:${PORT}`);
-    console.log(`📁 Serving frontend from: ${path.join(__dirname, '../frontend')}`);
-    console.log('');
-  });
-  server.on('error', (err) => {
-    if (err?.code === 'EADDRINUSE') {
-      console.error(`❌ Port already in use: http://${HOST}:${PORT}`)
-      console.error('   Stop the other server process (or change PORT) and restart.')
+const isTestEnv = process.env.NODE_ENV === 'test' || !!process.env.JEST_WORKER_ID;
+if (!isTestEnv) {
+  initPromise.then(() => {
+    startPoller();
+    startSchemaTracker();
+    server = app.listen(PORT, HOST, () => {
+      console.log('');
+      console.log('🏥 MIMS — Medical Information Management System');
+      console.log(`🚀 Server running at: http://${HOST}:${PORT}`);
+      console.log(`📁 Serving frontend from: ${path.join(__dirname, '../frontend')}`);
+      console.log('');
+    });
+    server.on('error', (err) => {
+      if (err?.code === 'EADDRINUSE') {
+        console.error(`❌ Port already in use: http://${HOST}:${PORT}`)
+        console.error('   Stop the other server process (or change PORT) and restart.')
+        process.exit(1)
+      }
+      console.error('❌ Server error:', err)
       process.exit(1)
-    }
-    console.error('❌ Server error:', err)
-    process.exit(1)
-  })
-});
+    })
+  });
+}
 
 
 function shutdown(signal) {
   console.log(`\n🛑 Shutting down (${signal})...`)
   try { stopPoller() } catch (_) {}
+  try { stopSchemaTracker() } catch (_) {}
   if (server) server.close(() => process.exit(0))
   else process.exit(0)
   // Force-exit if close hangs (e.g. open sockets)

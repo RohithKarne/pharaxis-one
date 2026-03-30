@@ -9,8 +9,9 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
+import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
 
 const API = 'http://localhost:3000/api'
@@ -42,6 +43,7 @@ const PC_TABS = [
 export default function CaseFormPage() {
   const { id }        = useParams()
   const navigate      = useNavigate()
+  const location      = useLocation()
   const { token }     = useAuth()
   const headers       = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
@@ -91,6 +93,19 @@ export default function CaseFormPage() {
   const [pcTabData,    setPcTabData]    = useState({})
   const [pcTabLoading, setPcTabLoading] = useState(false)
 
+  // Case correspondence (Inbox-linked communication timeline)
+  const [correspondence, setCorrespondence] = useState([])
+  const [corrLoading, setCorrLoading] = useState(false)
+  const [corrError, setCorrError] = useState('')
+  const [corrFilter, setCorrFilter] = useState('all')
+  const [corrSearch, setCorrSearch] = useState('')
+  const [corrFromDate, setCorrFromDate] = useState('')
+  const [corrToDate, setCorrToDate] = useState('')
+  const [activeCorrItem, setActiveCorrItem] = useState(null)
+  const [corrCompose, setCorrCompose] = useState(null)
+  const [corrAttachments, setCorrAttachments] = useState([])
+  const [corrAttLoading, setCorrAttLoading] = useState(false)
+
   // Auto-save ref (F-15)
   const autoSaveTimer = useRef(null)
 
@@ -130,10 +145,28 @@ export default function CaseFormPage() {
   useEffect(() => {
     if (!id) return
     if (section === 'contacts') loadContacts()
+    if (section === 'correspondence') loadCorrespondence()
     if (section === 'mi')       loadMI()
     if (section === 'ae')       loadAEVersions()
     if (section === 'pc')       loadPCVersions()
   }, [section, id])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '')
+    const targetSection = params.get('section')
+    if (targetSection === 'correspondence') {
+      setSection('correspondence')
+    }
+  }, [location.search])
+
+  function handleBackNavigation() {
+    const from = location.state?.from
+    if (from && typeof from === 'string') {
+      navigate(from)
+      return
+    }
+    navigate('/cases')
+  }
 
   // ── Auto-save (F-15) — debounce 2 min ────────────────────────────────────
 
@@ -231,6 +264,195 @@ export default function CaseFormPage() {
       await fetch(`${API}/cases/contacts/${ccId}`, { method: 'DELETE', headers })
       setContacts(prev => prev.filter(c => c.id !== ccId))
     } catch { alert('Failed to remove contact') }
+  }
+
+  // ── Correspondence timeline ───────────────────────────────────────────────
+
+  async function loadCorrespondence() {
+    setCorrLoading(true)
+    setCorrError('')
+    try {
+      const res = await fetch(`${API}/inbox/case/${id}/correspondence`, { headers })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load correspondence.')
+      setCorrespondence(Array.isArray(data.items) ? data.items : [])
+    } catch (err) {
+      setCorrespondence([])
+      setCorrError(err.message || 'Failed to load correspondence.')
+    } finally {
+      setCorrLoading(false)
+    }
+  }
+
+  function formatCorrDate(value) {
+    if (!value) return '-'
+    const dt = new Date(value)
+    if (Number.isNaN(dt.getTime())) return value
+    return dt.toLocaleString()
+  }
+
+  function getCorrDirection(item) {
+    const source = String(item?.source_tag || '').toLowerCase()
+    if (source.includes('reply') || source.includes('forward') || source.includes('sent') || source.includes('transmission')) {
+      return 'outbound'
+    }
+    return 'inbound'
+  }
+
+  function getCorrBox(item) {
+    return getCorrDirection(item) === 'outbound' ? 'sent' : 'inbox'
+  }
+
+  function getThreadRootId(item) {
+    return item?.original_inquiry_id || item?.id
+  }
+
+  function openCorrCompose(mode, item) {
+    const rawSubject = (item?.subject || '').trim()
+    const hasPrefix = mode === 'reply'
+      ? /^re:/i.test(rawSubject)
+      : /^fwd:/i.test(rawSubject)
+    const prefixedSubject = hasPrefix
+      ? rawSubject
+      : `${mode === 'reply' ? 'Re:' : 'Fwd:'} ${rawSubject || '(No Subject)'}`
+    const quoted = [
+      '',
+      '----- Original Message -----',
+      `From: ${item?.sender || '-'}`,
+      `To: ${item?.recipient || '-'}`,
+      `Sent: ${formatCorrDate(item?.received_at)}`,
+      `Subject: ${item?.subject || '(No Subject)'}`,
+      '',
+      item?.body || '',
+    ].join('\n')
+
+    setCorrCompose({
+      mode,
+      inquiryId: item?.id,
+      to: mode === 'reply' ? (item?.sender || '') : '',
+      subject: prefixedSubject,
+      body: quoted,
+      sending: false,
+      error: '',
+    })
+  }
+
+  async function sendCorrCompose() {
+    if (!corrCompose || corrCompose.sending) return
+    const to = (corrCompose.to || '').trim()
+    const subject = (corrCompose.subject || '').trim()
+    const body = (corrCompose.body || '').trim()
+    if (!to || !subject || !body) {
+      setCorrCompose(prev => ({ ...prev, error: 'To, subject, and body are required.' }))
+      return
+    }
+    setCorrCompose(prev => ({ ...prev, sending: true, error: '' }))
+    try {
+      const endpoint = corrCompose.mode === 'reply' ? 'reply' : 'forward'
+      const res = await fetch(`${API}/inbox/${corrCompose.inquiryId}/${endpoint}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ to, subject, body }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `Failed to ${corrCompose.mode}.`)
+      await loadCorrespondence()
+      setCorrCompose(null)
+      setSavedMsg(corrCompose.mode === 'reply' ? 'Reply sent' : 'Forward sent')
+      setTimeout(() => setSavedMsg(''), 2500)
+    } catch (err) {
+      setCorrCompose(prev => ({ ...prev, sending: false, error: err.message || 'Send failed.' }))
+      return
+    }
+  }
+
+  const filteredCorrespondence = correspondence.filter(item => {
+    if (corrFilter !== 'all' && getCorrBox(item) !== corrFilter) return false
+
+    const q = corrSearch.trim().toLowerCase()
+    if (q) {
+      const haystack = [
+        item.subject,
+        item.body,
+        item.sender,
+        item.recipient,
+        item.source_tag,
+        item.status,
+      ].filter(Boolean).join(' ').toLowerCase()
+      if (!haystack.includes(q)) return false
+    }
+
+    if (corrFromDate || corrToDate) {
+      const dt = item?.received_at ? new Date(item.received_at) : null
+      if (!dt || Number.isNaN(dt.getTime())) return false
+      if (corrFromDate) {
+        const from = new Date(`${corrFromDate}T00:00:00`)
+        if (dt < from) return false
+      }
+      if (corrToDate) {
+        const to = new Date(`${corrToDate}T23:59:59`)
+        if (dt > to) return false
+      }
+    }
+
+    return true
+  }).sort((a, b) => {
+    const ra = getThreadRootId(a)
+    const rb = getThreadRootId(b)
+    if (ra !== rb) return ra - rb
+    const ta = new Date(a?.received_at || 0).getTime()
+    const tb = new Date(b?.received_at || 0).getTime()
+    return ta - tb
+  })
+
+  useEffect(() => {
+    async function loadCorrAttachments() {
+      if (!activeCorrItem?.id) {
+        setCorrAttachments([])
+        return
+      }
+      setCorrAttLoading(true)
+      try {
+        const res = await fetch(`${API}/inbox/${activeCorrItem.id}/attachments`, { headers })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to load attachments.')
+        setCorrAttachments(Array.isArray(data.attachments) ? data.attachments : [])
+      } catch (_) {
+        setCorrAttachments([])
+      } finally {
+        setCorrAttLoading(false)
+      }
+    }
+    loadCorrAttachments()
+  }, [activeCorrItem?.id])
+
+  async function downloadCorrAttachment(att) {
+    try {
+      const r = await fetch(`${API}/inbox/attachments/${att.id}/download`, { headers })
+      if (!r.ok) return
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = att.filename || `attachment-${att.id}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (_) {
+      // no-op
+    }
+  }
+
+  async function previewCorrAttachment(att) {
+    try {
+      const r = await fetch(`${API}/inbox/attachments/${att.id}/download`, { headers })
+      if (!r.ok) return
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank', 'noopener,noreferrer')
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (_) {
+      // no-op
+    }
   }
 
   // ── MI Component (F-16) ───────────────────────────────────────────────────
@@ -422,16 +644,17 @@ export default function CaseFormPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) return <div className="cf-form-loading">Loading case…</div>
-  if (!caseData) return <div className="cf-form-error">Case not found. <button onClick={() => navigate('/cases')}>Back</button></div>
+  if (!caseData) return <div className="cf-form-error">Case not found. <button onClick={handleBackNavigation}>Back</button></div>
 
   const isLocked = (ver) => ver && ver.is_locked === 1
 
   return (
+    <MIMSLayout>
     <div className="cf-form-page">
 
       {/* Case header */}
       <div className="cf-form-header">
-        <button className="cf-back-btn" onClick={() => navigate('/cases')}>← Cases</button>
+        <button className="cf-back-btn" onClick={handleBackNavigation}>← Back</button>
         <div className="cf-form-header-info">
           <span className="cf-form-case-num">
             {caseData.case_number || <span className="cf-draft-badge">DRAFT</span>}
@@ -621,6 +844,131 @@ export default function CaseFormPage() {
                     <button className="cf-save-btn" onClick={saveContact}>Add Contact</button>
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Accordion: Correspondence ── */}
+        <div className="cf-acc-section">
+          <button className="cf-acc-header" onClick={() => setSection(s => s === 'correspondence' ? '' : 'correspondence')}>
+            <span className="cf-acc-title">Correspondence</span>
+            <span className="cf-acc-header-right">
+              {correspondence.length > 0 && (
+                <span className="cf-acc-filled">
+                  {correspondence.length} item{correspondence.length > 1 ? 's' : ''}
+                </span>
+              )}
+              <span className="cf-acc-arrow">{section === 'correspondence' ? '▲' : '▼'}</span>
+            </span>
+          </button>
+          {section === 'correspondence' && (
+            <div className="cf-acc-content">
+              {corrLoading && <div className="cf-empty-msg">Loading correspondence…</div>}
+              {!corrLoading && corrError && <div className="cf-corr-error">{corrError}</div>}
+              {!corrLoading && !corrError && correspondence.length === 0 && (
+                <div className="cf-empty-msg">
+                  No case communication tracked yet. Email/reply/forward linked to this case will appear here.
+                </div>
+              )}
+
+              {!corrLoading && !corrError && correspondence.length > 0 && (
+                <>
+                  <div className="cf-corr-filterbar">
+                    {[
+                      { key: 'all', label: `All (${correspondence.length})` },
+                      { key: 'inbox', label: `Inbox (${correspondence.filter(i => getCorrBox(i) === 'inbox').length})` },
+                      { key: 'sent', label: `Sent (${correspondence.filter(i => getCorrBox(i) === 'sent').length})` },
+                    ].map(opt => (
+                      <button
+                        key={opt.key}
+                        className={`cf-corr-filter ${corrFilter === opt.key ? 'active' : ''}`}
+                        onClick={() => setCorrFilter(opt.key)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="cf-corr-toolbar">
+                    <input
+                      className="cf-corr-search"
+                      type="text"
+                      placeholder="Search subject/body/sender/recipient..."
+                      value={corrSearch}
+                      onChange={e => setCorrSearch(e.target.value)}
+                    />
+                    <label className="cf-corr-date-field">
+                      <span>From</span>
+                      <input type="date" value={corrFromDate} onChange={e => setCorrFromDate(e.target.value)} />
+                    </label>
+                    <label className="cf-corr-date-field">
+                      <span>To</span>
+                      <input type="date" value={corrToDate} onChange={e => setCorrToDate(e.target.value)} />
+                    </label>
+                    <button
+                      className="cf-cancel-btn"
+                      onClick={() => { setCorrSearch(''); setCorrFromDate(''); setCorrToDate('') }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  {filteredCorrespondence.length === 0 && (
+                    <div className="cf-empty-msg">No {corrFilter} items in this case yet.</div>
+                  )}
+
+                  <div className="cf-corr-list">
+                    {filteredCorrespondence.map((item, index) => {
+                    const dir = getCorrDirection(item)
+                    const root = getThreadRootId(item)
+                    const prev = filteredCorrespondence[index - 1]
+                    const showGroup = !prev || getThreadRootId(prev) !== root
+                    return (
+                      <div key={item.id}>
+                        {showGroup && (
+                          <div className="cf-corr-thread-label">Thread #{root}</div>
+                        )}
+                      <div className={`cf-corr-card ${dir}`}>
+                        <div className="cf-corr-top">
+                          <span className={`cf-corr-dir ${dir}`}>{dir === 'outbound' ? 'Outbound' : 'Inbound'}</span>
+                          <span className="cf-corr-source">{item.source_tag || 'Email'}</span>
+                          <span className="cf-corr-time">{formatCorrDate(item.received_at)}</span>
+                        </div>
+                        <div className="cf-corr-subject">{item.subject || '(No subject)'}</div>
+                        <div className="cf-corr-meta">
+                          <span><strong>From:</strong> {item.sender || '-'}</span>
+                          <span><strong>To:</strong> {item.recipient || '-'}</span>
+                          <span><strong>Status:</strong> {item.status || '-'}</span>
+                          <span><strong>Attachments:</strong> {item.attachments_count || 0}</span>
+                          {item.original_inquiry_id ? <span><strong>Thread Root:</strong> #{item.original_inquiry_id}</span> : null}
+                        </div>
+                        {item.body && (
+                          <div className="cf-corr-body">
+                            {item.body.length > 500 ? `${item.body.slice(0, 500)}…` : item.body}
+                          </div>
+                        )}
+                        <div className="cf-corr-actions">
+                          <button className="cf-open-btn" onClick={() => setActiveCorrItem(item)}>
+                            View Full Message
+                          </button>
+                          {getCorrDirection(item) === 'inbound' && (
+                            <>
+                              <button className="cf-open-btn" onClick={() => openCorrCompose('reply', item)}>
+                                Reply
+                              </button>
+                              <button className="cf-open-btn" onClick={() => openCorrCompose('forward', item)}>
+                                Forward
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      </div>
+                    )
+                  })}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -845,7 +1193,98 @@ export default function CaseFormPage() {
         )}
 
       </div>
+
+      {activeCorrItem && (
+        <div className="cf-corr-modal-overlay" onClick={() => setActiveCorrItem(null)}>
+          <div className="cf-corr-modal" onClick={e => e.stopPropagation()}>
+            <div className="cf-corr-modal-header">
+              <div className="cf-corr-modal-title">{activeCorrItem.subject || '(No subject)'}</div>
+              <button className="cf-corr-modal-close" onClick={() => setActiveCorrItem(null)}>✕</button>
+            </div>
+            <div className="cf-corr-modal-meta">
+              <span><strong>From:</strong> {activeCorrItem.sender || '-'}</span>
+              <span><strong>To:</strong> {activeCorrItem.recipient || '-'}</span>
+              <span><strong>Direction:</strong> {getCorrDirection(activeCorrItem)}</span>
+              <span><strong>Type:</strong> {activeCorrItem.source_tag || 'Email'}</span>
+              <span><strong>Time:</strong> {formatCorrDate(activeCorrItem.received_at)}</span>
+              <span><strong>Status:</strong> {activeCorrItem.status || '-'}</span>
+            </div>
+            <div className="cf-corr-modal-body">{activeCorrItem.body || '(No content)'}</div>
+            <div className="cf-corr-attachments">
+              <div className="cf-corr-attachments-title">Attachments</div>
+              {corrAttLoading && <div className="cf-corr-attachments-empty">Loading attachments…</div>}
+              {!corrAttLoading && corrAttachments.length === 0 && (
+                <div className="cf-corr-attachments-empty">No attachments</div>
+              )}
+              {!corrAttLoading && corrAttachments.length > 0 && (
+                <div className="cf-corr-attachments-list">
+                  {corrAttachments.map(att => (
+                    <div key={att.id} className="cf-corr-attachment-item">
+                      <span className="cf-corr-attachment-name">{att.filename}</span>
+                      <span className="cf-corr-attachment-meta">{att.mime_type || '-'} · {att.size_bytes || 0} bytes</span>
+                      <div className="cf-corr-attachment-actions">
+                        <button className="cf-open-btn" onClick={() => previewCorrAttachment(att)}>Preview</button>
+                        <button className="cf-open-btn" onClick={() => downloadCorrAttachment(att)}>Download</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {corrCompose && (
+        <div className="cf-corr-compose-overlay" onClick={() => !corrCompose.sending && setCorrCompose(null)}>
+          <div className="cf-corr-compose-modal" onClick={e => e.stopPropagation()}>
+            <div className="cf-corr-compose-header">
+              <div className="cf-corr-compose-title">
+                {corrCompose.mode === 'reply' ? 'Reply from Case Correspondence' : 'Forward from Case Correspondence'}
+              </div>
+              <button className="cf-corr-modal-close" onClick={() => !corrCompose.sending && setCorrCompose(null)}>✕</button>
+            </div>
+            <div className="cf-corr-compose-body">
+              <div className="cf-form-field">
+                <label>To</label>
+                <input
+                  type="email"
+                  value={corrCompose.to}
+                  onChange={e => setCorrCompose(prev => ({ ...prev, to: e.target.value }))}
+                  disabled={corrCompose.sending}
+                />
+              </div>
+              <div className="cf-form-field">
+                <label>Subject</label>
+                <input
+                  type="text"
+                  value={corrCompose.subject}
+                  onChange={e => setCorrCompose(prev => ({ ...prev, subject: e.target.value }))}
+                  disabled={corrCompose.sending}
+                />
+              </div>
+              <div className="cf-form-field">
+                <label>Message</label>
+                <textarea
+                  rows={14}
+                  value={corrCompose.body}
+                  onChange={e => setCorrCompose(prev => ({ ...prev, body: e.target.value }))}
+                  disabled={corrCompose.sending}
+                />
+              </div>
+              {corrCompose.error && <div className="cf-corr-error">{corrCompose.error}</div>}
+            </div>
+            <div className="cf-form-actions" style={{ padding: '12px 14px', marginTop: 0 }}>
+              <button className="cf-cancel-btn" onClick={() => !corrCompose.sending && setCorrCompose(null)}>Cancel</button>
+              <button className="cf-save-btn" onClick={sendCorrCompose} disabled={corrCompose.sending}>
+                {corrCompose.sending ? 'Sending…' : (corrCompose.mode === 'reply' ? 'Send Reply' : 'Send Forward')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+    </MIMSLayout>
   )
 }
 

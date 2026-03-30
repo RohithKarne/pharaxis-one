@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Sidebar from '../components/Sidebar'
 import Topbar from '../../../shared/components/Topbar'
 import { useAuth } from '../../../shared/context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 
 const MODULES = [
   { key: 'mims_core', label: 'MIMS' },
@@ -32,6 +33,16 @@ const PAGE_TITLES = {
   'login-audit':   'Login Audit',
 }
 
+let handleSessionExpiry = null
+
+async function guardedFetch(input, init) {
+  const response = await fetch(input, init)
+  if (response.status === 401 && typeof handleSessionExpiry === 'function') {
+    await handleSessionExpiry()
+  }
+  return response
+}
+
 export default function SuperadminPage() {
   const [activePage, setActivePage] = useState('dashboard')
   const [collapsed, setCollapsed] = useState(() =>
@@ -42,8 +53,25 @@ export default function SuperadminPage() {
   )
   const [msg, setMsg] = useState({ text: '', type: '' })
 
-  const { token } = useAuth()
+  const navigate = useNavigate()
+  const { token, logout } = useAuth()
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+
+  useEffect(() => {
+    let handling = false
+    handleSessionExpiry = async () => {
+      if (handling) return
+      handling = true
+      try {
+        await logout()
+      } finally {
+        navigate('/login', { replace: true })
+      }
+    }
+    return () => {
+      handleSessionExpiry = null
+    }
+  }, [logout, navigate])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -104,7 +132,7 @@ function DashboardView({ H, setActivePage }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/superadmin/dashboard', { headers: H })
+      const res = await guardedFetch('/api/superadmin/dashboard', { headers: H })
       const data = await res.json()
       setSummary(data)
     } finally {
@@ -210,7 +238,7 @@ function OrganisationsView({ H, flash }) {
   async function load() {
     setLoading(true)
     try {
-      const res = await fetch('/api/superadmin/orgs', { headers: H })
+      const res = await guardedFetch('/api/superadmin/orgs', { headers: H })
       const data = await res.json()
       const orgsData = data.orgs || []
       setOrgs(orgsData)
@@ -224,7 +252,7 @@ function OrganisationsView({ H, flash }) {
   async function createOrg(e) {
     e.preventDefault()
     if (!orgForm.name.trim()) return flash('Organisation name is required.', 'error')
-    const res = await fetch('/api/superadmin/orgs', { method: 'POST', headers: H, body: JSON.stringify(orgForm) })
+    const res = await guardedFetch('/api/superadmin/orgs', { method: 'POST', headers: H, body: JSON.stringify(orgForm) })
     const data = await res.json()
     if (!res.ok) return flash(data.error || 'Failed to create.', 'error')
     flash('Organisation created.')
@@ -235,7 +263,7 @@ function OrganisationsView({ H, flash }) {
 
   async function saveOrgEdit() {
     if (!editingOrg || !editOrgName.trim()) return flash('Organisation name is required.', 'error')
-    const res = await fetch(`/api/superadmin/orgs/${editingOrg.id}`, {
+    const res = await guardedFetch(`/api/superadmin/orgs/${editingOrg.id}`, {
       method: 'PUT',
       headers: H,
       body: JSON.stringify({
@@ -253,7 +281,7 @@ function OrganisationsView({ H, flash }) {
   }
 
   async function toggleOrg(org) {
-    const res = await fetch(`/api/superadmin/orgs/${org.id}`, {
+    const res = await guardedFetch(`/api/superadmin/orgs/${org.id}`, {
       method: 'PUT', headers: H,
       body: JSON.stringify({ name: org.name, is_active: org.is_active ? 0 : 1 })
     })
@@ -263,7 +291,7 @@ function OrganisationsView({ H, flash }) {
   }
 
   async function toggleSite(site) {
-    const res = await fetch(`/api/superadmin/sites/${site.id}`, {
+    const res = await guardedFetch(`/api/superadmin/sites/${site.id}`, {
       method: 'PUT', headers: H,
       body: JSON.stringify({ name: site.name, country: site.country, is_primary: site.is_primary, is_active: site.is_active ? 0 : 1 })
     })
@@ -275,7 +303,7 @@ function OrganisationsView({ H, flash }) {
   async function createSite(e) {
     e.preventDefault()
     if (!siteForm.name.trim()) return flash('Site name is required.', 'error')
-    const res = await fetch(`/api/superadmin/orgs/${showSiteForm}/sites`, {
+    const res = await guardedFetch(`/api/superadmin/orgs/${showSiteForm}/sites`, {
       method: 'POST', headers: H, body: JSON.stringify(siteForm)
     })
     const data = await res.json()
@@ -289,7 +317,7 @@ function OrganisationsView({ H, flash }) {
   async function saveSiteEdit() {
     if (!editingSite) return
     if (!siteEditForm.name.trim()) return flash('Site name is required.', 'error')
-    const res = await fetch(`/api/superadmin/sites/${editingSite.id}`, {
+    const res = await guardedFetch(`/api/superadmin/sites/${editingSite.id}`, {
       method: 'PUT',
       headers: H,
       body: JSON.stringify({
@@ -312,7 +340,7 @@ function OrganisationsView({ H, flash }) {
     const formData = new FormData()
     formData.append('logo', file)
     try {
-      const res = await fetch(`/api/superadmin/orgs/${orgId}/logo`, {
+      const res = await guardedFetch(`/api/superadmin/orgs/${orgId}/logo`, {
         method: 'POST',
         headers: { Authorization: H.Authorization },
         body: formData,
@@ -341,7 +369,7 @@ function OrganisationsView({ H, flash }) {
     for (const id of ids) {
       const org = orgs.find(o => o.id === id)
       if (!org) continue
-      await fetch(`/api/superadmin/orgs/${id}`, {
+      await guardedFetch(`/api/superadmin/orgs/${id}`, {
         method: 'PUT', headers: H,
         body: JSON.stringify({ name: org.name, is_active: activate ? 1 : 0 }),
       })
@@ -354,13 +382,29 @@ function OrganisationsView({ H, flash }) {
   async function saveTimeout(org) {
     const mins = parseInt(timeoutValue)
     if (isNaN(mins) || mins < 30) return flash('Minimum session timeout is 30 minutes.', 'error')
-    const res = await fetch(`/api/superadmin/orgs/${org.id}`, {
+    const res = await guardedFetch(`/api/superadmin/orgs/${org.id}`, {
       method: 'PUT', headers: H,
       body: JSON.stringify({ name: org.name, is_active: org.is_active, session_timeout_minutes: mins })
     })
     if (!res.ok) return flash('Failed to update timeout.', 'error')
     flash(`Session timeout updated to ${mins} minutes for ${org.name}.`)
     setEditingTimeout(null)
+    load()
+  }
+
+  async function toggleProcessExplorer(org) {
+    const res = await guardedFetch(`/api/superadmin/orgs/${org.id}`, {
+      method: 'PUT',
+      headers: H,
+      body: JSON.stringify({
+        name: org.name,
+        is_active: org.is_active,
+        session_timeout_minutes: org.session_timeout_minutes || 30,
+        process_explorer_enabled: org.process_explorer_enabled ? 0 : 1,
+      }),
+    })
+    if (!res.ok) return flash('Failed to update Process Explorer setting.', 'error')
+    flash(`Process Explorer ${org.process_explorer_enabled ? 'disabled' : 'enabled'} for ${org.name}.`)
     load()
   }
 
@@ -442,6 +486,9 @@ function OrganisationsView({ H, flash }) {
               </span>
               <span style={{ fontSize: 11, marginLeft: 8, color: org.two_factor_enabled ? '#155724' : 'var(--text-muted)' }}>
                 🔐 2FA {org.two_factor_enabled ? 'On' : 'Off'}
+              </span>
+              <span style={{ fontSize: 11, marginLeft: 8, color: org.process_explorer_enabled ? '#155724' : 'var(--text-muted)' }}>
+                🧭 Process Explorer {org.process_explorer_enabled ? 'On' : 'Off'}
               </span>
             </div>
             </div>
@@ -594,6 +641,19 @@ function OrganisationsView({ H, flash }) {
                   </button>
                 )}
               </div>
+              <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Process Explorer:</span>
+                <span style={{
+                  fontSize: 11, padding: '1px 7px', borderRadius: 10,
+                  background: org.process_explorer_enabled ? '#d4edda' : '#f8d7da',
+                  color: org.process_explorer_enabled ? '#155724' : '#721c24',
+                }}>
+                  {org.process_explorer_enabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={() => toggleProcessExplorer(org)}>
+                  {org.process_explorer_enabled ? 'Disable' : 'Enable'}
+                </button>
+              </div>
 
               {showSiteForm === org.id ? (
                 <form onSubmit={createSite} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -685,8 +745,8 @@ function TwoFactorConfigView({ H, flash }) {
     setLoading(true)
     try {
       const [orgRes, configRes] = await Promise.all([
-        fetch('/api/superadmin/orgs', { headers: H }),
-        fetch('/api/superadmin/config', { headers: H }),
+        guardedFetch('/api/superadmin/orgs', { headers: H }),
+        guardedFetch('/api/superadmin/config', { headers: H }),
       ])
       const orgData = await orgRes.json()
       const configData = await configRes.json()
@@ -732,7 +792,7 @@ function TwoFactorConfigView({ H, flash }) {
     try {
       const payload = { ...systemForm }
       if (!payload.smtp_password) delete payload.smtp_password
-      const res = await fetch('/api/superadmin/config', {
+      const res = await guardedFetch('/api/superadmin/config', {
         method: 'PUT',
         headers: H,
         body: JSON.stringify(payload),
@@ -761,7 +821,7 @@ function TwoFactorConfigView({ H, flash }) {
         test_email: mode === 'send' ? testEmail.trim() : undefined,
       }
       if (!payload.smtp_password) delete payload.smtp_password
-      const res = await fetch('/api/superadmin/config/test-email', {
+      const res = await guardedFetch('/api/superadmin/config/test-email', {
         method: 'POST',
         headers: H,
         body: JSON.stringify(payload),
@@ -782,7 +842,7 @@ function TwoFactorConfigView({ H, flash }) {
     if (isNaN(mins) || mins < 15 || mins > 480) return flash('Session timeout must be between 15 and 480 minutes.', 'error')
     setSavingSessionTimeout(true)
     try {
-      const res = await fetch('/api/superadmin/config', {
+      const res = await guardedFetch('/api/superadmin/config', {
         method: 'PUT',
         headers: H,
         body: JSON.stringify({ superadmin_session_timeout_minutes: mins }),
@@ -799,7 +859,7 @@ function TwoFactorConfigView({ H, flash }) {
 
   async function saveOrgSecurity(org) {
     const form = orgSecurityForms[org.id] || { two_factor_enabled: false, methods: ['email', 'totp'], remember_days: 7 }
-    const res = await fetch(`/api/superadmin/orgs/${org.id}`, {
+    const res = await guardedFetch(`/api/superadmin/orgs/${org.id}`, {
       method: 'PUT',
       headers: H,
       body: JSON.stringify({
@@ -1037,7 +1097,7 @@ function UsersView({ H, flash }) {
   async function load() {
     setLoading(true)
     try {
-      const res = await fetch('/api/superadmin/all-users', { headers: H })
+      const res = await guardedFetch('/api/superadmin/all-users', { headers: H })
       const d = await res.json()
       setUsers(d.users || [])
     } catch { flash('Failed to load users.', 'error') }
@@ -1048,7 +1108,7 @@ function UsersView({ H, flash }) {
     e.preventDefault()
     setCreating(true)
     try {
-      const res = await fetch('/api/superadmin/users/create', { method: 'POST', headers: H, body: JSON.stringify(form) })
+      const res = await guardedFetch('/api/superadmin/users/create', { method: 'POST', headers: H, body: JSON.stringify(form) })
       const d = await res.json()
       if (!res.ok) return flash(d.error || 'Failed to create user.', 'error')
       flash(`User created. Default password: Manager@123 (reset required on first login).`, 'success')
@@ -1061,7 +1121,7 @@ function UsersView({ H, flash }) {
 
   async function saveUserEdit() {
     if (!editingUser) return
-    const res = await fetch(`/api/superadmin/users/${editingUser.id}`, {
+    const res = await guardedFetch(`/api/superadmin/users/${editingUser.id}`, {
       method: 'PUT',
       headers: H,
       body: JSON.stringify({
@@ -1091,7 +1151,7 @@ function UsersView({ H, flash }) {
   async function runBulkAction(action) {
     const userIds = Array.from(selectedUserIds)
     if (!userIds.length) return flash('Select at least one user first.', 'error')
-    const res = await fetch('/api/superadmin/users/bulk-action', {
+    const res = await guardedFetch('/api/superadmin/users/bulk-action', {
       method: 'POST',
       headers: H,
       body: JSON.stringify({ action, userIds }),
@@ -1109,8 +1169,8 @@ function UsersView({ H, flash }) {
     setAssignLoading(true)
     try {
       const [accessRes, orgsRes] = await Promise.all([
-        fetch(`/api/superadmin/users/${user.id}/org-access`, { headers: H }),
-        fetch('/api/superadmin/orgs-for-assignment', { headers: H }),
+        guardedFetch(`/api/superadmin/users/${user.id}/org-access`, { headers: H }),
+        guardedFetch('/api/superadmin/orgs-for-assignment', { headers: H }),
       ])
       const accessData = await accessRes.json()
       const orgsData   = await orgsRes.json()
@@ -1170,9 +1230,15 @@ function UsersView({ H, flash }) {
       const newOrgIds      = selectedOrgIds
 
       // Remove deselected orgs
+      const removedOrgNames = orgAccess
+        .filter((oa) => !newOrgIds.has(oa.org_id))
+        .map((oa) => oa.org_name || `org-${oa.org_id}`)
+      if (removedOrgNames.length > 0 && !window.confirm(`Remove org access for: ${removedOrgNames.join(', ')}?`)) {
+        return
+      }
       for (const oa of orgAccess) {
         if (!newOrgIds.has(oa.org_id)) {
-          await fetch(`/api/superadmin/users/${userId}/org-access/${oa.org_id}`, { method: 'DELETE', headers: H })
+          await guardedFetch(`/api/superadmin/users/${userId}/org-access/${oa.org_id}`, { method: 'DELETE', headers: H })
         }
       }
 
@@ -1181,12 +1247,12 @@ function UsersView({ H, flash }) {
         const siteId = selectedSites[orgId] || null
         const roleAtOrg = selectedOrgRoles[orgId] || 'agent'
         if (!existingOrgIds.has(orgId)) {
-          await fetch(`/api/superadmin/users/${userId}/org-access`, {
+          await guardedFetch(`/api/superadmin/users/${userId}/org-access`, {
             method: 'POST', headers: H,
             body: JSON.stringify({ org_id: orgId, primary_site_id: siteId, role_at_org: roleAtOrg }),
           })
         } else {
-          await fetch(`/api/superadmin/users/${userId}/org-access/${orgId}`, {
+          await guardedFetch(`/api/superadmin/users/${userId}/org-access/${orgId}`, {
             method: 'PUT', headers: H,
             body: JSON.stringify({ primary_site_id: siteId, role_at_org: roleAtOrg }),
           })
@@ -1195,7 +1261,7 @@ function UsersView({ H, flash }) {
 
       // Save module access globally for this user
       const modules = Array.from(selectedModules)
-      await fetch(`/api/superadmin/users/${userId}/modules`, {
+      await guardedFetch(`/api/superadmin/users/${userId}/modules`, {
         method: 'PUT', headers: H,
         body: JSON.stringify({ modules }),
       })
@@ -1208,7 +1274,8 @@ function UsersView({ H, flash }) {
   }
 
   async function resetUserTwoFactor(user) {
-    const res = await fetch(`/api/superadmin/users/${user.id}/reset-2fa`, {
+    if (!window.confirm(`Reset 2FA for "${user.name}"?`)) return
+    const res = await guardedFetch(`/api/superadmin/users/${user.id}/reset-2fa`, {
       method: 'POST',
       headers: H,
     })
@@ -1219,7 +1286,7 @@ function UsersView({ H, flash }) {
   }
 
   async function unlockUser(user) {
-    const res = await fetch(`/api/superadmin/users/${user.id}/unlock`, {
+    const res = await guardedFetch(`/api/superadmin/users/${user.id}/unlock`, {
       method: 'POST',
       headers: H,
     })
@@ -1230,7 +1297,7 @@ function UsersView({ H, flash }) {
   }
 
   async function forcePasswordReset(user) {
-    const res = await fetch(`/api/superadmin/users/${user.id}/force-password-reset`, {
+    const res = await guardedFetch(`/api/superadmin/users/${user.id}/force-password-reset`, {
       method: 'POST',
       headers: H,
     })
@@ -1743,7 +1810,7 @@ function AuditView({ H, endpoint }) {
     try {
       const params = new URLSearchParams({ limit: LIMIT, offset: off })
       Object.entries(filters).forEach(([key, value]) => value && params.set(key, value))
-      const res = await fetch(`${endpoint}?${params}`, { headers: H })
+      const res = await guardedFetch(`${endpoint}?${params}`, { headers: H })
       const data = await res.json()
       setLogs(data.logs || [])
       setTotal(data.total || 0)
@@ -1869,7 +1936,7 @@ function LoginAuditView({ H }) {
     try {
       const params = new URLSearchParams({ limit: LIMIT, offset: off })
       Object.entries(nextFilters).forEach(([key, value]) => value && params.set(key, value))
-      const res = await fetch(`/api/superadmin/login-audit?${params}`, { headers: H })
+      const res = await guardedFetch(`/api/superadmin/login-audit?${params}`, { headers: H })
       const data = await res.json()
       setLogs(data.logs || [])
       setTotal(data.total || 0)
@@ -2010,7 +2077,7 @@ function AlertsView({ H, flash }) {
     const params = new URLSearchParams({ limit: EVENTS_LIMIT, offset: off })
     if (filter.event_type) params.set('event_type', filter.event_type)
     if (filter.severity) params.set('severity', filter.severity)
-    const res = await fetch(`/api/superadmin/alerts/events?${params}`, { headers: H })
+    const res = await guardedFetch(`/api/superadmin/alerts/events?${params}`, { headers: H })
     const data = await res.json()
     setEvents(data.events || [])
     setEventsTotal(data.total || 0)
@@ -2019,8 +2086,8 @@ function AlertsView({ H, flash }) {
 
   const load = useCallback(async () => {
     const [rulesRes, templateRes] = await Promise.all([
-      fetch('/api/superadmin/alerts/rules', { headers: H }),
-      fetch('/api/superadmin/alert-email-template', { headers: H }),
+      guardedFetch('/api/superadmin/alerts/rules', { headers: H }),
+      guardedFetch('/api/superadmin/alert-email-template', { headers: H }),
     ])
     const rulesData = await rulesRes.json()
     setRules(rulesData.rules || [])
@@ -2041,6 +2108,19 @@ function AlertsView({ H, flash }) {
 
   const selectedEvent = ALERT_EVENT_OPTIONS.find(option => option.value === form.event_type)
   const isThresholdRule = selectedEvent?.mode === 'threshold'
+  const nextToggleStateLabel = (rule) => (rule.is_active ? 'inactive' : 'active')
+  const resetRuleForm = () => ({
+    id: null,
+    name: '',
+    event_type: 'failed_login_spike',
+    severity: 'high',
+    channels: 'email,in_app',
+    recipient_emails: '',
+    threshold_value: 1,
+    window_minutes: 15,
+    cooldown_minutes: 30,
+    is_active: true,
+  })
 
   async function saveRule(e) {
     e.preventDefault()
@@ -2055,7 +2135,7 @@ function AlertsView({ H, flash }) {
     }
     const url = form.id ? `/api/superadmin/alerts/rules/${form.id}` : '/api/superadmin/alerts/rules'
     const method = form.id ? 'PUT' : 'POST'
-    const res = await fetch(url, {
+    const res = await guardedFetch(url, {
       method,
       headers: H,
       body: JSON.stringify(form),
@@ -2064,26 +2144,26 @@ function AlertsView({ H, flash }) {
     if (!res.ok) return flash(data.error || 'Failed to save alert rule.', 'error')
     flash(data.message || 'Alert rule saved.')
     setEventTypeError('')
-    setForm({ id: null, name: '', event_type: 'failed_login_spike', severity: 'high', channels: 'email,in_app', recipient_emails: '', threshold_value: 1, window_minutes: 15, cooldown_minutes: 30, is_active: true })
+    setForm(resetRuleForm())
     load()
   }
 
   async function toggleRule(rule) {
-    const res = await fetch(`/api/superadmin/alerts/rules/${rule.id}`, {
+    const res = await guardedFetch(`/api/superadmin/alerts/rules/${rule.id}`, {
       method: 'PUT',
       headers: H,
       body: JSON.stringify({ ...rule, is_active: !rule.is_active }),
     })
     const data = await res.json()
     if (!res.ok) return flash(data.error || 'Failed to update rule.', 'error')
-    flash('Alert rule updated.')
+    flash(`Alert rule set to ${nextToggleStateLabel(rule)}. ${rule.is_active ? 'Events and notifications from this rule will stop.' : 'Events and notifications from this rule will resume.'}`)
     load()
   }
 
   async function deleteRule(rule) {
     const confirmed = window.confirm(`Delete alert rule "${rule.name}"?`)
     if (!confirmed) return
-    const res = await fetch(`/api/superadmin/alerts/rules/${rule.id}`, {
+    const res = await guardedFetch(`/api/superadmin/alerts/rules/${rule.id}`, {
       method: 'DELETE',
       headers: H,
     })
@@ -2091,7 +2171,7 @@ function AlertsView({ H, flash }) {
     if (!res.ok) return flash(data.error || 'Failed to delete rule.', 'error')
     flash('Alert rule deleted.')
     if (form.id === rule.id) {
-      setForm({ id: null, name: '', event_type: 'failed_login_spike', severity: 'high', channels: 'email,in_app', recipient_emails: '', threshold_value: 1, window_minutes: 15, cooldown_minutes: 30, is_active: true })
+      setForm(resetRuleForm())
     }
     load()
   }
@@ -2100,7 +2180,7 @@ function AlertsView({ H, flash }) {
     if (!emailTemplate.subject.trim() || !emailTemplate.body.trim()) return flash('Subject and body are required.', 'error')
     setEmailTemplateSaving(true)
     try {
-      const res = await fetch('/api/superadmin/alert-email-template', {
+      const res = await guardedFetch('/api/superadmin/alert-email-template', {
         method: 'PUT',
         headers: H,
         body: JSON.stringify({ subject: emailTemplate.subject, body: emailTemplate.body }),
@@ -2120,6 +2200,10 @@ function AlertsView({ H, flash }) {
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="card-header"><h3>Alert Rule Setup</h3></div>
         <div className="card-body">
+          <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-muted)', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-secondary)' }}>
+            Rule status behavior: <strong>Active</strong> rules can fire alert events and notifications. <strong>Inactive</strong> rules do not fire events or notifications.
+            {!form.id && ' New rules are active by default.'}
+          </div>
           <form onSubmit={saveRule} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             <div><label style={{ fontSize: 12 }}>Rule Name</label><input className="form-control" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
             <div><label style={{ fontSize: 12 }}>Event</label><select className="form-control" value={form.event_type} onChange={e => {
@@ -2152,7 +2236,7 @@ function AlertsView({ H, flash }) {
             <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: 12 }}>Recipient Emails</label><input className="form-control" placeholder="comma-separated emails" value={form.recipient_emails} onChange={e => setForm(f => ({ ...f, recipient_emails: e.target.value }))} /></div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
               <input type="checkbox" checked={!!form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />
-              Rule active
+              Rule active (if off, this rule will not fire events or notifications)
             </label>
             {eventTypeError && (
               <div style={{ gridColumn: '1 / -1', fontSize: 12, color: '#c0392b', background: '#fdf0ef', border: '1px solid #f5c6cb', borderRadius: 6, padding: '8px 12px' }}>
@@ -2185,7 +2269,11 @@ function AlertsView({ H, flash }) {
                       ? `${rule.threshold_value} within ${rule.window_minutes}m`
                       : `Immediate event • cooldown ${rule.cooldown_minutes}m`}
                   </td>
-                  <td><span className="badge">{rule.is_active ? 'Active' : 'Inactive'}</span></td>
+                  <td>
+                    <span className="badge" title={rule.is_active ? 'This rule can generate events and notifications.' : 'This rule is disabled and will not generate events or notifications.'}>
+                      {rule.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
                   <td>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setForm({ ...rule, is_active: !!rule.is_active })}>Edit</button>
@@ -2318,7 +2406,7 @@ function NotificationsView({ H, flash }) {
   const [selectedIds, setSelectedIds] = useState(new Set())
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/superadmin/notifications?limit=100', { headers: H })
+    const res = await guardedFetch('/api/superadmin/notifications?limit=100', { headers: H })
     const data = await res.json()
     setRows(data.notifications || [])
     setUnread(data.unread || 0)
@@ -2328,14 +2416,15 @@ function NotificationsView({ H, flash }) {
   useEffect(() => { load() }, [load])
 
   async function markRead(id) {
-    const res = await fetch(`/api/superadmin/notifications/${id}/read`, { method: 'POST', headers: H })
+    const res = await guardedFetch(`/api/superadmin/notifications/${id}/read`, { method: 'POST', headers: H })
     const data = await res.json()
     if (!res.ok) return flash(data.error || 'Failed to update notification.', 'error')
     load()
   }
 
   async function deleteNotification(id) {
-    const res = await fetch(`/api/superadmin/notifications/${id}`, { method: 'DELETE', headers: H })
+    if (!window.confirm('Delete this notification?')) return
+    const res = await guardedFetch(`/api/superadmin/notifications/${id}`, { method: 'DELETE', headers: H })
     const data = await res.json()
     if (!res.ok) return flash(data.error || 'Failed to delete notification.', 'error')
     flash('Notification deleted.')
@@ -2343,7 +2432,8 @@ function NotificationsView({ H, flash }) {
   }
 
   async function clearAllRead() {
-    const res = await fetch('/api/superadmin/notifications/read', { method: 'DELETE', headers: H })
+    if (!window.confirm('Delete all read notifications?')) return
+    const res = await guardedFetch('/api/superadmin/notifications/read', { method: 'DELETE', headers: H })
     const data = await res.json()
     if (!res.ok) return flash(data.error || 'Failed to clear read notifications.', 'error')
     flash(data.message || 'All read notifications cleared.')
@@ -2353,8 +2443,9 @@ function NotificationsView({ H, flash }) {
   async function deleteSelected() {
     const ids = Array.from(selectedIds)
     if (!ids.length) return
+    if (!window.confirm(`Delete ${ids.length} selected notification(s)?`)) return
     for (const id of ids) {
-      await fetch(`/api/superadmin/notifications/${id}`, { method: 'DELETE', headers: H })
+      await guardedFetch(`/api/superadmin/notifications/${id}`, { method: 'DELETE', headers: H })
     }
     flash(`${ids.length} notification${ids.length !== 1 ? 's' : ''} deleted.`)
     load()

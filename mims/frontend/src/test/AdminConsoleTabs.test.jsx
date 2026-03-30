@@ -1,10 +1,10 @@
 /**
  * AdminConsoleTabs.test.jsx
- * Functional tests for Admin Console top tab navigation.
+ * Functional tests for Admin Console sidebar navigation.
  */
 
-import { render, screen, fireEvent } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { render, screen } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock useAuth to avoid context errors
@@ -12,6 +12,14 @@ vi.mock('../shared/context/AuthContext', () => ({
   useAuth: () => ({
     user: { name: 'Test Admin', email: 'admin@test.com', role: 'admin' },
     token: 'mock-token',
+    orgName: 'Test Org',
+    orgId: 1,
+    siteName: 'Test Site',
+    allOrgs: [{ orgId: 1, orgName: 'Test Org' }],
+    switchOrg: vi.fn(),
+    refreshOrgAccess: vi.fn(),
+    logout: vi.fn(),
+    hasModuleAccess: () => true,
     getInitials: () => 'TA',
     formatRole: (r) => r,
   }),
@@ -28,50 +36,43 @@ beforeEach(() => {
 
 import AdminConsolePage from '../modules/admin/pages/AdminConsolePage'
 
-function renderPage() {
+function renderPage(path = '/admin-console') {
   return render(
-    <MemoryRouter>
-      <AdminConsolePage />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/admin-console/:section?" element={<AdminConsolePage />} />
+      </Routes>
     </MemoryRouter>
   )
 }
 
-describe('Admin Console — Top Tab Navigation', () => {
-  it('renders all 9 tabs', () => {
+describe('Admin Console — Sidebar Navigation', () => {
+  it('renders key sidebar items', () => {
     renderPage()
-    const expectedTabs = [
-      'Service Log', 'System Activity', 'Service Dashboard',
-      'Configuration', 'Escalation', 'Documents',
-      'Tables', 'System', 'Help',
-    ]
-    expectedTabs.forEach(label => {
+    const expectedItems = ['Sites Setup', 'Service Log', 'System Activity']
+    expectedItems.forEach(label => {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
     })
   })
 
-  it('defaults to Configuration tab', () => {
+  it('shows coming soon panel by default', () => {
     renderPage()
-    const configTab = screen.getByRole('button', { name: 'Configuration' })
-    expect(configTab).toHaveClass('active')
+    expect(screen.getByText('Coming Soon')).toBeInTheDocument()
+    expect(screen.getByText(/under development/i)).toBeInTheDocument()
   })
 
-  it('shows skeleton for non-Configuration tabs', () => {
-    renderPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Service Log' }))
-    expect(screen.getByText('This section is under construction.')).toBeInTheDocument()
+  it('shows Service Log action as available', () => {
+    renderPage('/admin-console')
+    expect(screen.getByRole('button', { name: 'Service Log' })).toBeEnabled()
   })
 
-  it('switches active tab highlight on click', () => {
-    renderPage()
-    const escalationTab = screen.getByRole('button', { name: 'Escalation' })
-    fireEvent.click(escalationTab)
-    expect(escalationTab).toHaveClass('active')
-    expect(screen.getByRole('button', { name: 'Configuration' })).not.toHaveClass('active')
+  it('shows System Activity action as available', () => {
+    renderPage('/admin-console')
+    expect(screen.getByRole('button', { name: 'System Activity' })).toBeEnabled()
   })
 
-  it('shows Configuration content when Configuration tab is active', () => {
+  it('shows General section label in sidebar', () => {
     renderPage()
-    // Configuration tab is default — admin nav section label should be present
     expect(screen.getByText('General')).toBeInTheDocument()
   })
 })

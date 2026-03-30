@@ -1,0 +1,2395 @@
+{
+  "generated_at_ist": "30/3/2026, 12:33:41 am IST",
+  "application_templates_count": 15,
+  "application_templates": [
+    "generic_admin",
+    "generic_portal",
+    "mims_superadmin_org_update",
+    "mims_admin_picklist_create",
+    "mims_inbox_correspondence",
+    "mims_case_create",
+    "mims_case_update",
+    "mims_case_query_search",
+    "mims_cm_template_management",
+    "mims_process_explorer_refresh",
+    "error_401_unauthorized",
+    "error_403_forbidden",
+    "error_404_not_found",
+    "error_422_validation",
+    "error_500_server"
+  ],
+  "auto_route_service_catalog_count": 291,
+  "auto_route_service_catalog": [
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/audit-logs",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "audit-logs",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/company-reps",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "company-reps",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/company-reps",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "company-reps",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/company-reps/:id",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/company-reps/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/contacts",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "contacts",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/contacts",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "contacts",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/contacts/:id",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/contacts/:id",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/contacts/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/email-accounts",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "email-accounts",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/email-accounts",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "email-accounts",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/email-accounts/:id",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/email-accounts/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/email-accounts/:id/fetch-now",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "fetch-now",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/email-accounts/:id/send-test",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "send-test",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/email-accounts/:id/test-imap",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "test-imap",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/email-accounts/:id/test-smtp",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "test-smtp",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PATCH",
+      "path_pattern": "/api/admin/email-accounts/:id/toggle",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": "toggle",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/esig-verify",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "esig-verify",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/field-setup",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "field-setup",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/field-setup",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": "field-setup",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/field-setup/flex",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "flex",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/field-setup/flex/:id",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/login-audit",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "login-audit",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/orgs/",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "orgs",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/orgs/",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "orgs",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/orgs/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/orgs/:id/sites",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "sites",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/orgs/:id/sites",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "sites",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/orgs/sites/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/permissions",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "permissions",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/permissions",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": "permissions",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/picklists",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "picklists",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/picklists",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "picklists",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/picklists/:id",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/picklists/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/picklists/bulk",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "bulk",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/picklists/export",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "export",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/process-logs/",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "process-logs",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/process-logs/config",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "config",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/process-logs/library",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "library",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/process-logs/purge",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": "purge",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/process-logs/refresh",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "refresh",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/product-families",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "product-families",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/product-families",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "product-families",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/product-families/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/products",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "products",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/products",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "products",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/products-full",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "products-full",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/products-full",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "products-full",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/products-full/:id",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/products-full/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/products/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/products/:id/approvals",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "approvals",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/products/:id/approvals",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "approvals",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/products/:id/country-authorizations",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "country-authorizations",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/products/:id/country-authorizations",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "country-authorizations",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/products/approvals/:approvalId",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":approvalId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/products/approvals/:approvalId",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":approvalId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/products/country-authorizations/:authId",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":authId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/products/country-authorizations/:authId",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":authId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/security-groups",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "security-groups",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/security-groups",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "security-groups",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/security-groups/:id",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/security-groups/:id",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/security-groups/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/security-groups/:id/users",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "users",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/security-groups/:id/users/:userId",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":userId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/service-logs",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "service-logs",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/sites",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "sites",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/sites",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "sites",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/sites/:id",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/sites/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/sites/:id/alerts",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "alerts",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/sites/:id/alerts",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "alerts",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/sites/:id/alerts/:alertId",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":alertId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/sites/:id/alerts/:alertId",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":alertId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/sites/:id/data-retention",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "data-retention",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/sites/:id/data-retention",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": "data-retention",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/sites/:id/email-accounts",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "email-accounts",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/sites/:id/email-accounts",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "email-accounts",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/sites/:id/email-accounts/:accountId",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":accountId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/sites/:id/email-purpose",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "email-purpose",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/sites/:id/email-purpose",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": "email-purpose",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/sites/:id/response-template",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "response-template",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/sites/:id/response-template",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": "response-template",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/source-types",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "source-types",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/source-types",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "source-types",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/source-types/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/system-activity",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "system-activity",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/transmission-audit-trail",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "transmission-audit-trail",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/transmission-audit-trail",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "transmission-audit-trail",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/transmission-audit-trail/:caseId",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": ":caseId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/users",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "users",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/users",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "users",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/users/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/workflow-activities",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "workflow-activities",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/workflow-activities",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "workflow-activities",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/workflow-activities/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/workflow-activity-triggers",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "workflow-activity-triggers",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/workflow-activity-triggers",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "workflow-activity-triggers",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/workflow-activity-triggers/:id",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/workflow-activity-triggers/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/workflow-rules",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "workflow-rules",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/workflow-rules",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "workflow-rules",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/workflow-rules/:id",
+      "source_module": "Admin Console",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/workflow-rules/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/workflow-states",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "workflow-states",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/workflow-states",
+      "source_module": "Admin Console",
+      "event_type": "create",
+      "entity_type": "workflow-states",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/workflow-states-extended",
+      "source_module": "Admin Console",
+      "event_type": "read",
+      "entity_type": "workflow-states-extended",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/admin/workflow-states/:id",
+      "source_module": "Admin Console",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/2fa/send-email-code",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "send-email-code",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/2fa/setup/totp",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "totp",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/2fa/skip-setup",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "skip-setup",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/2fa/verify",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "verify",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/change-password",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "change-password",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/forgot-password/reset",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "reset",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/forgot-password/send-code",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "send-code",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/forgot-password/verify-code",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "verify-code",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/login",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "login",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/logout",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "logout",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/auth/me",
+      "source_module": "Auth",
+      "event_type": "read",
+      "entity_type": "me",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/auth/org-logo",
+      "source_module": "Auth",
+      "event_type": "read",
+      "entity_type": "org-logo",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/register",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "register",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/reset-password",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "reset-password",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/auth/switch-org",
+      "source_module": "Auth",
+      "event_type": "create",
+      "entity_type": "switch-org",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "JOB",
+      "path_pattern": "/jobs/email-poller",
+      "source_module": "Background Jobs",
+      "event_type": "job",
+      "entity_type": "email-poller",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/case-audit-trail",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "case-audit-trail",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/case-audit-trail/:caseId",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": ":caseId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/case-form-definition",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "case-form-definition",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/case-form-definition",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "case-form-definition",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/case-form-definition/sections",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "sections",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/case-number-config",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "case-number-config",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/admin/case-number-config",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "case-number-config",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/admin/case-number-config/:id",
+      "source_module": "Case Management",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/admin/case-number-config/preview",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "preview",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "cases",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cases",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "cases",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/cases/:id",
+      "source_module": "Case Management",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/:id",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/:id",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/:id/ae/versions",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "versions",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cases/:id/ae/versions",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "versions",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cases/:id/assign-number",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "assign-number",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/:id/contacts",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "contacts",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cases/:id/contacts",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "contacts",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/:id/mi",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "mi",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cases/:id/mi",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "mi",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/:id/pc/versions",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "versions",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cases/:id/pc/versions",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "versions",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/cases/ae/events/:eventId",
+      "source_module": "Case Management",
+      "event_type": "delete",
+      "entity_type": ":eventId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/ae/events/:eventId",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": ":eventId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/cases/ae/lab-results/:labId",
+      "source_module": "Case Management",
+      "event_type": "delete",
+      "entity_type": ":labId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/cases/ae/medical-history/:mhId",
+      "source_module": "Case Management",
+      "event_type": "delete",
+      "entity_type": ":mhId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/cases/ae/product-info/:piId",
+      "source_module": "Case Management",
+      "event_type": "delete",
+      "entity_type": ":piId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/ae/versions/:versionId/events",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "events",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cases/ae/versions/:versionId/events",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "events",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/ae/versions/:versionId/general",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "general",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/ae/versions/:versionId/general",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "general",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/ae/versions/:versionId/lab-notes",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "lab-notes",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/ae/versions/:versionId/lab-notes",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "lab-notes",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/ae/versions/:versionId/lab-results",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "lab-results",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cases/ae/versions/:versionId/lab-results",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "lab-results",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/ae/versions/:versionId/medical-history",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "medical-history",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cases/ae/versions/:versionId/medical-history",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "medical-history",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/ae/versions/:versionId/medical-notes",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "medical-notes",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/ae/versions/:versionId/medical-notes",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "medical-notes",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/ae/versions/:versionId/patient-info",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "patient-info",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/ae/versions/:versionId/patient-info",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "patient-info",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/ae/versions/:versionId/product-info",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "product-info",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cases/ae/versions/:versionId/product-info",
+      "source_module": "Case Management",
+      "event_type": "create",
+      "entity_type": "product-info",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/ae/versions/:versionId/status",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "status",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/cases/contacts/:ccId",
+      "source_module": "Case Management",
+      "event_type": "delete",
+      "entity_type": ":ccId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/contacts/:ccId",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": ":ccId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/contacts/search",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "search",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/cases/mi/:miId",
+      "source_module": "Case Management",
+      "event_type": "delete",
+      "entity_type": ":miId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/mi/:miId",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": ":miId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/my",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "my",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/pc/versions/:versionId/general",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "general",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/pc/versions/:versionId/general",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "general",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/pc/versions/:versionId/patient-info",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "patient-info",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/pc/versions/:versionId/patient-info",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "patient-info",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/pc/versions/:versionId/product-info",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "product-info",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/pc/versions/:versionId/product-info",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "product-info",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/pc/versions/:versionId/refund-credit",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "refund-credit",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/pc/versions/:versionId/refund-credit",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "refund-credit",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/pc/versions/:versionId/replacement",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "replacement",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/pc/versions/:versionId/replacement",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "replacement",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/pc/versions/:versionId/return-retrieval",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "return-retrieval",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/pc/versions/:versionId/return-retrieval",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "return-retrieval",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cases/pc/versions/:versionId/status",
+      "source_module": "Case Management",
+      "event_type": "update",
+      "entity_type": "status",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cases/unassigned",
+      "source_module": "Case Management",
+      "event_type": "read",
+      "entity_type": "unassigned",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/documents",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": "documents",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/documents",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "documents",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/documents/:id",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cm/documents/:id",
+      "source_module": "Content",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/documents/:id/approve",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "approve",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/documents/:id/archive",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "archive",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/documents/:id/checkin",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "checkin",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/documents/:id/checkout",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "checkout",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/documents/:id/initiate-review",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "initiate-review",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/documents/:id/publish",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "publish",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/documents/:id/versions",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": "versions",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/faqs",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": "faqs",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/faqs",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "faqs",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/faqs/:id",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cm/faqs/:id",
+      "source_module": "Content",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/faqs/:id/approve",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "approve",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/faqs/:id/archive",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "archive",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/faqs/:id/checkin",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "checkin",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/faqs/:id/checkout",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "checkout",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/faqs/:id/publish",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "publish",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/folders",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": "folders",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/folders",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "folders",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/cm/folders/:id",
+      "source_module": "Content",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cm/folders/:id",
+      "source_module": "Content",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/merge-reports",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": "merge-reports",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/merge-reports",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "merge-reports",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/merge-reports/:id",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cm/merge-reports/:id",
+      "source_module": "Content",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/merge-reports/:id/checkin",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "checkin",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/merge-reports/:id/checkout",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "checkout",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/reviews",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": "reviews",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/reviews/:id/close",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "close",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/reviews/:id/end",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "end",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cm/reviews/:id/reviewer-status",
+      "source_module": "Content",
+      "event_type": "update",
+      "entity_type": "reviewer-status",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cm/reviews/:id/transfer",
+      "source_module": "Content",
+      "event_type": "update",
+      "entity_type": "transfer",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/reviews/all",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": "all",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/templates",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": "templates",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/cm/templates",
+      "source_module": "Content",
+      "event_type": "create",
+      "entity_type": "templates",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/cm/templates/:id",
+      "source_module": "Content",
+      "event_type": "read",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/cm/templates/:id",
+      "source_module": "Content",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PATCH",
+      "path_pattern": "/api/cm/templates/:id/status",
+      "source_module": "Content",
+      "event_type": "update",
+      "entity_type": "status",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/health",
+      "source_module": "Core",
+      "event_type": "read",
+      "entity_type": "health",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/users",
+      "source_module": "Core",
+      "event_type": "read",
+      "entity_type": "users",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/inbox/",
+      "source_module": "Inbox",
+      "event_type": "read",
+      "entity_type": "inbox",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PATCH",
+      "path_pattern": "/api/inbox/:id",
+      "source_module": "Inbox",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/inbox/:id/attachments",
+      "source_module": "Inbox",
+      "event_type": "read",
+      "entity_type": "attachments",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/inbox/:id/forward",
+      "source_module": "Inbox",
+      "event_type": "create",
+      "entity_type": "forward",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/inbox/:id/link-case",
+      "source_module": "Inbox",
+      "event_type": "create",
+      "entity_type": "link-case",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/inbox/:id/notes",
+      "source_module": "Inbox",
+      "event_type": "read",
+      "entity_type": "notes",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/inbox/:id/notes",
+      "source_module": "Inbox",
+      "event_type": "create",
+      "entity_type": "notes",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/inbox/:id/reply",
+      "source_module": "Inbox",
+      "event_type": "create",
+      "entity_type": "reply",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/inbox/:id/thread",
+      "source_module": "Inbox",
+      "event_type": "read",
+      "entity_type": "thread",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/inbox/attachments/:aid/download",
+      "source_module": "Inbox",
+      "event_type": "read",
+      "entity_type": "download",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/inbox/case/:caseId/correspondence",
+      "source_module": "Inbox",
+      "event_type": "read",
+      "entity_type": "correspondence",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/inbox/fetch",
+      "source_module": "Inbox",
+      "event_type": "create",
+      "entity_type": "fetch",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/inbox/templates",
+      "source_module": "Inbox",
+      "event_type": "read",
+      "entity_type": "templates",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/inbox/templates",
+      "source_module": "Inbox",
+      "event_type": "create",
+      "entity_type": "templates",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/inbox/templates/:tid",
+      "source_module": "Inbox",
+      "event_type": "delete",
+      "entity_type": ":tid",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PATCH",
+      "path_pattern": "/api/inbox/templates/:tid",
+      "source_module": "Inbox",
+      "event_type": "update",
+      "entity_type": ":tid",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/inbox/users",
+      "source_module": "Inbox",
+      "event_type": "read",
+      "entity_type": "users",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "SCHEMA",
+      "path_pattern": "/schema/tracker",
+      "source_module": "Schema Tracker",
+      "event_type": "schema_change",
+      "entity_type": "schema",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/alert-email-template",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "alert-email-template",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/superadmin/alert-email-template",
+      "source_module": "Superadmin",
+      "event_type": "update",
+      "entity_type": "alert-email-template",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/alerts/events",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "events",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/alerts/rules",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "rules",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/alerts/rules",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "rules",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/superadmin/alerts/rules/:id",
+      "source_module": "Superadmin",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/superadmin/alerts/rules/:id",
+      "source_module": "Superadmin",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/all-users",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "all-users",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/audit",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "audit",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/config",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "config",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/superadmin/config",
+      "source_module": "Superadmin",
+      "event_type": "update",
+      "entity_type": "config",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/config/test-email",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "test-email",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/dashboard",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "dashboard",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/login-audit",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "login-audit",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/notifications",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "notifications",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/superadmin/notifications/:id",
+      "source_module": "Superadmin",
+      "event_type": "delete",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/notifications/:id/read",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "read",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/superadmin/notifications/read",
+      "source_module": "Superadmin",
+      "event_type": "delete",
+      "entity_type": "read",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/orgs",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "orgs",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/orgs",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "orgs",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/orgs-for-assignment",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "orgs-for-assignment",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/superadmin/orgs/:id",
+      "source_module": "Superadmin",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/orgs/:id/sites",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "sites",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/orgs/:orgId/logo",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "logo",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/superadmin/sites/:id",
+      "source_module": "Superadmin",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/users",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "users",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/superadmin/users/:id",
+      "source_module": "Superadmin",
+      "event_type": "update",
+      "entity_type": ":id",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/users/:id/force-password-reset",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "force-password-reset",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/superadmin/users/:id/modules",
+      "source_module": "Superadmin",
+      "event_type": "update",
+      "entity_type": "modules",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "GET",
+      "path_pattern": "/api/superadmin/users/:id/org-access",
+      "source_module": "Superadmin",
+      "event_type": "read",
+      "entity_type": "org-access",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/users/:id/org-access",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "org-access",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "DELETE",
+      "path_pattern": "/api/superadmin/users/:id/org-access/:orgId",
+      "source_module": "Superadmin",
+      "event_type": "delete",
+      "entity_type": ":orgId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "PUT",
+      "path_pattern": "/api/superadmin/users/:id/org-access/:orgId",
+      "source_module": "Superadmin",
+      "event_type": "update",
+      "entity_type": ":orgId",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/users/:id/reset-2fa",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "reset-2fa",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/users/:id/unlock",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "unlock",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/users/bulk-action",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "bulk-action",
+      "coverage_source": "catalog"
+    },
+    {
+      "method": "POST",
+      "path_pattern": "/api/superadmin/users/create",
+      "source_module": "Superadmin",
+      "event_type": "create",
+      "entity_type": "create",
+      "coverage_source": "catalog"
+    }
+  ],
+  "database_logged_templates_count": 10,
+  "database_logged_templates": [
+    {
+      "method": "GET",
+      "flow_key": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "flow_key": "/api/auth/org-logo"
+    },
+    {
+      "method": "GET",
+      "flow_key": "/api/health"
+    },
+    {
+      "method": "GET",
+      "flow_key": "/api/superadmin/all-users"
+    },
+    {
+      "method": "GET",
+      "flow_key": "/api/superadmin/dashboard"
+    },
+    {
+      "method": "GET",
+      "flow_key": "/api/superadmin/orgs"
+    },
+    {
+      "method": "JOB",
+      "flow_key": "/jobs/email-poller"
+    },
+    {
+      "method": "POST",
+      "flow_key": "/api/admin/picklists"
+    },
+    {
+      "method": "POST",
+      "flow_key": "/api/auth/login"
+    },
+    {
+      "method": "PUT",
+      "flow_key": "/api/superadmin/orgs/:id"
+    }
+  ]
+}

@@ -11,10 +11,11 @@ export default defineConfig({
   },
   plugins: [react()],
   server: {
-    // Proxy /api requests to the Express backend on port 3000
-    // This means fetch('/api/auth/login') in React → goes to http://localhost:3000/api/auth/login
+    // Proxy API + static backend assets to Express on port 3000 during local dev.
     proxy: {
-      '/api': 'http://localhost:3000'
+      '/api': 'http://localhost:3000',
+      '/storage': 'http://localhost:3000',
+      '/uploads': 'http://localhost:3000',
     }
   },
   build: {

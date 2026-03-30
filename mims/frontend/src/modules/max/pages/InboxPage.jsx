@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 
@@ -18,7 +19,8 @@ const PRIORITY_ICON = { high: '🔴', medium: '🟡', low: '🟢' }
 const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 export default function InboxPage() {
-  const { user } = useAuth()
+  const navigate = useNavigate()
+  const { user, siteId } = useAuth()
 
   const STORAGE_KEY = `mims_inbox_${user?.id || 'guest'}`
   const VIEWS_KEY   = `mims_inbox_views_${user?.id || 'guest'}`
@@ -67,6 +69,17 @@ export default function InboxPage() {
   const [savingNote, setSavingNote]         = useState(false)
   const [threadItems, setThreadItems]       = useState([])   // F12
   const [threadExpanded, setThreadExpanded] = useState(true)
+  const [caseFlow, setCaseFlow] = useState({
+    open: false,
+    mode: 'create', // create | append
+    caseType: 'MI',
+    caseNumber: '',
+    search: '',
+    searching: false,
+    actionBusy: false,
+    actionError: '',
+    results: [],
+  })
 
   useEffect(() => {
     try { setSavedViews(JSON.parse(localStorage.getItem(VIEWS_KEY) || '[]')) } catch { /* ignore */ }
@@ -243,6 +256,152 @@ export default function InboxPage() {
     }
   }
 
+  function openCreateCaseModal() {
+    setCaseFlow({
+      open: true,
+      mode: 'create',
+      caseType: 'MI',
+      caseNumber: '',
+      search: '',
+      searching: false,
+      actionBusy: false,
+      actionError: '',
+      results: [],
+    })
+  }
+
+  function openAppendCaseModal() {
+    setCaseFlow({
+      open: true,
+      mode: 'append',
+      caseType: 'MI',
+      caseNumber: '',
+      search: '',
+      searching: false,
+      actionBusy: false,
+      actionError: '',
+      results: [],
+    })
+    searchCases('')
+  }
+
+  async function searchCases(term = '') {
+    setCaseFlow(prev => ({ ...prev, searching: true, actionError: '' }))
+    try {
+      const q = new URLSearchParams({ limit: '20', deleted: 'false' })
+      if (term?.trim()) q.set('search', term.trim())
+      const res = await fetch(`/api/cases?${q.toString()}`, { headers: AUTH_H })
+      if (!res.ok) {
+        setCaseFlow(prev => ({ ...prev, searching: false, actionError: 'Failed to load cases.' }))
+        return
+      }
+      const rows = await res.json()
+      setCaseFlow(prev => ({ ...prev, searching: false, results: rows || [] }))
+    } catch {
+      setCaseFlow(prev => ({ ...prev, searching: false, actionError: 'Failed to load cases.' }))
+    }
+  }
+
+  async function linkInquiryToCase(caseId) {
+    if (!selected) return false
+    const res = await fetch(`/api/inbox/${selected.id}/link-case`, {
+      method: 'POST',
+      headers: AUTH_H,
+      body: JSON.stringify({ case_id: caseId }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setCaseFlow(prev => ({ ...prev, actionError: data.error || 'Failed to link case.' }))
+      return false
+    }
+    updateInquiries(prev => prev.map(i => (
+      i.id === selected.id ? { ...i, status: 'processed', case_id: caseId } : i
+    )))
+    setSelected(prev => prev ? ({ ...prev, status: 'processed', case_id: caseId }) : prev)
+    return true
+  }
+
+  async function createCaseFromInquiry() {
+    if (!selected) return
+    if (!siteId) {
+      setCaseFlow(prev => ({ ...prev, actionError: 'No active site assigned. Contact admin.' }))
+      return
+    }
+    setCaseFlow(prev => ({ ...prev, actionBusy: true, actionError: '' }))
+    try {
+      const createRes = await fetch('/api/cases', {
+        method: 'POST',
+        headers: AUTH_H,
+        body: JSON.stringify({
+          site_id: siteId,
+          case_type: caseFlow.caseType,
+          intake_channel: 'email',
+          date_received: toDateOnly(selected.received_at),
+        }),
+      })
+      const created = await createRes.json().catch(() => ({}))
+      if (!createRes.ok || !created?.id) {
+        setCaseFlow(prev => ({ ...prev, actionBusy: false, actionError: created.error || 'Failed to create case.' }))
+        return
+      }
+
+      await fetch(`/api/cases/${created.id}/assign-number`, {
+        method: 'POST',
+        headers: AUTH_H,
+      })
+
+      const linked = await linkInquiryToCase(created.id)
+      if (!linked) {
+        setCaseFlow(prev => ({ ...prev, actionBusy: false }))
+        return
+      }
+
+      setCaseFlow(prev => ({ ...prev, actionBusy: false, open: false }))
+      navigate(`/cases/${created.id}`, { state: { from: '/inbox' } })
+    } catch {
+      setCaseFlow(prev => ({ ...prev, actionBusy: false, actionError: 'Failed to create case.' }))
+    }
+  }
+
+  async function appendToExistingCase(caseId) {
+    if (!selected || !caseId) return
+    setCaseFlow(prev => ({ ...prev, actionBusy: true, actionError: '' }))
+    const linked = await linkInquiryToCase(caseId)
+    if (!linked) {
+      setCaseFlow(prev => ({ ...prev, actionBusy: false }))
+      return
+    }
+    setCaseFlow(prev => ({ ...prev, actionBusy: false, open: false }))
+  }
+
+  async function appendByCaseNumber() {
+    const raw = (caseFlow.caseNumber || '').trim()
+    if (!raw) {
+      setCaseFlow(prev => ({ ...prev, actionError: 'Enter case number first.' }))
+      return
+    }
+    setCaseFlow(prev => ({ ...prev, searching: true, actionError: '' }))
+    try {
+      const q = new URLSearchParams({ limit: '50', deleted: 'false', search: raw })
+      const res = await fetch(`/api/cases?${q.toString()}`, { headers: AUTH_H })
+      if (!res.ok) {
+        setCaseFlow(prev => ({ ...prev, searching: false, actionError: 'Failed to search case number.' }))
+        return
+      }
+      const rows = await res.json()
+      const normalized = raw.toLowerCase()
+      const exact = (rows || []).find(c => (c.case_number || '').toLowerCase() === normalized)
+      if (!exact) {
+        setCaseFlow(prev => ({ ...prev, searching: false, actionError: `No exact case found for "${raw}".` }))
+        return
+      }
+      setCaseFlow(prev => ({ ...prev, searching: false }))
+      await appendToExistingCase(exact.id)
+    } catch {
+      setCaseFlow(prev => ({ ...prev, searching: false, actionError: 'Failed to search case number.' }))
+    }
+  }
+
   async function patchInquiry(id, body) {
     if (inboxSource === 'db') {
       await fetch(`/api/inbox/${id}`, { method: 'PATCH', headers: AUTH_H, body: JSON.stringify(body) }).catch(() => {})
@@ -414,6 +573,17 @@ export default function InboxPage() {
     if (d < t)  return 'overdue'
     if (d.getTime() === t.getTime()) return 'today'
     return null
+  }
+
+  function toDateOnly(value) {
+    if (!value) return null
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+    const dt = new Date(value)
+    if (Number.isNaN(dt.getTime())) return null
+    const y = dt.getUTCFullYear()
+    const m = String(dt.getUTCMonth() + 1).padStart(2, '0')
+    const d = String(dt.getUTCDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
   }
 
   const hasAdvFilters = Object.values(advFilters).some(v => v)
@@ -666,6 +836,18 @@ export default function InboxPage() {
                       <span className="meta-value">{formatFullDate(selected.received_at)}</span>
                       <span className="meta-label">Received On</span>
                       <span className="meta-value">{formatFullDate(selected.received_at)}</span>
+                      <span className="meta-label">Case</span>
+                      <span className="meta-value">
+                        {selected.case_id ? (
+                          <button
+                            className="btn btn-outline"
+                            style={{ fontSize: 11, padding: '3px 8px' }}
+                            onClick={() => navigate(`/cases/${selected.case_id}`, { state: { from: '/inbox' } })}
+                          >
+                            Open Case #{selected.case_id}
+                          </button>
+                        ) : 'Not linked'}
+                      </span>
 
                       {/* F1: Assign */}
                       <span className="meta-label">Assigned To</span>
@@ -758,6 +940,20 @@ export default function InboxPage() {
                     </button>
                     <button className="btn btn-outline" style={{ fontSize: 12, padding: '6px 14px' }} onClick={openForward}>
                       ↗ Forward
+                    </button>
+                    <button
+                      className="btn btn-outline"
+                      style={{ fontSize: 12, padding: '6px 14px' }}
+                      onClick={openCreateCaseModal}
+                    >
+                      ＋ Create Case
+                    </button>
+                    <button
+                      className="btn btn-outline"
+                      style={{ fontSize: 12, padding: '6px 14px' }}
+                      onClick={openAppendCaseModal}
+                    >
+                      🔗 Append to Case
                     </button>
                     <button className="btn btn-outline" style={{ fontSize: 12, padding: '6px 14px' }}
                       onClick={() => {
@@ -912,6 +1108,128 @@ export default function InboxPage() {
               </button>
               <button className="btn btn-outline" style={{ fontSize: 13 }}
                 onClick={() => setCompose(null)} disabled={compose.sending}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Case Modal (Create / Append) ── */}
+      {caseFlow.open && selected && (
+        <div className="compose-overlay" onClick={() => !caseFlow.actionBusy && setCaseFlow(prev => ({ ...prev, open: false }))}>
+          <div className="compose-modal" onClick={e => e.stopPropagation()}>
+            <div className="compose-modal-header">
+              <span>{caseFlow.mode === 'create' ? '＋ Create Case from Email' : '🔗 Append Email to Existing Case'}</span>
+              <button className="compose-close" onClick={() => !caseFlow.actionBusy && setCaseFlow(prev => ({ ...prev, open: false }))}>✕</button>
+            </div>
+            <div className="compose-modal-body">
+              {caseFlow.mode === 'create' ? (
+                <>
+                  <div className="compose-field">
+                    <label>Case Type</label>
+                    <select
+                      value={caseFlow.caseType}
+                      onChange={e => setCaseFlow(prev => ({ ...prev, caseType: e.target.value }))}
+                      disabled={caseFlow.actionBusy}
+                    >
+                      <option value="MI">MI</option>
+                      <option value="AE">AE</option>
+                      <option value="PC">PC</option>
+                    </select>
+                  </div>
+                  <div className="compose-field">
+                    <label>Source Email</label>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {selected.subject || '(No subject)'} from {selected.sender}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="compose-field">
+                    <label>Append by Case Number</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        type="text"
+                        placeholder="Enter exact case number"
+                        value={caseFlow.caseNumber}
+                        onChange={e => setCaseFlow(prev => ({ ...prev, caseNumber: e.target.value }))}
+                        disabled={caseFlow.searching || caseFlow.actionBusy}
+                      />
+                      <button
+                        className="btn btn-primary"
+                        type="button"
+                        onClick={appendByCaseNumber}
+                        disabled={caseFlow.searching || caseFlow.actionBusy}
+                      >
+                        {caseFlow.searching ? 'Searching…' : 'Proceed'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="compose-field">
+                    <label>Search Case</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        type="text"
+                        placeholder="Case number or description"
+                        value={caseFlow.search}
+                        onChange={e => setCaseFlow(prev => ({ ...prev, search: e.target.value }))}
+                        disabled={caseFlow.searching || caseFlow.actionBusy}
+                      />
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => searchCases(caseFlow.search)}
+                        disabled={caseFlow.searching || caseFlow.actionBusy}
+                      >
+                        {caseFlow.searching ? 'Searching…' : 'Search'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="compose-field" style={{ maxHeight: 220, overflowY: 'auto' }}>
+                    {caseFlow.results.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {caseFlow.searching ? 'Searching cases…' : 'No cases found.'}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {caseFlow.results.map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="btn btn-outline"
+                            style={{ fontSize: 12, textAlign: 'left', padding: '8px 10px' }}
+                            onClick={() => appendToExistingCase(c.id)}
+                            disabled={caseFlow.actionBusy}
+                          >
+                            <strong>{c.case_number || `Case #${c.id}`}</strong> · {c.case_type || '-'} · {c.status_name || '-'}
+                            <div style={{ color: 'var(--text-muted)' }}>{(c.description || '').slice(0, 100) || 'No description'}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+              {caseFlow.actionError && <div className="compose-error">{caseFlow.actionError}</div>}
+            </div>
+            <div className="compose-modal-footer">
+              {caseFlow.mode === 'create' ? (
+                <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={createCaseFromInquiry} disabled={caseFlow.actionBusy}>
+                  {caseFlow.actionBusy ? 'Creating…' : 'Create and Open Case'}
+                </button>
+              ) : (
+                <button className="btn btn-outline" style={{ fontSize: 13 }} disabled>
+                  Select a case from above to append
+                </button>
+              )}
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: 13 }}
+                onClick={() => setCaseFlow(prev => ({ ...prev, open: false }))}
+                disabled={caseFlow.actionBusy}
+              >
                 Cancel
               </button>
             </div>
