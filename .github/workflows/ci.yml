@@ -82,7 +82,7 @@ jobs:
       MYSQL_DATABASE: mims_dev
       JWT_SECRET: ci-jwt-secret
       SESSION_SECRET: ci-session-secret
-      NODE_ENV: test
+      NODE_ENV: ci
     steps:
       - uses: actions/checkout@v4
 
