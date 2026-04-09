@@ -1,86 +1,107 @@
 # Architecture Overview
 
-## Topology
+## Enterprise Hierarchy
 
-Pharaxis-One uses a multi-service, monorepo architecture where each app owns its own backend service and database schema while sharing common operational standards.
+Pharaxis is the company.  
+Pharaxis-One is the product suite under Pharaxis.
+
+Within Pharaxis-One:
+- 5 modules: `AI-Agent`, `Medical Affairs`, `Vault`, `QMS`, `Safety`
+- 8 applications total
+- each application has its own dedicated database
 
 ```mermaid
 flowchart TB
-  U[Users] --> CPFE[CP Portal Frontend]
-  U --> MIMSFE[MIMS Frontend]
-  U --> VFE[Vault Frontend]
+  PH["Pharaxis (Company)"] --> SU["Pharaxis-One (Suite)"]
 
-  CPFE --> CPBE[CP Portal Backend]
-  MIMSFE --> MIMSBE[MIMS Backend]
-  VFE --> VBE[Vault Backend]
-  CPBE --> AIBE[AI-Agent Backend]
-  MIMSBE --> AIBE
+  SU --> MODAI["Module: AI-Agent"]
+  SU --> MODMA["Module: Medical Affairs"]
+  SU --> MODV["Module: Vault"]
+  SU --> MODQ["Module: QMS"]
+  SU --> MODS["Module: Safety"]
 
-  PDBL[(Pharaxis DB Layer - MySQL 8)]
-  CPDB[(pharaxis_cp_portal_dev)]
-  MIMSDB[(pharaxis_mims_dev)]
-  AIDB[(pharaxis_ai_agent_dev)]
-  VDB[(pharaxis_vault_dev)]
-  PDBL --- CPDB
-  PDBL --- MIMSDB
-  PDBL --- AIDB
-  PDBL --- VDB
+  MODAI --> APPAI["App: AI-Agent"]
+  MODMA --> APPMIMS["App: MIMS"]
+  MODMA --> APPCP["App: CP Portal"]
+  MODMA --> APPIEG["App: IEG"]
+  MODMA --> APPPUB["App: Publications"]
+  MODV --> APPV["App: Vault"]
+  MODQ --> APPQ["App: QMS"]
+  MODS --> APPS["App: Safety"]
 
-  CPBE --> CPDB
-  MIMSBE --> MIMSDB
-  VBE --> VDB
-  AIBE --> AIDB
+  APPAI --> DBAI[("pharaxis_ai_agent_dev")]
+  APPMIMS --> DBMIMS[("pharaxis_mims_dev")]
+  APPCP --> DBCP[("pharaxis_cp_portal_dev")]
+  APPIEG --> DBIEG[("pharaxis_ieg_dev")]
+  APPPUB --> DBPUB[("pharaxis_publications_dev")]
+  APPV --> DBV[("pharaxis_vault_dev")]
+  APPQ --> DBQ[("pharaxis_qms_dev")]
+  APPS --> DBS[("pharaxis_safety_dev")]
 ```
 
-## Database Topology
+## Integration Architecture
 
-- Platform DB layer name: `Pharaxis DB` (logical platform grouping on MySQL).
-- Individual service databases (separate schema ownership):
-- `pharaxis_mims_dev` (MIMS)
-- `pharaxis_cp_portal_dev` (CP Portal)
-- `pharaxis_ai_agent_dev` (AI-Agent)
-- `pharaxis_vault_dev` (Vault)
+```mermaid
+flowchart LR
+  AI["AI-Agent"] --> MIMS["MIMS"]
+  AI --> CP["CP Portal"]
+  AI --> IEG["IEG"]
+  AI --> PUB["Publications"]
+  AI --> V["Vault"]
+  AI --> Q["QMS"]
+  AI --> S["Safety"]
 
-## Service Boundaries
+  MIMS <--> CP
+  MIMS <--> IEG
+  MIMS <--> PUB
+  CP <--> IEG
+  CP <--> PUB
+  IEG <--> PUB
 
-### MIMS
-- Path: `apps/medical-affairs/mims`
-- Core focus: case management, admin control surfaces, reporting, integrations.
-- Backend default port: `3000`
+  MIMS <--> V
+  MIMS <--> Q
+  MIMS <--> S
+  CP <--> V
+  CP <--> Q
+  CP <--> S
+  IEG <--> V
+  IEG <--> Q
+  IEG <--> S
+  PUB <--> V
+  PUB <--> Q
+  PUB <--> S
 
-### CP Portal
-- Path: `apps/medical-affairs/cp-portal`
-- Core focus: admin + public portal endpoints, content, submissions, notifications.
-- Backend default port: `4000`
-- Frontend default port: `5174`
+  Q <--> V
+  S <--> V
+  S <--> Q
+```
 
-### AI-Agent
-- Path: `apps/ai-agent`
-- Core focus: AI provider routing, org-level key configuration, query handling.
-- Backend default port: `6000`
+## App And Database Registry
 
-### Vault
-- Path: `apps/vault`
-- Core focus: auth + superadmin + content vault foundations.
-- Backend default port: `5000`
+| Module | Application | Path | Database | Status |
+|---|---|---|---|---|
+| AI-Agent | AI-Agent | `apps/ai-agent` | `pharaxis_ai_agent_dev` | Active |
+| Medical Affairs | MIMS | `apps/medical-affairs/mims` | `pharaxis_mims_dev` | Active |
+| Medical Affairs | CP Portal | `apps/medical-affairs/cp-portal` | `pharaxis_cp_portal_dev` | Active |
+| Medical Affairs | IEG | `apps/medical-affairs/ieg` | `pharaxis_ieg_dev` | Planned/Scaffold |
+| Medical Affairs | Publications | `apps/medical-affairs/publications` | `pharaxis_publications_dev` | Planned/Scaffold |
+| Vault | Vault | `apps/vault` | `pharaxis_vault_dev` | Active |
+| QMS | QMS | `apps/qms` | `pharaxis_qms_dev` | Planned/Scaffold |
+| Safety | Safety | `apps/safety` | `pharaxis_safety_dev` | Planned/Scaffold |
 
-## Data Model Strategy
+## Integration Rules (Locked)
 
-- MySQL is used across all active services.
-- Each service uses a dedicated database name to keep schema ownership clear.
-- Tables are initialized in application bootstrapping (`CREATE TABLE IF NOT EXISTS`).
+- AI-Agent can integrate with any application in the Pharaxis-One suite.
+- Medical Affairs applications can integrate with each other.
+- Medical Affairs applications can integrate with QMS, Safety, and Vault.
+- QMS and Vault can integrate.
+- Safety and Vault can integrate.
+- Safety and QMS can integrate.
 
-See `docs/DB_DETAILS.md` for exact DB names and env mapping.
+## Data And Platform Standards
 
-## API Versioning and Health
-
-- MIMS exposes `/api/health` and `/api/version`.
-- CP Portal exposes `/api/health`.
-- Vault exposes `/api/health`.
-- AI-Agent exposes `/api/v1/agent/health`.
-
-## Operational Principles
-
-- CI/CD and dependency updates are managed under `.github/`.
-- Security-sensitive runtime values are provided through `.env` files and must never be committed.
-- Runtime-generated storage artifacts are excluded from source control.
+- DB platform: MySQL 8 (`Pharaxis DB` logical layer).
+- DB isolation: one DB per application.
+- Naming standard: `pharaxis_<app>_dev`.
+- Environment contract: each app must use `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`.
+- Runtime secrets: provided via `.env` and never committed.
