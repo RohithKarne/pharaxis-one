@@ -13,7 +13,7 @@ It includes both internal admin controls and public-facing portal APIs/UI.
 
 - Backend: Node.js + Express
 - Frontend: React + Vite
-- Database: MySQL (`cp_portal_dev` by default)
+- Database: MySQL (`pharaxis_cp_portal_dev` by default)
 
 ## Paths
 

@@ -679,7 +679,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
           const columns = Array.isArray(schemaData.columns) ? schemaData.columns : []
           const relationships = Array.isArray(schemaData.relationships) ? schemaData.relationships : []
           setSqlSchemaSummary({
-            dbName: schemaData.db_name || 'mims_dev',
+            dbName: schemaData.db_name || 'pharaxis_mims_dev',
             tableCount: tables.length,
             columnCount: columns.length,
             relationshipCount: relationships.length,

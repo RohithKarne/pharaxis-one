@@ -8,7 +8,7 @@
  * - Exports `pool` for all route files to use
  * - Exports `initPromise` so server.js can wait for DB-ready before listening
  *
- * CONNECTION: Docker MySQL at localhost:3306, database: mims_dev
+ * CONNECTION: Docker MySQL at localhost:3306, database: pharaxis_mims_dev
  * Start MySQL: docker-compose up -d   (from project root)
  */
 

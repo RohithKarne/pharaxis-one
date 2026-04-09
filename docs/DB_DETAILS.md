@@ -23,7 +23,7 @@ All backend services use these variables:
 | Service | Database | Config Path |
 |---|---|---|
 | MIMS | `pharaxis_mims_dev` | `apps/medical-affairs/mims/backend/database/db.js` |
-| CP Portal | `cp_portal_dev` | `apps/medical-affairs/cp-portal/backend/database/db.js` |
+| CP Portal | `pharaxis_cp_portal_dev` | `apps/medical-affairs/cp-portal/backend/database/db.js` |
 | AI-Agent | `pharaxis_ai_agent_dev` | `apps/ai-agent/backend/database/db.js` |
 | Vault | `pharaxis_vault_dev` | `apps/vault/backend/database/db.js` |
 
@@ -47,7 +47,7 @@ Important:
 1. Start MySQL.
 2. Create service databases:
    - `pharaxis_mims_dev`
-   - `cp_portal_dev`
+   - `pharaxis_cp_portal_dev`
    - `pharaxis_ai_agent_dev`
    - `pharaxis_vault_dev`
 3. Copy `.env.example` to `.env` for each service.
@@ -65,3 +65,22 @@ Important:
 
 - Repository excludes local backup artifacts (`*_backup_*.sql`, `*.sql.gz`).
 - Runtime artifacts are ignored and should be stored outside version control.
+- Legacy CP Portal local database name `cp_portal_dev` is superseded by `pharaxis_cp_portal_dev`.
+
+### Safe CP Portal DB Rename (Local)
+
+If you already have data in `cp_portal_dev`, migrate it safely:
+
+1. Export current CP Portal data.
+2. Create new standardized DB.
+3. Import into `pharaxis_cp_portal_dev`.
+4. Update `MYSQL_DATABASE` in CP Portal backend `.env`.
+5. Keep old DB for rollback until verification passes.
+
+Example commands:
+
+```bash
+mysqldump -u devuser -pdevpass cp_portal_dev > /tmp/cp_portal_dev.sql
+mysql -u devuser -pdevpass -e "CREATE DATABASE IF NOT EXISTS pharaxis_cp_portal_dev;"
+mysql -u devuser -pdevpass pharaxis_cp_portal_dev < /tmp/cp_portal_dev.sql
+```

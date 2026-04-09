@@ -77,10 +77,10 @@ CP Portal is a separate white-label HCP/patient-facing portal. Future integratio
 | Engine | MySQL 8.0.45 (native install, NOT Docker) |
 | Location | `/usr/local/mysql/` on Mac |
 | Port | 3306 |
-| Database name | `mims_dev` |
+| Database name | `pharaxis_mims_dev` |
 | User | `devuser` / `devpass` |
 | Start | System Settings → MySQL → Start (or auto-starts on Mac boot via launchd) |
-| CLI | `/usr/local/mysql/bin/mysql -u devuser -pdevpass mims_dev` |
+| CLI | `/usr/local/mysql/bin/mysql -u devuser -pdevpass pharaxis_mims_dev` |
 | GUI | DBeaver — host: `localhost`, port: `3306`, allowPublicKeyRetrieval: true, useSSL: false |
 
 ### Infrastructure

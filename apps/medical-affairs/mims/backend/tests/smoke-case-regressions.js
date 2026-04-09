@@ -171,7 +171,7 @@ async function main() {
         port: parseInt(process.env.MYSQL_PORT || '3306', 10),
         user: process.env.MYSQL_USER || 'devuser',
         password: process.env.MYSQL_PASSWORD || 'devpass',
-        database: process.env.MYSQL_DATABASE || 'mims_dev',
+        database: process.env.MYSQL_DATABASE || 'pharaxis_mims_dev',
       });
       const conn = await pool.getConnection();
       try {

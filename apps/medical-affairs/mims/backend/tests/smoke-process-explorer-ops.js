@@ -28,7 +28,7 @@ async function ensureSecondSuperadmin() {
     port: Number(process.env.MYSQL_PORT || 3306),
     user: process.env.MYSQL_USER || 'devuser',
     password: process.env.MYSQL_PASSWORD || 'devpass',
-    database: process.env.MYSQL_DATABASE || 'mims_dev',
+    database: process.env.MYSQL_DATABASE || 'pharaxis_mims_dev',
   });
   try {
     const email = 'superadmin.qa2';

@@ -73,7 +73,7 @@ Copy sample env files where provided:
 Default local DB names used by the code:
 
 - `pharaxis_mims_dev`
-- `cp_portal_dev`
+- `pharaxis_cp_portal_dev`
 - `pharaxis_ai_agent_dev`
 - `pharaxis_vault_dev`
 

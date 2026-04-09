@@ -56,10 +56,10 @@ CP Portal is in maintenance mode. MIMS is the active development priority. CP Po
 | Engine | MySQL 8.0.45 (native install, NOT Docker) |
 | Location | `/usr/local/mysql/` on Mac |
 | Port | 3306 |
-| Database name | `cp_portal_dev` |
+| Database name | `pharaxis_cp_portal_dev` |
 | User | `devuser` / `devpass` |
 | Start | System Settings → MySQL → Start (or auto-starts on Mac boot via launchd) |
-| CLI | `/usr/local/mysql/bin/mysql -u devuser -pdevpass cp_portal_dev` |
+| CLI | `/usr/local/mysql/bin/mysql -u devuser -pdevpass pharaxis_cp_portal_dev` |
 | GUI | DBeaver — host: `localhost`, port: `3306`, allowPublicKeyRetrieval: true, useSSL: false |
 | Note | Migrated from SQLite → Docker MySQL (2026-03-24), then Docker removed — now same native MySQL instance as MIMS |
 
@@ -91,7 +91,7 @@ npm run dev
 
 Backend runs on port **4000**. Frontend dev server on port **5174**.
 
-Both CP Portal and MIMS share the same native MySQL 8.0.45 instance — `cp_portal_dev` and `mims_dev` are separate databases on the same server.
+Both CP Portal and MIMS share the same native MySQL 8.0.45 instance — `pharaxis_cp_portal_dev` and `pharaxis_mims_dev` are separate databases on the same server.
 
 ---
 

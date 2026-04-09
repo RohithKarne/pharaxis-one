@@ -173,7 +173,7 @@ function bindNamedParams(sql, params = {}) {
 }
 
 function getDatabaseName() {
-  return String(process.env.MYSQL_DATABASE || 'mims_dev');
+  return String(process.env.MYSQL_DATABASE || 'pharaxis_mims_dev');
 }
 
 function tokenizeSimple(text) {

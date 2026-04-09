@@ -16,17 +16,15 @@ flowchart TB
   CPBE --> AIBE[AI-Agent Backend]
   MIMSBE --> AIBE
 
-  subgraph PDBL[Pharaxis DB Layer (MySQL 8)]
-    PDB[(Pharaxis DB Platform)]
-    CPDB[(cp_portal_dev)]
-    MIMSDB[(pharaxis_mims_dev)]
-    AIDB[(pharaxis_ai_agent_dev)]
-    VDB[(pharaxis_vault_dev)]
-    PDB --- CPDB
-    PDB --- MIMSDB
-    PDB --- AIDB
-    PDB --- VDB
-  end
+  PDBL[(Pharaxis DB Layer - MySQL 8)]
+  CPDB[(pharaxis_cp_portal_dev)]
+  MIMSDB[(pharaxis_mims_dev)]
+  AIDB[(pharaxis_ai_agent_dev)]
+  VDB[(pharaxis_vault_dev)]
+  PDBL --- CPDB
+  PDBL --- MIMSDB
+  PDBL --- AIDB
+  PDBL --- VDB
 
   CPBE --> CPDB
   MIMSBE --> MIMSDB
@@ -39,7 +37,7 @@ flowchart TB
 - Platform DB layer name: `Pharaxis DB` (logical platform grouping on MySQL).
 - Individual service databases (separate schema ownership):
 - `pharaxis_mims_dev` (MIMS)
-- `cp_portal_dev` (CP Portal)
+- `pharaxis_cp_portal_dev` (CP Portal)
 - `pharaxis_ai_agent_dev` (AI-Agent)
 - `pharaxis_vault_dev` (Vault)
 

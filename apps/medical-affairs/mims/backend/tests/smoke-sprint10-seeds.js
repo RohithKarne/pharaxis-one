@@ -6,7 +6,7 @@ process.env.MYSQL_HOST = 'localhost';
 process.env.MYSQL_PORT = '3306';
 process.env.MYSQL_USER = 'devuser';
 process.env.MYSQL_PASSWORD = 'devpass';
-process.env.MYSQL_DATABASE = 'mims_dev';
+process.env.MYSQL_DATABASE = 'pharaxis_mims_dev';
 
 const { seedNewOrg } = require('../services/seedService');
 
@@ -15,7 +15,7 @@ const DB_CONFIG = {
   port: 3306,
   user: 'devuser',
   password: 'devpass',
-  database: 'mims_dev',
+  database: 'pharaxis_mims_dev',
 };
 
 const ORG_A_NAME = 'Seed Test Org Sprint10';
