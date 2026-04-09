@@ -46,20 +46,50 @@ async function loginUser(email, password) {
   throw new Error(`Unexpected login payload: ${JSON.stringify(r.data)}`);
 }
 
+async function ensureOrgWithSite(superToken, created) {
+  const orgs = await req('/api/superadmin/orgs-for-assignment', { token: superToken });
+  assert(orgs.ok, `Failed to load orgs: ${JSON.stringify(orgs.data)}`);
+
+  const existing = (orgs.data.orgs || []).find(o => Array.isArray(o.sites) && o.sites.length > 0);
+  if (existing) {
+    return { org: existing, site: existing.sites[0] };
+  }
+
+  const suffix = Date.now();
+  const orgName = `QA Regression Org ${suffix}`;
+  const siteName = `QA Regression Site ${suffix}`;
+
+  const createOrg = await req('/api/superadmin/orgs', {
+    method: 'POST',
+    token: superToken,
+    body: { name: orgName },
+  });
+  assert(createOrg.ok && createOrg.data?.id, `Failed to create fallback org: ${JSON.stringify(createOrg.data)}`);
+  created.orgId = createOrg.data.id;
+
+  const createSite = await req(`/api/superadmin/orgs/${created.orgId}/sites`, {
+    method: 'POST',
+    token: superToken,
+    body: { name: siteName, country: 'US', is_primary: true },
+  });
+  assert(createSite.ok && createSite.data?.id, `Failed to create fallback site: ${JSON.stringify(createSite.data)}`);
+  created.siteId = createSite.data.id;
+
+  return {
+    org: { id: created.orgId, name: orgName },
+    site: { id: created.siteId, name: siteName },
+  };
+}
+
 async function main() {
-  const created = { userId: null, caseIds: [], email: null };
+  const created = { userId: null, caseIds: [], email: null, orgId: null, siteId: null };
   let superToken = null;
   try {
     const health = await req('/api/health');
     assert(health.ok, 'Health check failed');
 
     superToken = await loginUser('superadmin', 'Manager@123');
-
-    const orgs = await req('/api/superadmin/orgs-for-assignment', { token: superToken });
-    assert(orgs.ok, `Failed to load orgs: ${JSON.stringify(orgs.data)}`);
-    const org = (orgs.data.orgs || []).find(o => Array.isArray(o.sites) && o.sites.length > 0);
-    assert(org, 'No organisation with active site found');
-    const site = org.sites[0];
+    const { org, site } = await ensureOrgWithSite(superToken, created);
 
     const email = `qa.regression+${Date.now()}@example.com`;
     created.email = email;
@@ -154,6 +184,12 @@ async function main() {
           await conn.query('DELETE FROM user_org_access WHERE user_id = ?', [created.userId]).catch(() => {});
           await conn.query('DELETE FROM sessions WHERE user_id = ?', [created.userId]).catch(() => {});
           await conn.query('DELETE FROM users WHERE id = ?', [created.userId]);
+        }
+        if (created.siteId) {
+          await conn.query('DELETE FROM sites WHERE id = ?', [created.siteId]).catch(() => {});
+        }
+        if (created.orgId) {
+          await conn.query('DELETE FROM organisations WHERE id = ?', [created.orgId]).catch(() => {});
         }
         await conn.commit();
       } catch (e) {
