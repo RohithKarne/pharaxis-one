@@ -3,6 +3,7 @@
 > Requested by Rohith
 > Purpose: define how the full team operates across structure, protocols, approvals, live communication, and execution discipline.
 > Revision update: 2026-03-30 (communication-quality addendum merged from `TEAM_OPERATING_SOP (Updated).md`)
+> Revision update: 2026-03-31 (Section 25 added — Codex + Claude Code tooling workflow. Tooling protocol added to Section 7. Engineering execution step updated in Section 8.)
 
 ---
 
@@ -59,12 +60,12 @@ If any older repo document conflicts with this SOP, the latest active protocol a
 ```text
 Saad (CEO)
 ├── Rohith (CPO)
-│   ├── Vanaja (Director, Product Management)
+│   ├── Vanaja (Director of Product Management)
 │   │   └── Vinay (Product Owner)
-│   └── Bala (Director, Project Management)
+│   └── Bala (Director of Project Management)
 └── Rajeev (CTO)
-    └── Varun (Senior Director, Engineering)
-        ├── Bhavya (Senior Architect)
+    └── Varun (Senior Director of Software Systems)
+        ├── Bhavya (Senior Solution Architect)
         ├── Vivek (Principal Software Engineer)
         ├── Karthik (QA Manager)
         └── Shivani (Senior Test Engineer)
@@ -92,13 +93,13 @@ Saad (CEO)
 - Rajeev: architecture oversight, engineering accountability, technology leadership awareness
 
 ### Product and Delivery
-- Vanaja (Director, Product Management): product strategy, feature definition, prioritization, requirement quality
+- Vanaja (Director of Product Management): product strategy, feature definition, prioritization, requirement quality
 - Vinay (Product Owner): user stories, acceptance criteria, edge cases, business rules, requirement detail, sprint scope ownership
-- Bala (Director, Project Management): project management, process enforcement, milestone communication, blocker escalation, approval coordination
+- Bala (Director of Project Management): project management, process enforcement, milestone communication, blocker escalation, approval coordination
 
 ### Engineering
-- Varun (Senior Director, Engineering): task assignment, technical coordination, code review, readiness sign-off before QA, engineering leadership
-- Bhavya (Senior Architect): architecture decisions, technical analysis, root cause analysis, system design, engineering quality
+- Varun (Senior Director of Software Systems): task assignment, technical coordination, code review, readiness sign-off before QA, engineering leadership
+- Bhavya (Senior Solution Architect): architecture decisions, technical analysis, root cause analysis, system design, engineering quality
 - Vivek (Principal Software Engineer): implementation ownership, file-level changes, design input alongside Bhavya, fix confirmation
 
 ### QA
@@ -140,6 +141,14 @@ The team must follow these protocol groups at all times:
 - scope must stay controlled
 - lessons must be captured after corrections
 
+### Tooling Protocol — Codex + Claude Code Split (mandatory from Sprint 10)
+- **Codex CLI writes all code** — every implementation, edit, test generation, and code fix must go through `codex exec`
+- **Claude Code is architecture and coordination only** — analysis, planning, route tracing, code reading, prompt preparation
+- **Pre-written Codex prompts are a Gate 1 pre-condition** — Bhavya prepares a prompt per task before Gate 1 is raised. No Gate 1 without prompts ready.
+- Prompts must include: exact file paths, line numbers, function names, column names, and the full change instruction
+- Claude Code must never write or edit production code files directly using Edit or Write tools
+- If Codex fails on a task, Bhavya investigates the failure, revises the prompt, and retries — not falls back to manual editing
+
 ### QA Protocol
 - QA plans before execution
 - happy path, negative path, and regression must be covered
@@ -177,8 +186,9 @@ Development starts only after approval.
 
 6. Engineering execution
 Varun assigns work explicitly.
-Bhavya provides analysis.
-Vivek implements changes.
+Bhavya provides analysis and writes the Codex prompt for each task.
+Vivek runs `codex exec` with Bhavya's prompt and owns the output.
+All code changes go through Codex CLI — never written manually by Claude Code.
 
 7. Engineering verification
 The team verifies the changed behavior and the critical paths around it.
@@ -1125,3 +1135,69 @@ Reason:
 Impact:
 Direction:
 ```
+
+---
+
+## 25. Engineering Tooling SOP — Codex + Claude Code Workflow
+
+> Established: 2026-03-31. Mandated by Rohith. Applies from Sprint 10 onward.
+
+### Principle
+
+Claude Code and Codex CLI serve distinct roles. Neither substitutes for the other.
+
+| Role | Tool |
+|------|------|
+| Code reading, route tracing, codebase analysis | Claude Code |
+| Architecture decisions, planning, prompt preparation | Claude Code (Bhavya) |
+| Live communication, gate management, coordination | Claude Code |
+| All code writing, editing, test file generation | Codex CLI (`codex exec`) |
+| Code fixes, refactors, file-level changes | Codex CLI |
+
+### Codex CLI — How to Run
+
+```bash
+codex exec -c 'sandbox_permissions=["disk-full-read-access", "disk-write-access"]' "your prompt here"
+```
+
+- Run from the project root: `/Users/rohithkarne/MIMS-CP Portal/`
+- Prompt must be specific enough to execute without ambiguity
+- Non-interactive — must include everything needed in the prompt itself
+
+### Bhavya's Prompt Preparation Responsibility
+
+Before each sprint Gate 1, Bhavya must deliver pre-written Codex prompts for every task in that sprint.
+
+Each prompt must include:
+- what file to edit (full relative path)
+- what function, route, or component to target
+- what exact change to make (column names, field names, logic rules)
+- what to leave unchanged
+- what to verify after the change
+
+Prompts without this level of detail are not accepted — Bhavya revises until they are specific enough for Codex to execute cleanly.
+
+### Vivek's Execution Responsibility
+
+Vivek runs `codex exec` with Bhavya's prompt. Vivek owns:
+- confirming the output matches Bhavya's scope
+- running the smoke tests after each Codex task
+- reporting exactly what changed in live chat
+
+If Codex output is incomplete or incorrect, Vivek flags it to Bhavya — who revises the prompt — before any manual fallback is considered.
+
+### What Is Not Allowed
+
+- Claude Code writing or editing source files directly (no Edit/Write tool on production code)
+- Vivek manually patching code outside of Codex without Varun's explicit direction
+- Starting implementation before Bhavya's prompt is ready
+- Submitting Gate 1 without prompts prepared for all tasks in scope
+
+### Gate 1 Pre-Condition Checklist
+
+Before Bala raises Gate 1:
+- [ ] Vinay's user stories and acceptance criteria are ready
+- [ ] Karthik's test plan is drafted
+- [ ] Bhavya has written Codex prompts for every task in scope
+
+Gate 1 is blocked until all three are true.

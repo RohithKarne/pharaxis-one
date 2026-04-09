@@ -1,0 +1,46 @@
+{
+  "name": "mims",
+  "version": "1.0.0",
+  "description": "Medical Information Management System - Inquiry handling and case processing platform",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "nodemon backend/server.js",
+    "dev:all": "concurrently -n backend,frontend -c cyan,magenta \"nodemon backend/server.js\" \"cd frontend && npm run dev\"",
+    "test": "jest --testPathPatterns=backend/tests",
+    "test:process-explorer-guard": "node backend/tests/process-explorer-guard.js",
+    "test:smoke:process-explorer-ops": "node backend/tests/smoke-process-explorer-ops.js",
+    "test:smoke:case-regression": "node backend/tests/smoke-case-regressions.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:smoke:sprint14:g12": "node backend/tests/smoke-sprint14-g12.js",
+    "test:sprint-close:gate1": "npm run test:smoke:case-regression && npm run test:smoke:sprint14:g12 && npm run test:e2e",
+    "test:smoke:sprint14:g13": "node backend/tests/smoke-sprint14-g13.js",
+    "demo:preflight": "node backend/tests/smoke-sprint14-g13.js",
+    "test:sprint14:full": "npm run test:smoke:case-regression && npm run test:smoke:sprint14:g12 && npm run test:smoke:sprint14:g13"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.5.1",
+    "geoip-lite": "^1.4.10",
+    "imap": "^0.8.17",
+    "imapflow": "^1.2.13",
+    "jsonwebtoken": "^9.0.2",
+    "mailparser": "^3.9.4",
+    "multer": "^2.1.1",
+    "mysql2": "^3.20.0",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^8.0.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/geoip-lite": "^1.4.4",
+    "concurrently": "^9.1.2",
+    "jest": "^30.3.0",
+    "nodemon": "^3.0.3",
+    "supertest": "^7.2.2"
+  }
+}

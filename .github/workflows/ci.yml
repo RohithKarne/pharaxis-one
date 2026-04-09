@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: cp-portal/backend
+        working-directory: apps/medical-affairs/cp-portal/backend
     steps:
       - uses: actions/checkout@v4
 
@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: cp-portal/backend/package-lock.json
+          cache-dependency-path: apps/medical-affairs/cp-portal/backend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: cp-portal/frontend
+        working-directory: apps/medical-affairs/cp-portal/frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -47,7 +47,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: cp-portal/frontend/package-lock.json
+          cache-dependency-path: apps/medical-affairs/cp-portal/frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -60,13 +60,13 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mims
+        working-directory: apps/medical-affairs/mims
     services:
       mysql:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: mims_dev
+          MYSQL_DATABASE: pharaxis_mims_dev
         ports:
           - 3306:3306
         options: >-
@@ -79,7 +79,7 @@ jobs:
       MYSQL_PORT: 3306
       MYSQL_USER: root
       MYSQL_PASSWORD: root
-      MYSQL_DATABASE: mims_dev
+      MYSQL_DATABASE: pharaxis_mims_dev
       JWT_SECRET: ci-jwt-secret
       SESSION_SECRET: ci-session-secret
       NODE_ENV: ci
@@ -91,7 +91,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: mims/package-lock.json
+          cache-dependency-path: apps/medical-affairs/mims/package-lock.json
 
       - name: Install dependencies
         run: npm ci

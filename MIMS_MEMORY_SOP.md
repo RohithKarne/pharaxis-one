@@ -18,6 +18,9 @@
 | 2026-03-28 | Bala | Team promotions effective: Varun → Senior Director Engineering, Bhavya → Senior Architect, Vivek → Principal SWE, Karthik → QA Manager, Vanaja → Director Product Management, Vinay → Product Owner. Org chart and role descriptions updated in Section 5. |
 | 2026-03-28 | Bala | Sprint 9 closed: SuperAdmin dashboard, advanced audit filters + CSV export, user lifecycle controls, alerts engine, in-app notifications, duplicate alert-rule fix, and latest sprint status updated across Sections 7–13. |
 | 2026-03-28 | Bala | Sprint 9 DB reference enriched: superadmin_alert_rules, superadmin_alert_events, notifications descriptions expanded. Existing tables affected by Sprint 9 documented (users, login_audit, audit_logs, user_2fa_settings, organisations, sites, system_config, service_logs, email_accounts). |
+| 2026-03-31 | Bala | Sprint 10 closed: org seed service (seedService.js), runtime linkage (GET /api/cases/form-config), Case Form UI dynamic rendering (AE 9 tabs / PC 7 tabs), Field Setup UI two-pane redesign + flex field CRUD. field_setup unique key fixed to include org_id. Backfill script for existing orgs. Codex workflow rule established. Sprint 11 integration roadmap locked (32 features, 3 phases). Version history, API map, DB reference, sprint history, technical rules, and test file list all updated. |
+| 2026-04-05 | Bala | Sprints 11–13 closed. Sprint 14 active. Section 5 (Team) replaced with pointer — full org chart in TEAM_OPERATING_SOP.md. Section 14 (Process) replaced with pointer — gate flow and browser verification in memory/protocols.md. Section 13 trimmed — process rules (git push, Codex workflow) moved to memory/feedback.md. Sprint 11 integration scope removed from Section 11 — Section 11 now current sprint only. Sprint history table updated to Sprint 14. |
+| 2026-04-07 | Bala | Sprint 14 closed. 13/14 items complete. G13-3 (client-facing demo environment full provisioning) deferred to Sprint 15. Gate 1 passed (exit code 0). Sprint history table updated. Section 11 updated to Sprint 15 READY. |
 
 ---
 
@@ -94,7 +97,8 @@ CP Portal is a separate white-label HCP/patient-facing portal. Future integratio
 |-----------|--------|
 | API + integration tests | Custom Node.js scripts using `curl` via `execSync` |
 | Browser tests | puppeteer-core + Chrome |
-| Test files | `sprint6-phase1a-test.js`, `sprint6-phase1b-test.js`, `sprint6-phase2-test.js`, `sprint7-qa-test.js`, `sprint8-session-timeout-test.js`, `mims/backend/tests/smoke-2fa.js` |
+| Test files | `sprint6-phase1a-test.js`, `sprint6-phase1b-test.js`, `sprint6-phase2-test.js`, `sprint7-qa-test.js`, `sprint8-session-timeout-test.js`, `mims/backend/tests/smoke-2fa.js`, `mims/backend/tests/smoke-sprint9.js` (26/27 PASS), `mims/backend/tests/smoke-sprint10-seeds.js` (9/9 PASS), `mims/backend/tests/smoke-sprint10-formconfig.js` (8/8 PASS), `mims/backend/tests/smoke-sprint10-caseformui.js` (10/10 PASS — static analysis), `mims/backend/tests/smoke-sprint10-fieldsetupui.js` (10/10 PASS — static analysis) |
+| Backfill script | `mims/backend/scripts/backfill-existing-orgs.js` — one-time run to seed org defaults for orgs created before Sprint 10. Run with `node mims/backend/scripts/backfill-existing-orgs.js`. |
 | Run command | `node <test-file>.js` from project root. Both servers + MySQL must be running. |
 | Backend test libs | Jest ^30.3.0, Supertest ^7.2.2 |
 | Frontend test libs | Vitest ^4.0.18, @testing-library/react ^16.3.2 |
@@ -208,27 +212,12 @@ if (req.user.role !== 'superadmin') {
 
 ---
 
-## 5. Full Team Structure
+## 5. Team Structure
 
-```
-Saad (CEO)
-├── Rohith (CPO — Final product authority, approval gates, sign-offs)
-│   ├── Vanaja (Director, Product Management)
-│   │   └── Vinay (Product Owner — user stories, AC, edge cases, business rules)
-│   └── Bala (Director, Project Management — gates, communication, escalation)
-└── Rajeev (CTO — architecture oversight, engineering accountability)
-    └── Varun (Senior Director, Engineering — task assignment, code review, sign-off)
-        ├── Bhavya (Senior Architect — technical analysis, root cause, design)
-        ├── Vivek (Principal Software Engineer — implementation, ownership)
-        ├── Karthik (QA Manager — test strategy, QA coverage, release-readiness)
-        └── Shivani (Senior Test Engineer — test execution, defect capture, evidence)
-```
+11 members. Full org chart and role descriptions: see `TEAM_OPERATING_SOP.md`.
 
-**Notes:**
-- Kavya is no longer in role. Bala carries PM + Scrum responsibilities.
-- Rajeev is CTO — NOT a hands-on bug fixer. Defects are fixed by Varun / Bhavya / Vivek.
-- Bala does not speak on technical matters. Engineering team speaks for engineering.
-- Promotions effective 2026-03-28: Varun → Senior Director, Bhavya → Senior Architect, Vivek → Principal SWE, Karthik → QA Manager, Vanaja → Director, Vinay → Product Owner.
+**Quick reference (titles updated 2026-04-05):**
+Saad (CEO) → Rohith (CPO) → Vanaja (Director of Product Management) + Bala (Director of Project Management) + Rajeev (CTO) → Varun (Senior Director of Software Systems) → Bhavya (Senior Solution Architect), Vivek (Principal Software Engineer), Karthik (QA Manager), Shivani (Senior Test Engineer). Vinay (Product Owner) reports to Vanaja.
 
 ---
 
@@ -281,6 +270,7 @@ Backend runs on port 3000. All routes under `/api/`.
 | GET | `/api/cases/my` | Cases owned by logged-in user |
 | GET | `/api/cases/unassigned` | Unassigned cases |
 | POST | `/api/cases` | Create case (org_id sourced from JWT only) |
+| GET | `/api/cases/form-config` | Dynamic form config — merged sections + fields + picklist options for a given case_type and org. Auth only (no requireOrg). Superadmin passes `?org_id=`. Regular users resolved from JWT orgId. Returns `{ case_type, sections: [{ section_name, is_visible, fields: [{ ...field, options: [] }] }] }`. |
 | GET | `/api/cases/:id` | Single case detail |
 | PUT | `/api/cases/:id` | Update case (COALESCE pattern — partial update) |
 | DELETE | `/api/cases/:id` | Soft delete |
@@ -301,7 +291,9 @@ Backend runs on port 3000. All routes under `/api/`.
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET/POST/PUT/DELETE | `/api/admin/picklists` | Dropdown values per org |
-| GET/POST/PUT/DELETE | `/api/admin/field-setup` | Case form field config |
+| GET/POST/PUT/DELETE | `/api/admin/field-setup` | Case form field config — standard fields |
+| POST | `/api/admin/field-setup/flex` | Add a flex field to a section. Body: `{ section_name, field_name, field_type, picklist_type, is_required, sort_order }` |
+| DELETE | `/api/admin/field-setup/flex/:id` | Delete a flex field by id |
 | GET/POST/PUT/DELETE | `/api/admin/security-groups` | RBAC groups + privilege matrix |
 | GET/POST/PUT/DELETE | `/api/admin/contacts` | Case contacts repository |
 | GET/POST/PUT/DELETE | `/api/admin/orgs` | Organisations |
@@ -474,10 +466,10 @@ Accessible at `/superadmin` (requires `superadmin` role). Navigation is sidebar-
 | `workflow_activities` | Named case activities that trigger rules (F-12) |
 | `workflow_activity_triggers` | If-activity-then-action rules |
 | `source_types` | How inquiries arrive (email, phone, web form, etc.) |
-| `field_setup` | Case form field config per section — type, required, hidden, picklist |
+| `field_setup` | Case form field config per section per org — type, required, hidden, picklist, help_text, max_length, default_value. **Sprint 10:** unique key changed from `uq_field_section_name (section_name, field_name)` to `uq_field_section_org (section_name, field_name, org_id)` — required for per-org seeding to work correctly via INSERT IGNORE. Seeds populated via `seedService.js` on org creation. |
 | `picklists` | Dropdown values per category per org |
 | `case_number_config` | Auto-number format per org per case type |
-| `case_form_definition` | Section + field visibility per org per case type |
+| `case_form_definition` | Section + field visibility per org per case type. Seeded for new orgs via `seedService.js`. |
 | `products` | Drug/trade names per org |
 | `product_families` | Product groupings with ingredients |
 | `product_approvals` | Regulatory approvals per product (F-07) |
@@ -517,21 +509,37 @@ Accessible at `/superadmin` (requires `superadmin` role). Navigation is sidebar-
 | `transmission_audit_trail` | Immutable outbound transmission log per case (F-10) |
 | `service_logs` | Platform-wide service events |
 
-### Sprint 9 — Existing Tables Affected
+---
 
-No schema changes. These tables are read or written by Sprint 9 features:
+## 9b. Services and Scripts Reference
 
-| Table | How Sprint 9 Uses It |
-|-------|----------------------|
-| `users` | Force password reset, activate/deactivate, bulk actions; identifies superadmin recipients for notifications |
-| `login_audit` | Dashboard failed-login metrics; login audit filter/export; failed-login and 2FA-lock alert detection |
-| `audit_logs` | Dashboard recent activity; audit trail filter/export; receives new audit entries for Sprint 9 actions |
-| `user_2fa_settings` | Unlock flow; locked-user detection for dashboard metrics and alerts |
-| `organisations` | Dashboard org counts; org deactivation alert trigger |
-| `sites` | Site deactivation alert trigger |
-| `system_config` | Platform SMTP config reused for alert emails (same SMTP as 2FA and forgot-password) |
-| `service_logs` | Service-failure and mailbox-failure alert detection |
-| `email_accounts` | Indirect — mail/SMTP health status shown on SuperAdmin dashboard |
+### `mims/backend/services/seedService.js` (NEW — Sprint 10)
+
+Master org seed service. Called whenever a new org is created.
+
+```js
+const { seedNewOrg } = require('./services/seedService');
+await seedNewOrg(orgId, userId);  // runs in a single transaction
+```
+
+Seeds three things in order:
+1. **Field Setup** — 113 fields across 19 sections (General, MI, AE, PC) including: Prefix, Reporter Type, Source, Consent Status, Product Type, Product Category, Reported Causality, PC Classification, Frequency, Administration Route
+2. **Picklists** — 33 default picklist groups
+3. **Case Form Definition** — section visibility defaults for MI (5 sections), AE (10 sections), PC (8 sections)
+
+All three run in a single MySQL transaction — if any fails, the whole seed rolls back.
+
+**Wired into:** `mims/backend/routes/admin/orgs.js` POST `/` handler — called after INSERT INTO organisations and before SELECT created_at.
+
+### `mims/backend/scripts/backfill-existing-orgs.js` (NEW — Sprint 10)
+
+One-time script to seed defaults for orgs created before Sprint 10 was deployed.
+
+```bash
+node mims/backend/scripts/backfill-existing-orgs.js
+```
+
+Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on error, prints summary. Run once. Already executed for org 1 (Novartis) and org 26 (Vanaja Review Co.).
 
 ---
 
@@ -548,14 +556,23 @@ No schema changes. These tables are read or written by Sprint 9 features:
 | Sprint 7 | Multi-Org Architecture | CLOSED — 2026-03-27 | Multi-org DB, JWT org context, switch-org API, superadmin user+org management, password reset flow, data isolation on all routes, org switcher UI, 7 bugs fixed during product testing | None |
 | Sprint 8 | Security + Data Integrity | CLOSED — 2026-03-28 | Session timeout per org + superadmin global timeout, 2FA infrastructure (user_2fa_settings, backup codes, trusted devices, challenges, password history), per-org 2FA config (on/off, email OTP + TOTP, remember-device days), platform SMTP config + test-email, superadmin audit + login-audit pages, superadmin lockdown, org/site toggles, site uniqueness, data cleanup. 20/20 QA tests passing. | None |
 | Sprint 9 | SuperAdmin Control, Audit, and Alerts | CLOSED — 2026-03-28 | SuperAdmin dashboard, advanced audit/login-audit filters + CSV export, user lifecycle controls (force password reset, unlock, bulk actions), alerts engine, alert rules/events, in-app notifications, org/site deactivation alerts, duplicate alert-rule fix. QA substantially passed and product review accepted. | Small future polish only — clarify alert-rule activation/default behavior in UX copy |
+| Sprint 10 | Case Form Foundation | CLOSED — 2026-03-31 | Org seed service (seedService.js), field_setup unique key fix (org_id added), runtime linkage (GET /api/cases/form-config), Case Form UI dynamic rendering (AE 9 tabs / PC 7 tabs, formConfig helpers, flex field tab panels), Field Setup UI two-pane redesign + flex field CRUD (add/delete), backfill script for existing orgs. 37/37 QA tests passing. All code written via Codex CLI. | None |
+| Sprint 11 | Integration Foundation + Reports Backend | CLOSED | Integration screens (SuperAdmin + Admin Console), org_integrations DB table, API key auth layer, Integration Engine service, EMIR, Reports backend. | AdminConsolePage split — deferred to Sprint 13 |
+| Sprint 12 | Admin Console + Workflow Gaps | CLOSED | Admin Console workflow engine, CM backend, security hardening. AdminConsolePage split attempted — deferred to Sprint 13. | AdminConsolePage split — carried to Sprint 13 |
+| Sprint 13 | AdminConsolePage Refactor + Reports UI + CM Frontend + Admin Gaps + Security | CLOSED — 2026-04-05 | AdminConsolePage 6,395→763 lines (5 sub-components), Reports frontend (27 reports), CM frontend (Documents/FAQs/Merge/Templates), Admin Console FRD gaps (Expiry/Approvals/Dependencies/Diff/Workflow Rules/Security Groups), Case Workflow Engine fix, Security hardening, SuperAdmin Reports Access (DB+API+UI). 50/50 items. Gate 2 approved by Rohith. | Open defect: Security Groups deactivation — Sprint 14 |
+| Sprint 14 | Case Management Gaps + UX + QA + Architecture | CLOSED — 2026-04-07 | G10: Global search, case comments (case_comments table), case reassignment UI, notifications (overlay + dashboard). G11: Home dashboard (stats/recent/alerts), session management UI (list, revoke, activity). G12: Full regression suite, inbox smoke, reports regression, Security Groups deactivation defect fix (409 + dependency payload), Playwright e2e gate hardened. G13: API versioning (/api/v1/* router, version headers), log aggregation endpoint (/api/admin/service-logs/aggregation). 13/14 items. Gate 1 passed (exit code 0, 8/13 Playwright pass, 2 flaky recovered, 3 skipped). | G13-3: Full client-facing demo environment provisioning — deferred to Sprint 15 (runbook + preflight delivered) |
 
 ---
 
 ## 11. Current Sprint
 
-**Sprint 10 — Not yet started.** Awaiting Rohith's direction on scope and priorities.
+**Sprint 14 — CLOSED (2026-04-07). 13/14 items delivered. Gate 1 PASSED.**
 
-Sprint 9 is CLOSED — 2026-03-28. Full history in Section 10. All Sprint 9 artifacts are in their permanent locations: APIs in Section 7, superadmin pages in Section 8, DB tables in Section 9, technical rules in Section 13.
+Deferred to Sprint 15: G13-3 — full client-facing demo environment provisioning/hardening (runbook + preflight smoke delivered; full release-grade environment setup deferred).
+
+**Sprint 15 — READY. Awaiting Rohith go-ahead.**
+
+Carry-in from Sprint 14: G13-3 client-facing demo environment (HIGH — must complete before any client demo).
 
 ---
 
@@ -567,11 +584,13 @@ Sprint 9 is CLOSED — 2026-03-28. Full history in Section 10. All Sprint 9 arti
 | 2 | CSS for `cf-` namespace — CasesPage/CaseFormPage use `cf-` classes — no dedicated stylesheet yet | Visual debt | Medium | Vivek |
 | 3 | `browser-test.js` (66 tests) — not re-run since Sprint 6 Phase 2 changes — may need selector updates | Test debt | Low | Karthik |
 | 4 | CP Portal: `Unknown column 'client_code'` in `cp_clients` — low priority, CP Portal not in active scope | CP Portal bug | Low | Varun |
-| 5 | Sprint 6 Phase 3 (Integration) — Argus/Veeva/TrackWise integration | Future sprint | Deferred | TBD |
+| 5 | Sprint 11 Phase 3 (Safety + CRM) — Argus/Veeva/TrackWise/Salesforce integration | Future sprint | Planned Sprint 11 | TBD |
 | 6 | Analytics module (`/analytics`) — placeholder only | Future sprint | Deferred | TBD |
 | 7 | Production deployment — Lightsail plan discussed and documented. Deferred by Rohith (2026-03-28). Plan: 2GB instance + Managed MySQL + Object Storage ~$29/mo. 9 non-cloud migrations identified before go-live. | Deployment | When ready | Varun |
 | 8 | Email OTP live success path depends on correct SMTP encryption/port settings. Use `SuperAdmin -> 2FA Configuration -> Test SMTP Connection / Send Test Email` before calling email OTP fully signed off. | Config / QA dependency | High | Varun / Karthik |
 | 9 | Forgot-password and change-password browser QA is still required after the password-history rule addition. Backend enforcement is implemented, but UI/browser evidence must be captured separately. | QA follow-up | High | Karthik |
+| 10 | npm vulnerabilities — 19 flagged on GitHub (8 high, 9 moderate, 2 low). Flagged on commit 71b8a3a. Varun to review in Sprint 11. | Security | Medium | Varun |
+| 11 | Sprint 11 Gate 1 pending — Bhavya must deliver pre-written Codex prompts before Gate 1 can be raised to Rohith. | Process blocker | High | Bhavya |
 
 ---
 
@@ -586,7 +605,9 @@ These are non-negotiable. Ignoring them causes bugs.
 | MySQL LIMIT/OFFSET | NEVER use `?` placeholders. Always inline: `` LIMIT ${parseInt(limit,10)} OFFSET ${offset} `` |
 | MySQL reserved words | Backtick reserved words in template literals: `` \`separator\` `` |
 | MySQL NULL + UNIQUE | NULL != NULL — `ON DUPLICATE KEY UPDATE` won't fire with NULL values |
-| Field setup seeding | Use `INSERT IGNORE` (idempotent by `section_name + field_name`) |
+| Field setup seeding | Use `INSERT IGNORE`. Unique key is `uq_field_section_org (section_name, field_name, org_id)` — always includes org_id. The old `uq_field_section_name` key (no org_id) was dropped in Sprint 10. Without org_id in the key, INSERT IGNORE silently blocks per-org seeds when global rows already exist. |
+| Org seed on creation | `seedNewOrg(orgId, userId)` in `seedService.js` must be called after every new org INSERT. Already wired into `POST /api/admin/orgs`. If orgs were created before Sprint 10, run `backfill-existing-orgs.js` once. |
+| form-config org resolution | `GET /api/cases/form-config` uses `authenticate` only — not `requireOrg`. Superadmin has orgId=null in JWT; org resolved inline: `superadmin ? parseInt(query.org_id) || 1 : req.user.orgId`. Never apply requireOrg to this route. |
 | Auth header | `Authorization: Bearer <token>`. Token from `mims_token` in localStorage. |
 | Git push | Disabled since Sprint 3. Never run `git push` or `gh` commands. |
 | New case org_id | Always sourced from JWT (`req.user.orgId`) — never from request body. |
@@ -600,45 +621,12 @@ These are non-negotiable. Ignoring them causes bugs.
 | 2FA expiry handling | Use DB-time expiry (`NOW()` / `DATE_ADD`) for challenges and trusted devices. Do not rely on JS Date values written directly into MySQL DATETIME for auth expiry logic. |
 | Password reuse policy | Backend must block reuse of the current password and previous 5 passwords across first-login reset, forgot-password reset, and in-app change password. This is hardcoded server behavior, not a UI setting. |
 | SuperAdmin alerts | Alert rules are configurable and can be enabled/disabled. If a rule is inactive, the related alert event and notification will not fire. |
-| QA status wording | For auth/email/security changes, always state whether status is backend smoke, browser verification, or full sign-off. |
 
 ---
 
-## 14. Compact Process Reference
+## 14. Process Reference
 
-For the full SOP, read `TEAM_OPERATING_SOP.md`. This is the quick reference card.
-
-### Gate Flow
-```
-Feature defined (Vanaja + Vinay)
-    → Bala confirms scope clear
-        → Tech + QA discussion in chat
-            → Karthik writes test cases
-                → GATE 1 (Rohith approves — dev can start)
-                    → Varun assigns → Bhavya analyses → Vivek implements
-                        → Engineering browser verification (Section 15 checklist)
-                            → GATE 2 (Rohith approves — QA can start)
-                                → Karthik + Shivani run QA with evidence
-                                    → FINAL SIGN-OFF (Rohith)
-```
-
-### Who Approves What
-| Gate | Purpose | Raised By | Approved By |
-|------|---------|-----------|-------------|
-| Gate 1 | Requirement is clear — dev can start | Bala + Varun | Rohith |
-| Gate 2 | Build complete + verified — QA can start | Bala + Varun | Rohith |
-| Final Sign-off | QA evidence reviewed — feature is done | Bala | Rohith |
-
-### Browser Verification (Mandatory Before Gate 2)
-Engineering must verify in browser before raising Gate 2:
-- App loads without crash or Vite import error
-- Standard user can log in and reach dashboard
-- New user created → can log in → correct modules → no Access Denied
-- Password-reset user redirected to `/reset-password` not `/dashboard`
-- Header shows correct org name and site name
-- Org switcher works if multi-org in scope
-
-Varun posts written sign-off in chat. Karthik posts QA sign-off with evidence. Bala blocks product review until both are confirmed.
+Full SOP: `TEAM_OPERATING_SOP.md`. Gate flow, browser verification checklist, and communication standards: see `memory/protocols.md`.
 
 ---
 

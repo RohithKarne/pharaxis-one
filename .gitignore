@@ -25,3 +25,15 @@ build/
 
 # Uploaded files (server-side only)
 uploads/
+
+# Local database backups (do not commit)
+*_backup_*.sql
+*.sql.gz
+
+# Runtime outputs
+test-results/
+playwright-report/
+
+# Runtime storage/data artifacts
+apps/**/backend/storage/email_attachments/
+apps/**/backend/storage/org_logos/
