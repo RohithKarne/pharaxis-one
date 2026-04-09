@@ -32,7 +32,7 @@ export const FLOW_TEMPLATES = {
       { from: 1, to: 2, label: 'Send API request', type: 'solid', concept: '🔄 Middleware', apiRoute: 'Derived /api/admin/...', detail: 'Frontend sends request to backend API.' },
       { from: 2, to: 3, label: 'Validate session and permissions', type: 'solid', concept: '🔐 Authentication', file: 'mims/backend/middleware/auth.js', detail: 'Backend validates auth and org/client scope.' },
       { from: 3, to: 2, label: 'Authorization passed', type: 'dashed', concept: '🔐 Authentication', detail: 'Request is allowed to continue.' },
-      { from: 2, to: 4, label: 'Read/Write MIMS data', type: 'solid', concept: '💾 DB Write', dbQuery: 'INSERT/UPDATE/DELETE or SELECT ...', detail: 'Backend executes business operation on MIMS DB.' },
+      { from: 2, to: 4, label: 'Read/Write MIMS data', type: 'solid', concept: '💾 DB Write', dbQuery: 'INSERT/UPDATE/DELETE or SELECT ...', detail: 'Backend executes business operation on pharaxis_mims_dev (Pharaxis DB layer).' },
       { from: 4, to: 2, label: 'DB result', type: 'dashed', concept: '💾 DB Read', detail: 'Database returns success/data to backend.' },
       { from: 2, to: 1, label: 'Response to UI', type: 'dashed', concept: '🖥 UI Action', statusMeaning: '200 OK — operation completed', detail: 'Frontend updates the UI from API response.' },
     ],

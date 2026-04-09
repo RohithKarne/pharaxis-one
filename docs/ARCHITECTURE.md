@@ -5,7 +5,7 @@
 Pharaxis-One uses a multi-service, monorepo architecture where each app owns its own backend service and database schema while sharing common operational standards.
 
 ```mermaid
-flowchart LR
+flowchart TB
   U[Users] --> CPFE[CP Portal Frontend]
   U --> MIMSFE[MIMS Frontend]
   U --> VFE[Vault Frontend]
@@ -13,15 +13,35 @@ flowchart LR
   CPFE --> CPBE[CP Portal Backend]
   MIMSFE --> MIMSBE[MIMS Backend]
   VFE --> VBE[Vault Backend]
-
-  CPBE --> CPDB[(cp_portal_dev)]
-  MIMSBE --> MIMSDB[(pharaxis_mims_dev)]
-  VBE --> VDB[(pharaxis_vault_dev)]
-
   CPBE --> AIBE[AI-Agent Backend]
   MIMSBE --> AIBE
-  AIBE --> AIDB[(pharaxis_ai_agent_dev)]
+
+  subgraph PDBL[Pharaxis DB Layer (MySQL 8)]
+    PDB[(Pharaxis DB Platform)]
+    CPDB[(cp_portal_dev)]
+    MIMSDB[(pharaxis_mims_dev)]
+    AIDB[(pharaxis_ai_agent_dev)]
+    VDB[(pharaxis_vault_dev)]
+    PDB --- CPDB
+    PDB --- MIMSDB
+    PDB --- AIDB
+    PDB --- VDB
+  end
+
+  CPBE --> CPDB
+  MIMSBE --> MIMSDB
+  VBE --> VDB
+  AIBE --> AIDB
 ```
+
+## Database Topology
+
+- Platform DB layer name: `Pharaxis DB` (logical platform grouping on MySQL).
+- Individual service databases (separate schema ownership):
+- `pharaxis_mims_dev` (MIMS)
+- `cp_portal_dev` (CP Portal)
+- `pharaxis_ai_agent_dev` (AI-Agent)
+- `pharaxis_vault_dev` (Vault)
 
 ## Service Boundaries
 
