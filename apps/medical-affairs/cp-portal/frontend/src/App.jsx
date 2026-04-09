@@ -53,6 +53,7 @@ import EmailSettingsPage        from './admin/pages/EmailSettingsPage'
 import FAQAdminPage            from './admin/pages/FAQPage'
 import FAQPortalPage           from './portal/pages/FAQPage'
 import LanguagePage            from './admin/pages/LanguagePage'
+import AIConfigPage            from './admin/pages/AIConfigPage'
 import ProcessExplorerPage    from './admin/pages/ProcessExplorerPage'
 
 function AdminGuard({ children }) {
@@ -137,6 +138,7 @@ export default function App() {
         <Route path="/admin/clients/:clientId/email-settings" element={<AdminGuard><EmailSettingsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/faq"           element={<AdminGuard><FAQAdminPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/language"      element={<AdminGuard><LanguagePage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/ai-config"     element={<AdminGuard><AIConfigPage /></AdminGuard>} />
         <Route path="/admin/process-explorer"              element={<AdminGuard><ProcessExplorerPage /></AdminGuard>} />
 
         {/* Public Portal — multi-tenant by clientCode */}

@@ -25,6 +25,7 @@ const templatesRoutes = express.Router()
 async function startServer() {
   await initializeDatabase()
 
+  app.use('/api/v1/agent/superadmin', require('./routes/admin/superadmin'))
   app.use('/api/v1/agent', require('./routes/agent'))
   app.use('/api/v1/agent/admin', adminRoutes)
   app.use('/api/v1/agent/config', adminRoutes)

@@ -26,6 +26,7 @@ const CLIENT_NAV_GROUPS = (id) => [
       { to: `/admin/clients/${id}/features`,  label: 'Features',   icon: '⚙️' },
       { to: `/admin/clients/${id}/gate`,      label: 'User Gate',  icon: '🚪' },
       { to: `/admin/clients/${id}/chatbox`,   label: 'Chatbox AI', icon: '🤖' },
+      { to: `/admin/clients/${id}/ai-config`, label: 'AI Configuration', icon: '✨' },
       { to: `/admin/clients/${id}/language`,  label: 'Language',   icon: '🌐' },
     ],
   },
@@ -92,6 +93,7 @@ const SEGMENT_TITLES = {
   reports:        'Custom Reports',
   faq:            'FAQ',
   language:            'Language Settings',
+  'ai-config':         'AI Configuration',
   'process-explorer':  'Process Explorer',
 }
 

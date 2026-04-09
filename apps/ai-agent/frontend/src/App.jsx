@@ -1,12 +1,20 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import AdminPanel from './components/AdminPanel'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import SuperadminLayout from './components/SuperadminLayout'
+import DashboardPage from './pages/DashboardPage'
+import OrgsPage from './pages/OrgsPage'
+import UsagePage from './pages/UsagePage'
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<div style={{ padding: '40px' }}>Pharaxis AI-Agent — Admin Panel coming in Sprint 1</div>} />
-        <Route path="/admin/ai-config" element={<AdminPanel />} />
+        <Route path="/" element={<SuperadminLayout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="orgs" element={<OrgsPage />} />
+          <Route path="usage" element={<UsagePage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   )
