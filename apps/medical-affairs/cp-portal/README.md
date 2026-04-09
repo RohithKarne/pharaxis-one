@@ -1,19 +1,25 @@
 # CP Portal
 
-CP Portal is part of the Pharaxis-One monorepo and includes:
+CP Portal is the medical-affairs external interaction layer in Pharaxis-One.
+It includes both internal admin controls and public-facing portal APIs/UI.
 
-- Admin Console (configuration and operations)
-- Public Portal (external user-facing experience)
+## Scope
 
-## Current Status
+- Admin Console configuration workflows
+- Public portal content and submission flows
+- Notification and scheduled content publication support
 
-Implemented and maintained in this repository. The app is not a placeholder.
+## Tech Stack
 
-## Stack
-
-- Frontend: React + Vite
 - Backend: Node.js + Express
+- Frontend: React + Vite
 - Database: MySQL (`cp_portal_dev` by default)
+
+## Paths
+
+- Backend: `backend/`
+- Frontend: `frontend/`
+- DB init/schema: `backend/database/db.js`
 
 ## Run Locally
 
@@ -33,21 +39,27 @@ npm install
 npm run dev
 ```
 
-## Database
+## Default Runtime
 
-Backend DB initialization is in:
+- Backend port: `4000` (`CP_PORT`)
+- Frontend port: `5174`
+- Health endpoint: `GET /api/health`
 
-- `apps/medical-affairs/cp-portal/backend/database/db.js`
+## API Areas
 
-Default connection behavior:
+- `/api/admin/*` for authenticated admin operations
+- `/api/portal/*` for public/portal-side flows
 
-- Host: `localhost`
-- Port: `3306`
-- Database: `cp_portal_dev`
-- User/password defaults exist in code for local development only.
+## Environment
 
-See [DB details](../../../docs/DB_DETAILS.md) for cross-app setup.
+Copy and configure:
 
-## Integration Context
+- `backend/.env.example` -> `backend/.env`
 
-CP Portal is designed to integrate with MIMS workflows for submission and status exchange.
+## Cross-App Context
+
+CP Portal is designed to operate alongside MIMS and can exchange submission/content context as part of wider product workflows.
+
+See cross-repo docs:
+- `docs/ARCHITECTURE.md`
+- `docs/DB_DETAILS.md`

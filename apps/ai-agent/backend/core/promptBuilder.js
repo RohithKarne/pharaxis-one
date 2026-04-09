@@ -1,46 +1,104 @@
-// Constructs the prompt string from query_type and payload
-// As prompt templates mature in Phase 2, templateStore will augment this
+function stringifyContext(context) {
+  if (context === undefined || context === null) {
+    return 'No additional context provided.'
+  }
+
+  if (typeof context === 'string') {
+    return context.trim() || 'No additional context provided.'
+  }
+
+  try {
+    return JSON.stringify(context, null, 2)
+  } catch {
+    return String(context)
+  }
+}
+
+function getPromptInputs(payload) {
+  const safePayload = payload && typeof payload === 'object' ? payload : {}
+  const queryValue = safePayload.query
+
+  const query = typeof queryValue === 'string'
+    ? queryValue.trim()
+    : stringifyContext(queryValue)
+
+  return {
+    query: query || 'No query supplied.',
+    context: stringifyContext(safePayload.context)
+  }
+}
 
 const PROMPT_BUILDERS = {
   document_search: (payload) => {
-    return `You are searching a pharmaceutical content library.
-Find the most relevant documents for the following user query.
-Return a ranked list with a short explanation of why each document is relevant.
+    const { query, context } = getPromptInputs(payload)
 
-Query: ${payload.query}
+    return `Task: Retrieve the most relevant documents for a pharmaceutical/healthcare user request.
 
-${payload.context?.documents ? `Available documents:\n${JSON.stringify(payload.context.documents, null, 2)}` : ''}
+User query:
+${query}
 
-Respond with a JSON array: [{ "title": "...", "relevance_score": 0.0-1.0, "reason": "..." }]`
+Available context:
+${context}
+
+Instructions:
+1. Identify the best-matching documents from the context.
+2. Prioritise accuracy and policy-safe answers.
+3. Return concise rationale for each document match.
+
+Output format:
+JSON array where each item has: title, relevance_score (0-1), reason.`
   },
 
   faq_draft: (payload) => {
-    return `You are a medical information specialist drafting a response to a frequently asked question.
-Use only the provided knowledge base content. Do not make up information.
+    const { query, context } = getPromptInputs(payload)
 
-Question: ${payload.query}
+    return `Task: Draft an FAQ response using only the supplied context.
 
-${payload.context?.knowledge_base ? `Knowledge base:\n${payload.context.knowledge_base}` : ''}
+User question:
+${query}
 
-Draft a clear, accurate response. Flag if the question cannot be answered from the available content.`
+Knowledge/context:
+${context}
+
+Instructions:
+1. Produce a clear and professional FAQ draft.
+2. Do not invent facts that are not supported by context.
+3. If context is insufficient, state what is missing.
+
+Output format:
+A plain-language FAQ draft answer.`
   },
 
   content_expiry_suggestion: (payload) => {
-    return `A document in a pharmaceutical content library is expiring soon.
-Suggest relevant replacement or related active documents.
+    const { query, context } = getPromptInputs(payload)
 
-Expiring document: ${payload.query}
-${payload.context?.available_documents ? `Active documents available:\n${JSON.stringify(payload.context.available_documents, null, 2)}` : ''}
+    return `Task: Suggest replacement or follow-up content for expiring assets.
 
-Return a JSON array of suggested replacements: [{ "title": "...", "reason": "..." }]`
+Expiring content query:
+${query}
+
+Current catalog/context:
+${context}
+
+Instructions:
+1. Suggest relevant replacement documents or content items.
+2. Explain why each suggestion is suitable.
+3. Prefer active and contextually close alternatives.
+
+Output format:
+JSON array where each item has: title, reason.`
   }
 }
 
 function buildPrompt(queryType, payload) {
   const builder = PROMPT_BUILDERS[queryType]
+
   if (!builder) {
-    throw new Error(`Unsupported query_type: ${queryType}`)
+    throw new Error(
+      `Unsupported query_type: ${queryType}. Supported query types are: document_search, faq_draft, content_expiry_suggestion.`
+    )
   }
+
   return builder(payload)
 }
 

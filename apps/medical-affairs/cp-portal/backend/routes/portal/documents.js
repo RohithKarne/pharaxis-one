@@ -62,6 +62,118 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
   }
 });
 
+// POST /api/portal/documents/ai-search
+// Authenticated AI-assisted semantic document search
+router.post('/ai-search', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const { clientCode, query } = req.body || {};
+    if (!clientCode || !query) {
+      return res.status(400).json({ error: 'clientCode and query required.' });
+    }
+
+    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [clientCode]);
+    if (!client) return res.status(404).json({ error: 'Client not found.' });
+
+    if (!await isFeatureEnabled(client.id, 'document_library')) {
+      return res.status(403).json({ error: 'Document library is not enabled for this portal.' });
+    }
+
+    const [docs] = await pool.execute(`
+      SELECT id, title, category, doc_type, file_size, expires_at
+      FROM cp_documents
+      WHERE client_id = ? AND is_active = 1
+        AND (status = 'published' OR (status = 'scheduled' AND publish_at <= NOW()))
+        AND (expires_at IS NULL OR expires_at > NOW())
+        AND (publish_at IS NULL OR publish_at <= NOW())
+      ORDER BY created_at DESC
+    `, [client.id]);
+
+    const context = docs.map(doc => ({
+      id: doc.id,
+      title: doc.title,
+      category: doc.category,
+      doc_type: doc.doc_type,
+    }));
+
+    let aiResponse;
+    try {
+      aiResponse = await fetch('http://localhost:6000/api/v1/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.AI_AGENT_INTERNAL_TOKEN}`,
+        },
+        body: JSON.stringify({
+          org_id: client.id,
+          app_source: 'cp_portal',
+          query_type: 'document_search',
+          payload: { query, context: { documents: context } },
+        }),
+      });
+    } catch (_) {
+      return res.json({ ai_unavailable: true, results: [] });
+    }
+
+    if (!aiResponse.ok) {
+      return res.json({ ai_unavailable: true, results: [] });
+    }
+
+    let aiJson;
+    try {
+      aiJson = await aiResponse.json();
+    } catch (_) {
+      return res.json({ ai_unavailable: true, results: [] });
+    }
+
+    const rawResults = Array.isArray(aiJson?.results)
+      ? aiJson.results
+      : Array.isArray(aiJson?.data?.results)
+        ? aiJson.data.results
+        : Array.isArray(aiJson?.payload?.results)
+          ? aiJson.payload.results
+          : [];
+
+    const now = Date.now();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const docsByLowerTitle = new Map(
+      docs
+        .filter(doc => doc.title)
+        .map(doc => [String(doc.title).trim().toLowerCase(), doc])
+    );
+
+    const results = rawResults
+      .map(item => {
+        const aiTitle = String(item?.title || '').trim();
+        if (!aiTitle) return null;
+        const doc = docsByLowerTitle.get(aiTitle.toLowerCase());
+        if (!doc) return null;
+
+        const expiresAtMs = doc.expires_at ? new Date(doc.expires_at).getTime() : null;
+        const isExpiringSoon = Boolean(
+          expiresAtMs &&
+          expiresAtMs > now &&
+          (expiresAtMs - now) <= thirtyDaysMs
+        );
+
+        return {
+          id: doc.id,
+          title: doc.title,
+          category: doc.category,
+          doc_type: doc.doc_type,
+          file_size: doc.file_size,
+          relevance_score: item?.relevance_score ?? item?.score ?? null,
+          reason: item?.reason || item?.match_reason || '',
+          is_expiring_soon: isExpiringSoon,
+        };
+      })
+      .filter(Boolean);
+
+    return res.json({ results });
+  } catch (_) {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // GET /api/portal/documents/:docId/download
 // Authenticated file download — streams file, does not expose public path
 router.get('/:docId/download', authenticatePortal, requirePortalAuth, async (req, res) => {

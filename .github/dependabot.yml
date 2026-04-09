@@ -1,32 +1,71 @@
 version: 2
 updates:
-  # Backend — Node/Express
   - package-ecosystem: "npm"
-    directory: "/cp-portal/backend"
+    directory: "/apps/medical-affairs/mims"
     schedule:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "backend"
+    labels: ["dependencies", "mims"]
 
-  # Frontend — React/Vite
   - package-ecosystem: "npm"
-    directory: "/cp-portal/frontend"
+    directory: "/apps/medical-affairs/mims/frontend"
     schedule:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "frontend"
+    labels: ["dependencies", "mims", "frontend"]
 
-  # GitHub Actions
+  - package-ecosystem: "npm"
+    directory: "/apps/medical-affairs/cp-portal/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "cp-portal", "backend"]
+
+  - package-ecosystem: "npm"
+    directory: "/apps/medical-affairs/cp-portal/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "cp-portal", "frontend"]
+
+  - package-ecosystem: "npm"
+    directory: "/apps/ai-agent"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "ai-agent"]
+
+  - package-ecosystem: "npm"
+    directory: "/apps/ai-agent/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "ai-agent", "frontend"]
+
+  - package-ecosystem: "npm"
+    directory: "/apps/vault"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "vault"]
+
+  - package-ecosystem: "npm"
+    directory: "/apps/vault/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "vault", "frontend"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
-    labels:
-      - "dependencies"
-      - "ci"
+    labels: ["dependencies", "ci"]

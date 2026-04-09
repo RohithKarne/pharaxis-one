@@ -31,7 +31,7 @@ jobs:
         env:
           CP_PORT: 4001
           CP_ADMIN_JWT_SECRET: ci-secret-admin
-          CP_PORTAL_SECRET: ci-secret-portal
+          CP_PORTAL_JWT_SECRET: ci-secret-portal
 
   frontend:
     name: Frontend — Install & Build

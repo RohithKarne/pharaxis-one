@@ -1,47 +1,67 @@
 # Database Details - Pharaxis-One
 
-This document captures the current database setup used by the codebase.
+This document defines the current database setup used by Pharaxis-One services.
 
-## Shared MySQL Defaults
+## Database Engine
 
-All services use MySQL via environment variables:
+- Engine: MySQL 8+
+- Pattern: One logical database per service
+- Connection method: `mysql2` pool in each backend
 
-- `MYSQL_HOST` (default: `localhost`)
-- `MYSQL_PORT` (default: `3306`)
-- `MYSQL_USER` (default in code: `devuser`)
-- `MYSQL_PASSWORD` (default in code: `devpass`)
-- `MYSQL_DATABASE` (service-specific; see below)
+## Shared Environment Variables
 
-## Service-Level Databases
+All backend services use these variables:
 
-| Service | Code Path | Default Database Name |
+- `MYSQL_HOST` (default usually `localhost`)
+- `MYSQL_PORT` (default usually `3306`)
+- `MYSQL_USER`
+- `MYSQL_PASSWORD`
+- `MYSQL_DATABASE` (service-specific)
+
+## Service Database Mapping
+
+| Service | Database | Config Path |
 |---|---|---|
-| MIMS | `apps/medical-affairs/mims/backend/database/db.js` | `pharaxis_mims_dev` |
-| CP Portal | `apps/medical-affairs/cp-portal/backend/database/db.js` | `cp_portal_dev` |
-| AI-Agent | `apps/ai-agent/backend/database/db.js` | `pharaxis_ai_agent_dev` |
-| Vault | `apps/vault/backend/database/db.js` | `pharaxis_vault_dev` |
+| MIMS | `pharaxis_mims_dev` | `apps/medical-affairs/mims/backend/database/db.js` |
+| CP Portal | `cp_portal_dev` | `apps/medical-affairs/cp-portal/backend/database/db.js` |
+| AI-Agent | `pharaxis_ai_agent_dev` | `apps/ai-agent/backend/database/db.js` |
+| Vault | `pharaxis_vault_dev` | `apps/vault/backend/database/db.js` |
 
 ## Initialization Behavior
 
-- Each backend initializes required tables automatically on startup (`CREATE TABLE IF NOT EXISTS` pattern).
-- Seed/bootstrap users are created if missing:
-  - MIMS: `superadmin` / `Manager@123`
-  - CP Portal: `cpadmin` / `Admin@123`
-- Change default credentials immediately in non-local environments.
+- Each backend initializes core tables on startup (`CREATE TABLE IF NOT EXISTS`).
+- This allows local environments to bootstrap quickly with a clean database.
+- Schema ownership remains service-local.
 
-## Recommended Local Setup
+## Seed / Bootstrap Accounts
 
-1. Start MySQL 8+.
-2. Create databases:
+- MIMS bootstrap account: `superadmin` (initial default password exists in code)
+- CP Portal bootstrap account: `cpadmin` (initial default password exists in code)
+
+Important:
+- Treat defaults as local-dev only.
+- Rotate/override credentials in shared or production environments.
+
+## Local Setup Sequence
+
+1. Start MySQL.
+2. Create service databases:
    - `pharaxis_mims_dev`
    - `cp_portal_dev`
    - `pharaxis_ai_agent_dev`
    - `pharaxis_vault_dev`
-3. Set environment variables (`MYSQL_*`) for each app.
-4. Start each backend once to auto-create tables.
+3. Copy `.env.example` to `.env` for each service.
+4. Set `MYSQL_*` values per environment.
+5. Start service backends once to initialize tables.
 
-## Security Notes
+## Security Rules
 
-- Do not commit `.env` files.
-- Do not commit SQL backup dumps from local machines.
-- Use separate credentials per environment (dev/stage/prod).
+- Never commit `.env` files.
+- Never commit local SQL backup dumps.
+- Use different DB users/passwords per environment.
+- Restrict DB user privileges to minimum required scope.
+
+## Backup and Migration Notes
+
+- Repository excludes local backup artifacts (`*_backup_*.sql`, `*.sql.gz`).
+- Runtime artifacts are ignored and should be stored outside version control.

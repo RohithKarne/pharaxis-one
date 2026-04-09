@@ -8,6 +8,14 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function formatRelevanceScore(score) {
+  const num = Number(score)
+  if (Number.isNaN(num)) return null
+  const pct = num <= 1 ? Math.round(num * 100) : Math.round(num)
+  const clamped = Math.max(0, Math.min(100, pct))
+  return `${clamped}%`
+}
+
 const DOC_TYPE_CLASSES = {
   smpc:             'smpc',
   pil:              'pil',
@@ -28,6 +36,11 @@ export default function DocumentsPage() {
   const [downloading, setDownloading] = useState(null)
   const [savedIds, setSavedIds]   = useState([])
   const [savingId, setSavingId]   = useState(null)
+  const [aiMode, setAiMode] = useState(false)
+  const [aiResults, setAiResults] = useState([])
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState('')
+  const [aiUnavailable, setAiUnavailable] = useState(false)
 
   const base = `/portal/${clientCode}`
 
@@ -67,6 +80,60 @@ export default function DocumentsPage() {
       const q = search.toLowerCase()
       return (d.title || '').toLowerCase().includes(q) || (d.doc_type || '').toLowerCase().includes(q)
     })
+
+  function toggleAiMode() {
+    if (aiMode) {
+      setAiMode(false)
+      setAiResults([])
+      setAiError('')
+      setAiLoading(false)
+      return
+    }
+    setAiMode(true)
+    setAiError('')
+  }
+
+  async function submitAiSearch() {
+    if (!aiMode) return
+    const q = search.trim()
+    if (!q) {
+      setAiResults([])
+      setAiError('Please enter a query to run AI search.')
+      return
+    }
+    setAiLoading(true)
+    setAiError('')
+    try {
+      const token = localStorage.getItem('cp_portal_token')
+      const res = await fetch('/api/portal/documents/ai-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ clientCode, query: q }),
+      })
+      const data = await res.json()
+
+      if (data?.ai_unavailable) {
+        setAiUnavailable(true)
+        setAiMode(false)
+        setAiResults([])
+        setAiError('')
+        return
+      }
+
+      if (!res.ok) {
+        setAiResults([])
+        setAiError(data?.error || 'Unable to run AI search.')
+        return
+      }
+
+      setAiResults(Array.isArray(data?.results) ? data.results : [])
+    } catch {
+      setAiResults([])
+      setAiError('Unable to run AI search.')
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   async function toggleSave(doc) {
     if (savingId === doc.id) return
@@ -123,12 +190,37 @@ export default function DocumentsPage() {
     <div className="pp-docs-page">
       <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 20 }}>Document Library</h1>
 
-      <div className="pp-docs-search">
+      <div className="pp-docs-search" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           placeholder="Search documents…"
           value={search}
           onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => {
+            if (aiMode && e.key === 'Enter') {
+              e.preventDefault()
+              submitAiSearch()
+            }
+          }}
+          style={{ flex: 1 }}
         />
+        {aiMode && (
+          <button
+            className="pp-btn pp-btn-outline pp-btn-sm"
+            onClick={submitAiSearch}
+            disabled={aiLoading}
+          >
+            {aiLoading ? 'Searching…' : 'Search'}
+          </button>
+        )}
+        {!aiUnavailable && (
+          <button
+            className="pp-btn pp-btn-outline pp-btn-sm"
+            onClick={toggleAiMode}
+            type="button"
+          >
+            {aiMode ? 'Standard Search' : 'AI Search'}
+          </button>
+        )}
       </div>
 
       <div className="pp-news-filters" style={{ marginBottom: 16 }}>
@@ -143,7 +235,77 @@ export default function DocumentsPage() {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {aiMode ? (
+        <>
+          <div style={{ fontStyle: 'italic', color: '#6B7280', marginBottom: 12 }}>
+            AI-assisted results — review source documents before use
+          </div>
+          {aiError ? (
+            <div className="pp-error-state">{aiError}</div>
+          ) : aiLoading ? (
+            <div className="pp-loading" role="status" aria-live="polite">Searching…</div>
+          ) : aiResults.length === 0 ? (
+            <div className="pp-empty-state"><span>📁</span><p>No relevant documents found for your query</p></div>
+          ) : (
+            <div className="pp-docs-grid">
+              {aiResults.map(doc => (
+                <div key={doc.id} className="pp-doc-card">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span className={`pp-doc-type-badge ${DOC_TYPE_CLASSES[doc.doc_type] || 'other'}`}>
+                      {doc.doc_type?.replace(/_/g, ' ').toUpperCase() || 'DOC'}
+                    </span>
+                    {formatRelevanceScore(doc.relevance_score) && (
+                      <span
+                        className="pp-doc-type-badge"
+                        style={{ background: '#E0E7FF', color: '#3730A3' }}
+                      >
+                        {formatRelevanceScore(doc.relevance_score)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="pp-doc-title">{doc.title}</div>
+                  <div className="pp-doc-meta">
+                    {doc.category && <span>{doc.category} · </span>}
+                    {formatFileSize(doc.file_size)}
+                  </div>
+                  <div style={{ fontStyle: 'italic', color: '#6B7280', marginTop: 8 }}>
+                    {doc.reason || 'Matched semantically to your query.'}
+                  </div>
+                  {doc.is_expiring_soon && (
+                    <div style={{ color: '#B45309', marginTop: 6, fontSize: 12 }}>
+                      Expiry warning: this document expires within 30 days
+                    </div>
+                  )}
+                  <div className="pp-doc-download" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                    <button
+                      className="pp-btn pp-btn-outline pp-btn-sm"
+                      onClick={() => handleDownload(doc)}
+                      disabled={downloading === doc.id}
+                      aria-label={`Download ${doc.title}`}
+                    >
+                      {downloading === doc.id ? 'Downloading…' : '⬇ Download'}
+                    </button>
+                    <button
+                      className="pp-btn pp-btn-outline pp-btn-sm"
+                      onClick={() => toggleSave(doc)}
+                      disabled={savingId === doc.id}
+                      aria-label={savedIds.includes(doc.id) ? `Unsave ${doc.title}` : `Save ${doc.title}`}
+                      style={{
+                        color: savedIds.includes(doc.id) ? '#1D4ED8' : '#6B7280',
+                        borderColor: savedIds.includes(doc.id) ? '#BFDBFE' : undefined,
+                        background: savedIds.includes(doc.id) ? '#EFF6FF' : undefined,
+                      }}
+                      title={savedIds.includes(doc.id) ? 'Unsave' : 'Save'}
+                    >
+                      {savingId === doc.id ? '…' : '🔖'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : filtered.length === 0 ? (
         <div className="pp-empty-state"><span>📁</span><p>No documents found.</p></div>
       ) : (
         <div className="pp-docs-grid">

@@ -9,9 +9,12 @@ const ADAPTERS = {
 }
 
 function getAdapter(provider) {
-  const adapter = ADAPTERS[provider]
+  const normalizedProvider = typeof provider === 'string' ? provider.trim().toLowerCase() : ''
+  const adapter = ADAPTERS[normalizedProvider]
   if (!adapter) {
-    throw new Error(`Unsupported provider: ${provider}`)
+    throw new Error(
+      `Unsupported provider "${provider}". Supported providers are: openai, claude, gemini.`
+    )
   }
   return adapter
 }

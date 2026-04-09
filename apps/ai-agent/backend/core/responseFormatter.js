@@ -1,23 +1,20 @@
-// Normalises the adapter response to the standard API response shape
-// All consumers receive the same structure regardless of provider
-
-function format(adapterResult) {
+function format(adapterResult = {}) {
   return {
     status: 'success',
-    provider_used: adapterResult.provider,
+    provider_used: adapterResult.provider ?? null,
     result: {
-      answer: adapterResult.answer || '',
-      sources: adapterResult.sources || [],
-      confidence: adapterResult.confidence || null
+      answer: adapterResult.answer ?? '',
+      sources: Array.isArray(adapterResult.sources) ? adapterResult.sources : [],
+      confidence: adapterResult.confidence ?? null
     },
     tokens_used: {
-      in: adapterResult.tokens_used?.in || 0,
-      out: adapterResult.tokens_used?.out || 0
+      in: Number(adapterResult.tokens_used?.in) || 0,
+      out: Number(adapterResult.tokens_used?.out) || 0
     }
   }
 }
 
-function formatError(message, code = 500) {
+function formatError(message, code) {
   return {
     status: 'error',
     error: message,
