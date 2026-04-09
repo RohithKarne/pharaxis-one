@@ -24,7 +24,7 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "express-rate-limit": "^7.5.1",
-    "geoip-lite": "^1.4.10",
+    "geoip-lite": "^2.0.1",
     "imap": "^0.8.17",
     "imapflow": "^1.2.13",
     "jsonwebtoken": "^9.0.2",
