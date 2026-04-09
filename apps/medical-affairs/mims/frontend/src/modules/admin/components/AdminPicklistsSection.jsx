@@ -1,7 +1,81 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
-import * as XLSX from 'xlsx'
+
+function escapeCsvCell(value) {
+  if (value == null) return ''
+  const raw = String(value)
+  if (/[",\n\r]/.test(raw)) return `"${raw.replace(/"/g, '""')}"`
+  return raw
+}
+
+function toCsv(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return ''
+  const headers = Array.from(
+    rows.reduce((acc, row) => {
+      Object.keys(row || {}).forEach(key => acc.add(key))
+      return acc
+    }, new Set())
+  )
+  const lines = [headers.map(escapeCsvCell).join(',')]
+  rows.forEach(row => {
+    lines.push(headers.map(key => escapeCsvCell(row?.[key])).join(','))
+  })
+  return lines.join('\n')
+}
+
+function parseCsv(text) {
+  const rows = []
+  let row = []
+  let cell = ''
+  let inQuotes = false
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') {
+        cell += '"'
+        i += 1
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+    if (ch === ',' && !inQuotes) {
+      row.push(cell)
+      cell = ''
+      continue
+    }
+    if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && text[i + 1] === '\n') i += 1
+      row.push(cell)
+      cell = ''
+      if (row.some(v => (v || '').trim() !== '')) rows.push(row)
+      row = []
+      continue
+    }
+    cell += ch
+  }
+
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell)
+    if (row.some(v => (v || '').trim() !== '')) rows.push(row)
+  }
+  if (rows.length === 0) return []
+
+  const headers = rows[0].map(h => String(h || '').trim())
+  return rows
+    .slice(1)
+    .map(cols => {
+      const out = {}
+      headers.forEach((header, idx) => {
+        if (!header) return
+        out[header] = cols[idx] ?? ''
+      })
+      return out
+    })
+    .filter(record => Object.values(record).some(v => String(v || '').trim() !== ''))
+}
 
 function SectionHeader({ title, desc, msg }) {
   return (
@@ -339,37 +413,42 @@ export default function AdminPicklistsSection({ contentSection, H, flash: flashP
     }
   }
 
-  async function exportPicklistsXlsx() {
+  async function exportPicklistsCsv() {
     try {
       const res = await fetch('/api/admin/picklists/export', { headers: H })
       const data = await res.json()
       const rows = data.picklists || data.data || data || []
-      const wb = XLSX.utils.book_new()
-      const ws = XLSX.utils.json_to_sheet(rows)
-      XLSX.utils.book_append_sheet(wb, ws, 'Picklists')
-      XLSX.writeFile(wb, 'picklists_export.xlsx')
+      const csv = toCsv(rows)
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'picklists_export.csv'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
     } catch { flash('Export failed.', 'error') }
   }
 
-  async function uploadPicklistsXlsx(e) {
+  async function uploadPicklistsCsv(e) {
     const file = e.target.files[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = async ev => {
-      try {
-        const wb = XLSX.read(ev.target.result, { type: 'binary' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const rows = XLSX.utils.sheet_to_json(ws)
-        const res = await fetch('/api/admin/picklists/bulk', { method: 'POST', headers: H, body: JSON.stringify({ items: rows }) })
-        const d = await res.json()
-        if (!res.ok) return flash(d.error || 'Upload failed.', 'error')
-        await loadPicklistHierarchy()
-        await loadPicklists({ field_id: selectedPicklistFieldId, page: 1 })
-        flash(`Processed ${d.imported || rows.length} row(s).`)
-      } catch { flash('Failed to parse file.', 'error') }
+    try {
+      const text = await file.text()
+      const rows = parseCsv(text)
+      if (!rows.length) return flash('No valid rows found in CSV.', 'error')
+      const res = await fetch('/api/admin/picklists/bulk', { method: 'POST', headers: H, body: JSON.stringify({ items: rows }) })
+      const d = await res.json()
+      if (!res.ok) return flash(d.error || 'Upload failed.', 'error')
+      await loadPicklistHierarchy()
+      await loadPicklists({ field_id: selectedPicklistFieldId, page: 1 })
+      flash(`Processed ${d.imported || rows.length} row(s).`)
+    } catch {
+      flash('Failed to parse CSV file.', 'error')
+    } finally {
+      e.target.value = ''
     }
-    reader.readAsBinaryString(file)
-    e.target.value = ''
   }
 
   async function loadFieldSetup() {
@@ -590,9 +669,9 @@ export default function AdminPicklistsSection({ contentSection, H, flash: flashP
               <div className="ac-picklists-right-top">
                 <div className="ac-picklists-right-title">{selectedPicklistField?.name || 'Select a field'}</div>
                 <div className="ac-picklists-right-actions">
-                  <button className="btn btn-outline" onClick={exportPicklistsXlsx}>Download</button>
-                  <button className="btn btn-outline" onClick={() => picklistUploadRef.current?.click()}>Upload</button>
-                  <input ref={picklistUploadRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={uploadPicklistsXlsx} />
+                  <button className="btn btn-outline" onClick={exportPicklistsCsv}>Download CSV</button>
+                  <button className="btn btn-outline" onClick={() => picklistUploadRef.current?.click()}>Upload CSV</button>
+                  <input ref={picklistUploadRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={uploadPicklistsCsv} />
                   <button
                     className="btn btn-primary"
                     disabled={!picklistHasSelection}
