@@ -9,6 +9,7 @@ Within Pharaxis-One:
 - 5 modules: `AI-Agent`, `Medical Affairs`, `Vault`, `QMS`, `Safety`
 - 8 applications total
 - each application has its own dedicated database
+- QMS Sprint 1 and Safety Sprint 1 + 2 are implemented in this repository
 
 ```mermaid
 flowchart TB
@@ -35,7 +36,7 @@ flowchart TB
   APPIEG --> DBIEG[("pharaxis_ieg_dev")]
   APPPUB --> DBPUB[("pharaxis_publications_dev")]
   APPV --> DBV[("pharaxis_vault_dev")]
-  APPQ --> DBQ[("pharaxis_qms_dev")]
+  APPQ --> DBQ[("qms_dev (PostgreSQL local default)")]
   APPS --> DBS[("pharaxis_safety_dev")]
 ```
 
@@ -86,8 +87,8 @@ flowchart LR
 | Medical Affairs | IEG | `apps/medical-affairs/ieg` | `pharaxis_ieg_dev` | Planned/Scaffold |
 | Medical Affairs | Publications | `apps/medical-affairs/publications` | `pharaxis_publications_dev` | Planned/Scaffold |
 | Vault | Vault | `apps/vault` | `pharaxis_vault_dev` | Active |
-| QMS | QMS | `apps/qms` | `pharaxis_qms_dev` | Planned/Scaffold |
-| Safety | Safety | `apps/safety` | `pharaxis_safety_dev` | Planned/Scaffold |
+| QMS | QMS | `apps/qms` | `qms_dev` (PostgreSQL, configurable via `DATABASE_URL`) | Active (Sprint 1 complete) |
+| Safety | Safety | `apps/safety` | `pharaxis_safety_dev` | Active (Sprint 1 and Sprint 2 complete) |
 
 ## Integration Rules (Locked)
 
@@ -100,8 +101,8 @@ flowchart LR
 
 ## Data And Platform Standards
 
-- DB platform: MySQL 8 (`Pharaxis DB` logical layer).
+- DB platforms: MySQL 8+ and PostgreSQL 14+.
 - DB isolation: one DB per application.
-- Naming standard: `pharaxis_<app>_dev`.
-- Environment contract: each app must use `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`.
+- Naming standard: MySQL services use `pharaxis_<app>_dev`; QMS uses `DATABASE_URL` (default local DB `qms_dev`).
+- Environment contract: MySQL services use `MYSQL_*`; QMS uses `DATABASE_URL`.
 - Runtime secrets: provided via `.env` and never committed.

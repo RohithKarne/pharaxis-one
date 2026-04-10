@@ -1,7 +1,7 @@
 # Pharaxis-One
 
 Pharaxis-One is a multi-application monorepo for medical-affairs and platform products.
-It currently includes MIMS, CP Portal, AI-Agent, and Vault with shared operating standards and MySQL-backed services.
+It currently includes MIMS, CP Portal, AI-Agent, Vault, QMS, and Safety with shared operating standards across MySQL and PostgreSQL services.
 
 ## What This Repository Contains
 
@@ -18,8 +18,8 @@ It currently includes MIMS, CP Portal, AI-Agent, and Vault with shared operating
 | CP Portal | `apps/medical-affairs/cp-portal` | Admin + public portal experience for external submissions/content | Backend: Node/Express + MySQL, Frontend: React/Vite |
 | AI-Agent | `apps/ai-agent` | Provider-agnostic AI query service and admin controls | Backend: Node/Express + MySQL, Frontend: React/Vite |
 | Vault | `apps/vault` | Content/document vault foundations with auth + superadmin flows | Backend: Node/Express + MySQL, Frontend: React/Vite |
-| QMS | `apps/qms` | Scaffold placeholder | Not yet implemented |
-| Safety | `apps/safety` | Scaffold placeholder | Not yet implemented |
+| QMS | `apps/qms` | Quality Management System baseline delivered in Sprint 1 (auth/superadmin, document control, CAPA, deviations, audits, validation) | Backend: Node/Express + PostgreSQL, Frontend: Vue/Vite + Tailwind |
+| Safety | `apps/safety` | Safety platform delivered in Sprint 1 + Sprint 2 (auth/admin/config + case management, regulatory workflows, narratives, listedness) | Backend: Node/Express + MySQL, Frontend: React/Vite |
 
 ## Repository Structure
 
@@ -43,6 +43,7 @@ docs/
 - Node.js 20+
 - npm 10+
 - MySQL 8+
+- PostgreSQL 14+
 - macOS/Linux shell (examples use `zsh`/`bash`)
 
 ## Quick Start
@@ -57,6 +58,10 @@ cd apps/medical-affairs/cp-portal/backend && npm install
 cd apps/medical-affairs/cp-portal/frontend && npm install
 cd apps/ai-agent && npm install
 cd apps/vault && npm install
+cd apps/qms/backend && npm install
+cd apps/qms/frontend && npm install
+cd apps/safety && npm install
+cd apps/safety/frontend && npm install
 ```
 
 ### 2) Configure Environment Variables
@@ -67,15 +72,22 @@ Copy sample env files where provided:
 - `apps/medical-affairs/cp-portal/backend/.env.example`
 - `apps/ai-agent/.env.example`
 - `apps/vault/.env.example`
+- `apps/qms/backend/.env.example`
+- `apps/safety/.env.example`
 
 ### 3) Create Databases
 
-Default local DB names used by the code:
+Default local DBs used by the code:
 
+MySQL:
 - `pharaxis_mims_dev`
 - `pharaxis_cp_portal_dev`
 - `pharaxis_ai_agent_dev`
 - `pharaxis_vault_dev`
+- `pharaxis_safety_dev`
+
+PostgreSQL:
+- `qms_dev` (QMS default from `DATABASE_URL`)
 
 ### 4) Run Services
 
@@ -92,6 +104,13 @@ cd apps/ai-agent && npm run dev:all
 
 # Vault
 cd apps/vault && npm run dev:all
+
+# QMS
+cd apps/qms/backend && npm run dev
+cd apps/qms/frontend && npm run dev
+
+# Safety
+cd apps/safety && npm run dev:all
 ```
 
 ## Default Local Ports
@@ -100,7 +119,11 @@ cd apps/vault && npm run dev:all
 - CP Portal backend: `4000`
 - Vault backend: `5000`
 - AI-Agent backend: `6000`
+- QMS backend: `3145`
+- Safety backend: `5200`
 - CP Portal frontend: `5174` (explicit)
+- QMS frontend: `3146`
+- Safety frontend: `5177`
 - Other Vite apps: Vite default unless overridden
 
 ## Health Endpoints
@@ -109,6 +132,8 @@ cd apps/vault && npm run dev:all
 - CP Portal: `GET /api/health` on port `4000`
 - Vault: `GET /api/health` on port `5000`
 - AI-Agent: `GET /api/v1/agent/health` on port `6000`
+- QMS: `GET /api/health` on port `3145`
+- Safety: `GET /api/health` on port `5200`
 
 ## CI/CD and Automation
 
@@ -121,8 +146,8 @@ cd apps/vault && npm run dev:all
 - Project overview: [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Database details: [docs/DB_DETAILS.md](docs/DB_DETAILS.md)
-- Team operating SOP: [TEAM_OPERATING_SOP.md](TEAM_OPERATING_SOP.md)
-- Live communication format: [live-communication-use-and-format.md](live-communication-use-and-format.md)
+- Team operating SOP: [docs/TEAM_OPERATING_SOP.md](docs/TEAM_OPERATING_SOP.md)
+- Live communication format: [docs/live-communication-use-and-format.md](docs/live-communication-use-and-format.md)
 
 ## Security and Governance
 

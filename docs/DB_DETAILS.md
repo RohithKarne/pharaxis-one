@@ -2,15 +2,15 @@
 
 This document defines the current database setup used by Pharaxis-One services.
 
-## Database Engine
+## Database Engines
 
-- Engine: MySQL 8+
-- Pattern: One logical database per service
-- Connection method: `mysql2` pool in each backend
+- MySQL 8+ for MIMS, CP Portal, AI-Agent, Vault, and Safety
+- PostgreSQL 14+ for QMS
+- Pattern: one logical database per service
 
-## Shared Environment Variables
+## Environment Contracts
 
-All backend services use these variables:
+MySQL services:
 
 - `MYSQL_HOST` (default usually `localhost`)
 - `MYSQL_PORT` (default usually `3306`)
@@ -18,18 +18,25 @@ All backend services use these variables:
 - `MYSQL_PASSWORD`
 - `MYSQL_DATABASE` (service-specific)
 
+PostgreSQL services:
+
+- `DATABASE_URL` (QMS uses this directly via `pg` pool)
+
 ## Service Database Mapping
 
-| Service | Database | Config Path |
-|---|---|---|
-| MIMS | `pharaxis_mims_dev` | `apps/medical-affairs/mims/backend/database/db.js` |
-| CP Portal | `pharaxis_cp_portal_dev` | `apps/medical-affairs/cp-portal/backend/database/db.js` |
-| AI-Agent | `pharaxis_ai_agent_dev` | `apps/ai-agent/backend/database/db.js` |
-| Vault | `pharaxis_vault_dev` | `apps/vault/backend/database/db.js` |
+| Service | Engine | Database | Config Path |
+|---|---|---|---|
+| MIMS | MySQL | `pharaxis_mims_dev` | `apps/medical-affairs/mims/backend/database/db.js` |
+| CP Portal | MySQL | `pharaxis_cp_portal_dev` | `apps/medical-affairs/cp-portal/backend/database/db.js` |
+| AI-Agent | MySQL | `pharaxis_ai_agent_dev` | `apps/ai-agent/backend/database/db.js` |
+| Vault | MySQL | `pharaxis_vault_dev` | `apps/vault/backend/database/db.js` |
+| Safety | MySQL | `pharaxis_safety_dev` | `apps/safety/backend/database/db.js` |
+| QMS | PostgreSQL | `qms_dev` (local default via `DATABASE_URL`) | `apps/qms/backend/src/db/pool.js` |
 
 ## Initialization Behavior
 
-- Each backend initializes core tables on startup (`CREATE TABLE IF NOT EXISTS`).
+- MySQL services initialize core tables at startup (`CREATE TABLE IF NOT EXISTS`).
+- QMS schema is managed through SQL migration scripts (`apps/qms/backend/src/db/migrations/*.sql`) and `npm run db:migrate`.
 - This allows local environments to bootstrap quickly with a clean database.
 - Schema ownership remains service-local.
 
@@ -37,6 +44,8 @@ All backend services use these variables:
 
 - MIMS bootstrap account: `superadmin` (initial default password exists in code)
 - CP Portal bootstrap account: `cpadmin` (initial default password exists in code)
+- Safety bootstrap account: `safety.superadmin@pharaxis.one` (default local password in app README/env example)
+- QMS JWT-path local login: `admin@pharaxis.local` with org code `PHA_DEV` (see `apps/qms/README.md`)
 
 Important:
 - Treat defaults as local-dev only.
@@ -44,15 +53,18 @@ Important:
 
 ## Local Setup Sequence
 
-1. Start MySQL.
+1. Start MySQL and PostgreSQL.
 2. Create service databases:
    - `pharaxis_mims_dev`
    - `pharaxis_cp_portal_dev`
    - `pharaxis_ai_agent_dev`
    - `pharaxis_vault_dev`
+   - `pharaxis_safety_dev`
+   - `qms_dev` (or your configured PostgreSQL DB from `DATABASE_URL`)
 3. Copy `.env.example` to `.env` for each service.
-4. Set `MYSQL_*` values per environment.
-5. Start service backends once to initialize tables.
+4. Set `MYSQL_*` values for MySQL services and `DATABASE_URL` for QMS.
+5. Run `npm run db:migrate` in `apps/qms/backend`.
+6. Start service backends once to initialize tables and seed local data.
 
 ## Security Rules
 

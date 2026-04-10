@@ -14,8 +14,9 @@ Pharaxis-One groups medical-affairs and platform products into a single operatio
 - **AI-Agent**: Provider-integrated AI service layer (OpenAI/Claude/Gemini adapters) with usage/config administration.
 - **Vault**: Document/content vault foundations with authentication and superadmin controls.
 
-### 3) Future Expansion
-- **QMS** and **Safety** are currently scaffolds and reserved for future implementation.
+### 3) Quality & Safety
+- **QMS**: Sprint 1 baseline delivered (auth/superadmin, document control, CAPA, deviations, audits, validation, platform shared services).
+- **Safety**: Sprint 1 and Sprint 2 delivered (admin/config foundations + case management, regulatory workflows, narratives, listedness/expectedness).
 
 ## Current State Snapshot
 
@@ -25,20 +26,21 @@ Pharaxis-One groups medical-affairs and platform products into a single operatio
 | CP Portal | Implemented and maintained |
 | AI-Agent | Implemented and evolving |
 | Vault | Implemented foundational modules |
-| QMS / Safety | Placeholder scaffolds |
+| QMS | Sprint 1 completed and active in repo |
+| Safety | Sprint 1 + Sprint 2 completed and active in repo |
 
 ## Technical Baseline
 
 - Backend stack: Node.js + Express
-- Frontend stack: React + Vite
-- Database: MySQL (service-specific DB per app)
+- Frontend stack: React + Vite (MIMS/CP Portal/AI-Agent/Vault/Safety), Vue + Vite + Tailwind (QMS)
+- Database: MySQL + PostgreSQL (service-specific DB per app)
 - CI: GitHub Actions
 - Dependency management: npm + Dependabot
 
 ## Team and Process Artifacts
 
-- `TEAM_OPERATING_SOP.md` defines cross-functional operating rules, gates, and responsibilities.
-- `live-communication-use-and-format.md` defines live collaboration communication behavior.
+- `docs/TEAM_OPERATING_SOP.md` defines cross-functional operating rules, gates, and responsibilities.
+- `docs/live-communication-use-and-format.md` defines live collaboration communication behavior.
 - Domain memory SOP docs capture app-specific context and continuity.
 
 ## How to Navigate This Repo
