@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AuthShell from '../../common/components/AuthShell'
 
 export default function SuperadminLoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
@@ -31,28 +32,52 @@ export default function SuperadminLoginPage() {
   }
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#1a1a2e' }}>
-      <div style={{ background: '#fff', padding: '40px', borderRadius: '8px', width: '380px', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
-        <h2 style={{ marginBottom: '8px', color: '#1a1a2e' }}>Pharaxis Vault</h2>
-        <p style={{ color: '#666', marginBottom: '32px', fontSize: '14px' }}>SuperAdmin Portal</p>
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>Email</label>
-            <input name="email" type="email" value={form.email} onChange={handleChange} required
-              style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>Password</label>
-            <input name="password" type="password" value={form.password} onChange={handleChange} required
-              style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box' }} />
-          </div>
-          {error && <div style={{ color: '#d32f2f', marginBottom: '16px', fontSize: '14px' }}>{error}</div>}
-          <button type="submit" disabled={loading}
-            style={{ width: '100%', padding: '12px', background: '#1a1a2e', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '16px', cursor: 'pointer' }}>
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-      </div>
-    </div>
+    <AuthShell
+      panelTitle="SuperAdmin Console"
+      panelSubtitle="Use your Pharaxis account to access global tenant controls."
+      modeLabel="Internal Access"
+      introTitle="Global platform control for enterprise vault operations."
+      introCopy="Monitor organization health, manage onboarding, and maintain system-wide governance."
+      points={[
+        'Cross-organization dashboard and audit visibility',
+        'Rapid org provisioning with quota controls',
+        'Secure global admin pathway separated from org login'
+      ]}
+      alternateLinkPath="/"
+      alternateLinkText="Back to Organization Sign In"
+    >
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <div className="form-field">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={form.email}
+            onChange={handleChange}
+            required
+            autoComplete="email"
+          />
+        </div>
+
+        <div className="form-field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            value={form.password}
+            onChange={handleChange}
+            required
+            autoComplete="current-password"
+          />
+        </div>
+
+        {error ? <div className="auth-error">{error}</div> : null}
+        <button className="btn-primary" type="submit" disabled={loading}>
+          {loading ? 'Signing in...' : 'Sign In'}
+        </button>
+      </form>
+    </AuthShell>
   )
 }

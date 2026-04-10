@@ -1,0 +1,29 @@
+{
+  "name": "pharaxis-safety",
+  "version": "1.0.0",
+  "private": true,
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "nodemon backend/server.js",
+    "dev:all": "concurrently -n backend,frontend -c cyan,magenta \"nodemon backend/server.js\" \"cd frontend && npm run dev\"",
+    "build:frontend": "cd frontend && npm run build",
+    "test:smoke:sprint1": "node backend/tests/smoke-sprint1.js",
+    "test:uat:sprint1:gate2": "node backend/tests/uat-sprint1-gate2.js",
+    "test:smoke:sprint2:kickoff": "node backend/tests/smoke-sprint2-kickoff.js",
+    "test:uat:sprint2:focused": "node backend/tests/uat-sprint2-focused.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "concurrently": "^8.2.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.3",
+    "nodemailer": "^6.10.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}

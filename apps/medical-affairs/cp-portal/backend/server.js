@@ -114,6 +114,7 @@ app.use('/uploads', (req, res, next) => {
 // ── Admin Console Routes ──────────────────────────────────────
 app.use('/api/admin/auth',         authLimiter, require('./routes/admin/auth'));
 app.use('/api/admin/clients',      require('./routes/admin/clients'));
+app.use('/api/admin/clients/:clientId/ai-config', require('./routes/admin/aiProxy'));
 app.use('/api/admin/branding',     require('./routes/admin/branding'));
 app.use('/api/admin/features',     require('./routes/admin/features'));
 app.use('/api/admin/content',      require('./routes/admin/content'));

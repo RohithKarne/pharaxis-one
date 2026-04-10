@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 
-const API_BASE = 'http://localhost:6000/api/v1/agent/admin'
-
 const PROVIDERS = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'claude', label: 'Claude' },
@@ -178,6 +176,7 @@ function extractConfig(raw) {
 
 export default function AIConfigPage() {
   const { clientId } = useParams()
+  const API_BASE = 'http://localhost:4000/api/admin/clients/' + clientId + '/ai-config'
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState(false)

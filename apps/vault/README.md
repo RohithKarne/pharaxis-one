@@ -36,7 +36,7 @@ npm run dev
 
 ## Default Runtime
 
-- Backend port: `5000`
+- Backend port: `5100`
 - Health endpoint: `GET /api/health`
 
 ## Environment

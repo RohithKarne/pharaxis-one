@@ -10,6 +10,33 @@ const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth
 const { applyTranslation } = require('../../utils/translator');
 const path = require('path');
 const fs   = require('fs');
+const http = require("http");
+
+function httpPost(url, headers, body) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const data = typeof body === "string" ? body : JSON.stringify(body);
+    const opts = {
+      hostname: parsed.hostname,
+      port: parsed.port,
+      path: parsed.pathname + parsed.search,
+      method: "POST",
+      headers: { ...headers, "Content-Length": Buffer.byteLength(data) },
+    };
+    const req = http.request(opts, (res) => {
+      let raw = "";
+      res.on("data", chunk => raw += chunk);
+      res.on("end", () => resolve({
+        ok: res.statusCode >= 200 && res.statusCode < 300,
+        status: res.statusCode,
+        json: () => Promise.resolve(JSON.parse(raw)),
+      }));
+    });
+    req.on("error", reject);
+    req.write(data);
+    req.end();
+  });
+}
 
 async function isFeatureEnabled(clientId, featureKey) {
   const [[row]] = await pool.execute('SELECT is_enabled FROM cp_features WHERE client_id = ? AND feature_key = ?', [clientId, featureKey]);
@@ -97,19 +124,7 @@ router.post('/ai-search', authenticatePortal, requirePortalAuth, async (req, res
 
     let aiResponse;
     try {
-      aiResponse = await fetch('http://localhost:6000/api/v1/agent/query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.AI_AGENT_INTERNAL_TOKEN}`,
-        },
-        body: JSON.stringify({
-          org_id: client.id,
-          app_source: 'cp_portal',
-          query_type: 'document_search',
-          payload: { query, context: { documents: context } },
-        }),
-      });
+      aiResponse = await httpPost("http://localhost:6000/api/v1/agent/query", { "Content-Type": "application/json", "Authorization": "Bearer " + process.env.AI_AGENT_INTERNAL_TOKEN }, JSON.stringify({ org_id: client.id, app_source: "cp_portal", query_type: "document_search", payload: { query, context: { documents: context } } }));
     } catch (_) {
       return res.json({ ai_unavailable: true, results: [] });
     }

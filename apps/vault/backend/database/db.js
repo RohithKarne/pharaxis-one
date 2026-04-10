@@ -267,6 +267,19 @@ async function initializeDatabase() {
   for (const query of queries) {
     await pool.execute(query)
   }
+
+  // Forward-compatible schema safety for Sprint 1 updates.
+  const [folderActiveColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'vault_folders'
+       AND COLUMN_NAME = 'is_active'`
+  )
+  if (!folderActiveColumn[0].total) {
+    await pool.execute('ALTER TABLE vault_folders ADD COLUMN is_active TINYINT(1) DEFAULT 1 AFTER path')
+  }
+
   console.log('Pharaxis Vault database initialized — all 21 tables ready')
 }
 

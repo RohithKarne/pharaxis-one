@@ -3,7 +3,8 @@
 > Technical review: Varun (Senior Director of Software Systems) + Bhavya (Senior Solution Architect)
 > Approved by: Rohith (CPO)
 > Date: 2026-04-09
-> Status: READY FOR DEVELOPMENT
+> Status: CLOSED ✅ — Final Sign-off by Rohith (CPO) 2026-04-09
+> QA: 31/31 tests passed — 0 failures
 
 ---
 
@@ -12,6 +13,7 @@
 AI-Agent service is live as a standalone Pharaxis core service.
 Org admin can configure their own AI provider API key.
 CP Portal semantic document search is powered by AI end-to-end.
+- Pharaxis Superadmin can view platform-wide AI usage across all orgs.
 
 ---
 
@@ -32,8 +34,9 @@ CP Portal semantic document search is powered by AI end-to-end.
 | 5 | Core query endpoint — POST /api/v1/agent/query | 3 days | Items 2, 4 |
 | 6 | CP Portal integration — semantic document search | 4 days | Items 3, 5 |
 | 7 | Phase 2 optimisation stubs | 0.5 days | Item 1 |
+| 8 | Superadmin portal — dashboard, orgs, usage pages | 2 days | Items 2, 3, 5 |
 
-**Total effort: 15.5 days**
+**Total effort: 17.5 days**
 
 ---
 
@@ -291,6 +294,25 @@ created_at DATETIME
 
 ---
 
+### Item 8 — Superadmin Portal
+
+**What:** Standalone frontend portal for Pharaxis platform-wide AI oversight. Dark sidebar design, three pages: Dashboard (stats + recent activity), Orgs (per-org config + enable/disable toggle), Usage (full usage log with filters).
+
+**Files:**
+- `apps/ai-agent/frontend/src/components/SuperadminLayout/index.jsx` — dark sidebar (240px, #0f172a), topbar, Pharaxis purple active state
+- `apps/ai-agent/frontend/src/pages/DashboardPage/index.jsx` — 6 stat cards, usage by app table, usage by provider bar, recent activity
+- `apps/ai-agent/frontend/src/pages/OrgsPage/index.jsx` — org list, provider badges, enable/disable toggle
+- `apps/ai-agent/frontend/src/pages/UsagePage/index.jsx` — filters, summary cards, paginated log table
+- `apps/ai-agent/backend/routes/admin/superadmin.js` — GET /dashboard, GET /orgs, PATCH /orgs/:orgId/toggle
+
+**Acceptance Criteria:**
+- Dashboard shows live stats from DB: orgs configured, active orgs, queries today, all-time queries, tokens today, all-time tokens
+- Orgs page shows per-org config with toggle to enable/disable any org
+- Usage page shows full usage log with org, provider, app source, status columns
+- UI is professional SaaS quality — dark sidebar, stat cards, proper typography
+
+---
+
 ## Technical Impact Summary
 
 | Impact Area | Detail |
@@ -300,6 +322,17 @@ created_at DATETIME
 | CP Portal | New admin settings page + new AI search mode on documents page |
 | Existing apps | Zero changes to MIMS, Vault, QMS, Safety in Sprint 1 |
 | Port | Backend: 6000 | Frontend: 5175 |
+
+## Auth Architecture
+
+| Path | Auth Method | Used By |
+|------|-------------|---------|
+| `/api/v1/agent/admin/*` | JWT (`JWT_SECRET`) — AI-Agent admin users | AI-Agent admin panel |
+| `/api/v1/agent/internal/*` | Static internal token (`AI_AGENT_INTERNAL_TOKEN`) + `X-Org-Id` header | CP Portal backend proxy |
+| `/api/admin/clients/:clientId/ai-config/*` | CP Portal admin JWT (`CP_ADMIN_JWT_SECRET`) | CP Portal admin frontend |
+
+**CP Portal AI Config flow:**
+CP Portal admin frontend → CP Portal backend proxy (validates cp_admin_token) → AI-Agent internal routes (validates AI_AGENT_INTERNAL_TOKEN). Frontend never calls AI-Agent directly.
 
 ---
 
@@ -340,9 +373,10 @@ MYSQL_PASSWORD=devpass
 MYSQL_DATABASE=pharaxis_ai_agent_dev
 JWT_SECRET=<shared with other apps>
 AI_AGENT_ENCRYPTION_KEY=<64 hex chars — 32 bytes for AES-256>
+AI_AGENT_INTERNAL_TOKEN=<static service token for CP Portal → AI-Agent calls>
 ```
 
 ---
 
-*Sprint 1 scope owned by Bala. Gate 1 approval required from Rohith before development starts.*
+*Sprint 1 development complete. Gate 2 approved. Pending QA execution by Karthik + Shivani before Final Sign-off.*
 *Gate 2 required before QA starts — raised by Bala + Varun after engineering verification.*

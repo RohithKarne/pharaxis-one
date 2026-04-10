@@ -27,6 +27,7 @@ async function startServer() {
 
   app.use('/api/v1/agent/superadmin', require('./routes/admin/superadmin'))
   app.use('/api/v1/agent', require('./routes/agent'))
+  app.use('/api/v1/agent/internal', require('./routes/internal/aiConfig'))
   app.use('/api/v1/agent/admin', adminRoutes)
   app.use('/api/v1/agent/config', adminRoutes)
   app.use('/api/v1/agent/usage', require('./routes/admin/usageLogs'))
