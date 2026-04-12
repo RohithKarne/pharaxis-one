@@ -14,7 +14,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
 
-const API = 'http://localhost:3000/api'
+const API = import.meta.env.VITE_API_URL || '/api'
 
 const TYPE_COLOR = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 

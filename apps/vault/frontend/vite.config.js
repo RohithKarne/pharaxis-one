@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 const backendTarget = process.env.VITE_API_TARGET || 'http://localhost:5100'
 
 export default defineConfig({
+  base: '/vault/',
   plugins: [react()],
   server: {
     proxy: {

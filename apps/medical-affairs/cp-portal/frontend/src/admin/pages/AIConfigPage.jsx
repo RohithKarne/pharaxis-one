@@ -176,7 +176,7 @@ function extractConfig(raw) {
 
 export default function AIConfigPage() {
   const { clientId } = useParams()
-  const API_BASE = 'http://localhost:4000/api/admin/clients/' + clientId + '/ai-config'
+  const API_BASE = (import.meta.env.VITE_API_URL || '/api') + '/admin/clients/' + clientId + '/ai-config'
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState(false)
