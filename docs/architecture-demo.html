@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pharaxis One — Architecture Viewer</title>
+  <style>
+    :root {
+      --bg:#f8fafc; --card:#fff; --text:#1e293b; --muted:#64748b;
+      --pill-bg:#f1f5f9; --pill-border:#e2e8f0; --pill-text:#475569;
+      --border:#e2e8f0; --shadow:0 2px 8px rgba(0,0,0,.08);
+    }
+    body.dark {
+      --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --muted:#94a3b8;
+      --pill-bg:#334155; --pill-border:#475569; --pill-text:#cbd5e1;
+      --border:#334155; --shadow:0 2px 8px rgba(0,0,0,.4);
+    }
+
+    * { box-sizing:border-box; }
+    body {
+      margin:0;
+      padding:24px;
+      font-family:sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      transition:background .2s, color .2s;
+    }
+    .wrap { max-width:1720px; margin:0 auto; }
+
+    .top-row { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+    h1 { margin:0; font-size:30px; font-weight:800; letter-spacing:-.02em; }
+    .subtitle { margin-top:6px; color:var(--muted); font-size:14px; font-weight:600; }
+    .env-badge {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:5px 12px;
+      border-radius:999px;
+      background:#fef9c3;
+      border:1px solid #fde047;
+      color:#854d0e;
+      font-size:11px;
+      font-weight:700;
+      white-space:nowrap;
+      margin-top:4px;
+    }
+    .env-dot { width:8px; height:8px; border-radius:50%; background:#eab308; animation:pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+    .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+    .btn {
+      padding:8px 14px;
+      border-radius:8px;
+      border:1px solid var(--border);
+      background:var(--card);
+      color:var(--text);
+      cursor:pointer;
+      font-size:12px;
+      font-weight:700;
+      transition:all .2s;
+    }
+    .btn:hover { border-color:#3b82f6; color:#3b82f6; }
+    .btn.paused { background:#ef4444; border-color:#ef4444; color:#fff; }
+
+    .tabs { display:flex; gap:4px; margin-top:16px; border-bottom:2px solid var(--pill-border); flex-wrap:wrap; }
+    .tab-btn { padding:9px 18px; border:none; background:transparent; cursor:pointer; font-size:13px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; }
+    .tab-btn:hover { color:var(--text); }
+    .tab-btn.active { color:#3b82f6; border-bottom-color:#3b82f6; }
+    .tab-pane { display:none; }
+    .tab-pane.active { display:block; }
+
+    .legend { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; }
+    .pill {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 12px;
+      border-radius:999px;
+      background:var(--pill-bg);
+      border:1px solid var(--pill-border);
+      color:var(--pill-text);
+      font-size:12px;
+      font-weight:600;
+      cursor:pointer;
+      transition:all .2s;
+      user-select:none;
+    }
+    .pill:hover { border-color:#3b82f6; }
+    .pill.active-filter { border-width:2px; }
+    .pill.dimmed { opacity:.35; }
+    .dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+
+    .line-legend {
+      display:flex;
+      flex-wrap:wrap;
+      gap:14px;
+      margin-top:10px;
+      padding:10px 14px;
+      width:fit-content;
+      background:var(--card);
+      border:1px solid var(--pill-border);
+      border-radius:10px;
+    }
+    .ll-item { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted); font-weight:600; }
+    .ll-line { width:34px; height:0; display:inline-block; }
+    .ll-solid { border-top:2px solid #94a3b8; }
+    .ll-dash { border-top:2px dashed #94a3b8; }
+    .ll-bidir { border-top:2px dashed #3b82f6; }
+    .ll-error { border-top:2px dashed #ef4444; }
+    .ll-sa { border-top:2px dashed #818cf8; }
+    .ll-dot-blue, .ll-dot-grey, .ll-dot-red, .ll-dot-purple, .ll-dot-green {
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      flex-shrink:0;
+    }
+    .ll-dot-blue { background:#3b82f6; }
+    .ll-dot-grey { background:#94a3b8; }
+    .ll-dot-red { background:#ef4444; }
+    .ll-dot-purple { background:#7c3aed; }
+    .ll-dot-green { background:#009688; }
+
+    .seq-guide {
+      display:flex;
+      align-items:center;
+      flex-wrap:wrap;
+      gap:6px;
+      margin-top:12px;
+      padding:9px 12px;
+      background:var(--card);
+      border:1px solid var(--pill-border);
+      border-radius:10px;
+      width:fit-content;
+      color:var(--muted);
+      font-size:11px;
+    }
+    .sq-title { color:var(--text); font-weight:700; }
+    .sq-step { padding:2px 7px; border-radius:5px; border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; font-weight:700; white-space:nowrap; }
+    .sq-arr { color:var(--muted); }
+    body.dark .sq-step { background:#1e3a5f; border-color:#3b82f6; color:#93c5fd; }
+
+    .card {
+      margin-top:12px;
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:12px;
+      box-shadow:var(--shadow);
+      padding:14px;
+      overflow:auto;
+    }
+
+    svg {
+      display:block;
+      width:100%;
+      height:auto;
+      min-width:1200px;
+      background:var(--card);
+      border-radius:10px;
+    }
+
+    .n-label { font:700 11px/1 sans-serif; fill:#1e293b; text-anchor:middle; }
+    .n-sub   { font:400 9.5px/1 sans-serif; fill:#64748b; text-anchor:middle; }
+    .n-sub2  { font:400 8.5px/1 sans-serif; fill:#94a3b8; text-anchor:middle; }
+    body.dark .n-label { fill:#f1f5f9; }
+    body.dark .n-sub   { fill:#94a3b8; }
+    body.dark .n-sub2  { fill:#64748b; }
+
+    .zone-label { font:700 11px/1 sans-serif; fill:#64748b; letter-spacing:.08em; text-anchor:middle; }
+    body.dark .zone-label { fill:#cbd5e1; }
+
+    .e-label rect { fill:#fff; stroke:#e2e8f0; }
+    .e-label text { font-size:10px; fill:#475569; text-anchor:middle; dominant-baseline:middle; font-weight:600; }
+    .e-label-err rect { fill:#fff1f2; stroke:#fecaca; }
+    .e-label-err text { font-size:10px; fill:#ef4444; text-anchor:middle; dominant-baseline:middle; font-weight:700; }
+    .e-label-sa rect { fill:#eef2ff; stroke:#c7d2fe; }
+    .e-label-sa text { font-size:10px; fill:#6366f1; text-anchor:middle; dominant-baseline:middle; font-weight:700; }
+    body.dark .e-label rect { fill:#1e293b; stroke:#475569; }
+    body.dark .e-label text { fill:#cbd5e1; }
+    body.dark .e-label-err rect { fill:#450a0a; stroke:#991b1b; }
+    body.dark .e-label-sa rect { fill:#1e1b4b; stroke:#4338ca; }
+
+    .node-dim { opacity:.18; transition:opacity .2s; }
+    .node-highlight { opacity:1 !important; }
+
+    #tip {
+      position:fixed;
+      z-index:999;
+      background:#1e293b;
+      color:white;
+      padding:6px 10px;
+      border-radius:6px;
+      font-size:12px;
+      pointer-events:none;
+      opacity:0;
+      transition:opacity .15s;
+      white-space:pre-line;
+      max-width:280px;
+    }
+
+    @keyframes flowDash {
+      to { stroke-dashoffset:-20; }
+    }
+    .edge-animated { animation:flowDash 1.5s linear infinite; }
+
+    .vault-edge-solid { fill:none; stroke:#64748b; stroke-width:1.8; marker-end:url(#arrow-vault); }
+    .vault-edge-dash  { fill:none; stroke:#94a3b8; stroke-width:1.5; stroke-dasharray:8,5; marker-end:url(#arrow-vault); }
+    .vault-edge-bidir { fill:none; stroke:#94a3b8; stroke-width:1.5; stroke-dasharray:8,5; marker-start:url(#arrow-vault-bi); marker-end:url(#arrow-vault-bi); }
+    .vault-edge-error { fill:none; stroke:#ef4444; stroke-width:1.6; stroke-dasharray:5,4; marker-end:url(#arrow-vault-err); }
+    .vault-edge-sa    { fill:none; stroke:#818cf8; stroke-width:1.5; stroke-dasharray:6,4; marker-end:url(#arrow-vault); }
+    .vault-edge-integ { fill:none; stroke:#94a3b8; stroke-width:1.5; stroke-dasharray:5,5; marker-end:url(#arrow-vault); opacity:.7; }
+
+    .coming-soon-card { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:400px; gap:16px; padding:48px; text-align:center; }
+    .cs-icon { font-size:64px; }
+    .coming-soon-card h2 { font-size:24px; font-weight:800; color:var(--text); margin:0; }
+    .coming-soon-card p { color:var(--muted); font-size:15px; margin:0; }
+    .cs-stack { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+    .cs-stack span { padding:4px 12px; border-radius:999px; background:var(--pill-bg); border:1px solid var(--pill-border); font-size:12px; font-weight:600; color:var(--pill-text); }
+    .cs-status { padding:8px 20px; border-radius:8px; background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; font-size:12px; font-weight:600; }
+    body.dark .cs-status { background:#1e3a5f; border-color:#3b82f6; color:#93c5fd; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top-row">
+      <div>
+        <h1>Pharaxis One — Architecture Viewer</h1>
+        <div class="subtitle">7 Apps · Full Platform View · Sprint Status Live</div>
+      </div>
+      <span class="env-badge"><span class="env-dot"></span>ENV: Development</span>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn" id="btnAnim" onclick="toggleAnim()">⏸ Pause</button>
+      <button class="btn" id="btnDark" onclick="toggleDark()">🌙 Dark Mode</button>
+      <button class="btn" onclick="exportSVG()">↓ Download SVG</button>
+      <button class="btn" onclick="resetFilter()">↺ Reset Filter</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="vault" onclick="switchTab('vault')">Pharaxis Vault</button>
+      <button class="tab-btn" data-tab="mims" onclick="switchTab('mims')">MIMS</button>
+      <button class="tab-btn" data-tab="cportal" onclick="switchTab('cportal')">CP Portal</button>
+      <button class="tab-btn" data-tab="aiagent" onclick="switchTab('aiagent')">AI Agent</button>
+      <button class="tab-btn" data-tab="qms" onclick="switchTab('qms')">QMS</button>
+      <button class="tab-btn" data-tab="safety" onclick="switchTab('safety')">Safety</button>
+      <button class="tab-btn" data-tab="ieg" onclick="switchTab('ieg')">IEG</button>
+    </div>
+
+    <div class="legend" id="layerLegend">
+      <span class="pill" data-filter="userroles" onclick="filterLayer(this)"><span class="dot" style="background:#f48fb1"></span>User Roles</span>
+      <span class="pill" data-filter="frontend" onclick="filterLayer(this)"><span class="dot" style="background:#90caf9"></span>Frontend</span>
+      <span class="pill" data-filter="middleware" onclick="filterLayer(this)"><span class="dot" style="background:#ffe082"></span>Middleware</span>
+      <span class="pill" data-filter="backend" onclick="filterLayer(this)"><span class="dot" style="background:#a5d6a7"></span>Backend</span>
+      <span class="pill" data-filter="database" onclick="filterLayer(this)"><span class="dot" style="background:#ffcc80"></span>Database</span>
+      <span class="pill" data-filter="external" onclick="filterLayer(this)"><span class="dot" style="background:#ce93d8"></span>External</span>
+      <span class="pill" data-filter="background" onclick="filterLayer(this)"><span class="dot" style="background:#80cbc4"></span>Background Services</span>
+      <span class="pill" data-filter="integration" onclick="filterLayer(this)"><span class="dot" style="background:#94a3b8"></span>Integration</span>
+      <span class="pill" data-filter="modules" onclick="filterLayer(this)"><span class="dot" style="background:#66bb6a"></span>Modules</span>
+    </div>
+
+    <div class="line-legend">
+      <span class="ll-item"><span class="ll-line ll-solid"></span>solid</span>
+      <span class="ll-item"><span class="ll-line ll-bidir"></span>bidir</span>
+      <span class="ll-item"><span class="ll-line ll-dash"></span>dash</span>
+      <span class="ll-item"><span class="ll-line ll-error"></span>error</span>
+      <span class="ll-item"><span class="ll-line ll-sa"></span>sa</span>
+      <span class="ll-item"><span class="ll-dot-blue"></span>request</span>
+      <span class="ll-item"><span class="ll-dot-grey"></span>response</span>
+      <span class="ll-item"><span class="ll-dot-red"></span>error</span>
+      <span class="ll-item"><span class="ll-dot-purple"></span>external</span>
+      <span class="ll-item"><span class="ll-dot-green"></span>background</span>
+    </div>
+
+    <div id="tab-vault" class="tab-pane active">
+      <div class="seq-guide">
+        <span class="sq-title">Vault Sequence:</span>
+        <span class="sq-step">① User Login</span><span class="sq-arr">→</span>
+        <span class="sq-step">② API Call</span><span class="sq-arr">→</span>
+        <span class="sq-step">③ CORS</span><span class="sq-arr">→</span>
+        <span class="sq-step">④ JWT Verify</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑤ Role Check</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑥ Route Handler</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑦ DB Query</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑧ Result</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑨ Response</span>
+      </div>
+      <div class="card">
+        <svg id="svg-vault" viewBox="0 0 1680 680" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" background="#ffffff">
+          <defs>
+            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.12"/>
+            </filter>
+            <filter id="db-glow" x="-25%" y="-25%" width="150%" height="150%">
+              <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#f57c00" flood-opacity="0.3"/>
+            </filter>
+            <marker id="arrow-vault" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/></marker>
+            <marker id="arrow-vault-bi" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#3b82f6"/></marker>
+            <marker id="arrow-vault-err" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#ef4444"/></marker>
+          </defs>
+
+          <path id="p-sa-fe" class="vault-edge-solid" d="M190,135 C225,135 240,135 260,135"/>
+          <g class="e-label" transform="translate(225,118)"><rect x="-43" y="-8" width="86" height="16" rx="4"/><text>Login Request</text></g>
+
+          <path id="p-org-fe" class="vault-edge-solid" d="M190,275 C225,275 225,135 260,135"/>
+          <g class="e-label" transform="translate(212,202)"><rect x="-43" y="-8" width="86" height="16" rx="4"/><text>Login Request</text></g>
+
+          <path id="p-vite-fe" class="vault-edge-solid" d="M340,240 C340,225 340,195 340,170"/>
+          <g class="e-label" transform="translate(358,207)"><rect x="-22" y="-8" width="44" height="16" rx="4"/><text>Serves</text></g>
+
+          <path id="p-fe-cors" class="vault-edge-solid" d="M420,135 C455,118 477,103 500,90"/>
+          <g class="e-label" transform="translate(458,110)"><rect x="-28" y="-8" width="56" height="16" rx="4"/><text>API Call</text></g>
+
+          <path id="p-cors-jwt" class="vault-edge-solid" d="M565,120 C565,132 565,150 565,160"/>
+
+          <path id="p-jwt-role" class="vault-edge-solid" d="M565,220 C565,232 565,250 565,260"/>
+          <g class="e-label" transform="translate(597,241)"><rect x="-40" y="-8" width="80" height="16" rx="4"/><text>Decode Token</text></g>
+
+          <path id="p-role-be" class="vault-edge-solid" d="M630,290 C656,278 676,264 695,255"/>
+          <g class="e-label" transform="translate(663,269)"><rect x="-58" y="-8" width="116" height="16" rx="4"/><text>Authorized Request</text></g>
+
+          <path id="p-be-feat" class="vault-edge-solid" d="M865,255 C870,260 876,268 880,273"/>
+          <g class="e-label" transform="translate(869,252)"><rect x="-34" y="-8" width="68" height="16" rx="4"/><text>Org Routes</text></g>
+
+          <path id="p-be-sa" class="vault-edge-sa edge-animated" d="M865,232 C872,208 879,170 890,141"/>
+          <g class="e-label-sa" transform="translate(858,187)"><rect x="-34" y="-8" width="68" height="16" rx="4"/><text>SA Routes</text></g>
+
+          <path id="p-err-jwt" class="vault-edge-error edge-animated" d="M500,185 C470,185 445,165 420,150"/>
+          <g class="e-label-err" transform="translate(452,161)"><rect x="-58" y="-8" width="116" height="16" rx="4"/><text>401 Unauthorized / Token Expired</text></g>
+
+          <path id="p-err-role" class="vault-edge-error edge-animated" d="M500,287 C462,287 445,237 420,162"/>
+          <g class="e-label-err" transform="translate(444,230)"><rect x="-46" y="-8" width="92" height="16" rx="4"/><text>403 Forbidden</text></g>
+
+          <path id="p-fe-ls" class="vault-edge-dash edge-animated" d="M370,170 C376,237 376,332 370,400"/>
+          <g class="e-label" transform="translate(392,287)"><rect x="-31" y="-8" width="62" height="16" rx="4"/><text>Store JWT</text></g>
+
+          <path id="p-ls-fe" class="vault-edge-dash edge-animated" d="M310,400 C304,332 304,237 310,170"/>
+          <g class="e-label" transform="translate(287,287)"><rect x="-28" y="-8" width="56" height="16" rx="4"/><text>Read JWT</text></g>
+
+          <path id="p-be-resp" class="vault-edge-dash edge-animated" d="M780,295 C758,444 492,454 420,170"/>
+          <g class="e-label" transform="translate(616,436)"><rect x="-46" y="-8" width="92" height="16" rx="4"/><text>JSON Response</text></g>
+
+          <path id="p-be-health" class="vault-edge-solid" d="M780,290 C780,342 780,403 780,450"/>
+          <g class="e-label" transform="translate(812,372)"><rect x="-34" y="-8" width="68" height="16" rx="4"/><text>GET /health</text></g>
+
+          <path id="p-auth-mysql" class="vault-edge-bidir edge-animated" d="M1165,111 C1188,158 1190,196 1184,228"/>
+          <g class="e-label" transform="translate(1148,163)"><rect x="-34" y="-8" width="68" height="16" rx="4"/><text>User Query</text></g>
+
+          <path id="p-content-mysql" class="vault-edge-bidir edge-animated" d="M1165,183 C1177,198 1182,214 1184,232"/>
+          <g class="e-label" transform="translate(1148,200)"><rect x="-31" y="-8" width="62" height="16" rx="4"/><text>Doc Query</text></g>
+
+          <path id="p-search-mysql" class="vault-edge-bidir edge-animated" d="M1165,255 C1175,255 1180,255 1184,255"/>
+          <g class="e-label" transform="translate(1142,244)"><rect x="-40" y="-8" width="80" height="16" rx="4"/><text>Search Query</text></g>
+
+          <path id="p-dossier-mysql" class="vault-edge-bidir edge-animated" d="M1165,327 C1175,308 1181,282 1184,272"/>
+          <g class="e-label" transform="translate(1147,308)"><rect x="-43" y="-8" width="86" height="16" rx="4"/><text>Dossier Query</text></g>
+
+          <path id="p-admin-mysql" class="vault-edge-bidir edge-animated" d="M1165,399 C1173,364 1180,308 1184,276"/>
+          <g class="e-label" transform="translate(1145,356)"><rect x="-37" y="-8" width="74" height="16" rx="4"/><text>Audit Query</text></g>
+
+          <path id="p-mysql-be" class="vault-edge-dash edge-animated" d="M1184,255 C1100,250 990,250 865,250"/>
+          <g class="e-label" transform="translate(1022,238)"><rect x="-22" y="-8" width="44" height="16" rx="4"/><text>Result</text></g>
+
+          <path id="p-content-upload" class="vault-edge-dash edge-animated" d="M1165,183 C1235,183 1235,469 1165,469"/>
+          <g class="e-label" transform="translate(1232,326)"><rect x="-31" y="-8" width="62" height="16" rx="4"/><text>Store File</text></g>
+
+          <path id="p-be-email" class="vault-edge-dash edge-animated" d="M865,238 C1092,182 1294,134 1422,120"/>
+          <g class="e-label" transform="translate(1164,150)"><rect x="-34" y="-8" width="68" height="16" rx="4"/><text>Send Email</text></g>
+
+          <path id="p-be-ai" class="vault-edge-dash edge-animated" d="M865,255 C1092,258 1294,263 1422,268"/>
+          <g class="e-label" transform="translate(1164,252)"><rect x="-34" y="-8" width="68" height="16" rx="4"/><text>AI Request</text></g>
+
+          <path id="p-be-cron" class="vault-edge-dash edge-animated" d="M865,268 C1052,332 1262,402 1422,435"/>
+          <g class="e-label" transform="translate(1166,370)"><rect x="-28" y="-8" width="56" height="16" rx="4"/><text>Schedule</text></g>
+
+          <path id="p-integ" class="vault-edge-integ edge-animated" d="M1422,545 C1360,545 1260,500 1184,300"/>
+          <g class="e-label" transform="translate(1310,486)"><rect x="-49" y="-8" width="98" height="16" rx="4"/><text>Integration API</text></g>
+
+          <rect x="880" y="50" width="300" height="490" rx="12" fill="#f0fdf4" stroke="#a5d6a7" stroke-width="1.5" stroke-dasharray="6 4"/>
+          <text x="900" y="72" font-size="11" fill="#4caf50" font-weight="700">Feature Modules</text>
+
+          <g id="n-superadmin" data-layer="user-roles" data-tip="Superadmin&#10;Full system access — no org filter&#10;Routes: /api/superadmin/*&#10;DB: All tables&#10;Token: role = superadmin" onclick="filterLayer(this)">
+            <rect x="40" y="100" width="150" height="70" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow)"/>
+            <svg x="50" y="124" width="22" height="22" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" fill="#e53935"/></svg>
+            <text class="n-label" x="80" y="122">Superadmin</text>
+            <text class="n-sub" x="80" y="138">Full Access</text>
+          </g>
+
+          <g id="n-orguser" data-layer="user-roles" data-tip="Org User&#10;Role-based access within org&#10;Routes: /api/vault/*, /api/content/*&#10;DB: Org-scoped (org_id filter)&#10;Token: role = admin | manager | viewer" onclick="filterLayer(this)">
+            <rect x="40" y="240" width="150" height="70" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow)"/>
+            <svg x="50" y="264" width="22" height="22" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" fill="#c62828"/></svg>
+            <text class="n-label" x="80" y="262">Org User</text>
+            <text class="n-sub" x="80" y="278">Role-based Access</text>
+          </g>
+
+          <g id="n-frontend" data-layer="frontend" data-tip="React Frontend&#10;Port 5173 (Vite dev server)&#10;State: React hooks + Context API&#10;Auth: JWT stored in localStorage&#10;Keys: vault_token, vault_user" onclick="filterLayer(this)">
+            <rect x="260" y="100" width="160" height="70" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow)"/>
+            <image href="https://cdn.simpleicons.org/react/61DAFB" x="270" y="124" width="22" height="22"/>
+            <text class="n-label" x="300" y="122">React Frontend</text>
+            <text class="n-sub" x="300" y="138">Port 5173 · Dev</text>
+          </g>
+
+          <g id="n-vite" data-layer="frontend" data-tip="Vite&#10;Dev server with Hot Module Replacement&#10;Builds optimised bundle for production&#10;Config: vite.config.js&#10;Serves on http://localhost:5173" onclick="filterLayer(this)">
+            <rect x="260" y="240" width="160" height="70" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow)"/>
+            <image href="https://cdn.simpleicons.org/vite/646CFF" x="270" y="264" width="22" height="22"/>
+            <text class="n-label" x="300" y="262">Vite</text>
+            <text class="n-sub" x="300" y="278">Dev Server</text>
+          </g>
+
+          <g id="n-localstorage" data-layer="frontend" data-tip="Browser LocalStorage&#10;Stores: vault_token (JWT)&#10;Stores: vault_user (user object)&#10;Read on every API call&#10;Cleared on logout or token expiry" onclick="filterLayer(this)">
+            <rect x="260" y="400" width="160" height="70" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow)"/>
+            <svg x="270" y="424" width="22" height="22" viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z" fill="#1565c0"/></svg>
+            <text class="n-label" x="300" y="422">LocalStorage</text>
+            <text class="n-sub" x="300" y="438">JWT Token</text>
+          </g>
+
+          <g id="n-cors" data-layer="middleware" data-tip="CORS Middleware&#10;Allows: http://localhost:5173&#10;Blocks unauthorized origins&#10;Headers: Access-Control-Allow-Origin&#10;Configured via cors() in server.js" onclick="filterLayer(this)">
+            <rect x="500" y="60" width="130" height="60" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow)"/>
+            <svg x="510" y="79" width="22" height="22" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="#f57c00"/></svg>
+            <text class="n-label" x="540" y="82">CORS</text>
+            <text class="n-sub" x="540" y="98">Middleware</text>
+          </g>
+
+          <g id="n-jwtmw" data-layer="middleware" data-tip="JWT Check Middleware&#10;Verifies Bearer token from Authorization header&#10;Decodes payload: userId, role, orgId&#10;Token expired → 401 Unauthorized&#10;Invalid token → 401 Unauthorized" onclick="filterLayer(this)">
+            <rect x="500" y="160" width="130" height="60" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow)"/>
+            <image href="https://cdn.simpleicons.org/jsonwebtokens/f59e0b" x="510" y="179" width="22" height="22"/>
+            <text class="n-label" x="540" y="182">JWT Check</text>
+            <text class="n-sub" x="540" y="198">Middleware</text>
+          </g>
+
+          <g id="n-rolecheck" data-layer="middleware" data-tip="Role Check Middleware&#10;Validates decoded role against route requirement&#10;SA routes: role must be superadmin&#10;Org routes: valid orgId required in token&#10;Fail → 403 Forbidden" onclick="filterLayer(this)">
+            <rect x="500" y="260" width="130" height="60" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow)"/>
+            <svg x="510" y="279" width="22" height="22" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1 1.7 0 3.1 1.4 3.1 3.1v2z" fill="#f57c00"/></svg>
+            <text class="n-label" x="540" y="282">Role Check</text>
+            <text class="n-sub" x="540" y="298">Middleware</text>
+          </g>
+
+          <g id="n-backend" data-layer="backend" data-tip="Node.js + Express&#10;Port 5100&#10;13 route modules registered&#10;initializeDatabase() on startup&#10;expiryAlertCron registered on boot" onclick="filterLayer(this)">
+            <rect x="695" y="210" width="170" height="80" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
+            <image href="https://cdn.simpleicons.org/nodedotjs/339933" x="705" y="239" width="22" height="22"/>
+            <text class="n-label" x="735" y="232">Node.js + Express</text>
+            <text class="n-sub" x="735" y="248">Port 5100</text>
+          </g>
+
+          <g id="n-health" data-layer="backend" data-tip="Health Check Endpoint&#10;GET /api/health&#10;No authentication required&#10;Returns: { status: ok, app: pharaxis-vault, time }" onclick="filterLayer(this)">
+            <rect x="695" y="450" width="170" height="60" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
+            <svg x="705" y="469" width="22" height="22" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="#2e7d32"/></svg>
+            <text class="n-label" x="735" y="470">Health Check</text>
+            <text class="n-sub" x="735" y="486">/api/health · 200 OK</text>
+          </g>
+
+          <g id="n-grp-auth" data-layer="backend" data-tip="Auth &amp; Users&#10;/api/auth/* — Login, /me, token refresh&#10;/api/superadmin/* — SA user management&#10;/api/users/* — Org user CRUD" onclick="filterLayer(this)">
+            <rect x="890" y="82" width="275" height="58" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
+            <text class="n-label" x="906" y="104">Auth &amp; Users</text>
+            <text class="n-sub" x="906" y="120">/auth · /superadmin · /users</text>
+          </g>
+
+          <g id="n-grp-content" data-layer="backend" data-tip="Content &amp; Lifecycle&#10;/api/content/* — Document CRUD&#10;/api/folders/* — Folder tree management&#10;/api/lifecycle/* — Draft→Approved→Published" onclick="filterLayer(this)">
+            <rect x="890" y="154" width="275" height="58" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
+            <text class="n-label" x="906" y="176">Content &amp; Lifecycle</text>
+            <text class="n-sub" x="906" y="192">/content · /folders · /lifecycle · /upload</text>
+          </g>
+
+          <g id="n-grp-search" data-layer="backend" data-tip="Search &amp; Taxonomy&#10;/api/search/* — Full-text search across content&#10;/api/taxonomy/* — Tags, categories, classifications" onclick="filterLayer(this)">
+            <rect x="890" y="226" width="275" height="58" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
+            <text class="n-label" x="906" y="248">Search &amp; Taxonomy</text>
+            <text class="n-sub" x="906" y="264">/search · /taxonomy</text>
+          </g>
+
+          <g id="n-grp-dossiers" data-layer="backend" data-tip="Dossiers &amp; Slots&#10;/api/dossiers/* — Dossier package management&#10;/api/slots/* — Slot assignment and tracking" onclick="filterLayer(this)">
+            <rect x="890" y="298" width="275" height="58" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
+            <text class="n-label" x="906" y="320">Dossiers &amp; Slots</text>
+            <text class="n-sub" x="906" y="336">/dossiers · /slots</text>
+          </g>
+
+          <g id="n-grp-admin" data-layer="backend" data-tip="Admin &amp; Audit&#10;/api/admin/* — System config, org settings&#10;/api/audit/* — Full audit trail (read-only)" onclick="filterLayer(this)">
+            <rect x="890" y="370" width="275" height="58" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
+            <text class="n-label" x="906" y="392">Admin &amp; Audit</text>
+            <text class="n-sub" x="906" y="408">/admin · /audit</text>
+          </g>
+
+          <g id="n-upload" data-layer="frontend" data-tip="Upload Store&#10;Path: backend/uploads/&#10;Stores files uploaded via /api/upload&#10;Served as static from Express" onclick="filterLayer(this)">
+            <rect x="890" y="448" width="275" height="58" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow)"/>
+            <svg x="900" y="467" width="22" height="22" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z" fill="#1565c0"/></svg>
+            <text class="n-label" x="930" y="470">Upload Store</text>
+            <text class="n-sub" x="930" y="486">backend/uploads/ · Local Disk</text>
+          </g>
+
+          <g id="n-mysql" data-layer="database" data-tip="MySQL — Primary Database&#10;DB: pharaxis_vault_dev · Port 3306&#10;All app data stored here&#10;Connection pool: 10 connections" onclick="filterLayer(this)">
+            <rect x="1184" y="192" width="220" height="110" rx="10" fill="#ffe0b2" stroke="#f57c00" stroke-width="2.5" filter="url(#db-glow)"/>
+            <image href="https://cdn.simpleicons.org/mysql/4479A1" x="1194" y="236" width="22" height="22"/>
+            <text class="n-label" x="1224" y="220" font-size="15">MySQL</text>
+            <text class="n-sub" x="1224" y="238">pharaxis_vault_dev</text>
+            <text class="n-sub2" x="1224" y="254">Primary Database</text>
+          </g>
+
+          <g id="n-smtp" data-layer="external" data-tip="Nodemailer — SMTP Email&#10;Triggered by expiry alerts &amp; notifications&#10;Config: SMTP_HOST, SMTP_PORT, SMTP_USER" onclick="filterLayer(this)">
+            <rect x="1422" y="82" width="170" height="75" rx="10" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow)"/>
+            <image href="https://cdn.simpleicons.org/maildotru/ea4335" x="1432" y="108" width="22" height="22"/>
+            <text class="n-label" x="1462" y="107">Nodemailer</text>
+            <text class="n-sub" x="1462" y="123">SMTP Email</text>
+          </g>
+
+          <g id="n-aiagent" data-layer="external" data-tip="AI Agent Service&#10;Port 6000 (internal)&#10;Provides AI completions for Vault&#10;Called via REST from Vault backend" onclick="filterLayer(this)">
+            <rect x="1422" y="232" width="170" height="75" rx="10" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow)"/>
+            <image href="https://cdn.simpleicons.org/openai/412991" x="1432" y="258" width="22" height="22"/>
+            <text class="n-label" x="1462" y="257">AI Agent</text>
+            <text class="n-sub" x="1462" y="273">Port 6000</text>
+          </g>
+
+          <g id="n-cron" data-layer="background" data-tip="Expiry Alert Cron&#10;Registered via registerExpiryAlertCron()&#10;Checks document expiry dates on schedule&#10;Triggers Nodemailer for near-expiry items" onclick="filterLayer(this)">
+            <rect x="1422" y="402" width="170" height="75" rx="10" fill="#e0f2f1" stroke="#80cbc4" stroke-width="1.5" filter="url(#shadow)"/>
+            <svg x="1432" y="428" width="22" height="22" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z" fill="#00897b"/></svg>
+            <text class="n-label" x="1462" y="427">Expiry Alert Cron</text>
+            <text class="n-sub" x="1462" y="443">Background Service</text>
+          </g>
+
+          <g id="n-integration" data-layer="integration" data-tip="Other Pharaxis Apps&#10;QMS · Safety · CP Portal · MIMS · IEG&#10;Connected via REST when client requires" onclick="filterLayer(this)">
+            <rect x="1422" y="535" width="190" height="70" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="5 3" filter="url(#shadow)"/>
+            <svg x="1432" y="557" width="22" height="22" viewBox="0 0 24 24"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" fill="#64748b"/></svg>
+            <text class="n-label" x="1462" y="560">Other Pharaxis Apps</text>
+            <text class="n-sub" x="1462" y="576">QMS · Safety · CP Portal</text>
+            <text class="n-sub2" x="1462" y="591">Integration when required</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div id="tab-mims" class="tab-pane">
+      <div class="seq-guide">
+        <span class="sq-title">MIMS Sequence:</span>
+        <span class="sq-step">① Login</span><span class="sq-arr">→</span>
+        <span class="sq-step">② Multi-Org JWT</span><span class="sq-arr">→</span>
+        <span class="sq-step">③ Rate Limit</span><span class="sq-arr">→</span>
+        <span class="sq-step">④ Org Check</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑤ Route Handler</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑥ Case/CM/Admin</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑦ DB Query</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑧ Response</span>
+        <span class="sq-step" style="background:#fff1f2;border-color:#fecaca;color:#dc2626">✕ JWT fail → 401</span>
+        <span class="sq-step" style="background:#faf5ff;border-color:#e9d5ff;color:#6d28d9">⊕ SA routes → Admin Console</span>
+      </div>
+      <div class="card">
+        <svg id="svg-mims" viewBox="0 0 1720 700" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <defs>
+            <filter id="shadow-mims" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity=".12"/>
+            </filter>
+            <filter id="db-glow-mims" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="4" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <marker id="arrow-mims" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/></marker>
+            <marker id="arrow-mims-bi" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#3b82f6"/></marker>
+            <marker id="arrow-mims-err" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#ef4444"/></marker>
+          </defs>
+
+          <rect x="20" y="40" width="160" height="480" rx="14" fill="#fce4ec" opacity="0.4" stroke="#f48fb1"/>
+          <rect x="240" y="40" width="180" height="380" rx="14" fill="#e3f2fd" opacity="0.4" stroke="#90caf9"/>
+          <rect x="480" y="40" width="180" height="460" rx="14" fill="#fff8e1" opacity="0.4" stroke="#ffe082"/>
+          <rect x="660" y="180" width="180" height="160" rx="14" fill="#e8f5e9" opacity="0.4" stroke="#a5d6a7"/>
+          <rect x="875" y="40" width="310" height="610" rx="14" fill="none" stroke="#66bb6a" stroke-dasharray="6,4"/>
+          <rect x="1175" y="180" width="160" height="160" rx="14" fill="#fff3e0" opacity="0.5" stroke="#ffcc80"/>
+          <rect x="1420" y="40" width="260" height="580" rx="14" fill="#f3e5f5" opacity="0.3" stroke="#ce93d8"/>
+
+          <text class="zone-label" x="100" y="58">USER ROLES</text>
+          <text class="zone-label" x="300" y="58">FRONTEND</text>
+          <text class="zone-label" x="555" y="58">MIDDLEWARE</text>
+          <text class="zone-label" x="760" y="200">BACKEND</text>
+          <text class="zone-label" x="1025" y="58">FEATURE MODULES</text>
+          <text class="zone-label" x="1260" y="230">DATABASE</text>
+          <text class="zone-label" x="1560" y="58">EXTERNAL</text>
+
+          <path id="p-m-su-fe" d="M190,107 C225,107 240,112 260,112" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-org-fe" d="M190,227 C225,227 240,132 260,132" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-fe-cors" d="M420,112 C460,95 477,82 500,80" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-cors-jwt" d="M555,115 C555,140 555,158 555,180" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-jwt-rl" d="M555,244 C555,268 555,282 555,300" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-rl-org" d="M555,355 C555,378 555,402 555,420" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-org-be" d="M610,450 C648,390 672,320 695,272" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-be-feat" d="M825,268 C848,268 868,268 890,268" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-auth-mysql" class="edge-animated" d="M1160,268 C1172,268 1182,268 1195,268" stroke="#3b82f6" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arrow-mims-bi)"/>
+          <path id="p-m-mysql-be" class="edge-animated" d="M1195,252 C1100,248 990,252 825,258" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-be-resp" class="edge-animated" d="M760,290 C740,420 510,440 420,148" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-be-smtp" class="edge-animated" d="M825,255 C1152,172 1356,128 1440,107" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-be-argus" class="edge-animated" d="M825,260 C1152,230 1356,218 1440,227" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-be-veeva" class="edge-animated" d="M825,268 C1152,290 1356,340 1440,347" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-be-emir" class="edge-animated" d="M825,272 C1152,360 1356,460 1440,467" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-be-cron" class="edge-animated" d="M825,278 C1152,430 1356,568 1440,587" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-err-jwt" class="edge-animated" d="M500,208 C468,208 445,172 420,158" stroke="#ef4444" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arrow-mims-err)"/>
+          <path id="p-m-fe-ls" class="edge-animated" d="M370,168 C376,244 376,308 370,332" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-ls-fe" class="edge-animated" d="M312,332 C306,264 306,178 312,128" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-mims)"/>
+          <path id="p-m-be-sa" class="edge-animated" d="M825,248 C852,196 868,156 890,104" stroke="#818cf8" stroke-width="1.5" fill="none" stroke-dasharray="3,3" marker-end="url(#arrow-mims)"/>
+
+          <g id="n-m-superadmin" class="node" data-layer="userroles" data-tip="Superadmin\nPlatform-wide control" onclick="filterLayer(this)">
+            <rect x="40" y="80" width="110" height="55" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="95" y="100">Superadmin</text>
+            <text class="n-sub" x="95" y="116">Platform-wide</text>
+          </g>
+          <g id="n-m-orgadmin" class="node" data-layer="userroles" data-tip="Org admin\nPer-org access" onclick="filterLayer(this)">
+            <rect x="40" y="200" width="110" height="55" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="95" y="220">Org Admin</text>
+            <text class="n-sub" x="95" y="236">Per-org access</text>
+          </g>
+          <g id="n-m-caseuser" class="node" data-layer="userroles" data-tip="Case User\nSubmit cases" onclick="filterLayer(this)">
+            <rect x="40" y="320" width="110" height="55" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="95" y="340">Case User</text>
+            <text class="n-sub" x="95" y="356">Submit cases</text>
+          </g>
+          <g id="n-m-viewer" class="node" data-layer="userroles" data-tip="Viewer\nRead-only access" onclick="filterLayer(this)">
+            <rect x="40" y="440" width="110" height="55" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="95" y="460">Viewer</text>
+            <text class="n-sub" x="95" y="476">Read only</text>
+          </g>
+
+          <g id="n-m-frontend" class="node" data-layer="frontend" data-tip="React frontend on 5173" onclick="filterLayer(this)">
+            <rect x="260" y="80" width="110" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="88" width="20" height="20"/>
+            <text class="n-label" x="315" y="102">React Frontend</text>
+            <text class="n-sub" x="315" y="118">Port 5173</text>
+          </g>
+          <g id="n-m-vite" class="node" data-layer="frontend" data-tip="Vite dev server" onclick="filterLayer(this)">
+            <rect x="260" y="200" width="110" height="55" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <image href="https://cdn.simpleicons.org/vite/646cff" x="268" y="208" width="20" height="20"/>
+            <text class="n-label" x="315" y="222">Vite</text>
+            <text class="n-sub" x="315" y="238">Dev Server</text>
+          </g>
+          <g id="n-m-localstorage" class="node" data-layer="frontend" data-tip="Stores mims_token" onclick="filterLayer(this)">
+            <rect x="260" y="320" width="110" height="55" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="315" y="340">LocalStorage</text>
+            <text class="n-sub" x="315" y="356">mims_token</text>
+          </g>
+
+          <g id="n-m-cors" class="node" data-layer="middleware" data-tip="Origin filter" onclick="filterLayer(this)">
+            <rect x="500" y="60" width="110" height="55" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="555" y="80">CORS</text>
+            <text class="n-sub" x="555" y="96">Origin filter</text>
+          </g>
+          <g id="n-m-jwt" class="node" data-layer="middleware" data-tip="Verify and decode JWT" onclick="filterLayer(this)">
+            <rect x="500" y="180" width="110" height="64" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="555" y="200">JWT Middleware</text>
+            <text class="n-sub" x="555" y="216">Verify + Decode</text>
+            <text class="n-sub2" x="555" y="232">24h expiry</text>
+          </g>
+          <g id="n-m-ratelimit" class="node" data-layer="middleware" data-tip="10 requests per min on auth" onclick="filterLayer(this)">
+            <rect x="500" y="300" width="110" height="55" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="555" y="320">Rate Limiter</text>
+            <text class="n-sub" x="555" y="336">10 req/min auth</text>
+          </g>
+          <g id="n-m-orgcheck" class="node" data-layer="middleware" data-tip="requireOrg middleware" onclick="filterLayer(this)">
+            <rect x="500" y="420" width="110" height="55" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="555" y="440">Org Check</text>
+            <text class="n-sub" x="555" y="456">requireOrg middleware</text>
+          </g>
+
+          <g id="n-m-backend" class="node" data-layer="backend" data-tip="Node backend on 3000" onclick="filterLayer(this)">
+            <rect x="695" y="240" width="130" height="64" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <image href="https://cdn.simpleicons.org/nodedotjs/339933" x="703" y="248" width="20" height="20"/>
+            <text class="n-label" x="760" y="262">Node.js + Express</text>
+            <text class="n-sub" x="760" y="278">Port 3000</text>
+          </g>
+
+          <g id="n-m-admin" class="node" data-layer="modules" data-tip="Picklists, fields, workflow" onclick="filterLayer(this)">
+            <rect x="890" y="80" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1025" y="98">Admin Console</text>
+            <text class="n-sub" x="1025" y="114">Picklists · Fields · Workflow</text>
+          </g>
+          <g id="n-m-cases" class="node" data-layer="modules" data-tip="AE, PC, MI, contacts" onclick="filterLayer(this)">
+            <rect x="890" y="148" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1025" y="166">Case Management</text>
+            <text class="n-sub" x="1025" y="182">AE · PC · MI · Contacts</text>
+          </g>
+          <g id="n-m-cm" class="node" data-layer="modules" data-tip="Docs, FAQs, templates" onclick="filterLayer(this)">
+            <rect x="890" y="216" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1025" y="234">Content Mgmt</text>
+            <text class="n-sub" x="1025" y="250">Docs · FAQs · Templates</text>
+          </g>
+          <g id="n-m-reports" class="node" data-layer="modules" data-tip="27 reports and CSV export" onclick="filterLayer(this)">
+            <rect x="890" y="284" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1025" y="302">Reports</text>
+            <text class="n-sub" x="1025" y="318">27 reports · CSV export</text>
+          </g>
+          <g id="n-m-integ" class="node" data-layer="modules" data-tip="Argus, Veeva, EMIR" onclick="filterLayer(this)">
+            <rect x="890" y="352" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1025" y="370">Integrations</text>
+            <text class="n-sub" x="1025" y="386">Argus · Veeva · EMIR</text>
+          </g>
+          <g id="n-m-health" class="node" data-layer="modules" data-tip="Health endpoint" onclick="filterLayer(this)">
+            <rect x="890" y="420" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1025" y="438">Health Check</text>
+            <text class="n-sub" x="1025" y="454">GET /api/health</text>
+          </g>
+
+          <g id="n-m-mysql" class="node" data-layer="database" data-tip="pharaxis_mims_dev, 105 tables" onclick="filterLayer(this)">
+            <rect x="1195" y="240" width="130" height="72" rx="10" fill="#fff3e0" stroke="#ffcc80" stroke-width="1.5" filter="url(#db-glow-mims)"/>
+            <image href="https://cdn.simpleicons.org/mysql/4479a1" x="1203" y="248" width="22" height="22"/>
+            <text class="n-label" x="1260" y="265">MySQL 8.0</text>
+            <text class="n-sub" x="1260" y="281">pharaxis_mims_dev</text>
+            <text class="n-sub2" x="1260" y="297">105 tables</text>
+          </g>
+
+          <g id="n-m-smtp" class="node" data-layer="external" data-tip="SMTP notifications" onclick="filterLayer(this)">
+            <rect x="1440" y="80" width="240" height="55" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1560" y="100">SMTP</text>
+            <text class="n-sub" x="1560" y="116">Email notifications</text>
+          </g>
+          <g id="n-m-argus" class="node" data-layer="external" data-tip="Case export" onclick="filterLayer(this)">
+            <rect x="1440" y="200" width="240" height="55" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1560" y="220">Argus Safety</text>
+            <text class="n-sub" x="1560" y="236">Case export</text>
+          </g>
+          <g id="n-m-veeva" class="node" data-layer="external" data-tip="Content sync" onclick="filterLayer(this)">
+            <rect x="1440" y="320" width="240" height="55" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1560" y="340">Veeva Vault</text>
+            <text class="n-sub" x="1560" y="356">Content sync</text>
+          </g>
+          <g id="n-m-emir" class="node" data-layer="external" data-tip="Audit export" onclick="filterLayer(this)">
+            <rect x="1440" y="440" width="240" height="55" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1560" y="460">EMIR/TrackWise</text>
+            <text class="n-sub" x="1560" y="476">Audit export</text>
+          </g>
+
+          <g id="n-m-cron" class="node" data-layer="background" data-tip="Expiry alerts and scheduled reports" onclick="filterLayer(this)">
+            <rect x="1440" y="560" width="240" height="55" rx="10" fill="#e0f2f1" stroke="#80cbc4" stroke-width="1.5" filter="url(#shadow-mims)"/>
+            <text class="n-label" x="1560" y="580">Cron Jobs</text>
+            <text class="n-sub" x="1560" y="596">Expiry alerts · Reports</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div id="tab-cportal" class="tab-pane">
+      <div class="seq-guide">
+        <span class="sq-title">CP Portal Sequence:</span>
+        <span class="sq-step">① Admin/HCP Login</span><span class="sq-arr">→</span>
+        <span class="sq-step">② JWT Verify</span><span class="sq-arr">→</span>
+        <span class="sq-step">③ Feature Flag Check</span><span class="sq-arr">→</span>
+        <span class="sq-step">④ Route Handler</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑤ DB Query</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑥ Response</span>
+        <span class="sq-step" style="background:#faf5ff;border-color:#e9d5ff;color:#6d28d9">⊕ Translation → MyMemory</span>
+        <span class="sq-step" style="background:#faf5ff;border-color:#e9d5ff;color:#6d28d9">⊕ Semantic → AI Agent</span>
+      </div>
+      <div class="card">
+        <svg id="svg-cportal" viewBox="0 0 1720 680" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <defs>
+            <filter id="shadow-cp" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity=".12"/>
+            </filter>
+            <filter id="db-glow-cp" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="4" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <marker id="arrow-cp" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/></marker>
+            <marker id="arrow-cp-bi" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#3b82f6"/></marker>
+            <marker id="arrow-cp-err" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#ef4444"/></marker>
+          </defs>
+
+          <rect x="20" y="40" width="160" height="260" rx="14" fill="#fce4ec" opacity="0.4" stroke="#f48fb1"/>
+          <rect x="240" y="40" width="180" height="380" rx="14" fill="#e3f2fd" opacity="0.4" stroke="#90caf9"/>
+          <rect x="480" y="40" width="180" height="360" rx="14" fill="#fff8e1" opacity="0.4" stroke="#ffe082"/>
+          <rect x="660" y="170" width="180" height="180" rx="14" fill="#e8f5e9" opacity="0.4" stroke="#a5d6a7"/>
+          <rect x="875" y="40" width="310" height="420" rx="14" fill="none" stroke="#66bb6a" stroke-dasharray="6,4"/>
+          <rect x="1175" y="170" width="160" height="180" rx="14" fill="#fff3e0" opacity="0.5" stroke="#ffcc80"/>
+          <rect x="1420" y="40" width="260" height="560" rx="14" fill="#f3e5f5" opacity="0.3" stroke="#ce93d8"/>
+
+          <text class="zone-label" x="100" y="58">USER ROLES</text>
+          <text class="zone-label" x="300" y="58">FRONTEND</text>
+          <text class="zone-label" x="555" y="58">MIDDLEWARE</text>
+          <text class="zone-label" x="760" y="190">BACKEND</text>
+          <text class="zone-label" x="1025" y="58">FEATURE MODULES</text>
+          <text class="zone-label" x="1260" y="220">DATABASE</text>
+          <text class="zone-label" x="1560" y="58">EXTERNAL</text>
+
+          <path id="p-cp-admin-fe" d="M190,107 C225,107 240,112 260,112" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-hcp-fe" d="M190,227 C225,227 240,217 260,217" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-fe-cors" d="M420,112 C460,90 477,77 500,77" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-cors-jwt" d="M555,115 C555,140 555,158 555,180" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-jwt-ff" d="M555,240 C555,272 555,302 555,320" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-ff-be" d="M610,352 C648,312 672,272 695,248" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-be-feat" d="M825,248 C848,248 868,248 890,248" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-auth-mysql" class="edge-animated" d="M1160,248 C1172,248 1182,248 1195,248" stroke="#3b82f6" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arrow-cp-bi)"/>
+          <path id="p-cp-mysql-be" class="edge-animated" d="M1195,232 C1100,228 990,232 825,238" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-be-resp" class="edge-animated" d="M760,270 C740,408 510,430 420,148" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-be-trans" class="edge-animated" d="M825,238 C1152,160 1356,122 1440,107" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-be-smtp" class="edge-animated" d="M825,242 C1152,232 1356,228 1440,248" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-be-ai" class="edge-animated" d="M825,252 C1152,308 1356,372 1440,387" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-be-cron" class="edge-animated" d="M825,260 C1152,382 1356,498 1440,527" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-cp)"/>
+          <path id="p-cp-err-jwt" class="edge-animated" d="M500,200 C468,200 445,172 420,150" stroke="#ef4444" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arrow-cp-err)"/>
+
+          <g id="n-cp-admin" class="node" data-layer="userroles" data-tip="Admin panel internal staff" onclick="filterLayer(this)">
+            <rect x="40" y="80" width="110" height="55" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="95" y="100">Admin Panel</text>
+            <text class="n-sub" x="95" y="116">Internal staff</text>
+          </g>
+          <g id="n-cp-hcp" class="node" data-layer="userroles" data-tip="HCP or patient portal user" onclick="filterLayer(this)">
+            <rect x="40" y="200" width="110" height="55" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="95" y="220">HCP / Patient</text>
+            <text class="n-sub" x="95" y="236">Portal user</text>
+          </g>
+
+          <g id="n-cp-admin-fe" class="node" data-layer="frontend" data-tip="Admin frontend" onclick="filterLayer(this)">
+            <rect x="260" y="80" width="110" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="88" width="20" height="20"/>
+            <text class="n-label" x="315" y="102">Admin Frontend</text>
+            <text class="n-sub" x="315" y="118">Port 5174</text>
+          </g>
+          <g id="n-cp-portal-fe" class="node" data-layer="frontend" data-tip="Client portal route" onclick="filterLayer(this)">
+            <rect x="260" y="200" width="110" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="208" width="20" height="20"/>
+            <text class="n-label" x="315" y="222">Client Portal</text>
+            <text class="n-sub" x="315" y="238">/portal/:clientCode</text>
+          </g>
+          <g id="n-cp-ls" class="node" data-layer="frontend" data-tip="Stores cp_admin_token" onclick="filterLayer(this)">
+            <rect x="260" y="340" width="110" height="55" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="315" y="360">LocalStorage</text>
+            <text class="n-sub" x="315" y="376">cp_admin_token</text>
+          </g>
+
+          <g id="n-cp-cors" class="node" data-layer="middleware" data-tip="Origin filter" onclick="filterLayer(this)">
+            <rect x="500" y="60" width="110" height="55" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="555" y="80">CORS</text>
+            <text class="n-sub" x="555" y="96">Origin filter</text>
+          </g>
+          <g id="n-cp-jwt" class="node" data-layer="middleware" data-tip="JWT for admin and portal" onclick="filterLayer(this)">
+            <rect x="500" y="180" width="110" height="64" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="555" y="200">JWT Middleware</text>
+            <text class="n-sub" x="555" y="216">Admin + Portal</text>
+          </g>
+          <g id="n-cp-featflag" class="node" data-layer="middleware" data-tip="cp_features per client" onclick="filterLayer(this)">
+            <rect x="500" y="320" width="110" height="55" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="555" y="340">Feature Flags</text>
+            <text class="n-sub" x="555" y="356">cp_features per client</text>
+          </g>
+
+          <g id="n-cp-backend" class="node" data-layer="backend" data-tip="CP backend" onclick="filterLayer(this)">
+            <rect x="695" y="220" width="130" height="64" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <image href="https://cdn.simpleicons.org/nodedotjs/339933" x="703" y="228" width="20" height="20"/>
+            <text class="n-label" x="760" y="242">Node.js + Express</text>
+            <text class="n-sub" x="760" y="258">Port 4000</text>
+          </g>
+
+          <g id="n-cp-clients" class="node" data-layer="modules" data-tip="Branding and config" onclick="filterLayer(this)">
+            <rect x="890" y="80" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="1025" y="98">Client Mgmt</text>
+            <text class="n-sub" x="1025" y="114">Branding · Config</text>
+          </g>
+          <g id="n-cp-content" class="node" data-layer="modules" data-tip="News alerts FAQs" onclick="filterLayer(this)">
+            <rect x="890" y="148" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="1025" y="166">Portal Content</text>
+            <text class="n-sub" x="1025" y="182">News · Alerts · FAQs</text>
+          </g>
+          <g id="n-cp-submissions" class="node" data-layer="modules" data-tip="Medical enquiry submissions" onclick="filterLayer(this)">
+            <rect x="890" y="216" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="1025" y="234">Submissions</text>
+            <text class="n-sub" x="1025" y="250">MI enquiries</text>
+          </g>
+          <g id="n-cp-procexp" class="node" data-layer="modules" data-tip="47 process flows" onclick="filterLayer(this)">
+            <rect x="890" y="284" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="1025" y="302">Process Explorer</text>
+            <text class="n-sub" x="1025" y="318">47 flows · Live feed</text>
+          </g>
+          <g id="n-cp-health" class="node" data-layer="modules" data-tip="Health endpoint" onclick="filterLayer(this)">
+            <rect x="890" y="352" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="1025" y="370">Health Check</text>
+            <text class="n-sub" x="1025" y="386">GET /api/health</text>
+          </g>
+
+          <g id="n-cp-mysql" class="node" data-layer="database" data-tip="pharaxis_cp_portal_dev, 34 tables" onclick="filterLayer(this)">
+            <rect x="1195" y="220" width="130" height="72" rx="10" fill="#fff3e0" stroke="#ffcc80" stroke-width="1.5" filter="url(#db-glow-cp)"/>
+            <image href="https://cdn.simpleicons.org/mysql/4479a1" x="1203" y="228" width="22" height="22"/>
+            <text class="n-label" x="1260" y="245">MySQL 8.0</text>
+            <text class="n-sub" x="1260" y="261">pharaxis_cp_portal_dev</text>
+            <text class="n-sub2" x="1260" y="277">34 tables</text>
+          </g>
+
+          <g id="n-cp-mymemory" class="node" data-layer="external" data-tip="Auto-translation API" onclick="filterLayer(this)">
+            <rect x="1440" y="80" width="240" height="62" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="1560" y="102">MyMemory API</text>
+            <text class="n-sub" x="1560" y="118">Auto-Translation</text>
+            <text class="n-sub2" x="1560" y="132">EN FR DE ES JA ZH</text>
+          </g>
+          <g id="n-cp-smtp" class="node" data-layer="external" data-tip="SMTP portal notifications" onclick="filterLayer(this)">
+            <rect x="1440" y="220" width="240" height="55" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="1560" y="240">SMTP</text>
+            <text class="n-sub" x="1560" y="256">Portal notifications</text>
+          </g>
+          <g id="n-cp-aiagent" class="node" data-layer="external" data-tip="Semantic search agent" onclick="filterLayer(this)">
+            <rect x="1440" y="360" width="240" height="62" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="1560" y="382">Pharaxis AI Agent</text>
+            <text class="n-sub" x="1560" y="398">Semantic search</text>
+            <text class="n-sub2" x="1560" y="412">Port 6000</text>
+          </g>
+
+          <g id="n-cp-cron" class="node" data-layer="background" data-tip="30-day log purge" onclick="filterLayer(this)">
+            <rect x="1440" y="500" width="240" height="55" rx="10" fill="#e0f2f1" stroke="#80cbc4" stroke-width="1.5" filter="url(#shadow-cp)"/>
+            <text class="n-label" x="1560" y="520">Cron Jobs</text>
+            <text class="n-sub" x="1560" y="536">30-day log purge</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div id="tab-aiagent" class="tab-pane">
+      <div class="seq-guide">
+        <span class="sq-title">AI Agent Sequence:</span>
+        <span class="sq-step">① Suite App Request</span><span class="sq-arr">→</span>
+        <span class="sq-step">② Internal Token Auth</span><span class="sq-arr">→</span>
+        <span class="sq-step">③ AES-256 Key Decrypt</span><span class="sq-arr">→</span>
+        <span class="sq-step">④ Prompt Builder</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑤ Adapter Factory</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑥ Provider Call (BYOK)</span><span class="sq-arr">→</span>
+        <span class="sq-step">⑦ Response</span>
+        <span class="sq-step" style="background:#faf5ff;border-color:#e9d5ff;color:#6d28d9">⊕ Key stored AES-256</span>
+        <span class="sq-step" style="background:#fff1f2;border-color:#fecaca;color:#dc2626">✕ Auth fail → 401</span>
+      </div>
+      <div class="card">
+        <svg id="svg-aiagent" viewBox="0 0 1720 720" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <defs>
+            <filter id="shadow-ai" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity=".12"/>
+            </filter>
+            <filter id="db-glow-ai" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="4" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <marker id="arrow-ai" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/></marker>
+            <marker id="arrow-ai-bi" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#3b82f6"/></marker>
+            <marker id="arrow-ai-err" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#ef4444"/></marker>
+          </defs>
+
+          <rect x="20" y="40" width="160" height="380" rx="14" fill="#fce4ec" opacity="0.4" stroke="#f48fb1"/>
+          <rect x="240" y="40" width="180" height="300" rx="14" fill="#e3f2fd" opacity="0.4" stroke="#90caf9"/>
+          <rect x="480" y="40" width="180" height="420" rx="14" fill="#fff8e1" opacity="0.4" stroke="#ffe082"/>
+          <rect x="660" y="170" width="180" height="180" rx="14" fill="#e8f5e9" opacity="0.4" stroke="#a5d6a7"/>
+          <rect x="875" y="40" width="310" height="340" rx="14" fill="none" stroke="#66bb6a" stroke-dasharray="6,4"/>
+          <rect x="875" y="400" width="310" height="200" rx="14" fill="none" stroke="#a78bfa" stroke-dasharray="6,4"/>
+          <rect x="1175" y="240" width="160" height="180" rx="14" fill="#fff3e0" opacity="0.5" stroke="#ffcc80"/>
+          <rect x="1420" y="40" width="260" height="650" rx="14" fill="#f3e5f5" opacity="0.3" stroke="#ce93d8"/>
+
+          <text class="zone-label" x="100" y="58">USER ROLES</text>
+          <text class="zone-label" x="300" y="58">FRONTEND</text>
+          <text class="zone-label" x="555" y="58">MIDDLEWARE</text>
+          <text class="zone-label" x="760" y="190">BACKEND</text>
+          <text class="zone-label" x="1025" y="58">CORE ENGINE</text>
+          <text class="zone-label" x="1025" y="418">PROVIDER LAYER</text>
+          <text class="zone-label" x="1260" y="260">DATABASE</text>
+          <text class="zone-label" x="1560" y="58">EXTERNAL PROVIDERS</text>
+          <rect x="900" y="432" width="260" height="22" rx="11" fill="#ede9fe" stroke="#c4b5fd"/>
+          <text x="1030" y="447" font-size="10" fill="#6d28d9" text-anchor="middle" font-weight="700">BYOK — client brings own API key · Pharaxis bears zero cost</text>
+
+          <path id="p-ai-superadmin-fe" d="M190,107 C225,107 240,107 260,107" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-consumer-be" d="M190,367 C350,350 550,310 695,255" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-fe-cors" d="M420,107 C460,90 477,77 500,77" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-cors-iauth" d="M555,115 C555,148 555,178 555,200" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-iauth-keyres" d="M555,260 C555,298 555,338 555,360" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-keyres-be" d="M610,388 C648,348 672,298 695,255" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-be-engine" d="M825,248 C848,248 868,248 890,248" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-engine-adapter" d="M1025,340 C1025,372 1025,400 1025,420" stroke="#94a3b8" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-adapter-openai" class="edge-animated" d="M1165,440 C1300,440 1380,240 1440,200" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-adapter-claude" class="edge-animated" d="M1165,450 C1300,450 1380,370 1440,350" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-adapter-gemini" class="edge-animated" d="M1165,460 C1300,460 1380,455 1440,455" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-be-mysql" class="edge-animated" d="M825,262 C1020,270 1120,275 1195,282" stroke="#3b82f6" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arrow-ai-bi)"/>
+          <path id="p-ai-mysql-be" class="edge-animated" d="M1195,268 C1120,262 1020,258 825,250" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-resp-consumer" class="edge-animated" d="M760,272 C740,378 450,400 190,378" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="6,4" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-key-keyvault" class="edge-animated" d="M825,258 C1300,402 1380,488 1440,527" stroke="#818cf8" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arrow-ai)"/>
+          <path id="p-ai-err-auth" class="edge-animated" d="M500,220 C468,220 448,178 420,158" stroke="#ef4444" stroke-width="1.5" fill="none" stroke-dasharray="4,3" marker-end="url(#arrow-ai-err)"/>
+
+          <g id="n-ai-superadmin" class="node" data-layer="userroles" data-tip="Superadmin with platform-wide access" onclick="filterLayer(this)">
+            <rect x="40" y="80" width="110" height="55" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="95" y="100">Superadmin</text>
+            <text class="n-sub" x="95" y="116">Platform-wide</text>
+          </g>
+          <g id="n-ai-orgadmin" class="node" data-layer="userroles" data-tip="Org admin configures BYOK" onclick="filterLayer(this)">
+            <rect x="40" y="200" width="110" height="55" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="95" y="220">Org Admin</text>
+            <text class="n-sub" x="95" y="236">BYOK config</text>
+          </g>
+          <g id="n-ai-consumer" class="node" data-layer="userroles" data-tip="Suite apps consume AI APIs" onclick="filterLayer(this)">
+            <rect x="40" y="340" width="110" height="55" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="95" y="360">Suite App</text>
+            <text class="n-sub" x="95" y="376">MIMS · Vault · CP Portal</text>
+          </g>
+
+          <g id="n-ai-adminfe" class="node" data-layer="frontend" data-tip="Admin panel" onclick="filterLayer(this)">
+            <rect x="260" y="80" width="110" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="88" width="20" height="20"/>
+            <text class="n-label" x="315" y="102">Admin Panel</text>
+            <text class="n-sub" x="315" y="118">Port 5175</text>
+          </g>
+          <g id="n-ai-widget" class="node" data-layer="frontend" data-tip="Embeddable agent widget" onclick="filterLayer(this)">
+            <rect x="260" y="240" width="110" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="248" width="20" height="20"/>
+            <text class="n-label" x="315" y="262">Agent Widget</text>
+            <text class="n-sub" x="315" y="278">Embeddable component</text>
+          </g>
+
+          <g id="n-ai-cors" class="node" data-layer="middleware" data-tip="Only suite apps allowed" onclick="filterLayer(this)">
+            <rect x="500" y="60" width="110" height="55" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="555" y="80">CORS</text>
+            <text class="n-sub" x="555" y="96">Suite apps allowed</text>
+          </g>
+          <g id="n-ai-internalauth" class="node" data-layer="middleware" data-tip="Internal service token" onclick="filterLayer(this)">
+            <rect x="500" y="200" width="110" height="64" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="555" y="220">Internal Auth</text>
+            <text class="n-sub" x="555" y="236">Service token</text>
+          </g>
+          <g id="n-ai-keyresolver" class="node" data-layer="middleware" data-tip="AES-256 key decryption" onclick="filterLayer(this)">
+            <rect x="500" y="360" width="110" height="55" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="555" y="380">Key Resolver</text>
+            <text class="n-sub" x="555" y="396">AES-256 decrypt</text>
+          </g>
+
+          <g id="n-ai-backend" class="node" data-layer="backend" data-tip="AI backend" onclick="filterLayer(this)">
+            <rect x="695" y="220" width="130" height="64" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <image href="https://cdn.simpleicons.org/nodedotjs/339933" x="703" y="228" width="20" height="20"/>
+            <text class="n-label" x="760" y="242">Node.js + Express</text>
+            <text class="n-sub" x="760" y="258">Port 6000</text>
+          </g>
+
+          <g id="n-ai-promptbuilder" class="node" data-layer="modules" data-tip="Prompt templates per query type" onclick="filterLayer(this)">
+            <rect x="890" y="80" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="1025" y="98">Prompt Builder</text>
+            <text class="n-sub" x="1025" y="114">Per query_type</text>
+          </g>
+          <g id="n-ai-query" class="node" data-layer="modules" data-tip="Main query endpoint" onclick="filterLayer(this)">
+            <rect x="890" y="148" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="1025" y="166">Query Engine</text>
+            <text class="n-sub" x="1025" y="182">POST /api/v1/agent/query</text>
+          </g>
+          <g id="n-ai-formatter" class="node" data-layer="modules" data-tip="Standard response format" onclick="filterLayer(this)">
+            <rect x="890" y="216" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="1025" y="234">Response Formatter</text>
+            <text class="n-sub" x="1025" y="250">Standardised shape</text>
+          </g>
+          <g id="n-ai-cache" class="node" data-layer="modules" data-tip="Phase 2 cache" onclick="filterLayer(this)">
+            <rect x="890" y="284" width="270" height="48" rx="8" fill="#f1f8e9" stroke="#aed581" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="1025" y="302">Cache (Phase 2)</text>
+            <text class="n-sub" x="1025" y="318">Token reduction</text>
+          </g>
+
+          <g id="n-ai-adapter" class="node" data-layer="modules" data-tip="Provider adapter factory" onclick="filterLayer(this)">
+            <rect x="890" y="420" width="270" height="48" rx="8" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="1025" y="438">Adapter Factory</text>
+            <text class="n-sub" x="1025" y="454">Provider switch</text>
+          </g>
+          <g id="n-ai-chunker" class="node" data-layer="modules" data-tip="Large-document chunking" onclick="filterLayer(this)">
+            <rect x="890" y="488" width="270" height="48" rx="8" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="1025" y="506">Chunker (Phase 2)</text>
+            <text class="n-sub" x="1025" y="522">Large doc handling</text>
+          </g>
+
+          <g id="n-ai-mysql" class="node" data-layer="database" data-tip="pharaxis_ai_agent_dev, 3 tables" onclick="filterLayer(this)">
+            <rect x="1195" y="280" width="130" height="72" rx="10" fill="#fff3e0" stroke="#ffcc80" stroke-width="1.5" filter="url(#db-glow-ai)"/>
+            <image href="https://cdn.simpleicons.org/mysql/4479a1" x="1203" y="288" width="22" height="22"/>
+            <text class="n-label" x="1260" y="305">MySQL 8.0</text>
+            <text class="n-sub" x="1260" y="321">pharaxis_ai_agent_dev</text>
+            <text class="n-sub2" x="1260" y="337">3 tables</text>
+          </g>
+
+          <g id="n-ai-openai" class="node" data-layer="external" data-tip="OpenAI provider via BYOK" onclick="filterLayer(this)">
+            <rect x="1440" y="80" width="240" height="62" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <image href="https://cdn.simpleicons.org/openai/412991" x="1450" y="88" width="22" height="22"/>
+            <text class="n-label" x="1560" y="102">OpenAI</text>
+            <text class="n-sub" x="1560" y="118">GPT-4o · BYOK</text>
+          </g>
+          <g id="n-ai-claude" class="node" data-layer="external" data-tip="Anthropic provider via BYOK" onclick="filterLayer(this)">
+            <rect x="1440" y="220" width="240" height="62" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <svg x="1450" y="228" width="22" height="22" viewBox="0 0 22 22">
+              <circle cx="11" cy="11" r="10" fill="#7c3aed"/>
+              <text x="11" y="15" font-size="12" text-anchor="middle" fill="#ffffff" font-weight="700">A</text>
+            </svg>
+            <text class="n-label" x="1560" y="242">Anthropic Claude</text>
+            <text class="n-sub" x="1560" y="258">claude-3 · BYOK</text>
+          </g>
+          <g id="n-ai-gemini" class="node" data-layer="external" data-tip="Gemini provider via BYOK" onclick="filterLayer(this)">
+            <rect x="1440" y="360" width="240" height="62" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <image href="https://cdn.simpleicons.org/google/4285f4" x="1450" y="368" width="22" height="22"/>
+            <text class="n-label" x="1560" y="382">Google Gemini</text>
+            <text class="n-sub" x="1560" y="398">gemini-pro · BYOK</text>
+          </g>
+          <g id="n-ai-keyvault" class="node" data-layer="external" data-tip="Encrypted key store" onclick="filterLayer(this)">
+            <rect x="1440" y="500" width="240" height="62" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="1560" y="522">AES-256 Key Store</text>
+            <text class="n-sub" x="1560" y="538">Encrypted at rest</text>
+            <text class="n-sub2" x="1560" y="552">DB: encrypted_key</text>
+          </g>
+          <g id="n-ai-phase2" class="node" data-layer="background" data-tip="Phase 2 extension points" onclick="filterLayer(this)">
+            <rect x="1440" y="600" width="240" height="62" rx="10" fill="#e0f2f1" stroke="#80cbc4" stroke-width="1.5" filter="url(#shadow-ai)"/>
+            <text class="n-label" x="1560" y="622">Phase 2 Hooks</text>
+            <text class="n-sub" x="1560" y="638">Cache · Chunker · Templates</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div id="tab-qms" class="tab-pane">
+      <div class="card">
+        <div class="coming-soon-card">
+          <div class="cs-icon">🏗</div>
+          <h2>QMS — Quality Management System</h2>
+          <p>SOPs · Validation · Document Control · Audit Trails</p>
+          <div class="cs-stack"><span>Node.js</span><span>React</span><span>PostgreSQL</span><span>Express</span></div>
+          <div class="cs-status">Architecture diagram coming in Sprint 2</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-safety" class="tab-pane">
+      <div class="card">
+        <div class="coming-soon-card">
+          <div class="cs-icon">🏗</div>
+          <h2>Safety — Pharmacovigilance Platform</h2>
+          <p>Argus-equivalent · Safety reporting · Case management · Regulatory submissions</p>
+          <div class="cs-stack"><span>Node.js</span><span>React</span><span>MySQL</span><span>Express</span></div>
+          <div class="cs-status">Architecture diagram coming in Sprint 2</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-ieg" class="tab-pane">
+      <div class="card">
+        <div class="coming-soon-card">
+          <div class="cs-icon">🏗</div>
+          <h2>IEG — Investigator-Initiated Trials &amp; Grants</h2>
+          <p>Investigator-Initiated Trials · Early Access Programs · Grants management</p>
+          <div class="cs-stack"><span>Node.js</span><span>React</span><span>MySQL</span><span>Express</span></div>
+          <div class="cs-status">Architecture diagram coming in Sprint 2</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tip"></div>
+
+  <script>
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const XLINK_NS = "http://www.w3.org/1999/xlink";
+
+    let animPaused = false;
+    let activeTab = "vault";
+    let activeFilter = null;
+    const tabIntervals = {};
+
+    const TAB_CYCLES = { vault:6500, mims:6500, cportal:7000, aiagent:7500 };
+    const tabSequences = {};
+
+    function normLayer(v) {
+      return (v || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+
+    function getActiveSvg() {
+      return document.getElementById("svg-" + activeTab);
+    }
+
+    function clearActiveSvgFilter() {
+      const svg = getActiveSvg();
+      if (!svg) return;
+      svg.querySelectorAll("[data-layer]").forEach(n => n.classList.remove("node-dim", "node-highlight"));
+    }
+
+    function switchTab(name) {
+      if (name === activeTab) return;
+      if (tabIntervals[activeTab]) { clearInterval(tabIntervals[activeTab]); delete tabIntervals[activeTab]; }
+      resetFilter();
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+      document.querySelectorAll(".tab-pane").forEach(p => p.classList.toggle("active", p.id === "tab-" + name));
+      activeTab = name;
+      const fn = tabSequences[name];
+      if (fn && !animPaused) { fn(); tabIntervals[name] = setInterval(fn, TAB_CYCLES[name] || 6500); }
+    }
+
+    function toggleAnim() {
+      animPaused = !animPaused;
+      const btn = document.getElementById("btnAnim");
+      if (animPaused) {
+        btn.textContent = "▶ Resume";
+        btn.classList.add("paused");
+        if (tabIntervals[activeTab]) {
+          clearInterval(tabIntervals[activeTab]);
+          delete tabIntervals[activeTab];
+        }
+      } else {
+        btn.textContent = "⏸ Pause";
+        btn.classList.remove("paused");
+        const fn = tabSequences[activeTab];
+        if (fn) {
+          fn();
+          tabIntervals[activeTab] = setInterval(fn, TAB_CYCLES[activeTab] || 6500);
+        }
+      }
+    }
+
+    function toggleDark() {
+      document.body.classList.toggle("dark");
+      const btn = document.getElementById("btnDark");
+      btn.textContent = document.body.classList.contains("dark") ? "☀️ Light Mode" : "🌙 Dark Mode";
+    }
+
+    function filterLayer(source) {
+      const layer = normLayer((source && source.dataset && (source.dataset.filter || source.dataset.layer)) || "");
+      if (!layer) return;
+
+      const svg = getActiveSvg();
+      if (!svg) return;
+
+      const pills = document.querySelectorAll("#layerLegend .pill");
+      const nodes = svg.querySelectorAll("[data-layer]");
+
+      if (activeFilter === layer) {
+        resetFilter();
+        return;
+      }
+
+      activeFilter = layer;
+      pills.forEach(p => {
+        const match = normLayer(p.dataset.filter) === layer;
+        p.classList.toggle("active-filter", match);
+        p.classList.toggle("dimmed", !match);
+      });
+
+      nodes.forEach(n => {
+        const match = normLayer(n.dataset.layer) === layer;
+        n.classList.toggle("node-dim", !match);
+        n.classList.toggle("node-highlight", match);
+      });
+    }
+
+    function resetFilter() {
+      activeFilter = null;
+      document.querySelectorAll("#layerLegend .pill").forEach(p => p.classList.remove("active-filter", "dimmed"));
+      clearActiveSvgFilter();
+    }
+
+    function exportSVG() {
+      const svg = document.getElementById("svg-" + activeTab);
+      if (!svg) return;
+      const data = new XMLSerializer().serializeToString(svg);
+      const blob = new Blob([data], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "pharaxis-" + activeTab + "-architecture.svg";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function spawnDot(pathId, color, dur, svgId) {
+      if (animPaused) return;
+      const svgEl = document.getElementById(svgId || ("svg-" + activeTab));
+      const path = document.getElementById(pathId);
+      if (!path || !svgEl) return;
+      const dot = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      dot.setAttribute("r","5");
+      dot.setAttribute("fill", color);
+      dot.setAttribute("opacity","0.9");
+      const anim = document.createElementNS("http://www.w3.org/2000/svg","animateMotion");
+      anim.setAttribute("dur", dur + "ms");
+      anim.setAttribute("repeatCount","1");
+      anim.setAttribute("fill","freeze");
+      const mpath = document.createElementNS("http://www.w3.org/2000/svg","mpath");
+      mpath.setAttributeNS("http://www.w3.org/1999/xlink","href","#" + pathId);
+      anim.appendChild(mpath);
+      dot.appendChild(anim);
+      svgEl.appendChild(dot);
+      setTimeout(() => { if (dot.parentNode) dot.parentNode.removeChild(dot); }, dur + 200);
+    }
+
+    const VAULT_SEQUENCE = [
+      { id:"p-sa-fe", color:"#3b82f6", delay:0, dur:700 },
+      { id:"p-fe-cors", color:"#3b82f6", delay:580, dur:480 },
+      { id:"p-cors-jwt", color:"#3b82f6", delay:950, dur:380 },
+      { id:"p-jwt-role", color:"#3b82f6", delay:1240, dur:380 },
+      { id:"p-role-be", color:"#3b82f6", delay:1520, dur:400 },
+      { id:"p-be-feat", color:"#3b82f6", delay:1820, dur:350 },
+      { id:"p-auth-mysql", color:"#3b82f6", delay:2080, dur:580 },
+      { id:"p-mysql-be", color:"#94a3b8", delay:2560, dur:560 },
+      { id:"p-be-resp", color:"#94a3b8", delay:3020, dur:820 },
+      { id:"p-be-email", color:"#7c3aed", delay:2100, dur:700 },
+      { id:"p-be-ai", color:"#7c3aed", delay:2200, dur:700 },
+      { id:"p-be-cron", color:"#009688", delay:3600, dur:800 },
+      { id:"p-err-jwt", color:"#ef4444", delay:4000, dur:500 },
+      { id:"p-be-sa", color:"#818cf8", delay:1850, dur:420 },
+      { id:"p-content-mysql", color:"#f97316", delay:2120, dur:500 },
+      { id:"p-search-mysql", color:"#f97316", delay:2160, dur:460 }
+    ];
+
+    tabSequences.vault = function() {
+      VAULT_SEQUENCE.forEach(step => {
+        setTimeout(() => spawnDot(step.id, step.color, step.dur, "svg-vault"), step.delay);
+      });
+    };
+
+    tabSequences.mims = function() {
+      [ { id:"p-m-su-fe", color:"#3b82f6", delay:0, dur:650 },
+        { id:"p-m-fe-cors", color:"#3b82f6", delay:550, dur:450 },
+        { id:"p-m-cors-jwt", color:"#3b82f6", delay:900, dur:380 },
+        { id:"p-m-jwt-rl", color:"#3b82f6", delay:1180, dur:320 },
+        { id:"p-m-rl-org", color:"#3b82f6", delay:1400, dur:320 },
+        { id:"p-m-org-be", color:"#3b82f6", delay:1620, dur:420 },
+        { id:"p-m-be-feat", color:"#3b82f6", delay:1940, dur:350 },
+        { id:"p-m-auth-mysql", color:"#3b82f6", delay:2200, dur:560 },
+        { id:"p-m-mysql-be", color:"#94a3b8", delay:2660, dur:520 },
+        { id:"p-m-be-resp", color:"#94a3b8", delay:3080, dur:800 },
+        { id:"p-m-be-smtp", color:"#7c3aed", delay:2100, dur:700 },
+        { id:"p-m-be-argus", color:"#7c3aed", delay:2200, dur:700 },
+        { id:"p-m-be-cron", color:"#009688", delay:3600, dur:800 },
+        { id:"p-m-err-jwt", color:"#ef4444", delay:4200, dur:480 },
+        { id:"p-m-be-sa", color:"#818cf8", delay:1860, dur:400 }
+      ].forEach(s => setTimeout(() => spawnDot(s.id, s.color, s.dur, "svg-mims"), s.delay));
+    };
+
+    tabSequences.cportal = function() {
+      [ { id:"p-cp-admin-fe", color:"#3b82f6", delay:0, dur:650 },
+        { id:"p-cp-fe-cors", color:"#3b82f6", delay:540, dur:450 },
+        { id:"p-cp-cors-jwt", color:"#3b82f6", delay:890, dur:360 },
+        { id:"p-cp-jwt-ff", color:"#3b82f6", delay:1150, dur:320 },
+        { id:"p-cp-ff-be", color:"#3b82f6", delay:1370, dur:400 },
+        { id:"p-cp-be-feat", color:"#3b82f6", delay:1670, dur:330 },
+        { id:"p-cp-auth-mysql", color:"#3b82f6", delay:1920, dur:560 },
+        { id:"p-cp-mysql-be", color:"#94a3b8", delay:2380, dur:520 },
+        { id:"p-cp-be-resp", color:"#94a3b8", delay:2800, dur:780 },
+        { id:"p-cp-be-trans", color:"#7c3aed", delay:2000, dur:700 },
+        { id:"p-cp-be-ai", color:"#7c3aed", delay:2100, dur:680 },
+        { id:"p-cp-be-cron", color:"#009688", delay:3400, dur:800 },
+        { id:"p-cp-err-jwt", color:"#ef4444", delay:4000, dur:480 }
+      ].forEach(s => setTimeout(() => spawnDot(s.id, s.color, s.dur, "svg-cportal"), s.delay));
+    };
+
+    tabSequences.aiagent = function() {
+      [ { id:"p-ai-consumer-be", color:"#3b82f6", delay:0, dur:700 },
+        { id:"p-ai-cors-iauth", color:"#3b82f6", delay:600, dur:380 },
+        { id:"p-ai-iauth-keyres", color:"#3b82f6", delay:880, dur:360 },
+        { id:"p-ai-keyres-be", color:"#3b82f6", delay:1140, dur:420 },
+        { id:"p-ai-be-engine", color:"#3b82f6", delay:1460, dur:380 },
+        { id:"p-ai-be-mysql", color:"#f97316", delay:1740, dur:520 },
+        { id:"p-ai-mysql-be", color:"#94a3b8", delay:2160, dur:480 },
+        { id:"p-ai-adapter-openai", color:"#7c3aed", delay:2540, dur:700 },
+        { id:"p-ai-adapter-claude", color:"#7c3aed", delay:2640, dur:700 },
+        { id:"p-ai-resp-consumer", color:"#94a3b8", delay:3340, dur:820 },
+        { id:"p-ai-key-keyvault", color:"#818cf8", delay:1800, dur:600 },
+        { id:"p-ai-err-auth", color:"#ef4444", delay:4400, dur:480 }
+      ].forEach(s => setTimeout(() => spawnDot(s.id, s.color, s.dur, "svg-aiagent"), s.delay));
+    };
+
+    const tip = document.getElementById("tip");
+    let tipVisible = false;
+
+    function showTip(text) {
+      tip.textContent = text || "";
+      tip.style.opacity = "1";
+      tipVisible = true;
+    }
+
+    function hideTip() {
+      tip.style.opacity = "0";
+      tipVisible = false;
+    }
+
+    document.addEventListener("mousemove", (e) => {
+      if (!tipVisible) return;
+      tip.style.left = (e.clientX + 14) + "px";
+      tip.style.top = (e.clientY + 14) + "px";
+    });
+
+    document.querySelectorAll("[data-tip]").forEach(el => {
+      el.addEventListener("mouseenter", () => showTip(el.dataset.tip));
+      el.addEventListener("mouseleave", hideTip);
+    });
+
+    tabSequences.vault && tabSequences.vault();
+    tabIntervals.vault = setInterval(tabSequences.vault, TAB_CYCLES.vault);
+  </script>
+</body>
+</html>

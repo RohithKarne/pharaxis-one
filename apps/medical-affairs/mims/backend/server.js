@@ -36,7 +36,7 @@ const { startScheduler, stopScheduler } = require('./services/scheduler');
 const rateLimit = require('express-rate-limit');
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000,
+  max: process.env.NODE_ENV === 'production' ? 10 : 100000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts. Please try again after 15 minutes.' },

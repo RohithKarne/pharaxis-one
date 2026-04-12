@@ -85,7 +85,7 @@ flowchart LR
 | Medical Affairs | MIMS | `apps/medical-affairs/mims` | `pharaxis_mims_dev` | Active |
 | Medical Affairs | CP Portal | `apps/medical-affairs/cp-portal` | `pharaxis_cp_portal_dev` | Active |
 | Medical Affairs | IEG | `apps/medical-affairs/ieg` | `pharaxis_ieg_dev` | Planned/Scaffold |
-| Medical Affairs | Publications | `apps/medical-affairs/publications` | `pharaxis_publications_dev` | Planned/Scaffold |
+| Medical Affairs | Publications | `apps/medical-affairs/publications` | `pharaxis_publications_dev` | Active (Sprint 1 kickoff baseline) |
 | Vault | Vault | `apps/vault` | `pharaxis_vault_dev` | Active |
 | QMS | QMS | `apps/qms` | `qms_dev` (PostgreSQL, configurable via `DATABASE_URL`) | Active (Sprint 1 complete) |
 | Safety | Safety | `apps/safety` | `pharaxis_safety_dev` | Active (Sprint 1 and Sprint 2 complete) |

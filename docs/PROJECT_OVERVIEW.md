@@ -9,6 +9,7 @@ Pharaxis-One groups medical-affairs and platform products into a single operatio
 ### 1) Medical Affairs
 - **MIMS**: Core system for inquiry/case lifecycle, admin workflows, process telemetry, and operational reporting.
 - **CP Portal**: Client/public interaction layer for submissions, documents, and content delivery.
+- **Publications**: Multi-tenant publication lifecycle management for concept, review, submission, and compliance tracking.
 
 ### 2) Platform Services
 - **AI-Agent**: Provider-integrated AI service layer (OpenAI/Claude/Gemini adapters) with usage/config administration.
@@ -24,6 +25,7 @@ Pharaxis-One groups medical-affairs and platform products into a single operatio
 |---|---|
 | MIMS | Active and extensive implementation |
 | CP Portal | Implemented and maintained |
+| Publications | Sprint 1 kickoff baseline added in repo |
 | AI-Agent | Implemented and evolving |
 | Vault | Implemented foundational modules |
 | QMS | Sprint 1 completed and active in repo |
@@ -32,7 +34,7 @@ Pharaxis-One groups medical-affairs and platform products into a single operatio
 ## Technical Baseline
 
 - Backend stack: Node.js + Express
-- Frontend stack: React + Vite (MIMS/CP Portal/AI-Agent/Vault/Safety), Vue + Vite + Tailwind (QMS)
+- Frontend stack: React + Vite (MIMS/CP Portal/Publications/AI-Agent/Vault/Safety), Vue + Vite + Tailwind (QMS)
 - Database: MySQL + PostgreSQL (service-specific DB per app)
 - CI: GitHub Actions
 - Dependency management: npm + Dependabot

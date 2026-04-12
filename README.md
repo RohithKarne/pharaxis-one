@@ -16,6 +16,7 @@ It currently includes MIMS, CP Portal, AI-Agent, Vault, QMS, and Safety with sha
 |---|---|---|---|
 | MIMS | `apps/medical-affairs/mims` | Medical Information Management System for case operations, inbox, admin, reporting | Backend: Node/Express + MySQL, Frontend: React/Vite |
 | CP Portal | `apps/medical-affairs/cp-portal` | Admin + public portal experience for external submissions/content | Backend: Node/Express + MySQL, Frontend: React/Vite |
+| Publications | `apps/medical-affairs/publications` | Publication lifecycle management for concept-to-publication workflows | Backend: Node/Express + MySQL, Frontend: React/Vite |
 | AI-Agent | `apps/ai-agent` | Provider-agnostic AI query service and admin controls | Backend: Node/Express + MySQL, Frontend: React/Vite |
 | Vault | `apps/vault` | Content/document vault foundations with auth + superadmin flows | Backend: Node/Express + MySQL, Frontend: React/Vite |
 | QMS | `apps/qms` | Quality Management System baseline delivered in Sprint 1 (auth/superadmin, document control, CAPA, deviations, audits, validation) | Backend: Node/Express + PostgreSQL, Frontend: Vue/Vite + Tailwind |
@@ -56,6 +57,8 @@ Install per app:
 cd apps/medical-affairs/mims && npm install
 cd apps/medical-affairs/cp-portal/backend && npm install
 cd apps/medical-affairs/cp-portal/frontend && npm install
+cd apps/medical-affairs/publications && npm install
+cd apps/medical-affairs/publications/frontend && npm install
 cd apps/ai-agent && npm install
 cd apps/vault && npm install
 cd apps/qms/backend && npm install
@@ -82,6 +85,7 @@ Default local DBs used by the code:
 MySQL:
 - `pharaxis_mims_dev`
 - `pharaxis_cp_portal_dev`
+- `pharaxis_publications_dev`
 - `pharaxis_ai_agent_dev`
 - `pharaxis_vault_dev`
 - `pharaxis_safety_dev`
@@ -102,6 +106,9 @@ cd apps/medical-affairs/cp-portal/frontend && npm run dev
 # AI-Agent
 cd apps/ai-agent && npm run dev:all
 
+# Publications
+cd apps/medical-affairs/publications && npm run dev:all
+
 # Vault
 cd apps/vault && npm run dev:all
 
@@ -117,6 +124,7 @@ cd apps/safety && npm run dev:all
 
 - MIMS backend: `3000`
 - CP Portal backend: `4000`
+- Publications backend: `5310`
 - Vault backend: `5000`
 - AI-Agent backend: `6000`
 - QMS backend: `3145`
@@ -124,12 +132,14 @@ cd apps/safety && npm run dev:all
 - CP Portal frontend: `5174` (explicit)
 - QMS frontend: `3146`
 - Safety frontend: `5177`
+- Publications frontend: `5179`
 - Other Vite apps: Vite default unless overridden
 
 ## Health Endpoints
 
 - MIMS: `GET /api/health` on port `3000`
 - CP Portal: `GET /api/health` on port `4000`
+- Publications: `GET /api/health` on port `5310`
 - Vault: `GET /api/health` on port `5000`
 - AI-Agent: `GET /api/v1/agent/health` on port `6000`
 - QMS: `GET /api/health` on port `3145`
