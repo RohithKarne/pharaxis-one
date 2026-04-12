@@ -37,3 +37,5 @@ playwright-report/
 # Runtime storage/data artifacts
 apps/**/backend/storage/email_attachments/
 apps/**/backend/storage/org_logos/
+apps/**/backend/storage/documents/**
+!apps/**/backend/storage/documents/.gitkeep
