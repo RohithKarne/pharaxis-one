@@ -7,6 +7,7 @@ export default defineConfig({
   base: '/vault/',
   plugins: [react()],
   server: {
+    port: 5176,
     proxy: {
       '/api': backendTarget
     }

@@ -53,6 +53,10 @@ export default function DashboardPage() {
     setLoading(true)
     setError('')
 
+    async function safeJson(res) {
+      try { return await res.json() } catch { return {} }
+    }
+
     try {
       const [summaryRes, sessionsRes] = await Promise.all([
         fetch(`${API}/cases/dashboard-summary`, { headers }),
@@ -60,8 +64,8 @@ export default function DashboardPage() {
       ])
 
       const [summaryData, sessionsData] = await Promise.all([
-        summaryRes.json(),
-        sessionsRes.json(),
+        safeJson(summaryRes),
+        safeJson(sessionsRes),
       ])
 
       if (!summaryRes.ok) throw new Error(summaryData.error || 'Failed to load dashboard summary.')
