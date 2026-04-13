@@ -260,7 +260,6 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/pharaxis-key.pem
           chmod 600 ~/.ssh/pharaxis-key.pem
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
       - name: Copy dist files to EC2 staging dir
         run: |
@@ -273,8 +272,8 @@ jobs:
           AI_AGENT="${{ needs.detect.outputs.ai_agent }}"
           QMS="${{ needs.detect.outputs.qms }}"
 
-          SSH="ssh -i ~/.ssh/pharaxis-key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}"
-          SCP="scp -i ~/.ssh/pharaxis-key.pem -r"
+          SSH="ssh -i ~/.ssh/pharaxis-key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}"
+          SCP="scp -i ~/.ssh/pharaxis-key.pem -o StrictHostKeyChecking=no -r"
           DEST="${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}"
 
           # Create staging dirs on EC2 (ubuntu user owns /tmp)
