@@ -6,9 +6,51 @@ on:
       - main
 
 jobs:
-  deploy:
-    name: Build & Deploy all 8 apps
+  detect:
+    name: Detect changed apps
     runs-on: ubuntu-latest
+    outputs:
+      mims:         ${{ steps.changes.outputs.mims }}
+      cp_portal:    ${{ steps.changes.outputs.cp_portal }}
+      ieg:          ${{ steps.changes.outputs.ieg }}
+      publications: ${{ steps.changes.outputs.publications }}
+      safety:       ${{ steps.changes.outputs.safety }}
+      vault:        ${{ steps.changes.outputs.vault }}
+      ai_agent:     ${{ steps.changes.outputs.ai_agent }}
+      qms:          ${{ steps.changes.outputs.qms }}
+      backend:      ${{ steps.changes.outputs.backend }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect which apps changed
+        id: changes
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          echo "$CHANGED"
+
+          flag() { echo "$CHANGED" | grep -q "^$1" && echo "true" || echo "false"; }
+
+          echo "mims=$(flag 'apps/medical-affairs/mims')"          >> $GITHUB_OUTPUT
+          echo "cp_portal=$(flag 'apps/medical-affairs/cp-portal')" >> $GITHUB_OUTPUT
+          echo "ieg=$(flag 'apps/medical-affairs/ieg')"             >> $GITHUB_OUTPUT
+          echo "publications=$(flag 'apps/medical-affairs/publications')" >> $GITHUB_OUTPUT
+          echo "safety=$(flag 'apps/safety')"                       >> $GITHUB_OUTPUT
+          echo "vault=$(flag 'apps/vault')"                         >> $GITHUB_OUTPUT
+          echo "ai_agent=$(flag 'apps/ai-agent')"                   >> $GITHUB_OUTPUT
+          echo "qms=$(flag 'apps/qms')"                             >> $GITHUB_OUTPUT
+
+          # Backend changed = restart PM2
+          BACKEND=$(echo "$CHANGED" | grep -qE '^apps/.*/backend' && echo "true" || echo "false")
+          echo "backend=$BACKEND"                                    >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy changed apps
+    runs-on: ubuntu-latest
+    needs: detect
     timeout-minutes: 60
 
     steps:
@@ -22,78 +64,147 @@ jobs:
           script: |
             set -e
 
+            MIMS="${{ needs.detect.outputs.mims }}"
+            CP_PORTAL="${{ needs.detect.outputs.cp_portal }}"
+            IEG="${{ needs.detect.outputs.ieg }}"
+            PUBLICATIONS="${{ needs.detect.outputs.publications }}"
+            SAFETY="${{ needs.detect.outputs.safety }}"
+            VAULT="${{ needs.detect.outputs.vault }}"
+            AI_AGENT="${{ needs.detect.outputs.ai_agent }}"
+            QMS="${{ needs.detect.outputs.qms }}"
+            BACKEND="${{ needs.detect.outputs.backend }}"
+
             echo "======================================"
-            echo " Pharaxis One — Auto Deploy Started"
+            echo " Pharaxis One — Smart Deploy Started"
+            echo "======================================"
+            echo " MIMS:         $MIMS"
+            echo " CP Portal:    $CP_PORTAL"
+            echo " IEG:          $IEG"
+            echo " Publications: $PUBLICATIONS"
+            echo " Safety:       $SAFETY"
+            echo " Vault:        $VAULT"
+            echo " AI Agent:     $AI_AGENT"
+            echo " QMS:          $QMS"
+            echo " Backend:      $BACKEND"
             echo "======================================"
 
             cd /home/ubuntu/pharaxis
-            echo "--- Pulling latest code from GitHub ---"
+            echo "--- Pulling latest code ---"
             git pull origin main
 
-            echo ""
-            echo "--- [1/8] Building MIMS ---"
-            cd /home/ubuntu/pharaxis/apps/medical-affairs/mims/frontend
-            npm install --prefer-offline --silent
-            npm run build
-            sudo cp -r dist/. /var/www/pharaxis/mims/
+            if [ "$MIMS" = "true" ]; then
+              echo ""
+              echo "--- [MIMS] Building ---"
+              cd /home/ubuntu/pharaxis/apps/medical-affairs/mims/frontend
+              npm install --prefer-offline --silent
+              npm run build
+              sudo cp -r dist/. /var/www/pharaxis/mims/
+              echo "--- [MIMS] Done ✅ ---"
+            else
+              echo "--- [MIMS] No changes — skipped ---"
+            fi
+
+            if [ "$CP_PORTAL" = "true" ]; then
+              echo ""
+              echo "--- [CP Portal] Building ---"
+              cd /home/ubuntu/pharaxis/apps/medical-affairs/cp-portal/frontend
+              npm install --prefer-offline --silent
+              npm run build
+              sudo cp -r dist/. /var/www/pharaxis/cp-portal/
+              echo "--- [CP Portal] Done ✅ ---"
+            else
+              echo "--- [CP Portal] No changes — skipped ---"
+            fi
+
+            if [ "$IEG" = "true" ]; then
+              echo ""
+              echo "--- [IEG] Building ---"
+              cd /home/ubuntu/pharaxis/apps/medical-affairs/ieg/frontend
+              npm install --prefer-offline --silent
+              npm run build
+              sudo cp -r dist/. /var/www/pharaxis/ieg/
+              echo "--- [IEG] Done ✅ ---"
+            else
+              echo "--- [IEG] No changes — skipped ---"
+            fi
+
+            if [ "$PUBLICATIONS" = "true" ]; then
+              echo ""
+              echo "--- [Publications] Building ---"
+              cd /home/ubuntu/pharaxis/apps/medical-affairs/publications/frontend
+              npm install --prefer-offline --silent
+              npm run build
+              sudo cp -r dist/. /var/www/pharaxis/publications/
+              echo "--- [Publications] Done ✅ ---"
+            else
+              echo "--- [Publications] No changes — skipped ---"
+            fi
+
+            if [ "$SAFETY" = "true" ]; then
+              echo ""
+              echo "--- [Safety] Building ---"
+              cd /home/ubuntu/pharaxis/apps/safety/frontend
+              npm install --prefer-offline --silent
+              npm run build
+              sudo cp -r dist/. /var/www/pharaxis/safety/
+              echo "--- [Safety] Done ✅ ---"
+            else
+              echo "--- [Safety] No changes — skipped ---"
+            fi
+
+            if [ "$VAULT" = "true" ]; then
+              echo ""
+              echo "--- [Vault] Building ---"
+              cd /home/ubuntu/pharaxis/apps/vault/frontend
+              npm install --prefer-offline --silent
+              npm run build
+              sudo cp -r dist/. /var/www/pharaxis/vault/
+              echo "--- [Vault] Done ✅ ---"
+            else
+              echo "--- [Vault] No changes — skipped ---"
+            fi
+
+            if [ "$AI_AGENT" = "true" ]; then
+              echo ""
+              echo "--- [AI Agent] Building ---"
+              cd /home/ubuntu/pharaxis/apps/ai-agent/frontend
+              npm install --prefer-offline --silent
+              npm run build
+              sudo cp -r dist/. /var/www/pharaxis/ai-agent/
+              echo "--- [AI Agent] Done ✅ ---"
+            else
+              echo "--- [AI Agent] No changes — skipped ---"
+            fi
+
+            if [ "$QMS" = "true" ]; then
+              echo ""
+              echo "--- [QMS] Building ---"
+              cd /home/ubuntu/pharaxis/apps/qms/frontend
+              npm install --prefer-offline --silent
+              npm run build
+              sudo cp -r dist/. /var/www/pharaxis/qms/
+              echo "--- [QMS] Done ✅ ---"
+            else
+              echo "--- [QMS] No changes — skipped ---"
+            fi
 
             echo ""
-            echo "--- [2/8] Building CP Portal ---"
-            cd /home/ubuntu/pharaxis/apps/medical-affairs/cp-portal/frontend
-            npm install --prefer-offline --silent
-            npm run build
-            sudo cp -r dist/. /var/www/pharaxis/cp-portal/
-
-            echo ""
-            echo "--- [3/8] Building IEG ---"
-            cd /home/ubuntu/pharaxis/apps/medical-affairs/ieg/frontend
-            npm install --prefer-offline --silent
-            npm run build
-            sudo cp -r dist/. /var/www/pharaxis/ieg/
-
-            echo ""
-            echo "--- [4/8] Building Publications ---"
-            cd /home/ubuntu/pharaxis/apps/medical-affairs/publications/frontend
-            npm install --prefer-offline --silent
-            npm run build
-            sudo cp -r dist/. /var/www/pharaxis/publications/
-
-            echo ""
-            echo "--- [5/8] Building Safety ---"
-            cd /home/ubuntu/pharaxis/apps/safety/frontend
-            npm install --prefer-offline --silent
-            npm run build
-            sudo cp -r dist/. /var/www/pharaxis/safety/
-
-            echo ""
-            echo "--- [6/8] Building Vault ---"
-            cd /home/ubuntu/pharaxis/apps/vault/frontend
-            npm install --prefer-offline --silent
-            npm run build
-            sudo cp -r dist/. /var/www/pharaxis/vault/
-
-            echo ""
-            echo "--- [7/8] Building AI Agent ---"
-            cd /home/ubuntu/pharaxis/apps/ai-agent/frontend
-            npm install --prefer-offline --silent
-            npm run build
-            sudo cp -r dist/. /var/www/pharaxis/ai-agent/
-
-            echo ""
-            echo "--- [8/8] Building QMS ---"
-            cd /home/ubuntu/pharaxis/apps/qms/frontend
-            npm install --prefer-offline --silent
-            npm run build
-            sudo cp -r dist/. /var/www/pharaxis/qms/
-
-            echo ""
-            echo "--- Restarting all backends ---"
+            echo "--- Applying PM2 ecosystem config (memory limits) ---"
             cd /home/ubuntu/pharaxis
-            pm2 restart all
+            pm2 start ecosystem.config.js --update-env
+
+            if [ "$BACKEND" = "true" ]; then
+              echo "--- Backend changes detected — restarting PM2 ---"
+              pm2 restart all
+              echo "--- PM2 restarted ✅ ---"
+            else
+              echo "--- No backend changes — PM2 not restarted ---"
+            fi
+            pm2 save
 
             echo ""
             echo "======================================"
-            echo " Deploy Complete ✅"
-            echo " All 8 apps live on AWS"
+            echo " Smart Deploy Complete ✅"
+            echo " Only changed apps were rebuilt"
             echo "======================================"
             exit 0
