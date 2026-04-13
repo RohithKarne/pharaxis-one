@@ -96,3 +96,4 @@ jobs:
             echo " Deploy Complete ✅"
             echo " All 8 apps live on AWS"
             echo "======================================"
+            exit 0
