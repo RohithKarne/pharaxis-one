@@ -1,0 +1,98 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Build & Deploy all 8 apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 35m
+          script: |
+            set -e
+
+            echo "======================================"
+            echo " Pharaxis One — Auto Deploy Started"
+            echo "======================================"
+
+            cd /home/ubuntu/pharaxis
+            echo "--- Pulling latest code from GitHub ---"
+            git pull origin main
+
+            echo ""
+            echo "--- [1/8] Building MIMS ---"
+            cd /home/ubuntu/pharaxis/apps/medical-affairs/mims/frontend
+            npm install --prefer-offline --silent
+            npm run build
+            sudo cp -r dist/. /var/www/pharaxis/mims/
+
+            echo ""
+            echo "--- [2/8] Building CP Portal ---"
+            cd /home/ubuntu/pharaxis/apps/medical-affairs/cp-portal/frontend
+            npm install --prefer-offline --silent
+            npm run build
+            sudo cp -r dist/. /var/www/pharaxis/cp-portal/
+
+            echo ""
+            echo "--- [3/8] Building IEG ---"
+            cd /home/ubuntu/pharaxis/apps/medical-affairs/ieg/frontend
+            npm install --prefer-offline --silent
+            npm run build
+            sudo cp -r dist/. /var/www/pharaxis/ieg/
+
+            echo ""
+            echo "--- [4/8] Building Publications ---"
+            cd /home/ubuntu/pharaxis/apps/medical-affairs/publications/frontend
+            npm install --prefer-offline --silent
+            npm run build
+            sudo cp -r dist/. /var/www/pharaxis/publications/
+
+            echo ""
+            echo "--- [5/8] Building Safety ---"
+            cd /home/ubuntu/pharaxis/apps/safety/frontend
+            npm install --prefer-offline --silent
+            npm run build
+            sudo cp -r dist/. /var/www/pharaxis/safety/
+
+            echo ""
+            echo "--- [6/8] Building Vault ---"
+            cd /home/ubuntu/pharaxis/apps/vault/frontend
+            npm install --prefer-offline --silent
+            npm run build
+            sudo cp -r dist/. /var/www/pharaxis/vault/
+
+            echo ""
+            echo "--- [7/8] Building AI Agent ---"
+            cd /home/ubuntu/pharaxis/apps/ai-agent/frontend
+            npm install --prefer-offline --silent
+            npm run build
+            sudo cp -r dist/. /var/www/pharaxis/ai-agent/
+
+            echo ""
+            echo "--- [8/8] Building QMS ---"
+            cd /home/ubuntu/pharaxis/apps/qms/frontend
+            npm install --prefer-offline --silent
+            npm run build
+            sudo cp -r dist/. /var/www/pharaxis/qms/
+
+            echo ""
+            echo "--- Restarting all backends ---"
+            cd /home/ubuntu/pharaxis
+            pm2 restart all
+
+            echo ""
+            echo "======================================"
+            echo " Deploy Complete ✅"
+            echo " All 8 apps live on AWS"
+            echo "======================================"
