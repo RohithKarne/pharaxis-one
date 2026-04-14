@@ -106,15 +106,30 @@ Default frontend port: `3146`
   - `POST /api/document-control/documents/:documentId/revisions`
   - `POST /api/document-control/documents/:documentId/versions/:versionId/transition`
   - `POST /api/document-control/documents/:documentId/versions/:versionId/acknowledge`
+  - `POST /api/document-control/documents/:documentId/versions/:versionId/export`
+  - `PUT /api/document-control/documents/:documentId/access-policies`
+  - `POST /api/document-control/documents/:documentId/reviews/:reviewId/complete`
   - `GET /api/document-control/documents`
   - `GET /api/document-control/documents/:documentId`
+  - `GET /api/document-control/documents/:documentId/versions`
+  - `GET /api/document-control/documents/:documentId/timeline`
+  - `GET /api/document-control/documents/:documentId/reviews`
   - `GET /api/document-control/documents/:documentId/versions/:versionId/controlled-preview`
 - CAPA APIs:
   - `POST /api/capa`
+  - `PATCH /api/capa/:capaId`
+  - `POST /api/capa/:capaId/submit`
+  - `POST /api/capa/:capaId/triage`
+  - `POST /api/capa/:capaId/rca/5why`
+  - `POST /api/capa/:capaId/rca/fishbone`
   - `POST /api/capa/:capaId/actions`
-  - `PATCH /api/capa/:capaId/actions/:actionId/status`
+  - `PATCH /api/capa/:capaId/actions/:actionId`
+  - `POST /api/capa/:capaId/approve`
   - `POST /api/capa/:capaId/effectiveness`
   - `POST /api/capa/:capaId/close`
+  - `POST /api/capa/:capaId/reopen`
+  - `GET /api/capa/:capaId`
+  - `GET /api/capa/:capaId/timeline`
   - `GET /api/capa`
 - Deviation APIs:
   - `POST /api/deviations`

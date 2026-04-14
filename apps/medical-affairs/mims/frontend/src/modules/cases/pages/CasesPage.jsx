@@ -14,7 +14,6 @@ import '../cases.css'
 const API = import.meta.env.VITE_API_URL || '/api'
 
 const CASE_TYPE_COLORS = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
-const CASE_TYPE_LABELS = { MI: 'Medical Information', AE: 'Adverse Event', PC: 'Product Complaint' }
 const PRIORITY_COLORS  = { normal: '#6b7280', high: '#f59e0b', urgent: '#ef4444' }
 
 export default function CasesPage() {
@@ -30,12 +29,12 @@ export default function CasesPage() {
   const [searchScope, setSearchScope] = useState('all') // all | tab
 
   // New case modal state
-  const [modalOpen, setModalOpen]   = useState(false)
-  const [step, setStep]             = useState(1)           // 1=Org, 2=Site, 3=Type
-  const [orgs, setOrgs]             = useState([])
-  const [sites, setSites]           = useState([])
-  const [newCase, setNewCase]       = useState({ org_id: '', site_id: '', case_type: '', date_received: '' })
-  const [creating, setCreating]     = useState(false)
+  const [modalOpen, setModalOpen]     = useState(false)
+  const [orgs, setOrgs]               = useState([])
+  const [sites, setSites]             = useState([])
+  const [newCase, setNewCase]         = useState({ org_id: '', site_id: '' })
+  const [selectedSiteId, setSelectedSiteId] = useState('')
+  const [creating, setCreating]       = useState(false)
 
   // ── Load cases ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -83,8 +82,8 @@ export default function CasesPage() {
   // ── New case modal helpers ────────────────────────────────────────────────
 
   async function openModal() {
-    setStep(1)
-    setNewCase({ org_id: '', site_id: '', case_type: '', date_received: '' })
+    setNewCase({ org_id: '', site_id: '' })
+    setSelectedSiteId('')
     setSites([])
     setModalOpen(true)
     try {
@@ -97,22 +96,24 @@ export default function CasesPage() {
 
   async function selectOrg(orgId) {
     setNewCase(p => ({ ...p, org_id: orgId, site_id: '' }))
+    setSelectedSiteId('')
+    setSites([])
+    if (!orgId) return
     try {
       const res  = await fetch(`${API}/admin/orgs/${orgId}/sites`, { headers })
       const data = await res.json()
       const list = Array.isArray(data) ? data : (Array.isArray(data.sites) ? data.sites : [])
       setSites(list.filter(s => s.is_active))
     } catch { setSites([]) }
-    setStep(2)
   }
 
-  function selectSite(siteId) {
+  function handleSiteChange(siteId) {
+    setSelectedSiteId(siteId)
     setNewCase(p => ({ ...p, site_id: siteId }))
-    setStep(3)
   }
 
   async function createCase() {
-    if (!newCase.case_type) return
+    if (!newCase.org_id || !newCase.site_id) return
     setCreating(true)
     try {
       const res  = await fetch(`${API}/cases`, {
@@ -120,8 +121,6 @@ export default function CasesPage() {
         body: JSON.stringify({
           org_id:         newCase.org_id,
           site_id:        newCase.site_id,
-          case_type:      newCase.case_type,
-          date_received:  newCase.date_received || undefined,
           intake_channel: 'manual',
         })
       })
@@ -275,90 +274,48 @@ export default function CasesPage() {
               <button className="cf-modal-close" onClick={() => setModalOpen(false)}>✕</button>
             </div>
 
-            {/* Step indicator */}
-            <div className="cf-modal-steps">
-              {['Organisation', 'Site', 'Case Type'].map((label, i) => (
-                <div key={i} className={`cf-modal-step ${step > i + 1 ? 'done' : step === i + 1 ? 'active' : ''}`}>
-                  <span className="cf-step-num">{step > i + 1 ? '✓' : i + 1}</span>
-                  <span className="cf-step-label">{label}</span>
-                </div>
-              ))}
-            </div>
-
             <div className="cf-modal-body">
+              <div className="cf-modal-step-content">
 
-              {/* Step 1: Organisation */}
-              {step === 1 && (
-                <div className="cf-modal-step-content">
-                  <p className="cf-modal-instruction">Select the organisation for this case:</p>
-                  <div className="cf-select-list">
-                    {orgs.length === 0 && <div className="cf-select-empty">No organisations found.</div>}
-                    {orgs.map(o => (
-                      <button key={o.id} className="cf-select-item" onClick={() => selectOrg(o.id)}>
-                        {o.name}
-                      </button>
-                    ))}
-                  </div>
+                <div className="cf-form-field" style={{ marginBottom: '16px' }}>
+                  <label className="cf-modal-label">Organisation</label>
+                  <select
+                    className="cf-modal-select"
+                    value={newCase.org_id}
+                    onChange={e => selectOrg(e.target.value)}
+                  >
+                    <option value="">— Select Organisation —</option>
+                    {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
                 </div>
-              )}
 
-              {/* Step 2: Site */}
-              {step === 2 && (
-                <div className="cf-modal-step-content">
-                  <p className="cf-modal-instruction">Select the site for this case:</p>
-                  <div className="cf-select-list">
-                    {sites.length === 0 && <div className="cf-select-empty">No active sites for this organisation.</div>}
-                    {sites.map(s => (
-                      <button key={s.id} className="cf-select-item" onClick={() => selectSite(s.id)}>
-                        {s.name}{s.country ? ` — ${s.country}` : ''}
-                      </button>
-                    ))}
-                  </div>
-                  <button className="cf-modal-back" onClick={() => setStep(1)}>← Back</button>
+                <div className="cf-form-field" style={{ marginBottom: '24px' }}>
+                  <label className="cf-modal-label">Site</label>
+                  <select
+                    className="cf-modal-select"
+                    value={selectedSiteId}
+                    onChange={e => handleSiteChange(e.target.value)}
+                    disabled={!newCase.org_id}
+                  >
+                    <option value="">— Select Site —</option>
+                    {sites.map(s => <option key={s.id} value={s.id}>{s.name}{s.country ? ` — ${s.country}` : ''}</option>)}
+                  </select>
+                  {newCase.org_id && sites.length === 0 && (
+                    <div className="cf-select-empty" style={{ marginTop: '8px' }}>No active sites for this organisation.</div>
+                  )}
                 </div>
-              )}
 
-              {/* Step 3: Case Type + Date */}
-              {step === 3 && (
-                <div className="cf-modal-step-content">
-                  <p className="cf-modal-instruction">Select case type:</p>
-                  <div className="cf-type-select-grid">
-                    {Object.entries(CASE_TYPE_LABELS).map(([type, label]) => (
-                      <button
-                        key={type}
-                        className={`cf-type-select-card ${newCase.case_type === type ? 'selected' : ''}`}
-                        style={{ borderColor: newCase.case_type === type ? CASE_TYPE_COLORS[type] : undefined }}
-                        onClick={() => setNewCase(p => ({ ...p, case_type: type }))}
-                      >
-                        <span className="cf-type-card-badge" style={{ background: CASE_TYPE_COLORS[type] }}>{type}</span>
-                        <span className="cf-type-card-label">{label}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="cf-modal-field">
-                    <label className="cf-modal-label">Date Received (optional)</label>
-                    <input
-                      type="date"
-                      className="cf-modal-input"
-                      value={newCase.date_received}
-                      onChange={e => setNewCase(p => ({ ...p, date_received: e.target.value }))}
-                    />
-                  </div>
-
-                  <div className="cf-modal-actions">
-                    <button className="cf-modal-back" onClick={() => setStep(2)}>← Back</button>
-                    <button
-                      className="cf-modal-confirm"
-                      disabled={!newCase.case_type || creating}
-                      onClick={createCase}
-                    >
-                      {creating ? 'Creating…' : 'Create Case →'}
-                    </button>
-                  </div>
+                <div className="cf-modal-actions">
+                  <button
+                    className="cf-modal-confirm"
+                    disabled={!newCase.org_id || !selectedSiteId || creating}
+                    onClick={createCase}
+                  >
+                    {creating ? 'Creating…' : 'Create Case →'}
+                  </button>
                 </div>
-              )}
 
+              </div>
             </div>
           </div>
         </div>

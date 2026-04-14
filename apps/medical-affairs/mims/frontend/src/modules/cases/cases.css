@@ -732,6 +732,87 @@
   padding: 20px 24px 24px;
 }
 
+/* ─── ARISg-style tab bar ────────────────────────────────────── */
+
+.cf-tabbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  background: #1d3557;
+  padding: 0 20px;
+  flex-shrink: 0;
+  border-bottom: 2px solid #e2e8f0;
+  overflow-x: auto;
+}
+
+.cf-tabbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.65);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  border-radius: 4px 4px 0 0;
+  margin-bottom: -2px;
+}
+
+.cf-tabbar-btn:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.08);
+}
+
+.cf-tabbar-btn.active {
+  color: #fff;
+  background: #f8fafc;
+  color: #1d3557;
+  border-bottom: 3px solid #2563eb;
+}
+
+.cf-tabbar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 9px;
+}
+
+.cf-tabbar-btn.active .cf-tabbar-badge {
+  background: #1d3557;
+  color: #fff;
+}
+
+/* ─── Tab content area ───────────────────────────────────────── */
+
+.cf-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  background: #eef1f6;
+  width: 100%;
+}
+
+.cf-tab-pane {
+  padding: 20px 24px 40px;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid #d1d9e6;
+  border-top: none;
+  min-height: 100%;
+}
+
 /* ─── Legacy sidebar selectors (kept for compatibility) ─────── */
 .cf-form-layout { display: flex; flex: 1; overflow: hidden; }
 .cf-form-sidebar { display: none; }
@@ -760,16 +841,19 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  margin-bottom: 16px;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 /* ─── Form grid + fields ────────────────────────────────────── */
 
 .cf-form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px 24px;
+  margin-bottom: 20px;
+  width: 100%;
 }
 
 .cf-form-field {
@@ -787,27 +871,30 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-secondary);
+  color: #4a5568;
 }
 
 .cf-form-field input,
 .cf-form-field select,
 .cf-form-field textarea {
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  border: 1px solid #c8d0dc;
+  border-radius: 4px;
   font-size: 13px;
-  color: var(--text-primary);
+  color: #1a202c;
   font-family: var(--font);
-  background: #fafafa;
+  background: #fff;
   outline: none;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
   resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
 }
 .cf-form-field input:focus,
 .cf-form-field select:focus,
 .cf-form-field textarea:focus {
-  border-color: #1d3557;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
   background: #fff;
 }
 
@@ -840,11 +927,11 @@
 }
 
 .cf-comments-composer {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: #fafcff;
-  padding: 10px;
-  margin-bottom: 12px;
+  border: 1px solid #d1d9e6;
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 14px;
+  margin-bottom: 16px;
 }
 
 .cf-comments-composer textarea {
@@ -1330,7 +1417,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #f8f9fb;
+  background: #f8fafc;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 12px 16px;
@@ -1379,9 +1466,9 @@
 }
 
 .cf-add-contact-form {
-  background: #f8f9fb;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: #f8fafc;
+  border: 1px solid #d1d9e6;
+  border-radius: 6px;
   padding: 20px;
   margin-top: 12px;
 }
@@ -1495,10 +1582,10 @@
 .cf-mi-tab:not(.active) .cf-mi-status.closed  { background: #f1f5f9; color: #64748b; }
 
 .cf-mi-panel {
-  background: #fafbff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 /* ─── AE / PC Version bar ───────────────────────────────────── */
@@ -1507,24 +1594,26 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .cf-version-btn {
-  background: #f0f4f8;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 6px 14px;
+  background: #fff;
+  border: 1px solid #c8d0dc;
+  border-radius: 20px;
+  padding: 5px 16px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: #4a5568;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: background 0.1s, color 0.1s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.cf-version-btn:hover { background: #e5ecf5; }
+.cf-version-btn:hover { background: #f0f4f8; border-color: #1d3557; color: #1d3557; }
 .cf-version-btn.active {
   background: #1d3557;
   color: #fff;
@@ -1563,8 +1652,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0;
-  border-bottom: 2px solid var(--border);
-  margin-bottom: 16px;
+  border-bottom: 2px solid #d1d9e6;
+  margin-bottom: 20px;
+  background: #f8fafc;
+  border-radius: 6px 6px 0 0;
+  padding: 0 4px;
 }
 
 .cf-tab-btn {
@@ -1572,19 +1664,20 @@
   border: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
-  padding: 9px 16px;
+  padding: 10px 16px;
   font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-weight: 600;
+  color: #64748b;
   cursor: pointer;
-  transition: color 0.1s, border-color 0.1s;
+  transition: color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
-.cf-tab-btn:hover { color: var(--text-primary); }
+.cf-tab-btn:hover { color: #1d3557; }
 .cf-tab-btn.active {
   color: #1d3557;
   font-weight: 700;
-  border-bottom-color: #e8890c;
+  border-bottom-color: #2563eb;
+  background: #fff;
 }
 
 .cf-tab-loading {

@@ -52,7 +52,7 @@ export default function CaseFormPage() {
   // ── Core case state ───────────────────────────────────────────────────────
   const [caseData,   setCaseData]   = useState(null)
   const [loading,    setLoading]    = useState(true)
-  const [section,    setSection]    = useState('info')  // info | comments | contacts | correspondence | mi | ae | pc
+  const [activeTab, setActiveTab] = useState('info')
   const [saving,     setSaving]     = useState(false)
   const [savedMsg,   setSavedMsg]   = useState('')
 
@@ -178,23 +178,20 @@ export default function CaseFormPage() {
 
   useEffect(() => {
     if (!id) return
-    if (section === 'comments') loadComments()
-    if (section === 'contacts') loadContacts()
-    if (section === 'correspondence') loadCorrespondence()
-    if (section === 'mi')       loadMI()
-    if (section === 'ae')       loadAEVersions()
-    if (section === 'pc')       loadPCVersions()
-  }, [section, id])
+    loadComments()
+    loadContacts()
+    loadCorrespondence()
+    loadMI()
+    loadAEVersions()
+    loadPCVersions()
+  }, [id])
 
   useEffect(() => {
     const params = new URLSearchParams(location.search || '')
     const targetSection = params.get('section')
-    if (targetSection === 'comments') {
-      setSection('comments')
-      return
-    }
-    if (targetSection === 'correspondence') {
-      setSection('correspondence')
+    const valid = ['info', 'comments', 'contacts', 'correspondence', 'mi', 'ae', 'pc']
+    if (targetSection && valid.includes(targetSection)) {
+      setActiveTab(targetSection)
     }
   }, [location.search])
 
@@ -791,8 +788,19 @@ export default function CaseFormPage() {
 
   const isLocked = (ver) => ver && ver.is_locked === 1
 
+  // ── Tab definitions ───────────────────────────────────────────────────────
+  const TABS = [
+    { key: 'info',           label: 'Case Information',   badge: null },
+    { key: 'comments',       label: 'Comments / Notes',   badge: comments.length > 0 ? comments.length : null },
+    { key: 'contacts',       label: 'Contacts',           badge: contacts.length > 0 ? contacts.length : null },
+    { key: 'correspondence', label: 'Correspondence',     badge: correspondence.length > 0 ? correspondence.length : null },
+    { key: 'mi',             label: 'MI Component',       badge: miTabs.length > 0 ? miTabs.length : null },
+    { key: 'ae',             label: 'AE Component',       badge: aeVersions.length > 0 ? aeVersions.length : null },
+    { key: 'pc',             label: 'PC Component',       badge: pcVersions.length > 0 ? pcVersions.length : null },
+  ]
+
   return (
-    <MIMSLayout>
+    <MIMSLayout bodyClassName="no-scroll">
     <div className="cf-form-page">
 
       {/* Case header */}
@@ -802,9 +810,11 @@ export default function CaseFormPage() {
           <span className="cf-form-case-num">
             {caseData.case_number || <span className="cf-draft-badge">DRAFT</span>}
           </span>
-          <span className="cf-form-type-badge" style={{ background: TYPE_COLOR[caseData.case_type] }}>
-            {caseData.case_type}
-          </span>
+          {caseData.case_type && (
+            <span className="cf-form-type-badge" style={{ background: TYPE_COLOR[caseData.case_type] }}>
+              {caseData.case_type}
+            </span>
+          )}
           <span className="cf-form-org">{caseData.org_name}</span>
           <span className="cf-form-sep">›</span>
           <span className="cf-form-site">{caseData.site_name}</span>
@@ -817,20 +827,26 @@ export default function CaseFormPage() {
         </div>
       </div>
 
-      {/* Accordion body — SciMax prototype layout */}
-      <div className="cf-accordion-body">
-
-        {/* ── Accordion: Case Information ── */}
-        <div className="cf-acc-section">
-          <button className="cf-acc-header" onClick={() => setSection(s => s === 'info' ? '' : 'info')}>
-            <span className="cf-acc-title">Case Information</span>
-            <span className="cf-acc-header-right">
-              {(infoForm.status_id || infoForm.description || infoForm.case_owner_id) && <span className="cf-acc-filled">● Filled</span>}
-              <span className="cf-acc-arrow">{section === 'info' ? '▲' : '▼'}</span>
-            </span>
+      {/* ARISg-style tab bar */}
+      <div className="cf-tabbar">
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            className={`cf-tabbar-btn${activeTab === t.key ? ' active' : ''}`}
+            onClick={() => setActiveTab(t.key)}
+          >
+            {t.label}
+            {t.badge != null && <span className="cf-tabbar-badge">{t.badge}</span>}
           </button>
-          {getSectionVisible('Case Information') && section === 'info' && (
-            <div className="cf-acc-content">
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="cf-tab-content">
+
+        {/* ── Tab: Case Information ── */}
+        {activeTab === 'info' && (
+          <div className="cf-tab-pane">
               <div className="cf-form-grid">
                 <div className="cf-form-field">
                   <label>Status</label>
@@ -912,21 +928,12 @@ export default function CaseFormPage() {
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* ── Accordion: Comments / Notes ── */}
-        <div className="cf-acc-section">
-          <button className="cf-acc-header" onClick={() => setSection(s => s === 'comments' ? '' : 'comments')}>
-            <span className="cf-acc-title">Comments / Notes</span>
-            <span className="cf-acc-header-right">
-              {comments.length > 0 && <span className="cf-acc-filled">{comments.length} comment{comments.length > 1 ? 's' : ''}</span>}
-              <span className="cf-acc-arrow">{section === 'comments' ? '▲' : '▼'}</span>
-            </span>
-          </button>
-          {section === 'comments' && (
-            <div className="cf-acc-content">
+        {/* ── Tab: Comments / Notes ── */}
+        {activeTab === 'comments' && (
+          <div className="cf-tab-pane">
               <div className="cf-comments-composer">
                 <textarea
                   rows={3}
@@ -958,21 +965,12 @@ export default function CaseFormPage() {
                   ))}
                 </div>
               )}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* ── Accordion: Contact / Requestor ── */}
-        <div className="cf-acc-section">
-          <button className="cf-acc-header" onClick={() => setSection(s => s === 'contacts' ? '' : 'contacts')}>
-            <span className="cf-acc-title">Contact / Requestor</span>
-            <span className="cf-acc-header-right">
-              {contacts.length > 0 && <span className="cf-acc-filled">{contacts.length} contact{contacts.length > 1 ? 's' : ''}</span>}
-              <span className="cf-acc-arrow">{section === 'contacts' ? '▲' : '▼'}</span>
-            </span>
-          </button>
-          {getSectionVisible('Contact / Requestor') && section === 'contacts' && (
-            <div className="cf-acc-content">
+        {/* ── Tab: Contacts ── */}
+        {activeTab === 'contacts' && (
+          <div className="cf-tab-pane">
               <div className="cf-section-header-row">
                 <button className="cf-add-btn" onClick={() => setShowContactAdd(true)}>+ Add Contact</button>
               </div>
@@ -1063,25 +1061,12 @@ export default function CaseFormPage() {
                   </div>
                 </div>
               )}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* ── Accordion: Correspondence ── */}
-        <div className="cf-acc-section">
-          <button className="cf-acc-header" onClick={() => setSection(s => s === 'correspondence' ? '' : 'correspondence')}>
-            <span className="cf-acc-title">Correspondence</span>
-            <span className="cf-acc-header-right">
-              {correspondence.length > 0 && (
-                <span className="cf-acc-filled">
-                  {correspondence.length} item{correspondence.length > 1 ? 's' : ''}
-                </span>
-              )}
-              <span className="cf-acc-arrow">{section === 'correspondence' ? '▲' : '▼'}</span>
-            </span>
-          </button>
-          {section === 'correspondence' && (
-            <div className="cf-acc-content">
+        {/* ── Tab: Correspondence ── */}
+        {activeTab === 'correspondence' && (
+          <div className="cf-tab-pane">
               {corrLoading && <div className="cf-empty-msg">Loading correspondence…</div>}
               {!corrLoading && corrError && <div className="cf-corr-error">{corrError}</div>}
               {!corrLoading && !corrError && correspondence.length === 0 && (
@@ -1188,22 +1173,12 @@ export default function CaseFormPage() {
                   </div>
                 </>
               )}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* ── Accordion: MI Component ── */}
-        {caseData.case_type === 'MI' && (
-        <div className="cf-acc-section">
-          <button className="cf-acc-header" onClick={() => setSection(s => s === 'mi' ? '' : 'mi')}>
-            <span className="cf-acc-title">MI Component</span>
-            <span className="cf-acc-header-right">
-              {miTabs.length > 0 && <span className="cf-acc-filled">{miTabs.length} MI</span>}
-              <span className="cf-acc-arrow">{section === 'mi' ? '▲' : '▼'}</span>
-            </span>
-          </button>
-          {getSectionVisible('MI — Category & Product') && section === 'mi' && (
-            <div className="cf-acc-content">
+        {/* ── Tab: MI Component ── */}
+        {activeTab === 'mi' && (
+          <div className="cf-tab-pane">
               <div className="cf-section-header-row">
                 <button className="cf-add-btn" onClick={addMITab}>+ Add MI</button>
               </div>
@@ -1263,23 +1238,12 @@ export default function CaseFormPage() {
                   </div>
                 </>
               )}
-            </div>
-          )}
-        </div>
+          </div>
         )}
 
-        {/* ── Accordion: AE Component ── */}
-        {caseData.case_type === 'AE' && (
-        <div className="cf-acc-section">
-          <button className="cf-acc-header" onClick={() => setSection(s => s === 'ae' ? '' : 'ae')}>
-            <span className="cf-acc-title">AE Component</span>
-            <span className="cf-acc-header-right">
-              {aeVersions.length > 0 && <span className="cf-acc-filled">{aeVersions.length} version{aeVersions.length > 1 ? 's' : ''}</span>}
-              <span className="cf-acc-arrow">{section === 'ae' ? '▲' : '▼'}</span>
-            </span>
-          </button>
-          {getSectionVisible('AE — General') && section === 'ae' && (
-            <div className="cf-acc-content">
+        {/* ── Tab: AE Component ── */}
+        {activeTab === 'ae' && (
+          <div className="cf-tab-pane">
               <div className="cf-section-header-row">
                 <button className="cf-add-btn" onClick={createAEVersion}>+ New Version</button>
               </div>
@@ -1337,23 +1301,12 @@ export default function CaseFormPage() {
                   )}
                 </>
               )}
-            </div>
-          )}
-        </div>
+          </div>
         )}
 
-        {/* ── Accordion: PC Component ── */}
-        {caseData.case_type === 'PC' && (
-        <div className="cf-acc-section">
-          <button className="cf-acc-header" onClick={() => setSection(s => s === 'pc' ? '' : 'pc')}>
-            <span className="cf-acc-title">PC Component</span>
-            <span className="cf-acc-header-right">
-              {pcVersions.length > 0 && <span className="cf-acc-filled">{pcVersions.length} version{pcVersions.length > 1 ? 's' : ''}</span>}
-              <span className="cf-acc-arrow">{section === 'pc' ? '▲' : '▼'}</span>
-            </span>
-          </button>
-          {getSectionVisible('PC — General') && section === 'pc' && (
-            <div className="cf-acc-content">
+        {/* ── Tab: PC Component ── */}
+        {activeTab === 'pc' && (
+          <div className="cf-tab-pane">
               <div className="cf-section-header-row">
                 <button className="cf-add-btn" onClick={createPCVersion}>+ New Version</button>
               </div>
@@ -1408,12 +1361,10 @@ export default function CaseFormPage() {
                   )}
                 </>
               )}
-            </div>
-          )}
-        </div>
+          </div>
         )}
 
-      </div>
+      </div>{/* end cf-tab-content */}
 
       {activeCorrItem && (
         <div className="cf-corr-modal-overlay" onClick={() => setActiveCorrItem(null)}>

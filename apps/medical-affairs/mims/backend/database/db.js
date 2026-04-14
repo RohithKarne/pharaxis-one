@@ -1150,7 +1150,7 @@ async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS cases (
         id             INT           NOT NULL AUTO_INCREMENT,
         case_number    VARCHAR(100),
-        case_type      ENUM('MI','AE','PC') NOT NULL,
+        case_type      ENUM('MI','AE','PC') NULL DEFAULT NULL,
         org_id         INT           NOT NULL,
         site_id        INT           NOT NULL,
         status_id      INT,
@@ -1174,6 +1174,11 @@ async function initializeDatabase() {
         KEY idx_cases_created (created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Make case_type nullable — cases start without a type (set when first component is added)
+    await conn.execute(`
+      ALTER TABLE cases MODIFY COLUMN case_type ENUM('MI','AE','PC') NULL DEFAULT NULL
+    `).catch(() => {}); // no-op if already nullable
 
     // Enforce org-scoped case number uniqueness.
     // MySQL UNIQUE allows multiple NULL values, so draft cases remain supported.

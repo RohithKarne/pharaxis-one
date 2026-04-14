@@ -661,10 +661,10 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
     const { site_id, case_type, intake_channel = 'manual', date_received, case_number } = req.body;
     // org_id is always sourced from JWT — never from request body
     const org_id = req.user.orgId;
-    if (!org_id || !site_id || !case_type) {
-      return res.status(400).json({ error: 'org_id, site_id, case_type are required' });
+    if (!org_id || !site_id) {
+      return res.status(400).json({ error: 'org_id and site_id are required' });
     }
-    if (!['MI', 'AE', 'PC'].includes(case_type)) {
+    if (case_type && !['MI', 'AE', 'PC'].includes(case_type)) {
       return res.status(400).json({ error: 'case_type must be MI, AE, or PC' });
     }
     const dateReceived = toDateOnlyOrNull(date_received);
@@ -676,7 +676,7 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
       [result] = await pool.execute(
         `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, case_number, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [org_id, site_id, case_type, intake_channel, dateReceived, case_number ?? null, req.user.userId]
+        [org_id, site_id, case_type ?? null, intake_channel, dateReceived, case_number ?? null, req.user.userId]
       );
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY' && String(err.message || '').includes('case_number')) {
@@ -685,7 +685,7 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
           [result] = await pool.execute(
             `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, case_number, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [org_id, site_id, case_type, intake_channel, dateReceived, retriedCaseNumber, req.user.userId]
+            [org_id, site_id, case_type ?? null, intake_channel, dateReceived, retriedCaseNumber, req.user.userId]
           );
         } catch (_) {
           return res.status(409).json({ error: 'Case number conflict. Please try again.' });

@@ -17,12 +17,16 @@ const FIELD_SETUP_ROWS = [
   ['Contact / Requestor', 'Institution', 'text', 0, null, null, 11],
   ['Contact / Requestor', 'Country', 'dropdown', 0, 'country', null, 12],
   ['Contact / Requestor', 'Do Not Update Master Data', 'checkbox', 0, null, null, 13],
+  ['Contact / Requestor', 'Country of Reporter', 'dropdown', 0, 'country', null, 14],
+  ['Contact / Requestor', 'Qualification', 'dropdown', 0, 'qualification', null, 15],
+  ['Contact / Requestor', 'Preferred Contact Method', 'dropdown', 0, 'preferred_contact_method', null, 16],
+  ['Contact / Requestor', 'Language Preference', 'dropdown', 0, 'language', null, 17],
 
   // Case Information
   ['Case Information', 'Case Number', 'text', 1, null, null, 1],
   ['Case Information', 'Date Received', 'date', 1, null, null, 2],
   ['Case Information', 'Date of Intake', 'date', 0, null, null, 3],
-  ['Case Information', 'Case Type', 'dropdown', 1, 'case_type', null, 4],
+  ['Case Information', 'Case Type', 'dropdown', 0, 'case_type', null, 4],
   ['Case Information', 'Case Status', 'dropdown', 1, 'case_status', null, 5],
   ['Case Information', 'Case Owner', 'lookup', 0, null, 'user', 6],
   ['Case Information', 'Organisation', 'lookup', 1, null, 'org', 7],
@@ -31,6 +35,9 @@ const FIELD_SETUP_ROWS = [
   ['Case Information', 'Priority', 'dropdown', 0, 'priority', null, 10],
   ['Case Information', 'Description', 'textarea', 0, null, null, 11],
   ['Case Information', 'Internal Notes', 'textarea', 0, null, null, 12],
+  ['Case Information', 'Due Date', 'date', 0, null, null, 13],
+  ['Case Information', 'Regulatory Reference Number', 'text', 0, null, null, 14],
+  ['Case Information', 'Created By', 'lookup', 0, null, 'user', 15],
 
   // MI — Category & Product
   ['MI — Category & Product', 'MI Category', 'dropdown', 1, 'mi_category', null, 1],
@@ -46,6 +53,8 @@ const FIELD_SETUP_ROWS = [
   ['MI — Response', 'Response Provided', 'textarea', 0, null, null, 2],
   ['MI — Response', 'Response Date', 'date', 0, null, null, 3],
   ['MI — Response', 'Response Channel', 'dropdown', 0, 'response_channel', null, 4],
+  ['MI — Response', 'MI Status', 'dropdown', 0, 'mi_status', null, 5],
+  ['MI — Response', 'Literature Reference', 'textarea', 0, null, null, 6],
 
   // AE — General
   ['AE — General', 'AE Version', 'text', 0, null, null, 1],
@@ -53,6 +62,8 @@ const FIELD_SETUP_ROWS = [
   ['AE — General', 'Date of Awareness', 'date', 0, null, null, 3],
   ['AE — General', 'Report Type', 'dropdown', 0, 'ae_report_type', null, 4],
   ['AE — General', 'Regulatory Reportability', 'dropdown', 0, 'regulatory_reportability', null, 5],
+  ['AE — General', 'Date of Report', 'date', 0, null, null, 6],
+  ['AE — General', 'Reporter Awareness Date', 'date', 0, null, null, 7],
 
   // AE — Events & Seriousness
   ['AE — Events & Seriousness', 'Event Description', 'textarea', 0, null, null, 1],
@@ -68,6 +79,8 @@ const FIELD_SETUP_ROWS = [
   ['AE — Events & Seriousness', 'Serious — Disability', 'checkbox', 0, null, null, 11],
   ['AE — Events & Seriousness', 'Serious — Congenital Anomaly', 'checkbox', 0, null, null, 12],
   ['AE — Events & Seriousness', 'Serious — Other Medically Important', 'checkbox', 0, null, null, 13],
+  ['AE — Events & Seriousness', 'Causality Assessment', 'dropdown', 0, 'causality_assessment', null, 14],
+  ['AE — Events & Seriousness', 'End Date', 'date', 0, null, null, 15],
 
   // AE — Patient Information
   ['AE — Patient Information', 'Patient Initials', 'text', 0, null, null, 1],
@@ -111,6 +124,10 @@ const FIELD_SETUP_ROWS = [
   ['AE — Product Information', 'Indication', 'text', 0, null, null, 10],
   ['AE — Product Information', 'Action Taken', 'dropdown', 0, 'action_taken', null, 11],
   ['AE — Product Information', 'Concomitant Medications', 'textarea', 0, null, null, 12],
+  ['AE — Product Information', 'Is Suspect', 'dropdown', 0, 'yes_no', null, 13],
+  ['AE — Product Information', 'Is Concomitant', 'dropdown', 0, 'yes_no', null, 14],
+  ['AE — Product Information', 'Dechallenge', 'dropdown', 0, 'dechallenge', null, 15],
+  ['AE — Product Information', 'Rechallenge', 'dropdown', 0, 'rechallenge', null, 16],
 
   // PC — General
   ['PC — General', 'PC Version', 'text', 0, null, null, 1],
@@ -119,6 +136,9 @@ const FIELD_SETUP_ROWS = [
   ['PC — General', 'PC Classification', 'dropdown', 0, 'pc_classification', null, 4],
   ['PC — General', 'Complaint Description', 'textarea', 1, null, null, 5],
   ['PC — General', 'Date of Complaint', 'date', 0, null, null, 6],
+  ['PC — General', 'Severity', 'dropdown', 0, 'pc_severity', null, 7],
+  ['PC — General', 'Root Cause', 'textarea', 0, null, null, 8],
+  ['PC — General', 'Date Received', 'date', 0, null, null, 9],
 
   // PC — Patient Information
   ['PC — Patient Information', 'Patient Name', 'text', 0, null, null, 1],
@@ -134,6 +154,8 @@ const FIELD_SETUP_ROWS = [
   ['PC — Product Information', 'Expiry Date', 'date', 0, null, null, 5],
   ['PC — Product Information', 'Manufacturing Date', 'date', 0, null, null, 6],
   ['PC — Product Information', 'Pack Size', 'text', 0, null, null, 7],
+  ['PC — Product Information', 'Storage Conditions', 'textarea', 0, null, null, 8],
+  ['PC — Product Information', 'Quantity Available for Investigation', 'dropdown', 0, 'yes_no', null, 9],
 
   // PC — Return & Retrieval
   ['PC — Return & Retrieval', 'Return Requested', 'dropdown', 0, 'yes_no', null, 1],
@@ -156,43 +178,52 @@ const FIELD_SETUP_ROWS = [
 ];
 
 const PICKLIST_GROUPS = [
-  { category: 'Case', field: 'case_status', values: ['New', 'In Progress', 'On Hold', 'Closed', 'Cancelled'] },
+  { category: 'Case', field: 'case_status', values: ['Draft', 'Open', 'In Review', 'Pending Information', 'Closed', 'Reopened', 'Submitted', 'Acknowledged', 'Amendment Submitted', 'Withdrawn', 'Investigating', 'Analysed', 'Escalated'] },
   { category: 'Case', field: 'case_type', values: ['MI', 'AE', 'PC'] },
-  { category: 'Case', field: 'priority', values: ['Critical', 'High', 'Medium', 'Low'] },
-  { category: 'Case', field: 'intake_channel', values: ['Manual', 'Email', 'EMIR', 'CRM', 'Portal'] },
+  { category: 'Case', field: 'priority', values: ['Critical', 'High', 'Normal', 'Low'] },
+  { category: 'Case', field: 'intake_channel', values: ['Manual', 'Email', 'Phone', 'Web Form', 'Healthcare Provider', 'Patient', 'Internal', 'EMIR', 'CRM', 'Portal', 'Other'] },
 
-  { category: 'Reporter', field: 'contact_type', values: ['Healthcare Professional', 'Consumer', 'Pharmacist', 'Lawyer', 'Regulatory Authority', 'Other'] },
-  { category: 'Reporter', field: 'reporter_type', values: ['Healthcare Professional', 'Consumer', 'Pharmacist', 'Regulatory Authority', 'Other'] },
+  { category: 'Reporter', field: 'contact_type', values: ['Healthcare Professional', 'Patient', 'Consumer', 'Pharmacist', 'Company Rep', 'Distributor', 'Regulatory Authority', 'Lawyer', 'Other'] },
+  { category: 'Reporter', field: 'reporter_type', values: ['Healthcare Professional', 'Patient', 'Consumer', 'Pharmacist', 'Regulatory Authority', 'Other'] },
   { category: 'Reporter', field: 'prefix', values: ['Mr', 'Ms', 'Mrs', 'Dr', 'Prof', 'Other'] },
-  { category: 'Reporter', field: 'source', values: ['Spontaneous', 'Literature', 'Clinical Trial', 'Post-Marketing Study', 'Regulatory Authority'] },
+  { category: 'Reporter', field: 'source', values: ['Spontaneous', 'Literature', 'Clinical Trial', 'Post-Marketing Study', 'Regulatory Authority', 'Other'] },
   { category: 'Reporter', field: 'consent_status', values: ['Obtained', 'Pending', 'Not Required', 'Withdrawn'] },
+  { category: 'Reporter', field: 'qualification', values: ['MD', 'PharmD', 'Nurse', 'Pharmacist', 'Consumer', 'Other'] },
+  { category: 'Reporter', field: 'preferred_contact_method', values: ['Email', 'Phone', 'Letter', 'Portal'] },
+  { category: 'Reporter', field: 'language', values: ['English', 'French', 'German', 'Spanish', 'Italian', 'Portuguese', 'Other'] },
 
-  { category: 'Medical Inquiry', field: 'mi_category', values: ['Medical Information', 'Off-Label', 'Compassionate Use', 'Clinical Trial', 'Other'] },
-  { category: 'Medical Inquiry', field: 'mi_subcategory', values: ['General Query', 'Dosing', 'Safety', 'Efficacy', 'Storage', 'Interactions'] },
-  { category: 'Medical Inquiry', field: 'response_channel', values: ['Email', 'Phone', 'Letter', 'Fax'] },
+  { category: 'Medical Inquiry', field: 'mi_category', values: ['Pharmacology', 'Efficacy', 'Safety', 'Dosage', 'Pregnancy/Lactation', 'Drug Interactions', 'Adverse Event Question', 'Regulatory', 'Formulation', 'Off-Label', 'Compassionate Use', 'Clinical Trial', 'Other'] },
+  { category: 'Medical Inquiry', field: 'mi_subcategory', values: ['General Query', 'Dosing', 'Safety', 'Efficacy', 'Storage', 'Interactions', 'Drug-Drug Interaction', 'Pregnancy - First Trimester', 'Pregnancy - Second Trimester', 'Pregnancy - Third Trimester', 'Other'] },
+  { category: 'Medical Inquiry', field: 'mi_status', values: ['Open', 'In Progress', 'Pending Information', 'Answered', 'Closed', 'Follow-up Required'] },
+  { category: 'Medical Inquiry', field: 'response_channel', values: ['Email', 'Phone Call', 'Written Letter', 'In-Person Meeting', 'Video Conference', 'Portal', 'Fax'] },
 
-  { category: 'Adverse Event', field: 'ae_status', values: ['Open', 'Under Review', 'Closed', 'Submitted'] },
-  { category: 'Adverse Event', field: 'ae_report_type', values: ['Spontaneous', 'Literature', 'Clinical Trial', 'Solicited'] },
-  { category: 'Adverse Event', field: 'ae_outcome', values: ['Recovered', 'Recovering', 'Not Recovered', 'Fatal', 'Unknown'] },
+  { category: 'Adverse Event', field: 'ae_status', values: ['Open', 'Under Review', 'Closed', 'Submitted', 'Acknowledged', 'Amendment Submitted', 'Withdrawn'] },
+  { category: 'Adverse Event', field: 'ae_report_type', values: ['Initial', 'Follow-up', 'Amendment', 'Expedited', 'Spontaneous', 'Literature', 'Clinical Trial', 'Solicited'] },
+  { category: 'Adverse Event', field: 'ae_outcome', values: ['Recovered', 'Recovering', 'Not Recovered', 'Fatal', 'Unknown', 'Recovered with Sequelae'] },
   { category: 'Adverse Event', field: 'reported_causality', values: ['Related', 'Possibly Related', 'Unrelated', 'Unknown'] },
+  { category: 'Adverse Event', field: 'causality_assessment', values: ['Certain', 'Probable', 'Possible', 'Unlikely', 'Unrelated', 'Unknown'] },
   { category: 'Adverse Event', field: 'frequency', values: ['Single Occurrence', 'Multiple Occurrences', 'Continuous', 'Intermittent'] },
   { category: 'Adverse Event', field: 'seriousness', values: ['Death', 'Life Threatening', 'Hospitalisation', 'Disability', 'Congenital Anomaly', 'Other Medically Important'] },
   { category: 'Adverse Event', field: 'regulatory_reportability', values: ['Reportable', 'Non-Reportable', 'Under Assessment'] },
+  { category: 'Adverse Event', field: 'dechallenge', values: ['Yes — Event Abated', 'No — Event Did Not Abate', 'Unknown', 'Not Applicable'] },
+  { category: 'Adverse Event', field: 'rechallenge', values: ['Yes — Event Recurred', 'No — Event Did Not Recur', 'Unknown', 'Not Done'] },
 
   { category: 'Patient', field: 'gender', values: ['Male', 'Female', 'Other', 'Unknown'] },
   { category: 'Patient', field: 'age_unit', values: ['Years', 'Months', 'Weeks', 'Days'] },
   { category: 'Patient', field: 'yes_no', values: ['Yes', 'No'] },
 
-  { category: 'Product', field: 'route_of_admin', values: ['Oral', 'Intravenous', 'Subcutaneous', 'Intramuscular', 'Topical', 'Inhaled', 'Transdermal', 'Other'] },
-  { category: 'Product', field: 'dose_unit', values: ['mg', 'mcg', 'g', 'mL', 'IU', '%'] },
-  { category: 'Product', field: 'action_taken', values: ['Dose Reduced', 'Drug Withdrawn', 'Dose Not Changed', 'Unknown'] },
+  { category: 'Product', field: 'route_of_admin', values: ['Oral', 'Intravenous (IV)', 'Intramuscular (IM)', 'Subcutaneous (SC)', 'Transdermal', 'Inhaled', 'Topical', 'Rectal', 'Ophthalmic', 'Nasal', 'Vaginal', 'Other'] },
+  { category: 'Product', field: 'dose_unit', values: ['mg', 'mcg', 'g', 'mL', 'IU', 'mmol', '%', 'Other'] },
+  { category: 'Product', field: 'action_taken', values: ['Dose Reduced', 'Drug Withdrawn', 'Dose Not Changed', 'Drug Interrupted', 'Unknown', 'Not Applicable'] },
   { category: 'Product', field: 'product_type', values: ['Prescription', 'Over the Counter', 'Biological', 'Medical Device', 'Combination Product'] },
   { category: 'Product', field: 'product_category', values: ['Brand', 'Generic', 'Biosimilar', 'Investigational'] },
+  { category: 'Product', field: 'frequency', values: ['Once Daily (QD)', 'Twice Daily (BID)', 'Three Times Daily (TID)', 'Four Times Daily (QID)', 'Every 6 Hours (Q6H)', 'Every 8 Hours (Q8H)', 'Every 12 Hours (Q12H)', 'Once Weekly', 'Once Monthly', 'As Needed (PRN)', 'Continuous', 'Per Protocol', 'Other'] },
 
-  { category: 'Product Complaint', field: 'pc_status', values: ['Open', 'Under Review', 'Closed'] },
-  { category: 'Product Complaint', field: 'pc_category', values: ['Quality', 'Packaging', 'Labelling', 'Efficacy', 'Other'] },
+  { category: 'Product Complaint', field: 'pc_status', values: ['Open', 'Investigating', 'Analysed', 'Closed', 'Reopened', 'Escalated'] },
+  { category: 'Product Complaint', field: 'pc_category', values: ['Quality Defect', 'Contamination', 'Packaging Damage', 'Efficacy Complaint', 'Safety Concern', 'Regulatory Issue', 'Labeling Error', 'Delivery Issue', 'Other'] },
   { category: 'Product Complaint', field: 'pc_classification', values: ['Critical', 'Major', 'Minor', 'Unclassified'] },
-  { category: 'Product Complaint', field: 'retrieval_method', values: ['Mail', 'Courier', 'Field Rep', 'Destruction on Site'] },
+  { category: 'Product Complaint', field: 'pc_severity', values: ['Critical', 'Major', 'Minor'] },
+  { category: 'Product Complaint', field: 'retrieval_method', values: ['Courier', 'Mail', 'Pickup', 'Returned at Pharmacy', 'Field Force Recovery', 'Destruction on Site', 'Other'] },
 
   { category: 'MedDRA', field: 'meddra_term', values: ['Nausea', 'Vomiting', 'Headache', 'Dizziness', 'Rash', 'Fatigue', 'Dyspnoea', 'Chest Pain', 'Palpitations', 'Other'] },
 ];
