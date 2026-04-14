@@ -259,7 +259,28 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/pharaxis-key.pem
+          sed -i 's/\r$//' ~/.ssh/pharaxis-key.pem
           chmod 600 ~/.ssh/pharaxis-key.pem
+
+      - name: Preflight EC2 SSH reachability
+        run: |
+          HOST="${{ secrets.EC2_HOST }}"
+          PORT="${{ secrets.EC2_SSH_PORT }}"
+          if [ -z "$PORT" ]; then PORT="22"; fi
+
+          echo "Checking SSH reachability to ${HOST}:${PORT}"
+          for i in {1..6}; do
+            if nc -z -w 5 "$HOST" "$PORT"; then
+              echo "SSH port is reachable."
+              exit 0
+            fi
+            echo "Attempt $i/6 failed. Retrying in 10s..."
+            sleep 10
+          done
+
+          echo "ERROR: Cannot reach ${HOST}:${PORT} from GitHub runner."
+          echo "Check EC2 instance state, EC2_HOST secret, security-group inbound rule for SSH, and NACL."
+          exit 1
 
       - name: Copy dist files to EC2 staging dir
         run: |
@@ -271,60 +292,100 @@ jobs:
           VAULT="${{ needs.detect.outputs.vault }}"
           AI_AGENT="${{ needs.detect.outputs.ai_agent }}"
           QMS="${{ needs.detect.outputs.qms }}"
+          PORT="${{ secrets.EC2_SSH_PORT }}"
+          if [ -z "$PORT" ]; then PORT="22"; fi
 
-          SSH="ssh -i ~/.ssh/pharaxis-key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}"
-          SCP="scp -i ~/.ssh/pharaxis-key.pem -o StrictHostKeyChecking=no -r"
           DEST="${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}"
 
+          run_ssh() {
+            ssh -i ~/.ssh/pharaxis-key.pem \
+              -p "$PORT" \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=20 \
+              -o ConnectionAttempts=3 \
+              -o ServerAliveInterval=15 \
+              -o ServerAliveCountMax=3 \
+              "$DEST" "$@"
+          }
+
+          run_scp() {
+            scp -i ~/.ssh/pharaxis-key.pem \
+              -P "$PORT" \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=20 \
+              -o ConnectionAttempts=3 \
+              -o ServerAliveInterval=15 \
+              -o ServerAliveCountMax=3 \
+              -r "$@"
+          }
+
+          retry() {
+            local max=4
+            local attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                echo "Command failed after ${max} attempts: $*"
+                return 1
+              fi
+              echo "Attempt ${attempt}/${max} failed. Retrying in 8s..."
+              attempt=$((attempt + 1))
+              sleep 8
+            done
+          }
+
           # Create staging dirs on EC2 (ubuntu user owns /tmp)
-          $SSH "mkdir -p /tmp/pharaxis-dist/{mims,cp-portal,ieg,publications,safety,vault,ai-agent,qms}"
+          retry run_ssh "mkdir -p /tmp/pharaxis-dist/{mims,cp-portal,ieg,publications,safety,vault,ai-agent,qms}"
 
           if [ "$MIMS" = "true" ] && [ -d "artifacts/dist-mims" ]; then
             echo "--- Staging MIMS dist ---"
-            $SCP artifacts/dist-mims/. $DEST:/tmp/pharaxis-dist/mims/
+            retry run_scp artifacts/dist-mims/. "$DEST:/tmp/pharaxis-dist/mims/"
           fi
 
           if [ "$CP_PORTAL" = "true" ] && [ -d "artifacts/dist-cp-portal" ]; then
             echo "--- Staging CP Portal dist ---"
-            $SCP artifacts/dist-cp-portal/. $DEST:/tmp/pharaxis-dist/cp-portal/
+            retry run_scp artifacts/dist-cp-portal/. "$DEST:/tmp/pharaxis-dist/cp-portal/"
           fi
 
           if [ "$IEG" = "true" ] && [ -d "artifacts/dist-ieg" ]; then
             echo "--- Staging IEG dist ---"
-            $SCP artifacts/dist-ieg/. $DEST:/tmp/pharaxis-dist/ieg/
+            retry run_scp artifacts/dist-ieg/. "$DEST:/tmp/pharaxis-dist/ieg/"
           fi
 
           if [ "$PUBLICATIONS" = "true" ] && [ -d "artifacts/dist-publications" ]; then
             echo "--- Staging Publications dist ---"
-            $SCP artifacts/dist-publications/. $DEST:/tmp/pharaxis-dist/publications/
+            retry run_scp artifacts/dist-publications/. "$DEST:/tmp/pharaxis-dist/publications/"
           fi
 
           if [ "$SAFETY" = "true" ] && [ -d "artifacts/dist-safety" ]; then
             echo "--- Staging Safety dist ---"
-            $SCP artifacts/dist-safety/. $DEST:/tmp/pharaxis-dist/safety/
+            retry run_scp artifacts/dist-safety/. "$DEST:/tmp/pharaxis-dist/safety/"
           fi
 
           if [ "$VAULT" = "true" ] && [ -d "artifacts/dist-vault" ]; then
             echo "--- Staging Vault dist ---"
-            $SCP artifacts/dist-vault/. $DEST:/tmp/pharaxis-dist/vault/
+            retry run_scp artifacts/dist-vault/. "$DEST:/tmp/pharaxis-dist/vault/"
           fi
 
           if [ "$AI_AGENT" = "true" ] && [ -d "artifacts/dist-ai-agent" ]; then
             echo "--- Staging AI Agent dist ---"
-            $SCP artifacts/dist-ai-agent/. $DEST:/tmp/pharaxis-dist/ai-agent/
+            retry run_scp artifacts/dist-ai-agent/. "$DEST:/tmp/pharaxis-dist/ai-agent/"
           fi
 
           if [ "$QMS" = "true" ] && [ -d "artifacts/dist-qms" ]; then
             echo "--- Staging QMS dist ---"
-            $SCP artifacts/dist-qms/. $DEST:/tmp/pharaxis-dist/qms/
+            retry run_scp artifacts/dist-qms/. "$DEST:/tmp/pharaxis-dist/qms/"
           fi
 
       - name: Publish dist + pull backend + restart PM2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
+          port: ${{ secrets.EC2_SSH_PORT != '' && secrets.EC2_SSH_PORT || '22' }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 60s
           command_timeout: 10m
           script: |
             set -e
