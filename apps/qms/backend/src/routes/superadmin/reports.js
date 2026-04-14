@@ -26,3 +26,33 @@ superadminReportsRouter.get('/billing-summary', async (req, res, next) => {
   }
 });
 
+superadminReportsRouter.get('/login-audit', async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit || 100), 1), 500);
+    const loginAudit = await req.withRlsTransaction(async (client) => {
+      const { rows } = await client.query(
+        `
+          SELECT
+            id,
+            org_id,
+            email::text AS email,
+            login_surface,
+            outcome,
+            reason,
+            ip_address::text AS ip_address,
+            user_agent,
+            occurred_at
+          FROM qms_login_audit
+          ORDER BY occurred_at DESC
+          LIMIT $1
+        `,
+        [limit]
+      );
+      return rows;
+    });
+
+    return res.json({ loginAudit });
+  } catch (error) {
+    return next(error);
+  }
+});

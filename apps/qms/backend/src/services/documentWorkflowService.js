@@ -9,10 +9,10 @@ const transitions = {
 };
 
 const roleRules = {
-  Review: ['doc_owner', 'superadmin', 'qa_manager'],
-  Approved: ['reviewer', 'qa_manager', 'superadmin'],
-  Effective: ['approver', 'qa_manager', 'superadmin'],
-  Retired: ['approver', 'qa_manager', 'superadmin']
+  Review: ['author', 'admin', 'qa_reviewer', 'superadmin'],
+  Approved: ['qa_reviewer', 'approver', 'admin', 'superadmin'],
+  Effective: ['approver', 'admin', 'superadmin'],
+  Retired: ['approver', 'admin', 'superadmin']
 };
 
 const signatureRequirements = {
@@ -58,4 +58,3 @@ export function assertRoleAllowedForTransition(toStatus, roles) {
 export function signatureMeaningForTransition(toStatus) {
   return signatureRequirements[toStatus] || null;
 }
-

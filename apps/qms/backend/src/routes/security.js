@@ -1,0 +1,137 @@
+import { Router } from 'express';
+import { appendAuditEvent } from '../services/auditTrailService.js';
+
+export const securityRouter = Router();
+
+function hasRole(roles, roleKey) {
+  return Array.isArray(roles) && roles.includes(roleKey);
+}
+
+securityRouter.get('/me', async (req, res, next) => {
+  try {
+    const data = await req.withRlsTransaction(async (client) => {
+      const { rows: policyRows } = await client.query(
+        `
+          SELECT email_otp_required, allow_org_admin_2fa_reset, updated_at
+          FROM sa_org_security_policies
+          WHERE org_id = $1
+          LIMIT 1
+        `,
+        [req.authContext.orgId]
+      );
+
+      const { rows: userRows } = await client.query(
+        `
+          SELECT email_otp_enabled, reset_required, last_verified_at, updated_at
+          FROM qms_user_2fa_settings
+          WHERE user_id = $1
+          LIMIT 1
+        `,
+        [req.authContext.userId]
+      );
+
+      return {
+        policy: policyRows[0] || null,
+        user2fa: userRows[0] || null
+      };
+    });
+
+    return res.json(data);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+securityRouter.post('/users/:userId/2fa-reset', async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const isSuperadmin = hasRole(req.authContext.roles, 'superadmin');
+    const isOrgAdmin = hasRole(req.authContext.roles, 'admin');
+    if (!isSuperadmin && !isOrgAdmin) {
+      return res.status(403).json({ error: 'Admin or superadmin role required' });
+    }
+
+    const response = await req.withRlsTransaction(async (client) => {
+      const { rows: policyRows } = await client.query(
+        `
+          SELECT email_otp_required, allow_org_admin_2fa_reset
+          FROM sa_org_security_policies
+          WHERE org_id = $1
+          LIMIT 1
+        `,
+        [req.authContext.orgId]
+      );
+      const policy = policyRows[0] || {
+        email_otp_required: true,
+        allow_org_admin_2fa_reset: true
+      };
+
+      if (!isSuperadmin && !policy.allow_org_admin_2fa_reset) {
+        const error = new Error('Org admin reset is disabled for this organization');
+        error.statusCode = 403;
+        throw error;
+      }
+
+      const { rows: userRows } = await client.query(
+        `
+          SELECT id, org_id, email::text AS email
+          FROM qms_users
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [userId]
+      );
+
+      if (!userRows[0]) {
+        const error = new Error('User not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const { rows: settingsRows } = await client.query(
+        `
+          INSERT INTO qms_user_2fa_settings (
+            org_id,
+            user_id,
+            email_otp_enabled,
+            reset_required,
+            reset_by,
+            updated_at
+          )
+          VALUES ($1, $2, true, true, $3, now())
+          ON CONFLICT (user_id)
+          DO UPDATE SET
+            email_otp_enabled = true,
+            reset_required = true,
+            reset_by = EXCLUDED.reset_by,
+            updated_at = now()
+          RETURNING user_id, email_otp_enabled, reset_required, updated_at
+        `,
+        [userRows[0].org_id, userId, req.authContext.userId]
+      );
+
+      await appendAuditEvent(client, {
+        orgId: req.authContext.orgId,
+        moduleKey: 'security',
+        entityTable: 'qms_user_2fa_settings',
+        entityId: settingsRows[0].user_id,
+        actionKey: '2fa_reset',
+        actorUserId: req.authContext.userId,
+        payloadJson: {
+          targetUserId: userId,
+          targetEmail: userRows[0].email,
+          actorIsSuperadmin: isSuperadmin
+        }
+      });
+
+      return {
+        policy,
+        setting: settingsRows[0]
+      };
+    });
+
+    return res.json(response);
+  } catch (error) {
+    return next(error);
+  }
+});

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { appendAuditEvent } from '../../services/auditTrailService.js';
 import { logSuperadminAction } from './_adminActions.js';
+import { ensureDefaultSecurityGroups } from '../../services/securityGroupService.js';
 
 export const superadminOrgsRouter = Router();
 
@@ -40,6 +41,24 @@ superadminOrgsRouter.post('/', async (req, res, next) => {
           RETURNING id, org_code, org_name, is_active, created_at, updated_at
         `,
         [orgCode, orgName]
+      );
+
+      await ensureDefaultSecurityGroups(client, rows[0].id);
+      await client.query(
+        `
+          INSERT INTO sa_org_upload_policies (org_id)
+          VALUES ($1)
+          ON CONFLICT (org_id) DO NOTHING
+        `,
+        [rows[0].id]
+      );
+      await client.query(
+        `
+          INSERT INTO sa_org_security_policies (org_id)
+          VALUES ($1)
+          ON CONFLICT (org_id) DO NOTHING
+        `,
+        [rows[0].id]
       );
 
       await logSuperadminAction(client, {
@@ -123,4 +142,3 @@ superadminOrgsRouter.patch('/:orgId/status', async (req, res, next) => {
     return next(error);
   }
 });
-

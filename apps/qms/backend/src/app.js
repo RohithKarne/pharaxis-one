@@ -8,6 +8,8 @@ import { deviationsRouter } from './routes/deviations.js';
 import { auditsRouter } from './routes/audits.js';
 import { validationRouter } from './routes/validation.js';
 import { platformRouter } from './routes/platform.js';
+import { changeControlRouter } from './routes/changeControl.js';
+import { securityRouter } from './routes/security.js';
 import { authSelector } from './middleware/authSelector.js';
 import { resolveAuthContext } from './middleware/authContext.js';
 import { withRlsContext } from './middleware/rlsContext.js';
@@ -54,7 +56,9 @@ export function createAppServer() {
   app.use('/api/deviations', deviationsRouter);
   app.use('/api/audits', auditsRouter);
   app.use('/api/validation', validationRouter);
+  app.use('/api/change-control', changeControlRouter);
   app.use('/api/platform', platformRouter);
+  app.use('/api/security', securityRouter);
   app.use('/api/superadmin', superadminAuth, superadminRouter);
 
   app.use((err, _req, res, _next) => {

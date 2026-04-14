@@ -97,6 +97,16 @@ documentControlRouter.post('/documents', async (req, res, next) => {
       const code = documentCode || makeDocumentCode(title);
       const nextReviewDueDate = buildNextReviewDate(reviewIntervalDays);
       const intervalDays = Number(reviewIntervalDays || 365);
+      const { rows: uploadPolicyRows } = await client.query(
+        `
+          SELECT viewer_default_can_download
+          FROM sa_org_upload_policies
+          WHERE org_id = $1
+          LIMIT 1
+        `,
+        [req.authContext.orgId]
+      );
+      const viewerDefaultCanDownload = Boolean(uploadPolicyRows[0]?.viewer_default_can_download);
 
       const { rows: docs } = await client.query(
         `
@@ -175,10 +185,12 @@ documentControlRouter.post('/documents', async (req, res, next) => {
             can_view,
             can_download,
             can_print
-          ) VALUES ($1, $2, 'superadmin', true, false, false)
+          ) VALUES
+            ($1, $2, 'superadmin', true, true, true),
+            ($1, $2, 'viewer', true, $3, false)
           ON CONFLICT (document_id, role_key) DO NOTHING
         `,
-        [req.authContext.orgId, document.id]
+        [req.authContext.orgId, document.id, viewerDefaultCanDownload]
       );
 
       await appendAuditEvent(client, {
@@ -285,7 +297,8 @@ documentControlRouter.post(
               v.version_no,
               v.status,
               d.review_interval_days,
-              d.active_version_id
+              d.active_version_id,
+              d.created_by AS document_created_by
             FROM dc_document_versions v
             JOIN dc_documents d ON d.id = v.document_id
             WHERE v.id = $1
@@ -303,6 +316,14 @@ documentControlRouter.post(
 
         assertTransitionAllowed(current.status, toStatus);
         assertRoleAllowedForTransition(toStatus, req.authContext.roles);
+
+        if (toStatus === 'Effective' && current.document_created_by === req.authContext.userId) {
+          const error = new Error(
+            'Segregation rule violation: the document creator cannot perform final approval'
+          );
+          error.statusCode = 403;
+          throw error;
+        }
 
         const validSignatureId = await validateSignatureIfRequired(client, req.authContext, {
           toStatus,
@@ -535,8 +556,15 @@ documentControlRouter.get(
       const response = await req.withRlsTransaction(async (client) => {
         const { rows: docs } = await client.query(
           `
-            SELECT d.id, d.controlled_preview_enabled, d.download_allowed, d.print_allowed
+            SELECT
+              d.id,
+              d.controlled_preview_enabled,
+              d.download_allowed,
+              d.print_allowed,
+              p.viewer_default_can_download,
+              p.viewer_download_requires_watermark
             FROM dc_documents d
+            LEFT JOIN sa_org_upload_policies p ON p.org_id = d.org_id
             WHERE d.id = $1
           `,
           [documentId]
@@ -573,8 +601,21 @@ documentControlRouter.get(
           [versionId, req.authContext.userId]
         );
 
+        const userRoles = Array.isArray(req.authContext.roles) ? req.authContext.roles : [];
+        const hasViewerRole = userRoles.includes('viewer');
+        const hasElevatedRole = userRoles.some((role) =>
+          ['admin', 'author', 'qa_reviewer', 'approver', 'superadmin'].includes(role)
+        );
+
+        const viewerOnlyContext = hasViewerRole && !hasElevatedRole;
         const policy = getControlledPreviewPolicy(docs[0], {
-          alreadyAcknowledged: Boolean(ackRows[0])
+          alreadyAcknowledged: Boolean(ackRows[0]),
+          downloadAllowed: viewerOnlyContext
+            ? Boolean(docs[0].viewer_default_can_download)
+            : Boolean(docs[0].download_allowed),
+          requiresConfidentialWatermark: viewerOnlyContext
+            ? Boolean(docs[0].viewer_download_requires_watermark)
+            : false
         });
 
         return {

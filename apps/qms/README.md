@@ -1,4 +1,4 @@
-# Pharaxis QMS (Sprint 1 Bootstrap)
+# Pharaxis QMS
 
 This app is now bootstrapped with:
 - Node.js + Express backend
@@ -52,14 +52,31 @@ npm run dev
 
 Default frontend port: `3146`
 
-## Current Auth Login Payload (JWT Path)
+## Current Auth Login Payloads (JWT Path)
 
 `POST /api/auth/login`
 ```json
 {
-  "email": "admin@pharaxis.local",
+  "userId": "admin",
   "password": "Admin@123",
   "orgCode": "PHA_DEV"
+}
+```
+
+`POST /api/auth/superadmin/login`
+```json
+{
+  "userId": "Superadmin",
+  "password": "Manager@123"
+}
+```
+
+`GET /api/auth/orgs`
+```json
+{
+  "orgs": [
+    { "orgCode": "PHA_DEV", "orgName": "Pharaxis Development" }
+  ]
 }
 ```
 
@@ -71,11 +88,18 @@ Default frontend port: `3146`
   - `POST /api/superadmin/orgs`
   - `PATCH /api/superadmin/orgs/:orgId/status`
   - `GET /api/superadmin/users`
+  - `GET /api/superadmin/users/security-groups/:orgId`
   - `POST /api/superadmin/users`
+  - `PATCH /api/superadmin/users/:userId/security-groups`
   - `PATCH /api/superadmin/users/:userId/status`
   - `GET /api/superadmin/billing/:orgId`
   - `PUT /api/superadmin/billing/:orgId`
   - `GET /api/superadmin/reports/billing-summary`
+  - `GET /api/superadmin/reports/login-audit`
+  - `GET /api/superadmin/platform/email-config`
+  - `PUT /api/superadmin/platform/email-config`
+  - `GET /api/superadmin/platform/upload-policy/:orgId`
+  - `PUT /api/superadmin/platform/upload-policy/:orgId`
 - Payment collection is intentionally not implemented in Sprint 1 scope.
 - Document Control baseline APIs are available in backend:
   - `POST /api/document-control/documents`
@@ -117,6 +141,13 @@ Default frontend port: `3146`
   - `POST /api/validation/reports/:systemId/generate-vsr`
   - `GET /api/validation/systems`
   - `GET /api/validation/deviations`
+- Change Control APIs:
+  - `POST /api/change-control`
+  - `POST /api/change-control/:changeId/impact-assessment`
+  - `POST /api/change-control/:changeId/approvals`
+  - `POST /api/change-control/:changeId/implementation`
+  - `POST /api/change-control/:changeId/close`
+  - `GET /api/change-control`
 - Platform shared services APIs:
   - `POST /api/platform/notifications/in-app`
   - `POST /api/platform/notifications/email`
@@ -124,10 +155,14 @@ Default frontend port: `3146`
   - `POST /api/platform/events/outbox/:eventId/publish`
   - `GET /api/platform/notifications`
   - `POST /api/platform/alerts/run`
-- Frontend workspace includes module routes:
+- Frontend routes:
+  - `/login` (user login)
+  - `/superadmin/login` (separate superadmin login)
+  - `/dashboard`
   - `/document-control`
   - `/capa`
   - `/deviations`
   - `/audits`
   - `/validation`
+  - `/change-control`
   - `/superadmin`

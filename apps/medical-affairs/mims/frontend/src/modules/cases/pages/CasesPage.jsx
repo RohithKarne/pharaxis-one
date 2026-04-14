@@ -14,6 +14,7 @@ import '../cases.css'
 const API = import.meta.env.VITE_API_URL || '/api'
 
 const CASE_TYPE_COLORS = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
+const CASE_TYPE_LABELS = { MI: 'Medical Information', AE: 'Adverse Event', PC: 'Product Complaint' }
 const PRIORITY_COLORS  = { normal: '#6b7280', high: '#f59e0b', urgent: '#ef4444' }
 
 export default function CasesPage() {

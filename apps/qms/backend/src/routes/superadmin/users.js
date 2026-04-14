@@ -1,8 +1,35 @@
 import { Router } from 'express';
 import { appendAuditEvent } from '../../services/auditTrailService.js';
 import { logSuperadminAction } from './_adminActions.js';
+import {
+  ensureDefaultSecurityGroups,
+  sanitizeRoleKeys,
+  syncUserSecurityGroups
+} from '../../services/securityGroupService.js';
 
 export const superadminUsersRouter = Router();
+
+superadminUsersRouter.get('/security-groups/:orgId', async (req, res, next) => {
+  try {
+    const { orgId } = req.params;
+    const groups = await req.withRlsTransaction(async (client) => {
+      await ensureDefaultSecurityGroups(client, orgId);
+      const { rows } = await client.query(
+        `
+          SELECT role_key, role_name
+          FROM qms_roles
+          WHERE org_id = $1
+          ORDER BY role_key ASC
+        `,
+        [orgId]
+      );
+      return rows;
+    });
+    return res.json({ securityGroups: groups });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 superadminUsersRouter.get('/', async (req, res, next) => {
   try {
@@ -17,9 +44,16 @@ superadminUsersRouter.get('/', async (req, res, next) => {
             u.full_name,
             u.role_key,
             u.is_active,
-            u.created_at
+            u.created_at,
+            COALESCE(
+              ARRAY_AGG(DISTINCT r.role_key) FILTER (WHERE r.role_key IS NOT NULL),
+              ARRAY[u.role_key]::text[]
+            ) AS security_groups
           FROM qms_users u
           JOIN qms_orgs o ON o.id = u.org_id
+          LEFT JOIN qms_user_roles ur ON ur.user_id = u.id AND ur.org_id = u.org_id
+          LEFT JOIN qms_roles r ON r.id = ur.role_id
+          GROUP BY u.id, o.org_code
           ORDER BY u.created_at DESC
           LIMIT 200
         `
@@ -35,22 +69,48 @@ superadminUsersRouter.get('/', async (req, res, next) => {
 
 superadminUsersRouter.post('/', async (req, res, next) => {
   try {
-    const { orgId, email, fullName, roleKey, password } = req.body || {};
-    if (!orgId || !email || !fullName || !roleKey || !password) {
+    const { orgId, email, fullName, roleKey, roleKeys, password } = req.body || {};
+    if (!orgId || !email || !fullName || !password) {
       return res.status(400).json({
-        error: 'orgId, email, fullName, roleKey, and password are required'
+        error: 'orgId, email, fullName, and password are required'
       });
     }
 
+    const requestedRoleKeys = sanitizeRoleKeys(roleKeys, [roleKey || 'viewer']);
+    if (requestedRoleKeys.length === 0) {
+      return res.status(400).json({ error: 'At least one valid security group is required' });
+    }
+
     const user = await req.withRlsTransaction(async (client) => {
+      await ensureDefaultSecurityGroups(client, orgId);
+
+      const primaryRole = requestedRoleKeys.includes('admin') ? 'admin' : requestedRoleKeys[0];
+
       const { rows } = await client.query(
         `
           INSERT INTO qms_users (org_id, email, full_name, role_key, password_hash, is_active)
           VALUES ($1, $2, $3, $4, crypt($5, gen_salt('bf')), true)
           RETURNING id, org_id, email::text AS email, full_name, role_key, is_active, created_at
         `,
-        [orgId, email, fullName, roleKey, password]
+        [orgId, email, fullName, primaryRole, password]
       );
+
+      const assignedRoleKeys = await syncUserSecurityGroups(client, {
+        orgId,
+        userId: rows[0].id,
+        roleKeys: requestedRoleKeys
+      });
+
+      if (!assignedRoleKeys.includes('superadmin')) {
+        await client.query(
+          `
+            INSERT INTO qms_user_2fa_settings (org_id, user_id, email_otp_enabled)
+            VALUES ($1, $2, true)
+            ON CONFLICT (user_id) DO NOTHING
+          `,
+          [orgId, rows[0].id]
+        );
+      }
 
       await logSuperadminAction(client, {
         orgId: req.authContext.orgId,
@@ -58,7 +118,7 @@ superadminUsersRouter.post('/', async (req, res, next) => {
         actionKey: 'superadmin.user.create',
         targetEntityType: 'qms_users',
         targetEntityId: rows[0].id,
-        detailsJson: { orgId, email, roleKey }
+        detailsJson: { orgId, email, roleKeys: assignedRoleKeys }
       });
 
       await appendAuditEvent(client, {
@@ -68,13 +128,79 @@ superadminUsersRouter.post('/', async (req, res, next) => {
         entityId: rows[0].id,
         actionKey: 'create',
         actorUserId: req.authContext.userId,
-        payloadJson: { orgId, email, roleKey }
+        payloadJson: { orgId, email, roleKeys: assignedRoleKeys }
       });
 
-      return rows[0];
+      return {
+        ...rows[0],
+        security_groups: assignedRoleKeys
+      };
     });
 
     return res.status(201).json({ user });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+superadminUsersRouter.patch('/:userId/security-groups', async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { roleKeys } = req.body || {};
+    const requestedRoleKeys = sanitizeRoleKeys(roleKeys, []);
+    if (requestedRoleKeys.length === 0) {
+      return res.status(400).json({ error: 'At least one valid security group is required' });
+    }
+
+    const updated = await req.withRlsTransaction(async (client) => {
+      const { rows: userRows } = await client.query(
+        `
+          SELECT id, org_id, email::text AS email
+          FROM qms_users
+          WHERE id = $1
+        `,
+        [userId]
+      );
+      if (!userRows[0]) {
+        const error = new Error('User not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const assignedRoleKeys = await syncUserSecurityGroups(client, {
+        orgId: userRows[0].org_id,
+        userId,
+        roleKeys: requestedRoleKeys
+      });
+
+      await logSuperadminAction(client, {
+        orgId: req.authContext.orgId,
+        actorUserId: req.authContext.userId,
+        actionKey: 'superadmin.user.security_groups',
+        targetEntityType: 'qms_users',
+        targetEntityId: userId,
+        detailsJson: { roleKeys: assignedRoleKeys }
+      });
+
+      await appendAuditEvent(client, {
+        orgId: req.authContext.orgId,
+        moduleKey: 'superadmin',
+        entityTable: 'qms_users',
+        entityId: userId,
+        actionKey: 'security_groups_update',
+        actorUserId: req.authContext.userId,
+        payloadJson: { roleKeys: assignedRoleKeys }
+      });
+
+      return {
+        id: userId,
+        orgId: userRows[0].org_id,
+        email: userRows[0].email,
+        securityGroups: assignedRoleKeys
+      };
+    });
+
+    return res.json({ user: updated });
   } catch (error) {
     return next(error);
   }
@@ -133,4 +259,3 @@ superadminUsersRouter.patch('/:userId/status', async (req, res, next) => {
     return next(error);
   }
 });
-
