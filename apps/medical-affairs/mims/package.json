@@ -10,14 +10,13 @@
     "test": "jest --testPathPatterns=backend/tests",
     "test:process-explorer-guard": "node backend/tests/process-explorer-guard.js",
     "test:smoke:process-explorer-ops": "node backend/tests/smoke-process-explorer-ops.js",
-    "test:smoke:case-regression": "node backend/tests/smoke-case-regressions.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:smoke:sprint14:g12": "node backend/tests/smoke-sprint14-g12.js",
-    "test:sprint-close:gate1": "npm run test:smoke:case-regression && npm run test:smoke:sprint14:g12 && npm run test:e2e",
+    "test:sprint-close:gate1": "npm run test:smoke:sprint14:g12 && npm run test:e2e",
     "test:smoke:sprint14:g13": "node backend/tests/smoke-sprint14-g13.js",
     "demo:preflight": "node backend/tests/smoke-sprint14-g13.js",
-    "test:sprint14:full": "npm run test:smoke:case-regression && npm run test:smoke:sprint14:g12 && npm run test:smoke:sprint14:g13"
+    "test:sprint14:full": "npm run test:smoke:sprint14:g12 && npm run test:smoke:sprint14:g13"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

@@ -133,41 +133,73 @@ Default frontend port: `3146`
   - `GET /api/capa`
 - Deviation APIs:
   - `POST /api/deviations`
+  - `PATCH /api/deviations/:deviationId`
+  - `POST /api/deviations/:deviationId/triage`
   - `POST /api/deviations/:deviationId/containment`
   - `POST /api/deviations/:deviationId/investigation`
+  - `POST /api/deviations/:deviationId/qa-review`
   - `POST /api/deviations/:deviationId/link-capa`
   - `POST /api/deviations/:deviationId/close`
+  - `POST /api/deviations/:deviationId/reopen`
+  - `GET /api/deviations/:deviationId`
+  - `GET /api/deviations/:deviationId/timeline`
   - `GET /api/deviations`
 - Audit + Binder APIs:
   - `POST /api/audits`
+  - `POST /api/audits/:auditId/start`
   - `POST /api/audits/:auditId/findings`
   - `POST /api/audits/:auditId/findings/:findingId/link-capa`
+  - `POST /api/audits/:auditId/findings/:findingId/respond`
+  - `POST /api/audits/:auditId/findings/:findingId/close`
   - `POST /api/audits/:auditId/respond/:findingId`
+  - `POST /api/audits/:auditId/close`
   - `POST /api/audits/binder/generate`
   - `GET /api/audits/binder/jobs`
+  - `GET /api/audits/:auditId`
+  - `GET /api/audits/:auditId/timeline`
   - `GET /api/audits`
 - Validation Services APIs:
   - `POST /api/validation/systems`
+  - `POST /api/validation/systems/:systemId/requirements`
+  - `POST /api/validation/systems/:systemId/traceability`
   - `POST /api/validation/systems/:systemId/plans`
   - `POST /api/validation/plans/:planId/protocols`
   - `POST /api/validation/protocols/:protocolId/scripts`
   - `PATCH /api/validation/steps/:stepId/execute`
   - `POST /api/validation/systems/:systemId/revalidation-flag`
+  - `POST /api/validation/systems/:systemId/reviews/:reviewId/complete`
+  - `POST /api/validation/systems/:systemId/complete`
+  - `GET /api/validation/systems/:systemId`
+  - `GET /api/validation/systems/:systemId/timeline`
   - `POST /api/validation/reports/:systemId/generate-vsr`
   - `GET /api/validation/systems`
   - `GET /api/validation/deviations`
 - Change Control APIs:
   - `POST /api/change-control`
   - `POST /api/change-control/:changeId/impact-assessment`
+  - `POST /api/change-control/:changeId/cab-review`
   - `POST /api/change-control/:changeId/approvals`
   - `POST /api/change-control/:changeId/implementation`
   - `POST /api/change-control/:changeId/close`
+  - `POST /api/change-control/:changeId/reopen`
+  - `GET /api/change-control/:changeId`
+  - `GET /api/change-control/:changeId/timeline`
   - `GET /api/change-control`
 - Platform shared services APIs:
   - `POST /api/platform/notifications/in-app`
   - `POST /api/platform/notifications/email`
+  - `POST /api/platform/notifications/email/:emailId/retry`
+  - `POST /api/platform/notifications/email/:emailId/fail`
+  - `POST /api/platform/notifications/email/:emailId/mark-sent`
   - `POST /api/platform/events/outbox`
   - `POST /api/platform/events/outbox/:eventId/publish`
+  - `POST /api/platform/events/outbox/:eventId/retry`
+  - `POST /api/platform/events/outbox/:eventId/fail`
+  - `GET /api/platform/trace-links`
+  - `POST /api/platform/training/catalog`
+  - `POST /api/platform/training/assignments`
+  - `POST /api/platform/training/assignments/:assignmentId/complete`
+  - `GET /api/platform/training/assignments`
   - `GET /api/platform/notifications`
   - `POST /api/platform/alerts/run`
 - Frontend routes:

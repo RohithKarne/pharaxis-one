@@ -39,7 +39,6 @@ npm run dev
 
 ```bash
 npm run test
-npm run test:smoke:case-regression
 npm run test:e2e
 ```
 

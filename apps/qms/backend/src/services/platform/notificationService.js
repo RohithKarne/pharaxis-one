@@ -39,3 +39,46 @@ export async function queueEmailNotification(client, params) {
   return rows[0];
 }
 
+export async function markEmailNotificationSent(client, notificationId) {
+  const { rows } = await client.query(
+    `
+      UPDATE qms_email_notifications
+      SET delivery_status = 'Sent', sent_at = now(), last_error = NULL
+      WHERE id = $1
+      RETURNING *
+    `,
+    [notificationId]
+  );
+  return rows[0] || null;
+}
+
+export async function markEmailNotificationFailed(client, notificationId, errorMessage) {
+  const { rows } = await client.query(
+    `
+      UPDATE qms_email_notifications
+      SET
+        delivery_status = 'Failed',
+        retry_count = retry_count + 1,
+        last_error = $2
+      WHERE id = $1
+      RETURNING *
+    `,
+    [notificationId, errorMessage || null]
+  );
+  return rows[0] || null;
+}
+
+export async function retryEmailNotification(client, notificationId) {
+  const { rows } = await client.query(
+    `
+      UPDATE qms_email_notifications
+      SET
+        delivery_status = 'Queued',
+        last_error = NULL
+      WHERE id = $1
+      RETURNING *
+    `,
+    [notificationId]
+  );
+  return rows[0] || null;
+}

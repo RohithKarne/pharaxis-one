@@ -26,3 +26,33 @@ export async function markOutboxPublished(client, outboxId) {
   return rows[0] || null;
 }
 
+export async function markOutboxFailed(client, outboxId, errorMessage) {
+  const { rows } = await client.query(
+    `
+      UPDATE qms_event_outbox
+      SET
+        publish_status = 'Failed',
+        retry_count = retry_count + 1,
+        last_error = $2
+      WHERE id = $1
+      RETURNING *
+    `,
+    [outboxId, errorMessage || null]
+  );
+  return rows[0] || null;
+}
+
+export async function retryOutboxEvent(client, outboxId) {
+  const { rows } = await client.query(
+    `
+      UPDATE qms_event_outbox
+      SET
+        publish_status = 'Queued',
+        last_error = NULL
+      WHERE id = $1
+      RETURNING *
+    `,
+    [outboxId]
+  );
+  return rows[0] || null;
+}

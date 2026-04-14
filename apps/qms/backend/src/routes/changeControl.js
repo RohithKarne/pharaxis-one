@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { appendAuditEvent } from '../services/auditTrailService.js';
+import { appendTraceLink } from '../services/traceabilityService.js';
 import { makeEntityCode, asDateString } from '../utils/codegen.js';
 
 export const changeControlRouter = Router();
@@ -7,8 +8,42 @@ export const changeControlRouter = Router();
 const VALID_CHANGE_TYPES = ['Standard', 'Major', 'Emergency'];
 const VALID_RISK_LEVELS = ['High', 'Medium', 'Low'];
 const VALID_APPROVAL_DECISIONS = ['Approve', 'Reject'];
+const VALID_CAB_DECISIONS = ['Approve', 'Reject', 'ConditionalApprove'];
 const VALID_STEP_STATUSES = ['Planned', 'InProgress', 'Completed', 'Blocked'];
 const VALID_EFFECTIVENESS_RESULTS = ['Effective', 'PartiallyEffective', 'NotEffective'];
+
+function hasAnyRole(roles, roleKeys) {
+  return Array.isArray(roles) && roleKeys.some((role) => roles.includes(role));
+}
+
+function assertRole(req, roleKeys, message = 'Insufficient permissions for this action') {
+  if (!hasAnyRole(req.authContext.roles, roleKeys)) {
+    const error = new Error(message);
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
+async function appendChangeHistoryEvent(client, {
+  orgId,
+  changeId,
+  actionKey,
+  actorUserId,
+  payloadJson = {}
+}) {
+  await client.query(
+    `
+      INSERT INTO cc_history_events (
+        org_id,
+        change_id,
+        action_key,
+        actor_user_id,
+        payload_json
+      ) VALUES ($1, $2, $3, $4, $5::jsonb)
+    `,
+    [orgId, changeId, actionKey, actorUserId, JSON.stringify(payloadJson)]
+  );
+}
 
 changeControlRouter.post('/', async (req, res, next) => {
   try {
@@ -20,7 +55,8 @@ changeControlRouter.post('/', async (req, res, next) => {
       plannedStartDate,
       plannedEndDate,
       linkedDocumentId = null,
-      riskLevel = 'Medium'
+      riskLevel = 'Medium',
+      cabRequired = true
     } = req.body || {};
 
     if (!title || !reason || !ownerUserId) {
@@ -55,9 +91,10 @@ changeControlRouter.post('/', async (req, res, next) => {
             linked_document_id,
             planned_start_date,
             planned_end_date,
+            cab_required,
             created_by
           )
-          VALUES ($1, $2, $3, $4, $5, 'Draft', $6, $7, $8, $9, $10, $11, $8)
+          VALUES ($1, $2, $3, $4, $5, 'Draft', $6, $7, $8, $9, $10, $11, $12, $8)
           RETURNING *
         `,
         [
@@ -71,9 +108,32 @@ changeControlRouter.post('/', async (req, res, next) => {
           req.authContext.userId,
           linkedDocumentId,
           asDateString(plannedStartDate),
-          asDateString(plannedEndDate)
+          asDateString(plannedEndDate),
+          Boolean(cabRequired)
         ]
       );
+
+      if (linkedDocumentId) {
+        await appendTraceLink(client, {
+          orgId: req.authContext.orgId,
+          sourceModule: 'change_control',
+          sourceTable: 'cc_change_records',
+          sourceId: rows[0].id,
+          targetModule: 'document_control',
+          targetTable: 'dc_documents',
+          targetId: linkedDocumentId,
+          linkType: 'Impact',
+          createdBy: req.authContext.userId
+        });
+      }
+
+      await appendChangeHistoryEvent(client, {
+        orgId: req.authContext.orgId,
+        changeId: rows[0].id,
+        actionKey: 'create',
+        actorUserId: req.authContext.userId,
+        payloadJson: { changeType, riskLevel, cabRequired: Boolean(cabRequired) }
+      });
 
       await appendAuditEvent(client, {
         orgId: req.authContext.orgId,
@@ -155,6 +215,14 @@ changeControlRouter.post('/:changeId/impact-assessment', async (req, res, next) 
         [req.authContext.orgId, changeId, assessmentSummary, safeModules, riskLevel, req.authContext.userId]
       );
 
+      await appendChangeHistoryEvent(client, {
+        orgId: req.authContext.orgId,
+        changeId,
+        actionKey: 'impact_assessment',
+        actorUserId: req.authContext.userId,
+        payloadJson: { riskLevel, impactedModules: safeModules }
+      });
+
       await appendAuditEvent(client, {
         orgId: req.authContext.orgId,
         moduleKey: 'change_control',
@@ -172,6 +240,73 @@ changeControlRouter.post('/:changeId/impact-assessment', async (req, res, next) 
     });
 
     return res.status(201).json(payload);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+changeControlRouter.post('/:changeId/cab-review', async (req, res, next) => {
+  try {
+    assertRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
+
+    const { changeId } = req.params;
+    const { decision, comments = null } = req.body || {};
+
+    if (!VALID_CAB_DECISIONS.includes(decision)) {
+      return res.status(400).json({
+        error: `decision must be one of: ${VALID_CAB_DECISIONS.join(', ')}`
+      });
+    }
+
+    const payload = await req.withRlsTransaction(async (client) => {
+      const { rows: changes } = await client.query(
+        `
+          SELECT id, status
+          FROM cc_change_records
+          WHERE id = $1
+          FOR UPDATE
+        `,
+        [changeId]
+      );
+
+      if (!changes[0]) {
+        const error = new Error('Change request not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const status = decision === 'Reject' ? 'Rejected' : 'CabReview';
+
+      const { rows } = await client.query(
+        `
+          UPDATE cc_change_records
+          SET
+            status = $2,
+            cab_decision = $3,
+            cab_reviewed_by = $4,
+            cab_reviewed_at = now(),
+            updated_at = now()
+          WHERE id = $1
+          RETURNING *
+        `,
+        [changeId, status, decision, req.authContext.userId]
+      );
+
+      await appendChangeHistoryEvent(client, {
+        orgId: req.authContext.orgId,
+        changeId,
+        actionKey: 'cab_review',
+        actorUserId: req.authContext.userId,
+        payloadJson: {
+          decision,
+          comments
+        }
+      });
+
+      return rows[0];
+    });
+
+    return res.status(201).json({ change: payload });
   } catch (error) {
     return next(error);
   }
@@ -254,6 +389,14 @@ changeControlRouter.post('/:changeId/approvals', async (req, res, next) => {
         error.statusCode = 404;
         throw error;
       }
+
+      await appendChangeHistoryEvent(client, {
+        orgId: req.authContext.orgId,
+        changeId,
+        actionKey: 'approval_decision',
+        actorUserId: req.authContext.userId,
+        payloadJson: { decision, comments: comments || null }
+      });
 
       await appendAuditEvent(client, {
         orgId: req.authContext.orgId,
@@ -362,6 +505,18 @@ changeControlRouter.post('/:changeId/implementation', async (req, res, next) => 
         `,
         [changeId]
       );
+
+      await appendChangeHistoryEvent(client, {
+        orgId: req.authContext.orgId,
+        changeId,
+        actionKey: 'implementation_step',
+        actorUserId: req.authContext.userId,
+        payloadJson: {
+          stepNo: nextStepNo,
+          stepStatus,
+          stepTitle
+        }
+      });
 
       await appendAuditEvent(client, {
         orgId: req.authContext.orgId,
@@ -478,6 +633,14 @@ changeControlRouter.post('/:changeId/close', async (req, res, next) => {
         throw error;
       }
 
+      await appendChangeHistoryEvent(client, {
+        orgId: req.authContext.orgId,
+        changeId,
+        actionKey: 'close',
+        actorUserId: req.authContext.userId,
+        payloadJson: { effectivenessResult }
+      });
+
       await appendAuditEvent(client, {
         orgId: req.authContext.orgId,
         moduleKey: 'change_control',
@@ -492,6 +655,164 @@ changeControlRouter.post('/:changeId/close', async (req, res, next) => {
     });
 
     return res.json({ change: closed });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+changeControlRouter.post('/:changeId/reopen', async (req, res, next) => {
+  try {
+    assertRole(req, ['qa_reviewer', 'admin', 'superadmin']);
+
+    const { changeId } = req.params;
+    const { reason } = req.body || {};
+    if (!reason) {
+      return res.status(400).json({ error: 'reason is required' });
+    }
+
+    const change = await req.withRlsTransaction(async (client) => {
+      const { rows } = await client.query(
+        `
+          UPDATE cc_change_records
+          SET
+            status = 'Reopened',
+            reopened_reason = $2,
+            reopened_at = now(),
+            updated_at = now()
+          WHERE id = $1
+          RETURNING *
+        `,
+        [changeId, reason]
+      );
+
+      if (!rows[0]) {
+        const error = new Error('Change request not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      await appendChangeHistoryEvent(client, {
+        orgId: req.authContext.orgId,
+        changeId,
+        actionKey: 'reopen',
+        actorUserId: req.authContext.userId,
+        payloadJson: { reason }
+      });
+
+      return rows[0];
+    });
+
+    return res.json({ change });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+changeControlRouter.get('/:changeId/timeline', async (req, res, next) => {
+  try {
+    const { changeId } = req.params;
+
+    const timeline = await req.withRlsTransaction(async (client) => {
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM cc_history_events
+          WHERE change_id = $1
+          ORDER BY occurred_at DESC
+        `,
+        [changeId]
+      );
+
+      return rows;
+    });
+
+    return res.json({ timeline });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+changeControlRouter.get('/:changeId', async (req, res, next) => {
+  try {
+    const { changeId } = req.params;
+
+    const payload = await req.withRlsTransaction(async (client) => {
+      const { rows: changes } = await client.query(
+        `
+          SELECT *
+          FROM cc_change_records
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [changeId]
+      );
+
+      if (!changes[0]) {
+        const error = new Error('Change request not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const [impactRows, approvalsRows, stepsRows, historyRows, traceRows] = await Promise.all([
+        client.query(
+          `
+            SELECT *
+            FROM cc_impact_assessments
+            WHERE change_id = $1
+            LIMIT 1
+          `,
+          [changeId]
+        ),
+        client.query(
+          `
+            SELECT *
+            FROM cc_approval_records
+            WHERE change_id = $1
+            ORDER BY decided_at DESC
+          `,
+          [changeId]
+        ),
+        client.query(
+          `
+            SELECT *
+            FROM cc_implementation_steps
+            WHERE change_id = $1
+            ORDER BY step_no ASC
+          `,
+          [changeId]
+        ),
+        client.query(
+          `
+            SELECT *
+            FROM cc_history_events
+            WHERE change_id = $1
+            ORDER BY occurred_at DESC
+          `,
+          [changeId]
+        ),
+        client.query(
+          `
+            SELECT *
+            FROM qms_trace_links
+            WHERE source_id = $1 OR target_id = $1
+            ORDER BY created_at DESC
+            LIMIT 100
+          `,
+          [changeId]
+        )
+      ]);
+
+      return {
+        change: changes[0],
+        impactAssessment: impactRows.rows[0] || null,
+        approvals: approvalsRows.rows,
+        implementationSteps: stepsRows.rows,
+        timeline: historyRows.rows,
+        traceLinks: traceRows.rows
+      };
+    });
+
+    return res.json(payload);
   } catch (error) {
     return next(error);
   }
