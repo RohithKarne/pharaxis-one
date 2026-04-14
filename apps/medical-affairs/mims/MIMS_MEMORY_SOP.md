@@ -214,10 +214,17 @@ if (req.user.role !== 'superadmin') {
 
 ## 5. Team Structure
 
-11 members. Full org chart and role descriptions: see `TEAM_OPERATING_SOP.md`.
+5 members. Full org chart and role descriptions: see `docs/TEAM_OPERATING_SOP.md`.
 
-**Quick reference (titles updated 2026-04-05):**
-Saad (CEO) → Rohith (CPO) → Vanaja (Director of Product Management) + Bala (Director of Project Management) + Rajeev (CTO) → Varun (Senior Director of Software Systems) → Bhavya (Senior Solution Architect), Vivek (Principal Software Engineer), Karthik (QA Manager), Shivani (Senior Test Engineer). Vinay (Product Owner) reports to Vanaja.
+**Quick reference (restructured 2026-04-14):**
+
+| Full Name | Role |
+|-----------|------|
+| Rohith Karne | CEO & Co-Founder |
+| Varun Karne | CTO & Co-Founder |
+| Saad Rahman | Chief Product Officer (CPO) |
+| Bhavya Bobba | Engineering Manager + QA Manager |
+| Bala Kaviti | Head of PMO, Business & Operations |
 
 ---
 

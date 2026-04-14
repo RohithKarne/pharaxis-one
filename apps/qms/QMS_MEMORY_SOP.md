@@ -46,7 +46,7 @@ A Pharaxis One application for managing SOPs, validation documents, quality even
 
 ## 5. Team Structure
 
-> Full org chart in `TEAM_OPERATING_SOP.md`.
+> Full org chart in `docs/TEAM_OPERATING_SOP.md`. Restructured 2026-04-14 — 5-member team. See team.md for full names and roles.
 
 ---
 

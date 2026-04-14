@@ -127,20 +127,15 @@ Tier 3 — Org Users (authors, reviewers, approvers, viewers)
 
 ## 5. Team Structure
 
-> Full org chart in `TEAM_OPERATING_SOP.md`. Summary:
+> Full org chart in `docs/TEAM_OPERATING_SOP.md`. Restructured 2026-04-14.
 
-| Role | Person | Vault Responsibility |
-|------|--------|---------------------|
-| CPO / Gate approvals | Rohith | All gates, final sign-off |
-| Director of PM / Scrum Master | Bala | Sprint facilitation, blockers, gate coordination |
-| Director of Product | Vanaja | Product strategy, feature prioritisation |
-| Product Owner | Vinay | User stories, AC, sprint scope |
-| CTO | Rajeev | Architecture review, schema sign-off |
-| Senior Director Engineering | Varun | Engineering lead, code review, Gate 2 sign-off |
-| Senior Solution Architect | Bhavya | Schema owner, Codex prompt author, root cause |
-| Principal Software Engineer | Vivek | Implementation, PR owner |
-| QA Manager | Karthik | Test strategy, coverage, QA sign-off |
-| Senior Test Engineer | Shivani | Test execution, defect capture, e2e |
+| Full Name | Role | Vault Responsibility |
+|-----------|------|---------------------|
+| Rohith Karne | CEO & Co-Founder | All gates, final sign-off, product direction |
+| Varun Karne | CTO & Co-Founder | Architecture review, engineering lead, code review, Gate 2 sign-off |
+| Saad Rahman | CPO | Product strategy, feature prioritisation, requirement quality |
+| Bhavya Bobba | Engineering Manager + QA Manager | Schema owner, Codex prompt author, root cause, implementation, QA sign-off |
+| Bala Kaviti | Head of PMO, Business & Operations | Sprint facilitation, blockers, gate coordination |
 
 ---
 
@@ -234,26 +229,26 @@ Awaiting Gate 1 approval from Rohith.
 
 | # | Feature | Description | Priority | Effort | Owner |
 |---|---------|-------------|----------|--------|-------|
-| 1 | Project Setup & Auth | App scaffold, login/logout, JWT, org-scoped session | P1 | M | Varun, Bhavya, Vivek |
-| 2 | Org & User Management | User CRUD, 5 roles (Admin/Author/Reviewer/Approver/Viewer), role middleware | P1 | M | Bhavya, Vivek |
-| 3 | Content Type & Taxonomy | Org-configurable content types, sub-types, classifications | P1 | M | Bhavya, Vivek |
-| 4 | Folder Structure | Hierarchical folders, folder tree UI, org-scoped | P1 | S | Vivek |
-| 5 | Document Upload & Storage | Upload PDF/Word/Excel/images, metadata capture, AWS S3 storage | P1 | L | Bhavya, Vivek |
-| 6 | Auto-Numbering | Auto-generate document numbers e.g. PHX-SOP-2026-00142 per org per type | P1 | S | Vivek |
-| 7 | Version Control | New version on every upload, all versions immutable and retained | P1 | M | Bhavya, Vivek |
-| 8 | Check-in / Check-out | Server-side document locking, HTTP 423 on bypass, admin force-release | P1 | M | Vivek |
-| 9 | Content Lifecycle | Draft → In Review → Approved → Published → Archived, role-enforced transitions | P1 | L | Bhavya, Vivek |
-| 10 | Content Metadata | Language, country, audience, confidentiality, regulated flag, effective/expiry dates | P1 | M | Vivek |
-| 11 | Inline Document Viewer | PDF.js in-browser viewer, no forced download, view logged to audit trail | P1 | M | Vivek |
-| 12 | Full-text & Metadata Search | Search by title, doc number, type, classification, status, date range | P1 | M | Bhavya, Vivek |
-| 13 | Audit Trail | Insert-only tamper-proof log, every action captured, reusable service | P1 | M | Bhavya |
-| 14 | Admin Console | Org Admin panel — users, taxonomy, lifecycle rules, retention, audit viewer | P1 | L | Bhavya, Vivek |
-| 15 | SuperAdmin Module | Pharaxis-only portal, org creation/management, system-wide dashboard | P1 | M | Bhavya, Vivek |
-| 16 | Watermarking | Auto-stamp by lifecycle status at render time, source file never modified | P1 | M | Vivek |
-| 17 | Content Slots | Placeholders for expected documents, due date tracking, fill with upload | P2 | S | Vivek |
-| 18 | Dossiers | Group documents into regulatory submission packages, table of contents view | P2 | M | Bhavya, Vivek |
-| 19 | Expiry Intelligence Dashboard | 30/60/90 day expiry view, email alerts to document owners | P2 | M | Vivek |
-| 20 | QA — Test Suite + Playwright e2e | Full regression, negative paths, e2e suite at sprint close | P1 | L | Karthik, Shivani |
+| 1 | Project Setup & Auth | App scaffold, login/logout, JWT, org-scoped session | P1 | M | Varun Karne, Bhavya Bobba |
+| 2 | Org & User Management | User CRUD, 5 roles (Admin/Author/Reviewer/Approver/Viewer), role middleware | P1 | M | Bhavya Bobba |
+| 3 | Content Type & Taxonomy | Org-configurable content types, sub-types, classifications | P1 | M | Bhavya Bobba |
+| 4 | Folder Structure | Hierarchical folders, folder tree UI, org-scoped | P1 | S | Bhavya Bobba |
+| 5 | Document Upload & Storage | Upload PDF/Word/Excel/images, metadata capture, AWS S3 storage | P1 | L | Bhavya Bobba |
+| 6 | Auto-Numbering | Auto-generate document numbers e.g. PHX-SOP-2026-00142 per org per type | P1 | S | Bhavya Bobba |
+| 7 | Version Control | New version on every upload, all versions immutable and retained | P1 | M | Bhavya Bobba |
+| 8 | Check-in / Check-out | Server-side document locking, HTTP 423 on bypass, admin force-release | P1 | M | Bhavya Bobba |
+| 9 | Content Lifecycle | Draft → In Review → Approved → Published → Archived, role-enforced transitions | P1 | L | Bhavya Bobba |
+| 10 | Content Metadata | Language, country, audience, confidentiality, regulated flag, effective/expiry dates | P1 | M | Bhavya Bobba |
+| 11 | Inline Document Viewer | PDF.js in-browser viewer, no forced download, view logged to audit trail | P1 | M | Bhavya Bobba |
+| 12 | Full-text & Metadata Search | Search by title, doc number, type, classification, status, date range | P1 | M | Bhavya Bobba |
+| 13 | Audit Trail | Insert-only tamper-proof log, every action captured, reusable service | P1 | M | Bhavya Bobba |
+| 14 | Admin Console | Org Admin panel — users, taxonomy, lifecycle rules, retention, audit viewer | P1 | L | Bhavya Bobba |
+| 15 | SuperAdmin Module | Pharaxis-only portal, org creation/management, system-wide dashboard | P1 | M | Bhavya Bobba |
+| 16 | Watermarking | Auto-stamp by lifecycle status at render time, source file never modified | P1 | M | Bhavya Bobba |
+| 17 | Content Slots | Placeholders for expected documents, due date tracking, fill with upload | P2 | S | Bhavya Bobba |
+| 18 | Dossiers | Group documents into regulatory submission packages, table of contents view | P2 | M | Bhavya Bobba |
+| 19 | Expiry Intelligence Dashboard | 30/60/90 day expiry view, email alerts to document owners | P2 | M | Bhavya Bobba |
+| 20 | QA — Test Suite + Playwright e2e | Full regression, negative paths, e2e suite at sprint close | P1 | L | Bhavya Bobba |
 
 ---
 

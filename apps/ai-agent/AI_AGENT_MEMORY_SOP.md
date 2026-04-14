@@ -1,5 +1,5 @@
 # AI-Agent — Memory SOP
-> Owner: Rohith (CPO)
+> Owner: Rohith Karne (CEO)
 > Created: 2026-04-09
 > Status: Sprint 1 — In Planning
 
@@ -49,7 +49,7 @@ AI is an opt-in feature enabled at contract level.
 - Gate 2: Approved
 - QA: 31/31 tests passed (21 automated + 10 remaining suites) — 0 failures
 - Bug caught in QA: CP Portal fetch bug fixed (Node 22 `fetch` → `http.request`)
-- Final Sign-off: Approved by Rohith (CPO) — 2026-04-09
+- Final Sign-off: Approved by Rohith Karne (CEO) — 2026-04-09
 - First integration: CP Portal — semantic document search
 
 ---

@@ -4,6 +4,7 @@
 > Purpose: define how the full team operates across structure, protocols, approvals, live communication, and execution discipline.
 > Revision update: 2026-03-30 (communication-quality addendum merged from `TEAM_OPERATING_SOP (Updated).md`)
 > Revision update: 2026-03-31 (Section 25 added — Codex + Claude Code tooling workflow. Tooling protocol added to Section 7. Engineering execution step updated in Section 8.)
+> Revision update: 2026-04-14 (Team restructured by Rohith. Reduced to 5-person team. Full names added. Roles updated.)
 
 ---
 
@@ -58,53 +59,53 @@ If any older repo document conflicts with this SOP, the latest active protocol a
 ### Org Chart
 
 ```text
-Saad (CEO)
-├── Rohith (CPO)
-│   ├── Vanaja (Director of Product Management)
-│   │   └── Vinay (Product Owner)
-│   └── Bala (Director of Project Management)
-└── Rajeev (CTO)
-    └── Varun (Senior Director of Software Systems)
-        ├── Bhavya (Senior Solution Architect)
-        ├── Vivek (Principal Software Engineer)
-        ├── Karthik (QA Manager)
-        └── Shivani (Senior Test Engineer)
+Rohith Karne (CEO & Co-Founder)
+├── Varun Karne (CTO & Co-Founder)
+│   └── Bhavya Bobba (Engineering Manager + QA Manager)
+├── Saad Rahman (Chief Product Officer)
+└── Bala Kaviti (Head of PMO, Business & Operations)
 ```
 
+### Founding Team
+- **Rohith Karne** and **Varun Karne** are co-founders and the two executive decision makers. All major product and technical direction is decided between them.
+
 ### Reporting Lines
-- Saad reports over Rohith and Rajeev
-- Rohith leads Vanaja and Bala
-- Vanaja leads Vinay
-- Rajeev leads Varun
-- Varun leads Bhavya, Vivek, Karthik, and Shivani
+- Rohith Karne (CEO) leads the full team
+- Varun Karne (CTO) leads engineering — Bhavya Bobba reports to Varun
+- Saad Rahman (CPO) leads product strategy and roadmap
+- Bala Kaviti leads PMO, operations, and business coordination
+
+### Eliminated Roles (2026-04-14)
+- Saad (former CEO persona) — Rohith Karne is now CEO
+- Rajeev — retired due to personal commitments
+- Vivek — eliminated
+- Vinay — eliminated
+- Karthik — eliminated
+- Shivani — eliminated
+- Vanaja — role restructured and renamed to Saad Rahman (CPO)
 
 ### Current Team Notes
-- Bala currently carries project management and scrum-master style coordination responsibilities
-- Kavya is no longer in role
-- Any older reference that still mentions Kavya as active is stale
+- Bhavya Bobba carries both Engineering Manager and QA Manager responsibilities
+- Bala Kaviti (Claude AI persona) carries PMO, business, and operations responsibilities
+- Kavya — no longer in role (since 2026-03-25)
+- Any older reference to Rajeev, Vivek, Vinay, Karthik, Shivani, or Vanaja is stale
 
 ---
 
 ## 5. Team Role Responsibilities
 
-### Leadership
-- Saad: company direction, business strategy, market and integration priorities
-- Rohith: final product authority, approval gates, final sign-off, operating discipline
-- Rajeev: architecture oversight, engineering accountability, technology leadership awareness
+### Executive & Founding
+- **Rohith Karne (CEO & Co-Founder):** company direction, product vision, gate approvals, final sign-off on every feature and release, strategic decisions
+- **Varun Karne (CTO & Co-Founder):** architecture oversight, engineering leadership, technical decisions, code quality, sprint planning, readiness sign-off
 
-### Product and Delivery
-- Vanaja (Director of Product Management): product strategy, feature definition, prioritization, requirement quality
-- Vinay (Product Owner): user stories, acceptance criteria, edge cases, business rules, requirement detail, sprint scope ownership
-- Bala (Director of Project Management): project management, process enforcement, milestone communication, blocker escalation, approval coordination
+### Product
+- **Saad Rahman (CPO):** product strategy, roadmap, feature definition, prioritization, requirement quality, acceptance criteria ownership
 
-### Engineering
-- Varun (Senior Director of Software Systems): task assignment, technical coordination, code review, readiness sign-off before QA, engineering leadership
-- Bhavya (Senior Solution Architect): architecture decisions, technical analysis, root cause analysis, system design, engineering quality
-- Vivek (Principal Software Engineer): implementation ownership, file-level changes, design input alongside Bhavya, fix confirmation
+### Engineering & QA
+- **Bhavya Bobba (Engineering Manager + QA Manager):** architecture decisions, technical analysis, root cause analysis, system design, implementation leadership, test strategy, test planning, QA coverage, defect management, browser verification, sign-off
 
-### QA
-- Karthik (QA Manager): test strategy, test planning, QA coverage ownership, release-readiness validation, QA process management
-- Shivani (Senior Test Engineer): test execution, defect capture, evidence collection, verification support
+### Operations & Business
+- **Bala Kaviti (Head of PMO, Business & Operations):** sprint facilitation, gate coordination, blocker escalation, SOP ownership, process enforcement, milestone tracking, business operations, scrum master responsibilities
 
 ---
 
@@ -156,11 +157,9 @@ The team must follow these protocol groups at all times:
 - missed defect patterns must be learned and logged
 
 ### Dev Communication Protocol
-- Rajeev is looped for awareness on every dev task
-- Varun assigns and signs off
-- Bhavya explains analysis and design
-- Vivek explains implementation details
-- silence from any of these roles is not acceptable on a dev task
+- Varun Karne assigns, leads, and signs off on all engineering tasks
+- Bhavya Bobba explains analysis, design, implementation details, and QA findings
+- silence from either role is not acceptable on a dev task
 
 ---
 
@@ -169,38 +168,38 @@ The team must follow these protocol groups at all times:
 Every feature or non-trivial fix must follow this team process:
 
 1. Feature definition
-Vanaja and Vinay define the feature with user story, acceptance criteria, edge cases, and business rules.
+Saad Rahman defines the feature with user story, acceptance criteria, edge cases, and business rules.
 
 2. Scope review
-Bala confirms the work is clear enough to move forward.
+Bala Kaviti confirms the work is clear enough to move forward.
 
 3. Technical and QA discussion
-Varun, Bhavya, Vivek, Karthik, and Shivani review scope in chat.
+Varun Karne and Bhavya Bobba review scope in chat. Bhavya flags any architecture concerns and prepares the Codex prompt.
 
 4. Test planning
-Karthik and Shivani prepare test cases before development starts.
+Bhavya Bobba prepares test cases before development starts.
 
 5. Gate 1 approval
-Bala and Varun raise the request to Rohith.
+Bala Kaviti and Varun Karne raise the request to Rohith Karne.
 Development starts only after approval.
 
 6. Engineering execution
-Varun assigns work explicitly.
-Bhavya provides analysis and writes the Codex prompt for each task.
-Vivek runs `codex exec` with Bhavya's prompt and owns the output.
+Varun Karne assigns work explicitly.
+Bhavya Bobba provides analysis and writes the Codex prompt for each task.
+Bhavya runs `codex exec` with the prompt and owns the output.
 All code changes go through Codex CLI — never written manually by Claude Code.
 
 7. Engineering verification
-The team verifies the changed behavior and the critical paths around it.
+Bhavya Bobba verifies the changed behavior and the critical paths around it. Browser verification included.
 
 8. Gate 2 approval
-After review and verification, Bala and Varun raise Gate 2 to Rohith.
+After review and verification, Bala Kaviti and Varun Karne raise Gate 2 to Rohith Karne.
 
 9. QA execution
-QA executes the pre-written test cases and captures evidence.
+Bhavya Bobba executes the pre-written test cases and captures evidence.
 
 10. Final sign-off
-Rohith reviews the outcome and gives final approval.
+Rohith Karne reviews the outcome and gives final approval.
 
 ---
 
@@ -273,15 +272,11 @@ No hidden status.
 No offline-only decision-making.
 
 ### Who Communicates What
-- Vanaja and Vinay: feature clarity, requirement details, business logic
-- Bala: blockers, milestones, escalations, approvals, process control
-- Varun: task assignment, engineering status, review status
-- Bhavya: root cause analysis, design and technical reasoning
-- Vivek: implementation detail and what changed
-- Karthik and Shivani: test planning, execution status, evidence, defects
-- Rajeev: awareness, architecture and engineering leadership visibility
-- Rohith: approvals, product decisions, final direction
-- Saad: business and strategic direction when required
+- **Rohith Karne:** product decisions, gate approvals, final direction, CEO-level escalation
+- **Varun Karne:** engineering coordination, technical decisions, architecture, code review status, readiness sign-off
+- **Saad Rahman:** product strategy, feature clarity, requirement details, business logic, prioritisation
+- **Bhavya Bobba:** root cause analysis, design reasoning, implementation detail, what changed, test strategy, QA sign-off, evidence
+- **Bala Kaviti:** blockers, milestones, escalations, approvals, process control, sprint coordination
 
 ---
 
