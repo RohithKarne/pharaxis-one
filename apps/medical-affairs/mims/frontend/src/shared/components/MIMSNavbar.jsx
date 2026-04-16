@@ -5,7 +5,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const CASE_MGMT_ROUTES  = { 'My Cases': '/cases?tab=my', 'Unassigned Cases': '/cases?tab=unassigned', 'Deleted Cases': '/cases?tab=deleted' }
@@ -68,25 +68,34 @@ export default function MIMSNavbar() {
 
   function navItem(moduleKey, path, label) {
     const allowed = canAccess(moduleKey)
+    if (!allowed) {
+      return (
+        <button
+          key={path}
+          className="mims-nav-tab disabled"
+          title="Access restricted"
+        >
+          {label}
+        </button>
+      )
+    }
     return (
-      <button
+      <Link
         key={path}
-        className={`mims-nav-tab ${isActive(path) ? 'active' : ''} ${!allowed ? 'disabled' : ''}`}
-        onClick={() => allowed && navigate(path)}
-        title={!allowed ? 'Access restricted' : undefined}
+        to={path}
+        className={`mims-nav-tab ${isActive(path) ? 'active' : ''}`}
       >
         {label}
-      </button>
+      </Link>
     )
   }
 
   return (
     <nav className="mims-navbar">
       {/* Home grid icon */}
-      <button className={`mims-nav-tab mims-nav-home ${isActive('/dashboard') ? 'active' : ''}`}
-        onClick={() => navigate('/dashboard')} title="Home">
+      <Link to="/dashboard" className={`mims-nav-tab mims-nav-home ${isActive('/dashboard') ? 'active' : ''}`} title="Home">
         ⊞
-      </button>
+      </Link>
 
       {/* Inbox */}
       {navItem('mims_core', '/inbox', 'Inbox')}
@@ -104,13 +113,14 @@ export default function MIMSNavbar() {
         {caseMgmtOpen && (
           <div className="mims-nav-dropdown">
             {CASE_MGMT_ITEMS.map(item => (
-              <div
+              <Link
                 key={item}
+                to={CASE_MGMT_ROUTES[item]}
                 className="mims-nav-dropdown-item"
-                onClick={() => { setCaseMgmtOpen(false); navigate(CASE_MGMT_ROUTES[item]) }}
+                onClick={() => setCaseMgmtOpen(false)}
               >
                 {item}
-              </div>
+              </Link>
             ))}
           </div>
         )}
@@ -157,13 +167,9 @@ export default function MIMSNavbar() {
 
       {/* Process Explorer */}
       {(user?.role === 'admin' || user?.role === 'superadmin') && (
-        <button
-          className={`mims-nav-tab ${isActive('/process-explorer') ? 'active' : ''} ${!processExplorerEnabled ? 'disabled' : ''}`}
-          onClick={() => processExplorerEnabled && navigate('/process-explorer')}
-          title={!processExplorerEnabled ? 'Process Explorer disabled for your organisation' : undefined}
-        >
-          Process Explorer
-        </button>
+        processExplorerEnabled
+          ? <Link to="/process-explorer" className={`mims-nav-tab ${isActive('/process-explorer') ? 'active' : ''}`}>Process Explorer</Link>
+          : <button className="mims-nav-tab disabled" title="Process Explorer disabled for your organisation">Process Explorer</button>
       )}
 
       {/* Spacer */}

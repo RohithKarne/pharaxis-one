@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 
 export default function Sidebar({ collapsed, onCollapse, theme, setTheme }) {
   const navigate = useNavigate()
@@ -50,17 +50,15 @@ export default function Sidebar({ collapsed, onCollapse, theme, setTheme }) {
           </div>
         )}
 
-        <div className={`nav-item ${isActive('/dashboard') ? 'active' : ''}`}
-          onClick={() => navigate('/dashboard')}>
+        <Link to="/dashboard" className={`nav-item ${isActive('/dashboard') ? 'active' : ''}`}>
           <span className="nav-icon">📊</span>
           <span className="nav-label">Dashboard</span>
-        </div>
+        </Link>
 
-        <div className={`nav-item ${isActive('/inbox') ? 'active' : ''}`}
-          onClick={() => navigate('/inbox')}>
+        <Link to="/inbox" className={`nav-item ${isActive('/inbox') ? 'active' : ''}`}>
           <span className="nav-icon">📥</span>
           <span className="nav-label">Inbox</span>
-        </div>
+        </Link>
 
         <div className={`nav-item ${caseMgmtOpen ? 'expanded' : ''}`}
           onClick={handleCaseMgmtClick}>
@@ -83,9 +81,9 @@ export default function Sidebar({ collapsed, onCollapse, theme, setTheme }) {
 
         <div className="nav-section-label">System</div>
 
-        <div className={`nav-item ${isActive('/admin') ? 'active' : ''}`} onClick={() => navigate('/admin')}>
+        <Link to="/admin-console" className={`nav-item ${isActive('/admin-console') ? 'active' : ''}`}>
           <span className="nav-icon">⚙️</span><span className="nav-label">Admin Console</span>
-        </div>
+        </Link>
 
         <div className="nav-item"><span className="nav-icon">📄</span><span className="nav-label">Content Management</span></div>
 

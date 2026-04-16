@@ -190,6 +190,7 @@ a:hover { text-decoration: underline; }
   white-space: nowrap;
 }
 .mims-dropdown-item:hover { background: var(--bg); }
+a.mims-dropdown-item { text-decoration: none; color: var(--text-primary); display: block; }
 .mims-dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
 .mims-dropdown-logout { color: var(--danger); }
 .mims-dropdown-logout:hover { background: #fde8ef; }
@@ -226,6 +227,11 @@ a:hover { text-decoration: underline; }
 .mims-nav-tab.active { color: #fff; border-bottom-color: #e8890c; font-weight: 700; }
 .mims-nav-tab.disabled { opacity: 0.45; cursor: not-allowed; }
 .mims-nav-tab.disabled:hover { background: none; color: rgba(255,255,255,0.45); }
+a.mims-nav-tab { text-decoration: none; color: rgba(255,255,255,0.75); }
+a.mims-nav-tab:hover { color: #fff; }
+a.mims-nav-tab.active { color: #fff; }
+a.mims-nav-dropdown-item { text-decoration: none; color: inherit; }
+a.nav-item { text-decoration: none; color: inherit; }
 .mims-nav-home { font-size: 18px; padding: 0 12px; }
 
 .mims-tab-num {
