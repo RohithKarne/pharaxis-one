@@ -153,7 +153,7 @@ function FolderManager({ show, onClose, token }) {
                 <label className="cm-form-label">Product</label>
                 <select className="cm-form-select" value={form.product_id} onChange={e => setForm(p => ({ ...p, product_id: e.target.value }))}>
                   <option value="">— None —</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {products.map(p => <option key={p.id} value={p.id}>{p.trade_name}</option>)}
                 </select>
               </div>
               <div className="cm-form-group" style={{ margin: 0 }}>

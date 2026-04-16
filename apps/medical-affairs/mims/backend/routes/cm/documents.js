@@ -15,7 +15,7 @@ const bcrypt = require('bcrypt');
 
 const multer = require('multer');
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../../../storage/cm_documents')),
+  destination: (req, file, cb) => cb(null, path.join(__dirname, '../../storage/cm_documents')),
   filename: (req, file, cb) => cb(null, Date.now() + '_' + file.originalname),
 });
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });

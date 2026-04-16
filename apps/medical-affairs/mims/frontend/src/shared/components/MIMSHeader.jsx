@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function MIMSHeader({ onBellClick }) {
@@ -205,14 +205,14 @@ export default function MIMSHeader({ onBellClick }) {
           {settingsOpen && (
             <div className="mims-dropdown mims-dropdown-right">
               {canAccessAdmin && (
-                <div className="mims-dropdown-item" onClick={() => { setSettingsOpen(false); navigate('/admin-console') }}>
+                <Link to="/admin-console" className="mims-dropdown-item" onClick={() => setSettingsOpen(false)}>
                   ⚙️ Admin Console
-                </div>
+                </Link>
               )}
               {canAccessContent && (
-                <div className="mims-dropdown-item" onClick={() => { setSettingsOpen(false); navigate('/content') }}>
+                <Link to="/content" className="mims-dropdown-item" onClick={() => setSettingsOpen(false)}>
                   📄 Content Management
-                </div>
+                </Link>
               )}
             </div>
           )}
