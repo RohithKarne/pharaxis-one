@@ -17,8 +17,10 @@ import ReportsPage from '../reports/pages/ReportsPage'
 import CasesPage from '../cases/pages/CasesPage'
 import CaseFormPage from '../cases/pages/CaseFormPage'
 import CaseQueryPage from '../cases/pages/CaseQueryPage'
+import ExceptionLogsPage from './pages/ExceptionLogsPage'
 import NoAccessPage from '../../pages/NoAccessPage'
 import ResetPasswordPage from '../../pages/ResetPasswordPage'
+import ExceptionToast from '../../shared/components/ExceptionToast'
 
 function AppRoutes() {
   const { user, sessionTimeout, logout } = useAuth()
@@ -39,6 +41,7 @@ function AppRoutes() {
   return (
     <>
       <SessionTimeoutModal visible={showWarning} remainingSeconds={warnSeconds} onStay={handleStay} />
+      <ExceptionToast />
       <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
@@ -116,6 +119,13 @@ function AppRoutes() {
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="reports">
                 <ReportsPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/exceptions" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="mims_core">
+                <ExceptionLogsPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />

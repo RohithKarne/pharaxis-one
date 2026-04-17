@@ -10,6 +10,7 @@
 const cron = require('node-cron')
 const pool = require('../database/db')
 const { logService } = require('./serviceLogger')
+const { logger } = require('./logger')
 
 const jobs = []
 let isInitialized = false
@@ -32,7 +33,7 @@ function toIsoNow() {
 function buildTask(job) {
   return cron.schedule(job.cronExpression, async () => {
     const startedAt = toIsoNow()
-    console.log(`[Scheduler] ${startedAt} START ${job.name}`)
+    logger.info({ job: job.name, started_at: startedAt }, 'Scheduler job started')
     try {
       await logService({
         source: 'Job Scheduler',
@@ -43,7 +44,7 @@ function buildTask(job) {
       })
       await job.handler()
       const endedAt = toIsoNow()
-      console.log(`[Scheduler] ${endedAt} END ${job.name}`)
+      logger.info({ job: job.name, ended_at: endedAt }, 'Scheduler job completed')
       await logService({
         source: 'Job Scheduler',
         service_type: 'CRON',
@@ -54,7 +55,7 @@ function buildTask(job) {
     } catch (err) {
       const errorAt = toIsoNow()
       const msg = err?.stack || err?.message || String(err)
-      console.error(`[Scheduler] ${errorAt} ERROR ${job.name}: ${msg}`)
+      logger.error({ job: job.name, at: errorAt, error: msg }, 'Scheduler job failed')
       await logService({
         source: 'Job Scheduler',
         service_type: 'CRON',
@@ -104,7 +105,7 @@ function registerDefaultJobs() {
     cronExpression: '*/5 * * * *',
     description: 'Polls EMIR mailbox for new emails',
     handler: async () => {
-      console.log('EMIR email poll running')
+      logger.info({ job: 'emir-poller' }, 'EMIR email poll tick')
     },
   })
 

@@ -100,6 +100,9 @@ export default function MIMSNavbar() {
       {/* Inbox */}
       {navItem('mims_core', '/inbox', 'Inbox')}
 
+      {/* Exception Log */}
+      {navItem('mims_core', '/exceptions', 'Exception Log')}
+
       {/* Case Management — dropdown */}
       <div className="mims-nav-dropdown-wrap" ref={caseMgmtRef}>
         <button

@@ -197,6 +197,94 @@ function ServiceLogTab({ logs, sources, filter, onFilterChange, onRefine, page, 
   )
 }
 
+function ExceptionLogTab({ rows, filter, onFilterChange, onRefine, loading, page, totalPages, onPageChange, total, onViewDetails }) {
+  const [copiedId, setCopiedId] = useState('')
+  async function copyExceptionId(id) {
+    if (!id) return
+    try {
+      await navigator.clipboard.writeText(id)
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(''), 1200)
+    } catch (_) {}
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', background: 'var(--surface)' }}>
+        <input
+          placeholder="Search description / endpoint"
+          value={filter.search}
+          onChange={e => onFilterChange({ search: e.target.value })}
+          style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, minWidth: 220 }}
+        />
+        <select value={filter.status} onChange={e => onFilterChange({ status: e.target.value })} style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}>
+          <option value="">All Statuses</option>
+          <option value="failed">Failed</option>
+          <option value="warning">Warning</option>
+        </select>
+        <select value={filter.source} onChange={e => onFilterChange({ source: e.target.value })} style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}>
+          <option value="">All Sources</option>
+          <option value="API Exceptions">API Exceptions</option>
+          <option value="Frontend Runtime">Frontend Runtime</option>
+        </select>
+        <button onClick={onRefine} style={{ padding: '6px 18px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          Refine
+        </button>
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
+          {total} record{total !== 1 ? 's' : ''}
+        </span>
+      </div>
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {loading ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-muted)', fontSize: 14 }}>Loading...</div>
+        ) : rows.length === 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--text-muted)', fontSize: 14 }}>No exception logs found.</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border)' }}>
+                {['Exception ID', 'Copy', 'Source', 'Status', 'HTTP', 'Method', 'Route', 'Description', 'Date', 'Details'].map(h => (
+                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={row.id} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'var(--surface)' : 'var(--bg)' }}>
+                  <td style={{ padding: '10px 12px', fontFamily: 'monospace' }}>{row.exception_id || '—'}</td>
+                  <td style={{ padding: '10px 12px' }}>
+                    {row.exception_id ? (
+                      <button className="btn btn-outline" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => copyExceptionId(row.exception_id)}>
+                        {copiedId === row.exception_id ? 'Copied' : 'Copy'}
+                      </button>
+                    ) : '—'}
+                  </td>
+                  <td style={{ padding: '10px 12px' }}>{row.source}</td>
+                  <td style={{ padding: '10px 12px' }}>{row.status}</td>
+                  <td style={{ padding: '10px 12px' }}>{row.status_code ?? '—'}</td>
+                  <td style={{ padding: '10px 12px' }}>{row.method || '—'}</td>
+                  <td style={{ padding: '10px 12px' }}>{row.route || '—'}</td>
+                  <td style={{ padding: '10px 12px' }}>{row.description || '—'}</td>
+                  <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>{fmtDateIST(row.created_at)}</td>
+                  <td style={{ padding: '10px 12px' }}>
+                    <button className="btn btn-outline" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => onViewDetails(row)}>View</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      {!loading && total > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
+          <button onClick={() => onPageChange(page - 1)} disabled={page <= 1} style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 4 }}>Prev</button>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Page {page} of {totalPages}</span>
+          <button onClick={() => onPageChange(page + 1)} disabled={page >= totalPages} style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 4 }}>Next</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SystemActivityTab({
   rows,
   summary,
@@ -417,6 +505,13 @@ export default function AdminConsolePage() {
   const [svcTotal, setSvcTotal] = useState(0)
   const [svcTotalPages, setSvcTotalPages] = useState(1)
   const [svcLoading, setSvcLoading] = useState(false)
+  const [exRows, setExRows] = useState([])
+  const [exFilter, setExFilter] = useState({ status: '', source: '', search: '' })
+  const [exPage, setExPage] = useState(1)
+  const [exTotal, setExTotal] = useState(0)
+  const [exTotalPages, setExTotalPages] = useState(1)
+  const [exLoading, setExLoading] = useState(false)
+  const [selectedException, setSelectedException] = useState(null)
 
   const [sysRows, setSysRows] = useState([])
   const [sysSummary, setSysSummary] = useState({ total: 0, success: 0, failed: 0, warning: 0 })
@@ -448,6 +543,7 @@ export default function AdminConsolePage() {
   useEffect(() => {
     if (contentSection === 'service-log')       loadServiceLogs()
     if (contentSection === 'system-activity')   loadSystemActivity()
+    if (contentSection === 'exception-log')     loadExceptionLogs()
   }, [contentSection])
 
   async function loadAll() {
@@ -511,6 +607,26 @@ export default function AdminConsolePage() {
       /* silent — table might not exist yet on fresh DB before restart */
     } finally {
       setSysLoading(false)
+    }
+  }
+
+  async function loadExceptionLogs(overrides = {}) {
+    setExLoading(true)
+    try {
+      const params = new URLSearchParams({
+        ...exFilter,
+        page: String(overrides.page ?? exPage),
+        page_size: '20',
+      })
+      for (const [k, v] of [...params.entries()]) { if (!v) params.delete(k) }
+      const d = await fetch(`/api/admin/observability/exceptions?${params}`, { headers: H }).then(r => r.json())
+      setExRows(d.data || [])
+      setExTotal(d.total || 0)
+      setExTotalPages(d.total_pages || 1)
+    } catch {
+      // silent fallback
+    } finally {
+      setExLoading(false)
     }
   }
 
@@ -715,6 +831,19 @@ export default function AdminConsolePage() {
               onPageChange={p => { setSysPage(p); loadSystemActivity({ page: p }) }}
               onPageSizeChange={ps => { setSysPage(1); setSysPageSize(ps); loadSystemActivity({ page: 1, page_size: ps }) }}
             />
+          ) : contentSection === 'exception-log' ? (
+            <ExceptionLogTab
+              rows={exRows}
+              filter={exFilter}
+              onFilterChange={f => setExFilter(prev => ({ ...prev, ...f }))}
+              onRefine={() => { setExPage(1); loadExceptionLogs({ page: 1 }) }}
+              loading={exLoading}
+              page={exPage}
+              totalPages={exTotalPages}
+              total={exTotal}
+              onPageChange={p => { setExPage(p); loadExceptionLogs({ page: p }) }}
+              onViewDetails={setSelectedException}
+            />
           ) : (
             <div className="page-content" style={{ padding: 0, flex: 1, overflow: 'auto' }}>
               {renderContent()}
@@ -758,6 +887,33 @@ export default function AdminConsolePage() {
                 } catch { setEsigError('Server unreachable. Please restart the backend and try again.') }
               }}>Sign & Confirm</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {selectedException && (
+        <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 420, background: 'var(--surface)', borderLeft: '1px solid var(--border)', boxShadow: '-8px 0 20px rgba(0,0,0,0.15)', zIndex: 1200, padding: 16, overflow: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <h3 style={{ margin: 0 }}>Exception Details</h3>
+            <button className="btn btn-outline" onClick={() => setSelectedException(null)}>Close</button>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+            Exception ID: <span style={{ fontFamily: 'monospace' }}>{selectedException.exception_id || '—'}</span>
+          </div>
+          <div style={{ display: 'grid', gap: 6, fontSize: 13 }}>
+            <div><strong>Source:</strong> {selectedException.source || '—'}</div>
+            <div><strong>Status:</strong> {selectedException.status || '—'}</div>
+            <div><strong>HTTP:</strong> {selectedException.status_code ?? '—'}</div>
+            <div><strong>Method:</strong> {selectedException.method || '—'}</div>
+            <div><strong>Route:</strong> {selectedException.route || '—'}</div>
+            <div><strong>Description:</strong> {selectedException.description || '—'}</div>
+            <div><strong>Date:</strong> {fmtDateIST(selectedException.created_at)}</div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <strong>Payload</strong>
+            <pre style={{ marginTop: 8, whiteSpace: 'pre-wrap', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: 10, fontSize: 12 }}>
+              {JSON.stringify(selectedException.details || {}, null, 2)}
+            </pre>
           </div>
         </div>
       )}

@@ -45,6 +45,7 @@ export default function DashboardPage() {
     activeSessionCount: 0,
     currentSession: null,
   })
+  const [observability, setObservability] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -82,12 +83,18 @@ export default function DashboardPage() {
         activeSessionCount: Number(sessionsData.activeSessionCount || 0),
         currentSession: sessionsData.currentSession || null,
       })
+
+      if (user?.role === 'admin' || user?.role === 'superadmin') {
+        const obsRes = await fetch(`${API}/admin/observability/summary`, { headers })
+        const obsData = await safeJson(obsRes)
+        if (obsRes.ok) setObservability(obsData)
+      }
     } catch (err) {
       setError(err.message || 'Unable to load dashboard.')
     } finally {
       setLoading(false)
     }
-  }, [headers, token])
+  }, [headers, token, user?.role])
 
   useEffect(() => {
     loadDashboard()
@@ -143,6 +150,39 @@ export default function DashboardPage() {
             <small>Awaiting owner</small>
           </article>
         </div>
+
+        {(user?.role === 'admin' || user?.role === 'superadmin') && observability && (
+          <section className="card" style={{ marginTop: 12 }}>
+            <div className="card-header">
+              <h3>Observability Snapshot (24h)</h3>
+              <button className="btn btn-outline" onClick={() => navigate('/exceptions')}>Open Exception Logs</button>
+            </div>
+            <div className="card-body">
+              <div className="mims-home-stats-grid">
+                <article className="mims-home-stat-card">
+                  <span>Server Errors</span>
+                  <strong>{Number(observability.process_summary_24h?.server_errors || 0)}</strong>
+                  <small>HTTP 5xx events</small>
+                </article>
+                <article className="mims-home-stat-card warning">
+                  <span>Client Errors</span>
+                  <strong>{Number(observability.process_summary_24h?.client_errors || 0)}</strong>
+                  <small>HTTP 4xx + runtime</small>
+                </article>
+                <article className="mims-home-stat-card danger">
+                  <span>Failed Service Logs</span>
+                  <strong>{Number(observability.service_summary?.failed_logs || 0)}</strong>
+                  <small>Background + API failures</small>
+                </article>
+                <article className="mims-home-stat-card">
+                  <span>Avg API Latency</span>
+                  <strong>{Math.round(Number(observability.process_summary_24h?.avg_duration_ms || 0))} ms</strong>
+                  <small>Across tracked process logs</small>
+                </article>
+              </div>
+            </div>
+          </section>
+        )}
 
         <div className="mims-home-grid">
           <section className="card">

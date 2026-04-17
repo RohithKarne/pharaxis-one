@@ -102,6 +102,7 @@ export const ADMIN_NAV_GROUPS = [
     items: [
       { key: 'service-log', label: 'Service Log', active: true },
       { key: 'system-activity', label: 'System Activity', active: true },
+      { key: 'exception-log', label: 'Exception Log', active: true },
     ],
   },
   {

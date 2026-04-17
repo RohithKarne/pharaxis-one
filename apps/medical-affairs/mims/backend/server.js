@@ -31,6 +31,10 @@ const {
   shouldCaptureBusinessEvent,
   emitProcessEvent,
 } = require('./services/processExplorerService');
+const { logger } = require('./services/logger');
+const { requestContext, attachRequestIdHeader } = require('./middleware/requestContext');
+const { captureApiExceptions } = require('./middleware/exceptionCapture');
+const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { startSchemaTracker, stopSchemaTracker } = require('./services/schemaTracker');
 const { startScheduler, stopScheduler } = require('./services/scheduler');
 const rateLimit = require('express-rate-limit');
@@ -73,6 +77,9 @@ app.use(express.json());
 
 // Parse URL-encoded form data (for HTML form submissions)
 app.use(express.urlencoded({ extended: true }));
+app.use(requestContext);
+app.use(attachRequestIdHeader);
+app.use(captureApiExceptions);
 
 // Process Explorer telemetry — captures all API traffic for automatic flow visibility.
 let lastProcessLogPurgeAt = 0;
@@ -209,8 +216,10 @@ app.get('/api/users', authenticate, async (req, res) => {
 app.use('/api/admin/orgs', require('./routes/admin/orgs'));
 app.use('/api/admin', require('./routes/admin/serviceLogs'));
 app.use('/api/admin', require('./routes/admin/systemActivity'));
+app.use('/api/admin', require('./routes/admin/observability'));
 app.use('/api/admin', require('./routes/admin/config'));
 app.use('/api/admin/process-logs', processExplorerRouter);
+app.use('/api/telemetry', require('./routes/telemetry'));
 // Superadmin routes (superadmin role required)
 app.use('/api/superadmin', require('./routes/superadmin'));
 app.use('/api/superadmin', require('./routes/superadmin/reportsAccess'));
@@ -275,6 +284,7 @@ apiV1Router.use('/admin', require('./routes/admin/caseAuditTrail'));
 apiV1Router.use('/admin', require('./routes/admin/transmissionAuditTrail'));
 apiV1Router.use('/admin', require('./routes/admin/serviceLogs'));
 apiV1Router.use('/admin', require('./routes/admin/systemActivity'));
+apiV1Router.use('/admin', require('./routes/admin/observability'));
 apiV1Router.use('/admin', require('./routes/admin/config'));
 apiV1Router.use('/admin/orgs', require('./routes/admin/orgs'));
 apiV1Router.use('/admin/process-logs', processExplorerRouter);
@@ -320,6 +330,10 @@ apiV1Router.use('/', require('./routes/integrations/vaultIngest'));
 apiV1Router.use('/', require('./routes/integrations/vaultPollTrigger'));
 apiV1Router.use('/', require('./routes/integrations/emirReceiver'));
 apiV1Router.use('/', require('./routes/integrations/caseExport'));
+apiV1Router.use('/telemetry', require('./routes/telemetry'));
+
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend', 'index.html'))
@@ -339,19 +353,15 @@ if (!isTestEnv) {
     startScheduler();
     startSchemaTracker();
     server = app.listen(PORT, HOST, () => {
-      console.log('');
-      console.log('🏥 MIMS — Medical Information Management System');
-      console.log(`🚀 Server running at: http://${HOST}:${PORT}`);
-      console.log(`📁 Serving frontend from: ${path.join(__dirname, '../frontend')}`);
-      console.log('');
+      logger.info({ host: HOST, port: PORT }, 'MIMS server started');
+      logger.info({ static_path: path.join(__dirname, '../frontend') }, 'Frontend static path mounted');
     });
     server.on('error', (err) => {
       if (err?.code === 'EADDRINUSE') {
-        console.error(`❌ Port already in use: http://${HOST}:${PORT}`)
-        console.error('   Stop the other server process (or change PORT) and restart.')
+        logger.error({ host: HOST, port: PORT }, 'Port already in use');
         process.exit(1)
       }
-      console.error('❌ Server error:', err)
+      logger.error({ err }, 'Server error');
       process.exit(1)
     })
   });
@@ -359,7 +369,7 @@ if (!isTestEnv) {
 
 
 function shutdown(signal) {
-  console.log(`\n🛑 Shutting down (${signal})...`)
+  logger.info({ signal }, 'Shutting down server');
   try { stopPoller() } catch (_) {}
   try { stopScheduler() } catch (_) {}
   try { stopSchemaTracker() } catch (_) {}

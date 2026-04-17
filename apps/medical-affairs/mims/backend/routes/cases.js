@@ -14,6 +14,7 @@ const router  = express.Router();
 const pool    = require('../database/db');
 const { authenticate, requireRole, requireOrg } = require('../middleware/auth');
 const { checkTransitionAllowed } = require('../services/workflowEngine');
+const { logger } = require('../services/logger');
 
 const CASE_SORT_MAP = Object.freeze({
   created_at: 'c.created_at',
@@ -370,7 +371,7 @@ router.get('/cases', authenticate, requireOrg, async (req, res) => {
     }
     return res.json(rows);
   } catch (err) {
-    console.error('GET /cases error:', err);
+    logger.error({ err, route: '/api/cases', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to list cases');
     res.status(500).json({ error: err.message });
   }
 });
@@ -401,7 +402,7 @@ router.get('/cases/my', authenticate, async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    console.error('GET /cases/my error:', err);
+    logger.error({ err, route: '/api/cases/my', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to list my cases');
     res.status(500).json({ error: err.message });
   }
 });
@@ -432,7 +433,7 @@ router.get('/cases/unassigned', authenticate, async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    console.error('GET /cases/unassigned error:', err);
+    logger.error({ err, route: '/api/cases/unassigned', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to list unassigned cases');
     res.status(500).json({ error: err.message });
   }
 });
@@ -489,7 +490,7 @@ router.get('/cases/dashboard-summary', authenticate, async (req, res) => {
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
-    console.error('GET /cases/dashboard-summary error:', err);
+    logger.error({ err, route: '/api/cases/dashboard-summary', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to load dashboard summary');
     return res.status(500).json({ error: err.message || 'Failed to load dashboard summary.' });
   }
 });
@@ -558,7 +559,7 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
 
     return res.json({ case_type, sections: sectionsWithFields });
   } catch (err) {
-    console.error('GET /cases/form-config error:', err);
+    logger.error({ err, route: '/api/cases/form-config', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to load case form config');
     return res.status(500).json({ error: err.message });
   }
 });
@@ -579,7 +580,7 @@ router.get('/cases/:id/comments', authenticate, async (req, res) => {
     );
     return res.json(rows);
   } catch (err) {
-    console.error('GET /cases/:id/comments error:', err);
+    logger.error({ err, route: '/api/cases/:id/comments', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to fetch case comments');
     return res.status(500).json({ error: err.message });
   }
 });
@@ -620,7 +621,7 @@ router.post('/cases/:id/comments', authenticate, async (req, res) => {
     }
     return res.status(201).json(saved);
   } catch (err) {
-    console.error('POST /cases/:id/comments error:', err);
+    logger.error({ err, route: '/api/cases/:id/comments', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to create case comment');
     return res.status(500).json({ error: err.message });
   }
 });
@@ -648,7 +649,7 @@ router.get('/cases/:id', authenticate, async (req, res) => {
     }
     res.json(c);
   } catch (err) {
-    console.error('GET /cases/:id error:', err);
+    logger.error({ err, route: '/api/cases/:id', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to fetch case details');
     res.status(500).json({ error: err.message });
   }
 });
@@ -702,9 +703,10 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
        WHERE c.id = ?`,
       [result.insertId]
     );
+    logger.info({ case_id: result.insertId, org_id, user_id: req.user?.userId }, 'Case created');
     res.status(201).json(newCase);
   } catch (err) {
-    console.error('POST /cases error:', err);
+    logger.error({ err, route: '/api/cases', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to create case');
     res.status(500).json({ error: err.message });
   }
 });
@@ -802,10 +804,11 @@ router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
     );
 
     await conn.commit();
+    logger.info({ case_id: req.params?.id, user_id: req.user?.userId, org_id: c.org_id }, 'Case number assigned');
     res.json({ case_number: caseNumber });
   } catch (err) {
     await conn.rollback();
-    console.error('assign-number error:', err);
+    logger.error({ err, route: '/api/cases/:id/assign-number', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to assign case number');
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'Case number conflict detected. Please retry assign number.' });
     }
@@ -916,7 +919,7 @@ router.post('/cases/:id/reassign', authenticate, async (req, res) => {
     );
     return res.json(updated);
   } catch (err) {
-    console.error('POST /cases/:id/reassign error:', err);
+    logger.error({ err, route: '/api/cases/:id/reassign', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to reassign case');
     return res.status(500).json({ error: err.message });
   }
 });
@@ -1089,9 +1092,10 @@ router.put('/cases/:id', authenticate, async (req, res) => {
       }
     }
 
+    logger.info({ case_id: req.params?.id, user_id: req.user?.userId, status_changed: statusChanged, owner_changed: ownerChanged }, 'Case updated');
     res.json(updated);
   } catch (err) {
-    console.error('PUT /cases/:id error:', err);
+    logger.error({ err, route: '/api/cases/:id', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to update case');
     res.status(500).json({ error: err.message });
   }
 });
@@ -1105,9 +1109,10 @@ router.delete('/cases/:id', authenticate, requireRole('admin', 'superadmin'), as
     if (!owned) return res.status(403).json({ error: 'Access denied' });
 
     await pool.execute('UPDATE cases SET is_deleted = 1 WHERE id = ?', [req.params.id]);
+    logger.warn({ case_id: req.params?.id, user_id: req.user?.userId }, 'Case soft deleted');
     res.json({ success: true });
   } catch (err) {
-    console.error('DELETE /cases/:id error:', err);
+    logger.error({ err, route: '/api/cases/:id', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to soft delete case');
     res.status(500).json({ error: err.message });
   }
 });

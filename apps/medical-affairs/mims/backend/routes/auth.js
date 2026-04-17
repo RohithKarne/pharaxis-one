@@ -5,6 +5,7 @@ const router         = express.Router();
 const authController = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 const pool           = require('../database/db');
+const { logger } = require('../services/logger');
 
 function extractBearerToken(req) {
   const authHeader = req.headers.authorization || '';
@@ -105,6 +106,7 @@ router.get('/sessions', authenticate, async (req, res) => {
       recentLogins,
     });
   } catch (err) {
+    logger.error({ err, user_id: req.user?.userId, route: '/api/auth/sessions' }, 'Failed to load sessions');
     return res.status(500).json({ error: err.message || 'Failed to load sessions.' });
   }
 });
@@ -122,6 +124,7 @@ router.post('/sessions/revoke-others', authenticate, async (req, res) => {
 
     return res.json({ success: true, revoked: Number(result?.affectedRows || 0) });
   } catch (err) {
+    logger.error({ err, user_id: req.user?.userId, route: '/api/auth/sessions/revoke-others' }, 'Failed to revoke other sessions');
     return res.status(500).json({ error: err.message || 'Failed to revoke sessions.' });
   }
 });
@@ -151,6 +154,7 @@ router.post('/sessions/:id/revoke', authenticate, async (req, res) => {
       revokedCurrent: !!token && row.token === token,
     });
   } catch (err) {
+    logger.error({ err, user_id: req.user?.userId, route: '/api/auth/sessions/:id/revoke' }, 'Failed to revoke selected session');
     return res.status(500).json({ error: err.message || 'Failed to revoke session.' });
   }
 });
@@ -167,6 +171,7 @@ router.post('/logout', authenticate, async (req, res) => {
   if (token) {
     await pool.execute('DELETE FROM sessions WHERE token = ?', [token]).catch(() => {});
   }
+  logger.info({ user_id: req.user?.userId, route: '/api/auth/logout' }, 'User logged out');
   res.json({ message: 'Logged out.' });
 });
 
@@ -180,6 +185,7 @@ router.get('/org-logo', authenticate, async (req, res) => {
     );
     res.json({ logo_url: org?.logo_url || null });
   } catch (err) {
+    logger.error({ err, user_id: req.user?.userId, route: '/api/auth/org-logo' }, 'Failed to load org logo');
     res.status(500).json({ error: 'Server error.' });
   }
 });

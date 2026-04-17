@@ -12,6 +12,7 @@ const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
 const bcrypt = require('bcrypt');
+const { logger } = require('../../services/logger');
 
 const multer = require('multer');
 const storage = multer.diskStorage({
@@ -150,7 +151,7 @@ router.get('/documents', authenticate, async (req, res) => {
     const [documents] = await pool.execute(query, params);
     res.json({ documents, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
   } catch (err) {
-    console.error('GET /cm/documents error:', err);
+    logger.error({ err, route: '/api/cm/documents', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to list CM documents');
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -224,7 +225,7 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
     res.status(201).json({ message: 'Document created.', id: result.insertId, document: created });
   } catch (err) {
     await conn.rollback();
-    console.error('POST /cm/documents error:', err);
+    logger.error({ err, route: '/api/cm/documents', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to create CM document');
     res.status(500).json({ error: 'Server error.' });
   } finally {
     conn.release();
@@ -264,7 +265,7 @@ router.get('/documents/:id', authenticate, async (req, res) => {
 
     res.json({ document: doc, versions });
   } catch (err) {
-    console.error('GET /cm/documents/:id error:', err);
+    logger.error({ err, route: '/api/cm/documents/:id', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to fetch CM document');
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -348,7 +349,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
     res.json({ message: 'Document updated.' });
   } catch (err) {
     await conn.rollback();
-    console.error('PUT /cm/documents/:id error:', err);
+    logger.error({ err, route: '/api/cm/documents/:id', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to update CM document');
     res.status(500).json({ error: 'Server error.' });
   } finally {
     conn.release();
@@ -371,7 +372,7 @@ router.post('/documents/:id/checkout', authenticate, async (req, res) => {
     await audit(req.user.userId, req.user.email, 'CHECKOUT', 'cm_document', Number(id), { doc_id: doc.doc_id });
     res.json({ message: 'Document checked out.' });
   } catch (err) {
-    console.error('POST /cm/documents/:id/checkout error:', err);
+    logger.error({ err, route: '/api/cm/documents/:id/checkout', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to checkout CM document');
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -416,7 +417,7 @@ router.post('/documents/:id/checkin', authenticate, async (req, res) => {
     await audit(req.user.userId, req.user.email, 'CHECKIN', 'cm_document', Number(id), { doc_id: doc.doc_id, version: versionStr });
     res.json({ message: 'Document checked in.', version: versionStr });
   } catch (err) {
-    console.error('POST /cm/documents/:id/checkin error:', err);
+    logger.error({ err, route: '/api/cm/documents/:id/checkin', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to checkin CM document');
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -470,7 +471,7 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
       conn.release();
     }
   } catch (err) {
-    console.error('POST /cm/documents/:id/initiate-review error:', err);
+    logger.error({ err, route: '/api/cm/documents/:id/initiate-review', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to initiate CM review');
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -502,7 +503,7 @@ router.post('/documents/:id/approve', authenticate, async (req, res) => {
     await audit(req.user.userId, req.user.email, 'APPROVE', 'cm_document', Number(id), { doc_id: doc.doc_id, reason, version: versionStr });
     res.json({ message: 'Document approved.' });
   } catch (err) {
-    console.error('POST /cm/documents/:id/approve error:', err);
+    logger.error({ err, route: '/api/cm/documents/:id/approve', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to approve CM document');
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -557,7 +558,7 @@ router.post('/documents/:id/publish', authenticate, async (req, res) => {
     await audit(req.user.userId, req.user.email, 'PUBLISH', 'cm_document', Number(id), { doc_id: doc.doc_id, reason, version: versionStr });
     res.json({ message: 'Document published.', version: versionStr });
   } catch (err) {
-    console.error('POST /cm/documents/:id/publish error:', err);
+    logger.error({ err, route: '/api/cm/documents/:id/publish', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to publish CM document');
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -579,7 +580,7 @@ router.post('/documents/:id/archive', authenticate, async (req, res) => {
     await audit(req.user.userId, req.user.email, 'ARCHIVE', 'cm_document', Number(id), { doc_id: doc.doc_id });
     res.json({ message: 'Document archived.' });
   } catch (err) {
-    console.error('POST /cm/documents/:id/archive error:', err);
+    logger.error({ err, route: '/api/cm/documents/:id/archive', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to archive CM document');
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -604,7 +605,7 @@ router.post('/documents/:id/release', authenticate, async (req, res) => {
     await audit(req.user.userId, req.user.email, 'RELEASE', 'cm_document', Number(id), { doc_id: doc.doc_id });
     res.json({ message: 'Document released. Status reset to Draft.' });
   } catch (err) {
-    console.error('POST /cm/documents/:id/release error:', err);
+    logger.error({ err, route: '/api/cm/documents/:id/release', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to release CM document');
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -753,7 +754,7 @@ router.get('/documents/:id/versions', authenticate, async (req, res) => {
     );
     res.json({ versions });
   } catch (err) {
-    console.error('GET /cm/documents/:id/versions error:', err);
+    logger.error({ err, route: '/api/cm/documents/:id/versions', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to fetch CM document versions');
     res.status(500).json({ error: 'Server error.' });
   }
 });

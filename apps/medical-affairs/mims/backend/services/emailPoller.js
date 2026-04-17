@@ -15,6 +15,7 @@ const fs = require('fs')
 const path = require('path')
 const { simpleParser } = require('mailparser')
 const { emitProcessEvent } = require('./processExplorerService')
+const { logger } = require('./logger')
 
 function toMySqlDateTime(input) {
   const dt = input instanceof Date ? input : new Date(input)
@@ -160,7 +161,7 @@ async function ingestAccount(account, sinceDt) {
                     [inquiry.id, safeName, att.contentType || null, buf.length, destPath]
                   )
                 } catch (e) {
-                  console.log(`[POLLER] Attachment save fail: inquiry ${inquiry.id} ${safeText(e?.message || e, 160)}`)
+                  logger.warn({ inquiry_id: inquiry.id, error: safeText(e?.message || e, 160) }, 'Attachment save failed');
                 }
               }
             }
@@ -212,7 +213,7 @@ function startPoller() {
 
           const sinceDt = lastRun || new Date(now.getTime() - (account.initial_fetch_days || 7) * 24 * 60 * 60 * 1000)
           const runStartedAt = new Date().toISOString()
-          console.log(`[POLLER] Ingest start: account ${account.id} (${account.account_name}) since ${sinceDt.toISOString()}`)
+          logger.info({ account_id: account.id, account_name: account.account_name, since: sinceDt.toISOString() }, 'Email ingest started');
 
           try {
             const n = await ingestAccount(account, sinceDt)
@@ -222,7 +223,7 @@ function startPoller() {
               `UPDATE email_accounts SET last_ingest_at = ? WHERE id = ?`,
               [runEndedAtDb, account.id]
             )
-            console.log(`[POLLER] Ingest done: account ${account.id} inserted ${n}`)
+            logger.info({ account_id: account.id, account_name: account.account_name, inserted: n }, 'Email ingest completed');
             logService({
               source: 'Email Accounts',
               service_type: 'IMAP',
@@ -257,7 +258,7 @@ function startPoller() {
             })
           } catch (err) {
             const runEndedAt = new Date().toISOString()
-            console.log(`[POLLER] Ingest fail: account ${account.id} ${safeText(err?.message || err, 200)}`)
+            logger.error({ account_id: account.id, account_name: account.account_name, error: safeText(err?.message || err, 200) }, 'Email ingest failed');
             logService({
               source: 'Email Accounts',
               service_type: 'IMAP',
@@ -299,7 +300,7 @@ function startPoller() {
     })
   })
 
-  console.log('[POLLER] Email poller started — tick every 1 minute (per-account intervals apply)')
+  logger.info('Email poller started — tick every 1 minute (per-account intervals apply)')
   return task
 }
 
