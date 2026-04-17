@@ -686,6 +686,45 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // CM_MODULES — reusable modular documents with document-linked lifecycle
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS cm_modules (
+        id                  INT NOT NULL AUTO_INCREMENT,
+        module_id           VARCHAR(50),
+        folder_id           INT NOT NULL,
+        module_type         VARCHAR(50) NOT NULL DEFAULT 'SRD',
+        name                VARCHAR(500) NOT NULL,
+        content_html        MEDIUMTEXT,
+        file_path           VARCHAR(1000),
+        file_name           VARCHAR(500),
+        file_size           INT,
+        file_mime           VARCHAR(100),
+        status              VARCHAR(50) NOT NULL DEFAULT 'Draft',
+        version_major       INT NOT NULL DEFAULT 1,
+        version_minor       INT NOT NULL DEFAULT 0,
+        checked_out_by      INT,
+        checked_out_at      DATETIME,
+        expiry_date         DATE,
+        activation_date     DATE,
+        language            VARCHAR(20) NOT NULL DEFAULT 'en',
+        search_tags         TEXT,
+        usage_instructions  TEXT,
+        document_category   VARCHAR(255),
+        standard_response_text TEXT,
+        publish_as_pdf      TINYINT(1) NOT NULL DEFAULT 0,
+        send_as_pdf         TINYINT(1) NOT NULL DEFAULT 0,
+        attributes          JSON,
+        owner_user_id       INT,
+        created_by          INT NOT NULL,
+        updated_by          INT,
+        created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_cm_modules_folder (folder_id),
+        KEY idx_cm_modules_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // CM_REVIEWS — review sessions for documents
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS cm_reviews (
@@ -2319,6 +2358,144 @@ async function initializeDatabase() {
         rule
       );
     }
+
+    // CM Phase 2 — MI Categories, Document Attachments, new cm_documents columns
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS mi_categories (
+        id          INT NOT NULL AUTO_INCREMENT,
+        org_id      INT NOT NULL,
+        name        VARCHAR(255) NOT NULL,
+        description TEXT,
+        is_active   TINYINT(1) NOT NULL DEFAULT 1,
+        sort_order  INT NOT NULL DEFAULT 0,
+        created_by  INT,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_mi_categories_org (org_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS cm_document_attachments (
+        id          INT NOT NULL AUTO_INCREMENT,
+        document_id INT NOT NULL,
+        file_path   VARCHAR(1000) NOT NULL,
+        file_name   VARCHAR(500) NOT NULL,
+        file_size   INT,
+        file_mime   VARCHAR(100),
+        uploaded_by INT,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_cm_doc_attachments_doc (document_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    const cmPhase2Alters = [
+      `ALTER TABLE cm_documents ADD COLUMN response_doc_type VARCHAR(50) DEFAULT 'File'`,
+      `ALTER TABLE cm_documents ADD COLUMN publish_as_pdf TINYINT(1) NOT NULL DEFAULT 0`,
+      `ALTER TABLE cm_documents ADD COLUMN send_as_pdf TINYINT(1) NOT NULL DEFAULT 0`,
+      `ALTER TABLE cm_documents ADD COLUMN selected_modules JSON`,
+      `ALTER TABLE cm_documents ADD COLUMN mi_category_id INT`,
+      `ALTER TABLE cm_documents ADD COLUMN document_category VARCHAR(255)`,
+      `ALTER TABLE cm_documents ADD COLUMN standard_response_text TEXT`,
+    ];
+    for (const sql of cmPhase2Alters) {
+      try { await conn.execute(sql); } catch (_) { /* column already exists */ }
+    }
+
+    const cmModuleAlters = [
+      `ALTER TABLE cm_modules ADD COLUMN module_id VARCHAR(50)`,
+      `ALTER TABLE cm_modules ADD COLUMN activation_date DATE`,
+      `ALTER TABLE cm_modules ADD COLUMN expiry_date DATE`,
+      `ALTER TABLE cm_modules ADD COLUMN language VARCHAR(20) NOT NULL DEFAULT 'en'`,
+      `ALTER TABLE cm_modules ADD COLUMN search_tags TEXT`,
+      `ALTER TABLE cm_modules ADD COLUMN usage_instructions TEXT`,
+      `ALTER TABLE cm_modules ADD COLUMN document_category VARCHAR(255)`,
+      `ALTER TABLE cm_modules ADD COLUMN standard_response_text TEXT`,
+      `ALTER TABLE cm_modules ADD COLUMN publish_as_pdf TINYINT(1) NOT NULL DEFAULT 0`,
+      `ALTER TABLE cm_modules ADD COLUMN send_as_pdf TINYINT(1) NOT NULL DEFAULT 0`,
+      `ALTER TABLE cm_modules ADD COLUMN attributes JSON`,
+      `ALTER TABLE cm_modules ADD COLUMN owner_user_id INT`,
+      `ALTER TABLE cm_modules ADD COLUMN updated_by INT`,
+      `ALTER TABLE cm_modules ADD COLUMN checked_out_by INT`,
+      `ALTER TABLE cm_modules ADD COLUMN checked_out_at DATETIME`,
+    ];
+    for (const sql of cmModuleAlters) {
+      try { await conn.execute(sql); } catch (_) { /* column already exists */ }
+    }
+
+    // CM Phase 4 — Owner Lock, Relations, Alert Subs, Org Settings
+    const cmPhase4Alters = [
+      `ALTER TABLE cm_documents ADD COLUMN owner_user_id INT`,
+      `ALTER TABLE cm_documents ADD COLUMN review_cycle_days INT`,
+      `ALTER TABLE cm_documents ADD COLUMN regulatory_ref VARCHAR(255)`,
+      `ALTER TABLE cm_documents ADD COLUMN custom_attributes JSON`,
+      `ALTER TABLE cm_documents ADD COLUMN version_notes TEXT`,
+      `ALTER TABLE cm_documents ADD COLUMN alert_days JSON`,
+      `ALTER TABLE cm_documents ADD COLUMN alert_email_account_id INT`,
+    ];
+    for (const sql of cmPhase4Alters) {
+      try { await conn.execute(sql); } catch (_) { /* column already exists */ }
+    }
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS cm_document_relations (
+        id              INT NOT NULL AUTO_INCREMENT,
+        doc_id          INT NOT NULL,
+        related_doc_id  INT NOT NULL,
+        relation_type   VARCHAR(50) NOT NULL DEFAULT 'Supports',
+        created_by      INT,
+        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_cm_doc_relations_doc (doc_id),
+        KEY idx_cm_doc_relations_related (related_doc_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS cm_document_alert_subs (
+        id          INT NOT NULL AUTO_INCREMENT,
+        document_id INT NOT NULL,
+        user_id     INT NOT NULL,
+        created_by  INT,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_alert_sub (document_id, user_id),
+        KEY idx_cm_alert_subs_doc (document_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS cm_org_settings (
+        id            INT NOT NULL AUTO_INCREMENT,
+        org_id        INT NOT NULL,
+        setting_key   VARCHAR(100) NOT NULL,
+        setting_value JSON,
+        updated_by    INT,
+        updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_cm_org_setting (org_id, setting_key)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // CM Phase 3 — Dedicated CM Picklists
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS cm_picklists (
+        id          INT NOT NULL AUTO_INCREMENT,
+        org_id      INT NOT NULL,
+        field_type  VARCHAR(100) NOT NULL,
+        value       VARCHAR(500) NOT NULL,
+        label       VARCHAR(500) NOT NULL,
+        sort_order  INT NOT NULL DEFAULT 0,
+        is_active   TINYINT(1) NOT NULL DEFAULT 1,
+        created_by  INT,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_cm_picklists_org_type (org_id, field_type)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
 
     console.log('✅ Database initialized — tables ready');
 

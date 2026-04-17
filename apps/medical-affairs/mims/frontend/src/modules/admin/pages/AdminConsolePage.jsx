@@ -12,6 +12,7 @@ import AdminWorkflowSection from '../components/AdminWorkflowSection'
 import AdminIntegrationSection from '../components/AdminIntegrationSection'
 import AdminMiscSection from '../components/AdminMiscSection'
 import AdminPicklistsSection from '../components/AdminPicklistsSection'
+import AdminMICategoriesSection from '../components/AdminMICategoriesSection'
 import {
   ADMIN_NAV_GROUPS,
   getAdminSectionLabel,
@@ -650,6 +651,9 @@ export default function AdminConsolePage() {
       case 'field-setup':
       case 'case-form-def':
         return <AdminPicklistsSection contentSection={contentSection} H={H} flash={flash} />
+
+      case 'mi-categories':
+        return <AdminMICategoriesSection H={H} />
 
       case 'mir-int':
       case 'crm-int':

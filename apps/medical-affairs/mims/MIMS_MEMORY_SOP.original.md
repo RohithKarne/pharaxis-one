@@ -1,7 +1,7 @@
 # MIMS Memory SOP
-> **Purpose:** Single source of truth for MIMS project. For any dev, QA, or team member onboarding/resuming without verbal explanation.
-> **Scope:** MIMS only. CP Portal documented separately in `CP_MEMORY_SOP.md`.
-> **Update Protocol:** Updated only when Rohith explicitly confirms. Rohith says "Bala, update the Memory SOP — [what changed]" and Bala updates. No one else modifies. Each update adds version note below.
+> **Purpose:** Single source of truth for the MIMS project. Intended for any developer, QA engineer, or team member who needs to onboard or resume work without requiring verbal explanation.
+> **Scope:** MIMS only. CP Portal is documented separately in `CP_MEMORY_SOP.md`.
+> **Update Protocol:** This file is only updated when Rohith explicitly confirms. Rohith says "Bala, update the Memory SOP — [what changed]" and Bala updates it. No one else modifies this file. Each update adds a version note below.
 
 ---
 
@@ -10,36 +10,36 @@
 | Date | Updated By | What Changed |
 |------|-----------|--------------|
 | 2026-03-27 | Bala | Initial creation — full Sprint 7 state |
-| 2026-03-28 | Bala | Sprint 8 complete: session timeout, superadmin lockdown, org/site toggles, data cleanup, site uniqueness. DB, API, frontend, team updated. |
-| 2026-03-28 | Bala | Post-Sprint 8: org-controlled user 2FA, SuperAdmin 2FA Config, platform SMTP test, QA status added. |
-| 2026-03-28 | Bala | Password recovery + history: forgot-password, in-app change-password, backend blocks reuse of current + last 5 passwords. |
-| 2026-03-28 | Bala | Reshape: audit + login-audit endpoints → Section 7. Superadmin pages table → Section 8. Sprint 8 summary expanded. Section 11 updated (2FA infra, SMTP, reset-2fa, audit). |
-| 2026-03-28 | Bala | Section 11 trimmed — verbose sprint blocks removed. Content already in sections 7–9, 13. Section 11 = current sprint only. |
-| 2026-03-28 | Bala | Team promotions: Varun → Senior Director Engineering, Bhavya → Senior Architect, Vivek → Principal SWE, Karthik → QA Manager, Vanaja → Director Product Management, Vinay → Product Owner. Section 5 updated. |
-| 2026-03-28 | Bala | Sprint 9 closed: SuperAdmin dashboard, audit filters + CSV export, user lifecycle controls, alerts engine, in-app notifications, duplicate alert-rule fix. Sections 7–13 updated. |
-| 2026-03-28 | Bala | Sprint 9 DB enriched: superadmin_alert_rules, superadmin_alert_events, notifications expanded. Sprint 9 affected tables documented. |
-| 2026-03-31 | Bala | Sprint 10 closed: org seed service (`seedService.js`), GET /api/cases/form-config, Case Form UI dynamic rendering (AE 9 tabs / PC 7 tabs), Field Setup UI two-pane + flex field CRUD. field_setup unique key fixed (org_id). Backfill script. Codex workflow rule. Sprint 11 roadmap locked. All sections updated. |
-| 2026-04-05 | Bala | Sprints 11–13 closed. Sprint 14 active. Section 5 → pointer to `TEAM_OPERATING_SOP.md`. Section 14 → pointer to `memory/protocols.md`. Section 13 trimmed (rules → `memory/feedback.md`). Section 11 = current sprint only. Sprint history updated to Sprint 14. |
-| 2026-04-07 | Bala | Sprint 14 closed. 13/14 items complete. G13-3 (client-facing demo env) deferred to Sprint 15. Gate 1 passed (exit code 0). Sprint history + Section 11 updated to Sprint 15 READY. |
+| 2026-03-28 | Bala | Sprint 8 complete: session timeout, superadmin lockdown, org/site toggles, data cleanup, site uniqueness enforcement. Full DB, API, frontend, team state updated. |
+| 2026-03-28 | Bala | Post-Sprint 8 update: org-controlled user 2FA, SuperAdmin 2FA Configuration, platform SMTP test actions, and latest QA status added. |
+| 2026-03-28 | Bala | Password recovery and password-history update: forgot-password flow, in-app change-password flow, and backend enforcement preventing reuse of current + last 5 passwords. |
+| 2026-03-28 | Bala | Reshape: audit + login-audit endpoints added to Section 7. Superadmin console pages table added to Section 8. Sprint 8 summary in Section 10 expanded. Section 11 deliverables, DB changes, and API endpoint list brought current with live code (2FA infra, SMTP, reset-2fa, audit endpoints). |
+| 2026-03-28 | Bala | Section 11 trimmed — verbose sprint-scoped blocks removed (deliverables, DB changes, API list, live data, QA results). All content already in permanent sections 7–9 and 13. Section 11 now holds current sprint status only. |
+| 2026-03-28 | Bala | Team promotions effective: Varun → Senior Director Engineering, Bhavya → Senior Architect, Vivek → Principal SWE, Karthik → QA Manager, Vanaja → Director Product Management, Vinay → Product Owner. Org chart and role descriptions updated in Section 5. |
+| 2026-03-28 | Bala | Sprint 9 closed: SuperAdmin dashboard, advanced audit filters + CSV export, user lifecycle controls, alerts engine, in-app notifications, duplicate alert-rule fix, and latest sprint status updated across Sections 7–13. |
+| 2026-03-28 | Bala | Sprint 9 DB reference enriched: superadmin_alert_rules, superadmin_alert_events, notifications descriptions expanded. Existing tables affected by Sprint 9 documented (users, login_audit, audit_logs, user_2fa_settings, organisations, sites, system_config, service_logs, email_accounts). |
+| 2026-03-31 | Bala | Sprint 10 closed: org seed service (seedService.js), runtime linkage (GET /api/cases/form-config), Case Form UI dynamic rendering (AE 9 tabs / PC 7 tabs), Field Setup UI two-pane redesign + flex field CRUD. field_setup unique key fixed to include org_id. Backfill script for existing orgs. Codex workflow rule established. Sprint 11 integration roadmap locked (32 features, 3 phases). Version history, API map, DB reference, sprint history, technical rules, and test file list all updated. |
+| 2026-04-05 | Bala | Sprints 11–13 closed. Sprint 14 active. Section 5 (Team) replaced with pointer — full org chart in TEAM_OPERATING_SOP.md. Section 14 (Process) replaced with pointer — gate flow and browser verification in memory/protocols.md. Section 13 trimmed — process rules (git push, Codex workflow) moved to memory/feedback.md. Sprint 11 integration scope removed from Section 11 — Section 11 now current sprint only. Sprint history table updated to Sprint 14. |
+| 2026-04-07 | Bala | Sprint 14 closed. 13/14 items complete. G13-3 (client-facing demo environment full provisioning) deferred to Sprint 15. Gate 1 passed (exit code 0). Sprint history table updated. Section 11 updated to Sprint 15 READY. |
 
 ---
 
 ## 1. What Is MIMS
 
 **MIMS — Medical Information Management System**
-Enterprise platform for pharma companies to manage medical information inquiries and safety cases end-to-end.
+An enterprise platform for pharmaceutical companies to manage medical information inquiries and safety cases end-to-end.
 
 MIMS handles:
 - Incoming medical inquiries via email (inbox), triaged by agents
-- Case creation + management across 3 case types: MI (Medical Information), AE (Adverse Events), PC (Product Complaints)
-- Admin config per org — picklists, field setup, security groups, sites, workflows, case numbering, audit trails
+- Case creation and management across three case types: MI (Medical Information), AE (Adverse Events), PC (Product Complaints)
+- Admin configuration per organisation — picklists, field setup, security groups, sites, workflows, case numbering, audit trails
 - Content management — documents, FAQs, templates, merge reports with approval lifecycles
-- Multi-org support — single MIMS instance serves multiple pharma client orgs with full data isolation
+- Multi-organisation support — a single MIMS instance serves multiple pharma client organisations with full data isolation
 
 **Relationship to CP Portal:**
-CP Portal: separate white-label HCP/patient portal. Future: CP Portal → MIMS via API, MIMS pushes outcomes back. Not built yet.
+CP Portal is a separate white-label HCP/patient-facing portal. Future integration planned — CP Portal will send submissions to MIMS via API, and MIMS will push outcomes back. No integration built yet.
 
-**Current Focus:** MIMS sole active dev priority. CP Portal: hotfix only if Rohith requires.
+**Current Focus:** MIMS is the sole active development priority. CP Portal receives hotfix support only if explicitly required by Rohith.
 
 ---
 
@@ -125,28 +125,28 @@ npm run dev
 **Default Superadmin login:**
 - Username: `superadmin`
 - Password: `Manager@123`
-- Only superadmin account. No other user can be assigned superadmin role — blocked at API + UI level.
-- Login field is `type="text"` (not `type="email"`) to support `superadmin` username (no `@`).
+- This is the **only** superadmin account. No other user can be assigned the superadmin role — blocked at both API and UI level.
+- The login field on the login page is `type="text"` (not `type="email"`) to support the `superadmin` username which has no `@`.
 
 ---
 
 ## 4. System Architecture
 
 ### Entry Point (CRITICAL)
-Real app entry point:
+The real app entry point is:
 ```
 index.html → src/modules/max/main.jsx → src/modules/max/App.jsx
 ```
-Top-level `src/App.jsx` and `src/main.jsx` are **legacy files — do not edit**. All route additions go into `src/modules/max/App.jsx`.
+The top-level `src/App.jsx` and `src/main.jsx` are **legacy files — do not edit them**. All route additions must go into `src/modules/max/App.jsx`.
 
 ### Auth Flow
-1. User POSTs `/api/auth/login` with email + password
+1. User POSTs to `/api/auth/login` with email + password
 2. Server verifies password (bcrypt), checks `user_org_access` for org assignment
-3. Returns JWT: `{ userId, email, role, orgId, siteId }`
+3. Returns JWT containing `{ userId, email, role, orgId, siteId }`
 4. JWT stored in localStorage as `mims_token`
 5. All API calls include `Authorization: Bearer <token>` header
-6. `requireAuth` middleware decodes JWT, attaches `req.user`
-7. `requireOrg` blocks non-superadmin users without `orgId` in JWT (403)
+6. `requireAuth` middleware decodes JWT and attaches `req.user`
+7. `requireOrg` middleware blocks non-superadmin users without `orgId` in JWT (403)
 
 ### JWT Decode Pattern
 ```js
@@ -169,35 +169,37 @@ if (req.user.role !== 'superadmin') {
 - Stored in `user_module_permissions` table per user
 - Frontend enforces via `ModuleAccessGuard` component wrapping each route
 - Superadmin bypasses all module checks
-- Superadmin hidden from User Management + Module Access screens — `WHERE role != 'superadmin'` on both `/api/superadmin/users` and `/api/superadmin/all-users`
+- Superadmin account is hidden from both User Management and Module Access screens — `WHERE role != 'superadmin'` applied to both `/api/superadmin/users` and `/api/superadmin/all-users`
 
 ### Session Timeout
-- Per-org idle timeout set by superadmin. Stored as `session_timeout_minutes` in `organisations` table.
-- Superadmin global timeout in `system_config` (`key: superadmin_session_timeout_minutes`).
-- Defaults: **30 min** per org, **60 min** superadmin. Min enforced: **30 min**.
-- Login + switch-org APIs return `sessionTimeout`.
-- Frontend: `useIdleTimer.js` tracks mouse/keyboard/scroll. `SessionTimeoutModal.jsx` warns 2 min before logout. "Stay Logged In" resets timer.
-- `sessionTimeout` stored in localStorage as `mims_session_timeout`. Wired into `App.jsx` via `AppRoutes`.
+- Per-org idle timeout configured by superadmin. Stored as `session_timeout_minutes` in `organisations` table.
+- Superadmin has its own global timeout stored in `system_config` table (`key: superadmin_session_timeout_minutes`).
+- Defaults: **30 minutes** per org, **60 minutes** for superadmin. Minimum enforced: **30 minutes**.
+- Login and switch-org APIs both return `sessionTimeout` in their responses.
+- Frontend: `useIdleTimer.js` hook tracks mouse/keyboard/scroll. Warning modal (`SessionTimeoutModal.jsx`) appears 2 minutes before logout. "Stay Logged In" resets the timer.
+- `sessionTimeout` stored in localStorage as `mims_session_timeout`. Wired into `App.jsx` via `AppRoutes` component wrapping all routes.
 
 ### User 2FA Architecture
 - 2FA applies to **MIMS users only**. Superadmin login does **not** use this flow.
-- Superadmin controls 2FA per org from `2FA Configuration` screen.
+- Superadmin controls 2FA per organisation from the dedicated `2FA Configuration` screen.
 - Supported methods: `Email OTP` and `Authenticator App (TOTP)`.
-- Login flow (same screen):
-  1. User enters username/email + password
-  2. If org 2FA enabled + user not enrolled, optional setup shown inline
-  3. User chooses Email OTP or Authenticator App, or skips if allowed
-  4. Once enrolled, 2FA required unless remembered device valid
-- Backup codes generated on enrollment. Remember-device supported for org-configured duration. Lock after **3** invalid attempts.
-- Superadmin can reset user 2FA from User Management.
-- Platform SMTP for 2FA emails in `system_config` — separate from org-level Email Accounts.
-- Security challenge expiry must use **DB time** (`NOW()` / `DATE_ADD`), not JS timestamps. Real QA defect — fixed.
+- The login experience stays on the same login screen:
+  1. user enters username/email + password
+  2. if org 2FA is enabled and user is not enrolled, optional setup is shown inline
+  3. user can choose Email OTP or Authenticator App, or skip if allowed
+  4. once enrolled, login requires 2FA unless a remembered device is valid
+- Backup codes are generated on enrollment.
+- Remember-device is supported for the org-configured duration.
+- Lock happens after **3** invalid attempts.
+- Superadmin can reset a user's 2FA state from User Management.
+- Platform SMTP used for user 2FA emails is stored in `system_config` and is separate from MIMS org-level Email Accounts used for operational mailboxes.
+- Security challenge expiry must be generated from **DB time** (`NOW()` / `DATE_ADD`) rather than app-side JS timestamps. This was a real defect found during QA and fixed.
 
 ### Password Reset Flow
 1. New users created with `password_reset_required = 1` and default password `Manager@123`
-2. On login, if flag set, server returns `{ passwordResetRequired: true, token: resetToken }`
+2. On login, if flag is set, server returns `{ passwordResetRequired: true, token: resetToken }`
 3. Frontend redirects to `/reset-password` (NOT `/dashboard`)
-4. After reset, flag cleared, user gets fresh JWT with modules + org context
+4. After reset, flag cleared, user gets fresh JWT with modules and org context
 5. User navigates to `/dashboard` normally
 
 ### CSS Namespace Convention
@@ -212,7 +214,7 @@ if (req.user.role !== 'superadmin') {
 
 ## 5. Team Structure
 
-5 members. Full org chart + role descriptions: see `docs/TEAM_OPERATING_SOP.md`.
+5 members. Full org chart and role descriptions: see `docs/TEAM_OPERATING_SOP.md`.
 
 **Quick reference (restructured 2026-04-14):**
 
@@ -228,7 +230,7 @@ if (req.user.role !== 'superadmin') {
 
 ## 6. Frontend Route Map
 
-All routes in `mims/frontend/src/modules/max/App.jsx`.
+All routes are in `mims/frontend/src/modules/max/App.jsx`.
 
 | Route | Component | Module Guard |
 |-------|-----------|-------------|
@@ -248,7 +250,7 @@ All routes in `mims/frontend/src/modules/max/App.jsx`.
 
 ## 7. Backend API Map
 
-Backend on port 3000. All routes under `/api/`.
+Backend runs on port 3000. All routes under `/api/`.
 
 ### Auth
 | Method | Path | Purpose |
@@ -256,12 +258,12 @@ Backend on port 3000. All routes under `/api/`.
 | POST | `/api/auth/register` | User registration |
 | POST | `/api/auth/login` | Login — returns JWT + modules + org data |
 | POST | `/api/auth/forgot-password/send-code` | Forgot-password: send email verification code |
-| POST | `/api/auth/forgot-password/verify-code` | Forgot-password: verify email code, issue short reset token |
+| POST | `/api/auth/forgot-password/verify-code` | Forgot-password: verify email code and issue short reset token |
 | POST | `/api/auth/forgot-password/reset` | Forgot-password: set new password after code verification |
 | POST | `/api/auth/2fa/send-email-code` | Send Email OTP for login/setup |
-| POST | `/api/auth/2fa/setup/totp` | Begin authenticator app setup, return secret/QR payload |
+| POST | `/api/auth/2fa/setup/totp` | Begin authenticator app setup and return secret/QR payload |
 | POST | `/api/auth/2fa/verify` | Verify email OTP, TOTP, or backup code |
-| POST | `/api/auth/2fa/skip-setup` | Skip optional 2FA setup, complete login |
+| POST | `/api/auth/2fa/skip-setup` | Skip optional 2FA setup and complete login |
 | GET | `/api/auth/me` | Current user info |
 | POST | `/api/auth/switch-org` | Re-issue JWT with different orgId |
 | POST | `/api/auth/reset-password` | Mandatory first-login reset |
@@ -274,8 +276,8 @@ Backend on port 3000. All routes under `/api/`.
 | GET | `/api/cases` | List with filters + pagination |
 | GET | `/api/cases/my` | Cases owned by logged-in user |
 | GET | `/api/cases/unassigned` | Unassigned cases |
-| POST | `/api/cases` | Create case (org_id from JWT only) |
-| GET | `/api/cases/form-config` | Dynamic form config — merged sections + fields + picklist options for given case_type + org. Auth only (no requireOrg). Superadmin passes `?org_id=`, regular users from JWT orgId. Returns `{ case_type, sections: [{ section_name, is_visible, fields: [{ ...field, options: [] }] }] }`. |
+| POST | `/api/cases` | Create case (org_id sourced from JWT only) |
+| GET | `/api/cases/form-config` | Dynamic form config — merged sections + fields + picklist options for a given case_type and org. Auth only (no requireOrg). Superadmin passes `?org_id=`. Regular users resolved from JWT orgId. Returns `{ case_type, sections: [{ section_name, is_visible, fields: [{ ...field, options: [] }] }] }`. |
 | GET | `/api/cases/:id` | Single case detail |
 | PUT | `/api/cases/:id` | Update case (COALESCE pattern — partial update) |
 | DELETE | `/api/cases/:id` | Soft delete |
@@ -297,8 +299,8 @@ Backend on port 3000. All routes under `/api/`.
 |--------|------|---------|
 | GET/POST/PUT/DELETE | `/api/admin/picklists` | Dropdown values per org |
 | GET/POST/PUT/DELETE | `/api/admin/field-setup` | Case form field config — standard fields |
-| POST | `/api/admin/field-setup/flex` | Add flex field to section. Body: `{ section_name, field_name, field_type, picklist_type, is_required, sort_order }` |
-| DELETE | `/api/admin/field-setup/flex/:id` | Delete flex field by id |
+| POST | `/api/admin/field-setup/flex` | Add a flex field to a section. Body: `{ section_name, field_name, field_type, picklist_type, is_required, sort_order }` |
+| DELETE | `/api/admin/field-setup/flex/:id` | Delete a flex field by id |
 | GET/POST/PUT/DELETE | `/api/admin/security-groups` | RBAC groups + privilege matrix |
 | GET/POST/PUT/DELETE | `/api/admin/contacts` | Case contacts repository |
 | GET/POST/PUT/DELETE | `/api/admin/orgs` | Organisations |
@@ -319,9 +321,9 @@ Backend on port 3000. All routes under `/api/`.
 | GET | `/api/superadmin/all-users` | Full user list with org assignments (excludes superadmin role) |
 | GET | `/api/superadmin/users` | Users for module access screen (excludes superadmin role) |
 | POST | `/api/superadmin/users/create` | Create user — roles: admin/agent/reviewer/content_manager only. superadmin blocked. |
-| PUT | `/api/superadmin/users/:id` | Update user — superadmin role blocked |
-| POST | `/api/superadmin/users/:id/reset-2fa` | Reset user 2FA enrollment, lock state, backup codes, trusted devices |
-| GET/POST/PUT/DELETE | `/api/superadmin/users/:id/org-access` | CRUD org assignments |
+| PUT | `/api/superadmin/users/:id` | Update user — superadmin role assignment blocked |
+| POST | `/api/superadmin/users/:id/reset-2fa` | Reset user's 2FA enrollment, lock state, backup codes, and trusted devices |
+| GET/POST/PUT/DELETE | `/api/superadmin/users/:id/org-access` | CRUD on org assignments |
 | GET | `/api/superadmin/orgs-for-assignment` | Active orgs + sites for dropdown |
 | PUT | `/api/superadmin/users/:id/modules` | Override user module access |
 | GET | `/api/superadmin/orgs` | List all orgs with sites + session_timeout_minutes |
@@ -331,14 +333,14 @@ Backend on port 3000. All routes under `/api/`.
 | PUT | `/api/superadmin/sites/:id` | Update site name / country / is_primary / is_active |
 | GET | `/api/superadmin/config` | Get system config (superadmin timeout + platform SMTP) |
 | PUT | `/api/superadmin/config` | Update system config (superadmin timeout + platform SMTP) |
-| POST | `/api/superadmin/config/test-email` | Test SMTP connection or send test email from SuperAdmin 2FA Configuration |
+| POST | `/api/superadmin/config/test-email` | Test SMTP connection or send a test email from SuperAdmin 2FA Configuration |
 | GET | `/api/superadmin/dashboard` | SuperAdmin dashboard KPIs + recent audit/login activity |
-| POST | `/api/superadmin/users/:id/force-password-reset` | Force user to reset password on next login |
-| POST | `/api/superadmin/users/:id/unlock` | Clear user security lock / 2FA failed-attempt lock |
+| POST | `/api/superadmin/users/:id/force-password-reset` | Force selected user to reset password on next login |
+| POST | `/api/superadmin/users/:id/unlock` | Clear user security lock state / 2FA failed-attempt lock |
 | POST | `/api/superadmin/users/bulk-action` | Bulk activate, deactivate, or force password reset |
 | GET | `/api/superadmin/audit` | Paginated general audit log — all entity changes. Params: `limit` (max 200), `offset` |
 | GET | `/api/superadmin/login-audit` | Paginated login/logout event log. Params: `limit`, `offset`, `status` filter |
-| GET/POST/PUT | `/api/superadmin/alerts/rules` | List, create, update SuperAdmin alert rules |
+| GET/POST/PUT | `/api/superadmin/alerts/rules` | List, create, and update SuperAdmin alert rules |
 | GET | `/api/superadmin/alerts/events` | Alert event history with delivery statuses |
 | GET | `/api/superadmin/notifications` | SuperAdmin in-app notifications |
 | POST | `/api/superadmin/notifications/:id/read` | Mark notification as read |
@@ -363,7 +365,7 @@ Backend on port 3000. All routes under `/api/`.
 
 ## 8. Admin Console Sections
 
-All under `/admin-console/*` (requires `admin_console` module).
+All accessible under `/admin-console/*` (requires `admin_console` module).
 
 | Section Key | URL Slug | What It Manages |
 |-------------|----------|----------------|
@@ -386,18 +388,18 @@ All under `/admin-console/*` (requires `admin_console` module).
 | email-accounts | email-accounts | IMAP/SMTP mailbox connectors |
 
 **Important distinction:**
-- `Admin Console -> Email Accounts` = org-specific MIMS mailboxes for app operations
-- `SuperAdmin -> 2FA Configuration` = platform SMTP for user 2FA email delivery + org-level 2FA controls
+- `Admin Console -> Email Accounts` = org-specific MIMS mailboxes for application operations
+- `SuperAdmin -> 2FA Configuration` = platform SMTP used for user 2FA email delivery and org-level 2FA controls
 
 ### Superadmin Console Pages
 
-Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — no URL routing between pages.
+Accessible at `/superadmin` (requires `superadmin` role). Navigation is sidebar-based — no URL routing between pages.
 
 | Page Key | Sidebar Label | What It Shows |
 |----------|--------------|---------------|
-| `dashboard` | Dashboard | Platform KPIs, failed logins, unread notifications, recent audit + login activity |
+| `dashboard` | Dashboard | Platform KPIs, failed logins, unread notifications, recent audit, recent login activity |
 | `organizations` | Organizations | Org cards with site lists, active/inactive toggles, session timeout editor, add site form |
-| `2fa-config` | 2FA Configuration | Platform SMTP config + test/send buttons; per-org 2FA enable/methods/remember-days table |
+| `2fa-config` | 2FA Configuration | Platform SMTP config form + test/send buttons; per-org 2FA enable/methods/remember-days table |
 | `users` | Users | User list with 2FA status, org assignments, Reset 2FA button; create user form; org assignment panel (Org / Site / Role tabs) |
 | `module-access` | Module Access | Per-user module checkboxes (mims_core, admin_console, content_mgmt, data_visualization) |
 | `alerts` | Alerts | Alert rule setup, enable/disable, thresholds, recipients, recent alert event history |
@@ -414,15 +416,15 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 |-------|---------|
 | `users` | System users — email, role, password hash, active, password_reset_required |
 | `sessions` | Active login session tracking |
-| `login_audit` | Login/logout + auth event records for 21 CFR Part 11 |
-| `notifications` | In-app notifications. Sprint 9. SuperAdmin alert-triggered, read/unread state. SuperAdmin inbox reads this table. |
+| `login_audit` | Login/logout + auth event records for 21 CFR Part 11 compliance |
+| `notifications` | In-app notifications for users. Created in Sprint 9. Stores SuperAdmin alert-triggered notifications with read/unread state. SuperAdmin notification inbox reads from this table. |
 | `user_org_access` | Multi-org: maps user → org → site → role → permission (Sprint 7) |
 | `user_module_permissions` | Per-user module access — overrides default role permissions |
-| `user_password_history` | Previous password hashes. Blocks reuse of current + last 5. |
-| `user_2fa_settings` | Per-user, per-org 2FA enrollment, method, TOTP secret, fail count, lock state |
+| `user_password_history` | Previous password hashes per user. Used to block reuse of current + last 5 passwords |
+| `user_2fa_settings` | Per-user, per-org 2FA enrollment, preferred method, TOTP secret, fail count, lock state |
 | `user_2fa_backup_codes` | Hashed one-time backup codes per user/org |
 | `user_2fa_trusted_devices` | Remembered devices with expiry per user/org |
-| `user_2fa_challenges` | Active email OTP + TOTP setup challenges with expiry |
+| `user_2fa_challenges` | Active email OTP and TOTP setup challenges with expiry |
 | `security_groups` | RBAC groups with privilege matrix |
 | `security_group_users` | User → security group mappings |
 | `role_permissions` | Default access per role per module |
@@ -430,11 +432,11 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 ### Organisation & Sites
 | Table | Purpose |
 |-------|---------|
-| `organisations` | Pharma client orgs — name, is_active, `session_timeout_minutes` (default 30), `two_factor_enabled`, `two_factor_methods`, `two_factor_remember_days` |
-| `sites` | Locations per org — country, primary flag, is_finalized, abbreviation. **UNIQUE constraint on (org_id, name)** — duplicate site names within org blocked at DB + API. |
-| `system_config` | Key-value global platform config. Uses: `superadmin_session_timeout_minutes`, platform SMTP settings |
+| `organisations` | Pharma client organisations — name, is_active, `session_timeout_minutes` (default 30), `two_factor_enabled`, `two_factor_methods`, `two_factor_remember_days` |
+| `sites` | Locations under each org — country, primary site flag, is_finalized, abbreviation. **UNIQUE constraint on (org_id, name)** — duplicate site names within an org are blocked at DB level and validated in API. |
+| `system_config` | Key-value store for global platform config. Current uses: `superadmin_session_timeout_minutes`, platform SMTP host/port/encryption/username/password/from_email/from_name |
 | `site_config` | Extended site config — GDPR, retry, alert settings |
-| `site_email_accounts` | Email accounts linked to site |
+| `site_email_accounts` | Email accounts linked to a site |
 | `site_email_purpose` | Site → purpose (response / transmissions / correspondence / fax) → email_account |
 | `site_response_templates` | Auto-acknowledgement templates per site |
 | `site_data_retention` | GDPR right-to-forget rules per site |
@@ -445,8 +447,8 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 |-------|---------|
 | `cases` | Core case record — case_number, type (MI/AE/PC), org, site, status, owner, priority |
 | `case_contacts` | Contact/requestor entries per case with DNUMD support |
-| `case_mi` | MI tabs — category, product, question, response |
-| `case_ae_versions` | AE version control — locking on new version |
+| `case_mi` | Medical information tabs — category, product, question, response |
+| `case_ae_versions` | AE version control — locking on new version creation |
 | `case_ae_general` | AE general tab (one per version) |
 | `case_ae_events` | AE events — 7 ICH E2B R3 seriousness boolean columns |
 | `case_ae_patient_info` | AE patient demographics |
@@ -468,10 +470,10 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 |-------|---------|
 | `workflow_states` | Case status definitions |
 | `workflow_rules` | Transitions between states — password / checklist / comment requirements |
-| `workflow_activities` | Named case activities triggering rules (F-12) |
+| `workflow_activities` | Named case activities that trigger rules (F-12) |
 | `workflow_activity_triggers` | If-activity-then-action rules |
 | `source_types` | How inquiries arrive (email, phone, web form, etc.) |
-| `field_setup` | Case form field config per section per org — type, required, hidden, picklist, help_text, max_length, default_value. **Sprint 10:** unique key changed from `uq_field_section_name (section_name, field_name)` to `uq_field_section_org (section_name, field_name, org_id)` — required for per-org seeding via INSERT IGNORE. Seeds via `seedService.js` on org creation. |
+| `field_setup` | Case form field config per section per org — type, required, hidden, picklist, help_text, max_length, default_value. **Sprint 10:** unique key changed from `uq_field_section_name (section_name, field_name)` to `uq_field_section_org (section_name, field_name, org_id)` — required for per-org seeding to work correctly via INSERT IGNORE. Seeds populated via `seedService.js` on org creation. |
 | `picklists` | Dropdown values per category per org |
 | `case_number_config` | Auto-number format per org per case type |
 | `case_form_definition` | Section + field visibility per org per case type. Seeded for new orgs via `seedService.js`. |
@@ -490,7 +492,7 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 | `inquiry_notes` | Internal notes per inquiry |
 | `inquiry_attachments` | Email attachment metadata |
 | `reply_templates` | Global email reply templates |
-| `email_retry_log` | Retry attempts for failed notification emails |
+| `email_retry_log` | Tracks retry attempts for failed notification emails |
 
 ### Content Management
 | Table | Purpose |
@@ -507,9 +509,9 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 ### Audit & Monitoring
 | Table | Purpose |
 |-------|---------|
-| `audit_logs` | General audit — case operations + entity changes |
-| `superadmin_alert_rules` | Sprint 9. Alert rule master data — event type, severity, delivery channels (email/in-app), recipients, threshold, time window, cooldown, active/inactive |
-| `superadmin_alert_events` | Sprint 9. Each fired alert event — per-channel delivery status (email delivered/failed, in-app created/failed) |
+| `audit_logs` | General audit — case operations and entity changes |
+| `superadmin_alert_rules` | Created Sprint 9. Alert rule master data — event type, severity, delivery channels (email/in-app), recipients, threshold, time window, cooldown period, active/inactive state |
+| `superadmin_alert_events` | Created Sprint 9. Each alert event that fires — includes per-channel delivery status (email delivered/failed, in-app created/failed) |
 | `case_audit_trail` | Immutable field-level change log per case (F-09) |
 | `transmission_audit_trail` | Immutable outbound transmission log per case (F-10) |
 | `service_logs` | Platform-wide service events |
@@ -520,31 +522,31 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 
 ### `mims/backend/services/seedService.js` (NEW — Sprint 10)
 
-Master org seed service. Called when new org created.
+Master org seed service. Called whenever a new org is created.
 
 ```js
 const { seedNewOrg } = require('./services/seedService');
 await seedNewOrg(orgId, userId);  // runs in a single transaction
 ```
 
-Seeds 3 things in order:
+Seeds three things in order:
 1. **Field Setup** — 113 fields across 19 sections (General, MI, AE, PC) including: Prefix, Reporter Type, Source, Consent Status, Product Type, Product Category, Reported Causality, PC Classification, Frequency, Administration Route
 2. **Picklists** — 33 default picklist groups
 3. **Case Form Definition** — section visibility defaults for MI (5 sections), AE (10 sections), PC (8 sections)
 
-All 3 run in single MySQL transaction — any failure rolls back all.
+All three run in a single MySQL transaction — if any fails, the whole seed rolls back.
 
-**Wired into:** `mims/backend/routes/admin/orgs.js` POST `/` handler — called after INSERT INTO organisations, before SELECT created_at.
+**Wired into:** `mims/backend/routes/admin/orgs.js` POST `/` handler — called after INSERT INTO organisations and before SELECT created_at.
 
 ### `mims/backend/scripts/backfill-existing-orgs.js` (NEW — Sprint 10)
 
-One-time script to seed defaults for orgs created before Sprint 10.
+One-time script to seed defaults for orgs created before Sprint 10 was deployed.
 
 ```bash
 node mims/backend/scripts/backfill-existing-orgs.js
 ```
 
-Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on error, prints summary. Run once. Already run for org 1 (Novartis) + org 26 (Vanaja Review Co.).
+Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on error, prints summary. Run once. Already executed for org 1 (Novartis) and org 26 (Vanaja Review Co.).
 
 ---
 
@@ -555,17 +557,17 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 | Sprint 1 | Foundation | Stable base | Auth, login, dashboard, basic inbox, core navigation | Browser verification not enforced — lesson learned |
 | Sprint 2 | Stability | Patch/hotfix only | Bug fixes, no new features | Client onboarding held pending stability |
 | Sprint 3 | Operational Maturity | CLOSED — 27 stories done | 6 features + Sprint 2 tech debt cleared. GitHub sync disabled. | None |
-| Sprint 4 | Admin Console Phase A + B | CLOSED — 10 stories done | Phase A: 7 admin features. Phase B: 3 features | None |
+| Sprint 4 | Admin Console Phase A + B | CLOSED — 10 stories done | Phase A: 7 admin console features. Phase B: 3 features | None |
 | Sprint 5 | Platform completeness | CLOSED — 9 stories done | 850 frontend modules, 0 errors. Core platform stabilised. | None |
-| Sprint 6 | Admin Console + Case Form | CLOSED — Gate 2 approved 2026-03-25 | Phase 1A: Admin Console redesign (165/166 QA). Phase 1B: Extended admin features. Phase 2: Full case form (F-13 to F-18, 195/195 QA). 6 bugs fixed. | Phase 3 (Argus/Veeva integration) — deferred |
-| Sprint 7 | Multi-Org Architecture | CLOSED — 2026-03-27 | Multi-org DB, JWT org context, switch-org API, superadmin user+org management, password reset flow, data isolation on all routes, org switcher UI, 7 bugs fixed | None |
-| Sprint 8 | Security + Data Integrity | CLOSED — 2026-03-28 | Session timeout (per org + superadmin global), 2FA infra, per-org 2FA config, platform SMTP + test-email, audit + login-audit pages, superadmin lockdown, org/site toggles, site uniqueness, data cleanup. 20/20 QA passing. | None |
-| Sprint 9 | SuperAdmin Control, Audit, and Alerts | CLOSED — 2026-03-28 | SuperAdmin dashboard, audit/login-audit filters + CSV export, user lifecycle controls, alerts engine, alert rules/events, in-app notifications, org/site deactivation alerts, duplicate alert-rule fix. QA passed. | Small future polish only |
-| Sprint 10 | Case Form Foundation | CLOSED — 2026-03-31 | Org seed service (`seedService.js`), field_setup unique key fix, GET /api/cases/form-config, Case Form UI dynamic rendering (AE 9 tabs / PC 7 tabs), Field Setup UI two-pane + flex field CRUD, backfill script. 37/37 QA passing. | None |
-| Sprint 11 | Integration Foundation + Reports Backend | CLOSED | Integration screens, org_integrations DB, API key auth layer, Integration Engine service, EMIR, Reports backend. | AdminConsolePage split — deferred to Sprint 13 |
-| Sprint 12 | Admin Console + Workflow Gaps | CLOSED | Admin Console workflow engine, CM backend, security hardening. | AdminConsolePage split — carried to Sprint 13 |
-| Sprint 13 | AdminConsolePage Refactor + Reports UI + CM Frontend + Admin Gaps + Security | CLOSED — 2026-04-05 | AdminConsolePage 6,395→763 lines (5 sub-components), Reports frontend (27 reports), CM frontend, Admin Console FRD gaps, Case Workflow Engine fix, Security hardening, SuperAdmin Reports Access. 50/50 items. Gate 2 approved. | Security Groups deactivation — Sprint 14 |
-| Sprint 14 | Case Management Gaps + UX + QA + Architecture | CLOSED — 2026-04-07 | G10: Global search, case comments, case reassignment, notifications. G11: Home dashboard, session management UI. G12: Full regression suite, Security Groups deactivation fix. G13: API versioning (/api/v1/*), log aggregation endpoint. 13/14 items. Gate 1 passed. | G13-3: Demo env provisioning — Sprint 15 |
+| Sprint 6 | Admin Console + Case Form | CLOSED — Gate 2 approved 2026-03-25 | Phase 1A: Admin Console redesign (165/166 QA). Phase 1B: Extended admin features. Phase 2: Full case form (F-13 to F-18, 195/195 QA). 6 bugs fixed during QA. | Phase 3 (Argus/Veeva integration) — deferred to future sprint |
+| Sprint 7 | Multi-Org Architecture | CLOSED — 2026-03-27 | Multi-org DB, JWT org context, switch-org API, superadmin user+org management, password reset flow, data isolation on all routes, org switcher UI, 7 bugs fixed during product testing | None |
+| Sprint 8 | Security + Data Integrity | CLOSED — 2026-03-28 | Session timeout per org + superadmin global timeout, 2FA infrastructure (user_2fa_settings, backup codes, trusted devices, challenges, password history), per-org 2FA config (on/off, email OTP + TOTP, remember-device days), platform SMTP config + test-email, superadmin audit + login-audit pages, superadmin lockdown, org/site toggles, site uniqueness, data cleanup. 20/20 QA tests passing. | None |
+| Sprint 9 | SuperAdmin Control, Audit, and Alerts | CLOSED — 2026-03-28 | SuperAdmin dashboard, advanced audit/login-audit filters + CSV export, user lifecycle controls (force password reset, unlock, bulk actions), alerts engine, alert rules/events, in-app notifications, org/site deactivation alerts, duplicate alert-rule fix. QA substantially passed and product review accepted. | Small future polish only — clarify alert-rule activation/default behavior in UX copy |
+| Sprint 10 | Case Form Foundation | CLOSED — 2026-03-31 | Org seed service (seedService.js), field_setup unique key fix (org_id added), runtime linkage (GET /api/cases/form-config), Case Form UI dynamic rendering (AE 9 tabs / PC 7 tabs, formConfig helpers, flex field tab panels), Field Setup UI two-pane redesign + flex field CRUD (add/delete), backfill script for existing orgs. 37/37 QA tests passing. All code written via Codex CLI. | None |
+| Sprint 11 | Integration Foundation + Reports Backend | CLOSED | Integration screens (SuperAdmin + Admin Console), org_integrations DB table, API key auth layer, Integration Engine service, EMIR, Reports backend. | AdminConsolePage split — deferred to Sprint 13 |
+| Sprint 12 | Admin Console + Workflow Gaps | CLOSED | Admin Console workflow engine, CM backend, security hardening. AdminConsolePage split attempted — deferred to Sprint 13. | AdminConsolePage split — carried to Sprint 13 |
+| Sprint 13 | AdminConsolePage Refactor + Reports UI + CM Frontend + Admin Gaps + Security | CLOSED — 2026-04-05 | AdminConsolePage 6,395→763 lines (5 sub-components), Reports frontend (27 reports), CM frontend (Documents/FAQs/Merge/Templates), Admin Console FRD gaps (Expiry/Approvals/Dependencies/Diff/Workflow Rules/Security Groups), Case Workflow Engine fix, Security hardening, SuperAdmin Reports Access (DB+API+UI). 50/50 items. Gate 2 approved by Rohith. | Open defect: Security Groups deactivation — Sprint 14 |
+| Sprint 14 | Case Management Gaps + UX + QA + Architecture | CLOSED — 2026-04-07 | G10: Global search, case comments (case_comments table), case reassignment UI, notifications (overlay + dashboard). G11: Home dashboard (stats/recent/alerts), session management UI (list, revoke, activity). G12: Full regression suite, inbox smoke, reports regression, Security Groups deactivation defect fix (409 + dependency payload), Playwright e2e gate hardened. G13: API versioning (/api/v1/* router, version headers), log aggregation endpoint (/api/admin/service-logs/aggregation). 13/14 items. Gate 1 passed (exit code 0, 8/13 Playwright pass, 2 flaky recovered, 3 skipped). | G13-3: Full client-facing demo environment provisioning — deferred to Sprint 15 (runbook + preflight delivered) |
 
 ---
 
@@ -573,11 +575,11 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 
 **Sprint 14 — CLOSED (2026-04-07). 13/14 items delivered. Gate 1 PASSED.**
 
-Deferred to Sprint 15: G13-3 — full client-facing demo env provisioning (runbook + preflight smoke delivered; release-grade env setup deferred).
+Deferred to Sprint 15: G13-3 — full client-facing demo environment provisioning/hardening (runbook + preflight smoke delivered; full release-grade environment setup deferred).
 
 **Sprint 15 — READY. Awaiting Rohith go-ahead.**
 
-Carry-in from Sprint 14: G13-3 client-facing demo env (HIGH — must complete before any client demo).
+Carry-in from Sprint 14: G13-3 client-facing demo environment (HIGH — must complete before any client demo).
 
 ---
 
@@ -585,23 +587,23 @@ Carry-in from Sprint 14: G13-3 client-facing demo env (HIGH — must complete be
 
 | # | Item | Type | Priority | Owner |
 |---|------|------|----------|-------|
-| 1 | Multi-row AE tabs (lab results, medical history, product info) — row-level CRUD UI is placeholder only | Feature gap | Medium | Varun |
-| 2 | CSS for `cf-` namespace — CasesPage/CaseFormPage use `cf-` classes, no dedicated stylesheet | Visual debt | Medium | Vivek |
-| 3 | `browser-test.js` (66 tests) — not re-run since Sprint 6 Phase 2 — may need selector updates | Test debt | Low | Karthik |
-| 4 | CP Portal: `Unknown column 'client_code'` in `cp_clients` — CP Portal not in active scope | CP Portal bug | Low | Varun |
+| 1 | Multi-row AE tabs (lab results, medical history, product info) — row-level CRUD UI is placeholder note only | Feature gap | Medium | Varun |
+| 2 | CSS for `cf-` namespace — CasesPage/CaseFormPage use `cf-` classes — no dedicated stylesheet yet | Visual debt | Medium | Vivek |
+| 3 | `browser-test.js` (66 tests) — not re-run since Sprint 6 Phase 2 changes — may need selector updates | Test debt | Low | Karthik |
+| 4 | CP Portal: `Unknown column 'client_code'` in `cp_clients` — low priority, CP Portal not in active scope | CP Portal bug | Low | Varun |
 | 5 | Sprint 11 Phase 3 (Safety + CRM) — Argus/Veeva/TrackWise/Salesforce integration | Future sprint | Planned Sprint 11 | TBD |
 | 6 | Analytics module (`/analytics`) — placeholder only | Future sprint | Deferred | TBD |
-| 7 | Production deployment — Lightsail plan: 2GB instance + Managed MySQL + Object Storage ~$29/mo. 9 non-cloud migrations before go-live. Deferred by Rohith (2026-03-28). | Deployment | When ready | Varun |
-| 8 | Email OTP live success depends on correct SMTP encryption/port. Use `SuperAdmin -> 2FA Configuration -> Test SMTP Connection / Send Test Email` before signing off. | Config / QA dependency | High | Varun / Karthik |
-| 9 | Forgot-password + change-password browser QA needed after password-history rule addition. Backend done, UI/browser evidence pending. | QA follow-up | High | Karthik |
-| 10 | npm vulnerabilities — 19 flagged (8 high, 9 moderate, 2 low). Flagged on commit 71b8a3a. Varun to review Sprint 11. | Security | Medium | Varun |
-| 11 | Sprint 11 Gate 1 pending — Bhavya must deliver pre-written Codex prompts before Gate 1 raised to Rohith. | Process blocker | High | Bhavya |
+| 7 | Production deployment — Lightsail plan discussed and documented. Deferred by Rohith (2026-03-28). Plan: 2GB instance + Managed MySQL + Object Storage ~$29/mo. 9 non-cloud migrations identified before go-live. | Deployment | When ready | Varun |
+| 8 | Email OTP live success path depends on correct SMTP encryption/port settings. Use `SuperAdmin -> 2FA Configuration -> Test SMTP Connection / Send Test Email` before calling email OTP fully signed off. | Config / QA dependency | High | Varun / Karthik |
+| 9 | Forgot-password and change-password browser QA is still required after the password-history rule addition. Backend enforcement is implemented, but UI/browser evidence must be captured separately. | QA follow-up | High | Karthik |
+| 10 | npm vulnerabilities — 19 flagged on GitHub (8 high, 9 moderate, 2 low). Flagged on commit 71b8a3a. Varun to review in Sprint 11. | Security | Medium | Varun |
+| 11 | Sprint 11 Gate 1 pending — Bhavya must deliver pre-written Codex prompts before Gate 1 can be raised to Rohith. | Process blocker | High | Bhavya |
 
 ---
 
 ## 13. Critical Technical Rules (Must Know)
 
-Non-negotiable. Ignoring causes bugs.
+These are non-negotiable. Ignoring them causes bugs.
 
 | Rule | Detail |
 |------|--------|
@@ -610,36 +612,36 @@ Non-negotiable. Ignoring causes bugs.
 | MySQL LIMIT/OFFSET | NEVER use `?` placeholders. Always inline: `` LIMIT ${parseInt(limit,10)} OFFSET ${offset} `` |
 | MySQL reserved words | Backtick reserved words in template literals: `` \`separator\` `` |
 | MySQL NULL + UNIQUE | NULL != NULL — `ON DUPLICATE KEY UPDATE` won't fire with NULL values |
-| Field setup seeding | Use `INSERT IGNORE`. Unique key is `uq_field_section_org (section_name, field_name, org_id)` — always includes org_id. Old `uq_field_section_name` (no org_id) dropped in Sprint 10. Without org_id, INSERT IGNORE silently blocks per-org seeds when global rows exist. |
-| Org seed on creation | `seedNewOrg(orgId, userId)` in `seedService.js` must be called after every new org INSERT. Wired into `POST /api/admin/orgs`. For orgs created before Sprint 10, run `backfill-existing-orgs.js` once. |
-| form-config org resolution | `GET /api/cases/form-config` uses `authenticate` only — not `requireOrg`. Superadmin has orgId=null; org resolved inline: `superadmin ? parseInt(query.org_id) || 1 : req.user.orgId`. Never apply requireOrg to this route. |
+| Field setup seeding | Use `INSERT IGNORE`. Unique key is `uq_field_section_org (section_name, field_name, org_id)` — always includes org_id. The old `uq_field_section_name` key (no org_id) was dropped in Sprint 10. Without org_id in the key, INSERT IGNORE silently blocks per-org seeds when global rows already exist. |
+| Org seed on creation | `seedNewOrg(orgId, userId)` in `seedService.js` must be called after every new org INSERT. Already wired into `POST /api/admin/orgs`. If orgs were created before Sprint 10, run `backfill-existing-orgs.js` once. |
+| form-config org resolution | `GET /api/cases/form-config` uses `authenticate` only — not `requireOrg`. Superadmin has orgId=null in JWT; org resolved inline: `superadmin ? parseInt(query.org_id) || 1 : req.user.orgId`. Never apply requireOrg to this route. |
 | Auth header | `Authorization: Bearer <token>`. Token from `mims_token` in localStorage. |
 | Git push | Disabled since Sprint 3. Never run `git push` or `gh` commands. |
-| New case org_id | Always from JWT (`req.user.orgId`) — never from request body. |
-| Superadmin role | Cannot be assigned to any user via API or UI. Only ID 4 (`superadmin`) has this role. Never add hardcoded role resets to `db.js` init. |
-| Site names | Unique per org. `UNIQUE KEY uq_site_org_name (org_id, name)`. Pre-validate in API with 409 before INSERT. |
-| Login input type | Login field is `type="text"` NOT `type="email"` — allows `superadmin` username (no @). |
-| Session timeout | Login + switch-org responses must include `sessionTimeout`. AuthContext must store in `mims_session_timeout` localStorage key. |
-| User 2FA scope | 2FA for MIMS users only. Superadmin login has no 2FA. |
-| Platform SMTP vs MIMS Email Accounts | Platform SMTP (Superadmin) = user 2FA emails. Admin Console Email Accounts = org-specific operational mailboxes. Do not mix. |
-| Platform SMTP reuse | Same platform SMTP used for user 2FA, forgot-password, and SuperAdmin alert emails. No separate alert SMTP config in Sprint 9. |
-| 2FA expiry handling | Use DB-time expiry (`NOW()` / `DATE_ADD`). Do not use JS Date values in MySQL DATETIME for auth expiry. |
-| Password reuse policy | Block reuse of current + previous 5 passwords across first-login reset, forgot-password, and in-app change. Hardcoded server behavior. |
-| SuperAdmin alerts | Alert rules configurable, can be enabled/disabled. Inactive rule = no alert event or notification fired. |
+| New case org_id | Always sourced from JWT (`req.user.orgId`) — never from request body. |
+| Superadmin role | Cannot be assigned to any user via API or UI. Only ID 4 (`superadmin`) carries this role. Never add hardcoded role resets to `db.js` init. |
+| Site names | Unique per org. `UNIQUE KEY uq_site_org_name (org_id, name)`. Always pre-validate in API with a 409 before INSERT. |
+| Login input type | Login field is `type="text"` NOT `type="email"` — required to allow `superadmin` username (no @ symbol). |
+| Session timeout | Login + switch-org responses must always include `sessionTimeout`. AuthContext must always store it in `mims_session_timeout` localStorage key. |
+| User 2FA scope | 2FA applies to MIMS users only. Superadmin login does not use 2FA. |
+| Platform SMTP vs MIMS Email Accounts | Platform SMTP in Superadmin is for user 2FA emails. Admin Console Email Accounts remain org-specific operational mailboxes. Do not mix them. |
+| Platform SMTP reuse | The same platform SMTP is currently used for user 2FA, forgot-password emails, and SuperAdmin alert emails. There is no separate alert SMTP config in Sprint 9. |
+| 2FA expiry handling | Use DB-time expiry (`NOW()` / `DATE_ADD`) for challenges and trusted devices. Do not rely on JS Date values written directly into MySQL DATETIME for auth expiry logic. |
+| Password reuse policy | Backend must block reuse of the current password and previous 5 passwords across first-login reset, forgot-password reset, and in-app change password. This is hardcoded server behavior, not a UI setting. |
+| SuperAdmin alerts | Alert rules are configurable and can be enabled/disabled. If a rule is inactive, the related alert event and notification will not fire. |
 
 ---
 
 ## 14. Process Reference
 
-Full SOP: `TEAM_OPERATING_SOP.md`. Gate flow, browser verification checklist, communication standards: see `memory/protocols.md`.
+Full SOP: `TEAM_OPERATING_SOP.md`. Gate flow, browser verification checklist, and communication standards: see `memory/protocols.md`.
 
 ---
 
 ## 15. How to Update This File
 
-- Updated only when Rohith explicitly confirms and asks Bala to update
+- This file is only updated when Rohith explicitly confirms and asks Bala to update it
 - Rohith says: *"Bala, update the Memory SOP — [summary of what changed]"*
-- Bala updates relevant sections + adds row to Version History
+- Bala updates the relevant sections and adds a row to the Version History table at the top
 - No one else modifies this file
-- After sprint closes: update sprint row in Section 10 to CLOSED, update Section 11 with new current sprint
-- Known issues in Section 12 updated when resolved or new debt identified
+- After a sprint closes, the sprint row in Section 10 is updated to CLOSED and Section 11 is updated with the new current sprint
+- Known issues in Section 12 are updated when items are resolved or new debt is identified

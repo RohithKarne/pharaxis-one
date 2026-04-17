@@ -104,6 +104,13 @@ export const ADMIN_NAV_GROUPS = [
       { key: 'system-activity', label: 'System Activity', active: true },
     ],
   },
+  {
+    key: 'content-management',
+    title: 'Content Management',
+    items: [
+      { key: 'mi-categories', label: 'MI Categories', active: true },
+    ],
+  },
 ]
 
 const LABEL_OVERRIDES = {

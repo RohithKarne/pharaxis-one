@@ -1,0 +1,117 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "MIMS Backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/medical-affairs/mims",
+      "port": 3000
+    },
+    {
+      "name": "MIMS Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/medical-affairs/mims/frontend",
+      "port": 5173
+    },
+    {
+      "name": "CP Portal Backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/medical-affairs/cp-portal/backend",
+      "port": 4000
+    },
+    {
+      "name": "CP Portal Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/medical-affairs/cp-portal/frontend",
+      "port": 5174
+    },
+    {
+      "name": "Vault Backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/vault",
+      "port": 5100
+    },
+    {
+      "name": "Vault Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/vault/frontend",
+      "port": 5176
+    },
+    {
+      "name": "QMS Backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/qms/backend",
+      "port": 3145
+    },
+    {
+      "name": "QMS Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/qms/frontend",
+      "port": 3146
+    },
+    {
+      "name": "Safety Backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/safety",
+      "port": 5200
+    },
+    {
+      "name": "Safety Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/safety/frontend",
+      "port": 5177
+    },
+    {
+      "name": "Publications Backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/medical-affairs/publications",
+      "port": 5310
+    },
+    {
+      "name": "Publications Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/medical-affairs/publications/frontend",
+      "port": 5179
+    },
+    {
+      "name": "IEG Backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/medical-affairs/ieg",
+      "port": 5300
+    },
+    {
+      "name": "IEG Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/medical-affairs/ieg/frontend",
+      "port": 5178
+    },
+    {
+      "name": "AI Agent Backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/ai-agent",
+      "port": 6000
+    },
+    {
+      "name": "AI Agent Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/ai-agent/frontend",
+      "port": 5175
+    }
+  ]
+}

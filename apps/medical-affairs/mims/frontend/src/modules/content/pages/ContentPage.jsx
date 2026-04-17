@@ -66,6 +66,27 @@ function StatusBadge({ status }) {
   return <span className={`cm-status-badge cm-status-${cls}`}>{status}</span>
 }
 
+function parseMaybeJson(value, fallback = null) {
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value === 'string') {
+    try { return JSON.parse(value) } catch { return fallback }
+  }
+  return value
+}
+
+function normalizeSelectedModules(value) {
+  let parsed = value
+  for (let i = 0; i < 2; i += 1) {
+    parsed = parseMaybeJson(parsed, parsed)
+    if (typeof parsed !== 'string') break
+  }
+  if (!Array.isArray(parsed)) return []
+  const normalized = parsed
+    .map(id => Number(id))
+    .filter(id => Number.isInteger(id) && id > 0)
+  return Array.from(new Set(normalized))
+}
+
 // ─── Folder Manager ───────────────────────────────────────────────────────────
 
 function FolderManager({ show, onClose, token }) {
@@ -461,33 +482,101 @@ function ReviewStatusModal({ review, token, onClose, onDone }) {
 
 // ─── Document Drawer ──────────────────────────────────────────────────────────
 
-function DocumentDrawer({ doc, folders, token, onClose, onSaved }) {
-  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+function DocumentCreationScreen({ doc, token, onClose, onSaved }) {
   const isEdit = !!doc?.id
   const fileInputRef = useRef(null)
+  const attachmentsInputRef = useRef(null)
 
   const [form, setForm] = useState({
     folder_id: doc?.folder_id || '',
     doc_type: doc?.doc_type || 'SRD',
     name: doc?.name || '',
-    content_type: 'online',
-    content: doc?.content || '',
-    expiry_date: doc?.expiry_date || '',
-    activation_date: doc?.activation_date || '',
-    language: doc?.language || 'English',
+    response_doc_type: doc?.response_doc_type || 'File',
+    standard_response_text: doc?.standard_response_text || '',
+    publish_as_pdf: doc?.publish_as_pdf ? true : false,
+    send_as_pdf: doc?.send_as_pdf ? true : false,
+    selected_modules: normalizeSelectedModules(doc?.selected_modules),
+    content_html: doc?.content_html || '',
+    expiry_date: doc?.expiry_date ? doc.expiry_date.slice(0, 10) : '',
+    activation_date: doc?.activation_date ? doc.activation_date.slice(0, 10) : '',
+    language: doc?.language || 'en',
     search_tags: doc?.search_tags || '',
-    product_specific: doc?.product_specific || false,
-    site_specific: doc?.site_specific || false,
+    mi_category_id: doc?.mi_category_id || '',
+    document_category: doc?.document_category || '',
+    version_notes: doc?.version_notes || '',
+    review_cycle_days: doc?.review_cycle_days || '',
+    regulatory_ref: doc?.regulatory_ref || '',
+    custom_attributes: doc?.custom_attributes ? (typeof doc.custom_attributes === 'string' ? JSON.parse(doc.custom_attributes) : doc.custom_attributes) : [],
+    bump_type: 'minor',
+    is_product_specific: doc?.is_product_specific ? true : false,
+    is_site_specific: doc?.is_site_specific ? true : false,
     usage_instructions: doc?.usage_instructions || '',
   })
+
+  const [activeTab, setActiveTab] = useState('general')
+  const [contentMode, setContentMode] = useState('upload')
   const [file, setFile] = useState(null)
-  const [contentTab, setContentTab] = useState('online')
-  const [attrOpen, setAttrOpen] = useState(false)
+  const [sourceAttachments, setSourceAttachments] = useState([])
   const [saving, setSaving] = useState(false)
+  const [availableModules, setAvailableModules] = useState([])
+  const [modulesLoading, setModulesLoading] = useState(false)
+  const [moduleSearch, setModuleSearch] = useState('')
+  const [folders, setFolders] = useState([])
+  const [miCategories, setMiCategories] = useState([])
+  const [docCategories, setDocCategories] = useState([])
+
+  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+  useEffect(() => {
+    fetch('/api/cm/folders', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { folders: [] })
+      .then(d => setFolders(d.folders || []))
+      .catch(() => setFolders([]))
+    fetch('/api/admin/mi-categories', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { categories: [] })
+      .then(d => setMiCategories((d.categories || []).filter(c => c.is_active)))
+      .catch(() => setMiCategories([]))
+    fetch('/api/cm/picklists?field_type=document_category&active_only=1', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { picklists: [] })
+      .then(d => setDocCategories(d.picklists || []))
+      .catch(() => setDocCategories([]))
+  }, [token])
+
+  useEffect(() => {
+    if (form.response_doc_type === 'Module') {
+      setModulesLoading(true)
+      fetch('/api/cm/modules?include_expired=false', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(d => setAvailableModules(d.modules || []))
+        .catch(() => setAvailableModules([]))
+        .finally(() => setModulesLoading(false))
+    } else {
+      setModuleSearch('')
+    }
+  }, [form.response_doc_type, token])
 
   function handleFile(e) {
     const f = e.target.files[0]
-    if (f) { setFile(f); setContentTab('file') }
+    if (f) setFile(f)
+  }
+
+  function handleAttachments(e) {
+    const files = Array.from(e.target.files)
+    setSourceAttachments(prev => [...prev, ...files])
+    e.target.value = ''
+  }
+
+  function removeAttachment(idx) {
+    setSourceAttachments(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  function toggleModule(moduleId) {
+    const targetId = Number(moduleId)
+    setForm(p => {
+      const existing = normalizeSelectedModules(p.selected_modules)
+      const has = existing.includes(targetId)
+      return { ...p, selected_modules: has ? existing.filter(id => id !== targetId) : [...existing, targetId] }
+    })
   }
 
   async function handleSave(checkIn = false) {
@@ -495,149 +584,456 @@ function DocumentDrawer({ doc, folders, token, onClose, onSaved }) {
     if (!form.name.trim()) return alert('Document name is required.')
     setSaving(true)
     try {
-      let body
-      let headers
-      if (contentTab === 'file' && file) {
-        const fd = new FormData()
-        Object.entries(form).forEach(([k, v]) => fd.append(k, v))
-        fd.append('file', file)
-        if (checkIn) fd.append('check_in', '1')
-        headers = { Authorization: `Bearer ${token}` }
-        body = fd
-      } else {
-        headers = authHeaders
-        body = JSON.stringify({ ...form, check_in: checkIn })
-      }
-
+      const fd = new FormData()
+      Object.entries(form).forEach(([k, v]) => {
+        if (k === 'selected_modules') fd.append(k, JSON.stringify(v))
+        else if (v !== null && v !== undefined) fd.append(k, v)
+      })
+      if (file) fd.append('file', file)
+      sourceAttachments.forEach(f => fd.append('source_attachments', f))
+      if (checkIn) fd.append('check_in', '1')
       const url = isEdit ? `/api/cm/documents/${doc.id}` : '/api/cm/documents'
       const method = isEdit ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers, body })
-      if (res.ok) { onSaved(); onClose() }
+      const res = await fetch(url, { method, headers: { Authorization: `Bearer ${token}` }, body: fd })
+      if (res.ok) {
+        const data = await res.json()
+        // Save & Check-In: after save, call checkin on the document
+        if (checkIn) {
+          const docId = isEdit ? doc.id : data.id
+          const ciRes = await fetch(`/api/cm/documents/${docId}/checkin`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notes: 'Checked in on creation' }),
+          })
+          if (!ciRes.ok) {
+            const ciErr = await ciRes.json()
+            alert(`Saved but check-in failed: ${ciErr.error || 'Unknown error'}`)
+          }
+        }
+        onSaved(); onClose()
+      }
       else { const d = await res.json(); alert(d.error || 'Save failed.') }
     } catch { alert('Network error.') }
     setSaving(false)
   }
 
-  return (
-    <>
-      <div className="cm-drawer-overlay" onClick={onClose} />
-      <div className="cm-drawer">
-        <div className="cm-drawer-header">
-          <span className="cm-drawer-title">{isEdit ? `Edit: ${doc.name}` : 'New Document'}</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-secondary)' }}>×</button>
-        </div>
-        <div className="cm-drawer-body">
-          {/* Basic Info */}
-          <div style={{ marginBottom: 20 }}>
-            <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Basic Info</h4>
-            <div className="cm-form-group">
-              <label className="cm-form-label">Folder <span className="required">*</span></label>
-              <select className="cm-form-select" value={form.folder_id} onChange={e => setForm(p => ({ ...p, folder_id: e.target.value }))}>
-                <option value="">— Select Folder —</option>
-                {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-            </div>
-            <div className="cm-form-group">
-              <label className="cm-form-label">Document Type <span className="required">*</span></label>
-              <select className="cm-form-select" value={form.doc_type} onChange={e => setForm(p => ({ ...p, doc_type: e.target.value }))}>
-                <option>SRD</option>
-                <option>Enclosure</option>
-                <option>Information Document</option>
-                <option>Internal Document</option>
-              </select>
-            </div>
-            <div className="cm-form-group">
-              <label className="cm-form-label">Document Name <span className="required">*</span></label>
-              <input className="cm-form-input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Enter document name" />
-            </div>
-            <div className="cm-form-group">
-              <label className="cm-form-label">Document ID</label>
-              <input className="cm-form-input" value={isEdit ? doc.doc_id || '—' : 'Auto'} readOnly style={{ background: 'var(--bg)', color: 'var(--text-muted)' }} />
-            </div>
-          </div>
+  const TABS = [
+    { key: 'general', label: 'General Attributes' },
+    { key: 'other', label: 'Other Attributes' },
+    { key: 'associated', label: 'Associated Documents' },
+    { key: 'usage', label: 'Usage Instructions' },
+    { key: 'versions', label: 'Version Alerts' },
+  ]
+  const filteredModules = availableModules.filter((m) => {
+    if (!moduleSearch.trim()) return true
+    const q = moduleSearch.trim().toLowerCase()
+    return (
+      String(m.name || '').toLowerCase().includes(q) ||
+      String(m.module_id || '').toLowerCase().includes(q) ||
+      String(m.folder_name || '').toLowerCase().includes(q) ||
+      String(m.search_tags || '').toLowerCase().includes(q)
+    )
+  })
 
-          {/* Content */}
-          <div style={{ marginBottom: 20 }}>
-            <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Content</h4>
-            <div className="cm-sub-tabs" style={{ marginBottom: 12 }}>
-              <div className={`cm-sub-tab ${contentTab === 'online' ? 'active' : ''}`} onClick={() => setContentTab('online')}>Online Authoring</div>
-              <div className={`cm-sub-tab ${contentTab === 'file' ? 'active' : ''}`} onClick={() => setContentTab('file')}>File Upload</div>
-            </div>
-            {contentTab === 'online' ? (
-              <RichTextEditor value={form.content} onChange={v => setForm(p => ({ ...p, content: v }))} placeholder="Write document content here…" />
-            ) : (
-              <div>
-                <div className="cm-upload-zone" onClick={() => fileInputRef.current?.click()}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>📎</div>
-                  <div style={{ fontSize: 14 }}>Click to browse or drag & drop</div>
-                  <div style={{ fontSize: 12, marginTop: 4 }}>Accepted: PDF, DOC, DOCX, TXT</div>
+  return (
+    <div style={{ position: 'fixed', top: 86, left: 0, right: 0, bottom: 0, zIndex: 500, background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 28px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+          {isEdit ? `Edit Document — ${doc.name}` : 'New Document'}
+        </h2>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--text-secondary)', lineHeight: 1 }}>×</button>
+      </div>
+
+      {/* ── Body ── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
+
+        {/* ── Row 1 — Basic Info ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 1fr', gap: 16, marginBottom: 24, alignItems: 'end' }}>
+          <div className="cm-form-group" style={{ margin: 0 }}>
+            <label className="cm-form-label">Folder <span style={{ color: 'var(--danger)' }}>*</span></label>
+            <select className="cm-form-select" value={form.folder_id} onChange={e => setForm(p => ({ ...p, folder_id: e.target.value }))}>
+              <option value="">— Select Folder —</option>
+              {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+          <div className="cm-form-group" style={{ margin: 0 }}>
+            <label className="cm-form-label">Document Type <span style={{ color: 'var(--danger)' }}>*</span></label>
+            <select className="cm-form-select" value={form.doc_type} onChange={e => setForm(p => ({ ...p, doc_type: e.target.value }))}>
+              <option>SRD</option>
+              <option>Enclosure</option>
+              <option>Information Document</option>
+              <option>Internal Document</option>
+            </select>
+          </div>
+          <div className="cm-form-group" style={{ margin: 0 }}>
+            <label className="cm-form-label">Document Name <span style={{ color: 'var(--danger)' }}>*</span></label>
+            <input className="cm-form-input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Enter document name" />
+          </div>
+          <div className="cm-form-group" style={{ margin: 0 }}>
+            <label className="cm-form-label">Document ID</label>
+            <input className="cm-form-input" value={isEdit ? doc.doc_id || '—' : 'Auto'} readOnly style={{ background: 'var(--bg)', color: 'var(--text-muted)', cursor: 'default' }} />
+          </div>
+        </div>
+
+        {/* ── Tab Bar ── */}
+        <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 20, gap: 0 }}>
+          {TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                padding: '9px 18px', background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 13, fontWeight: activeTab === tab.key ? 700 : 500,
+                color: activeTab === tab.key ? 'var(--primary)' : 'var(--text-secondary)',
+                borderBottom: activeTab === tab.key ? '2px solid var(--primary)' : '2px solid transparent',
+                marginBottom: -2, transition: 'all 0.15s', whiteSpace: 'nowrap',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── General Attributes Tab ── */}
+        {activeTab === 'general' && (
+          <div style={{ maxWidth: 1000 }}>
+
+            {/* Row A — Response Doc Type + icons + Standard Response Text + MI Category */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+
+              {/* Response Document Type */}
+              <div className="cm-form-group" style={{ margin: 0, minWidth: 160 }}>
+                <label className="cm-form-label">Response Doc Type</label>
+                <select
+                  className="cm-form-select"
+                  value={form.response_doc_type}
+                  onChange={e => setForm(p => ({ ...p, response_doc_type: e.target.value, selected_modules: [] }))}
+                >
+                  <option value="File">File</option>
+                  <option value="Module">Module</option>
+                </select>
+              </div>
+
+              {/* Upload + Author icons — compact, inline */}
+              {form.response_doc_type === 'File' && (
+                <div style={{ display: 'flex', gap: 6, paddingTop: 20 }}>
+                  <div
+                    onClick={() => { setContentMode('upload'); fileInputRef.current?.click() }}
+                    title="Upload File"
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      width: 54, height: 50, border: `2px dashed ${contentMode === 'upload' ? 'var(--primary)' : 'var(--border)'}`,
+                      borderRadius: 6, cursor: 'pointer', background: contentMode === 'upload' ? 'var(--primary-light, #eef2ff)' : 'var(--bg)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>📎</span>
+                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Upload</span>
+                  </div>
+                  <div
+                    onClick={() => setContentMode('online')}
+                    title="Author Online"
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      width: 54, height: 50, border: `2px dashed ${contentMode === 'online' ? 'var(--primary)' : 'var(--border)'}`,
+                      borderRadius: 6, cursor: 'pointer', background: contentMode === 'online' ? 'var(--primary-light, #eef2ff)' : 'var(--bg)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>✏️</span>
+                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Author</span>
+                  </div>
+                  <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{ display: 'none' }} onChange={handleFile} />
                 </div>
-                <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{ display: 'none' }} onChange={handleFile} />
-                {file && (
-                  <div className="cm-uploaded-file">
-                    <span>📄</span>
-                    <span style={{ flex: 1, fontSize: 13 }}>{file.name}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{(file.size / 1024).toFixed(1)} KB</span>
-                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)' }} onClick={() => setFile(null)}>×</button>
+              )}
+
+              {/* File chip — shown when file selected */}
+              {form.response_doc_type === 'File' && file && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 10px', fontSize: 12, marginTop: 20 }}>
+                  <span>📄</span><span>{file.name}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{(file.size / 1024).toFixed(0)} KB</span>
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 14 }} onClick={() => setFile(null)}>×</button>
+                </div>
+              )}
+
+              {/* Standard Response Text — beside icons */}
+              <div className="cm-form-group" style={{ margin: 0, flex: 1, minWidth: 200 }}>
+                <label className="cm-form-label">Standard Response / Cover Letter</label>
+                <textarea
+                  className="cm-form-input"
+                  rows={3}
+                  value={form.standard_response_text}
+                  onChange={e => setForm(p => ({ ...p, standard_response_text: e.target.value }))}
+                  placeholder="Enter standard response or cover letter text…"
+                  style={{ resize: 'vertical', fontFamily: 'inherit', fontSize: 12 }}
+                />
+              </div>
+
+              {/* MI Category — beside standard response */}
+              <div className="cm-form-group" style={{ margin: 0, minWidth: 180 }}>
+                <label className="cm-form-label">MI Category</label>
+                <select className="cm-form-select" value={form.mi_category_id} onChange={e => setForm(p => ({ ...p, mi_category_id: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  {miCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                {miCategories.length === 0 && (
+                  <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>Configure in Admin Console.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Online Editor */}
+            {form.response_doc_type === 'File' && contentMode === 'online' && (
+              <div style={{ marginBottom: 16 }}>
+                <RichTextEditor value={form.content_html} onChange={v => setForm(p => ({ ...p, content_html: v }))} placeholder="Write document content here…" />
+              </div>
+            )}
+
+            {/* PDF Checkboxes */}
+            <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                <input type="checkbox" checked={form.publish_as_pdf} onChange={e => setForm(p => ({ ...p, publish_as_pdf: e.target.checked }))} />
+                Publish as PDF
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                <input type="checkbox" checked={form.send_as_pdf} onChange={e => setForm(p => ({ ...p, send_as_pdf: e.target.checked }))} />
+                Send as PDF
+              </label>
+            </div>
+
+            {/* MODULE picker */}
+            {form.response_doc_type === 'Module' && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label className="cm-form-label" style={{ margin: 0 }}>Select Modules</label>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    Selected: {normalizeSelectedModules(form.selected_modules).length}
+                  </span>
+                </div>
+                <input
+                  className="cm-form-input"
+                  placeholder="Search modules by name, ID, folder, tag…"
+                  value={moduleSearch}
+                  onChange={e => setModuleSearch(e.target.value)}
+                  style={{ marginBottom: 10 }}
+                />
+                {modulesLoading && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading modules…</p>}
+                {!modulesLoading && availableModules.length === 0 && (
+                  <div style={{ padding: 20, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 13 }}>
+                    No modules available yet. Create them in the Modular Documents tab first.
+                  </div>
+                )}
+                {!modulesLoading && availableModules.length > 0 && (
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                    {filteredModules.length === 0 && (
+                      <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+                        No modules match your search.
+                      </div>
+                    )}
+                    {filteredModules.map((m, idx) => (
+                      <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: idx < filteredModules.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', background: normalizeSelectedModules(form.selected_modules).includes(Number(m.id)) ? 'var(--primary-light, #eef2ff)' : 'transparent' }}>
+                        <input type="checkbox" checked={normalizeSelectedModules(form.selected_modules).includes(Number(m.id))} onChange={() => toggleModule(m.id)} />
+                        <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
+                          {m.name}
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{m.module_id || `MOD-${m.id}`}</span>
+                        </span>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.folder_name || '—'}</span>
+                        <StatusBadge status={m.status} />
+                      </label>
+                    ))}
                   </div>
                 )}
               </div>
             )}
-          </div>
 
-          {/* Attributes */}
-          <div style={{ marginBottom: 8 }}>
-            <div onClick={() => setAttrOpen(p => !p)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '8px 0', borderTop: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1 }}>Attributes</span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{attrOpen ? '▲' : '▼'}</span>
+            {/* Row B — Search Tags | Document Category | Activation Date | Expiry Date */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
+              <div className="cm-form-group" style={{ margin: 0 }}>
+                <label className="cm-form-label">Search Tags</label>
+                <input
+                  className="cm-form-input"
+                  value={form.search_tags}
+                  onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))}
+                  placeholder="safety, dosing, paediatric…"
+                />
+              </div>
+              <div className="cm-form-group" style={{ margin: 0 }}>
+                <label className="cm-form-label">Document Category</label>
+                <select className="cm-form-select" value={form.document_category} onChange={e => setForm(p => ({ ...p, document_category: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  {docCategories.length > 0
+                    ? docCategories.map(c => <option key={c.id} value={c.value}>{c.label || c.value}</option>)
+                    : ['Clinical', 'Regulatory', 'Safety', 'Scientific', 'Patient Information', 'Internal'].map(v => <option key={v} value={v}>{v}</option>)
+                  }
+                </select>
+              </div>
+              <div className="cm-form-group" style={{ margin: 0 }}>
+                <label className="cm-form-label">Activation Date</label>
+                <input type="date" className="cm-form-input" value={form.activation_date} onChange={e => setForm(p => ({ ...p, activation_date: e.target.value }))} />
+              </div>
+              <div className="cm-form-group" style={{ margin: 0 }}>
+                <label className="cm-form-label">Expiry Date</label>
+                <input type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
+              </div>
             </div>
-            {attrOpen && (
-              <div style={{ paddingTop: 12 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div className="cm-form-group" style={{ margin: 0 }}>
-                    <label className="cm-form-label">Expiry Date</label>
-                    <input type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
-                  </div>
-                  <div className="cm-form-group" style={{ margin: 0 }}>
-                    <label className="cm-form-label">Activation Date</label>
-                    <input type="date" className="cm-form-input" value={form.activation_date} onChange={e => setForm(p => ({ ...p, activation_date: e.target.value }))} />
-                  </div>
-                  <div className="cm-form-group" style={{ margin: 0 }}>
-                    <label className="cm-form-label">Language</label>
-                    <select className="cm-form-select" value={form.language} onChange={e => setForm(p => ({ ...p, language: e.target.value }))}>
-                      <option>English</option><option>French</option><option>German</option><option>Spanish</option><option>Japanese</option><option>Chinese</option>
-                    </select>
-                  </div>
-                  <div className="cm-form-group" style={{ margin: 0 }}>
-                    <label className="cm-form-label">Search Tags</label>
-                    <input className="cm-form-input" value={form.search_tags} onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))} placeholder="Comma-separated tags" />
-                  </div>
+
+            {/* Source Attachments */}
+            <div className="cm-form-group" style={{ marginBottom: 8 }}>
+              <label className="cm-form-label">Source Attachments</label>
+              <div
+                onClick={() => attachmentsInputRef.current?.click()}
+                style={{
+                  border: '2px dashed var(--border)', borderRadius: 8, padding: '16px 20px', cursor: 'pointer',
+                  background: 'var(--bg)', display: 'flex', alignItems: 'center', gap: 12,
+                  color: 'var(--text-secondary)', fontSize: 13, marginBottom: 10,
+                  transition: 'border-color 0.15s',
+                }}
+              >
+                <span style={{ fontSize: 20 }}>📁</span>
+                <span>Click to attach source files <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>(multiple allowed — PDF, DOC, DOCX, XLS, XLSX, TXT)</span></span>
+              </div>
+              <input
+                ref={attachmentsInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+                style={{ display: 'none' }}
+                onChange={handleAttachments}
+              />
+              {sourceAttachments.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {sourceAttachments.map((f, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 12px', fontSize: 13 }}>
+                      <span>📄</span>
+                      <span style={{ flex: 1 }}>{f.name}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{(f.size / 1024).toFixed(0)} KB</span>
+                      <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 16 }} onClick={() => removeAttachment(idx)}>×</button>
+                    </div>
+                  ))}
                 </div>
-                <div style={{ display: 'flex', gap: 20, marginTop: 12 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
-                    <input type="checkbox" checked={form.product_specific} onChange={e => setForm(p => ({ ...p, product_specific: e.target.checked }))} />
-                    Product Specific
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
-                    <input type="checkbox" checked={form.site_specific} onChange={e => setForm(p => ({ ...p, site_specific: e.target.checked }))} />
-                    Site Specific
-                  </label>
-                </div>
-                <div className="cm-form-group" style={{ marginTop: 12 }}>
-                  <label className="cm-form-label">Usage Instructions</label>
-                  <textarea className="cm-form-textarea" value={form.usage_instructions} onChange={e => setForm(p => ({ ...p, usage_instructions: e.target.value }))} rows={2} />
-                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* ── Other Attributes Tab ── */}
+        {activeTab === 'other' && (
+          <div style={{ padding: '4px 0', maxWidth: 800 }}>
+            {/* Owner Lock Info */}
+            {doc && doc.owner_user_id && (
+              <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 16px', marginBottom: 20, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>🔒</span>
+                <span>This document is <strong>locked</strong> to its owner. Only the owner can publish or release it.</span>
               </div>
             )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+              {/* Version Bump — only show on re-versioning (version_major > 1) */}
+              {doc && doc.version_major > 1 && (
+                <div className="cm-form-group">
+                  <label className="cm-form-label">Version Bump *</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {['minor', 'major'].map(bt => (
+                      <label key={bt} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', border: `1px solid ${form.bump_type === bt ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, cursor: 'pointer', fontSize: 13, background: form.bump_type === bt ? 'var(--primary-light, #f0ebff)' : 'var(--surface)' }}>
+                        <input type="radio" name="bump_type" value={bt} checked={form.bump_type === bt} onChange={() => setForm(p => ({ ...p, bump_type: bt }))} style={{ margin: 0 }} />
+                        {bt === 'minor' ? 'Minor (1.x)' : 'Major (x.0)'}
+                      </label>
+                    ))}
+                  </div>
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>Minor = small update, Major = significant new version</p>
+                </div>
+              )}
+
+              {/* Version Notes */}
+              <div className="cm-form-group">
+                <label className="cm-form-label">Version Notes</label>
+                <input className="cm-form-input" value={form.version_notes || ''} onChange={e => setForm(p => ({ ...p, version_notes: e.target.value }))} placeholder="What changed in this version?" />
+              </div>
+
+              {/* Review Cycle */}
+              <div className="cm-form-group">
+                <label className="cm-form-label">Review Cycle</label>
+                <select className="cm-form-select" value={form.review_cycle_days || ''} onChange={e => setForm(p => ({ ...p, review_cycle_days: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  {[30, 60, 90, 180, 365].map(d => <option key={d} value={d}>{d} days</option>)}
+                </select>
+              </div>
+
+              {/* Regulatory Ref */}
+              <div className="cm-form-group">
+                <label className="cm-form-label">Regulatory Reference #</label>
+                <input className="cm-form-input" value={form.regulatory_ref || ''} onChange={e => setForm(p => ({ ...p, regulatory_ref: e.target.value }))} placeholder="e.g. EMA/2024/001" />
+              </div>
+            </div>
+
+            {/* Custom Attributes */}
+            <div className="cm-form-group">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label className="cm-form-label" style={{ margin: 0 }}>Custom Attributes</label>
+                <button type="button" onClick={() => setForm(p => ({ ...p, custom_attributes: [...(p.custom_attributes || []), { key: '', value: '' }] }))}
+                  style={{ fontSize: 12, padding: '3px 10px', border: '1px solid var(--border)', borderRadius: 4, background: 'none', cursor: 'pointer', color: 'var(--primary)' }}>
+                  + Add Attribute
+                </button>
+              </div>
+              {(form.custom_attributes || []).length === 0 ? (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>No custom attributes. Click "+ Add Attribute" to add org-specific metadata.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(form.custom_attributes || []).map((attr, idx) => (
+                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 32px', gap: 8, alignItems: 'center' }}>
+                      <input className="cm-form-input" style={{ margin: 0 }} placeholder="Key" value={attr.key} onChange={e => setForm(p => { const a = [...p.custom_attributes]; a[idx] = { ...a[idx], key: e.target.value }; return { ...p, custom_attributes: a }; })} />
+                      <input className="cm-form-input" style={{ margin: 0 }} placeholder="Value" value={attr.value} onChange={e => setForm(p => { const a = [...p.custom_attributes]; a[idx] = { ...a[idx], value: e.target.value }; return { ...p, custom_attributes: a }; })} />
+                      <button type="button" onClick={() => setForm(p => ({ ...p, custom_attributes: p.custom_attributes.filter((_, i) => i !== idx) }))}
+                        style={{ background: 'none', border: '1px solid #fca5a5', borderRadius: 4, color: 'var(--danger)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '2px 6px' }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="cm-drawer-footer">
-          <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="cm-btn cm-btn-secondary" onClick={() => handleSave(false)} disabled={saving}>{saving ? 'Saving…' : 'Save Draft'}</button>
-          <button className="cm-btn cm-btn-primary" onClick={() => handleSave(true)} disabled={saving}>{saving ? 'Saving…' : 'Save & Check-In'}</button>
-        </div>
+        )}
+
+        {/* ── Associated Documents Tab ── */}
+        {activeTab === 'associated' && doc && (
+          <AssociatedDocsPanel docId={doc.id} token={token} />
+        )}
+        {activeTab === 'associated' && !doc && (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
+            Save the document first to link associated documents.
+          </div>
+        )}
+
+        {/* ── Usage Instructions Tab ── */}
+        {activeTab === 'usage' && (
+          <div style={{ padding: '4px 0', maxWidth: 800 }}>
+            <div className="cm-form-group">
+              <label className="cm-form-label">Usage Instructions</label>
+              <RichTextEditor value={form.usage_instructions || ''} onChange={v => setForm(p => ({ ...p, usage_instructions: v }))} placeholder="How to use this document — intended audience, approved use cases, what NOT to do..." />
+            </div>
+          </div>
+        )}
+
+        {/* ── Version Alerts Tab ── */}
+        {activeTab === 'versions' && doc && (
+          <VersionAlertsPanel docId={doc.id} token={token} />
+        )}
+        {activeTab === 'versions' && !doc && (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
+            Save the document first to configure version alerts.
+          </div>
+        )}
       </div>
-    </>
+
+      {/* ── Footer ── */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 28px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+        <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
+        <button className="cm-btn cm-btn-secondary" onClick={() => handleSave(false)} disabled={saving}>{saving ? 'Saving…' : 'Save Draft'}</button>
+        <button className="cm-btn cm-btn-primary" onClick={() => handleSave(true)} disabled={saving}>{saving ? 'Saving…' : 'Save & Check-In'}</button>
+      </div>
+    </div>
   )
 }
 
@@ -646,6 +1042,8 @@ function DocumentDrawer({ doc, folders, token, onClose, onSaved }) {
 function DocumentsSection({ token, user }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   const [subTab, setSubTab] = useState('all')
+  const [checkedInDocs, setCheckedInDocs] = useState([])
+  const [checkedOutDocs, setCheckedOutDocs] = useState([])
   const [docs, setDocs] = useState([])
   const [reviews, setReviews] = useState([])
   const [folders, setFolders] = useState([])
@@ -693,9 +1091,25 @@ function DocumentsSection({ token, user }) {
     } catch { /* silent */ }
   }, [token]) // eslint-disable-line
 
+  const loadCheckedIn = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cm/documents?status=Pending', { headers: authHeaders })
+      if (res.ok) { const d = await res.json(); setCheckedInDocs(d.documents || []) }
+    } catch { /* silent */ }
+  }, [token]) // eslint-disable-line
+
+  const loadCheckedOut = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cm/documents?status=CheckedOut', { headers: authHeaders })
+      if (res.ok) { const d = await res.json(); setCheckedOutDocs(d.documents || []) }
+    } catch { /* silent */ }
+  }, [token]) // eslint-disable-line
+
   useEffect(() => { loadFolders() }, [loadFolders])
   useEffect(() => { if (subTab === 'all') loadDocs() }, [loadDocs, subTab])
   useEffect(() => { if (subTab === 'reviews') loadReviews() }, [loadReviews, subTab])
+  useEffect(() => { if (subTab === 'checkedin') loadCheckedIn() }, [loadCheckedIn, subTab])
+  useEffect(() => { if (subTab === 'checkedout') loadCheckedOut() }, [loadCheckedOut, subTab])
 
   async function handleCheckOut(doc) {
     try {
@@ -729,11 +1143,17 @@ function DocumentsSection({ token, user }) {
     const s = doc.status
     if (s === 'Draft') {
       btns.push(<button key="edit" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>Edit</button>)
-      btns.push(<button key="co" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(doc)}>Check Out</button>)
-      btns.push(<button key="ci" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setCheckInDoc(doc)}>Check In</button>)
+      btns.push(<button key="ci" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setCheckInDoc(doc)}>Check In</button>)
+    } else if (s === 'CheckedOut') {
+      if (doc.checked_out_by_name) {
+        btns.push(<span key="who" style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 6 }}>by {doc.checked_out_by_name}</span>)
+      }
+      btns.push(<button key="edit" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>Edit</button>)
+      btns.push(<button key="ci" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setCheckInDoc(doc)}>Check In</button>)
     } else if (s === 'Pending') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
-      btns.push(<button key="ir" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setReviewDoc(doc)}>Initiate Review</button>)
+      btns.push(<button key="ir" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setReviewDoc(doc)}>Initiate Review</button>)
+      btns.push(<button key="approve" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setApproveDoc(doc)}>Approve</button>)
     } else if (s === 'Under Review') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
       btns.push(<button key="approve" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setApproveDoc(doc)}>Approve</button>)
@@ -742,6 +1162,7 @@ function DocumentsSection({ token, user }) {
       btns.push(<button key="pub" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setPublishDoc(doc)}>Publish</button>)
     } else if (s === 'Published') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
+      btns.push(<button key="co" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(doc)}>Check Out</button>)
       btns.push(<button key="arch" className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(doc)}>Archive</button>)
     } else if (s === 'Archived') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
@@ -750,6 +1171,20 @@ function DocumentsSection({ token, user }) {
   }
 
   const totalPages = Math.ceil(total / LIMIT)
+
+  if (showDrawer) {
+    return (
+      <>
+        <DocumentCreationScreen
+          doc={editDoc}
+          token={token}
+          onClose={() => { setShowDrawer(false); setEditDoc(null) }}
+          onSaved={loadDocs}
+        />
+        {checkInDoc && <CheckInModal item={checkInDoc} onClose={() => setCheckInDoc(null)} onConfirm={handleCheckIn} loading={checkInLoading} />}
+      </>
+    )
+  }
 
   return (
     <div>
@@ -761,6 +1196,12 @@ function DocumentsSection({ token, user }) {
       {/* Sub-tabs */}
       <div className="cm-sub-tabs">
         <div className={`cm-sub-tab ${subTab === 'all' ? 'active' : ''}`} onClick={() => setSubTab('all')}>All Documents</div>
+        <div className={`cm-sub-tab ${subTab === 'checkedin' ? 'active' : ''}`} onClick={() => setSubTab('checkedin')}>
+          Checked In {checkedInDocs.length > 0 && <span style={{ background: 'var(--primary)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 4 }}>{checkedInDocs.length}</span>}
+        </div>
+        <div className={`cm-sub-tab ${subTab === 'checkedout' ? 'active' : ''}`} onClick={() => setSubTab('checkedout')}>
+          Checked Out {checkedOutDocs.length > 0 && <span style={{ background: 'var(--warning, #f59e0b)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 4 }}>{checkedOutDocs.length}</span>}
+        </div>
         <div className={`cm-sub-tab ${subTab === 'reviews' ? 'active' : ''}`} onClick={() => setSubTab('reviews')}>
           My Review Tasks {reviews.length > 0 && <span style={{ background: 'var(--danger)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 4 }}>{reviews.length}</span>}
         </div>
@@ -834,6 +1275,63 @@ function DocumentsSection({ token, user }) {
         </>
       )}
 
+      {subTab === 'checkedin' && (
+        checkedInDocs.length === 0 ? (
+          <div className="cm-empty"><div className="cm-empty-icon">📥</div><p>No documents currently checked in (Pending review).</p></div>
+        ) : (
+          <table className="cm-table">
+            <thead><tr><th>Doc ID</th><th>Name</th><th>Type</th><th>Folder</th><th>Version</th><th>Last Updated</th><th>Actions</th></tr></thead>
+            <tbody>
+              {checkedInDocs.map(d => (
+                <tr key={d.id}>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
+                  <td style={{ fontWeight: 500 }}>{d.name}</td>
+                  <td>{d.doc_type}</td>
+                  <td>{d.folder_name || '—'}</td>
+                  <td style={{ textAlign: 'center' }}>{d.version_major}.{d.version_minor}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{d.updated_at ? new Date(d.updated_at).toLocaleDateString() : '—'}</td>
+                  <td>
+                    <div className="cm-action-btns">
+                      <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(d); setShowDrawer(true) }}>View</button>
+                      <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setApproveDoc(d)}>Approve</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      )}
+
+      {subTab === 'checkedout' && (
+        checkedOutDocs.length === 0 ? (
+          <div className="cm-empty"><div className="cm-empty-icon">📤</div><p>No documents currently checked out.</p></div>
+        ) : (
+          <table className="cm-table">
+            <thead><tr><th>Doc ID</th><th>Name</th><th>Type</th><th>Folder</th><th>Version</th><th>Checked Out By</th><th>Checked Out At</th><th>Actions</th></tr></thead>
+            <tbody>
+              {checkedOutDocs.map(d => (
+                <tr key={d.id}>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
+                  <td style={{ fontWeight: 500 }}>{d.name}</td>
+                  <td>{d.doc_type}</td>
+                  <td>{d.folder_name || '—'}</td>
+                  <td style={{ textAlign: 'center' }}>{d.version_major}.{d.version_minor}</td>
+                  <td style={{ fontSize: 13 }}>{d.checked_out_by_name || '—'}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{d.checked_out_at ? new Date(d.checked_out_at).toLocaleDateString() : '—'}</td>
+                  <td>
+                    <div className="cm-action-btns">
+                      <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(d); setShowDrawer(true) }}>Edit</button>
+                      <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setCheckInDoc(d)}>Check In</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      )}
+
       {subTab === 'reviews' && (
         reviews.length === 0 ? (
           <div className="cm-empty"><div className="cm-empty-icon">✅</div><p>No review tasks assigned to you.</p></div>
@@ -865,11 +1363,10 @@ function DocumentsSection({ token, user }) {
         )
       )}
 
-      {/* Drawer */}
+      {/* Full Screen Document Creation / Edit */}
       {showDrawer && (
-        <DocumentDrawer
+        <DocumentCreationScreen
           doc={editDoc}
-          folders={folders}
           token={token}
           onClose={() => { setShowDrawer(false); setEditDoc(null) }}
           onSaved={loadDocs}
@@ -891,6 +1388,295 @@ function DocumentsSection({ token, user }) {
       )}
       {reviewStatusItem && (
         <ReviewStatusModal review={reviewStatusItem} token={token} onClose={() => setReviewStatusItem(null)} onDone={loadReviews} />
+      )}
+    </div>
+  )
+}
+
+// ─── Modular Documents ───────────────────────────────────────────────────────
+
+function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
+  const isEdit = !!moduleDoc?.id
+  const fileInputRef = useRef(null)
+  const [file, setFile] = useState(null)
+  const [contentMode, setContentMode] = useState(moduleDoc?.content_html ? 'online' : 'upload')
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    folder_id: moduleDoc?.folder_id || '',
+    module_type: moduleDoc?.module_type || 'SRD',
+    name: moduleDoc?.name || '',
+    status: moduleDoc?.status || 'Draft',
+    content_html: moduleDoc?.content_html || '',
+    activation_date: moduleDoc?.activation_date ? moduleDoc.activation_date.slice(0, 10) : '',
+    expiry_date: moduleDoc?.expiry_date ? moduleDoc.expiry_date.slice(0, 10) : '',
+    language: moduleDoc?.language || 'en',
+    search_tags: moduleDoc?.search_tags || '',
+    usage_instructions: moduleDoc?.usage_instructions || '',
+    document_category: moduleDoc?.document_category || '',
+    standard_response_text: moduleDoc?.standard_response_text || '',
+    publish_as_pdf: !!moduleDoc?.publish_as_pdf,
+    send_as_pdf: !!moduleDoc?.send_as_pdf,
+  })
+
+  async function handleSave() {
+    if (!form.folder_id) return alert('Folder is required.')
+    if (!form.name.trim()) return alert('Module name is required.')
+    setSaving(true)
+    try {
+      const fd = new FormData()
+      Object.entries(form).forEach(([k, v]) => {
+        if (v !== null && v !== undefined) fd.append(k, v)
+      })
+      if (file) fd.append('file', file)
+
+      const url = isEdit ? `/api/cm/modules/${moduleDoc.id}` : '/api/cm/modules'
+      const method = isEdit ? 'PUT' : 'POST'
+      const res = await fetch(url, { method, headers: { Authorization: `Bearer ${token}` }, body: fd })
+      if (res.ok) {
+        onSaved()
+        onClose()
+      } else {
+        const d = await res.json()
+        alert(d.error || 'Save failed.')
+      }
+    } catch {
+      alert('Network error.')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <>
+      <div className="cm-drawer-overlay" onClick={onClose} />
+      <div className="cm-drawer">
+        <div className="cm-drawer-header">
+          <span className="cm-drawer-title">{isEdit ? `Edit Module — ${moduleDoc.name}` : 'New Modular Document'}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-secondary)' }}>×</button>
+        </div>
+        <div className="cm-drawer-body">
+          <div className="cm-form-group">
+            <label className="cm-form-label">Folder <span className="required">*</span></label>
+            <select className="cm-form-select" value={form.folder_id} onChange={e => setForm(p => ({ ...p, folder_id: e.target.value }))}>
+              <option value="">— Select Folder —</option>
+              {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="cm-form-group">
+              <label className="cm-form-label">Module Type</label>
+              <select className="cm-form-select" value={form.module_type} onChange={e => setForm(p => ({ ...p, module_type: e.target.value }))}>
+                <option>SRD</option>
+                <option>Enclosure</option>
+                <option>Information Document</option>
+                <option>Internal Document</option>
+              </select>
+            </div>
+            <div className="cm-form-group">
+              <label className="cm-form-label">Status</label>
+              <select className="cm-form-select" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
+                <option>Draft</option>
+                <option>Pending</option>
+                <option>Under Review</option>
+                <option>Approved</option>
+                <option>Published</option>
+                <option>Archived</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="cm-form-group">
+            <label className="cm-form-label">Module Name <span className="required">*</span></label>
+            <input className="cm-form-input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Enter module name" />
+          </div>
+
+          <div className="cm-form-group">
+            <label className="cm-form-label">Response Text</label>
+            <textarea className="cm-form-textarea" rows={2} value={form.standard_response_text} onChange={e => setForm(p => ({ ...p, standard_response_text: e.target.value }))} />
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <button type="button" className={`cm-btn cm-btn-sm ${contentMode === 'upload' ? 'cm-btn-primary' : 'cm-btn-secondary'}`} onClick={() => { setContentMode('upload'); fileInputRef.current?.click() }}>Upload File</button>
+            <button type="button" className={`cm-btn cm-btn-sm ${contentMode === 'online' ? 'cm-btn-primary' : 'cm-btn-secondary'}`} onClick={() => setContentMode('online')}>Author Online</button>
+            <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{ display: 'none' }} onChange={e => setFile(e.target.files?.[0] || null)} />
+          </div>
+
+          {contentMode === 'upload' && (
+            <div style={{ marginBottom: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
+              {file ? `Selected: ${file.name}` : (moduleDoc?.file_name ? `Existing file: ${moduleDoc.file_name}` : 'No file selected')}
+            </div>
+          )}
+          {contentMode === 'online' && (
+            <div className="cm-form-group">
+              <label className="cm-form-label">Module Content</label>
+              <RichTextEditor value={form.content_html} onChange={v => setForm(p => ({ ...p, content_html: v }))} />
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="cm-form-group">
+              <label className="cm-form-label">Activation Date</label>
+              <input type="date" className="cm-form-input" value={form.activation_date} onChange={e => setForm(p => ({ ...p, activation_date: e.target.value }))} />
+            </div>
+            <div className="cm-form-group">
+              <label className="cm-form-label">Expiry Date</label>
+              <input type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="cm-form-group">
+            <label className="cm-form-label">Search Tags</label>
+            <input className="cm-form-input" value={form.search_tags} onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))} placeholder="comma-separated tags" />
+          </div>
+          <div className="cm-form-group">
+            <label className="cm-form-label">Usage Instructions</label>
+            <textarea className="cm-form-textarea" rows={2} value={form.usage_instructions} onChange={e => setForm(p => ({ ...p, usage_instructions: e.target.value }))} />
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 6 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+              <input type="checkbox" checked={form.publish_as_pdf} onChange={e => setForm(p => ({ ...p, publish_as_pdf: e.target.checked }))} />
+              Publish as PDF
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+              <input type="checkbox" checked={form.send_as_pdf} onChange={e => setForm(p => ({ ...p, send_as_pdf: e.target.checked }))} />
+              Send as PDF
+            </label>
+          </div>
+        </div>
+        <div className="cm-drawer-footer">
+          <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="cm-btn cm-btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : (isEdit ? 'Update Module' : 'Create Module')}</button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function ModulesSection({ token }) {
+  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const [modules, setModules] = useState([])
+  const [folders, setFolders] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filters, setFilters] = useState({ folder_id: '', status: '', search: '' })
+  const [showDrawer, setShowDrawer] = useState(false)
+  const [editModule, setEditModule] = useState(null)
+
+  const loadFolders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cm/folders', { headers: authHeaders })
+      if (res.ok) setFolders((await res.json()).folders || [])
+    } catch { /* silent */ }
+  }, [token]) // eslint-disable-line
+
+  const loadModules = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)))
+      const res = await fetch(`/api/cm/modules?${params}`, { headers: authHeaders })
+      if (res.ok) setModules((await res.json()).modules || [])
+    } catch { /* silent */ }
+    setLoading(false)
+  }, [token, filters]) // eslint-disable-line
+
+  useEffect(() => { loadFolders() }, [loadFolders])
+  useEffect(() => { loadModules() }, [loadModules])
+
+  async function handleArchive(moduleDoc) {
+    if (!confirm(`Archive module "${moduleDoc.name}"? Linked documents using this module will also be archived.`)) return
+    try {
+      const res = await fetch(`/api/cm/modules/${moduleDoc.id}/archive`, { method: 'POST', headers: authHeaders })
+      if (res.ok) {
+        const d = await res.json()
+        if (d.archived_linked_documents > 0) {
+          alert(`Module archived. ${d.archived_linked_documents} linked document(s) were auto-archived.`)
+        }
+        loadModules()
+      } else {
+        const d = await res.json()
+        alert(d.error || 'Archive failed.')
+      }
+    } catch {
+      alert('Network error.')
+    }
+  }
+
+  return (
+    <div>
+      <div className="cm-section-header">
+        <h2 className="cm-section-title">Modular Documents</h2>
+        <button className="cm-btn cm-btn-primary" onClick={() => { setEditModule(null); setShowDrawer(true) }}>+ New Module</button>
+      </div>
+
+      <div className="cm-filters">
+        <select className="cm-form-select" style={{ width: 180 }} value={filters.folder_id} onChange={e => setFilters(p => ({ ...p, folder_id: e.target.value }))}>
+          <option value="">All Folders</option>
+          {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+        <select className="cm-form-select" style={{ width: 180 }} value={filters.status} onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
+          <option value="">All Statuses</option>
+          <option>Draft</option>
+          <option>Pending</option>
+          <option>Under Review</option>
+          <option>Approved</option>
+          <option>Published</option>
+          <option>Archived</option>
+        </select>
+        <input className="cm-form-input" style={{ width: 250 }} value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} placeholder="Search by module name, ID, tags…" />
+        <button className="cm-btn cm-btn-secondary" onClick={loadModules}>Filter</button>
+      </div>
+
+      {loading ? (
+        <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading modules…</p>
+      ) : modules.length === 0 ? (
+        <div className="cm-empty"><div className="cm-empty-icon">🧩</div><p>No modular documents yet. Create your first module.</p></div>
+      ) : (
+        <table className="cm-table">
+          <thead>
+            <tr>
+              <th>Module ID</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Folder</th>
+              <th>Version</th>
+              <th>Status</th>
+              <th>Expiry</th>
+              <th>Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {modules.map(m => (
+              <tr key={m.id}>
+                <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{m.module_id || `MOD-${m.id}`}</td>
+                <td style={{ fontWeight: 500 }}>{m.name}</td>
+                <td>{m.module_type || 'SRD'}</td>
+                <td>{m.folder_name || '—'}</td>
+                <td style={{ textAlign: 'center' }}>{m.version_major || 1}.{m.version_minor || 0}</td>
+                <td><StatusBadge status={m.status} /></td>
+                <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.expiry_date ? new Date(m.expiry_date).toLocaleDateString() : '—'}</td>
+                <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.updated_at ? new Date(m.updated_at).toLocaleDateString() : '—'}</td>
+                <td>
+                  <div className="cm-action-btns">
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditModule(m); setShowDrawer(true) }}>Edit</button>
+                    {m.status !== 'Archived' && (
+                      <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(m)}>Archive</button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {showDrawer && (
+        <ModuleDrawer
+          moduleDoc={editModule}
+          folders={folders}
+          token={token}
+          onClose={() => { setShowDrawer(false); setEditModule(null) }}
+          onSaved={loadModules}
+        />
       )}
     </div>
   )
@@ -1613,6 +2399,709 @@ function BrowseSection({ token }) {
   )
 }
 
+// ─── Associated Docs Panel ────────────────────────────────────────────────────
+
+const RELATION_TYPES = ['Supports', 'Supersedes', 'Translated From', 'Referenced By']
+
+function AssociatedDocsPanel({ docId, token }) {
+  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const [relations, setRelations] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [relationType, setRelationType] = useState('Supports')
+  const [selectedDoc, setSelectedDoc] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/cm/documents/${docId}/relations`, { headers: H })
+      if (res.ok) setRelations((await res.json()).relations || [])
+    } catch { /* silent */ }
+    setLoading(false)
+  }, [docId, token]) // eslint-disable-line
+
+  useEffect(() => { load() }, [load])
+
+  async function doSearch(q) {
+    setSearch(q)
+    if (q.length < 2) { setSearchResults([]); return }
+    setSearching(true)
+    try {
+      const res = await fetch(`/api/cm/documents?search=${encodeURIComponent(q)}&limit=10`, { headers: H })
+      if (res.ok) {
+        const data = await res.json()
+        const docs = (data.documents || []).filter(d => d.id !== docId)
+        setSearchResults(docs)
+      }
+    } catch { /* silent */ }
+    setSearching(false)
+  }
+
+  async function handleAdd() {
+    if (!selectedDoc) return
+    setAdding(true)
+    try {
+      const res = await fetch(`/api/cm/documents/${docId}/relations`, {
+        method: 'POST', headers: H,
+        body: JSON.stringify({ related_doc_id: selectedDoc.id, relation_type: relationType }),
+      })
+      if (res.ok) { setShowSearch(false); setSelectedDoc(null); setSearch(''); setSearchResults([]); load() }
+      else { const d = await res.json(); alert(d.error || 'Failed to link.') }
+    } catch { alert('Network error.') }
+    setAdding(false)
+  }
+
+  async function handleRemove(relId) {
+    if (!window.confirm('Remove this linked document?')) return
+    try {
+      await fetch(`/api/cm/documents/${docId}/relations/${relId}`, { method: 'DELETE', headers: H })
+      load()
+    } catch { alert('Network error.') }
+  }
+
+  return (
+    <div style={{ padding: '4px 0', maxWidth: 800 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <h4 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700 }}>Associated Documents</h4>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Linked documents appear automatically on the case form when this document is used in a response.</p>
+        </div>
+        <button onClick={() => setShowSearch(s => !s)} style={{ padding: '6px 14px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          + Link Document
+        </button>
+      </div>
+
+      {showSearch && (
+        <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Search Document</label>
+              <input
+                className="cm-form-input" style={{ margin: 0 }}
+                value={search} onChange={e => doSearch(e.target.value)}
+                placeholder="Type to search by name..."
+                autoFocus
+              />
+              {searchResults.length > 0 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 6, marginTop: 4, background: 'var(--surface)', maxHeight: 180, overflowY: 'auto' }}>
+                  {searchResults.map(d => (
+                    <div key={d.id} onClick={() => { setSelectedDoc(d); setSearch(d.name); setSearchResults([]) }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 13, background: selectedDoc?.id === d.id ? 'var(--primary-light, #f0ebff)' : 'transparent' }}>
+                      <strong>{d.name}</strong> <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{d.doc_id} · {d.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searching && <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0' }}>Searching…</p>}
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Relation Type</label>
+              <select className="cm-form-select" style={{ margin: 0 }} value={relationType} onChange={e => setRelationType(e.target.value)}>
+                {RELATION_TYPES.map(r => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleAdd} disabled={!selectedDoc || adding} style={{ padding: '6px 16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+              {adding ? 'Linking…' : 'Link'}
+            </button>
+            <button onClick={() => { setShowSearch(false); setSelectedDoc(null); setSearch(''); setSearchResults([]) }} style={{ padding: '6px 12px', background: 'none', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 30 }}>Loading…</p>
+      ) : relations.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '30px 20px', border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 13 }}>
+          No associated documents yet. Link one above.
+        </div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid var(--border)' }}>
+              <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>DOCUMENT</th>
+              <th style={{ textAlign: 'left', padding: '6px 10px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>RELATION</th>
+              <th style={{ textAlign: 'center', padding: '6px 10px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>STATUS</th>
+              <th style={{ textAlign: 'right', padding: '6px 10px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>ACTION</th>
+            </tr>
+          </thead>
+          <tbody>
+            {relations.map(r => (
+              <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                <td style={{ padding: '8px 10px' }}>
+                  <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{r.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.doc_id} · v{r.version_major}.{r.version_minor}</div>
+                </td>
+                <td style={{ padding: '8px 10px', color: 'var(--text-muted)' }}>{r.relation_type}</td>
+                <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                  <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: r.status === 'Published' ? '#e6f4ee' : '#f5f5f5', color: r.status === 'Published' ? '#007a5a' : '#888' }}>{r.status}</span>
+                </td>
+                <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                  <button onClick={() => handleRemove(r.id)} style={{ padding: '3px 9px', fontSize: 12, border: '1px solid #fca5a5', borderRadius: 4, background: 'none', cursor: 'pointer', color: 'var(--danger)' }}>Remove</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
+// ─── Version Alerts Panel ─────────────────────────────────────────────────────
+
+function VersionAlertsPanel({ docId, token }) {
+  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const [config, setConfig] = useState({ alert_days: [], alert_email_account_id: '' })
+  const [subscribers, setSubscribers] = useState([])
+  const [emailAccounts, setEmailAccounts] = useState([])
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [newDay, setNewDay] = useState('')
+  const [addingUser, setAddingUser] = useState(false)
+  const [selectedUser, setSelectedUser] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [cfgRes, emailRes, usersRes] = await Promise.all([
+        fetch(`/api/cm/documents/${docId}/alert-config`, { headers: H }),
+        fetch('/api/admin/email-accounts', { headers: H }),
+        fetch('/api/users', { headers: H }),
+      ])
+      if (cfgRes.ok) {
+        const d = await cfgRes.json()
+        setConfig({ alert_days: d.alert_days || [], alert_email_account_id: d.alert_email_account_id || '' })
+        setSubscribers(d.subscribers || [])
+      }
+      if (emailRes.ok) setEmailAccounts((await emailRes.json()).accounts || [])
+      if (usersRes.ok) setUsers(await usersRes.json())
+    } catch { /* silent */ }
+    setLoading(false)
+  }, [docId, token]) // eslint-disable-line
+
+  useEffect(() => { load() }, [load])
+
+  function addDay() {
+    const d = Number(newDay)
+    if (!d || d < 1) return
+    if (config.alert_days.includes(d)) return
+    setConfig(p => ({ ...p, alert_days: [...p.alert_days, d].sort((a, b) => a - b) }))
+    setNewDay('')
+  }
+
+  function removeDay(d) {
+    setConfig(p => ({ ...p, alert_days: p.alert_days.filter(x => x !== d) }))
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/cm/documents/${docId}/alert-config`, {
+        method: 'PUT', headers: H,
+        body: JSON.stringify({ alert_days: config.alert_days, alert_email_account_id: config.alert_email_account_id || null }),
+      })
+      if (!res.ok) { const d = await res.json(); alert(d.error || 'Save failed.') }
+    } catch { alert('Network error.') }
+    setSaving(false)
+  }
+
+  async function addSubscriber() {
+    if (!selectedUser) return
+    setAddingUser(true)
+    try {
+      const res = await fetch(`/api/cm/documents/${docId}/alert-subs`, {
+        method: 'POST', headers: H, body: JSON.stringify({ user_id: Number(selectedUser) }),
+      })
+      if (res.ok) { setSelectedUser(''); load() }
+      else { const d = await res.json(); alert(d.error || 'Failed.') }
+    } catch { alert('Network error.') }
+    setAddingUser(false)
+  }
+
+  async function removeSub(subId) {
+    try {
+      await fetch(`/api/cm/documents/${docId}/alert-subs/${subId}`, { method: 'DELETE', headers: H })
+      load()
+    } catch { alert('Network error.') }
+  }
+
+  if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 40 }}>Loading…</p>
+
+  const subscribedIds = new Set(subscribers.map(s => s.user_id))
+
+  return (
+    <div style={{ padding: '4px 0', maxWidth: 700 }}>
+      {/* Alert Days */}
+      <div className="cm-form-group">
+        <label className="cm-form-label">Alert Days Before Expiry</label>
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-muted)' }}>Configure how many days before expiry to send alerts. Day 1 always fires regardless.</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          {(config.alert_days || []).length === 0 && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No custom days set — only the mandatory 1-day alert will fire.</span>
+          )}
+          {(config.alert_days || []).map(d => (
+            <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'var(--primary-light, #f0ebff)', border: '1px solid var(--primary)', borderRadius: 20, fontSize: 12, fontWeight: 600, color: 'var(--primary)' }}>
+              {d} day{d !== 1 ? 's' : ''}
+              <button onClick={() => removeDay(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+            </span>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="number" min="1" className="cm-form-input" style={{ margin: 0, width: 100 }} placeholder="Days" value={newDay} onChange={e => setNewDay(e.target.value)} onKeyDown={e => e.key === 'Enter' && addDay()} />
+          <button onClick={addDay} style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: 'none', cursor: 'pointer', fontSize: 13 }}>+ Add</button>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+          {[7, 14, 30, 60, 90].map(preset => (
+            <button key={preset} onClick={() => { if (!config.alert_days.includes(preset)) setConfig(p => ({ ...p, alert_days: [...p.alert_days, preset].sort((a,b)=>a-b) })) }}
+              style={{ padding: '3px 10px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 20, background: config.alert_days.includes(preset) ? 'var(--border)' : 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+              {preset}d
+            </button>
+          ))}
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>Quick presets</span>
+        </div>
+      </div>
+
+      {/* SMTP Email Account */}
+      <div className="cm-form-group">
+        <label className="cm-form-label">Alert Email Account (SMTP)</label>
+        <select className="cm-form-select" value={config.alert_email_account_id || ''} onChange={e => setConfig(p => ({ ...p, alert_email_account_id: e.target.value }))}>
+          <option value="">— Use org default —</option>
+          {emailAccounts.map(ea => (
+            <option key={ea.id} value={ea.id}>{ea.name || ea.email_address} ({ea.smtp_host})</option>
+          ))}
+        </select>
+        <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>If not set, the org-level default SMTP account will be used (configured in CM Settings → Alerts).</p>
+      </div>
+
+      <button onClick={handleSave} disabled={saving} style={{ padding: '7px 20px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600, marginBottom: 24 }}>
+        {saving ? 'Saving…' : 'Save Alert Config'}
+      </button>
+
+      {/* Subscribers */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div>
+            <h4 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700 }}>Alert Subscribers</h4>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>These users will receive email alerts when expiry thresholds are hit.</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <select className="cm-form-select" style={{ margin: 0, flex: 1 }} value={selectedUser} onChange={e => setSelectedUser(e.target.value)}>
+            <option value="">— Select a user —</option>
+            {users.filter(u => !subscribedIds.has(u.id)).map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+          </select>
+          <button onClick={addSubscriber} disabled={!selectedUser || addingUser} style={{ padding: '6px 14px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            {addingUser ? 'Adding…' : '+ Add'}
+          </button>
+        </div>
+        {subscribers.length === 0 ? (
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No subscribers yet. Add users above to notify them on expiry alerts.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {subscribers.map(s => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}>
+                <div>
+                  <span style={{ fontWeight: 500 }}>{s.name}</span>
+                  <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 12 }}>{s.email}</span>
+                </div>
+                <button onClick={() => removeSub(s.id)} style={{ padding: '3px 9px', fontSize: 12, border: '1px solid #fca5a5', borderRadius: 4, background: 'none', cursor: 'pointer', color: 'var(--danger)' }}>Remove</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── CM Org Alerts Settings ───────────────────────────────────────────────────
+
+function CMOrgAlertsSettings({ token }) {
+  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const [settings, setSettings] = useState({})
+  const [emailAccounts, setEmailAccounts] = useState([])
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState({})
+  const [newDay, setNewDay] = useState('')
+  const [alertDays, setAlertDays] = useState([])
+  const [defaultEmail, setDefaultEmail] = useState('')
+  const [defaultRoles, setDefaultRoles] = useState([])
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const [sRes, eRes] = await Promise.all([
+          fetch('/api/cm/settings', { headers: H }),
+          fetch('/api/admin/email-accounts', { headers: H }),
+        ])
+        if (sRes.ok) {
+          const d = await sRes.json()
+          const s = d.settings || {}
+          setSettings(s)
+          setAlertDays(Array.isArray(s.default_alert_days) ? s.default_alert_days : [])
+          setDefaultEmail(s.default_alert_email_account_id || '')
+          setDefaultRoles(Array.isArray(s.default_alert_roles) ? s.default_alert_roles : [])
+        }
+        if (eRes.ok) setEmailAccounts((await eRes.json()).accounts || [])
+      } catch { /* silent */ }
+      setLoading(false)
+    }
+    load()
+  }, [token]) // eslint-disable-line
+
+  async function saveSetting(key, value) {
+    setSaving(p => ({ ...p, [key]: true }))
+    try {
+      await fetch('/api/cm/settings', { method: 'PUT', headers: H, body: JSON.stringify({ setting_key: key, setting_value: value }) })
+    } catch { alert('Network error.') }
+    setSaving(p => ({ ...p, [key]: false }))
+  }
+
+  function addDay() {
+    const d = Number(newDay)
+    if (!d || d < 1 || alertDays.includes(d)) return
+    const updated = [...alertDays, d].sort((a, b) => a - b)
+    setAlertDays(updated)
+    setNewDay('')
+    saveSetting('default_alert_days', updated)
+  }
+
+  function removeDay(d) {
+    const updated = alertDays.filter(x => x !== d)
+    setAlertDays(updated)
+    saveSetting('default_alert_days', updated)
+  }
+
+  const ALL_ROLES = ['admin', 'manager', 'agent', 'reviewer']
+
+  if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 40 }}>Loading…</p>
+
+  return (
+    <div style={{ maxWidth: 700 }}>
+      <div style={{ marginBottom: 24 }}>
+        <h4 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700 }}>Org-Level Alert Defaults</h4>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>These defaults apply to all documents that don't have per-document alert configuration set.</p>
+      </div>
+
+      {/* Default Alert Days */}
+      <div className="cm-form-group">
+        <label className="cm-form-label">Default Alert Days Before Expiry</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          {alertDays.length === 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No default days — only the mandatory 1-day alert fires.</span>}
+          {alertDays.map(d => (
+            <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'var(--primary-light, #f0ebff)', border: '1px solid var(--primary)', borderRadius: 20, fontSize: 12, fontWeight: 600, color: 'var(--primary)' }}>
+              {d}d
+              <button onClick={() => removeDay(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 14, padding: 0 }}>×</button>
+            </span>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input type="number" min="1" className="cm-form-input" style={{ margin: 0, width: 100 }} placeholder="Days" value={newDay} onChange={e => setNewDay(e.target.value)} onKeyDown={e => e.key === 'Enter' && addDay()} />
+          <button onClick={addDay} style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: 'none', cursor: 'pointer', fontSize: 13 }}>+ Add</button>
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          {[7, 14, 30, 60, 90].map(preset => (
+            <button key={preset} onClick={() => { if (!alertDays.includes(preset)) { const u = [...alertDays, preset].sort((a,b)=>a-b); setAlertDays(u); saveSetting('default_alert_days', u) } }}
+              style={{ padding: '3px 10px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 20, background: alertDays.includes(preset) ? 'var(--border)' : 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+              {preset}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Default SMTP Account */}
+      <div className="cm-form-group">
+        <label className="cm-form-label">Default Alert Email Account (SMTP)</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select className="cm-form-select" style={{ margin: 0, flex: 1 }} value={defaultEmail} onChange={e => setDefaultEmail(e.target.value)}>
+            <option value="">— None —</option>
+            {emailAccounts.map(ea => <option key={ea.id} value={ea.id}>{ea.name || ea.email_address} ({ea.smtp_host})</option>)}
+          </select>
+          <button onClick={() => saveSetting('default_alert_email_account_id', defaultEmail || null)} disabled={saving.default_alert_email_account_id}
+            style={{ padding: '6px 16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            {saving.default_alert_email_account_id ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {/* Default Alert Roles */}
+      <div className="cm-form-group">
+        <label className="cm-form-label">Default Alert Roles</label>
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-muted)' }}>Users with these roles in the org will receive alerts for documents without specific subscribers.</p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          {ALL_ROLES.map(role => (
+            <label key={role} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={defaultRoles.includes(role)}
+                onChange={e => {
+                  const updated = e.target.checked ? [...defaultRoles, role] : defaultRoles.filter(r => r !== role)
+                  setDefaultRoles(updated)
+                }}
+              />
+              {role.charAt(0).toUpperCase() + role.slice(1)}
+            </label>
+          ))}
+        </div>
+        <button onClick={() => saveSetting('default_alert_roles', defaultRoles)} disabled={saving.default_alert_roles}
+          style={{ padding: '6px 16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          {saving.default_alert_roles ? 'Saving…' : 'Save Roles'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── CM Settings Section ──────────────────────────────────────────────────────
+
+const CM_FIELD_TYPES = [
+  { key: 'document_category', label: 'Document Category' },
+  { key: 'content_type', label: 'Content Type' },
+  { key: 'language', label: 'Language' },
+  { key: 'audience', label: 'Audience' },
+  { key: 'therapeutic_area', label: 'Therapeutic Area' },
+]
+
+function CMSettingsSection({ token }) {
+  const [activeField, setActiveField] = useState('document_category')
+  const [picklists, setPicklists] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [form, setForm] = useState({ value: '', label: '', sort_order: 0 })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+  const loadPicklists = useCallback(async (fieldType) => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/cm/picklists?field_type=${fieldType}`, { headers: H })
+      if (res.ok) setPicklists((await res.json()).picklists || [])
+      else setPicklists([])
+    } catch { setPicklists([]) }
+    setLoading(false)
+  }, [token]) // eslint-disable-line
+
+  useEffect(() => { loadPicklists(activeField) }, [activeField, loadPicklists])
+
+  function openAdd() {
+    setEditing(null)
+    setForm({ value: '', label: '', sort_order: picklists.length })
+    setError('')
+    setShowForm(true)
+  }
+
+  function openEdit(item) {
+    setEditing(item)
+    setForm({ value: item.value, label: item.label, sort_order: item.sort_order ?? 0 })
+    setError('')
+    setShowForm(true)
+  }
+
+  async function handleSave() {
+    if (!form.value.trim()) { setError('Value is required.'); return }
+    setSaving(true); setError('')
+    try {
+      const url = editing ? `/api/cm/picklists/${editing.id}` : '/api/cm/picklists'
+      const method = editing ? 'PUT' : 'POST'
+      const body = { ...form, field_type: activeField }
+      const res = await fetch(url, { method, headers: H, body: JSON.stringify(body) })
+      if (res.ok) { setShowForm(false); loadPicklists(activeField) }
+      else { const d = await res.json(); setError(d.error || 'Save failed.') }
+    } catch { setError('Network error.') }
+    setSaving(false)
+  }
+
+  async function handleToggle(item) {
+    try {
+      await fetch(`/api/cm/picklists/${item.id}`, {
+        method: 'PUT',
+        headers: H,
+        body: JSON.stringify({ ...item, is_active: item.is_active ? 0 : 1 }),
+      })
+      loadPicklists(activeField)
+    } catch { /* silent */ }
+  }
+
+  async function handleDelete(item) {
+    if (!window.confirm(`Delete "${item.label}"? This cannot be undone.`)) return
+    try {
+      const res = await fetch(`/api/cm/picklists/${item.id}`, { method: 'DELETE', headers: H })
+      if (res.ok) loadPicklists(activeField)
+      else { const d = await res.json(); alert(d.error || 'Delete failed.') }
+    } catch { alert('Network error.') }
+  }
+
+  const currentFieldLabel = CM_FIELD_TYPES.find(f => f.key === activeField)?.label || activeField
+
+  const [settingsTab, setSettingsTab] = useState('picklists')
+
+  return (
+    <div style={{ padding: 24, maxWidth: 900 }}>
+      <div style={{ marginBottom: 20 }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>Content Management Settings</h3>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
+          Manage CM-specific picklists, org-level alert defaults, and other configurations.
+        </p>
+      </div>
+
+      {/* Settings sub-tabs */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 24 }}>
+        {[{ key: 'picklists', label: 'Picklists' }, { key: 'alerts', label: 'Alert Defaults' }].map(st => (
+          <button key={st.key} onClick={() => setSettingsTab(st.key)}
+            style={{ padding: '8px 20px', background: 'none', border: 'none', borderBottom: `2px solid ${settingsTab === st.key ? 'var(--primary)' : 'transparent'}`, marginBottom: -2, cursor: 'pointer', fontSize: 13, fontWeight: settingsTab === st.key ? 700 : 500, color: settingsTab === st.key ? 'var(--primary)' : 'var(--text-secondary)' }}>
+            {st.label}
+          </button>
+        ))}
+      </div>
+
+      {settingsTab === 'picklists' && (<>
+      {/* Field Type Selector */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+        {CM_FIELD_TYPES.map(ft => (
+          <button
+            key={ft.key}
+            onClick={() => { setActiveField(ft.key); setShowForm(false) }}
+            style={{
+              padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 20, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', transition: 'all 0.15s',
+              background: activeField === ft.key ? 'var(--primary)' : 'var(--surface)',
+              color: activeField === ft.key ? '#fff' : 'var(--text-secondary)',
+              borderColor: activeField === ft.key ? 'var(--primary)' : 'var(--border)',
+            }}
+          >
+            {ft.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Section header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <h4 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{currentFieldLabel} Values</h4>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>These values appear in the "{currentFieldLabel}" dropdown in document creation.</p>
+        </div>
+        <button
+          onClick={openAdd}
+          style={{ padding: '7px 16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+        >
+          + Add Value
+        </button>
+      </div>
+
+      {/* Inline Form */}
+      {showForm && (
+        <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+          <h5 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 700 }}>{editing ? 'Edit Value' : `New ${currentFieldLabel} Value`}</h5>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px', gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Value * <span style={{ textTransform: 'none', fontWeight: 400 }}>(stored)</span></label>
+              <input
+                style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+                value={form.value}
+                onChange={e => setForm(p => ({ ...p, value: e.target.value, label: p.label || e.target.value }))}
+                placeholder="e.g. Clinical"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Display Label</label>
+              <input
+                style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+                value={form.label}
+                onChange={e => setForm(p => ({ ...p, label: e.target.value }))}
+                placeholder="e.g. Clinical Documents"
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 3, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Order</label>
+              <input
+                type="number"
+                style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+                value={form.sort_order}
+                onChange={e => setForm(p => ({ ...p, sort_order: Number(e.target.value) }))}
+              />
+            </div>
+          </div>
+          {error && <p style={{ color: 'var(--danger)', fontSize: 12, margin: '0 0 8px' }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleSave} disabled={saving} style={{ padding: '6px 16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+              {saving ? 'Saving…' : editing ? 'Update' : 'Add'}
+            </button>
+            <button onClick={() => setShowForm(false)} style={{ padding: '6px 12px', background: 'none', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      {loading ? (
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 40 }}>Loading…</p>
+      ) : picklists.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 13 }}>
+          No values yet for <strong>{currentFieldLabel}</strong>. Add your first one above.
+          <br />
+          <span style={{ fontSize: 12, marginTop: 4, display: 'block' }}>Until you add values here, the document creation form will show default hardcoded options.</span>
+        </div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid var(--border)' }}>
+              <th style={{ textAlign: 'left', padding: '7px 10px', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11 }}>VALUE</th>
+              <th style={{ textAlign: 'left', padding: '7px 10px', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11 }}>DISPLAY LABEL</th>
+              <th style={{ textAlign: 'center', padding: '7px 10px', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11 }}>ORDER</th>
+              <th style={{ textAlign: 'center', padding: '7px 10px', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11 }}>STATUS</th>
+              <th style={{ textAlign: 'right', padding: '7px 10px', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11 }}>ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody>
+            {picklists.map(item => (
+              <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                <td style={{ padding: '9px 10px', fontWeight: 500, color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: 12 }}>{item.value}</td>
+                <td style={{ padding: '9px 10px', color: 'var(--text-primary)' }}>{item.label}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'center', color: 'var(--text-muted)' }}>{item.sort_order}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'center' }}>
+                  <span style={{
+                    display: 'inline-block', padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                    background: item.is_active ? '#e6f4ee' : '#f5f5f5',
+                    color: item.is_active ? '#007a5a' : '#888',
+                  }}>
+                    {item.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td style={{ padding: '9px 10px', textAlign: 'right' }}>
+                  <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>
+                    <button onClick={() => openEdit(item)} style={{ padding: '3px 9px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 4, background: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}>Edit</button>
+                    <button onClick={() => handleToggle(item)} style={{ padding: '3px 9px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 4, background: 'none', cursor: 'pointer', color: item.is_active ? 'var(--text-muted)' : 'var(--primary)' }}>
+                      {item.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button onClick={() => handleDelete(item)} style={{ padding: '3px 9px', fontSize: 12, border: '1px solid #fca5a5', borderRadius: 4, background: 'none', cursor: 'pointer', color: 'var(--danger)' }}>Delete</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      </>)}
+
+      {settingsTab === 'alerts' && (
+        <CMOrgAlertsSettings token={token} />
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ContentPage() {
@@ -1622,10 +3111,12 @@ export default function ContentPage() {
 
   const tabs = [
     { key: 'documents', label: 'Documents' },
+    { key: 'modules', label: 'Modular Documents' },
     { key: 'faqs', label: 'FAQs' },
     { key: 'merge-reports', label: 'Merge Reports' },
     { key: 'templates', label: 'Templates' },
     { key: 'browse', label: 'Browse Content' },
+    { key: 'settings', label: '⚙ Settings' },
   ]
 
   return (
@@ -1653,10 +3144,12 @@ export default function ContentPage() {
         {/* Section Content */}
         <div className="cm-content">
           {activeTab === 'documents' && <DocumentsSection token={token} user={user} />}
+          {activeTab === 'modules' && <ModulesSection token={token} />}
           {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
           {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}
           {activeTab === 'templates' && <TemplatesSection token={token} />}
           {activeTab === 'browse' && <BrowseSection token={token} />}
+          {activeTab === 'settings' && <CMSettingsSection token={token} />}
         </div>
 
         {/* Folder Manager */}

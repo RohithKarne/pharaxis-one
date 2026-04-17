@@ -128,6 +128,7 @@ app.use('/api', (req, res, next) => {
 
 // ─── Admin Console — Extended Routes ────────────────────────────────────────
 app.use('/api/admin', require('./routes/admin/picklists'));
+app.use('/api/admin', require('./routes/admin/miCategories'));
 app.use('/api/admin', require('./routes/admin/fieldSetup'));
 app.use('/api/admin', require('./routes/admin/securityGroups'));
 app.use('/api/admin', require('./routes/admin/contacts'));
@@ -148,8 +149,11 @@ app.use('/api', require('./routes/casePC'));         // F-18
 app.use('/api', require('./routes/notifications'));  // G10 notifications feed
 
 // ─── Content Management Routes ───────────────────────────────────────────────
+app.use('/api/cm', require('./routes/cm/picklists'));
+app.use('/api/cm', require('./routes/cm/settings'));
 app.use('/api/cm', require('./routes/cm/folders'));
 app.use('/api/cm', require('./routes/cm/documents'));
+app.use('/api/cm', require('./routes/cm/modules'));
 app.use('/api/cm', require('./routes/cm/faqs'));
 app.use('/api/cm', require('./routes/cm/mergeReports'));
 app.use('/api/cm', require('./routes/cm/templates'));
@@ -258,6 +262,7 @@ apiV1Router.use('/auth', require('./routes/auth'));
 apiV1Router.use('/inbox', require('./routes/inbox'));
 
 apiV1Router.use('/admin', require('./routes/admin/picklists'));
+apiV1Router.use('/admin', require('./routes/admin/miCategories'));
 apiV1Router.use('/admin', require('./routes/admin/fieldSetup'));
 apiV1Router.use('/admin', require('./routes/admin/securityGroups'));
 apiV1Router.use('/admin', require('./routes/admin/contacts'));
@@ -290,8 +295,11 @@ apiV1Router.use('/', require('./routes/casePC'));
 apiV1Router.use('/', require('./routes/notifications'));
 apiV1Router.use('/', require('./routes/reports'));
 
+apiV1Router.use('/cm', require('./routes/cm/picklists'));
+apiV1Router.use('/cm', require('./routes/cm/settings'));
 apiV1Router.use('/cm', require('./routes/cm/folders'));
 apiV1Router.use('/cm', require('./routes/cm/documents'));
+apiV1Router.use('/cm', require('./routes/cm/modules'));
 apiV1Router.use('/cm', require('./routes/cm/faqs'));
 apiV1Router.use('/cm', require('./routes/cm/mergeReports'));
 apiV1Router.use('/cm', require('./routes/cm/templates'));

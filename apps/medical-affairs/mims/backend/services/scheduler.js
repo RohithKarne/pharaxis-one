@@ -80,6 +80,26 @@ function registerDefaultJobs() {
   })
 
   registerJob({
+    name: 'cm-expiry-alerts',
+    cronExpression: '0 7 * * *',
+    description: 'Runs CM document expiry alert checks',
+    handler: async () => {
+      const { runCmExpiryAlerts } = require('./cmExpiryAlertService');
+      await runCmExpiryAlerts();
+    },
+  })
+
+  registerJob({
+    name: 'cm-module-lifecycle',
+    cronExpression: '45 6 * * *',
+    description: 'Archives expired modules and cascades archive to linked documents',
+    handler: async () => {
+      const { runCmModuleLifecycle } = require('./cmModuleLifecycleService');
+      await runCmModuleLifecycle();
+    },
+  })
+
+  registerJob({
     name: 'emir-poller',
     cronExpression: '*/5 * * * *',
     description: 'Polls EMIR mailbox for new emails',

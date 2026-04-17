@@ -19,6 +19,10 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, Date.now() + '_' + file.originalname),
 });
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+const uploadFields = upload.fields([
+  { name: 'file', maxCount: 1 },
+  { name: 'source_attachments', maxCount: 20 },
+]);
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -46,6 +50,26 @@ async function generateDocId(conn) {
 
 function isSuperadmin(req) {
   return req.user.role === 'superadmin';
+}
+
+function parseSelectedModules(value) {
+  if (value === undefined || value === null || value === '') return [];
+
+  let parsed = value;
+  for (let i = 0; i < 2; i += 1) {
+    if (typeof parsed !== 'string') break;
+    try {
+      parsed = JSON.parse(parsed);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  if (!Array.isArray(parsed)) return [];
+  const normalized = parsed
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  return [...new Set(normalized)];
 }
 
 async function getScopedFolder(req, folderId) {
@@ -132,7 +156,7 @@ router.get('/documents', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents — create document (status=Draft, auto-generate doc_id)
-router.post('/documents', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
+router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -141,7 +165,10 @@ router.post('/documents', authenticate, upload.single('file'), validateUpload(['
     const {
       folder_id, doc_type, name, content_html, expiry_date, activation_date,
       language, is_product_specific, is_site_specific, search_tags, usage_instructions, attributes,
+      response_doc_type, publish_as_pdf, send_as_pdf, selected_modules,
+      mi_category_id, document_category, standard_response_text,
     } = req.body;
+    const parsedSelectedModules = parseSelectedModules(selected_modules);
 
     if (!folder_id || !name) {
       await conn.rollback();
@@ -154,27 +181,42 @@ router.post('/documents', authenticate, upload.single('file'), validateUpload(['
       return res.status(404).json({ error: 'Folder not found for active organisation.' });
     }
 
-    const filePath = req.file ? req.file.path : null;
-    const fileName = req.file ? req.file.originalname : null;
-    const fileSize = req.file ? req.file.size : null;
-    const fileMime = req.file ? req.file.mimetype : null;
+    const primaryFile = req.files && req.files['file'] ? req.files['file'][0] : null;
+    const filePath = primaryFile ? primaryFile.path : null;
+    const fileName = primaryFile ? primaryFile.originalname : null;
+    const fileSize = primaryFile ? primaryFile.size : null;
+    const fileMime = primaryFile ? primaryFile.mimetype : null;
 
     const [result] = await conn.execute(
       `INSERT INTO cm_documents
-         (doc_id, folder_id, doc_type, name, content_html, file_path, file_name, file_size, file_mime,
+         (doc_id, folder_id, doc_type, response_doc_type, name, content_html, file_path, file_name, file_size, file_mime,
           status, version_major, version_minor, expiry_date, activation_date, language,
-          is_product_specific, is_site_specific, search_tags, usage_instructions, attributes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          is_product_specific, is_site_specific, search_tags, usage_instructions,
+          publish_as_pdf, send_as_pdf, selected_modules, attributes,
+          mi_category_id, document_category, standard_response_text, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        docId, folder_id, doc_type || 'SRD', name.trim(), content_html || null,
+        docId, folder_id, doc_type || 'SRD', response_doc_type || 'File', name.trim(), content_html || null,
         filePath, fileName, fileSize, fileMime,
         expiry_date || null, activation_date || null, language || 'en',
         is_product_specific ? 1 : 0, is_site_specific ? 1 : 0,
         search_tags || null, usage_instructions || null,
+        publish_as_pdf ? 1 : 0, send_as_pdf ? 1 : 0,
+        parsedSelectedModules.length ? JSON.stringify(parsedSelectedModules) : null,
         attributes ? JSON.stringify(attributes) : null,
+        mi_category_id || null, document_category || null, standard_response_text || null,
         req.user.userId,
       ]
     );
+
+    // Save source attachments
+    const sourceFiles = req.files && req.files['source_attachments'] ? req.files['source_attachments'] : [];
+    for (const f of sourceFiles) {
+      await conn.execute(
+        `INSERT INTO cm_document_attachments (document_id, file_path, file_name, file_size, file_mime, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)`,
+        [result.insertId, f.path, f.originalname, f.size, f.mimetype, req.user.userId]
+      );
+    }
 
     await conn.commit();
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_document', result.insertId, { doc_id: docId, name, folder_id });
@@ -228,61 +270,98 @@ router.get('/documents/:id', authenticate, async (req, res) => {
 });
 
 // PUT /api/cm/documents/:id — update (only Draft or CheckedOut-by-me)
-router.put('/documents/:id', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
+router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc']), async (req, res) => {
+  const conn = await pool.getConnection();
   try {
+    await conn.beginTransaction();
     const { id } = req.params;
     const doc = await getScopedDocument(req, id);
-    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    if (!doc) { await conn.rollback(); return res.status(404).json({ error: 'Document not found.' }); }
 
     if (doc.status !== 'Draft' && !(doc.status === 'CheckedOut' && doc.checked_out_by === req.user.userId)) {
+      await conn.rollback();
       return res.status(403).json({ error: 'Document can only be updated when in Draft status or checked out by you.' });
     }
 
     const {
       folder_id, doc_type, name, content_html, expiry_date, activation_date,
       language, is_product_specific, is_site_specific, search_tags, usage_instructions, attributes,
+      response_doc_type, publish_as_pdf, send_as_pdf, selected_modules,
+      mi_category_id, document_category, standard_response_text,
     } = req.body;
+    const parsedSelectedModules = selected_modules !== undefined
+      ? parseSelectedModules(selected_modules)
+      : null;
 
-    const filePath = req.file ? req.file.path : doc.file_path;
-    const fileName = req.file ? req.file.originalname : doc.file_name;
-    const fileSize = req.file ? req.file.size : doc.file_size;
-    const fileMime = req.file ? req.file.mimetype : doc.file_mime;
+    const primaryFile = req.files && req.files['file'] ? req.files['file'][0] : null;
+    const filePath = primaryFile ? primaryFile.path : doc.file_path;
+    const fileName = primaryFile ? primaryFile.originalname : doc.file_name;
+    const fileSize = primaryFile ? primaryFile.size : doc.file_size;
+    const fileMime = primaryFile ? primaryFile.mimetype : doc.file_mime;
 
-    await pool.execute(
+    await conn.execute(
       `UPDATE cm_documents SET
          folder_id = ?, doc_type = ?, name = ?, content_html = ?,
          file_path = ?, file_name = ?, file_size = ?, file_mime = ?,
          expiry_date = ?, activation_date = ?, language = ?,
          is_product_specific = ?, is_site_specific = ?,
          search_tags = ?, usage_instructions = ?, attributes = ?,
-         updated_by = ?, updated_at = NOW()
+         response_doc_type = ?, publish_as_pdf = ?, send_as_pdf = ?,
+         selected_modules = ?, mi_category_id = ?, document_category = ?,
+         standard_response_text = ?, updated_by = ?, updated_at = NOW()
        WHERE id = ?`,
       [
-        folder_id || doc.folder_id, doc_type || doc.doc_type, name || doc.name, content_html !== undefined ? content_html : doc.content_html,
+        folder_id || doc.folder_id, doc_type || doc.doc_type, name || doc.name,
+        content_html !== undefined ? content_html : doc.content_html,
         filePath, fileName, fileSize, fileMime,
-        expiry_date || doc.expiry_date || null, activation_date || doc.activation_date || null, language || doc.language,
+        expiry_date || doc.expiry_date || null, activation_date || doc.activation_date || null,
+        language || doc.language,
         is_product_specific !== undefined ? (is_product_specific ? 1 : 0) : doc.is_product_specific,
         is_site_specific !== undefined ? (is_site_specific ? 1 : 0) : doc.is_site_specific,
-        search_tags || doc.search_tags, usage_instructions || doc.usage_instructions,
+        search_tags !== undefined ? search_tags : doc.search_tags,
+        usage_instructions !== undefined ? usage_instructions : doc.usage_instructions,
         attributes ? JSON.stringify(attributes) : doc.attributes,
+        response_doc_type || doc.response_doc_type || 'File',
+        publish_as_pdf !== undefined ? (publish_as_pdf ? 1 : 0) : doc.publish_as_pdf,
+        send_as_pdf !== undefined ? (send_as_pdf ? 1 : 0) : doc.send_as_pdf,
+        selected_modules !== undefined
+          ? (parsedSelectedModules.length ? JSON.stringify(parsedSelectedModules) : null)
+          : doc.selected_modules,
+        mi_category_id !== undefined ? (mi_category_id || null) : doc.mi_category_id,
+        document_category !== undefined ? (document_category || null) : doc.document_category,
+        standard_response_text !== undefined ? (standard_response_text || null) : doc.standard_response_text,
         req.user.userId, id,
       ]
     );
+
+    // Handle new source attachments if provided
+    const sourceFiles = req.files && req.files['source_attachments'] ? req.files['source_attachments'] : [];
+    for (const f of sourceFiles) {
+      await conn.execute(
+        `INSERT INTO cm_document_attachments (document_id, file_path, file_name, file_size, file_mime, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)`,
+        [id, f.path, f.originalname, f.size, f.mimetype, req.user.userId]
+      );
+    }
+
+    await conn.commit();
     await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_document', Number(id), { name: name || doc.name });
     res.json({ message: 'Document updated.' });
   } catch (err) {
+    await conn.rollback();
     console.error('PUT /cm/documents/:id error:', err);
     res.status(500).json({ error: 'Server error.' });
+  } finally {
+    conn.release();
   }
 });
 
-// POST /api/cm/documents/:id/checkout — check out document
+// POST /api/cm/documents/:id/checkout — check out document (Draft or Published)
 router.post('/documents/:id/checkout', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const doc = await getScopedDocument(req, id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    if (doc.status !== 'Draft') return res.status(400).json({ error: 'Only Draft documents can be checked out.' });
+    if (!['Draft', 'Published'].includes(doc.status)) return res.status(400).json({ error: 'Only Draft or Published documents can be checked out.' });
     if (doc.checked_out_by) return res.status(400).json({ error: 'Document is already checked out.' });
 
     await pool.execute(
@@ -297,27 +376,40 @@ router.post('/documents/:id/checkout', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/cm/documents/:id/checkin — check in (status=Pending, record version)
+// POST /api/cm/documents/:id/checkin — check in (Draft or CheckedOut → Pending)
 router.post('/documents/:id/checkin', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { notes } = req.body;
     const doc = await getScopedDocument(req, id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    if (doc.status !== 'CheckedOut') return res.status(400).json({ error: 'Document is not checked out.' });
-    if (doc.checked_out_by !== req.user.userId) {
+    if (!['Draft', 'CheckedOut'].includes(doc.status)) {
+      return res.status(400).json({ error: 'Only Draft or CheckedOut documents can be checked in.' });
+    }
+    if (doc.status === 'CheckedOut' && doc.checked_out_by !== req.user.userId) {
       return res.status(403).json({ error: 'Only the user who checked out this document can check it in.' });
     }
 
-    const newMinor = doc.version_minor + 1;
-    const versionStr = `${doc.version_major}.${newMinor}`;
+    const { notes, bump_type } = req.body;
+
+    // Determine version bump — bump_type only applies on re-versioning (version_major > 1 or explicit minor bump)
+    let newMajor = doc.version_major;
+    let newMinor = doc.version_minor + 1;
+    if (bump_type === 'major') {
+      newMajor = doc.version_major + 1;
+      newMinor = 0;
+    }
+    const versionStr = `${newMajor}.${newMinor}`;
+
+    // Auto-set owner_user_id on first checkin (locked to this user)
+    const ownerUpdate = doc.owner_user_id ? '' : ', owner_user_id = ?';
+    const ownerParams = doc.owner_user_id ? [] : [req.user.userId];
 
     await pool.execute(
       `UPDATE cm_documents SET
          status = 'Pending', checked_out_by = NULL, checked_out_at = NULL,
-         version_minor = ?, updated_by = ?, updated_at = NOW()
+         version_major = ?, version_minor = ?, updated_by = ?, updated_at = NOW()${ownerUpdate}
        WHERE id = ?`,
-      [newMinor, req.user.userId, id]
+      [newMajor, newMinor, req.user.userId, ...ownerParams, id]
     );
 
     await addVersionHistory('document', Number(id), versionStr, 'Pending', notes || 'Checked in', req.user.userId);
@@ -425,6 +517,10 @@ router.post('/documents/:id/publish', authenticate, async (req, res) => {
     const doc = await getScopedDocument(req, id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
     if (doc.status !== 'Approved') return res.status(400).json({ error: 'Only Approved documents can be published.' });
+    // Owner lock enforcement — only the document owner can publish
+    if (doc.owner_user_id && doc.owner_user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Only the document owner can publish. Ask the owner to release the document first.' });
+    }
 
     const [[user]] = await pool.execute('SELECT * FROM users WHERE id = ?', [req.user.userId]);
     const match = await bcrypt.compare(password, user.password);
@@ -445,8 +541,8 @@ router.post('/documents/:id/publish', authenticate, async (req, res) => {
       );
 
       await conn.execute(
-        "UPDATE cm_documents SET status = 'Published', version_major = ?, version_minor = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
-        [newMajor, newMinor, req.user.userId, id]
+        "UPDATE cm_documents SET status = 'Published', version_major = ?, version_minor = ?, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+        [newMajor, newMinor, req.user.userId, req.user.userId, id]
       );
 
       await conn.commit();
@@ -485,6 +581,160 @@ router.post('/documents/:id/archive', authenticate, async (req, res) => {
   } catch (err) {
     console.error('POST /cm/documents/:id/archive error:', err);
     res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/cm/documents/:id/release — owner releases lock → back to Draft
+router.post('/documents/:id/release', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = await getScopedDocument(req, id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    if (doc.owner_user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Only the document owner can release this document.' });
+    }
+    const allowedStatuses = ['Published', 'Approved', 'Pending', 'CheckedOut'];
+    if (!allowedStatuses.includes(doc.status)) {
+      return res.status(400).json({ error: 'Document cannot be released from its current status.' });
+    }
+    await pool.execute(
+      "UPDATE cm_documents SET status = 'Draft', owner_user_id = NULL, checked_out_by = NULL, checked_out_at = NULL, updated_by = ?, updated_at = NOW() WHERE id = ?",
+      [req.user.userId, id]
+    );
+    await audit(req.user.userId, req.user.email, 'RELEASE', 'cm_document', Number(id), { doc_id: doc.doc_id });
+    res.json({ message: 'Document released. Status reset to Draft.' });
+  } catch (err) {
+    console.error('POST /cm/documents/:id/release error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/documents/:id/relations — get associated documents
+router.get('/documents/:id/relations', authenticate, async (req, res) => {
+  try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+
+    const [rows] = await pool.execute(
+      `SELECT r.id, r.relation_type, r.created_at,
+              d.id AS related_id, d.doc_id, d.name, d.status, d.version_major, d.version_minor,
+              d.expiry_date, d.file_path, d.file_name
+       FROM cm_document_relations r
+       JOIN cm_documents d ON d.id = r.related_doc_id
+       WHERE r.doc_id = ?
+         AND d.status NOT IN ('Archived')
+         AND (d.expiry_date IS NULL OR d.expiry_date > NOW())
+       ORDER BY r.created_at DESC`,
+      [req.params.id]
+    );
+    res.json({ relations: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cm/documents/:id/relations — link a related document
+router.post('/documents/:id/relations', authenticate, async (req, res) => {
+  try {
+    const { related_doc_id, relation_type = 'Supports' } = req.body;
+    if (!related_doc_id) return res.status(400).json({ error: 'related_doc_id is required.' });
+
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+
+    const relDoc = await getScopedDocument(req, related_doc_id);
+    if (!relDoc) return res.status(404).json({ error: 'Related document not found.' });
+
+    if (Number(related_doc_id) === Number(req.params.id)) {
+      return res.status(400).json({ error: 'Cannot link a document to itself.' });
+    }
+
+    const [result] = await pool.execute(
+      `INSERT INTO cm_document_relations (doc_id, related_doc_id, relation_type, created_by) VALUES (?, ?, ?, ?)`,
+      [req.params.id, related_doc_id, relation_type, req.user.userId]
+    );
+    res.status(201).json({ message: 'Relation created.', id: result.insertId });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'This document is already linked.' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/cm/documents/:id/relations/:rel_id
+router.delete('/documents/:id/relations/:rel_id', authenticate, async (req, res) => {
+  try {
+    const [result] = await pool.execute(
+      'DELETE FROM cm_document_relations WHERE id = ? AND doc_id = ?',
+      [req.params.rel_id, req.params.id]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Relation not found.' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/cm/documents/:id/alert-config — get per-doc alert settings
+router.get('/documents/:id/alert-config', authenticate, async (req, res) => {
+  try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    const [subs] = await pool.execute(
+      `SELECT s.id, s.user_id, u.name, u.email FROM cm_document_alert_subs s
+       JOIN users u ON u.id = s.user_id WHERE s.document_id = ?`,
+      [req.params.id]
+    );
+    res.json({
+      alert_days: doc.alert_days || null,
+      alert_email_account_id: doc.alert_email_account_id || null,
+      subscribers: subs,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/cm/documents/:id/alert-config — save alert days + email account
+router.put('/documents/:id/alert-config', authenticate, async (req, res) => {
+  try {
+    const { alert_days, alert_email_account_id } = req.body;
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    await pool.execute(
+      'UPDATE cm_documents SET alert_days = ?, alert_email_account_id = ?, updated_at = NOW() WHERE id = ?',
+      [alert_days ? JSON.stringify(alert_days) : null, alert_email_account_id || null, req.params.id]
+    );
+    res.json({ message: 'Alert config saved.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cm/documents/:id/alert-subs — add subscriber
+router.post('/documents/:id/alert-subs', authenticate, async (req, res) => {
+  try {
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: 'user_id is required.' });
+    await pool.execute(
+      'INSERT IGNORE INTO cm_document_alert_subs (document_id, user_id, created_by) VALUES (?, ?, ?)',
+      [req.params.id, user_id, req.user.userId]
+    );
+    res.status(201).json({ message: 'Subscriber added.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/cm/documents/:id/alert-subs/:sub_id — remove subscriber
+router.delete('/documents/:id/alert-subs/:sub_id', authenticate, async (req, res) => {
+  try {
+    await pool.execute(
+      'DELETE FROM cm_document_alert_subs WHERE id = ? AND document_id = ?',
+      [req.params.sub_id, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
