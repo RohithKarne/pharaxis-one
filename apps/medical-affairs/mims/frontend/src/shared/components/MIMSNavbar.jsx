@@ -175,6 +175,11 @@ export default function MIMSNavbar() {
           : <button className="mims-nav-tab disabled" title="Process Explorer disabled for your organisation">Process Explorer</button>
       )}
 
+      {/* Regression Testing */}
+      {(user?.role === 'admin' || user?.role === 'superadmin') && (
+        <Link to="/regression" className={`mims-nav-tab ${isActive('/regression') ? 'active' : ''}`}>🧪 Regression</Link>
+      )}
+
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 

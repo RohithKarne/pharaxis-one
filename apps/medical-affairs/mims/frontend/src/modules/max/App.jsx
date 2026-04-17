@@ -18,6 +18,7 @@ import CasesPage from '../cases/pages/CasesPage'
 import CaseFormPage from '../cases/pages/CaseFormPage'
 import CaseQueryPage from '../cases/pages/CaseQueryPage'
 import ExceptionLogsPage from './pages/ExceptionLogsPage'
+import RegressionPage from '../regression/pages/RegressionPage'
 import NoAccessPage from '../../pages/NoAccessPage'
 import ResetPasswordPage from '../../pages/ResetPasswordPage'
 import ExceptionToast from '../../shared/components/ExceptionToast'
@@ -127,6 +128,11 @@ function AppRoutes() {
               <ModuleAccessGuard moduleKey="mims_core">
                 <ExceptionLogsPage />
               </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/regression" element={
+            <ProtectedRoute>
+              <RegressionPage />
             </ProtectedRoute>
           } />
           <Route path="/no-access"       element={<NoAccessPage />} />

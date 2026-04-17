@@ -2497,6 +2497,35 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // Regression Testing Suite
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS regression_runs (
+        id            INT NOT NULL AUTO_INCREMENT,
+        run_by        INT,
+        started_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        completed_at  DATETIME,
+        total_tests   INT NOT NULL DEFAULT 0,
+        passed        INT NOT NULL DEFAULT 0,
+        failed        INT NOT NULL DEFAULT 0,
+        skipped       INT NOT NULL DEFAULT 0,
+        health_score  DECIMAL(5,2) NOT NULL DEFAULT 0,
+        results       LONGTEXT,
+        PRIMARY KEY (id),
+        KEY idx_regression_runs_started (started_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Ensure regression test user exists
+    const REGRESSION_EMAIL = 'regression@system';
+    const [[existingRegUser]] = await conn.execute('SELECT id FROM users WHERE email = ?', [REGRESSION_EMAIL]);
+    if (!existingRegUser) {
+      const regHash = await bcrypt.hash('Regression@System123', 10);
+      await conn.execute(
+        `INSERT INTO users (name, email, password, role, is_active) VALUES (?, ?, ?, 'admin', 1)`,
+        ['Regression Test User', REGRESSION_EMAIL, regHash]
+      );
+    }
+
     console.log('✅ Database initialized — tables ready');
 
   } finally {

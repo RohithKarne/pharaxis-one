@@ -134,6 +134,7 @@ app.use('/api', (req, res, next) => {
 });
 
 // ─── Admin Console — Extended Routes ────────────────────────────────────────
+app.use('/api/admin', require('./routes/admin/regression'));
 app.use('/api/admin', require('./routes/admin/picklists'));
 app.use('/api/admin', require('./routes/admin/miCategories'));
 app.use('/api/admin', require('./routes/admin/fieldSetup'));
@@ -270,6 +271,7 @@ apiV1Router.get('/version', (_req, res) => {
 apiV1Router.use('/auth', require('./routes/auth'));
 apiV1Router.use('/inbox', require('./routes/inbox'));
 
+apiV1Router.use('/admin', require('./routes/admin/regression'));
 apiV1Router.use('/admin', require('./routes/admin/picklists'));
 apiV1Router.use('/admin', require('./routes/admin/miCategories'));
 apiV1Router.use('/admin', require('./routes/admin/fieldSetup'));
