@@ -10,7 +10,7 @@
     "test:sprint-close:gate1": "node backend/tests/smoke-sprint1.js && npx playwright test --config=playwright.config.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/client-s3": "^3.1032.0",
     "@aws-sdk/s3-request-presigner": "^3.400.0",
     "bcrypt": "^6.0.0",
     "concurrently": "^8.2.2",
