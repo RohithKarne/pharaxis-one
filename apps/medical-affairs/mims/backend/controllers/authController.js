@@ -571,6 +571,23 @@ const authController = {
       }
 
       const identity = email.toLowerCase().trim();
+
+      // Check if account is locked (AC-E6)
+      const [lockCheck] = await pool.execute(
+        'SELECT locked_until, failed_login_attempts FROM users WHERE email = ?',
+        [identity]
+      );
+      if (lockCheck.length > 0 && lockCheck[0].locked_until) {
+        const lockedUntil = new Date(lockCheck[0].locked_until);
+        if (lockedUntil > new Date()) {
+          return res.status(423).json({
+            error: 'Account locked',
+            message: `Account is locked due to too many failed login attempts. Try again after ${lockedUntil.toISOString()}.`,
+            locked_until: lockedUntil.toISOString()
+          });
+        }
+      }
+
       const user = await userModel.findByEmail(identity);
       if (!user) {
         await logLoginAudit({ userName: email, status: 'failed', failReason: 'User not found', authEvent: 'password_login_failed', req });
@@ -584,8 +601,42 @@ const authController = {
       const passwordMatch = await bcrypt.compare(password, user.password);
       if (!passwordMatch) {
         await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Wrong password', authEvent: 'password_login_failed', req });
+
+        // Get lockout threshold from system_config (default 5)
+        let lockoutThreshold = 5;
+        try {
+          const [cfg] = await pool.execute(
+            `SELECT config_value FROM system_config WHERE config_key = 'login_lockout_threshold' LIMIT 1`
+          );
+          if (cfg.length > 0) lockoutThreshold = parseInt(cfg[0].config_value) || 5;
+        } catch (_) {}
+
+        const newAttempts = (lockCheck[0]?.failed_login_attempts || 0) + 1;
+        let lockedUntilVal = null;
+        if (newAttempts >= lockoutThreshold) {
+          // Lock for 30 minutes (configurable via system_config login_lockout_minutes)
+          let lockMinutes = 30;
+          try {
+            const [lcfg] = await pool.execute(
+              `SELECT config_value FROM system_config WHERE config_key = 'login_lockout_minutes' LIMIT 1`
+            );
+            if (lcfg.length > 0) lockMinutes = parseInt(lcfg[0].config_value) || 30;
+          } catch (_) {}
+          lockedUntilVal = new Date(Date.now() + lockMinutes * 60 * 1000);
+        }
+        await pool.execute(
+          `UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE email = ?`,
+          [newAttempts, lockedUntilVal, identity]
+        );
+
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
+
+      // Successful password match — reset failed login counter
+      await pool.execute(
+        `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE email = ?`,
+        [identity]
+      );
 
       if (user.password_reset_required) {
         const resetToken = issueToken({ userId: user.id, email: user.email, role: user.role, passwordResetRequired: true });

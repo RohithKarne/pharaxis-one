@@ -997,6 +997,15 @@ export default function AdminAccessSection({ contentSection, H, flash }) {
                         <td>
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => { setSecGroupEditTarget(group); setSecGroupForm({ name: group.name, description: group.description || '' }); setSecGroupMsg('') }}>✏ Edit</button>
+                            <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/admin/security-groups/${group.id}/clone`, { method: 'POST', headers: H })
+                                const d = await res.json()
+                                if (!res.ok) return flash(d.error || 'Clone failed.', 'error')
+                                loadSecGroups()
+                                flash(`Security group cloned as "${d.name}".`)
+                              } catch { flash('Clone failed.', 'error') }
+                            }}>⧉ Clone</button>
                             <button className="btn btn-danger" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => deactivateSecGroup(group)}>🗑</button>
                           </div>
                         </td>

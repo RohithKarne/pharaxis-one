@@ -35,6 +35,103 @@ const MODULE_STATUSES = new Set([
 
 function isSuperadmin(req) { return req.user.role === 'superadmin'; }
 
+let schemaReady = false;
+let schemaInitPromise = null;
+let cmModulesColumnsCache = null;
+
+async function getCmModulesColumnSet(executor = pool, forceRefresh = false) {
+  if (cmModulesColumnsCache && !forceRefresh) return cmModulesColumnsCache;
+  const [rows] = await executor.execute(
+    `SELECT COLUMN_NAME
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = 'cm_modules'`
+  );
+  cmModulesColumnsCache = new Set(rows.map((row) => row.COLUMN_NAME));
+  return cmModulesColumnsCache;
+}
+
+async function ensureCmModulesSchema() {
+  if (schemaReady) return;
+  if (schemaInitPromise) {
+    await schemaInitPromise;
+    return;
+  }
+
+  schemaInitPromise = (async () => {
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS cm_modules (
+        id                  INT NOT NULL AUTO_INCREMENT,
+        module_id           VARCHAR(50),
+        folder_id           INT NOT NULL,
+        module_type         VARCHAR(50) NOT NULL DEFAULT 'SRD',
+        name                VARCHAR(500) NOT NULL,
+        content_html        MEDIUMTEXT,
+        file_path           VARCHAR(1000),
+        file_name           VARCHAR(500),
+        file_size           INT,
+        file_mime           VARCHAR(100),
+        status              VARCHAR(50) NOT NULL DEFAULT 'Draft',
+        version_major       INT NOT NULL DEFAULT 1,
+        version_minor       INT NOT NULL DEFAULT 0,
+        checked_out_by      INT,
+        checked_out_at      DATETIME,
+        expiry_date         DATE,
+        activation_date     DATE,
+        language            VARCHAR(20) NOT NULL DEFAULT 'en',
+        search_tags         TEXT,
+        usage_instructions  TEXT,
+        document_category   VARCHAR(255),
+        standard_response_text TEXT,
+        publish_as_pdf      TINYINT(1) NOT NULL DEFAULT 0,
+        send_as_pdf         TINYINT(1) NOT NULL DEFAULT 0,
+        attributes          JSON,
+        owner_user_id       INT,
+        created_by          INT NOT NULL,
+        updated_by          INT,
+        created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_cm_modules_folder (folder_id),
+        KEY idx_cm_modules_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    const alters = [
+      `ALTER TABLE cm_modules ADD COLUMN module_id VARCHAR(50)`,
+      `ALTER TABLE cm_modules ADD COLUMN module_type VARCHAR(50) NOT NULL DEFAULT 'SRD'`,
+      `ALTER TABLE cm_modules ADD COLUMN activation_date DATE`,
+      `ALTER TABLE cm_modules ADD COLUMN expiry_date DATE`,
+      `ALTER TABLE cm_modules ADD COLUMN language VARCHAR(20) NOT NULL DEFAULT 'en'`,
+      `ALTER TABLE cm_modules ADD COLUMN search_tags TEXT`,
+      `ALTER TABLE cm_modules ADD COLUMN usage_instructions TEXT`,
+      `ALTER TABLE cm_modules ADD COLUMN document_category VARCHAR(255)`,
+      `ALTER TABLE cm_modules ADD COLUMN standard_response_text TEXT`,
+      `ALTER TABLE cm_modules ADD COLUMN publish_as_pdf TINYINT(1) NOT NULL DEFAULT 0`,
+      `ALTER TABLE cm_modules ADD COLUMN send_as_pdf TINYINT(1) NOT NULL DEFAULT 0`,
+      `ALTER TABLE cm_modules ADD COLUMN attributes JSON`,
+      `ALTER TABLE cm_modules ADD COLUMN owner_user_id INT`,
+      `ALTER TABLE cm_modules ADD COLUMN updated_by INT`,
+      `ALTER TABLE cm_modules ADD COLUMN checked_out_by INT`,
+      `ALTER TABLE cm_modules ADD COLUMN checked_out_at DATETIME`,
+    ];
+    for (const sql of alters) {
+      try {
+        await pool.execute(sql);
+      } catch (_) { /* already exists */ }
+    }
+
+    await getCmModulesColumnSet(pool, true);
+    schemaReady = true;
+  })();
+
+  try {
+    await schemaInitPromise;
+  } finally {
+    schemaInitPromise = null;
+  }
+}
+
 function normalizeStatus(value, fallback = 'Draft') {
   const status = String(value || '').trim();
   return MODULE_STATUSES.has(status) ? status : fallback;
@@ -104,61 +201,92 @@ async function getScopedFolder(req, folderId) {
 }
 
 async function getScopedModule(req, moduleId) {
-  const [rows] = await pool.execute(
-    isSuperadmin(req)
-      ? `SELECT m.*, f.org_id AS folder_org_id, f.name AS folder_name, u.name AS created_by_name
-         FROM cm_modules m
-         INNER JOIN cm_folders f ON m.folder_id = f.id
-         LEFT JOIN users u ON m.created_by = u.id
-         WHERE m.id = ?`
-      : `SELECT m.*, f.org_id AS folder_org_id, f.name AS folder_name, u.name AS created_by_name
-         FROM cm_modules m
-         INNER JOIN cm_folders f ON m.folder_id = f.id
-         LEFT JOIN users u ON m.created_by = u.id
-         WHERE m.id = ? AND f.org_id = ?`,
-    isSuperadmin(req) ? [moduleId] : [moduleId, req.user.orgId]
-  );
-  return rows[0] || null;
+  try {
+    const [rows] = await pool.execute(
+      isSuperadmin(req)
+        ? `SELECT m.*, f.org_id AS folder_org_id, f.name AS folder_name, u.name AS created_by_name
+           FROM cm_modules m
+           INNER JOIN cm_folders f ON m.folder_id = f.id
+           LEFT JOIN users u ON m.created_by = u.id
+           WHERE m.id = ?`
+        : `SELECT m.*, f.org_id AS folder_org_id, f.name AS folder_name, u.name AS created_by_name
+           FROM cm_modules m
+           INNER JOIN cm_folders f ON m.folder_id = f.id
+           LEFT JOIN users u ON m.created_by = u.id
+           WHERE m.id = ? AND f.org_id = ?`,
+      isSuperadmin(req) ? [moduleId] : [moduleId, req.user.orgId]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    if (err.code !== 'ER_BAD_FIELD_ERROR') throw err;
+    const [rows] = await pool.execute(
+      isSuperadmin(req)
+        ? `SELECT m.*, f.org_id AS folder_org_id, f.name AS folder_name
+           FROM cm_modules m
+           INNER JOIN cm_folders f ON m.folder_id = f.id
+           WHERE m.id = ?`
+        : `SELECT m.*, f.org_id AS folder_org_id, f.name AS folder_name
+           FROM cm_modules m
+           INNER JOIN cm_folders f ON m.folder_id = f.id
+           WHERE m.id = ? AND f.org_id = ?`,
+      isSuperadmin(req) ? [moduleId] : [moduleId, req.user.orgId]
+    );
+    return rows[0] || null;
+  }
 }
 
 // GET /api/cm/modules — list modules
 router.get('/modules', authenticate, async (req, res) => {
   try {
+    await ensureCmModulesSchema();
     await runCmModuleLifecycle().catch(() => {});
     const { status, folder_id, search, include_expired = 'false' } = req.query;
-    let query = `
-      SELECT m.*, f.name AS folder_name, u.name AS created_by_name
-      FROM cm_modules m
-      LEFT JOIN cm_folders f ON m.folder_id = f.id
-      LEFT JOIN users u ON m.created_by = u.id
-      WHERE 1=1
-    `;
-    const params = [];
-    if (!isSuperadmin(req)) {
-      query += ' AND f.org_id = ?';
-      params.push(req.user.orgId);
+    const buildQuery = (includeCreatedBy) => {
+      let query = `
+        SELECT m.*, f.name AS folder_name${includeCreatedBy ? ', u.name AS created_by_name' : ''}
+        FROM cm_modules m
+        LEFT JOIN cm_folders f ON m.folder_id = f.id
+        ${includeCreatedBy ? 'LEFT JOIN users u ON m.created_by = u.id' : ''}
+        WHERE 1=1
+      `;
+      const params = [];
+      if (!isSuperadmin(req)) {
+        query += ' AND f.org_id = ?';
+        params.push(req.user.orgId);
+      }
+      if (status) { query += ' AND m.status = ?'; params.push(status); }
+      if (folder_id) { query += ' AND m.folder_id = ?'; params.push(folder_id); }
+      if (search) {
+        query += ' AND (m.name LIKE ? OR m.module_id LIKE ? OR m.search_tags LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      }
+      if (include_expired !== 'true') {
+        query += ' AND (m.expiry_date IS NULL OR m.expiry_date >= CURDATE())';
+      }
+      query += ' ORDER BY m.updated_at DESC';
+      return { query, params };
+    };
+
+    try {
+      const { query, params } = buildQuery(true);
+      const [modules] = await pool.execute(query, params);
+      return res.json({ modules });
+    } catch (err) {
+      if (err.code !== 'ER_BAD_FIELD_ERROR') throw err;
+      const { query, params } = buildQuery(false);
+      const [modules] = await pool.execute(query, params);
+      return res.json({ modules });
     }
-    if (status) { query += ' AND m.status = ?'; params.push(status); }
-    if (folder_id) { query += ' AND m.folder_id = ?'; params.push(folder_id); }
-    if (search) {
-      query += ' AND (m.name LIKE ? OR m.module_id LIKE ? OR m.search_tags LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-    }
-    if (include_expired !== 'true') {
-      query += ' AND (m.expiry_date IS NULL OR m.expiry_date >= CURDATE())';
-    }
-    query += ' ORDER BY m.updated_at DESC';
-    const [modules] = await pool.execute(query, params);
-    res.json({ modules });
   } catch (err) {
     console.error('GET /cm/modules error:', err);
-    res.status(500).json({ error: 'Server error.' });
+    res.status(500).json({ error: err.message || 'Server error.', code: err.code || null });
   }
 });
 
 // GET /api/cm/modules/:id — module detail
 router.get('/modules/:id', authenticate, async (req, res) => {
   try {
+    await ensureCmModulesSchema();
     const moduleRow = await getScopedModule(req, req.params.id);
     if (!moduleRow) return res.status(404).json({ error: 'Module not found.' });
     return res.json({ module: moduleRow });
@@ -172,6 +300,7 @@ router.get('/modules/:id', authenticate, async (req, res) => {
 router.post('/modules', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
   const conn = await pool.getConnection();
   try {
+    await ensureCmModulesSchema();
     await conn.beginTransaction();
     const moduleId = await generateModuleId(conn);
     const {
@@ -183,6 +312,13 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
     if (!folder_id || !name) {
       await conn.rollback();
       return res.status(400).json({ error: 'folder_id and name are required.' });
+    }
+
+    // CM-T7: Validate content_html payload size (max 5 MB)
+    const CM_T7_MAX_CONTENT_BYTES = 5 * 1024 * 1024;
+    if (content_html && Buffer.byteLength(content_html, 'utf8') > CM_T7_MAX_CONTENT_BYTES) {
+      await conn.rollback();
+      return res.status(413).json({ error: 'Module content exceeds the maximum allowed size of 5 MB. Please reduce the content or split into smaller modules.' });
     }
 
     const scopedFolder = await getScopedFolder(req, folder_id);
@@ -198,25 +334,40 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
     const fileMime = req.file ? req.file.mimetype : null;
     const attrs = parseJsonField(attributes, null);
 
+    const columns = await getCmModulesColumnSet(conn, true);
+    const row = {};
+    if (columns.has('module_id')) row.module_id = moduleId;
+    if (columns.has('folder_id')) row.folder_id = folder_id;
+    if (columns.has('module_type')) row.module_type = module_type || 'SRD';
+    if (columns.has('name')) row.name = name.trim();
+    else if (columns.has('title')) row.title = name.trim();
+    if (columns.has('content_html')) row.content_html = content_html || null;
+    else if (columns.has('content')) row.content = content_html || null;
+    if (columns.has('file_path')) row.file_path = filePath;
+    if (columns.has('file_name')) row.file_name = fileName;
+    if (columns.has('file_size')) row.file_size = fileSize;
+    if (columns.has('file_mime')) row.file_mime = fileMime;
+    if (columns.has('status')) row.status = resolvedStatus;
+    if (columns.has('version_major')) row.version_major = 1;
+    if (columns.has('version_minor')) row.version_minor = 0;
+    if (columns.has('language')) row.language = language || 'en';
+    if (columns.has('search_tags')) row.search_tags = search_tags || null;
+    if (columns.has('publish_as_pdf')) row.publish_as_pdf = parseBoolean(publish_as_pdf, false) ? 1 : 0;
+    if (columns.has('send_as_pdf')) row.send_as_pdf = parseBoolean(send_as_pdf, false) ? 1 : 0;
+    if (columns.has('activation_date')) row.activation_date = activation_date || null;
+    if (columns.has('expiry_date')) row.expiry_date = expiry_date || null;
+    if (columns.has('usage_instructions')) row.usage_instructions = usage_instructions || null;
+    if (columns.has('document_category')) row.document_category = document_category || null;
+    if (columns.has('standard_response_text')) row.standard_response_text = standard_response_text || null;
+    if (columns.has('attributes')) row.attributes = attrs ? JSON.stringify(attrs) : null;
+    if (columns.has('owner_user_id')) row.owner_user_id = req.user.userId || null;
+    if (columns.has('created_by')) row.created_by = req.user.userId || null;
+    if (columns.has('org_id')) row.org_id = scopedFolder.org_id || req.user.orgId || null;
+
+    const insertFields = Object.keys(row);
     const [result] = await conn.execute(
-      `INSERT INTO cm_modules
-         (module_id, folder_id, module_type, name, content_html, file_path, file_name, file_size, file_mime,
-          status, version_major, version_minor, language, search_tags, publish_as_pdf, send_as_pdf,
-          activation_date, expiry_date, usage_instructions, document_category, standard_response_text,
-          attributes, owner_user_id, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        moduleId, folder_id, module_type || 'SRD', name.trim(),
-        content_html || null, filePath, fileName, fileSize, fileMime,
-        resolvedStatus,
-        language || 'en', search_tags || null,
-        parseBoolean(publish_as_pdf, false) ? 1 : 0, parseBoolean(send_as_pdf, false) ? 1 : 0,
-        activation_date || null, expiry_date || null, usage_instructions || null,
-        document_category || null, standard_response_text || null,
-        attrs ? JSON.stringify(attrs) : null,
-        req.user.userId,
-        req.user.userId,
-      ]
+      `INSERT INTO cm_modules (${insertFields.join(', ')}) VALUES (${insertFields.map(() => '?').join(', ')})`,
+      insertFields.map((field) => row[field])
     );
     await conn.commit();
     const created = await getScopedModule(req, result.insertId);
@@ -239,7 +390,7 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
   } catch (err) {
     await conn.rollback();
     console.error('POST /cm/modules error:', err);
-    res.status(500).json({ error: 'Server error.' });
+    res.status(500).json({ error: err.message || 'Server error.', code: err.code || null });
   } finally {
     conn.release();
   }
@@ -249,6 +400,7 @@ router.post('/modules', authenticate, upload.single('file'), validateUpload(['do
 router.put('/modules/:id', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
   const conn = await pool.getConnection();
   try {
+    await ensureCmModulesSchema();
     await conn.beginTransaction();
     const existing = await getScopedModule(req, req.params.id);
     if (!existing) {
@@ -262,6 +414,13 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
       status, activation_date, expiry_date, usage_instructions,
       document_category, standard_response_text, attributes,
     } = req.body;
+
+    // CM-T7: Validate content_html payload size (max 5 MB)
+    const CM_T7_MAX_CONTENT_BYTES_PUT = 5 * 1024 * 1024;
+    if (content_html && Buffer.byteLength(content_html, 'utf8') > CM_T7_MAX_CONTENT_BYTES_PUT) {
+      await conn.rollback();
+      return res.status(413).json({ error: 'Module content exceeds the maximum allowed size of 5 MB. Please reduce the content or split into smaller modules.' });
+    }
 
     if (folder_id) {
       const scopedFolder = await getScopedFolder(req, folder_id);
@@ -337,7 +496,7 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
   } catch (err) {
     await conn.rollback();
     console.error('PUT /cm/modules/:id error:', err);
-    return res.status(500).json({ error: 'Server error.' });
+    return res.status(500).json({ error: err.message || 'Server error.', code: err.code || null });
   } finally {
     conn.release();
   }
@@ -346,6 +505,7 @@ router.put('/modules/:id', authenticate, upload.single('file'), validateUpload([
 // POST /api/cm/modules/:id/archive — archive module + cascade archive linked docs
 router.post('/modules/:id/archive', authenticate, async (req, res) => {
   try {
+    await ensureCmModulesSchema();
     const moduleRow = await getScopedModule(req, req.params.id);
     if (!moduleRow) return res.status(404).json({ error: 'Module not found.' });
     if (moduleRow.status === 'Archived') return res.json({ message: 'Module already archived.' });
@@ -377,7 +537,7 @@ router.post('/modules/:id/archive', authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error('POST /cm/modules/:id/archive error:', err);
-    return res.status(500).json({ error: 'Server error.' });
+    return res.status(500).json({ error: err.message || 'Server error.', code: err.code || null });
   }
 });
 

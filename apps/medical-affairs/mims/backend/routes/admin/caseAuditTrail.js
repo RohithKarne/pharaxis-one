@@ -39,6 +39,66 @@ router.get('/case-audit-trail/:caseId', authenticate, requireRole('admin', 'supe
   }
 });
 
+// GET /api/admin/audit-trail — list audit_logs with advanced filters
+router.get('/audit-trail', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { user_id, action, entity, date_from, date_to, page = 1, limit = 100 } = req.query;
+    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+
+    let query = `SELECT id, user_id, user_name, action, entity, entity_id, details, created_at FROM audit_logs WHERE 1=1`;
+    const params = [];
+    if (user_id)   { query += ` AND user_id = ?`;         params.push(user_id); }
+    if (action)    { query += ` AND action LIKE ?`;        params.push(`%${action}%`); }
+    if (entity)    { query += ` AND entity = ?`;           params.push(entity); }
+    if (date_from) { query += ` AND created_at >= ?`;      params.push(date_from); }
+    if (date_to)   { query += ` AND created_at <= ?`;      params.push(date_to + ' 23:59:59'); }
+
+    const countQuery = query.replace(
+      'SELECT id, user_id, user_name, action, entity, entity_id, details, created_at',
+      'SELECT COUNT(*) AS total'
+    );
+    const [[{ total }]] = await pool.execute(countQuery, params);
+
+    query += ` ORDER BY created_at DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
+    const [entries] = await pool.execute(query, params);
+
+    res.json({ entries, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
+  } catch (err) {
+    console.error('GET /audit-trail error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/audit-trail/export — Export filtered audit trail as CSV
+router.get('/audit-trail/export', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { user_id, action, entity, date_from, date_to } = req.query;
+    let query = `SELECT id, user_id, user_name, action, entity, entity_id, details, created_at FROM audit_logs WHERE 1=1`;
+    const params = [];
+    if (user_id)   { query += ` AND user_id = ?`;         params.push(user_id); }
+    if (action)    { query += ` AND action LIKE ?`;        params.push(`%${action}%`); }
+    if (entity)    { query += ` AND entity = ?`;           params.push(entity); }
+    if (date_from) { query += ` AND created_at >= ?`;      params.push(date_from); }
+    if (date_to)   { query += ` AND created_at <= ?`;      params.push(date_to + ' 23:59:59'); }
+    query += ` ORDER BY created_at DESC LIMIT 10000`;
+    const [rows] = await pool.execute(query, params);
+    const header = 'id,user_id,user_name,action,entity,entity_id,details,created_at';
+    const csvRows = rows.map(r => [
+      r.id, r.user_id, `"${(r.user_name||'').replace(/"/g,'""')}"`,
+      `"${(r.action||'').replace(/"/g,'""')}"`, r.entity, r.entity_id,
+      `"${JSON.stringify(r.details||{}).replace(/"/g,'""')}"`,
+      r.created_at
+    ].join(','));
+    const csv = [header, ...csvRows].join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="audit_trail.csv"');
+    res.send(csv);
+  } catch (err) {
+    console.error('GET /audit-trail/export error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/admin/case-audit-trail — write an audit entry (called internally by Case Form)
 router.post('/case-audit-trail', authenticate, async (req, res) => {
   try {

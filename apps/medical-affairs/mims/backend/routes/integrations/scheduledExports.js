@@ -25,7 +25,7 @@ router.post('/admin/exports/scheduled', authenticate, async (req, res) => {
     const id = await createExportConfig(req.user.orgId, req.user.userId, req.body);
     return res.json({ id, message: 'Created' });
   } catch (err) {
-    return res.status(500).json({ error: err.message || 'Failed to create scheduled export' });
+    return res.status(err.statusCode || 500).json({ error: err.message || 'Failed to create scheduled export' });
   }
 });
 

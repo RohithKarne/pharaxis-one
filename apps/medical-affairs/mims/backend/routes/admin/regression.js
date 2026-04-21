@@ -62,8 +62,10 @@ router.get('/regression/history/:id', authenticate, requireRole('admin', 'supera
   try {
     const [[run]] = await pool.execute('SELECT * FROM regression_runs WHERE id = ?', [req.params.id]);
     if (!run) return res.status(404).json({ error: 'Run not found.' });
-    const results = typeof run.results === 'string' ? JSON.parse(run.results) : run.results;
-    res.json({ run: { ...run, results } });
+    // Spread parsed report fields into run — so detail.results is the test array,
+    // detail.modules is the modules array, detail.healthScore etc. all resolve correctly
+    const parsedReport = typeof run.results === 'string' ? JSON.parse(run.results) : (run.results || {});
+    res.json({ run: { ...run, ...parsedReport } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

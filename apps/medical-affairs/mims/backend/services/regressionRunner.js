@@ -67,13 +67,48 @@ function sleep(ms) {
 }
 
 // ── Token acquisition ─────────────────────────────────────────────────────────
+async function ensureRegressionUserOrgAccess() {
+  try {
+    const [[regUser]] = await pool.execute('SELECT id FROM users WHERE email = ?', [REGRESSION_EMAIL]);
+    if (!regUser) return;
+    const [[firstOrg]] = await pool.execute(
+      `SELECT id FROM organisations WHERE is_active = 1 ORDER BY id ASC LIMIT 1`
+    );
+    if (!firstOrg) return;
+    await pool.execute(
+      `INSERT IGNORE INTO user_org_access (user_id, org_id, is_active) VALUES (?, ?, 1)`,
+      [regUser.id, firstOrg.id]
+    );
+  } catch (err) {
+    console.warn('[Regression] ensureRegressionUserOrgAccess failed (non-fatal):', err.message);
+  }
+}
+
 async function getToken() {
+  // First attempt
   const res = await makeRequest('POST', '/api/auth/login', {
     email: REGRESSION_EMAIL,
     password: REGRESSION_PASSWORD,
   }, null);
+
   if (res.status === 200 && res.body?.token) return res.body.token;
-  // Fallback to superadmin
+
+  // If noOrgAccess, self-heal the user_org_access row and retry once
+  if (res.status === 200 && res.body?.noOrgAccess) {
+    console.warn('[Regression] Regression user has no org access — self-healing...');
+    await ensureRegressionUserOrgAccess();
+    const retry = await makeRequest('POST', '/api/auth/login', {
+      email: REGRESSION_EMAIL,
+      password: REGRESSION_PASSWORD,
+    }, null);
+    if (retry.status === 200 && retry.body?.token) {
+      console.log('[Regression] Self-heal succeeded — regression user now has org access.');
+      return retry.body.token;
+    }
+  }
+
+  // Final fallback: superadmin (orgId will be null — only use for non-org-scoped tests)
+  console.warn('[Regression] Falling back to superadmin token. Org-scoped tests may fail.');
   const res2 = await makeRequest('POST', '/api/auth/login', {
     email: 'superadmin',
     password: 'Manager@123',

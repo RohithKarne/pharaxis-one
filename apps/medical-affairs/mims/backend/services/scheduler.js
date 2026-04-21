@@ -111,11 +111,47 @@ function registerDefaultJobs() {
 
   registerJob({
     name: 'scheduled-exports',
-    cronExpression: '0 * * * *',
-    description: 'Checks scheduled export jobs',
+    cronExpression: '*/15 * * * *',
+    description: 'Checks timezone-aware scheduled export jobs',
     handler: async () => {
       const { runScheduledExports } = require('./scheduledExportService');
       await runScheduledExports();
+    },
+  })
+
+  registerJob({
+    name: 'case-transmission-sla',
+    cronExpression: '*/30 * * * *',
+    description: 'Refreshes transmission SLA states and sends escalation alerts',
+    handler: async () => {
+      const { refreshTransmissionSlaAlerts } = require('./caseGovernanceService');
+      await refreshTransmissionSlaAlerts();
+    },
+  })
+
+  // AC-T4: Login audit auto-archive — runs daily at 02:00 UTC
+  registerJob({
+    name: 'login-audit-archive',
+    cronExpression: '0 2 * * *',
+    description: 'Deletes login audit records older than configured retention period',
+    handler: async () => {
+      // Configurable retention via system_config key 'login_audit_retention_days' (default 90)
+      let retentionDays = 90;
+      try {
+        const [[cfg]] = await pool.execute(
+          `SELECT setting_value FROM system_config WHERE setting_key = 'login_audit_retention_days' LIMIT 1`
+        );
+        if (cfg?.setting_value) {
+          const parsed = parseInt(cfg.setting_value, 10);
+          if (!isNaN(parsed) && parsed > 0) retentionDays = parsed;
+        }
+      } catch (_) {}
+
+      const [result] = await pool.execute(
+        `DELETE FROM login_audit WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`,
+        [retentionDays]
+      );
+      logger.info({ job: 'login-audit-archive', deleted: result.affectedRows, retentionDays }, 'Login audit archive complete');
     },
   })
 }

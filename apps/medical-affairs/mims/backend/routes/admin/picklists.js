@@ -637,6 +637,83 @@ router.post('/picklists/bulk-status', authenticate, requireRole('admin', 'supera
   }
 });
 
+// GET /api/admin/picklists/export-csv — Export all picklist values as CSV
+router.get('/picklists/export-csv', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+  try {
+    const { category } = req.query;
+    let query = `SELECT p.id, p.name, p.field_type, p.value, p.description, p.status FROM picklists p`;
+    const params = [];
+    if (req.user.role !== 'superadmin') {
+      query += ` WHERE p.org_id = ?`;
+      params.push(req.user.orgId);
+      if (category) { query += ` AND p.name = ?`; params.push(category); }
+    } else {
+      if (category) { query += ` WHERE p.name = ?`; params.push(category); }
+    }
+    query += ` ORDER BY p.name, p.value`;
+    const [rows] = await pool.execute(query, params);
+    const header = 'id,name,field_type,value,description,status';
+    const csvRows = rows.map(r => [r.id, `"${(r.name||'').replace(/"/g,'""')}"`, r.field_type, `"${(r.value||'').replace(/"/g,'""')}"`, `"${(r.description||'').replace(/"/g,'""')}"`, r.status].join(','));
+    const csv = [header, ...csvRows].join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="picklists.csv"');
+    res.send(csv);
+  } catch (err) {
+    console.error('GET /picklists/export-csv error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/picklists/import-csv — Import picklist values from CSV rows
+router.post('/picklists/import-csv', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+  try {
+    const { rows } = req.body; // array of {name, field_type, value, description}
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'rows array required' });
+    const orgId = resolveOrgScope(req, req.body.org_id);
+    let imported = 0;
+    for (const row of rows) {
+      if (!row.name || !row.value) continue;
+      const ensured = await ensureCategoryAndField({
+        orgId,
+        categoryName: row.category || 'General',
+        fieldName: row.field_type || 'General',
+        userId: req.user.userId,
+      });
+      await pool.execute(
+        `INSERT INTO picklists (name, category, field_type, field_id, value, description, status, created_by, org_id)
+         VALUES (?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE value=VALUES(value)`,
+        [row.name, ensured.categoryName, ensured.fieldName, ensured.fieldId, row.value, row.description || null, 'Active', req.user.userId || null, orgId]
+      );
+      imported++;
+    }
+    await audit(req.user.userId, req.user.email, 'CSV_IMPORT', 'picklist', null, { imported });
+    res.json({ success: true, imported });
+  } catch (err) {
+    console.error('POST /picklists/import-csv error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/picklists/:id/toggle — Toggle active/inactive without delete
+router.patch('/picklists/:id/toggle', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [rows] = await pool.execute(
+      `SELECT id, status FROM picklists WHERE id = ? ${req.user.role === 'superadmin' ? '' : 'AND org_id = ?'}`,
+      req.user.role === 'superadmin' ? [id] : [id, req.user.orgId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const newStatus = rows[0].status === 'Active' ? 'Inactive' : 'Active';
+    await pool.execute(`UPDATE picklists SET status = ? WHERE id = ?`, [newStatus, id]);
+    await audit(req.user.userId, req.user.email, 'TOGGLE', 'picklist', id, { status: newStatus });
+    res.json({ success: true, status: newStatus });
+  } catch (err) {
+    console.error('PATCH /picklists/:id/toggle error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/admin/picklists/bulk — bulk import from JSON array (validate + upsert)
 router.post('/picklists/bulk', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {

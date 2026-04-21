@@ -639,9 +639,23 @@ export default function AdminMiscSection({ contentSection, H, flash }) {
                             <td style={{ color: 'var(--text-muted)' }}>{p.org_name || '—'}</td>
                             <td><StatusPill active={p.is_active} /></td>
                             <td>
-                              <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => selectProductForDetail(p)}>
-                                Approvals / Auth →
-                              </button>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => selectProductForDetail(p)}>
+                                  Approvals / Auth →
+                                </button>
+                                <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={async () => {
+                                  const res = await fetch(`/api/admin/products/${p.id}/clone`, { method: 'POST', headers: H })
+                                  const d = await res.json()
+                                  if (!res.ok) return flash(d.error || 'Clone failed.', 'error')
+                                  loadProducts()
+                                  flash(`Cloned as "${d.trade_name}".`)
+                                }}>⧉ Clone</button>
+                                {p.is_active ? <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px', color: 'var(--warning)', borderColor: 'var(--warning)' }} onClick={async () => {
+                                  const res = await fetch('/api/admin/products/bulk-deactivate', { method: 'PATCH', headers: H, body: JSON.stringify({ ids: [p.id] }) })
+                                  if (!res.ok) return flash('Deactivate failed.', 'error')
+                                  loadProducts(); flash('Product deactivated.')
+                                }}>Deactivate</button> : null}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -864,6 +878,31 @@ export default function AdminMiscSection({ contentSection, H, flash }) {
         return (
           <>
             <SectionHeader title="Login Audit Trail" desc="21 CFR Part 11 — all login and logout events. Read-only." onExport exportData={loginAudit} exportFile="login-audit.csv" />
+            {/* AC-E6: Lockout Settings */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-header"><h3>Account Lockout Settings</h3></div>
+              <div className="card-body">
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Failed Attempts Threshold</label>
+                    <input className="form-control" type="number" min={1} max={20} defaultValue={5} id="lockout-threshold" style={{ maxWidth: 100 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Lockout Duration (minutes)</label>
+                    <input className="form-control" type="number" min={1} max={1440} defaultValue={30} id="lockout-minutes" style={{ maxWidth: 100 }} />
+                  </div>
+                  <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={async () => {
+                    const threshold = document.getElementById('lockout-threshold')?.value || 5
+                    const minutes = document.getElementById('lockout-minutes')?.value || 30
+                    await Promise.all([
+                      fetch('/api/admin/system-config', { method: 'POST', headers: H, body: JSON.stringify({ key: 'login_lockout_threshold', value: String(threshold) }) }).catch(() => {}),
+                      fetch('/api/admin/system-config', { method: 'POST', headers: H, body: JSON.stringify({ key: 'login_lockout_minutes', value: String(minutes) }) }).catch(() => {})
+                    ])
+                    flash('Lockout settings saved.')
+                  }}>Save Lockout Settings</button>
+                </div>
+              </div>
+            </div>
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="card-header"><h3>Filter</h3></div>
               <div className="card-body">
@@ -879,7 +918,7 @@ export default function AdminMiscSection({ contentSection, H, flash }) {
               <div className="card-header"><h3>Login History ({loginAudit.length} entries)</h3></div>
               <div className="card-body" style={{ padding: 0 }}>
                 <table className="admin-table">
-                  <thead><tr><th>User</th><th>Role</th><th>Login Time</th><th>Logout Time</th><th>Status</th><th>Reason</th></tr></thead>
+                  <thead><tr><th>User</th><th>Role</th><th>Login Time</th><th>Logout Time</th><th>Status</th><th>Reason</th><th>Actions</th></tr></thead>
                   <tbody>
                     {loginAudit.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No login records yet. Click Search to load.</td></tr>}
                     {loginAudit.map(l => (
@@ -890,6 +929,15 @@ export default function AdminMiscSection({ contentSection, H, flash }) {
                         <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.logout_time || '—'}</td>
                         <td><span className={`status-pill ${l.status === 'success' ? 'active' : 'inactive'}`}>{l.status}</span></td>
                         <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.fail_reason || l.auth_event || '—'}</td>
+                        <td>
+                          {l.status === 'failed' && l.user_id && (
+                            <button className="btn btn-outline" style={{ fontSize: 11, padding: '2px 8px' }} onClick={async () => {
+                              const res = await fetch('/api/auth/unlock-user', { method: 'POST', headers: H, body: JSON.stringify({ user_id: l.user_id }) })
+                              const d = await res.json()
+                              flash(res.ok ? 'Account unlocked.' : (d.error || 'Unlock failed.'), res.ok ? 'success' : 'error')
+                            }}>🔓 Unlock</button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1428,6 +1476,31 @@ export default function AdminMiscSection({ contentSection, H, flash }) {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
                   <input className="form-control" placeholder="Search name…" value={repSearch} onChange={e => setRepSearch(e.target.value)} style={{ maxWidth: 240 }} />
                   <button className="btn btn-primary" onClick={() => loadCompanyReps(repSearch)}>Search</button>
+                  {/* AC-E9: CSV Import */}
+                  <label className="btn btn-outline" style={{ fontSize: 12, cursor: 'pointer', margin: 0 }}>
+                    ⬆ Import CSV
+                    <input type="file" accept=".csv" style={{ display: 'none' }} onChange={async e => {
+                      const file = e.target.files[0]; if (!file) return
+                      const text = await file.text()
+                      const lines = text.trim().split('\n')
+                      const header = lines[0].toLowerCase().split(',')
+                      const nameIdx = header.findIndex(h => h.includes('name'))
+                      const emailIdx = header.findIndex(h => h.includes('email'))
+                      const phoneIdx = header.findIndex(h => h.includes('phone'))
+                      const territoryIdx = header.findIndex(h => h.includes('territory'))
+                      const rows = lines.slice(1).map(line => {
+                        const cols = line.split(',')
+                        return { name: cols[nameIdx]?.replace(/"/g,'').trim(), email: cols[emailIdx]?.replace(/"/g,'').trim(), phone: cols[phoneIdx]?.replace(/"/g,'').trim(), territory: cols[territoryIdx]?.replace(/"/g,'').trim() }
+                      }).filter(r => r.name)
+                      if (!rows.length) return flash('No valid rows in CSV.', 'error')
+                      const res = await fetch('/api/admin/company-reps/import', { method: 'POST', headers: H, body: JSON.stringify({ rows }) })
+                      const d = await res.json()
+                      if (!res.ok) return flash(d.error || 'Import failed.', 'error')
+                      flash(`Imported ${d.imported} representatives.`)
+                      loadCompanyReps()
+                      e.target.value = ''
+                    }} />
+                  </label>
                   <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => { setRepForm({ name: '', title: '', territory: '', email: '', phone: '', organization: '' }); setRepEditTarget(null); setRepModal('add') }}>+ Add Rep</button>
                 </div>
 

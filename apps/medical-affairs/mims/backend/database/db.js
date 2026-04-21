@@ -39,18 +39,26 @@ async function initializeDatabase() {
     // USERS — all system users (admins, agents, reviewers, superadmin)
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS users (
-        id          INT           NOT NULL AUTO_INCREMENT,
-        name        VARCHAR(255)  NOT NULL,
-        email       VARCHAR(255)  NOT NULL,
-        password    VARCHAR(255)  NOT NULL,
-        role        VARCHAR(50)   NOT NULL DEFAULT 'agent',
-        is_active   TINYINT(1)    NOT NULL DEFAULT 1,
-        created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        id                     INT           NOT NULL AUTO_INCREMENT,
+        name                   VARCHAR(255)  NOT NULL,
+        email                  VARCHAR(255)  NOT NULL,
+        password               VARCHAR(255)  NOT NULL,
+        role                   VARCHAR(50)   NOT NULL DEFAULT 'agent',
+        is_active              TINYINT(1)    NOT NULL DEFAULT 1,
+        failed_login_attempts  INT           DEFAULT 0,
+        locked_until           DATETIME      NULL,
+        created_at             DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at             DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         UNIQUE KEY uq_users_email (email)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    try {
+      await pool.execute(`ALTER TABLE users ADD COLUMN failed_login_attempts INT DEFAULT 0`);
+    } catch (_) {}
+    try {
+      await pool.execute(`ALTER TABLE users ADD COLUMN locked_until DATETIME NULL`);
+    } catch (_) {}
 
     // Bootstrap: ensure default Superadmin account exists.
     // Never overwrite password on subsequent restarts.
@@ -680,11 +688,19 @@ async function initializeDatabase() {
         updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         vault_source_id   VARCHAR(100) DEFAULT NULL,
         vault_source_status VARCHAR(50) DEFAULT NULL,
+        expiry_alert_recipients JSON NULL,
+        checkout_expires_at DATETIME NULL,
         PRIMARY KEY (id),
         KEY idx_cm_docs_folder (folder_id),
         KEY idx_cm_docs_status (status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    try {
+      await pool.execute(`ALTER TABLE cm_documents ADD COLUMN expiry_alert_recipients JSON NULL`);
+    } catch (_) {}
+    try {
+      await pool.execute(`ALTER TABLE cm_documents ADD COLUMN checkout_expires_at DATETIME NULL`);
+    } catch (_) {}
 
     // CM_MODULES — reusable modular documents with document-linked lifecycle
     await conn.execute(`
@@ -1218,6 +1234,14 @@ async function initializeDatabase() {
     await conn.execute(`
       ALTER TABLE cases MODIFY COLUMN case_type ENUM('MI','AE','PC') NULL DEFAULT NULL
     `).catch(() => {}); // no-op if already nullable
+
+    const sprint17CaseSchemaAlters = [
+      `ALTER TABLE cases ADD COLUMN field_schema_version VARCHAR(150) NULL AFTER date_of_intake`,
+      `ALTER TABLE cases ADD COLUMN field_schema_snapshot LONGTEXT NULL AFTER field_schema_version`,
+    ];
+    for (const sql of sprint17CaseSchemaAlters) {
+      try { await conn.execute(sql); } catch (_) { /* already aligned */ }
+    }
 
     // Enforce org-scoped case number uniqueness.
     // MySQL UNIQUE allows multiple NULL values, so draft cases remain supported.
@@ -1847,6 +1871,19 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    const sprint17NotificationAlters = [
+      `ALTER TABLE notifications ADD COLUMN severity VARCHAR(20) NOT NULL DEFAULT 'info' AFTER metadata`,
+      `ALTER TABLE notifications ADD COLUMN requires_acknowledgement TINYINT(1) NOT NULL DEFAULT 0 AFTER severity`,
+      `ALTER TABLE notifications ADD COLUMN event_key VARCHAR(100) NULL AFTER requires_acknowledgement`,
+      `ALTER TABLE notifications ADD COLUMN acknowledged_at DATETIME NULL AFTER read_at`,
+      `ALTER TABLE notifications ADD COLUMN acknowledged_by INT NULL AFTER acknowledged_at`,
+      `ALTER TABLE notifications ADD INDEX idx_notifications_severity (severity)`,
+      `ALTER TABLE notifications ADD INDEX idx_notifications_ack (requires_acknowledgement, acknowledged_at)`,
+    ];
+    for (const sql of sprint17NotificationAlters) {
+      try { await conn.execute(sql); } catch (_) { /* already aligned */ }
+    }
+
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS mims_process_logs (
         id              BIGINT        NOT NULL AUTO_INCREMENT,
@@ -2237,6 +2274,37 @@ async function initializeDatabase() {
     `);
 
     await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_saved_views (
+        id             INT           NOT NULL AUTO_INCREMENT,
+        org_id         INT           NOT NULL,
+        user_id        INT           NOT NULL,
+        name           VARCHAR(255)  NOT NULL,
+        scope          VARCHAR(50)   NOT NULL DEFAULT 'personal',
+        filters_json   JSON,
+        is_shared      TINYINT(1)    NOT NULL DEFAULT 0,
+        created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_case_saved_views_org_user (org_id, user_id),
+        KEY idx_case_saved_views_shared (org_id, is_shared)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    const sprint17ScheduledExportAlters = [
+      `ALTER TABLE scheduled_export_configs ADD COLUMN report_key VARCHAR(100) NOT NULL DEFAULT 'case-summary' AFTER export_name`,
+      `ALTER TABLE scheduled_export_configs ADD COLUMN schedule_frequency VARCHAR(20) NOT NULL DEFAULT 'weekly' AFTER cron_expression`,
+      `ALTER TABLE scheduled_export_configs ADD COLUMN schedule_time_local VARCHAR(5) NOT NULL DEFAULT '06:00' AFTER schedule_frequency`,
+      `ALTER TABLE scheduled_export_configs ADD COLUMN schedule_weekday TINYINT NOT NULL DEFAULT 1 AFTER schedule_time_local`,
+      `ALTER TABLE scheduled_export_configs ADD COLUMN timezone_name VARCHAR(100) NOT NULL DEFAULT 'UTC' AFTER schedule_weekday`,
+      `ALTER TABLE scheduled_export_configs ADD COLUMN next_run_at_utc DATETIME NULL AFTER timezone_name`,
+      `ALTER TABLE scheduled_export_configs ADD COLUMN last_error TEXT NULL AFTER last_run_status`,
+      `ALTER TABLE scheduled_export_configs ADD INDEX idx_scheduled_export_next_run (is_active, next_run_at_utc)`,
+    ];
+    for (const sql of sprint17ScheduledExportAlters) {
+      try { await conn.execute(sql); } catch (_) { /* already aligned */ }
+    }
+
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS org_report_access (
         id               INT          NOT NULL AUTO_INCREMENT,
         org_id           INT          NOT NULL,
@@ -2524,6 +2592,284 @@ async function initializeDatabase() {
         `INSERT INTO users (name, email, password, role, is_active) VALUES (?, ?, ?, 'admin', 1)`,
         ['Regression Test User', REGRESSION_EMAIL, regHash]
       );
+    }
+    // Ensure regression user has org access so orgId is set in JWT (needed for org-scoped endpoints).
+    // Runs on every startup so it self-heals if orgs were created after the first boot.
+    try {
+      const [[regUserRow]] = await conn.execute('SELECT id FROM users WHERE email = ?', [REGRESSION_EMAIL]);
+      if (regUserRow?.id) {
+        const [[firstOrg]] = await conn.execute(
+          `SELECT id FROM organisations WHERE is_active = 1 ORDER BY id ASC LIMIT 1`
+        );
+        if (firstOrg?.id) {
+          await conn.execute(
+            `INSERT IGNORE INTO user_org_access (user_id, org_id, is_active) VALUES (?, ?, 1)`,
+            [regUserRow.id, firstOrg.id]
+          );
+        }
+      }
+    } catch (_) { /* organisations table may not exist yet on fresh DB — safe to skip */ }
+
+    // ── Sprint 15: New CM tables ──────────────────────────────────────────────
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS cm_folder_permissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        folder_id INT NOT NULL,
+        security_group_id INT NOT NULL,
+        permission_level VARCHAR(50) NOT NULL DEFAULT 'read',
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_folder_group (folder_id, security_group_id),
+        INDEX idx_folder_id (folder_id)
+      )
+    `);
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS cm_document_activity_log (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        doc_id INT NOT NULL,
+        user_id INT NULL,
+        user_name VARCHAR(255) NULL,
+        action VARCHAR(100) NOT NULL,
+        details JSON NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_doc_id (doc_id),
+        INDEX idx_created_at (created_at)
+      )
+    `);
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS cm_browse_bookmarks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_user_entity (user_id, entity_type, entity_id),
+        INDEX idx_user_id (user_id)
+      )
+    `);
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS cm_review_config (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        doc_id INT NOT NULL UNIQUE,
+        review_mode VARCHAR(20) NOT NULL DEFAULT 'sequential',
+        updated_by INT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // ── Sprint 15: Performance indexes ───────────────────────────────────────
+    try {
+      await pool.execute(`ALTER TABLE audit_logs ADD INDEX idx_entity_entity_id_created (entity, entity_id, created_at)`);
+    } catch (_) {}
+    try {
+      await pool.execute(`ALTER TABLE cm_documents ADD FULLTEXT INDEX ft_doc_search (name, content_html)`);
+    } catch (_) {}
+    try {
+      await pool.execute(`ALTER TABLE cm_faqs ADD INDEX idx_status_category (status, category)`);
+    } catch (_) {}
+
+    // ── Sprint 16: Case form enhancements + MI response + AE/PC transmission ──
+
+    // CASE_DYNAMIC_FIELD_VALUES — stores values for admin-configured dynamic fields per case (CF-E1)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_dynamic_field_values (
+        id         INT           NOT NULL AUTO_INCREMENT,
+        case_id    INT           NOT NULL,
+        field_id   INT           NOT NULL,
+        field_value TEXT,
+        created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_case_field (case_id, field_id),
+        KEY idx_cdfv_case (case_id),
+        KEY idx_cdfv_field (field_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // CASE_REPORTER — hardcoded reporter info captured at case creation (CF-E3)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_reporter (
+        id              INT           NOT NULL AUTO_INCREMENT,
+        case_id         INT           NOT NULL,
+        first_name      VARCHAR(100),
+        last_name       VARCHAR(100),
+        email           VARCHAR(255),
+        phone           VARCHAR(50),
+        reporter_type   VARCHAR(50)   NOT NULL DEFAULT 'HCP',
+        country         VARCHAR(100),
+        organisation    VARCHAR(255),
+        created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_case_reporter (case_id),
+        KEY idx_case_reporter_case (case_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // CASE_PATIENT — hardcoded patient demographics captured at case creation (CF-E3)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_patient (
+        id         INT           NOT NULL AUTO_INCREMENT,
+        case_id    INT           NOT NULL,
+        initials   VARCHAR(20),
+        age        INT,
+        age_unit   VARCHAR(20)   NOT NULL DEFAULT 'years',
+        gender     VARCHAR(20),
+        weight_kg  DECIMAL(6,2),
+        created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_case_patient (case_id),
+        KEY idx_case_patient_case (case_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // CASE_AE_INTAKE — hardcoded AE seriousness + suspect product captured at creation (CF-E4)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_ae_intake (
+        id                           INT           NOT NULL AUTO_INCREMENT,
+        case_id                      INT           NOT NULL,
+        suspect_drug_name            VARCHAR(255),
+        batch_lot_number             VARCHAR(100),
+        dose                         VARCHAR(100),
+        route_of_admin               VARCHAR(100),
+        treatment_start_date         DATE,
+        treatment_stop_date          DATE,
+        reaction_description         TEXT,
+        reaction_onset_date          DATE,
+        outcome                      VARCHAR(100),
+        is_serious                   TINYINT(1)    NOT NULL DEFAULT 0,
+        is_death                     TINYINT(1)    NOT NULL DEFAULT 0,
+        is_life_threatening          TINYINT(1)    NOT NULL DEFAULT 0,
+        is_hospitalization           TINYINT(1)    NOT NULL DEFAULT 0,
+        is_prolonged_hospitalization TINYINT(1)    NOT NULL DEFAULT 0,
+        is_disability                TINYINT(1)    NOT NULL DEFAULT 0,
+        is_congenital_anomaly        TINYINT(1)    NOT NULL DEFAULT 0,
+        is_other_medically_important TINYINT(1)    NOT NULL DEFAULT 0,
+        created_at                   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at                   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_case_ae_intake (case_id),
+        KEY idx_case_ae_intake_case (case_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // CASE_PC_INTAKE — hardcoded PC complaint fields captured at creation (CF-E5)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_pc_intake (
+        id                      INT           NOT NULL AUTO_INCREMENT,
+        case_id                 INT           NOT NULL,
+        product_name            VARCHAR(255),
+        batch_lot_number        VARCHAR(100),
+        expiry_date             DATE,
+        purchase_date           DATE,
+        complaint_category      VARCHAR(100),
+        complaint_description   TEXT,
+        sample_available        TINYINT(1)    NOT NULL DEFAULT 0,
+        sample_return_requested TINYINT(1)    NOT NULL DEFAULT 0,
+        created_at              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_case_pc_intake (case_id),
+        KEY idx_case_pc_intake_case (case_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // CASE_MI_RESPONSES — MI response history (one row per response, not overwrite) (CF-E6/E7)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_mi_responses (
+        id                   INT           NOT NULL AUTO_INCREMENT,
+        case_id              INT           NOT NULL,
+        mi_tab_id            INT,
+        response_text        TEXT,
+        response_channel     VARCHAR(100),
+        response_date        DATE,
+        follow_up_required   TINYINT(1)    NOT NULL DEFAULT 0,
+        cm_document_id       INT,
+        cm_document_name     VARCHAR(500),
+        author_id            INT,
+        author_name          VARCHAR(255),
+        created_at           DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_case_mi_resp_case (case_id),
+        KEY idx_case_mi_resp_tab (mi_tab_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    const sprint17ResponseAlters = [
+      `ALTER TABLE case_mi_responses ADD COLUMN response_status VARCHAR(20) NOT NULL DEFAULT 'SENT' AFTER follow_up_required`,
+      `ALTER TABLE case_mi_responses ADD COLUMN draft_saved_at DATETIME NULL AFTER response_status`,
+      `ALTER TABLE case_mi_responses ADD COLUMN approved_by INT NULL AFTER draft_saved_at`,
+      `ALTER TABLE case_mi_responses ADD COLUMN approved_at DATETIME NULL AFTER approved_by`,
+      `ALTER TABLE case_mi_responses ADD INDEX idx_case_mi_resp_status (response_status)`,
+    ];
+    for (const sql of sprint17ResponseAlters) {
+      try { await conn.execute(sql); } catch (_) { /* already aligned */ }
+    }
+
+    // CASE_AE_TRANSMISSIONS — AE internal PV routing (CF-E8/E10)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_ae_transmissions (
+        id              INT           NOT NULL AUTO_INCREMENT,
+        case_id         INT           NOT NULL,
+        assigned_to     INT,
+        assigned_name   VARCHAR(255),
+        priority        VARCHAR(50)   NOT NULL DEFAULT 'standard',
+        due_date        DATE,
+        narrative       TEXT,
+        status          VARCHAR(50)   NOT NULL DEFAULT 'Pending',
+        resolution_notes TEXT,
+        created_by      INT,
+        created_by_name VARCHAR(255),
+        created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_ae_trans_case (case_id),
+        KEY idx_ae_trans_assigned (assigned_to),
+        KEY idx_ae_trans_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // CASE_PC_TRANSMISSIONS — PC internal quality routing (CF-E9/E10)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_pc_transmissions (
+        id              INT           NOT NULL AUTO_INCREMENT,
+        case_id         INT           NOT NULL,
+        assigned_to     INT,
+        assigned_name   VARCHAR(255),
+        priority        VARCHAR(50)   NOT NULL DEFAULT 'standard',
+        due_date        DATE,
+        resolution_notes TEXT,
+        status          VARCHAR(50)   NOT NULL DEFAULT 'Pending',
+        created_by      INT,
+        created_by_name VARCHAR(255),
+        created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_pc_trans_case (case_id),
+        KEY idx_pc_trans_assigned (assigned_to),
+        KEY idx_pc_trans_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    const sprint17TransmissionAlters = [
+      `ALTER TABLE case_ae_transmissions ADD COLUMN sla_status VARCHAR(20) NOT NULL DEFAULT 'on_track' AFTER status`,
+      `ALTER TABLE case_ae_transmissions ADD COLUMN reminder_sent_at DATETIME NULL AFTER sla_status`,
+      `ALTER TABLE case_ae_transmissions ADD COLUMN escalated_at DATETIME NULL AFTER reminder_sent_at`,
+      `ALTER TABLE case_ae_transmissions ADD COLUMN escalation_level INT NOT NULL DEFAULT 0 AFTER escalated_at`,
+      `ALTER TABLE case_ae_transmissions ADD INDEX idx_ae_trans_sla_status (sla_status)`,
+      `ALTER TABLE case_pc_transmissions ADD COLUMN sla_status VARCHAR(20) NOT NULL DEFAULT 'on_track' AFTER status`,
+      `ALTER TABLE case_pc_transmissions ADD COLUMN reminder_sent_at DATETIME NULL AFTER sla_status`,
+      `ALTER TABLE case_pc_transmissions ADD COLUMN escalated_at DATETIME NULL AFTER reminder_sent_at`,
+      `ALTER TABLE case_pc_transmissions ADD COLUMN escalation_level INT NOT NULL DEFAULT 0 AFTER escalated_at`,
+      `ALTER TABLE case_pc_transmissions ADD INDEX idx_pc_trans_sla_status (sla_status)`,
+    ];
+    for (const sql of sprint17TransmissionAlters) {
+      try { await conn.execute(sql); } catch (_) { /* already aligned */ }
     }
 
     console.log('✅ Database initialized — tables ready');

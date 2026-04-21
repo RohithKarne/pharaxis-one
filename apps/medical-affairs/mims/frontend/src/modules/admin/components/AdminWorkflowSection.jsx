@@ -1,4 +1,127 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+
+// ── AC-E2: Workflow State Transition Diagram (pure SVG, no extra packages) ────
+
+function WorkflowDiagram({ states, rules }) {
+  const activeStates = (states || []).filter(s => s.is_active)
+  const NODE_R = 36
+  const W = 760
+  const H = 480
+  const PADDING = 80
+
+  // Arrange nodes in a circle
+  const nodes = useMemo(() => {
+    if (!activeStates.length) return []
+    const cx = W / 2
+    const cy = H / 2
+    const r = Math.min(W, H) / 2 - PADDING
+    return activeStates.map((s, i) => {
+      const angle = (2 * Math.PI * i) / activeStates.length - Math.PI / 2
+      return { ...s, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }
+    })
+  }, [activeStates.length]) // eslint-disable-line
+
+  const nodeMap = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes])
+
+  if (!activeStates.length) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 40, marginBottom: 8 }}>⬡</div>
+        <p>No active workflow states. Add states first to view the diagram.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card">
+      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3>State Transition Diagram</h3>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {activeStates.length} states · {(rules || []).filter(r => r.is_active).length} active transitions
+        </span>
+      </div>
+      <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        <svg width={W} height={H} style={{ display: 'block', maxWidth: '100%' }}>
+          <defs>
+            <marker id="wf-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--primary, #4f6ef7)" />
+            </marker>
+            <marker id="wf-arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#aaa" />
+            </marker>
+          </defs>
+
+          {/* Transition edges */}
+          {(rules || []).map(rule => {
+            const from = nodeMap[rule.from_state_id]
+            const to = nodeMap[rule.to_state_id]
+            if (!from || !to) return null
+            const dx = to.x - from.x
+            const dy = to.y - from.y
+            const dist = Math.sqrt(dx * dx + dy * dy)
+            if (dist === 0) return null
+            const ux = dx / dist
+            const uy = dy / dist
+            const sx = from.x + ux * NODE_R
+            const sy = from.y + uy * NODE_R
+            const ex = to.x - ux * (NODE_R + 2)
+            const ey = to.y - uy * (NODE_R + 2)
+            // Slight curve to avoid overlap with reverse rules
+            const midX = (sx + ex) / 2 - uy * 24
+            const midY = (sy + ey) / 2 + ux * 24
+            const active = rule.is_active
+            return (
+              <g key={rule.id}>
+                <path
+                  d={`M ${sx} ${sy} Q ${midX} ${midY} ${ex} ${ey}`}
+                  fill="none"
+                  stroke={active ? 'var(--primary, #4f6ef7)' : '#ccc'}
+                  strokeWidth={active ? 2 : 1.5}
+                  strokeDasharray={active ? undefined : '5,4'}
+                  markerEnd={active ? 'url(#wf-arrow)' : 'url(#wf-arrow-gray)'}
+                  opacity={active ? 0.85 : 0.45}
+                />
+                {(rule.require_password || rule.require_checklist || rule.require_comment) && (
+                  <text x={(sx + ex) / 2 - uy * 16} y={(sy + ey) / 2 + ux * 16}
+                    textAnchor="middle" fontSize="10" fill="var(--warning, #f59e0b)" fontWeight="700">
+                    {[rule.require_password && '🔑', rule.require_checklist && '✅', rule.require_comment && '💬'].filter(Boolean).join('')}
+                  </text>
+                )}
+              </g>
+            )
+          })}
+
+          {/* State nodes */}
+          {nodes.map(n => (
+            <g key={n.id}>
+              <circle cx={n.x} cy={n.y} r={NODE_R}
+                fill="var(--surface, #fff)" stroke="var(--primary, #4f6ef7)" strokeWidth={2}
+                style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.12))' }} />
+              <text x={n.x} y={n.y + 1} textAnchor="middle" dominantBaseline="middle"
+                fontSize={n.name.length > 10 ? 9 : 11} fontWeight="600"
+                fill="var(--text-primary, #1a1a2e)" style={{ userSelect: 'none' }}>
+                {n.name.length > 14 ? n.name.slice(0, 13) + '…' : n.name}
+              </text>
+            </g>
+          ))}
+        </svg>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: 20, padding: '12px 20px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="28" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="var(--primary, #4f6ef7)" strokeWidth="2" markerEnd="url(#wf-arrow)" /></svg>
+            Active transition
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="28" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="#ccc" strokeWidth="1.5" strokeDasharray="4,3" /></svg>
+            Inactive rule
+          </span>
+          <span>🔑 = password required &nbsp; ✅ = checklist &nbsp; 💬 = comment</span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function SectionHeader({ title, desc }) {
   return (
@@ -87,7 +210,7 @@ export default function AdminWorkflowSection({ contentSection, H, flash }) {
 
   useEffect(() => {
     if (contentSection !== 'workflow') return
-    if (wfTab === 'rules') loadWfRules()
+    if (wfTab === 'rules' || wfTab === 'diagram') loadWfRules()
   }, [wfTab, contentSection])
   /* eslint-enable react-hooks/exhaustive-deps */
 
@@ -877,7 +1000,7 @@ export default function AdminWorkflowSection({ contentSection, H, flash }) {
 
             {/* Sub-tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
-              {[{ key: 'states', label: 'Workflow States' }, { key: 'triggers', label: 'Activity Triggers' }, { key: 'rules', label: 'Transition Rules' }].map(t => (
+              {[{ key: 'states', label: 'Workflow States' }, { key: 'triggers', label: 'Activity Triggers' }, { key: 'rules', label: 'Transition Rules' }, { key: 'diagram', label: '⬡ State Diagram' }].map(t => (
                 <button key={t.key} onClick={() => setWfTab(t.key)}
                   style={{ padding: '10px 20px', border: 'none', borderBottom: wfTab === t.key ? '2px solid var(--primary)' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: wfTab === t.key ? 700 : 400, color: wfTab === t.key ? 'var(--primary)' : 'var(--text-secondary)' }}>
                   {t.label}
@@ -1124,6 +1247,11 @@ export default function AdminWorkflowSection({ contentSection, H, flash }) {
                   </div>
                 </div>
               </>
+            )}
+
+            {/* ── AC-E2: State Transition Diagram ── */}
+            {wfTab === 'diagram' && (
+              <WorkflowDiagram states={workflowStates} rules={wfRules} />
             )}
           </>
         )

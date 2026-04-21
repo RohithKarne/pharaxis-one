@@ -31,6 +31,30 @@ function buildPreview(cfg, seq = 1) {
   return parts.join(cfg.separator === 'none' ? '' : (cfg.separator || '-'));
 }
 
+// POST /api/admin/case-numbering/preview — Preview generated case number
+router.post('/case-numbering/preview', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { prefix, next_number, pad_length, suffix, include_date, date_format } = req.body;
+    const padLen = parseInt(pad_length) || 4;
+    const nextNum = parseInt(next_number) || 1;
+    let preview = prefix || '';
+    if (include_date) {
+      const now = new Date();
+      const fmt = (date_format || 'YYYYMMDD')
+        .replace('YYYY', now.getFullYear())
+        .replace('MM', String(now.getMonth() + 1).padStart(2, '0'))
+        .replace('DD', String(now.getDate()).padStart(2, '0'));
+      preview += fmt;
+    }
+    preview += String(nextNum).padStart(padLen, '0');
+    if (suffix) preview += suffix;
+    res.json({ preview });
+  } catch (err) {
+    console.error('POST /case-numbering/preview error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/case-number-config — list all configs (global + per org)
 router.get('/case-number-config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {

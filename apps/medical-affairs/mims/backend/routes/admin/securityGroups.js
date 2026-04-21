@@ -282,6 +282,30 @@ router.delete('/security-groups/:id/users/:userId', authenticate, requireRole('a
   }
 });
 
+// POST /api/admin/security-groups/:id/clone — Clone group with its privileges
+router.post('/security-groups/:id/clone', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+  try {
+    const group = await resolveScopedGroup(req.params.id, req);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+    const newName = `${group.name} (Copy)`;
+    const orgId = req.user.role === 'superadmin'
+      ? (req.body.org_id !== undefined ? Number(req.body.org_id) : group.org_id)
+      : req.user.orgId;
+    const [result] = await pool.execute(
+      `INSERT INTO security_groups (name, description, privileges, is_active, created_by, org_id, created_at) VALUES (?,?,?,1,?,?,NOW())`,
+      [newName, group.description || null, group.privileges || null, req.user.userId || null, orgId]
+    );
+    await audit(req.user.userId, req.user.email, 'CLONE', 'security_group', result.insertId, { source_id: group.id, name: newName });
+    res.json({ success: true, id: result.insertId, name: newName });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'A security group with this name already exists.' });
+    }
+    console.error('POST /security-groups/:id/clone error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PUT /api/admin/users/:id — update user (role, is_active)
 router.put('/users/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {

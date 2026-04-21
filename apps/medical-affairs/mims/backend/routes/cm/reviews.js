@@ -295,4 +295,43 @@ router.put('/reviews/:id/transfer', authenticate, async (req, res) => {
   }
 });
 
+// ── CM-E3: Review mode config (parallel / sequential) ────────────────────────
+
+// GET /api/cm/reviews/:reviewId/config
+router.get('/reviews/:reviewId/config', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT rc.* FROM cm_review_config rc
+       JOIN cm_reviews r ON r.doc_id = rc.doc_id
+       WHERE r.id = ?`,
+      [req.params.reviewId]
+    );
+    res.json({ config: rows[0] || { review_mode: 'sequential' } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/cm/reviews/:reviewId/config
+router.patch('/reviews/:reviewId/config', authenticate, async (req, res) => {
+  try {
+    const { review_mode } = req.body;
+    if (!['sequential', 'parallel'].includes(review_mode)) {
+      return res.status(400).json({ error: 'review_mode must be sequential or parallel' });
+    }
+    const [[review]] = await pool.execute('SELECT id, doc_id FROM cm_reviews WHERE id = ?', [req.params.reviewId]);
+    if (!review) return res.status(404).json({ error: 'Review not found' });
+    await pool.execute(
+      `INSERT INTO cm_review_config (doc_id, review_mode, updated_by)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE review_mode = VALUES(review_mode), updated_by = VALUES(updated_by), updated_at = NOW()`,
+      [review.doc_id, review_mode, req.user.userId || null]
+    );
+    await audit(req.user.userId, req.user.email, 'SET_REVIEW_MODE', 'cm_review', Number(req.params.reviewId), { review_mode });
+    res.json({ success: true, review_mode });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

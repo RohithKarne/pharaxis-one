@@ -140,40 +140,30 @@ async function runCmModuleLifecycle() {
        AND m.status <> 'Archived'`
   );
 
-  for (const moduleRow of expiredModules) {
+  if (expiredModules.length === 0) return { expiredModuleCount: 0 };
+
+  // Batch UPDATE in chunks of 50
+  const chunkSize = 50;
+  const ids = expiredModules.map(m => m.id);
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const placeholders = chunk.map(() => '?').join(',');
     await pool.execute(
-      `UPDATE cm_modules
-       SET status = 'Archived',
-           updated_at = NOW()
-       WHERE id = ?`,
-      [moduleRow.id]
+      `UPDATE cm_modules SET status = 'Archived', updated_at = NOW() WHERE id IN (${placeholders})`,
+      chunk
     );
+  }
+
+  // Per-row: version history, audit, cascade archive (keep existing logic)
+  for (const moduleRow of expiredModules) {
     const versionStr = `${moduleRow.version_major || 1}.${moduleRow.version_minor || 0}`;
-    await addVersionHistory(
-      'module',
-      moduleRow.id,
-      versionStr,
-      'Archived',
-      'Auto-archived because module expiry date passed.',
-      null
-    );
-    await addAuditLog(
-      null,
-      'system',
-      'AUTO_ARCHIVE_EXPIRED_MODULE',
-      'cm_module',
-      moduleRow.id,
-      {
-        module_id: moduleRow.module_id || null,
-        name: moduleRow.name,
-        expiry_date: moduleRow.expiry_date,
-      }
-    );
-    await archiveLinkedDocumentsForModule(moduleRow, {
-      trigger: 'expired',
-      actorUserId: null,
-      actorUserName: 'system',
+    await addVersionHistory('module', moduleRow.id, versionStr, 'Archived', 'Auto-archived because module expiry date passed.', null);
+    await addAuditLog(null, 'system', 'AUTO_ARCHIVE_EXPIRED_MODULE', 'cm_module', moduleRow.id, {
+      module_id: moduleRow.module_id || null,
+      name: moduleRow.name,
+      expiry_date: moduleRow.expiry_date,
     });
+    await archiveLinkedDocumentsForModule(moduleRow, { trigger: 'expired', actorUserId: null, actorUserName: 'system' });
   }
 
   return { expiredModuleCount: expiredModules.length };

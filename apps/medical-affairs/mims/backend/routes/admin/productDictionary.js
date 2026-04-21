@@ -261,6 +261,55 @@ router.delete('/products-full/:id', authenticate, requireRole('admin', 'superadm
   }
 });
 
+// POST /api/admin/products/:id/clone — Clone a product
+router.post('/products/:id/clone', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(`SELECT * FROM products WHERE id = ?`, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Product not found' });
+    const src = rows[0];
+    const newName = `${src.trade_name} (Copy)`;
+    const orgId = getScopedOrgId(req, src.org_id);
+    let result;
+    try {
+      [result] = await pool.execute(
+        `INSERT INTO products (trade_name, org_id, family_id, dosage, atc_code, is_active, created_at) VALUES (?,?,?,?,?,1,NOW())`,
+        [newName, orgId, src.family_id || null, src.dosage || null, src.atc_code || null]
+      );
+    } catch (colErr) {
+      if (colErr.code === 'ER_BAD_FIELD_ERROR') {
+        [result] = await pool.execute(
+          `INSERT INTO products (trade_name, org_id, is_active, created_at) VALUES (?,?,1,NOW())`,
+          [newName, orgId]
+        );
+      } else {
+        throw colErr;
+      }
+    }
+    await audit(req.user.userId, req.user.email, 'CLONE', 'product', result.insertId, { source_id: src.id, trade_name: newName });
+    res.json({ success: true, id: result.insertId, trade_name: newName });
+  } catch (err) {
+    console.error('POST /products/:id/clone error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/products/bulk-deactivate — Bulk deactivate
+router.patch('/products/bulk-deactivate', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
+    const placeholders = ids.map(() => '?').join(',');
+    const scopeClause = isSuperadmin(req) ? '' : ` AND org_id = ?`;
+    const params = isSuperadmin(req) ? [...ids] : [...ids, req.user.orgId];
+    await pool.execute(`UPDATE products SET is_active = 0 WHERE id IN (${placeholders})${scopeClause}`, params);
+    await audit(req.user.userId, req.user.email, 'BULK_DEACTIVATE', 'product', null, { ids, count: ids.length });
+    res.json({ success: true, deactivated: ids.length });
+  } catch (err) {
+    console.error('PATCH /products/bulk-deactivate error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── PRODUCT APPROVALS (F-07) ─────────────────────────────────────────────────
 
 // GET /api/admin/products/:id/approvals

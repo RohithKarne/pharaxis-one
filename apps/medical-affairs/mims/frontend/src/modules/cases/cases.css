@@ -98,6 +98,27 @@
   margin-left: 12px;
 }
 
+.cf-cases-view-actions {
+  display: inline-flex;
+  margin-left: 12px;
+}
+
+.cf-cases-view-btn {
+  border: 1px solid #1d3557;
+  background: #fff;
+  color: #1d3557;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cf-cases-view-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .cf-cases-scope-btn {
   border: 1px solid var(--border);
   background: #fff;
@@ -119,6 +140,58 @@
   margin-top: 8px;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.cf-cases-saved-views {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 0 14px;
+}
+
+.cf-cases-saved-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.cf-cases-saved-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cf-cases-view-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.cf-cases-view-chip.active {
+  border-color: #1d3557;
+  background: #eef3fb;
+}
+
+.cf-cases-view-chip button {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cf-cases-view-chip span {
+  color: #b42318;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .cf-query-toolbar {
@@ -1270,6 +1343,106 @@
   flex-direction: column;
 }
 
+.cf-dup-panel {
+  border: 1px solid #dbe3f0;
+  background: #f8fbff;
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.cf-dup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cf-dup-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1d3557;
+}
+
+.cf-dup-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.cf-dup-check-btn {
+  border: 1px solid #1d3557;
+  background: #fff;
+  color: #1d3557;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cf-dup-check-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.cf-dup-empty,
+.cf-dup-error {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.cf-dup-empty {
+  color: var(--text-secondary);
+}
+
+.cf-dup-error {
+  color: #b42318;
+}
+
+.cf-dup-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cf-dup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #dbe3f0;
+}
+
+.cf-dup-case {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1d3557;
+}
+
+.cf-dup-meta,
+.cf-dup-reasons {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.cf-dup-open-btn {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #1d3557;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .cf-corr-modal-header {
   display: flex;
   align-items: center;
@@ -1743,3 +1916,250 @@
   color: var(--text-secondary);
 }
 .cf-seriousness-item input { cursor: pointer; }
+
+/* ─── Sprint 16: Dynamic Fields Section ───────────────────────── */
+
+.cf-dyn-fields-section {
+  margin-top: 28px;
+  padding: 18px 20px;
+  background: #f8f9fb;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.cf-dyn-fields-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  margin-bottom: 16px;
+}
+
+.cf-dyn-section {
+  margin-bottom: 20px;
+}
+
+.cf-dyn-section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cf-multi-select {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  min-height: 40px;
+}
+
+.cf-multi-opt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #f1f5f9;
+}
+
+.cf-multi-opt:hover { background: #e2e8f0; }
+
+/* ─── Sprint 16: MI Response History ──────────────────────────── */
+
+.cf-response-history {
+  margin-top: 24px;
+  border-top: 2px solid var(--border);
+  padding-top: 18px;
+}
+
+.cf-response-history-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.cf-response-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+
+.cf-response-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.cf-response-channel {
+  display: inline-block;
+  padding: 2px 10px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.cf-response-date {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cf-response-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.cf-followup-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  background: #fef3c7;
+  color: #d97706;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cf-response-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* ─── Sprint 16: AE / PC Transmission ─────────────────────────── */
+
+.cf-tx-trigger-btn {
+  padding: 7px 14px;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cf-tx-trigger-btn:hover { background: #dcfce7; }
+
+.cf-tx-drawer {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin: 16px 0;
+}
+
+.cf-tx-drawer-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.cf-tx-tracker {
+  margin-top: 24px;
+  border-top: 2px solid var(--border);
+  padding-top: 18px;
+}
+
+.cf-tx-tracker-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.cf-tx-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+
+.cf-tx-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.cf-tx-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cf-tx-status--pending         { background: #fef9c3; color: #854d0e; }
+.cf-tx-status--in-review       { background: #dbeafe; color: #1e40af; }
+.cf-tx-status--accepted        { background: #d1fae5; color: #065f46; }
+.cf-tx-status--closed          { background: #f1f5f9; color: #475569; }
+.cf-tx-status--under-investigation { background: #ede9fe; color: #5b21b6; }
+
+.cf-tx-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cf-tx-narrative {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  background: #f8f9fb;
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.cf-tx-status-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cf-tx-status-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #f8f9fb;
+  color: #64748b;
+  transition: all 0.15s;
+}
+
+.cf-tx-status-btn:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: var(--text-primary);
+}
+
+.cf-tx-status-btn.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.cf-tx-status-btn:disabled { opacity: 0.5; cursor: not-allowed; }

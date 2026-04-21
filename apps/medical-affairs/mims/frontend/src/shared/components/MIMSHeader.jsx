@@ -34,9 +34,11 @@ export default function MIMSHeader({ onBellClick }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // Run once on mount — refreshOrgAccess is now memoised via useCallback so this
+  // won't loop, but the empty-array guard provides an extra safety net.
   useEffect(() => {
     refreshOrgAccess()
-  }, [refreshOrgAccess])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!token) return

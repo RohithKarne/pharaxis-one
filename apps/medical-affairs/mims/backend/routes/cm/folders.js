@@ -152,4 +152,104 @@ router.delete('/folders/:id', authenticate, async (req, res) => {
   }
 });
 
+// ── CM-E8: Folder-level permissions ──────────────────────────────────────────
+
+// GET /api/cm/folders/:id/permissions
+router.get('/folders/:id/permissions', authenticate, async (req, res) => {
+  try {
+    const [perms] = await pool.execute(
+      `SELECT fp.*, sg.name AS group_name
+       FROM cm_folder_permissions fp
+       JOIN security_groups sg ON sg.id = fp.security_group_id
+       WHERE fp.folder_id = ?`,
+      [req.params.id]
+    );
+    res.json({ permissions: perms });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cm/folders/:id/permissions
+router.post('/folders/:id/permissions', authenticate, async (req, res) => {
+  try {
+    const { security_group_id, permission_level } = req.body;
+    if (!security_group_id) return res.status(400).json({ error: 'security_group_id required' });
+    await pool.execute(
+      `INSERT INTO cm_folder_permissions (folder_id, security_group_id, permission_level, created_by)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE permission_level = VALUES(permission_level)`,
+      [req.params.id, security_group_id, permission_level || 'read', req.user.userId || null]
+    );
+    await audit(req.user.userId, req.user.email, 'SET_FOLDER_PERMISSION', 'cm_folder', Number(req.params.id), { security_group_id, permission_level });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/cm/folders/:id/permissions/:groupId
+router.delete('/folders/:id/permissions/:groupId', authenticate, async (req, res) => {
+  try {
+    await pool.execute(
+      `DELETE FROM cm_folder_permissions WHERE folder_id = ? AND security_group_id = ?`,
+      [req.params.id, req.params.groupId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── CM-E9: Browse bookmarks ───────────────────────────────────────────────────
+
+// GET /api/cm/folders/bookmarks
+router.get('/folders/bookmarks', authenticate, async (req, res) => {
+  try {
+    const [bookmarks] = await pool.execute(
+      `SELECT b.*,
+        CASE b.entity_type
+          WHEN 'document' THEN (SELECT name FROM cm_documents WHERE id = b.entity_id)
+          WHEN 'folder'   THEN (SELECT name FROM cm_folders WHERE id = b.entity_id)
+          WHEN 'faq'      THEN (SELECT title FROM cm_faqs WHERE id = b.entity_id)
+        END AS entity_name
+       FROM cm_browse_bookmarks b
+       WHERE b.user_id = ?
+       ORDER BY b.created_at DESC`,
+      [req.user.userId]
+    );
+    res.json({ bookmarks });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cm/folders/bookmarks
+router.post('/folders/bookmarks', authenticate, async (req, res) => {
+  try {
+    const { entity_type, entity_id } = req.body;
+    if (!entity_type || !entity_id) return res.status(400).json({ error: 'entity_type and entity_id required' });
+    await pool.execute(
+      `INSERT IGNORE INTO cm_browse_bookmarks (user_id, entity_type, entity_id) VALUES (?, ?, ?)`,
+      [req.user.userId, entity_type, entity_id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/cm/folders/bookmarks/:id
+router.delete('/folders/bookmarks/:id', authenticate, async (req, res) => {
+  try {
+    await pool.execute(
+      `DELETE FROM cm_browse_bookmarks WHERE id = ? AND user_id = ?`,
+      [req.params.id, req.user.userId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

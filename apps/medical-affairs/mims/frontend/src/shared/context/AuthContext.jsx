@@ -5,7 +5,7 @@
  * Provides: login(), logout(), switchOrg(), refreshOrgAccess(), getInitials(), formatRole(), hasModuleAccess()
  */
 
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useCallback } from 'react'
 
 const AuthContext = createContext(null)
 
@@ -110,7 +110,8 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     window.location.reload()
   }
 
-  async function refreshOrgAccess() {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refreshOrgAccess = useCallback(async () => {
     const savedToken = localStorage.getItem(`${KEY}_token`)
     if (!savedToken || user?.role === 'superadmin') return
 
@@ -147,7 +148,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     localStorage.setItem(`${KEY}_all_orgs`,        JSON.stringify(switched.allOrgs || []))
     localStorage.setItem(`${KEY}_session_timeout`, String(switched.sessionTimeout ?? 30))
     window.location.reload()
-  }
+  }, [KEY, user?.role]) // stable deps — KEY is constant, role changes rarely (login/logout)
 
   function getInitials() {
     if (!user?.name) return '?'

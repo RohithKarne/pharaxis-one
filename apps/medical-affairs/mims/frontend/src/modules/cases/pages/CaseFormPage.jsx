@@ -133,6 +133,32 @@ export default function CaseFormPage() {
   const [pcTabData,    setPcTabData]    = useState({})
   const [pcTabLoading, setPcTabLoading] = useState(false)
 
+  // Dynamic fields (Sprint 16)
+  const [dynFieldValues, setDynFieldValues] = useState({})
+  const [dynFieldSaving, setDynFieldSaving] = useState(false)
+
+  // MI Responses (Sprint 16)
+  const [miResponses, setMiResponses] = useState([])
+  const [miRespLoading, setMiRespLoading] = useState(false)
+  const [miRespModal, setMiRespModal] = useState(false)
+  const [miRespForm, setMiRespForm] = useState({ response_text: '', channel: 'email', responded_at: '', follow_up_required: false })
+  const [miRespSaving, setMiRespSaving] = useState(false)
+
+  // AE Transmissions (Sprint 16)
+  const [aeTransmissions, setAeTransmissions] = useState([])
+  const [aeTxLoading, setAeTxLoading] = useState(false)
+  const [aeTxDrawer, setAeTxDrawer] = useState(false)
+  const [aeTxForm, setAeTxForm] = useState({ assigned_to_id: '', priority: 'routine', narrative: '' })
+  const [aeTxSaving, setAeTxSaving] = useState(false)
+
+  // PC Transmissions (Sprint 16)
+  const [pcTransmissions, setPcTransmissions] = useState([])
+  const [pcTxLoading, setPcTxLoading] = useState(false)
+  const [pcTxDrawer, setPcTxDrawer] = useState(false)
+  const [pcTxForm, setPcTxForm] = useState({ assigned_to_id: '', priority: 'routine', notes: '' })
+  const [pcTxSaving, setPcTxSaving] = useState(false)
+  const miDraftStorageKey = `mims_case_${id}_mi_response_draft`
+
   // Case correspondence (Inbox-linked communication timeline)
   const [correspondence, setCorrespondence] = useState([])
   const [corrLoading, setCorrLoading] = useState(false)
@@ -221,6 +247,7 @@ export default function CaseFormPage() {
     loadMI()
     loadAEVersions()
     loadPCVersions()
+    loadDynFields()
   }, [id])
 
   useEffect(() => {
@@ -231,6 +258,39 @@ export default function CaseFormPage() {
       setActiveTab(targetSection)
     }
   }, [location.search])
+
+  useEffect(() => {
+    if (!id) return
+    if (activeTab === 'mi') loadMiResponses()
+    if (activeTab === 'ae') loadAeTransmissions()
+    if (activeTab === 'pc') loadPcTransmissions()
+  }, [activeTab, id])
+
+  useEffect(() => {
+    if (!miRespModal) return
+    try {
+      const stored = localStorage.getItem(miDraftStorageKey)
+      if (!stored) return
+      const parsed = JSON.parse(stored)
+      if (parsed && typeof parsed === 'object') {
+        setMiRespForm(prev => ({
+          ...prev,
+          ...parsed,
+        }))
+      }
+    } catch {
+      // no-op
+    }
+  }, [miRespModal, miDraftStorageKey])
+
+  useEffect(() => {
+    if (!miRespModal) return
+    try {
+      localStorage.setItem(miDraftStorageKey, JSON.stringify(miRespForm))
+    } catch {
+      // no-op
+    }
+  }, [miDraftStorageKey, miRespForm, miRespModal])
 
   function handleBackNavigation() {
     const from = location.state?.from
@@ -798,6 +858,187 @@ export default function CaseFormPage() {
     } catch (err) { alert(err.message) }
   }
 
+  // ── Dynamic Fields (Sprint 16) ────────────────────────────────────────────
+
+  async function loadDynFields() {
+    try {
+      const res = await fetch(`${API}/cases/${id}/dynamic-fields`, { headers })
+      const data = await res.json()
+      if (!res.ok) return
+      const map = {}
+      ;(Array.isArray(data) ? data : []).forEach(f => { map[f.field_definition_id] = f.value })
+      setDynFieldValues(map)
+    } catch { /* no-op */ }
+  }
+
+  async function saveDynFields() {
+    if (dynFieldSaving || !formConfig) return
+    setDynFieldSaving(true)
+    try {
+      const fields = Object.entries(dynFieldValues).map(([field_definition_id, value]) => ({
+        field_definition_id: Number(field_definition_id),
+        value: String(value ?? ''),
+      }))
+      const res = await fetch(`${API}/cases/${id}/dynamic-fields`, {
+        method: 'POST', headers, body: JSON.stringify({ fields }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setSavedMsg('Additional fields saved')
+      setTimeout(() => setSavedMsg(''), 2200)
+    } catch (err) { alert(err.message) }
+    finally { setDynFieldSaving(false) }
+  }
+
+  // ── MI Responses (Sprint 16) ──────────────────────────────────────────────
+
+  async function loadMiResponses() {
+    setMiRespLoading(true)
+    try {
+      const res = await fetch(`${API}/cases/${id}/mi-responses`, { headers })
+      const data = await res.json()
+      setMiResponses(Array.isArray(data) ? data : [])
+    } catch { setMiResponses([]) }
+    finally { setMiRespLoading(false) }
+  }
+
+  async function submitMiResponse(responseStatus = 'SENT') {
+    if (miRespSaving) return
+    if (!miRespForm.response_text.trim()) { alert('Response text is required.'); return }
+    setMiRespSaving(true)
+    try {
+      const payload = {
+        ...miRespForm,
+        responded_at: miRespForm.responded_at || new Date().toISOString().slice(0, 10),
+        response_status: responseStatus,
+      }
+      const res = await fetch(`${API}/cases/${id}/mi-responses`, {
+        method: 'POST', headers, body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setMiResponses(prev => [data, ...prev])
+      setMiRespModal(false)
+      setMiRespForm({ response_text: '', channel: 'email', responded_at: '', follow_up_required: false })
+      localStorage.removeItem(miDraftStorageKey)
+      setSavedMsg(responseStatus === 'DRAFT' ? 'MI draft saved' : 'MI response recorded')
+      setTimeout(() => setSavedMsg(''), 2200)
+    } catch (err) { alert(err.message) }
+    finally { setMiRespSaving(false) }
+  }
+
+  async function changeMiResponseStatus(responseId, responseStatus) {
+    let reason = ''
+    let password = ''
+    if (responseStatus === 'APPROVED' || responseStatus === 'SENT') {
+      reason = window.prompt(`Reason for ${responseStatus.toLowerCase()}?`) || ''
+      if (!reason.trim()) return
+      password = window.prompt('Electronic signature: enter your password') || ''
+      if (!password) return
+    }
+
+    try {
+      const res = await fetch(`${API}/cases/${id}/mi-responses/${responseId}/status`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          response_status: responseStatus,
+          reason: reason.trim() || undefined,
+          password: password || undefined,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setMiResponses(prev => prev.map((item) => (item.id === responseId ? data : item)))
+      setSavedMsg(`MI response moved to ${responseStatus}`)
+      setTimeout(() => setSavedMsg(''), 2200)
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  // ── AE Transmissions (Sprint 16) ──────────────────────────────────────────
+
+  async function loadAeTransmissions() {
+    setAeTxLoading(true)
+    try {
+      const res = await fetch(`${API}/cases/${id}/ae-transmissions`, { headers })
+      const data = await res.json()
+      setAeTransmissions(Array.isArray(data) ? data : [])
+    } catch { setAeTransmissions([]) }
+    finally { setAeTxLoading(false) }
+  }
+
+  async function createAeTransmission() {
+    if (aeTxSaving) return
+    setAeTxSaving(true)
+    try {
+      const res = await fetch(`${API}/cases/${id}/ae-transmissions`, {
+        method: 'POST', headers, body: JSON.stringify(aeTxForm),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setAeTransmissions(prev => [data, ...prev])
+      setAeTxDrawer(false)
+      setAeTxForm({ assigned_to_id: '', priority: 'routine', narrative: '' })
+      setSavedMsg('Transmission created — PV team notified')
+      setTimeout(() => setSavedMsg(''), 2500)
+    } catch (err) { alert(err.message) }
+    finally { setAeTxSaving(false) }
+  }
+
+  async function updateAeTxStatus(txId, status) {
+    try {
+      const res = await fetch(`${API}/cases/${id}/ae-transmissions/${txId}`, {
+        method: 'PATCH', headers, body: JSON.stringify({ status }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setAeTransmissions(prev => prev.map(t => t.id === txId ? data : t))
+    } catch (err) { alert(err.message) }
+  }
+
+  // ── PC Transmissions (Sprint 16) ──────────────────────────────────────────
+
+  async function loadPcTransmissions() {
+    setPcTxLoading(true)
+    try {
+      const res = await fetch(`${API}/cases/${id}/pc-transmissions`, { headers })
+      const data = await res.json()
+      setPcTransmissions(Array.isArray(data) ? data : [])
+    } catch { setPcTransmissions([]) }
+    finally { setPcTxLoading(false) }
+  }
+
+  async function createPcTransmission() {
+    if (pcTxSaving) return
+    setPcTxSaving(true)
+    try {
+      const res = await fetch(`${API}/cases/${id}/pc-transmissions`, {
+        method: 'POST', headers, body: JSON.stringify(pcTxForm),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setPcTransmissions(prev => [data, ...prev])
+      setPcTxDrawer(false)
+      setPcTxForm({ assigned_to_id: '', priority: 'routine', notes: '' })
+      setSavedMsg('Routed to Quality team')
+      setTimeout(() => setSavedMsg(''), 2500)
+    } catch (err) { alert(err.message) }
+    finally { setPcTxSaving(false) }
+  }
+
+  async function updatePcTxStatus(txId, status) {
+    try {
+      const res = await fetch(`${API}/cases/${id}/pc-transmissions/${txId}`, {
+        method: 'PATCH', headers, body: JSON.stringify({ status }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setPcTransmissions(prev => prev.map(t => t.id === txId ? data : t))
+    } catch (err) { alert(err.message) }
+  }
+
   function getFieldConfig(sectionName, fieldName) {
     if (!formConfig || !Array.isArray(formConfig.sections)) return null
     const section = formConfig.sections.find(s => s.section_name === sectionName)
@@ -965,6 +1206,16 @@ export default function CaseFormPage() {
                   </button>
                 </div>
               </div>
+              {formConfig && Array.isArray(formConfig.sections) &&
+                formConfig.sections.some(s => Array.isArray(s.fields) && s.fields.length > 0) && (
+                <DynamicFieldsSection
+                  sections={formConfig.sections}
+                  values={dynFieldValues}
+                  onChange={setDynFieldValues}
+                  onSave={saveDynFields}
+                  saving={dynFieldSaving}
+                />
+              )}
           </div>
         )}
 
@@ -1218,6 +1469,7 @@ export default function CaseFormPage() {
           <div className="cf-tab-pane">
               <div className="cf-section-header-row">
                 <button className="cf-add-btn" onClick={addMITab}>+ Add MI</button>
+                <button className="cf-open-btn" style={{ marginLeft: 8 }} onClick={() => setMiRespModal(true)}>📨 Record MI Response</button>
               </div>
 
               {miTabs.length === 0 ? (
@@ -1279,6 +1531,47 @@ export default function CaseFormPage() {
                   </div>
                 </>
               )}
+
+              {/* MI Response History */}
+              <div className="cf-response-history">
+                <div className="cf-response-history-title">📋 Response History</div>
+                {miRespLoading && <div className="cf-empty-msg">Loading responses…</div>}
+                {!miRespLoading && miResponses.length === 0 && (
+                  <div className="cf-empty-msg">No MI responses recorded yet. Click "Record MI Response" to log one.</div>
+                )}
+                {!miRespLoading && miResponses.map(r => (
+                  <div key={r.id} className="cf-response-card">
+                    <div className="cf-response-top">
+                      <span className="cf-response-channel">{r.channel}</span>
+                      <span className="cf-response-date">{r.responded_at ? String(r.responded_at).slice(0, 10) : '-'}</span>
+                      {r.follow_up_required ? <span className="cf-followup-badge">⚠ Follow-up Required</span> : null}
+                      <span className="cf-followup-badge" style={{
+                        background: r.response_status === 'SENT' ? '#dcfce7' : r.response_status === 'APPROVED' ? '#dbeafe' : '#fef3c7',
+                        color: r.response_status === 'SENT' ? '#166534' : r.response_status === 'APPROVED' ? '#1d4ed8' : '#92400e',
+                      }}>{r.response_status || 'SENT'}</span>
+                      <span className="cf-response-meta">by {r.responded_by_name || 'User'}</span>
+                    </div>
+                    <div className="cf-response-text">{r.response_text}</div>
+                    <div className="cf-tx-status-actions" style={{ marginTop: 10 }}>
+                      {r.response_status !== 'READY' && r.response_status !== 'SENT' && (
+                        <button className="cf-tx-status-btn" onClick={() => changeMiResponseStatus(r.id, 'READY')}>
+                          Mark Ready
+                        </button>
+                      )}
+                      {r.response_status !== 'APPROVED' && r.response_status !== 'SENT' && (
+                        <button className="cf-tx-status-btn" onClick={() => changeMiResponseStatus(r.id, 'APPROVED')}>
+                          Approve
+                        </button>
+                      )}
+                      {r.response_status !== 'SENT' && (
+                        <button className="cf-tx-status-btn active" onClick={() => changeMiResponseStatus(r.id, 'SENT')}>
+                          Send
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
           </div>
         )}
 
@@ -1287,6 +1580,9 @@ export default function CaseFormPage() {
           <div className="cf-tab-pane">
               <div className="cf-section-header-row">
                 <button className="cf-add-btn" onClick={createAEVersion}>+ New Version</button>
+                <button className="cf-tx-trigger-btn" onClick={() => setAeTxDrawer(p => !p)}>
+                  🔬 {aeTxDrawer ? 'Cancel Transmission' : 'Transmit to PV'}
+                </button>
               </div>
 
               {aeVersions.length === 0 ? (
@@ -1342,6 +1638,69 @@ export default function CaseFormPage() {
                   )}
                 </>
               )}
+
+              {/* AE Transmission Drawer + Tracker */}
+              {aeTxDrawer && (
+                <div className="cf-tx-drawer">
+                  <div className="cf-tx-drawer-title">New AE Transmission → PV Team</div>
+                  <div className="cf-form-grid">
+                    <div className="cf-form-field">
+                      <label>Assign To (PV Team)</label>
+                      <select value={aeTxForm.assigned_to_id} onChange={e => setAeTxForm(p => ({ ...p, assigned_to_id: e.target.value }))}>
+                        <option value="">— Select Assignee —</option>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="cf-form-field">
+                      <label>Priority</label>
+                      <select value={aeTxForm.priority} onChange={e => setAeTxForm(p => ({ ...p, priority: e.target.value }))}>
+                        <option value="routine">Routine (30 days)</option>
+                        <option value="expedited">Expedited (15 days)</option>
+                        <option value="urgent">Urgent (7 days)</option>
+                      </select>
+                    </div>
+                    <div className="cf-form-field cf-form-field--full">
+                      <label>Clinical Narrative</label>
+                      <textarea rows={3} value={aeTxForm.narrative}
+                        onChange={e => setAeTxForm(p => ({ ...p, narrative: e.target.value }))}
+                        placeholder="Clinical narrative for PV team…" />
+                    </div>
+                  </div>
+                  <div className="cf-form-actions">
+                    <button className="cf-cancel-btn" onClick={() => setAeTxDrawer(false)}>Cancel</button>
+                    <button className="cf-save-btn" onClick={createAeTransmission} disabled={aeTxSaving}>
+                      {aeTxSaving ? 'Transmitting…' : 'Transmit to PV'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="cf-tx-tracker">
+                <div className="cf-tx-tracker-title">AE Transmission Tracker</div>
+                {aeTxLoading && <div className="cf-empty-msg">Loading transmissions…</div>}
+                {!aeTxLoading && aeTransmissions.length === 0 && (
+                  <div className="cf-empty-msg">No AE transmissions created yet.</div>
+                )}
+                {!aeTxLoading && aeTransmissions.map(tx => (
+                  <div key={tx.id} className="cf-tx-card">
+                    <div className="cf-tx-card-top">
+                      <span className={`cf-tx-status-badge cf-tx-status--${(tx.status || '').toLowerCase().replace(/\s+/g, '-')}`}>{tx.status}</span>
+                      <span className="cf-tx-meta">Priority: <strong>{tx.priority}</strong></span>
+                      {tx.due_date && <span className="cf-tx-meta">Due: {String(tx.due_date).slice(0, 10)}</span>}
+                      <span className="cf-tx-meta">→ {tx.assignee_name || 'Unassigned'}</span>
+                    </div>
+                    {tx.narrative && <div className="cf-tx-narrative">{tx.narrative}</div>}
+                    <div className="cf-tx-status-actions">
+                      {['Pending', 'In Review', 'Accepted', 'Closed'].map(s => (
+                        <button key={s}
+                          className={`cf-tx-status-btn${tx.status === s ? ' active' : ''}`}
+                          onClick={() => updateAeTxStatus(tx.id, s)}
+                          disabled={tx.status === s}>{s}</button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
           </div>
         )}
 
@@ -1350,6 +1709,9 @@ export default function CaseFormPage() {
           <div className="cf-tab-pane">
               <div className="cf-section-header-row">
                 <button className="cf-add-btn" onClick={createPCVersion}>+ New Version</button>
+                <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)}>
+                  🧪 {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
+                </button>
               </div>
 
               {pcVersions.length === 0 ? (
@@ -1402,6 +1764,68 @@ export default function CaseFormPage() {
                   )}
                 </>
               )}
+
+              {/* PC Transmission Drawer + Tracker */}
+              {pcTxDrawer && (
+                <div className="cf-tx-drawer">
+                  <div className="cf-tx-drawer-title">New PC Routing → Quality Team</div>
+                  <div className="cf-form-grid">
+                    <div className="cf-form-field">
+                      <label>Assign To (Quality Team)</label>
+                      <select value={pcTxForm.assigned_to_id} onChange={e => setPcTxForm(p => ({ ...p, assigned_to_id: e.target.value }))}>
+                        <option value="">— Select Assignee —</option>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="cf-form-field">
+                      <label>Priority</label>
+                      <select value={pcTxForm.priority} onChange={e => setPcTxForm(p => ({ ...p, priority: e.target.value }))}>
+                        <option value="routine">Routine</option>
+                        <option value="expedited">Expedited</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                    </div>
+                    <div className="cf-form-field cf-form-field--full">
+                      <label>Notes for Quality Team</label>
+                      <textarea rows={3} value={pcTxForm.notes}
+                        onChange={e => setPcTxForm(p => ({ ...p, notes: e.target.value }))}
+                        placeholder="Context and notes for quality team…" />
+                    </div>
+                  </div>
+                  <div className="cf-form-actions">
+                    <button className="cf-cancel-btn" onClick={() => setPcTxDrawer(false)}>Cancel</button>
+                    <button className="cf-save-btn" onClick={createPcTransmission} disabled={pcTxSaving}>
+                      {pcTxSaving ? 'Routing…' : 'Route to Quality'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="cf-tx-tracker">
+                <div className="cf-tx-tracker-title">PC Quality Routing Tracker</div>
+                {pcTxLoading && <div className="cf-empty-msg">Loading routings…</div>}
+                {!pcTxLoading && pcTransmissions.length === 0 && (
+                  <div className="cf-empty-msg">No PC routings created yet.</div>
+                )}
+                {!pcTxLoading && pcTransmissions.map(tx => (
+                  <div key={tx.id} className="cf-tx-card">
+                    <div className="cf-tx-card-top">
+                      <span className={`cf-tx-status-badge cf-tx-status--${(tx.status || '').toLowerCase().replace(/\s+/g, '-')}`}>{tx.status}</span>
+                      <span className="cf-tx-meta">Priority: <strong>{tx.priority}</strong></span>
+                      <span className="cf-tx-meta">→ {tx.assignee_name || 'Unassigned'}</span>
+                    </div>
+                    {tx.notes && <div className="cf-tx-narrative">{tx.notes}</div>}
+                    <div className="cf-tx-status-actions">
+                      {['Pending', 'Under Investigation', 'Closed'].map(s => (
+                        <button key={s}
+                          className={`cf-tx-status-btn${tx.status === s ? ' active' : ''}`}
+                          onClick={() => updatePcTxStatus(tx.id, s)}
+                          disabled={tx.status === s}>{s}</button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
           </div>
         )}
 
@@ -1443,6 +1867,60 @@ export default function CaseFormPage() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MI Response Modal */}
+      {miRespModal && (
+        <div className="cf-corr-compose-overlay" onClick={() => !miRespSaving && setMiRespModal(false)}>
+          <div className="cf-corr-compose-modal" onClick={e => e.stopPropagation()}>
+            <div className="cf-corr-compose-header">
+              <div className="cf-corr-compose-title">📨 Record MI Response</div>
+              <button className="cf-corr-modal-close" onClick={() => !miRespSaving && setMiRespModal(false)}>✕</button>
+            </div>
+            <div className="cf-corr-compose-body">
+              <div className="cf-form-grid">
+                <div className="cf-form-field">
+                  <label>Channel</label>
+                  <select value={miRespForm.channel} onChange={e => setMiRespForm(p => ({ ...p, channel: e.target.value }))} disabled={miRespSaving}>
+                    {['email', 'phone', 'letter', 'portal', 'fax', 'in-person'].map(c => (
+                      <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="cf-form-field">
+                  <label>Response Date</label>
+                  <input type="date" value={miRespForm.responded_at}
+                    onChange={e => setMiRespForm(p => ({ ...p, responded_at: e.target.value }))}
+                    disabled={miRespSaving} />
+                </div>
+                <div className="cf-form-field cf-form-field--full">
+                  <label>
+                    <input type="checkbox" checked={miRespForm.follow_up_required}
+                      onChange={e => setMiRespForm(p => ({ ...p, follow_up_required: e.target.checked }))}
+                      disabled={miRespSaving} style={{ marginRight: 6 }} />
+                    Follow-up Required
+                  </label>
+                </div>
+              </div>
+              <div className="cf-form-field">
+                <label>Response Text <span style={{ color: '#dc2626' }}>*</span></label>
+                <textarea rows={8} value={miRespForm.response_text}
+                  onChange={e => setMiRespForm(p => ({ ...p, response_text: e.target.value }))}
+                  placeholder="Enter the MI response provided to the requestor…"
+                  disabled={miRespSaving} />
+              </div>
+            </div>
+            <div className="cf-form-actions" style={{ padding: '12px 14px', marginTop: 0 }}>
+              <button className="cf-cancel-btn" onClick={() => !miRespSaving && setMiRespModal(false)}>Cancel</button>
+              <button className="cf-open-btn" onClick={() => submitMiResponse('DRAFT')} disabled={miRespSaving}>
+                {miRespSaving ? 'Saving…' : 'Save Draft'}
+              </button>
+              <button className="cf-save-btn" onClick={() => submitMiResponse('SENT')} disabled={miRespSaving}>
+                {miRespSaving ? 'Recording…' : 'Send Response'}
+              </button>
             </div>
           </div>
         </div>
@@ -1739,6 +2217,119 @@ function PCTabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions
           <button className="cf-save-btn" onClick={onSave}>Save</button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Dynamic Fields Section (Sprint 16) ────────────────────────────────────────
+
+function DynamicFieldsSection({ sections, values, onChange, onSave, saving }) {
+  const activeSections = (sections || []).filter(s => Array.isArray(s.fields) && s.fields.length > 0)
+  if (activeSections.length === 0) return null
+
+  function renderField(field) {
+    const fid = field.id
+    const val = values[fid] ?? ''
+    const label = field.custom_label || field.field_name
+    const set = (v) => onChange(prev => ({ ...prev, [fid]: v }))
+
+    if (field.field_type === 'textarea') {
+      return (
+        <div key={fid} className="cf-form-field cf-form-field--full">
+          <label>{label}{field.is_required ? ' *' : ''}</label>
+          <textarea rows={3} value={val} placeholder={field.placeholder_text || ''} onChange={e => set(e.target.value)} />
+        </div>
+      )
+    }
+    if (field.field_type === 'number') {
+      return (
+        <div key={fid} className="cf-form-field">
+          <label>{label}{field.is_required ? ' *' : ''}</label>
+          <input type="number" value={val} placeholder={field.placeholder_text || ''} onChange={e => set(e.target.value)} />
+        </div>
+      )
+    }
+    if (field.field_type === 'date') {
+      return (
+        <div key={fid} className="cf-form-field">
+          <label>{label}{field.is_required ? ' *' : ''}</label>
+          <input type="date" value={val} onChange={e => set(e.target.value)} />
+        </div>
+      )
+    }
+    if (field.field_type === 'checkbox') {
+      return (
+        <div key={fid} className="cf-form-field">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!val} onChange={e => set(e.target.checked)} />
+            {label}{field.is_required ? ' *' : ''}
+          </label>
+        </div>
+      )
+    }
+    if (field.field_type === 'dropdown') {
+      return (
+        <div key={fid} className="cf-form-field">
+          <label>{label}{field.is_required ? ' *' : ''}</label>
+          <select value={val} onChange={e => set(e.target.value)}>
+            <option value="">— Select —</option>
+            {(Array.isArray(field.options) ? field.options : []).map(o => (
+              <option key={o.value} value={o.value}>{o.label || o.value}</option>
+            ))}
+          </select>
+        </div>
+      )
+    }
+    if (field.field_type === 'multi-select') {
+      const selected = Array.isArray(val) ? val : (val ? String(val).split(',').filter(Boolean) : [])
+      const opts = Array.isArray(field.options) ? field.options : []
+      return (
+        <div key={fid} className="cf-form-field">
+          <label>{label}{field.is_required ? ' *' : ''}</label>
+          <div className="cf-multi-select">
+            {opts.map(o => (
+              <label key={o.value} className="cf-multi-opt">
+                <input type="checkbox" checked={selected.includes(String(o.value))}
+                  onChange={e => {
+                    const next = e.target.checked
+                      ? [...selected, String(o.value)]
+                      : selected.filter(x => x !== String(o.value))
+                    set(next.join(','))
+                  }} />
+                {o.label || o.value}
+              </label>
+            ))}
+          </div>
+        </div>
+      )
+    }
+    // default: text
+    return (
+      <div key={fid} className="cf-form-field">
+        <label>{label}{field.is_required ? ' *' : ''}</label>
+        <input type="text" value={val} placeholder={field.placeholder_text || ''} onChange={e => set(e.target.value)} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="cf-dyn-fields-section">
+      <div className="cf-dyn-fields-title">⚙ Additional Fields (Admin-Configured)</div>
+      {activeSections.map(section => (
+        <div key={section.section_name} className="cf-dyn-section">
+          <div className="cf-dyn-section-label">{section.section_label || section.section_name}</div>
+          <div className="cf-form-grid">
+            {[...section.fields]
+              .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+              .map(f => renderField(f))}
+          </div>
+        </div>
+      ))}
+      <div className="cf-form-actions">
+        <button className="cf-save-btn" onClick={onSave} disabled={saving}>
+          {saving ? 'Saving…' : 'Save Additional Fields'}
+        </button>
+      </div>
     </div>
   )
 }

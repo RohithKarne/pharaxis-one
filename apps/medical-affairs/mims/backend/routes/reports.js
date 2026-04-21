@@ -1,6 +1,12 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const pool = require('../database/db');
+const {
+  getDailyCaseOpenings,
+  getDailyCaseClosures,
+  getDailyCaseSummary,
+  getTransmissionSlaReport,
+} = require('../services/reportDatasetService');
 const router = express.Router();
 
 function dateFilters(from, to, col) {
@@ -15,6 +21,48 @@ function normalizeOrgId(value) {
   const parsed = parseInt(value, 10);
   return Number.isNaN(parsed) ? value : parsed;
 }
+
+function resolveReportOrgId(req) {
+  const userOrgId = normalizeOrgId(req.user.orgId);
+  const overrideOrgId = parseInt(req.query.org_id, 10);
+  return req.user.role === 'superadmin' && !Number.isNaN(overrideOrgId) ? overrideOrgId : userOrgId;
+}
+
+router.get('/reports/daily-case-openings', authenticate, async (req, res) => {
+  try {
+    const rows = await getDailyCaseOpenings(resolveReportOrgId(req), req.query);
+    return res.json({ data: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/daily-case-closures', authenticate, async (req, res) => {
+  try {
+    const rows = await getDailyCaseClosures(resolveReportOrgId(req), req.query);
+    return res.json({ data: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/daily-case-summary', authenticate, async (req, res) => {
+  try {
+    const rows = await getDailyCaseSummary(resolveReportOrgId(req), req.query);
+    return res.json({ data: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/transmission-sla', authenticate, async (req, res) => {
+  try {
+    const rows = await getTransmissionSlaReport(resolveReportOrgId(req), req.query);
+    return res.json({ data: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 router.get('/reports/case-volume', authenticate, async (req, res) => {
   try {

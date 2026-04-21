@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pharaxis Vault — Pharaxis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --sky: #38BDF8; --sky-dim: #0EA5E9; --sky-pale: #7DD3FC; --navy: #080E1C; --navy-mid: #0D1829; --navy-card: #111C30; --navy-border: #1E2D45; --white: #F0F9FF; --muted: #64748B; --text: #CBD5E1; --font-display: 'Sora', sans-serif; --font-body: 'DM Sans', sans-serif; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--navy); color: var(--text); font-family: var(--font-body); font-size: 16px; line-height: 1.6; overflow-x: hidden; }
+  body::before { content: ''; position: fixed; inset: 0; z-index: 0; background-image: radial-gradient(circle, #1E3A5F 1px, transparent 1px); background-size: 36px 36px; opacity: 0.25; pointer-events: none; }
+  section, nav, footer { position: relative; z-index: 1; }
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 60px; height: 72px; background: rgba(8,14,28,0.85); backdrop-filter: blur(16px); border-bottom: 1px solid var(--navy-border); }
+  .nav-logo { font-family: var(--font-display); font-size: 22px; font-weight: 800; color: var(--white); letter-spacing: -0.5px; text-decoration: none; }
+  .nav-logo span { color: var(--sky); }
+  .nav-links { display: flex; gap: 36px; list-style: none; align-items: center; }
+  .nav-links a { color: var(--muted); font-size: 14px; font-weight: 500; text-decoration: none; transition: color 0.2s; }
+  .nav-links a:hover { color: var(--white); }
+  .nav-cta { background: var(--sky); color: var(--navy); padding: 9px 22px; border-radius: 6px; font-family: var(--font-display); font-size: 13px; font-weight: 700; text-decoration: none; transition: opacity 0.2s; }
+  .nav-cta:hover { opacity: 0.85; }
+  .section { padding: 120px 60px; }
+  .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sky); margin-bottom: 16px; }
+  .section-title { font-family: var(--font-display); font-size: clamp(32px, 3.5vw, 52px); font-weight: 800; color: var(--white); letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 20px; }
+  .section-title em { font-style: normal; color: var(--sky); }
+  .section-sub { font-size: 17px; font-weight: 300; color: var(--text); max-width: 600px; line-height: 1.7; margin-bottom: 60px; }
+  #hero { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 140px 60px 80px; max-width: 860px; }
+  .hero-glow { position: absolute; width: 700px; height: 700px; border-radius: 50%; background: radial-gradient(circle, rgba(56,189,248,0.12) 0%, transparent 70%); top: -100px; right: -100px; pointer-events: none; }
+  .hero-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.25); color: var(--sky-pale); font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 99px; margin-bottom: 28px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .hero-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--sky); box-shadow: 0 0 8px var(--sky); }
+  .hero-title { font-family: var(--font-display); font-size: clamp(42px, 5vw, 68px); font-weight: 800; line-height: 1.05; color: var(--white); letter-spacing: -2px; margin-bottom: 24px; }
+  .btn-primary { display: inline-block; background: var(--sky); color: var(--navy); padding: 14px 32px; border-radius: 8px; font-family: var(--font-display); font-size: 15px; font-weight: 700; text-decoration: none; transition: box-shadow 0.2s, opacity 0.2s; margin-top: 20px; }
+  .btn-primary:hover { box-shadow: 0 0 32px rgba(56,189,248,0.4); opacity: 0.9; }
+  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .feature-card { background: var(--navy-card); border: 1px solid var(--navy-border); border-radius: 16px; padding: 32px; transition: border-color 0.3s, transform 0.3s; }
+  .feature-card:hover { border-color: rgba(56,189,248,0.35); transform: translateY(-4px); }
+  .feature-icon { width: 44px; height: 44px; border-radius: 10px; background: rgba(56,189,248,0.12); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; font-size: 20px; }
+  .feature-name { font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--white); margin-bottom: 8px; }
+  .feature-desc { font-size: 14px; color: var(--muted); line-height: 1.65; }
+  .who-box { background: var(--navy-mid); border: 1px solid var(--navy-border); border-radius: 16px; padding: 40px; margin-top: 16px; font-size: 16px; color: var(--text); line-height: 1.8; }
+  #features { background: var(--navy-mid); }
+  footer { padding: 60px; border-top: 1px solid var(--navy-border); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 40px; }
+  .footer-logo { font-family: var(--font-display); font-size: 20px; font-weight: 800; color: var(--white); margin-bottom: 8px; }
+  .footer-logo span { color: var(--sky); }
+  .footer-copy { font-size: 13px; color: var(--muted); }
+  .footer-links { display: flex; gap: 28px; }
+  .footer-links a { font-size: 13px; color: var(--muted); text-decoration: none; transition: color 0.2s; }
+  .footer-links a:hover { color: var(--white); }
+</style>
+</head>
+<body>
+<nav>
+  <a href="index.html" class="nav-logo">Phar<span>axis</span></a>
+  <ul class="nav-links">
+    <li><a href="index.html#about">About</a></li>
+    <li><a href="index.html#products">Products</a></li>
+    <li><a href="index.html#services">Services</a></li>
+    <li><a href="index.html#portfolio">Case Studies</a></li>
+    <li><a href="index.html#pricing">Pricing</a></li>
+    <li><a href="index.html#team">Team</a></li>
+    <li><a href="index.html#contact">Contact</a></li>
+  </ul>
+  <a href="index.html#contact" class="nav-cta">Book a Demo</a>
+</nav>
+<section id="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-badge">Content Management</div>
+  <h1 class="hero-title">Structured Content and<br/><em>Dossier Management</em></h1>
+  <p class="section-sub">Pharaxis Vault is the enterprise content repository for life science organisations — version-controlled, access-governed, and built to replace fragmented document management with a single source of truth.</p>
+  <a href="index.html#contact" class="btn-primary">Book a Demo →</a>
+</section>
+<section id="features" class="section">
+  <div class="section-label">Key Features</div>
+  <h2 class="section-title" style="margin-bottom:48px;">One place for every piece of medical content.</h2>
+  <div class="features-grid">
+    <div class="feature-card"><div class="feature-icon">📁</div><div class="feature-name">Dossier Management</div><div class="feature-desc">Organise medical content into structured dossiers with defined content slots, approval stages, and distribution channels.</div></div>
+    <div class="feature-card"><div class="feature-icon">📡</div><div class="feature-name">Content Channels</div><div class="feature-desc">Define how content reaches different audiences — HCPs, internal teams, regulatory bodies — with channel-level access control.</div></div>
+    <div class="feature-card"><div class="feature-icon">🔄</div><div class="feature-name">Version Control</div><div class="feature-desc">Full version history on every document. No overwritten files. No lost approvals. Always know what changed and when.</div></div>
+    <div class="feature-card"><div class="feature-icon">✅</div><div class="feature-name">Verified Sign-off</div><div class="feature-desc">Structured approval workflows with named reviewers, deadlines, and immutable sign-off records.</div></div>
+    <div class="feature-card"><div class="feature-icon">📊</div><div class="feature-name">Reach Score</div><div class="feature-desc">Track how effectively your content is reaching and engaging its intended audience across channels.</div></div>
+    <div class="feature-card"><div class="feature-icon">🧠</div><div class="feature-name">Content Intelligence</div><div class="feature-desc">Identify stale, expiring, or underperforming content before it becomes a compliance or operational risk.</div></div>
+  </div>
+</section>
+<section class="section">
+  <div class="section-label">Who It's For</div>
+  <h2 class="section-title">Built for content-heavy life science teams.</h2>
+  <div class="who-box">Medical affairs, regulatory, and marketing teams at life science companies managing large volumes of controlled content across multiple channels and markets.</div>
+  <a href="index.html#contact" class="btn-primary" style="margin-top:40px;display:inline-block;">Get in Touch →</a>
+</section>
+<footer>
+  <div><div class="footer-logo">Phar<span>axis</span></div><div class="footer-copy">© 2026 Pharaxis. All rights reserved. Built for enterprise life sciences.</div></div>
+  <div class="footer-links"><a href="index.html#about">About</a><a href="index.html#products">Products</a><a href="index.html#services">Services</a><a href="index.html#contact">Contact</a><a href="#">Privacy</a><a href="#">Terms</a></div>
+</footer>
+</body>
+</html>

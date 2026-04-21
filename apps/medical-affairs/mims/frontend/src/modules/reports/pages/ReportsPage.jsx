@@ -31,7 +31,16 @@ function ReportFilterPanel({ filters, onChange, onApply }) {
           value={filters.date_to} onChange={e => onChange({ ...filters, date_to: e.target.value })} />
       </div>
       <button onClick={onApply} style={{ padding: '5px 14px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Apply</button>
-      <button onClick={() => { onChange({ date_from: '', date_to: '' }); onApply() }} style={{ padding: '5px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>Clear</button>
+      <button
+        onClick={() => {
+          const cleared = { date_from: '', date_to: '' }
+          onChange(cleared)
+          onApply(cleared)
+        }}
+        style={{ padding: '5px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}
+      >
+        Clear
+      </button>
     </div>
   )
 }
@@ -111,11 +120,109 @@ function ReportTable({ title, description, endpoint, filters, token, filename })
   )
 }
 
+const SCHEDULEABLE_REPORTS = [
+  { key: 'daily-case-openings', label: 'Daily Case Openings' },
+  { key: 'daily-case-closures', label: 'Daily Case Closures' },
+  { key: 'daily-case-summary', label: 'Daily Case Summary' },
+  { key: 'transmission-sla', label: 'Transmission SLA' },
+]
+
+function ScheduledReportsPanel({
+  configs,
+  loading,
+  form,
+  onChange,
+  onCreate,
+  onDelete,
+  saving,
+}) {
+  return (
+    <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: '#f8fafc' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Scheduled Reports</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Timezone-aware daily report jobs with DST-safe execution.</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 0.8fr 1.1fr 1.2fr auto', gap: 10, marginTop: 12, alignItems: 'end' }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>Report</div>
+          <select
+            value={form.report_key}
+            onChange={(e) => {
+              const nextKey = e.target.value
+              const picked = SCHEDULEABLE_REPORTS.find((report) => report.key === nextKey)
+              onChange({ ...form, report_key: nextKey, export_name: picked?.label || form.export_name })
+            }}
+            style={{ width: '100%', padding: '7px 8px', borderRadius: 6, border: '1px solid var(--border)' }}
+          >
+            {SCHEDULEABLE_REPORTS.map((report) => <option key={report.key} value={report.key}>{report.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>Name</div>
+          <input value={form.export_name} onChange={(e) => onChange({ ...form, export_name: e.target.value })} style={{ width: '100%', padding: '7px 8px', borderRadius: 6, border: '1px solid var(--border)' }} />
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>Frequency</div>
+          <select value={form.schedule_frequency} onChange={(e) => onChange({ ...form, schedule_frequency: e.target.value })} style={{ width: '100%', padding: '7px 8px', borderRadius: 6, border: '1px solid var(--border)' }}>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>Time</div>
+          <input type="time" value={form.schedule_time_local} onChange={(e) => onChange({ ...form, schedule_time_local: e.target.value })} style={{ width: '100%', padding: '7px 8px', borderRadius: 6, border: '1px solid var(--border)' }} />
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>Timezone</div>
+          <input value={form.timezone_name} onChange={(e) => onChange({ ...form, timezone_name: e.target.value })} style={{ width: '100%', padding: '7px 8px', borderRadius: 6, border: '1px solid var(--border)' }} />
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>Email To</div>
+          <input value={form.delivery_target} onChange={(e) => onChange({ ...form, delivery_target: e.target.value })} placeholder="team@example.com" style={{ width: '100%', padding: '7px 8px', borderRadius: 6, border: '1px solid var(--border)' }} />
+        </div>
+        <button onClick={onCreate} disabled={saving} style={{ padding: '8px 14px', border: 'none', borderRadius: 6, background: 'var(--primary)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+          {saving ? 'Saving…' : 'Create'}
+        </button>
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        {loading && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading scheduled jobs…</div>}
+        {!loading && configs.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No scheduled report jobs yet.</div>}
+        {!loading && configs.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {configs.map((config) => (
+              <div key={config.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: '#fff' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{config.export_name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {config.report_key} • {config.schedule_frequency} • {config.schedule_time_local} • {config.timezone_name}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    Next run: {config.next_run_at_utc ? new Date(config.next_run_at_utc).toLocaleString() : 'Pending'}
+                    {config.last_run_status ? ` • Last: ${config.last_run_status}` : ''}
+                  </div>
+                </div>
+                <button onClick={() => onDelete(config.id)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #fecaca', background: '#fff5f5', color: '#b91c1c', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const REPORT_GROUPS = [
   {
     key: 'operational',
     label: 'Case Operational',
     reports: [
+      { key: 'daily-case-summary',  label: 'Daily Case Summary',       endpoint: 'daily-case-summary',  desc: 'Openings, closures, and backlog summary for the selected day or range.' },
       { key: 'case-volume',         label: 'Case Volume by Date',       endpoint: 'case-volume',         desc: 'Daily case creation counts across the selected period.' },
       { key: 'case-type',           label: 'Cases by Type',             endpoint: 'case-type',           desc: 'Breakdown of cases by type (MI, AE, PC).' },
       { key: 'case-status',         label: 'Cases by Status',           endpoint: 'case-status',         desc: 'Distribution of cases by current workflow status.' },
@@ -130,6 +237,8 @@ const REPORT_GROUPS = [
     key: 'detail',
     label: 'Case Detail',
     reports: [
+      { key: 'daily-case-openings', label: 'Daily Case Openings',      endpoint: 'daily-case-openings', desc: 'Detailed list of cases opened in the selected day or range.' },
+      { key: 'daily-case-closures', label: 'Daily Case Closures',      endpoint: 'daily-case-closures', desc: 'Detailed list of cases closed in the selected day or range.' },
       { key: 'case-source',         label: 'Cases by Source',           endpoint: 'case-source',         desc: 'Case origin sources.' },
       { key: 'case-duplicates',     label: 'Duplicate Cases',           endpoint: 'case-duplicates',     desc: 'Potential duplicate case pairs within the selected period.' },
       { key: 'case-audit-trail',    label: 'Case Audit Trail',          endpoint: 'case-audit-trail',    desc: 'Audit events on cases for the selected period.' },
@@ -139,6 +248,7 @@ const REPORT_GROUPS = [
     key: 'compliance',
     label: 'Case Compliance',
     reports: [
+      { key: 'transmission-sla',    label: 'Transmission SLA',          endpoint: 'transmission-sla',    desc: 'Open AE and PC transmissions with current SLA state and escalation level.' },
       { key: 'regulatory-readiness', label: 'Regulatory Readiness',    endpoint: 'regulatory-readiness', desc: 'Cases reviewed for regulatory submission readiness.' },
       { key: 'case-monthly-trend',   label: 'Monthly Case Trend',       endpoint: 'case-monthly-trend',  desc: 'Month-on-month case volume for compliance trending.' },
       { key: 'case-closure-rate',    label: 'Case Closure Rate',        endpoint: 'case-closure-rate',   desc: 'Percentage of cases closed within SLA targets.' },
@@ -172,12 +282,83 @@ const REPORT_GROUPS = [
 export default function ReportsPage() {
   const { token } = useAuth()
   const [activeGroup, setActiveGroup] = useState('operational')
-  const [activeReport, setActiveReport] = useState('case-volume')
+  const [activeReport, setActiveReport] = useState('daily-case-summary')
   const [filters, setFilters] = useState({ date_from: '', date_to: '' })
   const [appliedFilters, setAppliedFilters] = useState({ date_from: '', date_to: '' })
+  const [scheduledConfigs, setScheduledConfigs] = useState([])
+  const [scheduledLoading, setScheduledLoading] = useState(false)
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleForm, setScheduleForm] = useState({
+    report_key: 'daily-case-summary',
+    export_name: 'Daily Case Summary',
+    schedule_frequency: 'daily',
+    schedule_time_local: '08:00',
+    timezone_name: 'America/New_York',
+    delivery_target: '',
+  })
 
   const currentGroup = REPORT_GROUPS.find(g => g.key === activeGroup)
   const currentReport = currentGroup?.reports.find(r => r.key === activeReport)
+
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+
+  const loadScheduledConfigs = useCallback(async () => {
+    if (!token) return
+    setScheduledLoading(true)
+    try {
+      const res = await fetch('/api/admin/exports/scheduled', { headers })
+      const data = await res.json()
+      setScheduledConfigs(Array.isArray(data.configs) ? data.configs : [])
+    } catch (_) {
+      setScheduledConfigs([])
+    } finally {
+      setScheduledLoading(false)
+    }
+  }, [token])
+
+  useEffect(() => { loadScheduledConfigs() }, [loadScheduledConfigs])
+
+  async function createScheduledReport() {
+    if (!scheduleForm.export_name.trim() || !scheduleForm.delivery_target.trim()) {
+      alert('Report name and delivery email are required.')
+      return
+    }
+    setScheduleSaving(true)
+    try {
+      const res = await fetch('/api/admin/exports/scheduled', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          export_name: scheduleForm.export_name.trim(),
+          report_key: scheduleForm.report_key,
+          schedule_frequency: scheduleForm.schedule_frequency,
+          schedule_time_local: scheduleForm.schedule_time_local,
+          timezone_name: scheduleForm.timezone_name.trim() || 'UTC',
+          delivery_method: 'email',
+          delivery_target: scheduleForm.delivery_target.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create scheduled report')
+      await loadScheduledConfigs()
+    } catch (err) {
+      alert(err.message || 'Failed to create scheduled report')
+    } finally {
+      setScheduleSaving(false)
+    }
+  }
+
+  async function deleteScheduledReport(id) {
+    if (!window.confirm('Delete this scheduled report?')) return
+    try {
+      const res = await fetch(`/api/admin/exports/scheduled/${id}`, { method: 'DELETE', headers })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to delete scheduled report')
+      await loadScheduledConfigs()
+    } catch (err) {
+      alert(err.message || 'Failed to delete scheduled report')
+    }
+  }
 
   function handleGroupClick(groupKey) {
     setActiveGroup(groupKey)
@@ -194,10 +375,19 @@ export default function ReportsPage() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Reports</h2>
           <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Operational, compliance, and platform analytics</span>
         </div>
+        <ScheduledReportsPanel
+          configs={scheduledConfigs}
+          loading={scheduledLoading}
+          form={scheduleForm}
+          onChange={setScheduleForm}
+          onCreate={createScheduledReport}
+          onDelete={deleteScheduledReport}
+          saving={scheduleSaving}
+        />
         <ReportFilterPanel
           filters={filters}
           onChange={setFilters}
-          onApply={() => setAppliedFilters({ ...filters })}
+          onApply={(nextFilters = filters) => setAppliedFilters({ ...nextFilters })}
         />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           <div style={{ width: 220, flexShrink: 0, borderRight: '1px solid var(--border)', overflowY: 'auto', background: 'var(--surface)' }}>

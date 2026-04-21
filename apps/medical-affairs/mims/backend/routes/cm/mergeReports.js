@@ -212,4 +212,46 @@ router.post('/merge-reports/:id/checkin', authenticate, async (req, res) => {
   }
 });
 
+// ── CM-E10: Merge report scheduling ──────────────────────────────────────────
+
+// GET /api/cm/merge-reports/:id/schedule
+router.get('/merge-reports/:id/schedule', authenticate, async (req, res) => {
+  try {
+    const [jobs] = await pool.execute(
+      `SELECT * FROM scheduled_jobs
+       WHERE job_type = 'cm_merge_report'
+         AND JSON_UNQUOTE(JSON_EXTRACT(job_config, '$.merge_report_id')) = ?
+       LIMIT 1`,
+      [String(req.params.id)]
+    );
+    res.json({ schedule: jobs[0] || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cm/merge-reports/:id/schedule
+router.post('/merge-reports/:id/schedule', authenticate, async (req, res) => {
+  try {
+    const { cron_expression, email_recipients, is_active } = req.body;
+    if (!cron_expression) return res.status(400).json({ error: 'cron_expression required' });
+    const orgId = req.user.orgId || null;
+    const jobConfig = JSON.stringify({
+      merge_report_id: Number(req.params.id),
+      email_recipients: Array.isArray(email_recipients) ? email_recipients : [],
+    });
+    await pool.execute(
+      `INSERT INTO scheduled_jobs (org_id, job_type, job_config, schedule_cron, is_active, created_at, updated_at)
+       VALUES (?, 'cm_merge_report', ?, ?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE job_config = VALUES(job_config), schedule_cron = VALUES(schedule_cron),
+                               is_active = VALUES(is_active), updated_at = NOW()`,
+      [orgId, jobConfig, cron_expression, is_active !== false ? 1 : 0]
+    );
+    await audit(req.user.userId, req.user.email, 'SET_MERGE_SCHEDULE', 'cm_merge_report', Number(req.params.id), { cron_expression });
+    res.json({ success: true, message: 'Merge report schedule saved.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

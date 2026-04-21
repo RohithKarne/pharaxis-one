@@ -21,6 +21,7 @@
 | 2026-03-31 | Bala | Sprint 10 closed: org seed service (`seedService.js`), GET /api/cases/form-config, Case Form UI dynamic rendering (AE 9 tabs / PC 7 tabs), Field Setup UI two-pane + flex field CRUD. field_setup unique key fixed (org_id). Backfill script. Codex workflow rule. Sprint 11 roadmap locked. All sections updated. |
 | 2026-04-05 | Bala | Sprints 11–13 closed. Sprint 14 active. Section 5 → pointer to `TEAM_OPERATING_SOP.md`. Section 14 → pointer to `memory/protocols.md`. Section 13 trimmed (rules → `memory/feedback.md`). Section 11 = current sprint only. Sprint history updated to Sprint 14. |
 | 2026-04-07 | Bala | Sprint 14 closed. 13/14 items complete. G13-3 (client-facing demo env) deferred to Sprint 15. Gate 1 passed (exit code 0). Sprint history + Section 11 updated to Sprint 15 READY. |
+| 2026-04-18 | Bala | Sprint 15 active changes: CM Phase 4 (4 new document tabs), Regression Testing Suite built, navbar restructured (Utilities dropdown), auth infinite-loop fixed, ExceptionToast silenced, regression mi-categories self-heal fix. Sections 6, 7, 9, 9b, 11, 12, 13 updated. |
 
 ---
 
@@ -239,10 +240,31 @@ All routes in `mims/frontend/src/modules/max/App.jsx`.
 | `/inbox` | InboxPage | `mims_core` |
 | `/cases` | CasesPage | `mims_core` |
 | `/cases/:id` | CaseFormPage | `mims_core` |
+| `/case-query` | CaseQueryPage | `mims_core` |
+| `/session-management` | SessionManagementPage | `mims_core` |
+| `/exceptions` | ExceptionLogsPage | `mims_core` |
+| `/process-explorer` | ProcessExplorerPage | `mims_core` |
+| `/regression` | RegressionPage | ProtectedRoute only (admin/superadmin) |
 | `/admin-console/*` | AdminConsoleRouter | `admin_console` |
 | `/content` | ContentPage | `content_mgmt` |
 | `/analytics` | AnalyticsPage | `data_visualization` |
+| `/reports` | ReportsPage | `reports` |
+| `/transmissions` | — | `transmissions` |
+| `/browse-content` | — | `browse_content` |
 | `*` | Redirect | → `/dashboard` |
+
+### Navbar Structure (MIMSNavbar.jsx)
+Main bar: Home · Inbox · Case Management ▾ · Case Query · **Utilities ▾** · Transmissions · Browse Content · Analytics · Reports
+
+**Utilities dropdown** (all in one menu):
+- Exception Log (`/exceptions`) — all users
+- Session Management (`/session-management`) — all users
+- Process Explorer (`/process-explorer`) — admin/superadmin, org-config gated (shows "Off" if disabled)
+- 🧪 Regression Testing (`/regression`) — admin/superadmin only
+- ─── divider ───
+- Response Log, CDR Log, Schedule CDR, Case Audit Trail, Transmission Audit Trail, Non Relevant Emails — all "Soon"
+
+Utilities tab highlights active (orange) when on any sub-page.
 
 ---
 
@@ -348,10 +370,38 @@ Backend on port 3000. All routes under `/api/`.
 |--------|------|---------|
 | GET | `/api/cm/folders` | Active content folders |
 | CRUD | `/api/cm/documents` | Documents — Draft → Published lifecycle |
+| POST | `/api/cm/documents/:id/checkin` | Check in with version bump (bump_type: major/minor). Auto-sets owner_user_id on first checkin. |
+| POST | `/api/cm/documents/:id/publish` | Publish — enforces owner lock (only owner can publish). Sets publisher as owner_user_id. |
+| POST | `/api/cm/documents/:id/release` | Release owner lock — resets document to Draft, clears owner_user_id |
+| GET/POST/DELETE | `/api/cm/documents/:id/relations` | Associated documents — link/unlink, relation types |
+| GET/PUT | `/api/cm/documents/:id/alert-config` | Per-document version alert config (alert_days JSON, alert_email_account_id) |
+| POST/DELETE | `/api/cm/documents/:id/alert-subs` | Per-document alert subscribers (users to notify) |
+| GET/PUT | `/api/cm/settings` | Org-level CM default settings (upsert via ON DUPLICATE KEY) |
 | CRUD | `/api/cm/faqs` | FAQs with lifecycle |
 | CRUD | `/api/cm/templates` | Email/response templates |
 | CRUD | `/api/cm/merge-reports` | Merge report templates |
 | GET/PUT | `/api/cm/reviews` | Review tasks for content reviewers |
+| CRUD | `/api/cm/picklists` | CM document category values (mounted at `/api/cm`, paths are `/picklists` not `/cm/picklists`) |
+
+### Regression Testing Suite
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/admin/regression/run` | Run full test suite (rate-limited: 5 min per user) |
+| GET | `/api/admin/regression/history` | Last 50 run summaries |
+| GET | `/api/admin/regression/history/:id` | Single run full results with module grouping |
+| GET | `/api/admin/regression/db-health` | Live DB table health (row counts, column names) |
+| GET | `/api/admin/regression/api-catalog` | All registered Express routes |
+| GET | `/api/admin/regression/coverage` | Uncovered routes vs tests |
+
+### Admin (additional)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/admin/mi-categories` | MI categories (org-scoped; superadmin needs `?org_id=`) |
+| GET | `/api/admin/audit-logs` | Audit log entries (plural — NOT `/audit-log`) |
+| GET | `/api/admin/email-accounts` | Email accounts for SMTP dropdown |
+| GET | `/api/admin/products-full` | Full products list |
+| GET | `/api/admin/security-groups` | Security groups |
+| GET | `/api/admin/field-setup` | Field setup |
 
 ### Misc
 | Method | Path | Purpose |
@@ -496,13 +546,21 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 | Table | Purpose |
 |-------|---------|
 | `cm_folders` | Top-level content folders |
-| `cm_documents` | Documents — Draft → CheckedOut → Pending → Under Review → Approved → Published → Archived |
+| `cm_documents` | Documents — Draft → CheckedOut → Pending → Under Review → Approved → Published → Archived. **Phase 4 columns:** `owner_user_id`, `review_cycle_days`, `regulatory_ref`, `custom_attributes` (JSON), `version_notes`, `alert_days` (JSON), `alert_email_account_id` |
+| `cm_document_relations` | Associated document links — `doc_id`, `related_doc_id`, `relation_type`, `created_by` |
+| `cm_document_alert_subs` | Per-document alert subscribers — `document_id`, `user_id`, `created_by` |
+| `cm_org_settings` | Org-level CM default settings — key/value JSON store. Keys: `default_alert_days`, `default_alert_email_account_id`, `default_alert_roles` |
 | `cm_faqs` | FAQs with lifecycle |
 | `cm_templates` | Email/response/acknowledgment templates |
 | `cm_merge_reports` | Merge report templates with lifecycle |
 | `cm_reviews` | Review sessions |
 | `cm_reviewers` | Individual reviewer assignments per review session |
 | `cm_version_history` | Version tracking per document/FAQ/merge-report |
+
+### Regression & Monitoring
+| Table | Purpose |
+|-------|---------|
+| `regression_runs` | Regression test run history — `run_by`, `started_at`, `completed_at`, `total_tests`, `passed`, `failed`, `skipped`, `health_score`, `results` (LONGTEXT — full JSON report) |
 
 ### Audit & Monitoring
 | Table | Purpose |
@@ -517,6 +575,28 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 ---
 
 ## 9b. Services and Scripts Reference
+
+### `mims/backend/services/regressionRunner.js` (NEW — Sprint 15)
+
+Full regression test engine. Auto-discovers `*.tests.js` files from `mims/backend/regression-tests/`, runs them sequentially (50ms gaps), stores full JSON report in `regression_runs` table.
+
+Key functions:
+- `runRegressionSuite({ runByUserId, app })` — runs all discovered tests, returns structured report
+- `getToken()` — logs in as `regression@system` (role=admin). If `noOrgAccess`, calls `ensureRegressionUserOrgAccess()` to self-heal, then retries. Falls back to superadmin only if everything fails.
+- `ensureRegressionUserOrgAccess()` — directly INSERTs `user_org_access` row for regression user using first active org. Called automatically on `noOrgAccess` during test run.
+- `getDbHealth()` — SHOW TABLES + DESCRIBE per table + row counts
+- `getApiCatalog(app)` — traverses `app._router.stack` recursively to list all registered routes
+- `discoverTests()` — fs.readdirSync scans `regression-tests/` for `*.tests.js` files. New test files auto-detected without config changes.
+
+**Regression user:** `regression@system` / `Regression@System123`, role=`admin`. Seeded in `db.js`. Must have `user_org_access` row — self-healed at test time if missing.
+
+**Test files location:** `mims/backend/regression-tests/*.tests.js`
+
+**Rate limit:** 5 minutes per user (in-memory, resets on backend restart).
+
+### `mims/backend/services/cmExpiryAlertService.js` (NEW — Sprint 15)
+
+Daily cron at 07:00 UTC. Checks `cm_documents` for expiring documents. Per-doc config (`alert_days` JSON + `alert_email_account_id`) with org-level default fallback from `cm_org_settings`. Sends via nodemailer using stored SMTP account. Always fires on day 1 of expiry.
 
 ### `mims/backend/services/seedService.js` (NEW — Sprint 10)
 
@@ -566,6 +646,7 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 | Sprint 12 | Admin Console + Workflow Gaps | CLOSED | Admin Console workflow engine, CM backend, security hardening. | AdminConsolePage split — carried to Sprint 13 |
 | Sprint 13 | AdminConsolePage Refactor + Reports UI + CM Frontend + Admin Gaps + Security | CLOSED — 2026-04-05 | AdminConsolePage 6,395→763 lines (5 sub-components), Reports frontend (27 reports), CM frontend, Admin Console FRD gaps, Case Workflow Engine fix, Security hardening, SuperAdmin Reports Access. 50/50 items. Gate 2 approved. | Security Groups deactivation — Sprint 14 |
 | Sprint 14 | Case Management Gaps + UX + QA + Architecture | CLOSED — 2026-04-07 | G10: Global search, case comments, case reassignment, notifications. G11: Home dashboard, session management UI. G12: Full regression suite, Security Groups deactivation fix. G13: API versioning (/api/v1/*), log aggregation endpoint. 13/14 items. Gate 1 passed. | G13-3: Demo env provisioning — Sprint 15 |
+| Sprint 15 | CM Phase 4 + Regression Suite + UX Fixes | IN PROGRESS — 2026-04-18 | CM 4-tab extension (Other Attributes, Associated Docs, Usage Instructions, Version Alerts), Owner lock model, CM picklists fix, Regression Testing Suite (dashboard + history + self-healing test user), Auth infinite loop fix, Navbar restructure (Utilities dropdown), ExceptionToast silenced. | G13-3 demo env carry-in |
 
 ---
 
@@ -575,9 +656,23 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 
 Deferred to Sprint 15: G13-3 — full client-facing demo env provisioning (runbook + preflight smoke delivered; release-grade env setup deferred).
 
-**Sprint 15 — READY. Awaiting Rohith go-ahead.**
+**Sprint 15 — IN PROGRESS (2026-04-18)**
 
-Carry-in from Sprint 14: G13-3 client-facing demo env (HIGH — must complete before any client demo).
+| Item | Status | Detail |
+|------|--------|--------|
+| CM Phase 4 — Other Attributes tab | ✅ DONE | Version bump radio (major/minor, only shows when version_major > 1), version notes, review cycle dropdown, regulatory ref, custom key-value attributes builder |
+| CM Phase 4 — Associated Documents tab | ✅ DONE | Search-as-you-type, relation types, table with remove. Wired into CaseFormPage MI section. |
+| CM Phase 4 — Usage Instructions tab | ✅ DONE | RichTextEditor |
+| CM Phase 4 — Version Alerts tab | ✅ DONE | Alert days chips + presets, SMTP dropdown from email accounts, subscribers list, org-level defaults panel |
+| CM Owner Lock model | ✅ DONE | owner_user_id set on first checkin, enforced on publish, cleared on release. Publisher becomes permanent owner. |
+| CM Picklists network error fix | ✅ DONE | Route path double-mounting bug: was `/cm/picklists` → fixed to `/picklists` |
+| Full Regression Testing Suite | ✅ DONE | Dashboard (ScoreMeter, module cards, API catalog, DB tables, history). Backend runner, test discovery, rate limiting, history storage. |
+| Regression history blank page fix | ✅ DONE | Backend `history/:id` now spreads parsed report: `{ ...run, ...parsedReport }` |
+| Regression mi-categories FAIL fix | ✅ DONE | `ensureRegressionUserOrgAccess()` self-heals user_org_access on noOrgAccess. db.js query improved. |
+| Auth infinite loop fix | ✅ DONE | `refreshOrgAccess` wrapped in `useCallback([KEY, user?.role])` in AuthContext. MIMSHeader useEffect uses `[]`. |
+| Navbar restructure | ✅ DONE | Exception Log, Session Mgmt, Process Explorer, Regression → Utilities dropdown. Utilities highlights active on sub-pages. |
+| ExceptionToast silenced | ✅ DONE | No visual popup — console.warn only |
+| G13-3 demo env provisioning | ⏳ CARRY-IN | Runbook + preflight smoke delivered in Sprint 14. Full provisioning pending. |
 
 ---
 
@@ -626,6 +721,13 @@ Non-negotiable. Ignoring causes bugs.
 | 2FA expiry handling | Use DB-time expiry (`NOW()` / `DATE_ADD`). Do not use JS Date values in MySQL DATETIME for auth expiry. |
 | Password reuse policy | Block reuse of current + previous 5 passwords across first-login reset, forgot-password, and in-app change. Hardcoded server behavior. |
 | SuperAdmin alerts | Alert rules configurable, can be enabled/disabled. Inactive rule = no alert event or notification fired. |
+| CM route paths | CM router mounted at `/api/cm`. Route paths inside must NOT repeat the prefix. Use `/picklists` NOT `/cm/picklists`. Duplication = double path bug. |
+| CM owner lock | `owner_user_id` set on first checkin. Only owner can publish. Others must request release (resets to Draft, clears owner). Publisher overwrites as new owner. |
+| Regression test user | `regression@system` / `Regression@System123`, role=`admin`. Must have `user_org_access` row for orgId in JWT. `regressionRunner.getToken()` self-heals via `ensureRegressionUserOrgAccess()` if missing — no manual fix needed. |
+| Regression test paths | New test files: drop a `*.tests.js` file in `mims/backend/regression-tests/`. Auto-discovered — no config changes. Audit-log endpoint is `/api/admin/audit-logs` (PLURAL). |
+| AuthContext useCallback | `refreshOrgAccess` is wrapped in `useCallback([KEY, user?.role])`. Any new async function added to AuthContext used in a useEffect dep array MUST also be `useCallback` to prevent infinite render loops. |
+| ExceptionToast | Silenced — returns null. All API exceptions logged to `console.warn('[MIMS Exception]', ...)` only. Do not re-add visual popup without Rohith approval. |
+| Navbar Utilities | Exception Log, Session Mgmt, Process Explorer, Regression Testing all live in Utilities dropdown. Do NOT add them back to the main nav bar. |
 
 ---
 

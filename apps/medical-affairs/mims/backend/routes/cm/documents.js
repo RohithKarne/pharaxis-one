@@ -25,6 +25,38 @@ const uploadFields = upload.fields([
   { name: 'source_attachments', maxCount: 20 },
 ]);
 
+// ── CM-T1: assembled_html in-process cache ────────────────────────────────────
+// Key: `${docId}:${sortedModuleIds}:${moduleVersions}` — invalidated by version change
+const _assembledCache = new Map();
+const ASSEMBLED_TTL_MS = 10 * 60 * 1000; // 10-minute safety TTL
+
+function _assembledCacheGet(key) {
+  const e = _assembledCache.get(key);
+  if (!e) return undefined;
+  if (Date.now() > e.expiresAt) { _assembledCache.delete(key); return undefined; }
+  return e.value;
+}
+
+function _assembledCacheSet(key, value) {
+  _assembledCache.set(key, { value, expiresAt: Date.now() + ASSEMBLED_TTL_MS });
+}
+
+/** Call on document save / module update to invalidate a document's assembled cache. */
+function invalidateAssembledCache(docId) {
+  for (const k of _assembledCache.keys()) {
+    if (k.startsWith(`${docId}:`)) _assembledCache.delete(k);
+  }
+}
+
+async function logDocumentActivity(docId, userId, userName, action, details) {
+  try {
+    await pool.execute(
+      `INSERT INTO cm_document_activity_log (doc_id, user_id, user_name, action, details) VALUES (?,?,?,?,?)`,
+      [docId, userId || null, userName || null, action, details ? JSON.stringify(details) : null]
+    );
+  } catch (_) {}
+}
+
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
     await pool.execute(
@@ -259,11 +291,38 @@ router.get('/documents/:id', authenticate, async (req, res) => {
        FROM cm_version_history vh
        LEFT JOIN users u ON vh.author_id = u.id
        WHERE vh.entity_type = 'document' AND vh.entity_id = ?
-       ORDER BY vh.created_at DESC`,
+       ORDER BY vh.created_at DESC
+       LIMIT 5`,
       [id]
     );
 
-    res.json({ document: doc, versions });
+    let assembled_html = null;
+    if (doc.response_doc_type === 'Module') {
+      const moduleIds = parseSelectedModules(doc.selected_modules);
+      if (moduleIds.length > 0) {
+        const placeholders = moduleIds.map(() => '?').join(',');
+        // Fetch with version info for cache key
+        const [moduleRows] = await pool.execute(
+          `SELECT id, content_html, version_major, version_minor FROM cm_modules WHERE id IN (${placeholders})`,
+          moduleIds
+        );
+        const sortedIds = [...moduleIds].sort((a, b) => a - b);
+        const versionSig = sortedIds
+          .map(mid => { const m = moduleRows.find(r => r.id === mid); return m ? `${mid}:${m.version_major}.${m.version_minor}` : `${mid}:0`; })
+          .join(',');
+        const cacheKey = `${doc.id}:${moduleIds.join(',')}:${versionSig}`;
+        const cached = _assembledCacheGet(cacheKey);
+        if (cached !== undefined) {
+          assembled_html = cached;
+        } else {
+          const moduleMap = Object.fromEntries(moduleRows.map(m => [m.id, m.content_html || '']));
+          assembled_html = moduleIds.map(mid => moduleMap[mid] || '').join('\n');
+          _assembledCacheSet(cacheKey, assembled_html);
+        }
+      }
+    }
+
+    res.json({ document: { ...doc, assembled_html }, versions });
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents/:id', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to fetch CM document');
     res.status(500).json({ error: 'Server error.' });
@@ -346,6 +405,7 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
 
     await conn.commit();
     await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_document', Number(id), { name: name || doc.name });
+    invalidateAssembledCache(Number(id)); // CM-T1: flush assembled_html cache on save
     res.json({ message: 'Document updated.' });
   } catch (err) {
     await conn.rollback();
@@ -366,7 +426,7 @@ router.post('/documents/:id/checkout', authenticate, async (req, res) => {
     if (doc.checked_out_by) return res.status(400).json({ error: 'Document is already checked out.' });
 
     await pool.execute(
-      "UPDATE cm_documents SET status = 'CheckedOut', checked_out_by = ?, checked_out_at = NOW(), updated_at = NOW() WHERE id = ?",
+      "UPDATE cm_documents SET status = 'CheckedOut', checked_out_by = ?, checked_out_at = NOW(), checkout_expires_at = DATE_ADD(NOW(), INTERVAL 2 HOUR), updated_at = NOW() WHERE id = ?",
       [req.user.userId, id]
     );
     await audit(req.user.userId, req.user.email, 'CHECKOUT', 'cm_document', Number(id), { doc_id: doc.doc_id });
@@ -739,24 +799,113 @@ router.delete('/documents/:id/alert-subs/:sub_id', authenticate, async (req, res
   }
 });
 
-// GET /api/cm/documents/:id/versions — version history
+// GET /api/cm/documents/:id/versions — paginated version history (CM-T3)
 router.get('/documents/:id/versions', authenticate, async (req, res) => {
   try {
-    const doc = await getScopedDocument(req, req.params.id);
-    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
     const [versions] = await pool.execute(
-      `SELECT vh.*, u.name AS author_name
-       FROM cm_version_history vh
-       LEFT JOIN users u ON vh.author_id = u.id
-       WHERE vh.entity_type = 'document' AND vh.entity_id = ?
-       ORDER BY vh.created_at DESC`,
+      `SELECT * FROM cm_version_history WHERE entity_type = 'document' AND entity_id = ?
+       ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [req.params.id, limit, offset]
+    );
+    const [[{ total }]] = await pool.execute(
+      `SELECT COUNT(*) as total FROM cm_version_history WHERE entity_type = 'document' AND entity_id = ?`,
       [req.params.id]
     );
-    res.json({ versions });
+    res.json({ versions, total, page, limit });
   } catch (err) {
     logger.error({ err, route: '/api/cm/documents/:id/versions', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to fetch CM document versions');
     res.status(500).json({ error: 'Server error.' });
   }
+});
+
+// GET /api/cm/documents/search — full-text document search (CM-E1)
+router.get('/documents/search', authenticate, async (req, res) => {
+  try {
+    const { q, folder_id, status } = req.query;
+    if (!q || q.trim().length < 2) return res.status(400).json({ error: 'Query must be at least 2 characters' });
+    let query = `SELECT id, doc_id, name, folder_id, status, response_doc_type, version_major, version_minor, created_at,
+      MATCH(name, content_html) AGAINST(? IN NATURAL LANGUAGE MODE) AS relevance
+      FROM cm_documents
+      WHERE MATCH(name, content_html) AGAINST(? IN NATURAL LANGUAGE MODE)`;
+    const params = [q, q];
+    if (folder_id) { query += ` AND folder_id = ?`; params.push(folder_id); }
+    if (status) { query += ` AND status = ?`; params.push(status); }
+    query += ` ORDER BY relevance DESC LIMIT 50`;
+    const [rows] = await pool.execute(query, params);
+    res.json({ documents: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/cm/documents/:id/version-diff — compare two versions (CM-E2)
+router.get('/documents/:id/version-diff', authenticate, async (req, res) => {
+  try {
+    const { v1, v2 } = req.query;
+    if (!v1 || !v2) return res.status(400).json({ error: 'v1 and v2 version params required' });
+    const [versions] = await pool.execute(
+      `SELECT vh.id, vh.version, vh.status, vh.notes, vh.created_at, vh.author_id
+       FROM cm_version_history vh
+       WHERE vh.entity_type = 'document' AND vh.entity_id = ?
+         AND vh.version IN (?,?)
+       ORDER BY vh.created_at ASC`,
+      [req.params.id, v1, v2]
+    );
+    if (versions.length < 2) {
+      return res.status(404).json({ error: 'One or both versions not found in history' });
+    }
+    res.json({ version_a: versions[0], version_b: versions[1] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/cm/documents/release-stale-checkouts — auto-release expired checkouts (CM-E4 + CM-T6)
+router.post('/documents/release-stale-checkouts', async (req, res) => {
+  try {
+    const [result] = await pool.execute(
+      `UPDATE cm_documents
+       SET checked_out_by = NULL, checked_out_at = NULL, checkout_expires_at = NULL
+       WHERE checked_out_by IS NOT NULL
+         AND checkout_expires_at IS NOT NULL
+         AND checkout_expires_at < NOW()`
+    );
+    res.json({ success: true, released: result.affectedRows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/cm/documents/module-usage/:moduleId — module usage report (CM-E7)
+router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.moduleId);
+    if (!moduleId) return res.status(400).json({ error: 'Invalid moduleId' });
+    const [docs] = await pool.execute(
+      `SELECT id, doc_id, name, status, version_major, version_minor, updated_at
+       FROM cm_documents
+       WHERE response_doc_type = 'Module'
+         AND selected_modules IS NOT NULL
+         AND JSON_CONTAINS(selected_modules, CAST(? AS JSON))`,
+      [String(moduleId)]
+    );
+    res.json({ module_id: moduleId, linked_documents: docs, count: docs.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/cm/documents/:id/activity — paginated activity log
+router.get('/documents/:id/activity', authenticate, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+    const [logs] = await pool.execute(
+      `SELECT * FROM cm_document_activity_log WHERE doc_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [req.params.id, limit, offset]
+    );
+    const [[{ total }]] = await pool.execute(
+      `SELECT COUNT(*) as total FROM cm_document_activity_log WHERE doc_id = ?`,
+      [req.params.id]
+    );
+    res.json({ logs, total, page, limit });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

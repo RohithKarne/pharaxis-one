@@ -175,6 +175,21 @@ router.post('/logout', authenticate, async (req, res) => {
   res.json({ message: 'Logged out.' });
 });
 
+// POST /api/auth/unlock-user — admin manually unlocks a locked account (AC-E6)
+router.post('/unlock-user', authenticate, async (req, res) => {
+  try {
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: 'user_id required' });
+    await pool.execute(
+      `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?`,
+      [user_id]
+    );
+    res.json({ success: true, message: 'User account unlocked.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/auth/org-logo — returns logo_url for the current user's active org
 router.get('/org-logo', authenticate, async (req, res) => {
   try {

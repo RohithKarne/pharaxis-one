@@ -1,16 +1,22 @@
 /**
  * MIMSNavbar.jsx — Horizontal navigation bar
  * Grid Home | 1 Inbox | 2 Case Management ▾ | 3 Case Query | 4 Utilities ▾ |
- * 5 Transmissions | 6 Browse Content | 7 Analytics          + New Case
+ * 5 Transmissions | 6 Browse Content | 7 Analytics | 8 Reports     + New Case
+ *
+ * Utilities dropdown contains:
+ *   — Exception Log, Session Management (all authenticated users)
+ *   — Process Explorer (admin/superadmin, org-config gated)
+ *   — Regression Testing (admin/superadmin only)
+ *   — Coming-soon items
  */
 
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-const CASE_MGMT_ROUTES  = { 'My Cases': '/cases?tab=my', 'Unassigned Cases': '/cases?tab=unassigned', 'Deleted Cases': '/cases?tab=deleted' }
-const CASE_MGMT_ITEMS   = ['My Cases', 'Unassigned Cases', 'Deleted Cases']
-const UTILITIES_ITEMS   = ['Response Log', 'CDR Log', 'Schedule CDR', 'Case Audit Trail', 'Transmission Audit Trail', 'Non Relevant Emails']
+const CASE_MGMT_ROUTES = { 'My Cases': '/cases?tab=my', 'Unassigned Cases': '/cases?tab=unassigned', 'Deleted Cases': '/cases?tab=deleted' }
+const CASE_MGMT_ITEMS  = ['My Cases', 'Unassigned Cases', 'Deleted Cases']
+const COMING_SOON      = ['Response Log', 'CDR Log', 'Schedule CDR', 'Case Audit Trail', 'Transmission Audit Trail', 'Non Relevant Emails']
 
 export default function MIMSNavbar() {
   const navigate  = useNavigate()
@@ -37,54 +43,36 @@ export default function MIMSNavbar() {
     let alive = true
     async function loadProcessExplorerConfig() {
       if (!token || !user) return
-      if (user.role === 'superadmin') {
-        if (alive) setProcessExplorerEnabled(true)
-        return
-      }
+      if (user.role === 'superadmin') { if (alive) setProcessExplorerEnabled(true); return }
       try {
-        const res = await fetch('/api/admin/process-logs/config', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await fetch('/api/admin/process-logs/config', { headers: { Authorization: `Bearer ${token}` } })
         if (!alive) return
-        if (!res.ok) {
-          setProcessExplorerEnabled(false)
-          return
-        }
-        const data = await res.json()
-        setProcessExplorerEnabled(!!data.allowed)
-      } catch (_) {
-        if (alive) setProcessExplorerEnabled(false)
-      }
+        setProcessExplorerEnabled(res.ok ? !!(await res.json()).allowed : false)
+      } catch (_) { if (alive) setProcessExplorerEnabled(false) }
     }
     loadProcessExplorerConfig()
     return () => { alive = false }
   }, [token, user?.role, user?.id, user?.email])
 
-  function isActive(path) { return location.pathname === path }
+  function isActive(path)  { return location.pathname === path }
   function isCasesActive() { return location.pathname === '/cases' || location.pathname.startsWith('/cases/') }
 
-  function canAccess(moduleKey) { return hasModuleAccess(moduleKey) }
+  // True if any utility sub-path is currently active
+  function isUtilitiesActive() {
+    return ['/exceptions', '/session-management', '/process-explorer', '/regression'].some(p => location.pathname === p)
+  }
+
+  function canAccess(moduleKey)        { return hasModuleAccess(moduleKey) }
   function canAccessAny(...moduleKeys) { return moduleKeys.some(k => hasModuleAccess(k)) }
 
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
+
   function navItem(moduleKey, path, label) {
-    const allowed = canAccess(moduleKey)
-    if (!allowed) {
-      return (
-        <button
-          key={path}
-          className="mims-nav-tab disabled"
-          title="Access restricted"
-        >
-          {label}
-        </button>
-      )
+    if (!canAccess(moduleKey)) {
+      return <button key={path} className="mims-nav-tab disabled" title="Access restricted">{label}</button>
     }
     return (
-      <Link
-        key={path}
-        to={path}
-        className={`mims-nav-tab ${isActive(path) ? 'active' : ''}`}
-      >
+      <Link key={path} to={path} className={`mims-nav-tab ${isActive(path) ? 'active' : ''}`}>
         {label}
       </Link>
     )
@@ -100,9 +88,6 @@ export default function MIMSNavbar() {
       {/* Inbox */}
       {navItem('mims_core', '/inbox', 'Inbox')}
 
-      {/* Exception Log */}
-      {navItem('mims_core', '/exceptions', 'Exception Log')}
-
       {/* Case Management — dropdown */}
       <div className="mims-nav-dropdown-wrap" ref={caseMgmtRef}>
         <button
@@ -116,12 +101,7 @@ export default function MIMSNavbar() {
         {caseMgmtOpen && (
           <div className="mims-nav-dropdown">
             {CASE_MGMT_ITEMS.map(item => (
-              <Link
-                key={item}
-                to={CASE_MGMT_ROUTES[item]}
-                className="mims-nav-dropdown-item"
-                onClick={() => setCaseMgmtOpen(false)}
-              >
+              <Link key={item} to={CASE_MGMT_ROUTES[item]} className="mims-nav-dropdown-item" onClick={() => setCaseMgmtOpen(false)}>
                 {item}
               </Link>
             ))}
@@ -132,22 +112,55 @@ export default function MIMSNavbar() {
       {/* Case Query */}
       {navItem('mims_core', '/case-query', 'Case Query')}
 
-      {/* Session Management */}
-      {navItem('mims_core', '/session-management', 'Session Mgmt')}
-
-      {/* Utilities — dropdown */}
+      {/* Utilities — dropdown (Exception Log, Session Mgmt, Process Explorer, Regression + coming soon) */}
       <div className="mims-nav-dropdown-wrap" ref={utilitiesRef}>
         <button
-          className={`mims-nav-tab ${!canAccess('utilities') ? 'disabled' : ''}`}
-          onClick={() => canAccess('utilities') && setUtilitiesOpen(o => !o)}
-          title={!canAccess('utilities') ? 'Access restricted' : undefined}
+          className={`mims-nav-tab ${isUtilitiesActive() ? 'active' : ''}`}
+          onClick={() => setUtilitiesOpen(o => !o)}
         >
           Utilities
           <span className="mims-tab-arrow">▾</span>
         </button>
+
         {utilitiesOpen && (
-          <div className="mims-nav-dropdown">
-            {UTILITIES_ITEMS.map(item => (
+          <div className="mims-nav-dropdown" style={{ minWidth: 220 }}>
+
+            {/* Active tools — all authenticated users */}
+            {canAccess('mims_core') && (
+              <Link to="/exceptions" className={`mims-nav-dropdown-item ${isActive('/exceptions') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                Exception Log
+              </Link>
+            )}
+            {canAccess('mims_core') && (
+              <Link to="/session-management" className={`mims-nav-dropdown-item ${isActive('/session-management') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                Session Management
+              </Link>
+            )}
+
+            {/* Admin-only tools */}
+            {isAdmin && (
+              processExplorerEnabled
+                ? (
+                  <Link to="/process-explorer" className={`mims-nav-dropdown-item ${isActive('/process-explorer') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                    Process Explorer
+                  </Link>
+                ) : (
+                  <div className="mims-nav-dropdown-item coming-soon" title="Process Explorer disabled for your organisation">
+                    Process Explorer <span className="mims-coming-tag">Off</span>
+                  </div>
+                )
+            )}
+            {isAdmin && (
+              <Link to="/regression" className={`mims-nav-dropdown-item ${isActive('/regression') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                🧪 Regression Testing
+              </Link>
+            )}
+
+            {/* Divider before coming-soon items */}
+            <div className="mims-dropdown-divider" />
+
+            {/* Coming soon items */}
+            {COMING_SOON.map(item => (
               <div key={item} className="mims-nav-dropdown-item coming-soon">
                 {item} <span className="mims-coming-tag">Soon</span>
               </div>
@@ -167,18 +180,6 @@ export default function MIMSNavbar() {
 
       {/* Reports */}
       {navItem('reports', '/reports', 'Reports')}
-
-      {/* Process Explorer */}
-      {(user?.role === 'admin' || user?.role === 'superadmin') && (
-        processExplorerEnabled
-          ? <Link to="/process-explorer" className={`mims-nav-tab ${isActive('/process-explorer') ? 'active' : ''}`}>Process Explorer</Link>
-          : <button className="mims-nav-tab disabled" title="Process Explorer disabled for your organisation">Process Explorer</button>
-      )}
-
-      {/* Regression Testing */}
-      {(user?.role === 'admin' || user?.role === 'superadmin') && (
-        <Link to="/regression" className={`mims-nav-tab ${isActive('/regression') ? 'active' : ''}`}>🧪 Regression</Link>
-      )}
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />

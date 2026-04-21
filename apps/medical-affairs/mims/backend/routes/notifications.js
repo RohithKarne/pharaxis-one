@@ -19,33 +19,79 @@ function parseJsonSafe(value, fallback = null) {
   try { return JSON.parse(value); } catch (_) { return fallback; }
 }
 
+function toBoolQuery(value) {
+  return value === '1' || value === 'true';
+}
+
 // GET /api/notifications — user notification feed
 router.get('/notifications', authenticate, async (req, res) => {
   try {
     const limit = clamp(parseIntSafe(req.query.limit, 50), 1, 200);
     const offset = Math.max(0, parseIntSafe(req.query.offset, 0));
+    const category = String(req.query.category || '').trim();
+    const severity = String(req.query.severity || '').trim();
+    const unreadOnly = toBoolQuery(String(req.query.unread_only || ''));
+    const ackRequiredOnly = toBoolQuery(String(req.query.ack_required_only || ''));
+
+    const where = ['user_id = ?'];
+    const params = [req.user.userId];
+
+    if (category) {
+      where.push('category = ?');
+      params.push(category);
+    }
+    if (severity) {
+      where.push('severity = ?');
+      params.push(severity);
+    }
+    if (unreadOnly) where.push('is_read = 0');
+    if (ackRequiredOnly) where.push('requires_acknowledgement = 1');
+
+    const whereSql = where.join(' AND ');
 
     const [rows] = await pool.execute(
-      `SELECT id, category, title, message, link_url, metadata, is_read, created_at, read_at
+      `SELECT
+         id,
+         category,
+         title,
+         message,
+         link_url,
+         metadata,
+         severity,
+         requires_acknowledgement,
+         event_key,
+         is_read,
+         created_at,
+         read_at,
+         acknowledged_at
        FROM notifications
-       WHERE user_id = ?
-       ORDER BY created_at DESC
+       WHERE ${whereSql}
+       ORDER BY
+         CASE severity WHEN 'critical' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END,
+         created_at DESC
        LIMIT ${limit} OFFSET ${offset}`,
+      params
+    );
+    const [[{ total }]] = await pool.execute(
+      `SELECT COUNT(*) AS total FROM notifications WHERE ${whereSql}`,
+      params
+    );
+    const [[{ unread }]] = await pool.execute(
+      'SELECT COUNT(*) AS unread FROM notifications WHERE user_id = ? AND is_read = 0',
       [req.user.userId]
     );
-    const [[{ cnt: total }]] = await pool.execute(
-      'SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ?',
-      [req.user.userId]
-    );
-    const [[{ cnt: unread }]] = await pool.execute(
-      'SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ? AND is_read = 0',
+    const [[{ ack_pending }]] = await pool.execute(
+      `SELECT COUNT(*) AS ack_pending
+       FROM notifications
+       WHERE user_id = ? AND requires_acknowledgement = 1 AND acknowledged_at IS NULL`,
       [req.user.userId]
     );
 
     return res.json({
-      notifications: rows.map(row => ({ ...row, metadata: parseJsonSafe(row.metadata, null) })),
+      notifications: rows.map((row) => ({ ...row, metadata: parseJsonSafe(row.metadata, null) })),
       total,
       unread,
+      ack_pending,
       limit,
       offset,
     });
@@ -64,6 +110,22 @@ router.post('/notifications/:id/read', authenticate, async (req, res) => {
       [req.params.id, req.user.userId]
     );
     if (!result.affectedRows) return res.status(404).json({ error: 'Notification not found.' });
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Server error.' });
+  }
+});
+
+// POST /api/notifications/:id/acknowledge — acknowledge a critical notification
+router.post('/notifications/:id/acknowledge', authenticate, async (req, res) => {
+  try {
+    const [result] = await pool.execute(
+      `UPDATE notifications
+       SET acknowledged_at = COALESCE(acknowledged_at, NOW()), acknowledged_by = ?, is_read = 1, read_at = COALESCE(read_at, NOW())
+       WHERE id = ? AND user_id = ? AND requires_acknowledgement = 1`,
+      [req.user.userId, req.params.id, req.user.userId]
+    );
+    if (!result.affectedRows) return res.status(404).json({ error: 'Acknowledgement target not found.' });
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Server error.' });

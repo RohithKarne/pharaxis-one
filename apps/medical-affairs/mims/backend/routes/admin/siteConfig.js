@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
+const { invalidateWorkflowRulesCache } = require('../../services/workflowEngine');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -36,6 +37,25 @@ async function hasSiteAccess(req, siteId) {
   );
   return rows.length > 0;
 }
+
+// POST /api/admin/site-config/test-smtp — Test SMTP connection
+router.post('/site-config/test-smtp', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const nodemailer = require('nodemailer');
+    const { host, port, secure, user, pass } = req.body;
+    if (!host || !port) return res.status(400).json({ error: 'host and port required' });
+    const transporter = nodemailer.createTransport({
+      host, port: parseInt(port), secure: !!secure,
+      auth: user ? { user, pass: pass || '' } : undefined,
+      connectionTimeout: 5000, greetingTimeout: 5000
+    });
+    await transporter.verify();
+    res.json({ success: true, message: 'SMTP connection verified successfully.' });
+  } catch (err) {
+    console.error('POST /site-config/test-smtp error:', err);
+    res.status(200).json({ success: false, message: err.message });
+  }
+});
 
 // ─── SITES ───────────────────────────────────────────────────────────────────
 
@@ -298,6 +318,7 @@ router.post('/workflow-rules', authenticate, requireRole('admin', 'superadmin'),
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'workflow_rule', result.insertId, { from_state_id, to_state_id });
     const [[created]] = await pool.execute('SELECT * FROM workflow_rules WHERE id = ?', [result.insertId]);
+    invalidateWorkflowRulesCache(); // AC-T3: flush rules cache on write
     res.status(201).json({ message: 'Workflow rule created.', id: result.insertId, rule: created });
   } catch (err) {
     console.error('POST /workflow-rules error:', err);
@@ -334,6 +355,7 @@ router.put('/workflow-rules/:id', authenticate, requireRole('admin', 'superadmin
       ]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'workflow_rule', Number(id), { from_state_id, to_state_id });
+    invalidateWorkflowRulesCache(); // AC-T3: flush rules cache on write
     res.json({ message: 'Workflow rule updated.' });
   } catch (err) {
     console.error('PUT /workflow-rules/:id error:', err);
@@ -350,6 +372,7 @@ router.delete('/workflow-rules/:id', authenticate, requireRole('admin', 'superad
 
     await pool.execute('DELETE FROM workflow_rules WHERE id = ?', [id]);
     await audit(req.user.userId, req.user.email, 'DELETE', 'workflow_rule', Number(id), {});
+    invalidateWorkflowRulesCache(); // AC-T3: flush rules cache on delete
     res.json({ message: 'Workflow rule deleted.' });
   } catch (err) {
     console.error('DELETE /workflow-rules/:id error:', err);

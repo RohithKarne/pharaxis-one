@@ -99,6 +99,13 @@ function FolderManager({ show, onClose, token }) {
   const [editFolder, setEditFolder] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ name: '', product_id: '', site_id: '', description: '', status: 'Active' })
+  // CM-E8: Folder permissions panel state
+  const [permFolder, setPermFolder] = useState(null)
+  const [permissions, setPermissions] = useState([])
+  const [secGroups, setSecGroups] = useState([])
+  const [permLoading, setPermLoading] = useState(false)
+  const [permGroupId, setPermGroupId] = useState('')
+  const [permLevel, setPermLevel] = useState('read')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -114,6 +121,40 @@ function FolderManager({ show, onClose, token }) {
     } catch { /* silent */ }
     setLoading(false)
   }, [token]) // eslint-disable-line
+
+  // CM-E8: Load folder permissions + security groups
+  async function loadPermissions(folderId) {
+    setPermLoading(true)
+    try {
+      const [permRes, sgRes] = await Promise.all([
+        fetch(`/api/cm/folders/${folderId}/permissions`, { headers: authHeaders }),
+        fetch('/api/admin/security-groups', { headers: authHeaders }),
+      ])
+      if (permRes.ok) setPermissions((await permRes.json()).permissions || [])
+      if (sgRes.ok) setSecGroups((await sgRes.json()).groups || [])
+    } catch { /* silent */ }
+    setPermLoading(false)
+  }
+
+  async function handleAddPermission() {
+    if (!permGroupId) return
+    try {
+      const res = await fetch(`/api/cm/folders/${permFolder.id}/permissions`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ group_id: Number(permGroupId), permission_level: permLevel }),
+      })
+      if (res.ok) { setPermGroupId(''); loadPermissions(permFolder.id) }
+      else { const d = await res.json(); alert(d.error || 'Failed to add permission.') }
+    } catch { alert('Network error.') }
+  }
+
+  async function handleRemovePermission(groupId) {
+    if (!confirm('Remove this permission?')) return
+    try {
+      const res = await fetch(`/api/cm/folders/${permFolder.id}/permissions/${groupId}`, { method: 'DELETE', headers: authHeaders })
+      if (res.ok) loadPermissions(permFolder.id)
+    } catch { alert('Network error.') }
+  }
 
   useEffect(() => { if (show) load() }, [show, load])
 
@@ -145,6 +186,7 @@ function FolderManager({ show, onClose, token }) {
   if (!show) return null
 
   return (
+    <>
     <div className="cm-modal-overlay" onClick={onClose}>
       <div className="cm-modal" style={{ width: 700, maxWidth: '95vw' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -219,7 +261,10 @@ function FolderManager({ show, onClose, token }) {
                   <td>{f.site_name || '—'}</td>
                   <td><StatusBadge status={f.status || 'Active'} /></td>
                   <td>
-                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => openEdit(f)}>Edit</button>
+                    <div className="cm-action-btns">
+                      <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => openEdit(f)}>Edit</button>
+                      <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setPermFolder(f); loadPermissions(f.id) }}>🔒 Permissions</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -228,6 +273,55 @@ function FolderManager({ show, onClose, token }) {
         )}
       </div>
     </div>
+
+    {/* CM-E8: Folder Permissions Panel */}
+    {permFolder && (
+      <div className="cm-modal-overlay" onClick={() => setPermFolder(null)}>
+        <div className="cm-modal" style={{ width: 560, maxWidth: '95vw' }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h3 className="cm-modal-title" style={{ margin: 0 }}>Permissions — {permFolder.name}</h3>
+            <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setPermFolder(null)}>Close</button>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Control which security groups can access this folder and at what level.</p>
+
+          {/* Add permission */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
+            <select className="cm-form-select" style={{ flex: 1 }} value={permGroupId} onChange={e => setPermGroupId(e.target.value)}>
+              <option value="">— Select security group —</option>
+              {secGroups.filter(sg => !permissions.some(p => p.group_id === sg.id)).map(sg => (
+                <option key={sg.id} value={sg.id}>{sg.name}</option>
+              ))}
+            </select>
+            <select className="cm-form-select" style={{ width: 100 }} value={permLevel} onChange={e => setPermLevel(e.target.value)}>
+              <option value="read">Read</option>
+              <option value="write">Write</option>
+              <option value="manage">Manage</option>
+            </select>
+            <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={handleAddPermission} disabled={!permGroupId}>+ Add</button>
+          </div>
+
+          {permLoading ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>Loading…</p>
+          ) : permissions.length === 0 ? (
+            <div className="cm-empty" style={{ padding: 20 }}><p>No group permissions set. All users with folder access can read.</p></div>
+          ) : (
+            <table className="cm-table">
+              <thead><tr><th>Security Group</th><th>Permission Level</th><th></th></tr></thead>
+              <tbody>
+                {permissions.map(p => (
+                  <tr key={p.group_id}>
+                    <td style={{ fontWeight: 500 }}>{p.group_name}</td>
+                    <td><span style={{ textTransform: 'capitalize', fontSize: 12, padding: '2px 8px', borderRadius: 10, background: p.permission_level === 'manage' ? '#e8f5e9' : p.permission_level === 'write' ? '#fff8e1' : 'var(--bg)', color: p.permission_level === 'manage' ? '#2e7d32' : p.permission_level === 'write' ? '#856404' : 'var(--text-secondary)' }}>{p.permission_level}</span></td>
+                    <td><button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleRemovePermission(p.group_id)}>Remove</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 
@@ -499,6 +593,7 @@ function DocumentCreationScreen({ doc, token, onClose, onSaved }) {
     content_html: doc?.content_html || '',
     expiry_date: doc?.expiry_date ? doc.expiry_date.slice(0, 10) : '',
     activation_date: doc?.activation_date ? doc.activation_date.slice(0, 10) : '',
+    expiry_alert_recipients: doc?.expiry_alert_recipients ? (typeof doc.expiry_alert_recipients === 'string' ? JSON.parse(doc.expiry_alert_recipients) : doc.expiry_alert_recipients) : [],
     language: doc?.language || 'en',
     search_tags: doc?.search_tags || '',
     mi_category_id: doc?.mi_category_id || '',
@@ -545,7 +640,7 @@ function DocumentCreationScreen({ doc, token, onClose, onSaved }) {
   useEffect(() => {
     if (form.response_doc_type === 'Module') {
       setModulesLoading(true)
-      fetch('/api/cm/modules?include_expired=false', { headers: { Authorization: `Bearer ${token}` } })
+      fetch('/api/cm/modules?status=Published&include_expired=false', { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.json())
         .then(d => setAvailableModules(d.modules || []))
         .catch(() => setAvailableModules([]))
@@ -570,12 +665,34 @@ function DocumentCreationScreen({ doc, token, onClose, onSaved }) {
     setSourceAttachments(prev => prev.filter((_, i) => i !== idx))
   }
 
-  function toggleModule(moduleId) {
+  function addModule(moduleId) {
     const targetId = Number(moduleId)
     setForm(p => {
       const existing = normalizeSelectedModules(p.selected_modules)
-      const has = existing.includes(targetId)
-      return { ...p, selected_modules: has ? existing.filter(id => id !== targetId) : [...existing, targetId] }
+      if (existing.includes(targetId)) return p
+      return { ...p, selected_modules: [...existing, targetId] }
+    })
+  }
+
+  function removeModule(moduleId) {
+    const targetId = Number(moduleId)
+    setForm(p => ({
+      ...p,
+      selected_modules: normalizeSelectedModules(p.selected_modules).filter(id => id !== targetId)
+    }))
+  }
+
+  function moveModule(moduleId, direction) {
+    const targetId = Number(moduleId)
+    setForm(p => {
+      const arr = normalizeSelectedModules(p.selected_modules)
+      const idx = arr.indexOf(targetId)
+      if (idx === -1) return p
+      const newArr = [...arr]
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (swapIdx < 0 || swapIdx >= newArr.length) return p
+      ;[newArr[idx], newArr[swapIdx]] = [newArr[swapIdx], newArr[idx]]
+      return { ...p, selected_modules: newArr }
     })
   }
 
@@ -804,49 +921,92 @@ function DocumentCreationScreen({ doc, token, onClose, onSaved }) {
             </div>
 
             {/* MODULE picker */}
-            {form.response_doc_type === 'Module' && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <label className="cm-form-label" style={{ margin: 0 }}>Select Modules</label>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    Selected: {normalizeSelectedModules(form.selected_modules).length}
-                  </span>
-                </div>
-                <input
-                  className="cm-form-input"
-                  placeholder="Search modules by name, ID, folder, tag…"
-                  value={moduleSearch}
-                  onChange={e => setModuleSearch(e.target.value)}
-                  style={{ marginBottom: 10 }}
-                />
-                {modulesLoading && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading modules…</p>}
-                {!modulesLoading && availableModules.length === 0 && (
-                  <div style={{ padding: 20, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 13 }}>
-                    No modules available yet. Create them in the Modular Documents tab first.
-                  </div>
-                )}
-                {!modulesLoading && availableModules.length > 0 && (
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                    {filteredModules.length === 0 && (
-                      <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
-                        No modules match your search.
+            {form.response_doc_type === 'Module' && (() => {
+              const selectedIds = normalizeSelectedModules(form.selected_modules)
+              const selectedModules = selectedIds.map(id => availableModules.find(m => Number(m.id) === id)).filter(Boolean)
+              const unselectedModules = availableModules.filter(m => !selectedIds.includes(Number(m.id)))
+              const filtered = unselectedModules.filter(m => {
+                if (!moduleSearch.trim()) return true
+                const q = moduleSearch.trim().toLowerCase()
+                return (
+                  String(m.name || '').toLowerCase().includes(q) ||
+                  String(m.module_id || '').toLowerCase().includes(q) ||
+                  String(m.folder_name || '').toLowerCase().includes(q) ||
+                  String(m.search_tags || '').toLowerCase().includes(q)
+                )
+              })
+              return (
+                <div style={{ marginBottom: 16 }}>
+                  <label className="cm-form-label">Module Sequence</label>
+
+                  {/* Selected — ordered list */}
+                  {selectedModules.length > 0 && (
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 10, overflow: 'hidden' }}>
+                      <div style={{ padding: '6px 12px', background: 'var(--bg-subtle, #f8f9fa)', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Selected — {selectedModules.length} module{selectedModules.length !== 1 ? 's' : ''} in order
                       </div>
-                    )}
-                    {filteredModules.map((m, idx) => (
-                      <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: idx < filteredModules.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', background: normalizeSelectedModules(form.selected_modules).includes(Number(m.id)) ? 'var(--primary-light, #eef2ff)' : 'transparent' }}>
-                        <input type="checkbox" checked={normalizeSelectedModules(form.selected_modules).includes(Number(m.id))} onChange={() => toggleModule(m.id)} />
-                        <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
-                          {m.name}
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{m.module_id || `MOD-${m.id}`}</span>
-                        </span>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.folder_name || '—'}</span>
-                        <StatusBadge status={m.status} />
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                      {selectedModules.map((m, idx) => (
+                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: idx < selectedModules.length - 1 ? '1px solid var(--border)' : 'none', background: 'var(--primary-light, #eef2ff)' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', minWidth: 20, textAlign: 'center' }}>{idx + 1}</span>
+                          <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
+                            {m.name}
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{m.module_id || `MOD-${m.id}`}</span>
+                          </span>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.folder_name || '—'}</span>
+                          <div style={{ display: 'flex', gap: 2 }}>
+                            <button type="button" onClick={() => moveModule(m.id, 'up')} disabled={idx === 0} style={{ padding: '2px 6px', fontSize: 12, cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.35 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'white' }} title="Move up">↑</button>
+                            <button type="button" onClick={() => moveModule(m.id, 'down')} disabled={idx === selectedModules.length - 1} style={{ padding: '2px 6px', fontSize: 12, cursor: idx === selectedModules.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === selectedModules.length - 1 ? 0.35 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'white' }} title="Move down">↓</button>
+                            <button type="button" onClick={() => removeModule(m.id)} style={{ padding: '2px 6px', fontSize: 12, cursor: 'pointer', border: '1px solid #fca5a5', borderRadius: 4, background: '#fff5f5', color: '#dc2626' }} title="Remove">✕</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Available — search + add */}
+                  <input
+                    className="cm-form-input"
+                    placeholder="Search published modules to add…"
+                    value={moduleSearch}
+                    onChange={e => setModuleSearch(e.target.value)}
+                    style={{ marginBottom: 8 }}
+                  />
+                  {modulesLoading && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading modules…</p>}
+                  {!modulesLoading && availableModules.length === 0 && (
+                    <div style={{ padding: 20, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 13 }}>
+                      No published modules available. Create and publish modules in the Modular Documents tab first.
+                    </div>
+                  )}
+                  {!modulesLoading && availableModules.length > 0 && unselectedModules.length === 0 && !moduleSearch && (
+                    <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', border: '1px dashed var(--border)', borderRadius: 8, textAlign: 'center' }}>
+                      All available modules have been added.
+                    </div>
+                  )}
+                  {!modulesLoading && filtered.length > 0 && (
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ padding: '6px 12px', background: 'var(--bg-subtle, #f8f9fa)', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Available modules
+                      </div>
+                      {filtered.map((m, idx) => (
+                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderBottom: idx < filtered.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                          <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
+                            {m.name}
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{m.module_id || `MOD-${m.id}`}</span>
+                          </span>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.folder_name || '—'}</span>
+                          <button type="button" onClick={() => addModule(m.id)} style={{ padding: '3px 10px', fontSize: 12, cursor: 'pointer', border: '1px solid var(--primary, #4f46e5)', borderRadius: 4, background: 'white', color: 'var(--primary, #4f46e5)', fontWeight: 600 }}>+ Add</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!modulesLoading && moduleSearch && filtered.length === 0 && (
+                    <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)', border: '1px dashed var(--border)', borderRadius: 8, textAlign: 'center' }}>
+                      No modules match your search.
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Row B — Search Tags | Document Category | Activation Date | Expiry Date */}
             <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
@@ -878,6 +1038,37 @@ function DocumentCreationScreen({ doc, token, onClose, onSaved }) {
                 <input type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
               </div>
             </div>
+
+            {/* CM-E5: Expiry Alert Recipients */}
+            {form.expiry_date && (
+              <div className="cm-form-group" style={{ marginBottom: 12 }}>
+                <label className="cm-form-label">Additional Expiry Alert Recipients</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg)', minHeight: 38 }}>
+                  {(form.expiry_alert_recipients || []).map((email, i) => (
+                    <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--primary-light, #eef2ff)', color: 'var(--primary)', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}>
+                      {email}
+                      <button type="button" onClick={() => setForm(p => ({ ...p, expiry_alert_recipients: p.expiry_alert_recipients.filter((_, j) => j !== i) }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', padding: 0, lineHeight: 1 }}>✕</button>
+                    </span>
+                  ))}
+                  <input
+                    className="cm-form-input"
+                    style={{ flex: 1, minWidth: 180, border: 'none', background: 'transparent', padding: '2px 4px' }}
+                    placeholder="Add email and press Enter or comma…"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault()
+                        const val = e.target.value.trim().replace(/,$/, '')
+                        if (val && val.includes('@')) {
+                          setForm(p => ({ ...p, expiry_alert_recipients: [...(p.expiry_alert_recipients || []), val] }))
+                          e.target.value = ''
+                        }
+                      }
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>These recipients will receive 30/60/90-day pre-expiry reminder notifications.</span>
+              </div>
+            )}
 
             {/* Source Attachments */}
             <div className="cm-form-group" style={{ marginBottom: 8 }}>
@@ -1018,7 +1209,12 @@ function DocumentCreationScreen({ doc, token, onClose, onSaved }) {
 
         {/* ── Version Alerts Tab ── */}
         {activeTab === 'versions' && doc && (
-          <VersionAlertsPanel docId={doc.id} token={token} />
+          <>
+            <VersionDiffPanel docId={doc.id} token={token} />
+            <div style={{ borderTop: '1px solid var(--border)', marginTop: 24, paddingTop: 24 }}>
+              <VersionAlertsPanel docId={doc.id} token={token} />
+            </div>
+          </>
         )}
         {activeTab === 'versions' && !doc && (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
@@ -1037,6 +1233,57 @@ function DocumentCreationScreen({ doc, token, onClose, onSaved }) {
   )
 }
 
+// ─── CM-E3: Review Row with Mode Toggle ─────────────────────────────────────
+
+function ReviewRowWithMode({ r, authHeaders, onOpen }) {
+  const [mode, setMode] = useState(r.review_mode || null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    // Load current review mode config
+    fetch(`/api/cm/reviews/${r.review_id || r.id}/config`, { headers: authHeaders })
+      .then(res => res.ok ? res.json() : null)
+      .then(d => { if (d?.config?.review_mode) setMode(d.config.review_mode) })
+      .catch(() => {})
+  }, [r.id]) // eslint-disable-line
+
+  async function toggleMode(newMode) {
+    if (saving) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/cm/reviews/${r.review_id || r.id}/config`, {
+        method: 'PATCH', headers: authHeaders,
+        body: JSON.stringify({ review_mode: newMode }),
+      })
+      if (res.ok) setMode(newMode)
+    } catch { /* silent */ }
+    setSaving(false)
+  }
+
+  return (
+    <tr>
+      <td style={{ fontWeight: 500 }}>{r.document_name}</td>
+      <td>{r.title}</td>
+      <td style={{ fontSize: 12 }}>{r.planned_end_date ? new Date(r.planned_end_date).toLocaleDateString() : '—'}</td>
+      <td><StatusBadge status={r.my_status || 'Ongoing'} /></td>
+      <td>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['sequential', 'parallel'].map(m => (
+            <button key={m} className={`cm-btn cm-btn-sm ${mode === m ? 'cm-btn-primary' : 'cm-btn-secondary'}`}
+              style={{ textTransform: 'capitalize', opacity: saving ? 0.6 : 1 }}
+              onClick={() => toggleMode(m)} disabled={saving}>
+              {m === 'sequential' ? '⬇ Seq' : '⇉ Par'}
+            </button>
+          ))}
+        </div>
+      </td>
+      <td>
+        <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={onOpen}>Open Review</button>
+      </td>
+    </tr>
+  )
+}
+
 // ─── Documents Section ────────────────────────────────────────────────────────
 
 function DocumentsSection({ token, user }) {
@@ -1049,6 +1296,10 @@ function DocumentsSection({ token, user }) {
   const [folders, setFolders] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({ folder_id: '', doc_type: '', status: '', search: '' })
+  // CM-E1: Full-text search
+  const [ftQuery, setFtQuery] = useState('')
+  const [ftResults, setFtResults] = useState(null)
+  const [ftSearching, setFtSearching] = useState(false)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const LIMIT = 20
@@ -1226,6 +1477,53 @@ function DocumentsSection({ token, user }) {
             <input className="cm-form-input" style={{ width: 220 }} placeholder="Search documents…" value={filters.search} onChange={e => { setFilters(p => ({ ...p, search: e.target.value })); setPage(1) }} />
             <button className="cm-btn cm-btn-secondary" onClick={loadDocs}>Filter</button>
           </div>
+          {/* CM-E1: Full-text content search */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+            <input className="cm-form-input" style={{ width: 300 }} placeholder="🔍 Full-text content search…" value={ftQuery}
+              onChange={e => { setFtQuery(e.target.value); if (!e.target.value) setFtResults(null) }}
+              onKeyDown={async e => {
+                if (e.key === 'Enter' && ftQuery.trim().length >= 2) {
+                  setFtSearching(true)
+                  try {
+                    const res = await fetch(`/api/cm/documents/search?q=${encodeURIComponent(ftQuery)}`, { headers: authHeaders })
+                    if (res.ok) { const d = await res.json(); setFtResults(d.documents || []) }
+                  } catch { /* silent */ } finally { setFtSearching(false) }
+                }
+              }} />
+            <button className="cm-btn cm-btn-secondary" disabled={ftSearching || ftQuery.trim().length < 2} onClick={async () => {
+              setFtSearching(true)
+              try {
+                const res = await fetch(`/api/cm/documents/search?q=${encodeURIComponent(ftQuery)}`, { headers: authHeaders })
+                if (res.ok) { const d = await res.json(); setFtResults(d.documents || []) }
+              } catch { /* silent */ } finally { setFtSearching(false) }
+            }}>{ftSearching ? 'Searching…' : 'Search Content'}</button>
+            {ftResults !== null && <button className="cm-btn cm-btn-secondary" onClick={() => { setFtResults(null); setFtQuery('') }}>✕ Clear</button>}
+          </div>
+          {ftResults !== null && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                {ftResults.length} content match{ftResults.length !== 1 ? 'es' : ''} for "{ftQuery}"
+              </div>
+              {ftResults.length === 0 ? (
+                <div className="cm-empty"><p>No documents matched that query in their content.</p></div>
+              ) : (
+                <table className="cm-table">
+                  <thead><tr><th>Doc ID</th><th>Name</th><th>Status</th><th>Version</th><th>Actions</th></tr></thead>
+                  <tbody>
+                    {ftResults.map(d => (
+                      <tr key={d.id}>
+                        <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
+                        <td style={{ fontWeight: 500 }}>{d.name}</td>
+                        <td><StatusBadge status={d.status} /></td>
+                        <td>{d.version_major || 1}.{d.version_minor || 0}</td>
+                        <td><button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(d); setShowDrawer(true) }}>Open</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
 
           {loading ? (
             <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading documents…</p>
@@ -1308,25 +1606,36 @@ function DocumentsSection({ token, user }) {
           <div className="cm-empty"><div className="cm-empty-icon">📤</div><p>No documents currently checked out.</p></div>
         ) : (
           <table className="cm-table">
-            <thead><tr><th>Doc ID</th><th>Name</th><th>Type</th><th>Folder</th><th>Version</th><th>Checked Out By</th><th>Checked Out At</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Doc ID</th><th>Name</th><th>Type</th><th>Folder</th><th>Version</th><th>Checked Out By</th><th>Checked Out At</th><th>Auto-releases At</th><th>Actions</th></tr></thead>
             <tbody>
-              {checkedOutDocs.map(d => (
-                <tr key={d.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
-                  <td style={{ fontWeight: 500 }}>{d.name}</td>
-                  <td>{d.doc_type}</td>
-                  <td>{d.folder_name || '—'}</td>
-                  <td style={{ textAlign: 'center' }}>{d.version_major}.{d.version_minor}</td>
-                  <td style={{ fontSize: 13 }}>{d.checked_out_by_name || '—'}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{d.checked_out_at ? new Date(d.checked_out_at).toLocaleDateString() : '—'}</td>
-                  <td>
-                    <div className="cm-action-btns">
-                      <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(d); setShowDrawer(true) }}>Edit</button>
-                      <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setCheckInDoc(d)}>Check In</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {checkedOutDocs.map(d => {
+                const expiresAt = d.checkout_expires_at ? new Date(d.checkout_expires_at) : null
+                const isExpiringSoon = expiresAt && (expiresAt - Date.now()) < 2 * 60 * 60 * 1000 // within 2h
+                return (
+                  <tr key={d.id}>
+                    <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
+                    <td style={{ fontWeight: 500 }}>{d.name}</td>
+                    <td>{d.doc_type}</td>
+                    <td>{d.folder_name || '—'}</td>
+                    <td style={{ textAlign: 'center' }}>{d.version_major}.{d.version_minor}</td>
+                    <td style={{ fontSize: 13 }}>{d.checked_out_by_name || '—'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{d.checked_out_at ? new Date(d.checked_out_at).toLocaleDateString() : '—'}</td>
+                    <td style={{ fontSize: 12 }}>
+                      {expiresAt ? (
+                        <span style={{ color: isExpiringSoon ? 'var(--danger)' : 'var(--text-muted)', fontWeight: isExpiringSoon ? 600 : 400 }}>
+                          {isExpiringSoon ? '⚠ ' : ''}auto-releases {expiresAt.toLocaleString()}
+                        </span>
+                      ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
+                    <td>
+                      <div className="cm-action-btns">
+                        <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(d); setShowDrawer(true) }}>Edit</button>
+                        <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setCheckInDoc(d)}>Check In</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )
@@ -1343,20 +1652,13 @@ function DocumentsSection({ token, user }) {
                 <th>Review Title</th>
                 <th>Planned End Date</th>
                 <th>My Status</th>
+                <th>Review Mode</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {reviews.map(r => (
-                <tr key={r.id}>
-                  <td style={{ fontWeight: 500 }}>{r.document_name}</td>
-                  <td>{r.title}</td>
-                  <td style={{ fontSize: 12 }}>{r.planned_end_date ? new Date(r.planned_end_date).toLocaleDateString() : '—'}</td>
-                  <td><StatusBadge status={r.my_status || 'Ongoing'} /></td>
-                  <td>
-                    <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setReviewStatusItem(r)}>Open Review</button>
-                  </td>
-                </tr>
+                <ReviewRowWithMode key={r.id} r={r} authHeaders={authHeaders} onOpen={() => setReviewStatusItem(r)} />
               ))}
             </tbody>
           </table>
@@ -1658,6 +1960,17 @@ function ModulesSection({ token }) {
                 <td>
                   <div className="cm-action-btns">
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditModule(m); setShowDrawer(true) }}>Edit</button>
+                    {/* CM-E7: Module usage report */}
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={async () => {
+                      try {
+                        const res = await fetch(`/api/cm/documents/module-usage/${m.id}`, { headers: authHeaders })
+                        if (res.ok) {
+                          const d = await res.json()
+                          const names = d.linked_documents.map(doc => `• ${doc.name} (${doc.status})`).join('\n') || 'No documents linked.'
+                          alert(`Module "${m.name}" — Used in ${d.count} document(s):\n\n${names}`)
+                        }
+                      } catch { /* silent */ }
+                    }}>Usage</button>
                     {m.status !== 'Archived' && (
                       <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(m)}>Archive</button>
                     )}
@@ -1773,6 +2086,10 @@ function FAQsSection({ token, user }) {
   const [editFaq, setEditFaq] = useState(null)
   const [checkInFaq, setCheckInFaq] = useState(null)
   const [checkInLoading, setCheckInLoading] = useState(false)
+  // CM-E6: Bulk tags + view count
+  const [selectedFaqIds, setSelectedFaqIds] = useState([])
+  const [bulkTagInput, setBulkTagInput] = useState('')
+  const [showBulkTag, setShowBulkTag] = useState(false)
 
   const loadFaqs = useCallback(async () => {
     setLoading(true)
@@ -1847,8 +2164,34 @@ function FAQsSection({ token, user }) {
     <div>
       <div className="cm-section-header">
         <h2 className="cm-section-title">FAQs</h2>
-        <button className="cm-btn cm-btn-primary" onClick={() => { setEditFaq(null); setShowDrawer(true) }}>+ New FAQ</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {selectedFaqIds.length > 0 && (
+            <button className="cm-btn cm-btn-secondary" onClick={() => setShowBulkTag(true)}>
+              🏷 Bulk Tag ({selectedFaqIds.length})
+            </button>
+          )}
+          <button className="cm-btn cm-btn-primary" onClick={() => { setEditFaq(null); setShowDrawer(true) }}>+ New FAQ</button>
+        </div>
       </div>
+      {/* CM-E6: Bulk Tag Modal */}
+      {showBulkTag && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 28, maxWidth: 420, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ margin: '0 0 16px' }}>Bulk Tag — {selectedFaqIds.length} FAQs</h3>
+            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Tags (comma-separated)</label>
+            <input className="cm-form-input" value={bulkTagInput} onChange={e => setBulkTagInput(e.target.value)} placeholder="e.g. safety, dosage, oncology" />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button className="cm-btn cm-btn-secondary" onClick={() => { setShowBulkTag(false); setBulkTagInput('') }}>Cancel</button>
+              <button className="cm-btn cm-btn-primary" onClick={async () => {
+                const tags = bulkTagInput.split(',').map(t => t.trim()).filter(Boolean)
+                const res = await fetch('/api/cm/faqs/bulk-tags', { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ ids: selectedFaqIds, tags }) })
+                if (res.ok) { loadFaqs(); setSelectedFaqIds([]); setShowBulkTag(false); setBulkTagInput('') }
+                else alert('Bulk tag failed.')
+              }}>Apply Tags</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="cm-filters">
         <select className="cm-form-select" style={{ width: 160 }} value={filters.folder_id} onChange={e => setFilters(p => ({ ...p, folder_id: e.target.value }))}>
           <option value="">All Folders</option>
@@ -1870,10 +2213,11 @@ function FAQsSection({ token, user }) {
         <table className="cm-table">
           <thead>
             <tr>
-              <th>#</th>
+              <th><input type="checkbox" checked={faqs.length > 0 && faqs.every(f => selectedFaqIds.includes(f.id))} onChange={e => setSelectedFaqIds(e.target.checked ? faqs.map(f => f.id) : [])} /></th>
               <th>Question</th>
               <th>Category</th>
               <th>Folder</th>
+              <th>Views</th>
               <th>Version</th>
               <th>Status</th>
               <th>Actions</th>
@@ -1882,10 +2226,13 @@ function FAQsSection({ token, user }) {
           <tbody>
             {faqs.map((f, i) => (
               <tr key={f.id}>
-                <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{i + 1}</td>
-                <td style={{ maxWidth: 300 }}>{f.question?.length > 60 ? f.question.slice(0, 60) + '…' : f.question}</td>
+                <td><input type="checkbox" checked={selectedFaqIds.includes(f.id)} onChange={e => setSelectedFaqIds(prev => e.target.checked ? [...new Set([...prev, f.id])] : prev.filter(id => id !== f.id))} /></td>
+                <td style={{ maxWidth: 300 }} onClick={() => fetch(`/api/cm/faqs/${f.id}/view`, { method: 'POST', headers: authHeaders }).catch(() => {})}>
+                  {f.question?.length > 60 ? f.question.slice(0, 60) + '…' : f.question}
+                </td>
                 <td>{f.category || '—'}</td>
                 <td>{f.folder_name || '—'}</td>
+                <td style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>{f.view_count || 0}</td>
                 <td style={{ textAlign: 'center' }}>{f.version || '1.0'}</td>
                 <td><StatusBadge status={f.status} /></td>
                 <td>{getFaqActions(f)}</td>
@@ -2057,6 +2404,14 @@ function MergeReportsSection({ token }) {
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditReport(r); setShowDrawer(true) }}>Edit</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(r)}>Check Out</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setCheckInReport(r)}>Check In</button>
+                    {/* CM-E10: Schedule */}
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={async () => {
+                      const cron = prompt('Set schedule (cron expression):\ne.g. "0 9 * * 1" = every Monday 9am\nLeave blank to remove schedule:')
+                      if (cron === null) return
+                      const emails = prompt('Email recipients (comma-separated, leave blank for none):') || ''
+                      const res = await fetch(`/api/cm/merge-reports/${r.id}/schedule`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ cron_expression: cron, email_recipients: emails.split(',').map(e => e.trim()).filter(Boolean), is_active: !!cron }) })
+                      if (res.ok) alert(cron ? 'Schedule saved.' : 'Schedule removed.') ; else alert('Schedule save failed.')
+                    }}>⏱ Schedule</button>
                     <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(r)}>Archive</button>
                   </div>
                 </td>
@@ -2262,6 +2617,30 @@ function BrowseSection({ token }) {
   const [loading, setLoading] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  // CM-E9: Bookmarks
+  const [showBookmarks, setShowBookmarks] = useState(false)
+  const [bookmarks, setBookmarks] = useState([])
+  const authHeadersJson = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+  async function loadBookmarks() {
+    try {
+      const res = await fetch('/api/cm/folders/bookmarks', { headers: authHeaders })
+      if (res.ok) setBookmarks((await res.json()).bookmarks || [])
+    } catch { /* silent */ }
+  }
+
+  async function toggleBookmark(item) {
+    const entityType = contentType === 'documents' ? 'document' : 'faq'
+    const existing = bookmarks.find(b => b.entity_type === entityType && b.entity_id === item.id)
+    if (existing) {
+      await fetch(`/api/cm/folders/bookmarks/${existing.id}`, { method: 'DELETE', headers: authHeaders }).catch(() => {})
+    } else {
+      await fetch('/api/cm/folders/bookmarks', { method: 'POST', headers: authHeadersJson, body: JSON.stringify({ entity_type: entityType, entity_id: item.id }) }).catch(() => {})
+    }
+    loadBookmarks()
+  }
+
+  useEffect(() => { loadBookmarks() }, [token]) // eslint-disable-line
 
   useEffect(() => {
     setSelectedItem(null)
@@ -2295,10 +2674,15 @@ function BrowseSection({ token }) {
           <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
             {[{ key: 'documents', label: 'Documents' }, { key: 'faqs', label: 'FAQs' }].map(t => (
               <button key={t.key}
-                onClick={() => setContentType(t.key)}
-                style={{ padding: '6px 14px', border: 'none', background: contentType === t.key ? 'var(--primary)' : '#fff', color: contentType === t.key ? '#fff' : 'var(--text-primary)', cursor: 'pointer', fontSize: 13, fontWeight: contentType === t.key ? 600 : 400 }}
+                onClick={() => { setContentType(t.key); setShowBookmarks(false) }}
+                style={{ padding: '6px 14px', border: 'none', background: contentType === t.key && !showBookmarks ? 'var(--primary)' : '#fff', color: contentType === t.key && !showBookmarks ? '#fff' : 'var(--text-primary)', cursor: 'pointer', fontSize: 13, fontWeight: contentType === t.key && !showBookmarks ? 600 : 400 }}
               >{t.label}</button>
             ))}
+            {/* CM-E9: Bookmarks toggle */}
+            <button onClick={() => { setShowBookmarks(b => !b); if (!showBookmarks) loadBookmarks() }}
+              style={{ padding: '6px 14px', border: 'none', background: showBookmarks ? 'var(--warning, #f59e0b)' : '#fff', color: showBookmarks ? '#fff' : 'var(--text-primary)', cursor: 'pointer', fontSize: 13, fontWeight: showBookmarks ? 600 : 400 }}>
+              ★ Bookmarks {bookmarks.length > 0 && `(${bookmarks.length})`}
+            </button>
           </div>
           <input
             style={{ flex: 1, minWidth: 160, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}
@@ -2308,16 +2692,27 @@ function BrowseSection({ token }) {
           />
         </div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {loading ? (
+          {showBookmarks ? (
+            bookmarks.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No bookmarks yet. Click ★ next to any item to bookmark it.</div>
+            ) : bookmarks.map(b => (
+              <div key={b.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 8 }}>[{b.entity_type}]</span>
+                  <span style={{ fontWeight: 500 }}>{b.entity_name || `ID ${b.entity_id}`}</span>
+                </div>
+                <button onClick={async () => { await fetch(`/api/cm/folders/bookmarks/${b.id}`, { method: 'DELETE', headers: authHeaders }); loadBookmarks() }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--warning, #f59e0b)' }}>★</button>
+              </div>
+            ))
+          ) : loading ? (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
           ) : items.length === 0 ? (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No published {contentType} found.</div>
           ) : (
             items.map(item => (
-              <div key={item.id}
-                onClick={() => openItem(item)}
-                style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', background: selectedItem && selectedItem.id === item.id ? 'var(--primary-light, #f0f4ff)' : 'transparent' }}
-              >
+              <div key={item.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 8, background: selectedItem && selectedItem.id === item.id ? 'var(--primary-light, #f0f4ff)' : 'transparent' }}>
+                <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => openItem(item)}>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>{item.title || item.question || '(Untitled)'}</div>
                 {contentType === 'documents' && (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -2333,6 +2728,12 @@ function BrowseSection({ token }) {
                     Expires: {new Date(item.expiry_date).toLocaleDateString()}
                   </div>
                 )}
+                </div>
+                {/* CM-E9: Bookmark star */}
+                <button onClick={e => { e.stopPropagation(); toggleBookmark(item) }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: bookmarks.find(b => b.entity_id === item.id) ? 'var(--warning, #f59e0b)' : 'var(--border)', flexShrink: 0, alignSelf: 'center' }}>
+                  {bookmarks.find(b => b.entity_id === item.id) ? '★' : '☆'}
+                </button>
               </div>
             ))
           )}
@@ -2554,6 +2955,96 @@ function AssociatedDocsPanel({ docId, token }) {
 }
 
 // ─── Version Alerts Panel ─────────────────────────────────────────────────────
+
+// ─── CM-E2: Version Diff Panel ────────────────────────────────────────────────
+
+function VersionDiffPanel({ docId, token }) {
+  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const [versions, setVersions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [v1, setV1] = useState('')
+  const [v2, setV2] = useState('')
+  const [diff, setDiff] = useState(null)
+  const [diffLoading, setDiffLoading] = useState(false)
+  const [diffError, setDiffError] = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/cm/documents/${docId}/versions?limit=20`, { headers: H })
+      .then(r => r.ok ? r.json() : { versions: [] })
+      .then(d => setVersions(d.versions || []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [docId]) // eslint-disable-line
+
+  async function fetchDiff() {
+    if (!v1 || !v2) return
+    if (v1 === v2) { setDiffError('Select two different versions.'); return }
+    setDiffError(''); setDiffLoading(true); setDiff(null)
+    try {
+      const res = await fetch(`/api/cm/documents/${docId}/version-diff?v1=${encodeURIComponent(v1)}&v2=${encodeURIComponent(v2)}`, { headers: H })
+      if (res.ok) { const d = await res.json(); setDiff(d) }
+      else { const d = await res.json(); setDiffError(d.error || 'Failed to load diff.') }
+    } catch { setDiffError('Network error.') }
+    setDiffLoading(false)
+  }
+
+  if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20 }}>Loading versions…</p>
+
+  return (
+    <div>
+      <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: 'var(--text-primary)' }}>Version Comparison</h4>
+      {versions.length < 2 ? (
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>At least 2 versions required for comparison. Save and check-in the document to create versions.</p>
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Version A</label>
+              <select className="cm-form-select" style={{ width: 160 }} value={v1} onChange={e => setV1(e.target.value)}>
+                <option value="">— select —</option>
+                {versions.map(v => <option key={v.id} value={v.id}>{v.version} — {v.status} ({v.created_at ? new Date(v.created_at).toLocaleDateString() : ''})</option>)}
+              </select>
+            </div>
+            <span style={{ marginTop: 16, color: 'var(--text-muted)' }}>vs</span>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Version B</label>
+              <select className="cm-form-select" style={{ width: 160 }} value={v2} onChange={e => setV2(e.target.value)}>
+                <option value="">— select —</option>
+                {versions.map(v => <option key={v.id} value={v.id}>{v.version} — {v.status} ({v.created_at ? new Date(v.created_at).toLocaleDateString() : ''})</option>)}
+              </select>
+            </div>
+            <button className="cm-btn cm-btn-primary cm-btn-sm" style={{ marginTop: 16 }} onClick={fetchDiff} disabled={!v1 || !v2 || diffLoading}>
+              {diffLoading ? 'Loading…' : 'Compare'}
+            </button>
+          </div>
+          {diffError && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 8 }}>{diffError}</p>}
+          {diff && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 8 }}>
+              {[{ label: `Version A — ${diff.version_a?.version || ''}`, data: diff.version_a }, { label: `Version B — ${diff.version_b?.version || ''}`, data: diff.version_b }].map(({ label, data }) => (
+                <div key={label} style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+                  <div style={{ padding: '8px 14px', background: 'var(--bg)', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{label}</div>
+                  <div style={{ padding: 14 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                      Status: <strong>{data?.status || '—'}</strong> &nbsp;|&nbsp; Author: <strong>{data?.author_name || '—'}</strong>
+                    </div>
+                    {data?.notes && <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px', fontStyle: 'italic' }}>{data.notes}</p>}
+                    {data?.content_snapshot ? (
+                      <div style={{ maxHeight: 300, overflowY: 'auto', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, padding: 10 }}
+                        dangerouslySetInnerHTML={{ __html: data.content_snapshot }} />
+                    ) : (
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No content snapshot stored for this version.</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
 
 function VersionAlertsPanel({ docId, token }) {
   const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }

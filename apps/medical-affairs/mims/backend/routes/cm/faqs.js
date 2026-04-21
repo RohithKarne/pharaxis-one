@@ -29,6 +29,9 @@ async function addVersionHistory(entityId, version, status, notes, authorId) {
   } catch (_) {}
 }
 
+// Try to add view_count column if it doesn't exist (CM-E6)
+pool.execute(`ALTER TABLE cm_faqs ADD COLUMN view_count INT DEFAULT 0`).catch(() => {});
+
 function isSuperadmin(req) {
   return req.user.role === 'superadmin';
 }
@@ -313,6 +316,30 @@ router.post('/faqs/:id/publish', authenticate, async (req, res) => {
     console.error('POST /cm/faqs/:id/publish error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
+});
+
+// POST /api/cm/faqs/:id/view — increment view count (CM-E6)
+router.post('/faqs/:id/view', authenticate, async (req, res) => {
+  try {
+    // Try to increment view_count column; if column doesn't exist, just return ok
+    await pool.execute(`UPDATE cm_faqs SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?`, [req.params.id]).catch(() => {});
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /api/cm/faqs/bulk-tags — bulk assign tags to multiple FAQs (CM-E6)
+router.patch('/faqs/bulk-tags', authenticate, async (req, res) => {
+  try {
+    const { ids, tags } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids required' });
+    const tagsStr = Array.isArray(tags) ? tags.join(',') : (tags || '');
+    const placeholders = ids.map(() => '?').join(',');
+    await pool.execute(
+      `UPDATE cm_faqs SET search_tags = ?, updated_by = ?, updated_at = NOW() WHERE id IN (${placeholders})`,
+      [tagsStr, req.user?.id || null, ...ids]
+    );
+    res.json({ success: true, updated: ids.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // POST /api/cm/faqs/:id/archive — archive

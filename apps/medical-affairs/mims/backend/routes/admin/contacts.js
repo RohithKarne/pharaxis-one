@@ -264,6 +264,29 @@ router.put('/company-reps/:id', authenticate, requireRole('admin', 'superadmin')
   }
 });
 
+// POST /api/admin/company-reps/import — Bulk import reps from CSV rows
+router.post('/company-reps/import', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+  try {
+    const { rows } = req.body; // array of {name, email, phone, territory, org_id}
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'rows array required' });
+    let imported = 0;
+    for (const row of rows) {
+      if (!row.name) continue;
+      const orgId = getScopedOrgId(req, row.org_id || null);
+      await pool.execute(
+        `INSERT INTO company_reps (name, email, phone, org_id, is_active, created_at) VALUES (?,?,?,?,1,NOW()) ON DUPLICATE KEY UPDATE name=VALUES(name)`,
+        [row.name, row.email || null, row.phone || null, orgId]
+      );
+      imported++;
+    }
+    await audit(req.user.userId, req.user.email, 'CSV_IMPORT', 'company_rep', null, { imported });
+    res.json({ success: true, imported });
+  } catch (err) {
+    console.error('POST /company-reps/import error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/admin/company-reps/:id — soft delete
 router.delete('/company-reps/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {

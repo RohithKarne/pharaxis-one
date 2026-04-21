@@ -52,10 +52,10 @@ module.exports = [
     }
   },
   {
-    name: 'GET /api/admin/audit-log returns audit entries',
+    name: 'GET /api/admin/audit-logs returns audit entries',
     module: 'Admin — Audit Trail',
     run: async ({ makeRequest, token }) => {
-      const res = await makeRequest('GET', '/api/admin/audit-log', null, token)
+      const res = await makeRequest('GET', '/api/admin/audit-logs', null, token)
       return { pass: res.status === 200, details: `Status: ${res.status}` }
     }
   },

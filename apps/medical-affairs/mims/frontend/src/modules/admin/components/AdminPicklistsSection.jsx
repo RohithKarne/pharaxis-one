@@ -746,6 +746,41 @@ export default function AdminPicklistsSection({ contentSection, H, flash: flashP
                 </div>
               )}
 
+              {/* AC-E1: CSV Export / Import */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={() => {
+                  const params = selectedPicklistFieldId ? `?category=${encodeURIComponent(selectedPicklistFieldId)}` : ''
+                  fetch(`/api/admin/picklists/export-csv${params}`, { headers: H })
+                    .then(r => r.blob()).then(blob => {
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a'); a.href = url; a.download = 'picklists.csv'; a.click()
+                      URL.revokeObjectURL(url)
+                    }).catch(() => flash('Export failed.', 'error'))
+                }}>⬇ Export CSV</button>
+                <label className="btn btn-outline" style={{ fontSize: 12, cursor: 'pointer' }}>
+                  ⬆ Import CSV
+                  <input type="file" accept=".csv" style={{ display: 'none' }} onChange={async e => {
+                    const file = e.target.files[0]; if (!file) return
+                    const text = await file.text()
+                    const lines = text.trim().split('\n')
+                    const header = lines[0].split(',')
+                    const nameIdx = header.findIndex(h => h.toLowerCase().includes('name'))
+                    const valueIdx = header.findIndex(h => h.toLowerCase().includes('value'))
+                    const descIdx = header.findIndex(h => h.toLowerCase().includes('desc'))
+                    const rows = lines.slice(1).map(line => {
+                      const cols = line.split(',')
+                      return { name: cols[nameIdx]?.replace(/"/g,'').trim(), value: cols[valueIdx]?.replace(/"/g,'').trim(), description: cols[descIdx]?.replace(/"/g,'').trim() }
+                    }).filter(r => r.name && r.value)
+                    if (!rows.length) return flash('No valid rows found in CSV.', 'error')
+                    const res = await fetch('/api/admin/picklists/import-csv', { method: 'POST', headers: H, body: JSON.stringify({ rows }) })
+                    const d = await res.json()
+                    if (!res.ok) return flash(d.error || 'Import failed.', 'error')
+                    flash(`Imported ${d.imported} picklist values.`)
+                    loadPicklists({ page: 1 })
+                    e.target.value = ''
+                  }} />
+                </label>
+              </div>
               <div className="ac-picklists-display-count">Displaying {picklistStartIdx}-{picklistEndIdx} of {picklistTotal} Items</div>
 
               <div className="ac-picklists-grid-wrap">
@@ -807,7 +842,23 @@ export default function AdminPicklistsSection({ contentSection, H, flash: flashP
                         </td>
                         <td>{row.status || 'Active'}</td>
                         <td>
-                          <button className="btn btn-outline" style={{ fontSize: 12, padding: '2px 9px' }} onClick={() => deletePicklist(row)}>Deactivate</button>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button
+                              className="btn btn-outline"
+                              style={{ fontSize: 11, padding: '2px 9px', color: row.status === 'Active' ? 'var(--warning)' : 'var(--success)', borderColor: row.status === 'Active' ? 'var(--warning)' : 'var(--success)' }}
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`/api/admin/picklists/${row.id}/toggle`, { method: 'PATCH', headers: H })
+                                  const d = await res.json()
+                                  if (!res.ok) return flash(d.error || 'Toggle failed.', 'error')
+                                  await loadPicklists({ field_id: selectedPicklistFieldId, page: picklistPage })
+                                  flash(`Picklist ${row.status === 'Active' ? 'deactivated' : 'activated'}.`)
+                                } catch { flash('Toggle failed.', 'error') }
+                              }}
+                            >
+                              {row.status === 'Active' ? 'Deactivate' : 'Activate'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -132,4 +132,61 @@ async function runCmExpiryAlerts() {
   }
 }
 
-module.exports = { runCmExpiryAlerts };
+// ── CM-E5: Pre-expiry reminders (30/60/90 days) ──────────────────────────────
+async function runCmPreExpiryReminders() {
+  const intervals = [90, 60, 30];
+  let totalSent = 0;
+  try {
+    for (const days of intervals) {
+      const [docs] = await pool.execute(
+        `SELECT d.id, d.doc_id, d.name, d.expiry_date, d.expiry_alert_recipients,
+                COALESCE(d.owner_user_id, d.created_by) AS owner_id
+         FROM cm_documents d
+         WHERE d.status = 'Published'
+           AND d.expiry_date IS NOT NULL
+           AND DATEDIFF(d.expiry_date, CURDATE()) = ?`,
+        [days]
+      );
+      for (const doc of docs) {
+        // Notify document owner via in-app notification
+        if (doc.owner_id) {
+          await pool.execute(
+            `INSERT INTO notifications (user_id, category, title, message, link_url, metadata)
+             VALUES (?, 'cm_expiry', ?, ?, '/content', ?)`,
+            [
+              doc.owner_id,
+              `Document Expiring in ${days} Days`,
+              `"${doc.name}" is set to expire on ${doc.expiry_date}. Please review and renew.`,
+              JSON.stringify({ doc_id: doc.id, doc_code: doc.doc_id, days_remaining: days }),
+            ]
+          ).catch(() => {});
+        }
+        // Queue custom email recipients from expiry_alert_recipients JSON column
+        if (doc.expiry_alert_recipients) {
+          let recipients = [];
+          try {
+            recipients = typeof doc.expiry_alert_recipients === 'string'
+              ? JSON.parse(doc.expiry_alert_recipients)
+              : doc.expiry_alert_recipients;
+          } catch (_) {}
+          for (const email of (Array.isArray(recipients) ? recipients : [])) {
+            await pool.execute(
+              `INSERT INTO service_logs (source, service_type, description, details, status)
+               VALUES ('cmExpiryAlert', 'expiry_reminder', ?, ?, 'queued')`,
+              [
+                `Expiry reminder for doc ${doc.doc_id} to ${email} (${days}d)`,
+                JSON.stringify({ doc_id: doc.id, email, days, expiry_date: doc.expiry_date }),
+              ]
+            ).catch(() => {});
+          }
+        }
+        totalSent++;
+      }
+    }
+  } catch (err) {
+    console.error('[CM Pre-Expiry Reminder] Error:', err.message);
+  }
+  return { totalSent };
+}
+
+module.exports = { runCmExpiryAlerts, runCmPreExpiryReminders };

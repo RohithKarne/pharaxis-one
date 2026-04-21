@@ -321,23 +321,63 @@ function HistoryTab({ token }) {
         {selected && detailLoading && <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 40 }}>Loading…</p>}
         {selected && !detailLoading && detail && (
           <div>
+            {/* Summary cards */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-              {[{ l: 'Total', v: detail.total_tests }, { l: 'Passed', v: detail.passed }, { l: 'Failed', v: detail.failed }, { l: 'Score', v: `${detail.health_score}%` }].map(s => (
+              {[
+                { l: 'Total', v: detail.totalTests ?? detail.total_tests },
+                { l: 'Passed', v: detail.passed },
+                { l: 'Failed', v: detail.failed },
+                { l: 'Score', v: `${detail.healthScore ?? detail.health_score}%` },
+              ].map(s => (
                 <div key={s.l} style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: 8, textAlign: 'center', background: 'var(--surface)' }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{s.v}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.l}</div>
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {(detail.results || []).map((r, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, background: r.pass ? '#f0fdf4' : '#fef2f2', fontSize: 12 }}>
-                  <StatusBadge pass={r.pass} error={r.error} />
-                  <span style={{ flex: 1 }}>{r.name}</span>
-                  <span style={{ color: 'var(--text-muted)' }}>{r.durationMs}ms</span>
-                </div>
-              ))}
-            </div>
+
+            {/* Module grouping — mirrors Overview tab */}
+            {(detail.modules || []).length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(detail.modules || []).map(mod => {
+                  const allPass = mod.failed === 0
+                  const modScore = mod.passed + mod.failed > 0 ? Math.round((mod.passed / (mod.passed + mod.failed)) * 100) : 0
+                  return (
+                    <div key={mod.name} style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: allPass ? '#f0fdf4' : '#fef2f2', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>{allPass ? '✅' : '❌'}</span>
+                          <span style={{ fontWeight: 700, fontSize: 13 }}>{mod.name}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, fontSize: 12 }}>
+                          <span style={{ color: '#16a34a', fontWeight: 600 }}>{mod.passed} passed</span>
+                          {mod.failed > 0 && <span style={{ color: '#dc2626', fontWeight: 600 }}>{mod.failed} failed</span>}
+                          <span style={{ fontWeight: 700, color: scoreColor(modScore) }}>{modScore}%</span>
+                        </div>
+                      </div>
+                      {mod.tests.map((t, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px', borderBottom: i < mod.tests.length - 1 ? '1px solid var(--border)' : 'none', background: 'var(--surface)', fontSize: 12 }}>
+                          <StatusBadge pass={t.pass} error={t.error} />
+                          <span style={{ flex: 1, color: 'var(--text-primary)' }}>{t.name}</span>
+                          <span style={{ color: 'var(--text-muted)', minWidth: 50, textAlign: 'right' }}>{t.durationMs}ms</span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              /* Fallback flat list if modules not available */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {(detail.results || []).map((r, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, background: r.pass ? '#f0fdf4' : '#fef2f2', fontSize: 12 }}>
+                    <StatusBadge pass={r.pass} error={r.error} />
+                    <span style={{ flex: 1 }}>{r.name}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{r.durationMs}ms</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
