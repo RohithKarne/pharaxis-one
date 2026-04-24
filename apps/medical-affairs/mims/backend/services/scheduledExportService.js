@@ -4,6 +4,7 @@ const pool = require('../database/db');
 const nodemailer = require('nodemailer');
 const { createNotification } = require('./notificationCenterService');
 const { getDatasetByReportKey } = require('./reportDatasetService');
+const { recordReportRun } = require('./reportOpsService');
 
 function escapeCSV(value) {
   if (value == null) return '';
@@ -212,10 +213,12 @@ async function runScheduledExports(now = new Date()) {
 
     let runStatus = 'success';
     let lastError = null;
+    let rowCount = 0;
 
     try {
       const filters = getDefaultFiltersForRun(config, now);
       const rows = await getDatasetByReportKey(config.report_key || 'case-summary', config.org_id, filters);
+      rowCount = rows.length;
       const csvContent = buildCSV(rows);
 
       if (config.delivery_method === 'email') {
@@ -235,6 +238,20 @@ async function runScheduledExports(now = new Date()) {
       );
     } finally {
       const next = computeNextRunAtUtc(config, new Date(now.getTime() + 60 * 1000));
+      await recordReportRun({
+        orgId: config.org_id,
+        reportKey: config.report_key || 'case-summary',
+        reportName: config.export_name || config.report_key || 'Scheduled Report',
+        runMode: 'scheduled',
+        triggeredBy: config.created_by || null,
+        filters: getDefaultFiltersForRun(config, now),
+        timezoneName: config.timezone_name || 'UTC',
+        rowCount,
+        deliveryMethod: config.delivery_method || null,
+        deliveryTarget: config.delivery_target || null,
+        status: runStatus,
+        errorMessage: lastError,
+      }).catch(() => {});
       await pool.query(
         `UPDATE scheduled_export_configs
          SET last_run_at = NOW(),

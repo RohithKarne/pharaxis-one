@@ -229,6 +229,12 @@ const changeApprovals = require('./routes/admin/changeApprovals');
 app.use('/api/admin', changeApprovals);
 const dependencyCheck = require('./routes/admin/dependencyCheck');
 app.use('/api/admin', dependencyCheck);
+app.use('/api/admin', require('./routes/admin/impactPreview'));
+app.use('/api/admin', require('./routes/admin/policyGraph'));
+app.use('/api/admin', require('./routes/admin/contentIntelligence'));
+// ── In-App Help System (S21-1) ──────────────────────────────────────────────
+app.use('/api',       require('./routes/help'));
+app.use('/api/admin', require('./routes/admin/help'));
 app.use("/api/integrations", require("./routes/integrations/dataExport"))
 app.use("/api", require("./routes/integrations/integrationsAdmin"))
 app.use('/api/admin', require('./routes/integrations/schedulerAdmin'));
@@ -293,6 +299,9 @@ apiV1Router.use('/admin/process-logs', processExplorerRouter);
 apiV1Router.use('/admin', require('./routes/admin/reportAccessRequests'));
 apiV1Router.use('/admin', require('./routes/admin/changeApprovals'));
 apiV1Router.use('/admin', require('./routes/admin/dependencyCheck'));
+apiV1Router.use('/admin', require('./routes/admin/impactPreview'));
+apiV1Router.use('/admin', require('./routes/admin/policyGraph'));
+apiV1Router.use('/admin', require('./routes/admin/contentIntelligence'));
 apiV1Router.use('/admin', require('./routes/integrations/schedulerAdmin'));
 apiV1Router.use('/admin', require('./routes/integrations/oauth2Admin'));
 

@@ -110,6 +110,11 @@ export const ADMIN_NAV_GROUPS = [
     title: 'Content Management',
     items: [
       { key: 'mi-categories', label: 'MI Categories', active: true },
+      { key: 'policy-graph', label: 'Policy Graph Engine', active: true },
+      { key: 'evidence-chain-compiler', label: 'Evidence Chain Compiler', active: true },
+      { key: 'contradiction-radar', label: 'Contradiction Radar', active: true },
+      { key: 'digital-twin-release-simulator', label: 'Digital Twin Release Simulator', active: true },
+      { key: 'adaptive-risk-workflow', label: 'Adaptive Risk Workflow', active: true },
     ],
   },
 ]

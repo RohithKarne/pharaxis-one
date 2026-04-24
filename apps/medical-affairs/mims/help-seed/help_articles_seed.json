@@ -1,0 +1,364 @@
+{
+  "articles": [
+    {
+      "feature_key": "general",
+      "feature_group": null,
+      "title": "Welcome to MIMS",
+      "summary": "A quick orientation to the Medical Information Management System.",
+      "content_html": "<h4>What is MIMS?</h4><p>MIMS (Medical Information Management System) is a unified platform for managing medical information cases, content, and communications across your organisation.</p><h4>Who uses it?</h4><ul><li><strong>Case Agents</strong> — log and process medical information requests.</li><li><strong>CM Admins</strong> — manage approved documents, FAQs, templates, and merge reports.</li><li><strong>Org Admins</strong> — configure the system, products, workflows, and users.</li><li><strong>Superadmin</strong> — manage organisations and platform-wide settings.</li></ul><h4>How to get started</h4><ol><li>Log in with your assigned email and password.</li><li>Your home screen shows the modules you have access to.</li><li>Use the top navigation bar to move between modules.</li></ol><h4>What happens next?</h4><p>Click the <strong>?</strong> button at the bottom-right of any screen to get contextual help for that feature.</p>",
+      "audience": ["all"],
+      "sort_order": 1,
+      "tags": ["orientation","getting started"]
+    },
+    {
+      "feature_key": "general",
+      "feature_group": null,
+      "title": "Navigating the Platform",
+      "summary": "How to use the top navigation bar, sidebar, and module switcher.",
+      "content_html": "<h4>What is this?</h4><p>The navigation bar at the top of every page gives you quick access to your modules, notifications, and account settings.</p><h4>When to use it</h4><p>Use the nav bar to switch between Cases, Content, Browse, Reports, and Admin sections.</p><h4>How to do it</h4><ul><li>Click a module name in the top bar to navigate to it.</li><li>The bell icon opens your notification feed.</li><li>Your avatar/initials in the top-right opens account options and logout.</li></ul><h4>What happens next?</h4><p>The page refreshes to the selected module. Your current work is not lost unless you navigate away mid-form.</p>",
+      "audience": ["all"],
+      "sort_order": 2,
+      "tags": ["navigation"]
+    },
+    {
+      "feature_key": "cases",
+      "feature_group": "cases",
+      "title": "Cases Overview",
+      "summary": "What cases are and how they flow through MIMS.",
+      "content_html": "<h4>What is a Case?</h4><p>A case is a record of a medical information request — a question from a healthcare professional, patient, or internal stakeholder about a product. Every case has a unique case number, status, and owner.</p><h4>When to use it</h4><p>Create a case any time you receive a new medical information inquiry that needs to be tracked, responded to, and archived.</p><h4>How to do it</h4><ul><li>Click <strong>+ New Case</strong> from the Cases list.</li><li>Fill in the case type, priority, product, and contact details.</li><li>Assign an owner and submit.</li></ul><h4>What happens next?</h4><p>The case moves to <strong>Open</strong> status. The assigned agent receives a notification and can begin processing the inquiry.</p>",
+      "audience": ["agent","cm_admin","admin","superadmin"],
+      "sort_order": 10,
+      "tags": ["cases","overview"]
+    },
+    {
+      "feature_key": "cases",
+      "feature_group": "cases",
+      "title": "Case Statuses Explained",
+      "summary": "Understand each case status: Open, In Progress, Pending, Closed.",
+      "content_html": "<h4>What are case statuses?</h4><p>Statuses show where a case is in its lifecycle and who needs to act next.</p><h4>Status definitions</h4><ul><li><strong>Open</strong> — Case created, not yet being processed.</li><li><strong>In Progress</strong> — Agent is actively working on the response.</li><li><strong>Pending</strong> — Waiting for additional information from the requester or third party.</li><li><strong>Closed</strong> — Response delivered and case archived.</li></ul><h4>How to change status</h4><p>Open the case detail and use the <strong>Update Status</strong> dropdown. Some transitions require a note or e-signature.</p><h4>What happens next?</h4><p>Status changes are logged in the case audit trail and may trigger notifications to the assigned user or case owner.</p>",
+      "audience": ["agent","cm_admin","admin"],
+      "sort_order": 11,
+      "tags": ["cases","status","workflow"]
+    },
+    {
+      "feature_key": "cases.create",
+      "feature_group": "cases",
+      "title": "Creating a New Case",
+      "summary": "Step-by-step guide to logging a new medical information case.",
+      "content_html": "<h4>What is this?</h4><p>The New Case form lets you capture all details about a medical information request in a structured, compliant format.</p><h4>When to use it</h4><p>Use this whenever a new inquiry arrives — by phone, email, or in person — and needs to be tracked in MIMS.</p><h4>How to do it</h4><ol><li>Click <strong>+ New Case</strong> from the Cases module.</li><li>Select <strong>Case Type</strong> (Medical Information, Adverse Event, Product Complaint, etc.).</li><li>Choose <strong>Priority</strong> and the relevant <strong>Product</strong>.</li><li>Add at least one <strong>Contact</strong> under the Contacts tab.</li><li>Assign the case to an agent.</li><li>Click <strong>Save</strong>.</li></ol><h4>What happens next?</h4><p>The case is created with a unique case number. The assigned agent sees it in their queue and receives a notification.</p>",
+      "audience": ["agent","admin"],
+      "sort_order": 12,
+      "tags": ["cases","create"]
+    },
+    {
+      "feature_key": "cases.detail",
+      "feature_group": "cases",
+      "title": "Case Detail Page Guide",
+      "summary": "How to use the case detail view: tabs, actions, and history.",
+      "content_html": "<h4>What is this?</h4><p>The Case Detail page shows all information about a single case — the main record, contacts, medical information, adverse events, product complaints, and full audit history.</p><h4>When to use it</h4><p>Open a case detail any time you need to view, update, or close a case.</p><h4>How to do it</h4><ul><li>Click any case number in the Cases list to open its detail page.</li><li>Use the <strong>tabs</strong> at the top to navigate between MI, Contacts, AE, PC, and Audit sections.</li><li>Use the <strong>action buttons</strong> (Update Status, Assign, Close) in the header area.</li></ul><h4>What happens next?</h4><p>All edits are logged with the editor's name and timestamp. The case audit trail is immutable and 21 CFR Part 11 compliant.</p>",
+      "audience": ["agent","cm_admin","admin"],
+      "sort_order": 13,
+      "tags": ["cases","detail","audit"]
+    },
+    {
+      "feature_key": "cases.contacts",
+      "feature_group": "cases",
+      "title": "Managing Case Contacts",
+      "summary": "How to add, edit, and manage contacts on a case.",
+      "content_html": "<h4>What is this?</h4><p>Case contacts are the people connected to a medical information request — the requester, healthcare professional, patient, or caregiver.</p><h4>When to use it</h4><p>Add a contact when you have someone whose details should be recorded against the case (required for most case types).</p><h4>How to do it</h4><ul><li>Open the case and click the <strong>Contacts</strong> tab.</li><li>Click <strong>+ Add Contact</strong>.</li><li>Fill in name, role, email, and phone.</li><li>Mark one contact as <strong>Primary</strong> if needed.</li></ul><h4>What happens next?</h4><p>The contact is saved against the case. Their details can be referenced in merge reports and correspondence templates.</p>",
+      "audience": ["agent","admin"],
+      "sort_order": 14,
+      "tags": ["cases","contacts"]
+    },
+    {
+      "feature_key": "cases.mi",
+      "feature_group": "cases",
+      "title": "Medical Information (MI) Section",
+      "summary": "Recording medical information details within a case.",
+      "content_html": "<h4>What is this?</h4><p>The MI section captures the specific medical information request — the product, question category, and details of the inquiry.</p><h4>When to use it</h4><p>Fill in the MI section for any case where the requester has a specific medical or scientific question about a product.</p><h4>How to do it</h4><ul><li>Open the case and click the <strong>MI</strong> tab.</li><li>Select the <strong>Product</strong> and <strong>MI Category</strong>.</li><li>Enter the <strong>Question</strong> and any relevant notes.</li><li>Click <strong>Save MI</strong>.</li></ul><h4>What happens next?</h4><p>The MI record is linked to the case and contributes to product inquiry analytics on the Reports page.</p>",
+      "audience": ["agent","admin"],
+      "sort_order": 15,
+      "tags": ["cases","mi","medical information"]
+    },
+    {
+      "feature_key": "cases.ae",
+      "feature_group": "cases",
+      "title": "Adverse Event (AE) Reporting",
+      "summary": "How to log and manage adverse event details within a case.",
+      "content_html": "<h4>What is this?</h4><p>The AE section records adverse events reported within a case — product safety events that may require regulatory reporting.</p><h4>When to use it</h4><p>Capture AE information any time a contact reports a suspected adverse reaction to a product during a case interaction.</p><h4>How to do it</h4><ul><li>Open the case and click the <strong>AE</strong> tab.</li><li>Click <strong>+ Add Adverse Event</strong>.</li><li>Enter the event description, onset date, severity, and outcome.</li><li>Link to the relevant contact.</li></ul><h4>What happens next?</h4><p>The AE is recorded and may trigger a regulatory submission workflow depending on your organisation's configuration.</p>",
+      "audience": ["agent","admin"],
+      "sort_order": 16,
+      "tags": ["cases","adverse event","AE","safety"]
+    },
+    {
+      "feature_key": "cases.pc",
+      "feature_group": "cases",
+      "title": "Product Complaint (PC) Reporting",
+      "summary": "Recording product quality complaints within a case.",
+      "content_html": "<h4>What is this?</h4><p>The PC section captures product quality complaints — issues relating to the physical product rather than a clinical adverse event.</p><h4>When to use it</h4><p>Use the PC tab when a contact reports a packaging defect, labelling issue, or product quality concern.</p><h4>How to do it</h4><ul><li>Open the case and click the <strong>PC</strong> tab.</li><li>Click <strong>+ Add Complaint</strong>.</li><li>Select complaint type and enter description, lot number, and expiry date if available.</li></ul><h4>What happens next?</h4><p>The complaint is linked to the case and feeds into product quality analytics.</p>",
+      "audience": ["agent","admin"],
+      "sort_order": 17,
+      "tags": ["cases","product complaint","PC"]
+    },
+    {
+      "feature_key": "cases.workflow",
+      "feature_group": "cases",
+      "title": "Case Workflow & Assignments",
+      "summary": "Understanding how cases are assigned, escalated, and closed.",
+      "content_html": "<h4>What is this?</h4><p>Cases flow through a defined lifecycle — from creation through processing to closure — with assignments, notifications, and audit entries at each step.</p><h4>When to use it</h4><p>Understand workflow when you need to reassign a case, escalate it, or complete it.</p><h4>How to do it</h4><ul><li>To <strong>reassign</strong>: Open the case, click <strong>Assign</strong>, and select a new agent.</li><li>To <strong>escalate</strong>: Change the case priority to High or Critical from the detail header.</li><li>To <strong>close</strong>: Click <strong>Close Case</strong> from the status dropdown. A note is required.</li></ul><h4>What happens next?</h4><p>Assignments and closures are logged in the audit trail. The previous and new owners receive notifications.</p>",
+      "audience": ["agent","admin"],
+      "sort_order": 18,
+      "tags": ["cases","workflow","assignment","escalation"]
+    },
+    {
+      "feature_key": "cm.folders",
+      "feature_group": "cm",
+      "title": "Content Folders",
+      "summary": "How folders organise your content library.",
+      "content_html": "<h4>What is this?</h4><p>Folders are the top-level containers in the Content Management module. Every document, FAQ, template, and merge report lives inside a folder.</p><h4>When to use it</h4><p>Create folders to organise content by product, therapy area, country, or document type — whatever structure works for your team.</p><h4>How to do it</h4><ul><li>Go to <strong>Content → Folders</strong> tab.</li><li>Click <strong>+ New Folder</strong>.</li><li>Enter a name, select a product, and save.</li></ul><h4>What happens next?</h4><p>The folder appears in the folder panel of all content tabs (Documents, Modules, FAQs, etc.) and in the Browse Content module for agents.</p>",
+      "audience": ["cm_admin","admin","superadmin"],
+      "sort_order": 20,
+      "tags": ["cm","folders"]
+    },
+    {
+      "feature_key": "cm.documents",
+      "feature_group": "cm",
+      "title": "Managing Documents",
+      "summary": "Uploading, versioning, and publishing approved documents.",
+      "content_html": "<h4>What is this?</h4><p>Documents are the primary content assets in MIMS — product monographs, prescribing information, clinical summaries, and other approved reference materials.</p><h4>When to use it</h4><p>Upload a document when you have a new or updated approved resource that agents should be able to access and reference in case responses.</p><h4>How to do it</h4><ol><li>Go to <strong>Content → Documents</strong> tab.</li><li>Select the folder in the left panel.</li><li>Click <strong>+ New Document</strong>.</li><li>Upload a file (PDF, Word, etc.) or paste HTML content.</li><li>Fill in name, category, keywords, and version.</li><li>Click <strong>Save</strong>.</li></ol><h4>What happens next?</h4><p>The document is created in <strong>Draft</strong> status. Use <strong>Publish</strong> to make it available to agents in the Browse Content module.</p>",
+      "audience": ["cm_admin","admin","superadmin"],
+      "sort_order": 21,
+      "tags": ["cm","documents","upload"]
+    },
+    {
+      "feature_key": "cm.documents",
+      "feature_group": "cm",
+      "title": "Document Versioning & Checkout",
+      "summary": "Using checkout/checkin to safely edit published documents.",
+      "content_html": "<h4>What is this?</h4><p>MIMS uses a checkout/checkin system to prevent conflicting edits. When a document is checked out, only the checkout owner can edit it.</p><h4>When to use it</h4><p>Check out a document before making edits to an existing published or draft document.</p><h4>How to do it</h4><ul><li>Find the document and click <strong>Checkout</strong>.</li><li>Make your edits and upload the new file.</li><li>Click <strong>Checkin</strong> with an optional change note.</li></ul><h4>What happens next?</h4><p>A new version entry is created in the document's version history. The minor version number increments automatically (e.g. 1.0 → 1.1).</p>",
+      "audience": ["cm_admin","admin"],
+      "sort_order": 22,
+      "tags": ["cm","documents","versioning","checkout"]
+    },
+    {
+      "feature_key": "cm.documents",
+      "feature_group": "cm",
+      "title": "Bulk Document Actions",
+      "summary": "How to publish or archive multiple documents at once.",
+      "content_html": "<h4>What is this?</h4><p>Bulk actions let you Publish or Archive multiple documents in one step, saving time when managing large content libraries.</p><h4>When to use it</h4><p>Use bulk actions after a product update to publish a batch of new documents, or to archive outdated materials.</p><h4>How to do it</h4><ul><li>Go to the <strong>Documents</strong> tab.</li><li>Select the checkboxes next to the documents you want to act on.</li><li>Click <strong>Bulk Actions → Publish</strong> or <strong>Archive</strong>.</li><li>Confirm the action in the popup.</li></ul><h4>What happens next?</h4><p>All selected documents update to the new status. Archived documents are hidden from agents but remain in the system for audit purposes.</p>",
+      "audience": ["cm_admin","admin"],
+      "sort_order": 23,
+      "tags": ["cm","documents","bulk","archive","publish"]
+    },
+    {
+      "feature_key": "cm.modules",
+      "feature_group": "cm",
+      "title": "Content Modules",
+      "summary": "What modules are and how they differ from documents.",
+      "content_html": "<h4>What is this?</h4><p>Modules are reusable content blocks — chunks of structured text that can be referenced in multiple documents or templates. Think of them as building blocks for larger content.</p><h4>When to use it</h4><p>Create a module when you have content (e.g. a safety statement, dosing table, or indication summary) that appears in several different documents.</p><h4>How to do it</h4><ul><li>Go to <strong>Content → Modules</strong> tab.</li><li>Click <strong>+ New Module</strong>.</li><li>Enter a name, paste or type the HTML content, and save.</li></ul><h4>What happens next?</h4><p>The module is available in the Browse Content module for agents, and can be referenced from templates.</p>",
+      "audience": ["cm_admin","admin"],
+      "sort_order": 30,
+      "tags": ["cm","modules"]
+    },
+    {
+      "feature_key": "cm.templates",
+      "feature_group": "cm",
+      "title": "Response Templates",
+      "summary": "Creating and using letter/email templates for case responses.",
+      "content_html": "<h4>What is this?</h4><p>Templates are pre-approved letter and email templates that agents use to draft responses to medical information inquiries. They support merge fields that automatically fill in case data.</p><h4>When to use it</h4><p>Create a template for any type of response your team sends frequently — e.g. standard MI response letters, acknowledgement emails.</p><h4>How to do it</h4><ol><li>Go to <strong>Content → Templates</strong> tab.</li><li>Click <strong>+ New Template</strong>.</li><li>Select the template type (Response / Transmission / Correspondence).</li><li>Write the content using HTML. Insert merge fields like <code>{{case_number}}</code>, <code>{{patient_name}}</code>.</li><li>Save and publish.</li></ol><h4>What happens next?</h4><p>Agents can use the <strong>Render</strong> action to fill merge fields with live case data and generate a ready-to-send document.</p>",
+      "audience": ["cm_admin","admin"],
+      "sort_order": 40,
+      "tags": ["cm","templates","merge fields"]
+    },
+    {
+      "feature_key": "cm.templates",
+      "feature_group": "cm",
+      "title": "Template Merge Fields Reference",
+      "summary": "List of all supported {{merge_fields}} and what data they pull.",
+      "content_html": "<h4>What is this?</h4><p>Merge fields are placeholders in templates that are replaced with real data when a template is rendered for a specific case.</p><h4>Supported merge fields</h4><ul><li><code>{{case_number}}</code> — unique case ID</li><li><code>{{case_type}}</code> — type of case (MI, AE, PC)</li><li><code>{{case_status}}</code> — current status</li><li><code>{{case_priority}}</code> — priority level</li><li><code>{{case_assigned_to}}</code> — assigned agent's full name</li><li><code>{{patient_name}}</code> — primary contact full name</li><li><code>{{patient_email}}</code> — primary contact email</li><li><code>{{product_name}}</code> — product from MI record</li><li><code>{{org_name}}</code> — organisation name</li><li><code>{{agent_name}}</code> — logged-in user's name</li><li><code>{{date}}</code> — today's date (long format)</li><li><code>{{report_name}}</code> — template/report name</li></ul><h4>How to use</h4><p>Type the field exactly as shown (double curly braces, no spaces) inside your template HTML. Fields that don't resolve are left as-is.</p><h4>What happens next?</h4><p>When you click Render/Generate, all fields are replaced with live data from the selected case.</p>",
+      "audience": ["cm_admin","admin"],
+      "sort_order": 41,
+      "tags": ["cm","templates","merge fields","reference"]
+    },
+    {
+      "feature_key": "cm.merge_reports",
+      "feature_group": "cm",
+      "title": "Merge Reports",
+      "summary": "Creating and generating merge report templates from live case data.",
+      "content_html": "<h4>What is this?</h4><p>Merge Reports are document templates — similar to templates but specifically designed to generate structured reports by merging case data into a formatted layout.</p><h4>When to use it</h4><p>Use merge reports to generate consistent, pre-formatted reports for individual cases — e.g. a case summary PDF for submission or archiving.</p><h4>How to do it</h4><ol><li>Go to <strong>Content → Merge Reports</strong> tab.</li><li>Click <strong>+ New Merge Report</strong> and choose a folder.</li><li>Write or paste your HTML content with <code>{{merge_fields}}</code>.</li><li>Click <strong>⚡ Generate</strong> from the action menu.</li><li>Enter the Case ID to pull live data.</li><li>Preview, then download as HTML or print to PDF.</li></ol><h4>What happens next?</h4><p>The generated output is saved against the merge report record. It can be regenerated at any time for a different case.</p>",
+      "audience": ["cm_admin","admin","agent"],
+      "sort_order": 50,
+      "tags": ["cm","merge reports","generate"]
+    },
+    {
+      "feature_key": "cm.faqs",
+      "feature_group": "cm",
+      "title": "FAQs Management",
+      "summary": "Creating, approving, and expiring frequently asked questions.",
+      "content_html": "<h4>What is this?</h4><p>FAQs are approved question-and-answer pairs that agents can reference or send to requesters. They follow a draft → approved → expired lifecycle.</p><h4>When to use it</h4><p>Create FAQs for common medical questions about your products. They appear in agents' Browse Content module for quick reference.</p><h4>How to do it</h4><ol><li>Go to <strong>Content → FAQs</strong> tab.</li><li>Click <strong>+ New FAQ</strong>.</li><li>Enter the question, answer, category, and an expiry date.</li><li>Submit for approval.</li></ol><h4>What happens next?</h4><p>The FAQ goes to <strong>Pending Approval</strong> status. An approver must e-sign it before it becomes visible to agents. FAQs auto-expire on the set date.</p>",
+      "audience": ["cm_admin","admin"],
+      "sort_order": 60,
+      "tags": ["cm","faqs","approval"]
+    },
+    {
+      "feature_key": "cm.faqs",
+      "feature_group": "cm",
+      "title": "FAQ Approval Workflow",
+      "summary": "How the e-sign approval process works for FAQs.",
+      "content_html": "<h4>What is this?</h4><p>FAQs require electronic signature approval before they are published to agents. This ensures compliance with content governance policies.</p><h4>When to use it</h4><p>When a FAQ is submitted for approval and you are an authorised approver.</p><h4>How to do it</h4><ul><li>Find the FAQ with <strong>Pending Approval</strong> status.</li><li>Click <strong>Approve</strong>.</li><li>In the e-sign modal, enter your password and a confirmation note.</li><li>Click <strong>Confirm Approval</strong>.</li></ul><h4>What happens next?</h4><p>The FAQ moves to <strong>Approved</strong> status and becomes visible in the Browse Content module. The approval is logged with your signature in the audit trail.</p>",
+      "audience": ["cm_admin","admin"],
+      "sort_order": 61,
+      "tags": ["cm","faqs","e-sign","approval","workflow"]
+    },
+    {
+      "feature_key": "cm.reviews",
+      "feature_group": "cm",
+      "title": "Content Reviews",
+      "summary": "Scheduling and tracking periodic content review cycles.",
+      "content_html": "<h4>What is this?</h4><p>The Reviews section manages scheduled review cycles for your content library — ensuring documents, FAQs, and templates are regularly checked for accuracy and compliance.</p><h4>When to use it</h4><p>Set up a review when a document or FAQ is published, or when a regulatory deadline requires periodic content validation.</p><h4>How to do it</h4><ul><li>Go to <strong>Content → Reviews</strong> tab.</li><li>Click <strong>+ New Review</strong>.</li><li>Select the content item and assign a reviewer.</li><li>Set the due date and any notes.</li></ul><h4>What happens next?</h4><p>The reviewer receives a notification. When they complete the review, they can approve or flag the content for update. Review status is tracked on this screen.</p>",
+      "audience": ["cm_admin","admin"],
+      "sort_order": 70,
+      "tags": ["cm","reviews","periodic review"]
+    },
+    {
+      "feature_key": "browse",
+      "feature_group": "browse",
+      "title": "Browse Content",
+      "summary": "How to search and access approved documents, FAQs, and modules.",
+      "content_html": "<h4>What is this?</h4><p>The Browse Content module is the agent-facing library of all approved reference materials — documents, content modules, FAQs, and templates.</p><h4>When to use it</h4><p>Use Browse Content when you need to find reference information to answer a case, or to locate a document to send to a requester.</p><h4>How to do it</h4><ul><li>Click <strong>Browse</strong> in the top navigation.</li><li>Use the <strong>search bar</strong> to find content by title or keyword.</li><li>Filter by <strong>folder</strong>, <strong>type</strong>, or <strong>status</strong> using the dropdowns.</li><li>Click a card to open the detail sidebar.</li><li>Switch to the <strong>Preview</strong> tab to view the file inline.</li></ul><h4>What happens next?</h4><p>You can download the file, copy the content, or reference the document in a case note.</p>",
+      "audience": ["agent","cm_admin","admin"],
+      "sort_order": 80,
+      "tags": ["browse","documents","search","library"]
+    },
+    {
+      "feature_key": "browse",
+      "feature_group": "browse",
+      "title": "Previewing Documents & Modules",
+      "summary": "How the inline document and module preview works.",
+      "content_html": "<h4>What is this?</h4><p>The Browse Content detail sidebar has a <strong>Preview</strong> tab that lets you read documents and modules without downloading them.</p><h4>When to use it</h4><p>Use preview to quickly check a document's content before deciding to use or download it.</p><h4>How to do it</h4><ul><li>Click any document or module card in Browse Content.</li><li>In the detail sidebar, click the <strong>Preview</strong> tab.</li><li>For HTML content, the document renders in an inline frame.</li><li>For PDFs, the file opens in the browser's built-in PDF viewer.</li><li>For images, the image is displayed directly.</li></ul><h4>What happens next?</h4><p>You can download the file using the link at the bottom of the preview pane, or close the sidebar to return to the list.</p>",
+      "audience": ["agent","cm_admin","admin"],
+      "sort_order": 81,
+      "tags": ["browse","preview","PDF","documents"]
+    },
+    {
+      "feature_key": "reports",
+      "feature_group": "reports",
+      "title": "Reports & Analytics",
+      "summary": "Overview of available reports and how to generate them.",
+      "content_html": "<h4>What is this?</h4><p>The Reports module provides analytics and exports for cases, content, and compliance activities across your organisation.</p><h4>When to use it</h4><p>Use reports for periodic case volume reviews, regulatory submissions, team performance tracking, or content usage analytics.</p><h4>How to do it</h4><ul><li>Click <strong>Reports</strong> in the top navigation.</li><li>Select the report type from the left panel.</li><li>Apply date range and filter options.</li><li>Click <strong>Generate</strong> to load the data.</li><li>Use <strong>Export</strong> to download as CSV or PDF.</li></ul><h4>What happens next?</h4><p>Generated reports are not saved automatically. Download or screenshot the results if you need to retain them outside MIMS.</p>",
+      "audience": ["agent","cm_admin","admin","superadmin"],
+      "sort_order": 90,
+      "tags": ["reports","analytics","export"]
+    },
+    {
+      "feature_key": "inbox",
+      "feature_group": "inbox",
+      "title": "Inbox & Notifications",
+      "summary": "How the MIMS notification inbox works.",
+      "content_html": "<h4>What is this?</h4><p>The Inbox shows all system notifications directed to you — case assignments, status changes, approval requests, and system alerts.</p><h4>When to use it</h4><p>Check your inbox regularly to stay informed of actions that require your attention.</p><h4>How to do it</h4><ul><li>Click the <strong>bell icon</strong> in the top navigation to open the notification overlay.</li><li>Or go to <strong>Inbox</strong> in the navigation for the full list.</li><li>Click a notification to navigate to the relevant case or record.</li><li>Mark notifications as read individually or in bulk.</li></ul><h4>What happens next?</h4><p>Read notifications remain in your inbox for 30 days, then are automatically cleared. Unread notifications persist indefinitely.</p>",
+      "audience": ["all"],
+      "sort_order": 95,
+      "tags": ["inbox","notifications"]
+    },
+    {
+      "feature_key": "admin.picklists",
+      "feature_group": "admin",
+      "title": "Managing Picklists",
+      "summary": "How to add, edit, and reorder dropdown values across MIMS.",
+      "content_html": "<h4>What is this?</h4><p>Picklists define the dropdown options used throughout MIMS — case priorities, types, categories, contact roles, and more. Admins control what values appear in these dropdowns.</p><h4>When to use it</h4><p>Edit picklists when you need to add a new option, rename an existing one, or deactivate values that are no longer relevant.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Picklists</strong>.</li><li>Select the picklist type from the left panel.</li><li>Click <strong>+ Add Item</strong> to add a new value.</li><li>Use drag handles to reorder, or click the edit icon to rename.</li><li>Toggle the active switch to deactivate without deleting.</li></ul><h4>What happens next?</h4><p>Changes take effect immediately. Deactivated values no longer appear in dropdowns but existing records that used them are unaffected.</p>",
+      "audience": ["admin","superadmin"],
+      "sort_order": 100,
+      "tags": ["admin","picklists","configuration"]
+    },
+    {
+      "feature_key": "admin.field_setup",
+      "feature_group": "admin",
+      "title": "Field Setup & Custom Fields",
+      "summary": "Configuring which fields appear on case and contact forms.",
+      "content_html": "<h4>What is this?</h4><p>Field Setup lets admins control which fields appear on case forms — making fields required, optional, hidden, or adding custom fields unique to your organisation.</p><h4>When to use it</h4><p>Use Field Setup when you need to capture additional information in cases that isn't in the default form, or to hide fields that aren't relevant to your workflow.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Field Setup</strong>.</li><li>Select the form (Case, Contact, MI, AE, PC) from the top tabs.</li><li>Toggle fields between Required, Optional, and Hidden.</li><li>Click <strong>+ Add Custom Field</strong> to create a new field.</li></ul><h4>What happens next?</h4><p>Form changes apply to all new cases immediately. Existing case records are not affected.</p>",
+      "audience": ["admin","superadmin"],
+      "sort_order": 101,
+      "tags": ["admin","field setup","custom fields","forms"]
+    },
+    {
+      "feature_key": "admin.workflow",
+      "feature_group": "admin",
+      "title": "Workflow Activities",
+      "summary": "Configuring workflow stages and transition rules for cases.",
+      "content_html": "<h4>What is this?</h4><p>Workflow Activities define the steps a case goes through — what statuses are available, what transitions are allowed, and whether a note or e-signature is required.</p><h4>When to use it</h4><p>Configure workflow when you need to add a new case status, change who can transition a case, or enforce documentation at a specific step.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Workflow</strong>.</li><li>Select the case type from the dropdown.</li><li>Add, edit, or reorder workflow steps.</li><li>For each step, set: allowed roles, required note, and e-sign requirement.</li></ul><h4>What happens next?</h4><p>The updated workflow applies to new and in-progress cases. Agents will see only the transitions allowed for their role at each step.</p>",
+      "audience": ["admin","superadmin"],
+      "sort_order": 102,
+      "tags": ["admin","workflow","activities","transitions"]
+    },
+    {
+      "feature_key": "admin.product_dictionary",
+      "feature_group": "admin",
+      "title": "Product Dictionary",
+      "summary": "Managing your product and brand list in MIMS.",
+      "content_html": "<h4>What is this?</h4><p>The Product Dictionary is the master list of products (medicines, devices, etc.) that can be referenced in cases, MI records, and content.</p><h4>When to use it</h4><p>Add a product when a new drug or device needs to be tracked in MIMS, or update an existing product when its details change.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Product Dictionary</strong>.</li><li>Click <strong>+ Add Product</strong>.</li><li>Enter the brand name, INN (international non-proprietary name), therapeutic area, and active status.</li></ul><h4>What happens next?</h4><p>The product becomes available in case MI forms, content folder assignment, and reporting filters.</p>",
+      "audience": ["admin","superadmin"],
+      "sort_order": 103,
+      "tags": ["admin","products","product dictionary"]
+    },
+    {
+      "feature_key": "admin.security_groups",
+      "feature_group": "admin",
+      "title": "Security Groups & Permissions",
+      "summary": "How security groups control what each user can see and do.",
+      "content_html": "<h4>What is this?</h4><p>Security Groups define role-based access control for your organisation — which modules users can see and what actions they can perform.</p><h4>When to use it</h4><p>Use security groups when onboarding new users with specific access requirements, or when you need to restrict access to sensitive case types or content.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Security Groups</strong>.</li><li>Click <strong>+ New Group</strong> or edit an existing one.</li><li>Toggle permissions for each module (Cases, Content, Reports, etc.).</li><li>Assign users to the group from the Users section.</li></ul><h4>What happens next?</h4><p>Users see only the modules and actions permitted by their security group. Changes take effect on next login.</p>",
+      "audience": ["admin","superadmin"],
+      "sort_order": 104,
+      "tags": ["admin","security","permissions","roles"]
+    },
+    {
+      "feature_key": "admin.case_numbering",
+      "feature_group": "admin",
+      "title": "Case Numbering Configuration",
+      "summary": "Setting up automatic case number formats for your organisation.",
+      "content_html": "<h4>What is this?</h4><p>Case Numbering lets you define the format for automatically assigned case numbers — e.g. <code>MI-2026-00001</code>.</p><h4>When to use it</h4><p>Configure case numbering when setting up a new organisation or changing your numbering convention.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Case Numbering</strong>.</li><li>Select the case type.</li><li>Set the prefix, year format, separator, and padding.</li><li>Click <strong>Save</strong>.</li></ul><h4>What happens next?</h4><p>New cases created after saving use the new format. Existing case numbers are not changed.</p>",
+      "audience": ["admin","superadmin"],
+      "sort_order": 105,
+      "tags": ["admin","case numbering","configuration"]
+    },
+    {
+      "feature_key": "admin.organisations",
+      "feature_group": "admin",
+      "title": "Organisation Management",
+      "summary": "How superadmins create and manage organisations and sites.",
+      "content_html": "<h4>What is this?</h4><p>The Organisations section (Superadmin only) is where new pharmaceutical organisations and their sub-sites are created and managed within MIMS.</p><h4>When to use it</h4><p>Use this when onboarding a new client organisation, adding a site/subsidiary, or deactivating an organisation.</p><h4>How to do it</h4><ul><li>Go to <strong>Superadmin Console → Organizations</strong>.</li><li>Click <strong>+ New Organisation</strong>.</li><li>Enter the name, contact details, and select which modules to enable.</li><li>Add sites under the organisation if needed.</li></ul><h4>What happens next?</h4><p>The organisation is created. You can then set up users, assign admins, and configure module access for the org.</p>",
+      "audience": ["superadmin"],
+      "sort_order": 110,
+      "tags": ["admin","organisations","superadmin","sites"]
+    },
+    {
+      "feature_key": "admin.content_intelligence",
+      "feature_group": "admin",
+      "title": "Content Intelligence — Overview",
+      "summary": "Introduction to the four AI-powered content analysis features.",
+      "content_html": "<h4>What is this?</h4><p>Content Intelligence is a suite of AI-powered tools in the Admin Console that help you analyse, validate, and manage the quality of your content library.</p><h4>The four features</h4><ul><li><strong>Evidence Chain</strong> — traces the source evidence behind content claims.</li><li><strong>Contradiction Radar</strong> — identifies conflicting statements across documents.</li><li><strong>Digital Twin</strong> — creates a regulatory profile snapshot for a product.</li><li><strong>Adaptive Risk</strong> — scores the regulatory risk of your current content state.</li></ul><h4>When to use it</h4><p>Use Content Intelligence during content audits, before regulatory submissions, or when reviewing newly uploaded materials.</p><h4>What happens next?</h4><p>Each tool generates an analysis report viewable on screen. Results are not automatically acted upon — you review and take action based on the findings.</p>",
+      "audience": ["admin","superadmin"],
+      "sort_order": 120,
+      "tags": ["admin","content intelligence","AI","evidence","contradiction","risk"]
+    },
+    {
+      "feature_key": "admin.content_intelligence",
+      "feature_group": "admin",
+      "title": "Evidence Chain Analysis",
+      "summary": "How to trace the scientific evidence behind a content claim.",
+      "content_html": "<h4>What is this?</h4><p>Evidence Chain traces how a claim in your approved content is supported by source evidence — clinical studies, product labels, and regulatory documents.</p><h4>When to use it</h4><p>Use Evidence Chain when you need to verify that a claim is backed by current, valid evidence — e.g. before publishing new content or responding to a regulatory query.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Content Intelligence → Evidence Chain</strong>.</li><li>Select the document or enter a content claim.</li><li>Click <strong>Analyse</strong>.</li></ul><h4>What happens next?</h4><p>The system returns a chain of evidence nodes showing supporting sources, confidence levels, and gaps where evidence is missing or weak.</p>",
+      "audience": ["admin","superadmin"],
+      "sort_order": 121,
+      "tags": ["admin","content intelligence","evidence chain"]
+    },
+    {
+      "feature_key": "admin.policy_graph",
+      "feature_group": "admin",
+      "title": "Policy Graph",
+      "summary": "Visualising and managing your medical affairs policy relationships.",
+      "content_html": "<h4>What is this?</h4><p>The Policy Graph is a visual map of your medical affairs policies — showing how internal policies, SOPs, regulations, and content interconnect.</p><h4>When to use it</h4><p>Use the Policy Graph to understand the impact of a regulatory change on your existing policies, or to identify policy gaps before an audit.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Policy Graph</strong>.</li><li>Click <strong>+ Add Node</strong> to add a policy or regulation.</li><li>Draw connections between related nodes.</li><li>Use <strong>Evaluate</strong> to run an impact analysis from a selected node.</li></ul><h4>What happens next?</h4><p>The graph updates in real-time. The evaluate function returns a risk propagation report showing which downstream policies are affected by a change at the selected node.</p>",
+      "audience": ["admin","superadmin"],
+      "sort_order": 130,
+      "tags": ["admin","policy graph","compliance","regulations"]
+    }
+  ]
+}

@@ -22,8 +22,11 @@ export default function NotificationOverlay({ open, onClose }) {
   const [rows, setRows] = useState([])
   const [unread, setUnread] = useState(0)
   const [ackPending, setAckPending] = useState(0)
+  const [failedDelivery, setFailedDelivery] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [retryingId, setRetryingId] = useState(null)
+  const [retryingAll, setRetryingAll] = useState(false)
   const [severityFilter, setSeverityFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [unreadOnly, setUnreadOnly] = useState(false)
@@ -46,10 +49,12 @@ export default function NotificationOverlay({ open, onClose }) {
       setRows(items)
       setUnread(Number(data.unread || 0))
       setAckPending(Number(data.ack_pending || 0))
+      setFailedDelivery(Number(data.failed_delivery || 0))
     } catch (err) {
       setRows([])
       setUnread(0)
       setAckPending(0)
+      setFailedDelivery(0)
       setError(err.message || 'Failed to load notifications.')
     } finally {
       setLoading(false)
@@ -104,6 +109,44 @@ export default function NotificationOverlay({ open, onClose }) {
     }
   }
 
+  async function retryNotification(id) {
+    setRetryingId(id)
+    try {
+      const res = await fetch(`${API}/notifications/${id}/retry`, { method: 'POST', headers })
+      if (!res.ok) return
+      setRows(prev => prev.map((n) => (
+        n.id === id
+          ? {
+              ...n,
+              delivery_status: 'delivered',
+              next_retry_at: null,
+              failure_reason: null,
+              last_delivery_attempt_at: new Date().toISOString(),
+              delivery_attempts: Number(n.delivery_attempts || 0) + 1,
+            }
+          : n
+      )))
+      setFailedDelivery(prev => Math.max(0, prev - 1))
+    } catch (_) {
+      // no-op
+    } finally {
+      setRetryingId(null)
+    }
+  }
+
+  async function retryAllFailed() {
+    setRetryingAll(true)
+    try {
+      const res = await fetch(`${API}/notifications/retry-failed`, { method: 'POST', headers })
+      if (!res.ok) return
+      await loadNotifications()
+    } catch (_) {
+      // no-op
+    } finally {
+      setRetryingAll(false)
+    }
+  }
+
   async function handleOpen(notification) {
     if (!notification.is_read) {
       await markRead(notification.id)
@@ -130,8 +173,16 @@ export default function NotificationOverlay({ open, onClose }) {
             <span className="mims-notif-title">Notifications</span>
             <span className="mims-notif-unread-pill">{unread} unread</span>
             <span className="mims-notif-ack-pill">{ackPending} ack pending</span>
+            <span className="mims-notif-ack-pill">{failedDelivery} failed delivery</span>
           </div>
           <div className="mims-notif-header-actions">
+            <button
+              className="mims-notif-markall"
+              onClick={retryAllFailed}
+              disabled={failedDelivery === 0 || retryingAll}
+            >
+              {retryingAll ? 'Retrying…' : 'Retry failed'}
+            </button>
             <button className="mims-notif-markall" onClick={markAllRead} disabled={rows.length === 0 || unread === 0}>
               Mark all read
             </button>
@@ -194,6 +245,7 @@ export default function NotificationOverlay({ open, onClose }) {
               <div className="mims-notif-meta">
                 <span>{(n.category || 'general').toUpperCase()}</span>
                 <span>{formatWhen(n.created_at)}</span>
+                <span>Delivery: {String(n.delivery_status || 'delivered')}</span>
               </div>
               <div className="mims-notif-actions">
                 {n.requires_acknowledgement && !n.acknowledged_at && (
@@ -210,6 +262,15 @@ export default function NotificationOverlay({ open, onClose }) {
                     onClick={e => { e.stopPropagation(); markRead(n.id) }}
                   >
                     Mark read
+                  </button>
+                )}
+                {String(n.delivery_status || '').toLowerCase() === 'failed' && (
+                  <button
+                    className="mims-notif-action-btn"
+                    onClick={e => { e.stopPropagation(); retryNotification(n.id) }}
+                    disabled={retryingId === n.id}
+                  >
+                    {retryingId === n.id ? 'Retrying…' : 'Retry delivery'}
                   </button>
                 )}
                 {n.link_url && <span className="mims-notif-linkhint">Open →</span>}

@@ -1,8 +1,13 @@
 import { useAuth } from '../context/AuthContext'
 
-export default function ModuleAccessGuard({ moduleKey, children }) {
+export default function ModuleAccessGuard({ moduleKey, moduleKeys, children }) {
   const { hasModuleAccess, logout } = useAuth()
-  if (moduleKey && !hasModuleAccess(moduleKey)) {
+  const allowedModules = Array.isArray(moduleKeys)
+    ? moduleKeys.filter(Boolean)
+    : (moduleKey ? [moduleKey] : [])
+  const canAccess = allowedModules.length === 0 || allowedModules.some(hasModuleAccess)
+
+  if (!canAccess) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 12, fontFamily: 'sans-serif' }}>
         <div style={{ fontSize: 48 }}>🚫</div>

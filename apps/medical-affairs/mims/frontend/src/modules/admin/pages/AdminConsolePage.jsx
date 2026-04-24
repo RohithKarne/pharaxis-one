@@ -13,6 +13,8 @@ import AdminIntegrationSection from '../components/AdminIntegrationSection'
 import AdminMiscSection from '../components/AdminMiscSection'
 import AdminPicklistsSection from '../components/AdminPicklistsSection'
 import AdminMICategoriesSection from '../components/AdminMICategoriesSection'
+import AdminPolicyGraphSection from '../components/AdminPolicyGraphSection'
+import AdminContentIntelligenceSection from '../components/AdminContentIntelligenceSection'
 import {
   ADMIN_NAV_GROUPS,
   getAdminSectionLabel,
@@ -770,6 +772,14 @@ export default function AdminConsolePage() {
 
       case 'mi-categories':
         return <AdminMICategoriesSection H={H} />
+
+      case 'policy-graph':
+        return <AdminPolicyGraphSection H={H} flash={flash} />
+      case 'evidence-chain-compiler':
+      case 'contradiction-radar':
+      case 'digital-twin-release-simulator':
+      case 'adaptive-risk-workflow':
+        return <AdminContentIntelligenceSection contentSection={contentSection} H={H} flash={flash} />
 
       case 'mir-int':
       case 'crm-int':

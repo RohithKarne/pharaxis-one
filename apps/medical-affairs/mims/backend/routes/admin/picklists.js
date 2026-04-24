@@ -24,6 +24,17 @@ function normalizeStr(v, fallback = '') {
   return s || fallback;
 }
 
+function toDateOnlyOrNull(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return null;
+  const year = dt.getUTCFullYear();
+  const month = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(dt.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function resolveOrgScope(req, requestedOrgId) {
   if (req.user.role === 'superadmin') {
     return Number(requestedOrgId || 0);
@@ -401,7 +412,7 @@ router.get('/picklists', authenticate, requireRole('admin', 'superadmin'), requi
     const total = Number(countRow.total || 0);
 
     const [picklists] = await pool.execute(
-      `SELECT p.id, p.name, p.value, p.description, p.status, p.created_at, p.updated_at, p.org_id,
+      `SELECT p.id, p.name, p.value, p.description, p.status, p.effective_from, p.effective_to, p.governance_note, p.created_at, p.updated_at, p.org_id,
               p.field_id,
               COALESCE(c.name, p.category, 'General') AS category,
               COALESCE(f.name, p.field_type, 'General') AS field_type
@@ -442,6 +453,9 @@ router.get('/picklists/export', authenticate, requireRole('admin', 'superadmin')
               p.value,
               p.description,
               p.status,
+              p.effective_from,
+              p.effective_to,
+              p.governance_note,
               p.created_at,
               p.updated_at
        FROM picklists p
@@ -465,6 +479,11 @@ router.post('/picklists', authenticate, requireRole('admin', 'superadmin'), requ
     if (!value) {
       return res.status(400).json({ error: 'value is required.' });
     }
+    const effectiveFrom = toDateOnlyOrNull(req.body?.effective_from);
+    const effectiveTo = toDateOnlyOrNull(req.body?.effective_to);
+    if (effectiveFrom && effectiveTo && effectiveFrom > effectiveTo) {
+      return res.status(400).json({ error: 'effective_from cannot be after effective_to.' });
+    }
 
     const context = await resolveFieldContext(req, req.body);
     if (!context) return res.status(400).json({ error: 'Invalid field_id.' });
@@ -472,8 +491,8 @@ router.post('/picklists', authenticate, requireRole('admin', 'superadmin'), requ
     const displayName = normalizeStr(name, value);
 
     const [result] = await pool.execute(
-      `INSERT INTO picklists (name, category, field_type, field_id, value, description, status, created_by, org_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO picklists (name, category, field_type, field_id, value, description, status, effective_from, effective_to, governance_note, created_by, org_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         displayName,
         context.categoryName,
@@ -482,6 +501,9 @@ router.post('/picklists', authenticate, requireRole('admin', 'superadmin'), requ
         normalizeStr(value),
         description || null,
         status || 'Active',
+        effectiveFrom,
+        effectiveTo,
+        req.body?.governance_note ? String(req.body.governance_note).trim() : null,
         req.user.userId,
         context.orgId,
       ]
@@ -494,7 +516,7 @@ router.post('/picklists', authenticate, requireRole('admin', 'superadmin'), requ
     });
 
     const [[created]] = await pool.execute(
-      `SELECT p.id, p.name, p.value, p.description, p.status, p.created_at, p.updated_at, p.field_id,
+      `SELECT p.id, p.name, p.value, p.description, p.status, p.effective_from, p.effective_to, p.governance_note, p.created_at, p.updated_at, p.field_id,
               COALESCE(c.name, p.category, 'General') AS category,
               COALESCE(f.name, p.field_type, 'General') AS field_type
        FROM picklists p
@@ -519,7 +541,7 @@ router.put('/picklists/:id', authenticate, requireRole('admin', 'superadmin'), r
   try {
     const id = Number(req.params.id);
     const [[existing]] = await pool.execute(
-      `SELECT p.id, p.org_id, p.name, p.value, p.description, p.status, p.field_id, p.category, p.field_type
+      `SELECT p.id, p.org_id, p.name, p.value, p.description, p.status, p.effective_from, p.effective_to, p.governance_note, p.field_id, p.category, p.field_type
        FROM picklists p
        WHERE p.id = ? ${req.user.role === 'superadmin' ? '' : 'AND p.org_id = ?'}
        LIMIT 1`,
@@ -541,11 +563,17 @@ router.put('/picklists/:id', authenticate, requireRole('admin', 'superadmin'), r
       value: normalizeStr(req.body.value, existing.value),
       description: req.body.description === undefined ? existing.description : req.body.description,
       status: req.body.status || existing.status || 'Active',
+      effective_from: req.body.effective_from === undefined ? existing.effective_from : toDateOnlyOrNull(req.body.effective_from),
+      effective_to: req.body.effective_to === undefined ? existing.effective_to : toDateOnlyOrNull(req.body.effective_to),
+      governance_note: req.body.governance_note === undefined ? existing.governance_note : (req.body.governance_note ? String(req.body.governance_note).trim() : null),
     };
+    if (payload.effective_from && payload.effective_to && payload.effective_from > payload.effective_to) {
+      return res.status(400).json({ error: 'effective_from cannot be after effective_to.' });
+    }
 
     await pool.execute(
       `UPDATE picklists
-       SET name = ?, category = ?, field_type = ?, field_id = ?, value = ?, description = ?, status = ?
+       SET name = ?, category = ?, field_type = ?, field_id = ?, value = ?, description = ?, status = ?, effective_from = ?, effective_to = ?, governance_note = ?
        WHERE id = ?`,
       [
         payload.name,
@@ -555,6 +583,9 @@ router.put('/picklists/:id', authenticate, requireRole('admin', 'superadmin'), r
         payload.value,
         payload.description || null,
         payload.status,
+        payload.effective_from,
+        payload.effective_to,
+        payload.governance_note,
         id,
       ]
     );
@@ -564,6 +595,8 @@ router.put('/picklists/:id', authenticate, requireRole('admin', 'superadmin'), r
       field_type: context.fieldName,
       value: payload.value,
       status: payload.status,
+      effective_from: payload.effective_from,
+      effective_to: payload.effective_to,
     });
 
     res.json({ message: 'Picklist value updated.' });
@@ -641,7 +674,7 @@ router.post('/picklists/bulk-status', authenticate, requireRole('admin', 'supera
 router.get('/picklists/export-csv', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
     const { category } = req.query;
-    let query = `SELECT p.id, p.name, p.field_type, p.value, p.description, p.status FROM picklists p`;
+    let query = `SELECT p.id, p.name, p.field_type, p.value, p.description, p.status, p.effective_from, p.effective_to, p.governance_note FROM picklists p`;
     const params = [];
     if (req.user.role !== 'superadmin') {
       query += ` WHERE p.org_id = ?`;
@@ -652,8 +685,18 @@ router.get('/picklists/export-csv', authenticate, requireRole('admin', 'superadm
     }
     query += ` ORDER BY p.name, p.value`;
     const [rows] = await pool.execute(query, params);
-    const header = 'id,name,field_type,value,description,status';
-    const csvRows = rows.map(r => [r.id, `"${(r.name||'').replace(/"/g,'""')}"`, r.field_type, `"${(r.value||'').replace(/"/g,'""')}"`, `"${(r.description||'').replace(/"/g,'""')}"`, r.status].join(','));
+    const header = 'id,name,field_type,value,description,status,effective_from,effective_to,governance_note';
+    const csvRows = rows.map(r => [
+      r.id,
+      `"${(r.name||'').replace(/"/g,'""')}"`,
+      r.field_type,
+      `"${(r.value||'').replace(/"/g,'""')}"`,
+      `"${(r.description||'').replace(/"/g,'""')}"`,
+      r.status,
+      r.effective_from || '',
+      r.effective_to || '',
+      `"${String(r.governance_note || '').replace(/"/g, '""')}"`
+    ].join(','));
     const csv = [header, ...csvRows].join('\n');
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="picklists.csv"');
@@ -680,10 +723,23 @@ router.post('/picklists/import-csv', authenticate, requireRole('admin', 'superad
         userId: req.user.userId,
       });
       await pool.execute(
-        `INSERT INTO picklists (name, category, field_type, field_id, value, description, status, created_by, org_id)
-         VALUES (?,?,?,?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE value=VALUES(value)`,
-        [row.name, ensured.categoryName, ensured.fieldName, ensured.fieldId, row.value, row.description || null, 'Active', req.user.userId || null, orgId]
+        `INSERT INTO picklists (name, category, field_type, field_id, value, description, status, effective_from, effective_to, governance_note, created_by, org_id)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE value=VALUES(value), effective_from=VALUES(effective_from), effective_to=VALUES(effective_to), governance_note=VALUES(governance_note)`,
+        [
+          row.name,
+          ensured.categoryName,
+          ensured.fieldName,
+          ensured.fieldId,
+          row.value,
+          row.description || null,
+          'Active',
+          toDateOnlyOrNull(row.effective_from),
+          toDateOnlyOrNull(row.effective_to),
+          row.governance_note || null,
+          req.user.userId || null,
+          orgId,
+        ]
       );
       imported++;
     }
@@ -733,10 +789,16 @@ router.post('/picklists/bulk', authenticate, requireRole('admin', 'superadmin'),
       const name = normalizeStr(item.name || item.Name, value);
       const status = normalizeStr(item.status || item.Status, 'Active');
       const description = item.description ?? item.Description ?? null;
+      const effectiveFrom = toDateOnlyOrNull(item.effective_from || item.effectiveFrom || item['Effective From']);
+      const effectiveTo = toDateOnlyOrNull(item.effective_to || item.effectiveTo || item['Effective To']);
       const orgId = resolveOrgScope(req, item.org_id || item.orgId || 0);
 
       if (!value) {
         errors.push({ index: i, error: 'value is required.', item });
+        continue;
+      }
+      if (effectiveFrom && effectiveTo && effectiveFrom > effectiveTo) {
+        errors.push({ index: i, error: 'effective_from cannot be after effective_to.', item });
         continue;
       }
 
@@ -749,16 +811,32 @@ router.post('/picklists/bulk', authenticate, requireRole('admin', 'superadmin'),
         });
 
         await pool.execute(
-          `INSERT INTO picklists (name, category, field_type, field_id, value, description, status, created_by, org_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO picklists (name, category, field_type, field_id, value, description, status, effective_from, effective_to, governance_note, created_by, org_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE
              name = VALUES(name),
              category = VALUES(category),
              field_type = VALUES(field_type),
              field_id = VALUES(field_id),
              description = VALUES(description),
-             status = VALUES(status)`,
-          [name, ensured.categoryName, ensured.fieldName, ensured.fieldId, value, description, status, req.user.userId, orgId]
+             status = VALUES(status),
+             effective_from = VALUES(effective_from),
+             effective_to = VALUES(effective_to),
+             governance_note = VALUES(governance_note)`,
+          [
+            name,
+            ensured.categoryName,
+            ensured.fieldName,
+            ensured.fieldId,
+            value,
+            description,
+            status,
+            effectiveFrom,
+            effectiveTo,
+            item.governance_note || item.governanceNote || null,
+            req.user.userId,
+            orgId,
+          ]
         );
 
         imported += 1;

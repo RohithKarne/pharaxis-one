@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../database/db');
 const { authenticate } = require('../middleware/auth');
+const { markNotificationDelivered, retryFailedNotifications } = require('../services/notificationCenterService');
 
 function parseIntSafe(value, fallback) {
   const parsed = parseInt(value, 10);
@@ -63,7 +64,13 @@ router.get('/notifications', authenticate, async (req, res) => {
          is_read,
          created_at,
          read_at,
-         acknowledged_at
+         acknowledged_at,
+         delivery_status,
+         delivery_attempts,
+         max_delivery_attempts,
+         last_delivery_attempt_at,
+         next_retry_at,
+         failure_reason
        FROM notifications
        WHERE ${whereSql}
        ORDER BY
@@ -86,12 +93,19 @@ router.get('/notifications', authenticate, async (req, res) => {
        WHERE user_id = ? AND requires_acknowledgement = 1 AND acknowledged_at IS NULL`,
       [req.user.userId]
     );
+    const [[{ failed_delivery }]] = await pool.execute(
+      `SELECT COUNT(*) AS failed_delivery
+       FROM notifications
+       WHERE user_id = ? AND delivery_status = 'failed'`,
+      [req.user.userId]
+    );
 
     return res.json({
       notifications: rows.map((row) => ({ ...row, metadata: parseJsonSafe(row.metadata, null) })),
       total,
       unread,
       ack_pending,
+      failed_delivery,
       limit,
       offset,
     });
@@ -142,6 +156,38 @@ router.post('/notifications/read-all', authenticate, async (req, res) => {
       [req.user.userId]
     );
     return res.json({ success: true, updated: result.affectedRows || 0 });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Server error.' });
+  }
+});
+
+// POST /api/notifications/:id/retry — manual retry of failed notification delivery marker
+router.post('/notifications/:id/retry', authenticate, async (req, res) => {
+  try {
+    const [[row]] = await pool.execute(
+      `SELECT id, user_id, delivery_status
+       FROM notifications
+       WHERE id = ? AND user_id = ?`,
+      [req.params.id, req.user.userId]
+    );
+    if (!row) return res.status(404).json({ error: 'Notification not found.' });
+    if (row.delivery_status !== 'failed') {
+      return res.status(400).json({ error: 'Retry is allowed only for failed notifications.' });
+    }
+    await markNotificationDelivered(row.id);
+    return res.json({ success: true, retried_id: row.id });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Server error.' });
+  }
+});
+
+// POST /api/notifications/retry-failed — retry due failed notifications for current user
+router.post('/notifications/retry-failed', authenticate, async (req, res) => {
+  try {
+    const retried = await retryFailedNotifications(Number(req.body?.limit || 100), {
+      userId: req.user.userId,
+    });
+    return res.json({ success: true, retried });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Server error.' });
   }

@@ -13,6 +13,7 @@ const { authenticate } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
 const bcrypt = require('bcrypt');
 const { logger } = require('../../services/logger');
+const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 
 const multer = require('multer');
 const storage = multer.diskStorage({
@@ -165,8 +166,12 @@ router.get('/documents', authenticate, async (req, res) => {
       params.push(doc_type);
     }
     if (search) {
-      query += ' AND (d.name LIKE ? OR d.doc_id LIKE ? OR d.search_tags LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      query += ' AND (d.name LIKE ? OR d.doc_id LIKE ? OR d.search_tags LIKE ? OR d.document_category LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    if (req.query.category) {
+      query += ' AND d.document_category = ?';
+      params.push(req.query.category);
     }
     if (include_expired !== 'true') {
       query += ' AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())';
@@ -583,6 +588,25 @@ router.post('/documents/:id/publish', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Only the document owner can publish. Ask the owner to release the document first.' });
     }
 
+    const evidenceGate = await enforceEvidenceGate({
+      orgId: doc.folder_org_id || req.user.orgId,
+      contentType: 'document',
+      contentId: Number(id),
+      mode: 'publish',
+      actorUserId: req.user.userId,
+      metadata: {
+        route: '/api/cm/documents/:id/publish',
+        reason: reason || null,
+      },
+    });
+    if (!evidenceGate.allow) {
+      return res.status(422).json({
+        error: 'Evidence Chain Compiler blocked this publish request.',
+        run_id: evidenceGate.run_id,
+        evidence: evidenceGate.result,
+      });
+    }
+
     const [[user]] = await pool.execute('SELECT * FROM users WHERE id = ?', [req.user.userId]);
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
@@ -873,6 +897,106 @@ router.post('/documents/release-stale-checkouts', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST /api/cm/documents/bulk — bulk publish or archive documents
+router.post('/documents/bulk', authenticate, async (req, res) => {
+  try {
+    const { action, ids } = req.body;
+    if (!['publish', 'archive'].includes(action)) return res.status(400).json({ error: 'action must be publish or archive.' });
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array is required.' });
+
+    const newStatus = action === 'publish' ? 'Published' : 'Archived';
+    const results = { success: [], failed: [] };
+
+    for (const rawId of ids) {
+      const docId = parseInt(rawId, 10);
+      if (!docId) { results.failed.push({ id: rawId, reason: 'Invalid id' }); continue; }
+
+      const doc = await getScopedDocument(req, docId);
+      if (!doc) { results.failed.push({ id: docId, reason: 'Not found or access denied' }); continue; }
+
+      if (action === 'publish') {
+        const allowedForPublish = ['Approved', 'Under Review'];
+        if (!allowedForPublish.includes(doc.status)) {
+          results.failed.push({ id: docId, reason: `Cannot publish from status: ${doc.status}` }); continue;
+        }
+        if (doc.owner_user_id && doc.owner_user_id !== req.user.userId && req.user.role !== 'admin' && !isSuperadmin(req)) {
+          results.failed.push({ id: docId, reason: 'Owner lock — not your document' }); continue;
+        }
+
+        const evidenceGate = await enforceEvidenceGate({
+          orgId: doc.folder_org_id || req.user.orgId,
+          contentType: 'document',
+          contentId: Number(docId),
+          mode: 'publish',
+          actorUserId: req.user.userId,
+          metadata: { route: '/api/cm/documents/bulk', action: 'publish' },
+        });
+        if (!evidenceGate.allow) {
+          results.failed.push({
+            id: docId,
+            reason: evidenceGate.result?.blockers?.[0] || 'Evidence gate blocked publish.',
+            run_id: evidenceGate.run_id,
+          });
+          continue;
+        }
+      }
+
+      await pool.execute(
+        'UPDATE cm_documents SET status = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
+        [newStatus, req.user.userId, docId]
+      );
+      await audit(req.user.userId, req.user.email, action.toUpperCase(), 'cm_document', docId, { bulk: true, status: newStatus });
+      results.success.push(docId);
+    }
+
+    res.json({ message: `Bulk ${action} complete.`, success: results.success.length, failed: results.failed });
+  } catch (err) {
+    logger.error({ err }, 'POST /cm/documents/bulk error');
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/cm/content-usage — log that a document/faq/module was used in an MI response
+router.post('/content-usage', authenticate, async (req, res) => {
+  try {
+    const { content_type, content_id, case_id, response_id } = req.body;
+    if (!content_type || !content_id || !case_id) {
+      return res.status(400).json({ error: 'content_type, content_id, and case_id are required.' });
+    }
+    if (!['document', 'faq', 'module'].includes(content_type)) {
+      return res.status(400).json({ error: 'content_type must be document, faq, or module.' });
+    }
+    await pool.execute(
+      `INSERT INTO cm_content_usage (content_type, content_id, case_id, response_id, used_by)
+       VALUES (?, ?, ?, ?, ?)`,
+      [content_type, content_id, case_id, response_id || null, req.user.userId]
+    );
+    res.status(201).json({ message: 'Usage logged.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/content-usage/:contentType/:contentId — usage history for a content item
+router.get('/content-usage/:contentType/:contentId', authenticate, async (req, res) => {
+  try {
+    const { contentType, contentId } = req.params;
+    const [rows] = await pool.execute(
+      `SELECT cu.*, c.case_number, u.name AS used_by_name
+       FROM cm_content_usage cu
+       LEFT JOIN cases c ON c.id = cu.case_id
+       LEFT JOIN users u ON u.id = cu.used_by
+       WHERE cu.content_type = ? AND cu.content_id = ?
+       ORDER BY cu.used_at DESC
+       LIMIT 100`,
+      [contentType, contentId]
+    );
+    res.json({ usage: rows, total: rows.length });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // GET /api/cm/documents/module-usage/:moduleId — module usage report (CM-E7)
 router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) => {
   try {
@@ -888,6 +1012,43 @@ router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) =
     );
     res.json({ module_id: moduleId, linked_documents: docs, count: docs.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/cm/documents/:id/file — serve the stored file inline (for in-app preview)
+router.get('/documents/:id/file', authenticate, async (req, res) => {
+  try {
+    const [[doc]] = await pool.execute(
+      `SELECT d.file_path, d.file_name, d.file_mime, f.org_id
+       FROM cm_documents d
+       JOIN cm_folders f ON f.id = d.folder_id
+       WHERE d.id = ?`,
+      [req.params.id]
+    );
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+
+    // Org scope check (superadmin bypasses)
+    const isSA = req.user.role === 'superadmin';
+    if (!isSA && doc.org_id !== req.user.orgId) return res.status(403).json({ error: 'Forbidden.' });
+
+    if (!doc.file_path) return res.status(404).json({ error: 'No file attached to this document.' });
+
+    const absPath = path.isAbsolute(doc.file_path)
+      ? doc.file_path
+      : path.join(__dirname, '../../', doc.file_path);
+
+    const mime = doc.file_mime || 'application/octet-stream';
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `inline; filename="${doc.file_name || 'document'}"`);
+    res.sendFile(absPath, err => {
+      if (err) {
+        console.error('GET /cm/documents/:id/file sendFile error:', err.message);
+        if (!res.headersSent) res.status(500).json({ error: 'Could not serve file.' });
+      }
+    });
+  } catch (err) {
+    console.error('GET /cm/documents/:id/file error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // GET /api/cm/documents/:id/activity — paginated activity log

@@ -22,6 +22,8 @@
 | 2026-04-05 | Bala | Sprints 11–13 closed. Sprint 14 active. Section 5 → pointer to `TEAM_OPERATING_SOP.md`. Section 14 → pointer to `memory/protocols.md`. Section 13 trimmed (rules → `memory/feedback.md`). Section 11 = current sprint only. Sprint history updated to Sprint 14. |
 | 2026-04-07 | Bala | Sprint 14 closed. 13/14 items complete. G13-3 (client-facing demo env) deferred to Sprint 15. Gate 1 passed (exit code 0). Sprint history + Section 11 updated to Sprint 15 READY. |
 | 2026-04-18 | Bala | Sprint 15 active changes: CM Phase 4 (4 new document tabs), Regression Testing Suite built, navbar restructured (Utilities dropdown), auth infinite-loop fixed, ExceptionToast silenced, regression mi-categories self-heal fix. Sections 6, 7, 9, 9b, 11, 12, 13 updated. |
+| 2026-04-22 | Bala | Sprints 16-18 closed. MI Full Approval Workflow (DRAFT→READY→APPROVED→SENT + e-sign), AE multi-row tab CRUD, Transmissions page, Browse Content page, Impact Preview, npm audit fix, MI bypass fix, DB DEFAULT fix. All sections updated. |
+| 2026-04-23 | Bala | Sprint 19 closed. MI email delivery on SENT transition, Response Log page, SLA badge on case list, Dashboard MI KPIs, Inbox→Case context carry, Case Audit Trail diff UI + per-case CSV. Sections 6, 7, 9b, 10, 11, 12, 13 updated. |
 
 ---
 
@@ -208,6 +210,8 @@ if (req.user.role !== 'superadmin') {
 | `ac-` | Admin Console pages |
 | `cm-` | Content Management pages |
 | `cf-` | Case Form pages |
+| `tx-` | Transmissions page |
+| `bc-` | Browse Content page |
 
 ---
 
@@ -249,20 +253,24 @@ All routes in `mims/frontend/src/modules/max/App.jsx`.
 | `/content` | ContentPage | `content_mgmt` |
 | `/analytics` | AnalyticsPage | `data_visualization` |
 | `/reports` | ReportsPage | `reports` |
-| `/transmissions` | — | `transmissions` |
-| `/browse-content` | — | `browse_content` |
+| `/transmissions` | TransmissionsPage | `mims_core` |
+| `/browse-content` | BrowseContentPage | `content_mgmt` |
+| `/response-log` | ResponseLogPage | `mims_core` |
 | `*` | Redirect | → `/dashboard` |
 
 ### Navbar Structure (MIMSNavbar.jsx)
-Main bar: Home · Inbox · Case Management ▾ · Case Query · **Utilities ▾** · Transmissions · Browse Content · Analytics · Reports
+Main bar: Home · Inbox · Case Management ▾ · Case Query · **Utilities ▾** · Transmissions · Browse Content · Reports
 
 **Utilities dropdown** (all in one menu):
 - Exception Log (`/exceptions`) — all users
 - Session Management (`/session-management`) — all users
+- 📋 Response Log (`/response-log`) — all users (Sprint 19)
 - Process Explorer (`/process-explorer`) — admin/superadmin, org-config gated (shows "Off" if disabled)
 - 🧪 Regression Testing (`/regression`) — admin/superadmin only
 - ─── divider ───
-- Response Log, CDR Log, Schedule CDR, Case Audit Trail, Transmission Audit Trail, Non Relevant Emails — all "Soon"
+- CDR Log, Schedule CDR, Case Audit Trail, Transmission Audit Trail, Non Relevant Emails — all "Soon"
+
+**Removed from main bar:** Analytics (deferred by Rohith 2026-04-22)
 
 Utilities tab highlights active (orange) when on any sub-page.
 
@@ -305,7 +313,17 @@ Backend on port 3000. All routes under `/api/`.
 | GET/POST/PUT/DELETE | `/api/cases/:id/contacts/:cid` | Case contacts with DNUMD support |
 | GET/POST/PUT/DELETE | `/api/cases/:id/mi/:tabId` | MI multi-tab management |
 | GET/POST/PUT | `/api/cases/:id/ae/versions` | AE version control (locks on new version) |
+| GET/POST/DELETE | `/api/cases/ae/versions/:versionId/lab-results` | AE lab results multi-row CRUD |
+| GET/POST/DELETE | `/api/cases/ae/versions/:versionId/medical-history` | AE medical history multi-row CRUD |
+| GET/POST/DELETE | `/api/cases/ae/versions/:versionId/product-info` | AE product info multi-row CRUD |
 | GET/POST/PUT | `/api/cases/:id/pc/versions` | PC version control |
+| GET | `/api/cases/mi-responses/log` | Response Log — all MI responses cross-case, filterable by status/date/search (Sprint 19) |
+| GET | `/api/cases/dashboard-summary` | Dashboard stats + MI KPIs (pending, pending_approval, sent_today, sla_breached) + recent cases + alerts |
+| GET | `/api/cases/:id/mi-responses` | List MI responses with workflow status |
+| POST | `/api/cases/:id/mi-responses` | Create MI response (always DRAFT — 21 CFR Part 11) |
+| PATCH | `/api/cases/:id/mi-responses/:rid/status` | Transition MI response status with e-sign (DRAFT→READY→APPROVED→SENT). SENT triggers nodemailer delivery + transmission_audit_trail log. |
+| PATCH | `/api/cases/:id/mi-responses/:rid/discard` | Void a DRAFT response (VOIDED terminal state) |
+| POST | `/api/admin/impact-preview` | Blast-radius impact preview for workflow/field/taxonomy changes (5-min TTL cache) |
 
 ### Inbox
 | Method | Path | Purpose |
@@ -505,6 +523,8 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 | `case_ae_medical_history` | AE medical history (multi-row) |
 | `case_ae_medical_notes` | AE medical notes |
 | `case_ae_product_info` | AE product information (multi-row) |
+| `case_mi_responses` | MI response records — `response_status` ENUM: DRAFT/READY/APPROVED/SENT/VOIDED. `DEFAULT 'DRAFT'` enforced. SENT = immutable. VOIDED = terminal discard. Each status transition records e-sign password + reason. 21 CFR Part 11 compliant. |
+| `case_mi_response_transitions` | Immutable audit log of each MI response status change — who, when, target_status, e-sign reason |
 | `case_pc_versions` | PC version control — copy-forward on new version |
 | `case_pc_general` | PC general tab |
 | `case_pc_patient_info` | PC patient information |
@@ -598,6 +618,17 @@ Key functions:
 
 Daily cron at 07:00 UTC. Checks `cm_documents` for expiring documents. Per-doc config (`alert_days` JSON + `alert_email_account_id`) with org-level default fallback from `cm_org_settings`. Sends via nodemailer using stored SMTP account. Always fires on day 1 of expiry.
 
+### `mims/backend/routes/admin/impactPreview.js` (NEW — Sprint 17)
+
+POST `/api/admin/impact-preview` with 5-min in-memory TTL cache (Map-based).
+
+Supports 3 `change_type` values:
+- `workflow_rule` — affected cases by workflow state + case type
+- `field_definition` — affected case versions with field changes
+- `taxonomy` — affected cases referencing a picklist value
+
+Returns: `{ affected_cases, risk_level (LOW/MEDIUM/HIGH), breakdown_by_case_type[], warnings[], ... }`. Used by AdminWorkflowSection.jsx and AdminPicklistsSection.jsx to show blast-radius before admin changes.
+
 ### `mims/backend/services/seedService.js` (NEW — Sprint 10)
 
 Master org seed service. Called when new org created.
@@ -646,33 +677,44 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 | Sprint 12 | Admin Console + Workflow Gaps | CLOSED | Admin Console workflow engine, CM backend, security hardening. | AdminConsolePage split — carried to Sprint 13 |
 | Sprint 13 | AdminConsolePage Refactor + Reports UI + CM Frontend + Admin Gaps + Security | CLOSED — 2026-04-05 | AdminConsolePage 6,395→763 lines (5 sub-components), Reports frontend (27 reports), CM frontend, Admin Console FRD gaps, Case Workflow Engine fix, Security hardening, SuperAdmin Reports Access. 50/50 items. Gate 2 approved. | Security Groups deactivation — Sprint 14 |
 | Sprint 14 | Case Management Gaps + UX + QA + Architecture | CLOSED — 2026-04-07 | G10: Global search, case comments, case reassignment, notifications. G11: Home dashboard, session management UI. G12: Full regression suite, Security Groups deactivation fix. G13: API versioning (/api/v1/*), log aggregation endpoint. 13/14 items. Gate 1 passed. | G13-3: Demo env provisioning — Sprint 15 |
-| Sprint 15 | CM Phase 4 + Regression Suite + UX Fixes | IN PROGRESS — 2026-04-18 | CM 4-tab extension (Other Attributes, Associated Docs, Usage Instructions, Version Alerts), Owner lock model, CM picklists fix, Regression Testing Suite (dashboard + history + self-healing test user), Auth infinite loop fix, Navbar restructure (Utilities dropdown), ExceptionToast silenced. | G13-3 demo env carry-in |
+| Sprint 15 | CM Phase 4 + Regression Suite + UX Fixes | CLOSED — 2026-04-18 | CM 4-tab extension (Other Attributes, Associated Docs, Usage Instructions, Version Alerts), Owner lock model, CM picklists fix, Regression Testing Suite (dashboard + history + self-healing test user), Auth infinite loop fix, Navbar restructure (Utilities dropdown), ExceptionToast silenced. | G13-3 demo env carry-in |
+| Sprint 16 | MI Full Approval Workflow (D1) | CLOSED — 2026-04-22 | D1: MI response lifecycle DRAFT→READY→APPROVED→SENT with 21 CFR Part 11 e-sign. VOIDED terminal state. `case_mi_responses` + `case_mi_response_transitions` tables. MI e-sign modal in CaseFormPage. C1 fix: removed direct SENT bypass. T4: DB DEFAULT 'SENT'→'DRAFT'. T1: npm audit fix (DOMPurify + lockfile). | None |
+| Sprint 17 | Master-data Impact Preview (D2) | CLOSED — 2026-04-22 | D2: POST `/api/admin/impact-preview` — blast-radius for workflow/field/taxonomy changes. 5-min TTL cache. "Preview Impact" buttons in AdminWorkflowSection and AdminPicklistsSection. ImpactPreviewModal with risk_level badge + breakdown table. | None |
+| Sprint 18 | UX Completions — AE Multi-row, Transmissions, Browse Content | CLOSED — 2026-04-22 | C2: AEMultiRowTab component — inline CRUD for Lab Results, Medical History, Product Info (frontend only; backend was already complete). H1: TransmissionsPage `/transmissions` — filtered log with stats strip. H2: BrowseContentPage `/browse-content` — card grid + folder sidebar + detail sidebar. Both wired into App.jsx + existing navbar links activated. | None |
+| Sprint 19 | P0/P1 Completions — Email delivery, Response Log, SLA, Dashboard KPIs, Audit Trail UX | CLOSED — 2026-04-23 | P0: MI SENT transition now sends nodemailer email to primary case contact (SMTP from site_email_purpose/fallback), logs to transmission_audit_trail. P0: ResponseLogPage `/response-log` — full filtered MI response log with detail modal. P0: SLA badge on case list (green/amber/red from response_required_by). P1: Dashboard MI KPI section (pending/approval/sent today/SLA breached). P1: Inbox→Case carries email subject+body+sender into description+internal_notes. P1: Audit Trail UI rebuilt — per-case field audit (before/after diff in red/green + CSV export) + system audit log "Diff" modal per row. | None |
 
 ---
 
 ## 11. Current Sprint
 
-**Sprint 14 — CLOSED (2026-04-07). 13/14 items delivered. Gate 1 PASSED.**
+**Sprints 15-18 — ALL CLOSED (2026-04-22). Gate 1 PASSED.**
 
-Deferred to Sprint 15: G13-3 — full client-facing demo env provisioning (runbook + preflight smoke delivered; release-grade env setup deferred).
+**Summary of Sprints 16-18 (one-shot delivery):**
 
-**Sprint 15 — IN PROGRESS (2026-04-18)**
+| Item | ID | Status | Detail |
+|------|----|--------|--------|
+| MI Full Approval Workflow | D1 | ✅ DONE | DRAFT→READY→APPROVED→SENT lifecycle. E-sign modal (password + reason) for APPROVED and SENT transitions. VOIDED terminal state. Backend: `case_mi_responses`, `case_mi_response_transitions` tables + transition API. |
+| MI "Send Response" bypass fix | C1 | ✅ DONE | Removed button that directly created SENT records. Creation modal now only has "Save as Draft". Info notice explains full workflow. |
+| DB response_status DEFAULT fix | T4 | ✅ DONE | `case_mi_responses.response_status` DEFAULT changed from 'SENT' to 'DRAFT'. MODIFY COLUMN statement added to fix existing running DBs. |
+| npm audit fix | T1 | ✅ DONE | DOMPurify ≤3.3.3 vuln fixed via `npm audit fix`. Backend `package-lock.json` created via `npm install --package-lock-only` (0 vulns). |
+| Impact Preview (blast-radius) | D2 | ✅ DONE | POST `/api/admin/impact-preview` — 3 change_types (workflow_rule/field_definition/taxonomy), 5-min TTL cache. "⚠ Preview Impact" buttons in AdminWorkflowSection + AdminPicklistsSection. ImpactPreviewModal with risk_level badge + breakdown. |
+| AE multi-row tab CRUD | C2 | ✅ DONE | `AEMultiRowTab` component in CaseFormPage: Lab Results, Medical History, Product Info — inline add/delete rows, API calls to existing backend routes. `.cf-multirow-*` CSS added. |
+| Transmissions page | H1 | ✅ DONE | `/transmissions` → TransmissionsPage.jsx. Filter by system/status/date, search, pagination, stats strip. Uses `/api/admin/transmission-audit-trail`. CSS namespace: `tx-`. |
+| Browse Content page | H2 | ✅ DONE | `/browse-content` → BrowseContentPage.jsx. Folder sidebar + card grid + detail sidebar. Uses `/api/cm/documents` + `/api/cm/folders`. CSS namespace: `bc-`. |
+| MIMS SOP update | T2 | ✅ DONE | Sprints 16-18 documented in all relevant sections. |
 
-| Item | Status | Detail |
-|------|--------|--------|
-| CM Phase 4 — Other Attributes tab | ✅ DONE | Version bump radio (major/minor, only shows when version_major > 1), version notes, review cycle dropdown, regulatory ref, custom key-value attributes builder |
-| CM Phase 4 — Associated Documents tab | ✅ DONE | Search-as-you-type, relation types, table with remove. Wired into CaseFormPage MI section. |
-| CM Phase 4 — Usage Instructions tab | ✅ DONE | RichTextEditor |
-| CM Phase 4 — Version Alerts tab | ✅ DONE | Alert days chips + presets, SMTP dropdown from email accounts, subscribers list, org-level defaults panel |
-| CM Owner Lock model | ✅ DONE | owner_user_id set on first checkin, enforced on publish, cleared on release. Publisher becomes permanent owner. |
-| CM Picklists network error fix | ✅ DONE | Route path double-mounting bug: was `/cm/picklists` → fixed to `/picklists` |
-| Full Regression Testing Suite | ✅ DONE | Dashboard (ScoreMeter, module cards, API catalog, DB tables, history). Backend runner, test discovery, rate limiting, history storage. |
-| Regression history blank page fix | ✅ DONE | Backend `history/:id` now spreads parsed report: `{ ...run, ...parsedReport }` |
-| Regression mi-categories FAIL fix | ✅ DONE | `ensureRegressionUserOrgAccess()` self-heals user_org_access on noOrgAccess. db.js query improved. |
-| Auth infinite loop fix | ✅ DONE | `refreshOrgAccess` wrapped in `useCallback([KEY, user?.role])` in AuthContext. MIMSHeader useEffect uses `[]`. |
-| Navbar restructure | ✅ DONE | Exception Log, Session Mgmt, Process Explorer, Regression → Utilities dropdown. Utilities highlights active on sub-pages. |
-| ExceptionToast silenced | ✅ DONE | No visual popup — console.warn only |
-| G13-3 demo env provisioning | ⏳ CARRY-IN | Runbook + preflight smoke delivered in Sprint 14. Full provisioning pending. |
+**Sprint 19 — CLOSED (2026-04-23). All 6 items delivered.**
+
+| Item | ID | Status | Detail |
+|------|----|--------|--------|
+| MI email delivery on SENT | P0-1 | ✅ DONE | nodemailer fires when response transitions to SENT. Primary case contact email fetched from case_contacts. SMTP resolved via site_email_purpose (purpose='response') → any active account fallback. Success + failure both logged to transmission_audit_trail. Non-fatal: SENT status not rolled back on email failure. |
+| Response Log page | P0-2 | ✅ DONE | `/response-log` → ResponseLogPage.jsx. Cross-case MI response log, filterable by status/date/search. Detail modal per row with full response text. Added to Utilities dropdown. CSS namespace: `rl-`. |
+| SLA badge on case list | P0-3 | ✅ DONE | `SlaBadge` component in CasesPage.jsx reads `sla_due` (SQL subquery: MIN(response_required_by) from case_mi). Green ✓ (>48h), Amber ⚠ (<48h), Red ✕ (breached). Added to My Cases + Unassigned Cases columns. |
+| Dashboard MI KPIs | P1-4 | ✅ DONE | dashboard-summary backend now returns `mi_stats` object. DashboardPage shows "MI Response Activity" section: In Progress / Pending Approval / Sent Today / SLA Breached (red if > 0). Links to /response-log. |
+| Inbox→Case context carry | P1-5 | ✅ DONE | createCaseFromInquiry() now passes `description` (email body, first 1000 chars) and `internal_notes` (sender + subject + received timestamp) into POST /api/cases. Agent no longer has to retype inquiry content. |
+| Case Audit Trail UI rebuild | P1-7 | ✅ DONE | AdminMiscSection audit-admin section replaced with AuditAdminPanel component: (1) Case Field Audit — enter case ID → before/after diff table (red = old, green = new) + CSV export; (2) System Audit Log — "Diff" button per row → modal showing parsed change details. |
+
+**Next sprint planning:** TBD by Rohith.
 
 ---
 
@@ -680,17 +722,19 @@ Deferred to Sprint 15: G13-3 — full client-facing demo env provisioning (runbo
 
 | # | Item | Type | Priority | Owner |
 |---|------|------|----------|-------|
-| 1 | Multi-row AE tabs (lab results, medical history, product info) — row-level CRUD UI is placeholder only | Feature gap | Medium | Varun |
+| 1 | ~~Multi-row AE tabs (lab results, medical history, product info) — row-level CRUD UI is placeholder only~~ | **RESOLVED Sprint 18** — AEMultiRowTab component built. | — | — |
 | 2 | CSS for `cf-` namespace — CasesPage/CaseFormPage use `cf-` classes, no dedicated stylesheet | Visual debt | Medium | Vivek |
 | 3 | `browser-test.js` (66 tests) — not re-run since Sprint 6 Phase 2 — may need selector updates | Test debt | Low | Karthik |
 | 4 | CP Portal: `Unknown column 'client_code'` in `cp_clients` — CP Portal not in active scope | CP Portal bug | Low | Varun |
-| 5 | Sprint 11 Phase 3 (Safety + CRM) — Argus/Veeva/TrackWise/Salesforce integration | Future sprint | Planned Sprint 11 | TBD |
-| 6 | Analytics module (`/analytics`) — placeholder only | Future sprint | Deferred | TBD |
-| 7 | Production deployment — Lightsail plan: 2GB instance + Managed MySQL + Object Storage ~$29/mo. 9 non-cloud migrations before go-live. Deferred by Rohith (2026-03-28). | Deployment | When ready | Varun |
+| 5 | Sprint 11 Phase 3 (Safety + CRM) — Argus/Veeva/TrackWise/Salesforce integration | Future sprint | Planned | TBD |
+| 6 | Analytics module (`/analytics`) — placeholder only. Rohith deferred (2026-04-22). | Future sprint | Deferred | TBD |
+| 7 | Production deployment — Lightsail plan: 2GB instance + Managed MySQL + Object Storage ~$29/mo. Deferred by Rohith. | Deployment | When ready | Varun |
 | 8 | Email OTP live success depends on correct SMTP encryption/port. Use `SuperAdmin -> 2FA Configuration -> Test SMTP Connection / Send Test Email` before signing off. | Config / QA dependency | High | Varun / Karthik |
 | 9 | Forgot-password + change-password browser QA needed after password-history rule addition. Backend done, UI/browser evidence pending. | QA follow-up | High | Karthik |
-| 10 | npm vulnerabilities — 19 flagged (8 high, 9 moderate, 2 low). Flagged on commit 71b8a3a. Varun to review Sprint 11. | Security | Medium | Varun |
-| 11 | Sprint 11 Gate 1 pending — Bhavya must deliver pre-written Codex prompts before Gate 1 raised to Rohith. | Process blocker | High | Bhavya |
+| 10 | ~~npm vulnerabilities — 19 flagged (8 high, 9 moderate, 2 low).~~ | **RESOLVED Sprint 16** — `npm audit fix` run. DOMPurify patched. Backend lockfile created. 0 vulnerabilities. | — | — |
+| 11 | Chunk size warning in Vite build — main bundle ~1.2MB. Not an error; no action needed unless performance is flagged. | Build debt | Low | Varun |
+| 12 | PC Case — no end-to-end QA walkthrough done since backend was built. PC has 7 tabs + version control. Needs verification pass. | QA gap | Medium | Karthik |
+| 13 | MI email delivery depends on SMTP being configured in Admin Console → Email Accounts with `site_email_purpose` = 'response'. If not configured, email is silently skipped (SENT status is still committed). | Config dependency | High | Varun / Karthik |
 
 ---
 
@@ -728,6 +772,17 @@ Non-negotiable. Ignoring causes bugs.
 | AuthContext useCallback | `refreshOrgAccess` is wrapped in `useCallback([KEY, user?.role])`. Any new async function added to AuthContext used in a useEffect dep array MUST also be `useCallback` to prevent infinite render loops. |
 | ExceptionToast | Silenced — returns null. All API exceptions logged to `console.warn('[MIMS Exception]', ...)` only. Do not re-add visual popup without Rohith approval. |
 | Navbar Utilities | Exception Log, Session Mgmt, Process Explorer, Regression Testing all live in Utilities dropdown. Do NOT add them back to the main nav bar. |
+| MI response creation | MI responses must ALWAYS be created as DRAFT. Never POST with `response_status = 'SENT'` or `'APPROVED'` directly — 21 CFR Part 11 violation. Use the transition endpoint with e-sign for every status advance. |
+| MI response immutability | SENT status = immutable. No edits to content. VOIDED = terminal discard state. Transitions from SENT and VOIDED are blocked at API level. |
+| MI e-sign requirement | Transitions to APPROVED and SENT require password verification + reason via `/transition` endpoint. Password verified via bcrypt against current user record. |
+| case_mi_responses DEFAULT | `response_status` column DEFAULT must be `'DRAFT'` — never `'SENT'`. DB MODIFY COLUMN statement ensures this on both new and existing databases. |
+| Impact Preview cache | `/api/admin/impact-preview` uses a 5-min in-memory Map cache keyed by `change_type:entity_id`. Cache cleared after 5 min. Not Redis — resets on server restart. |
+| MI email delivery — non-fatal | SENT transition in `PATCH /cases/:id/mi-responses/:rid/status` sends email in a try-catch. If nodemailer fails, status remains SENT (already committed), failure is logged to `transmission_audit_trail` with status='Failed'. Never throw from email block. |
+| MI email SMTP resolution | Priority: (1) site_email_purpose where purpose='response' for the case's site_id; (2) any active email_account with smtp configured. If neither found, email is skipped silently. |
+| SLA badge data source | `sla_due` field added to /cases/my and /cases/unassigned queries via SQL subquery: `(SELECT MIN(mi.response_required_by) FROM case_mi mi WHERE mi.case_id = c.id)`. NOT on the general /cases list — only My Cases and Unassigned tabs. |
+| Inbox→Case description | `createCaseFromInquiry()` in InboxPage.jsx passes `description` (email body, max 1000 chars) and `internal_notes` (from/subject/received metadata) when creating a case. These fields are COALESCE'd in PUT /cases/:id — safe to pre-populate. |
+| Response Log route | `GET /api/cases/mi-responses/log` must be declared BEFORE `GET /api/cases/:id` in cases.js route order, otherwise Express will try to match "mi-responses" as a case `:id`. Already correct as of Sprint 19. |
+| Audit Trail UI | `AuditAdminPanel` is a standalone component defined in `AdminMiscSection.jsx` (not a separate file). It uses the existing `fmtDateIST` and `H` (auth headers) props passed from the parent. Case field audit calls `GET /api/admin/case-audit-trail/:caseId` (admin/superadmin only). |
 
 ---
 

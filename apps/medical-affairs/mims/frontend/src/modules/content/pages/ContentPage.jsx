@@ -1304,6 +1304,29 @@ function DocumentsSection({ token, user }) {
   const [total, setTotal] = useState(0)
   const LIMIT = 20
 
+  // Bulk selection
+  const [selectedDocIds, setSelectedDocIds] = useState([])
+  const [bulkLoading, setBulkLoading] = useState(false)
+
+  async function handleBulkAction(action) {
+    if (selectedDocIds.length === 0) return
+    if (!confirm(`${action === 'publish' ? 'Publish' : 'Archive'} ${selectedDocIds.length} document(s)?`)) return
+    setBulkLoading(true)
+    try {
+      const res = await fetch('/api/cm/documents/bulk', {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ action, ids: selectedDocIds }),
+      })
+      const d = await res.json()
+      if (res.ok) {
+        setSelectedDocIds([])
+        loadDocs()
+        if (d.failed?.length > 0) alert(`${d.success} succeeded. ${d.failed.length} failed:\n${d.failed.map(f => `ID ${f.id}: ${f.reason}`).join('\n')}`)
+      } else alert(d.error || 'Bulk action failed.')
+    } catch { alert('Network error.') }
+    setBulkLoading(false)
+  }
+
   // Drawer & modal state
   const [showDrawer, setShowDrawer] = useState(false)
   const [editDoc, setEditDoc] = useState(null)
@@ -1525,6 +1548,14 @@ function DocumentsSection({ token, user }) {
             </div>
           )}
 
+          {selectedDocIds.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--primary-light, #eff6ff)', borderRadius: 6, marginBottom: 10, border: '1px solid var(--primary-border, #bfdbfe)' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{selectedDocIds.length} selected</span>
+              <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handleBulkAction('publish')} disabled={bulkLoading}>Bulk Publish</button>
+              <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleBulkAction('archive')} disabled={bulkLoading}>Bulk Archive</button>
+              <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setSelectedDocIds([])} disabled={bulkLoading}>✕ Clear</button>
+            </div>
+          )}
           {loading ? (
             <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading documents…</p>
           ) : docs.length === 0 ? (
@@ -1534,6 +1565,12 @@ function DocumentsSection({ token, user }) {
               <table className="cm-table">
                 <thead>
                   <tr>
+                    <th style={{ width: 36 }}>
+                      <input type="checkbox"
+                        checked={docs.length > 0 && docs.every(d => selectedDocIds.includes(d.id))}
+                        onChange={e => setSelectedDocIds(e.target.checked ? docs.map(d => d.id) : [])}
+                      />
+                    </th>
                     <th>Doc ID</th>
                     <th>Name</th>
                     <th>Type</th>
@@ -1548,6 +1585,12 @@ function DocumentsSection({ token, user }) {
                 <tbody>
                   {docs.map(d => (
                     <tr key={d.id}>
+                      <td>
+                        <input type="checkbox"
+                          checked={selectedDocIds.includes(d.id)}
+                          onChange={e => setSelectedDocIds(prev => e.target.checked ? [...new Set([...prev, d.id])] : prev.filter(id => id !== d.id))}
+                        />
+                      </td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
                       <td style={{ fontWeight: 500, maxWidth: 200 }}>{d.name}</td>
                       <td>{d.doc_type}</td>
@@ -2090,6 +2133,12 @@ function FAQsSection({ token, user }) {
   const [selectedFaqIds, setSelectedFaqIds] = useState([])
   const [bulkTagInput, setBulkTagInput] = useState('')
   const [showBulkTag, setShowBulkTag] = useState(false)
+  // E-sign modal for FAQ approve / publish
+  const [faqEsign, setFaqEsign] = useState({ open: false, faq: null, action: null })
+  const [faqEsignPw, setFaqEsignPw] = useState('')
+  const [faqEsignReason, setFaqEsignReason] = useState('')
+  const [faqEsignErr, setFaqEsignErr] = useState('')
+  const [faqEsignLoading, setFaqEsignLoading] = useState(false)
 
   const loadFaqs = useCallback(async () => {
     setLoading(true)
@@ -2125,20 +2174,31 @@ function FAQsSection({ token, user }) {
     setCheckInLoading(false)
   }
 
-  async function handleApprove(faq) {
-    try {
-      const res = await fetch(`/api/cm/faqs/${faq.id}/approve`, { method: 'POST', headers: authHeaders })
-      if (res.ok) loadFaqs()
-      else { const d = await res.json(); alert(d.error || 'Approve failed.') }
-    } catch { alert('Network error.') }
+  function handleApprove(faq) {
+    setFaqEsign({ open: true, faq, action: 'approve' })
+    setFaqEsignPw(''); setFaqEsignReason(''); setFaqEsignErr('')
   }
 
-  async function handlePublish(faq) {
+  function handlePublish(faq) {
+    setFaqEsign({ open: true, faq, action: 'publish' })
+    setFaqEsignPw(''); setFaqEsignReason(''); setFaqEsignErr('')
+  }
+
+  async function submitFaqEsign() {
+    if (!faqEsignPw || !faqEsignReason) { setFaqEsignErr('Password and reason are required.'); return }
+    setFaqEsignLoading(true); setFaqEsignErr('')
     try {
-      const res = await fetch(`/api/cm/faqs/${faq.id}/publish`, { method: 'POST', headers: authHeaders })
-      if (res.ok) loadFaqs()
-      else { const d = await res.json(); alert(d.error || 'Publish failed.') }
-    } catch { alert('Network error.') }
+      const endpoint = faqEsign.action === 'approve' ? 'approve' : 'publish'
+      const res = await fetch(`/api/cm/faqs/${faqEsign.faq.id}/${endpoint}`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ password: faqEsignPw, reason: faqEsignReason }),
+      })
+      const d = await res.json()
+      if (res.ok) { setFaqEsign({ open: false, faq: null, action: null }); loadFaqs() }
+      else setFaqEsignErr(d.error || `${endpoint} failed.`)
+    } catch { setFaqEsignErr('Network error.') }
+    setFaqEsignLoading(false)
   }
 
   function getFaqActions(faq) {
@@ -2247,6 +2307,25 @@ function FAQsSection({ token, user }) {
       {checkInFaq && (
         <CheckInModal item={checkInFaq} onClose={() => setCheckInFaq(null)} onConfirm={handleCheckIn} loading={checkInLoading} />
       )}
+      {faqEsign.open && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 28, maxWidth: 420, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ margin: '0 0 4px' }}>{faqEsign.action === 'approve' ? 'Approve FAQ' : 'Publish FAQ'}</h3>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--text-muted)' }}>Electronic signature required — 21 CFR Part 11</p>
+            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Your Password</label>
+            <input type="password" className="cm-form-input" style={{ marginBottom: 12 }} value={faqEsignPw} onChange={e => setFaqEsignPw(e.target.value)} placeholder="Enter your password" />
+            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Reason</label>
+            <input className="cm-form-input" style={{ marginBottom: 16 }} value={faqEsignReason} onChange={e => setFaqEsignReason(e.target.value)} placeholder="Reason for this action" />
+            {faqEsignErr && <p style={{ color: '#dc2626', fontSize: 13, margin: '0 0 12px' }}>{faqEsignErr}</p>}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="cm-btn cm-btn-secondary" onClick={() => setFaqEsign({ open: false, faq: null, action: null })} disabled={faqEsignLoading}>Cancel</button>
+              <button className="cm-btn cm-btn-primary" onClick={submitFaqEsign} disabled={faqEsignLoading}>
+                {faqEsignLoading ? 'Submitting…' : faqEsign.action === 'approve' ? 'Approve' : 'Publish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -2325,6 +2404,13 @@ function MergeReportsSection({ token }) {
   const [checkInReport, setCheckInReport] = useState(null)
   const [checkInLoading, setCheckInLoading] = useState(false)
 
+  // ── Generate from live case ──────────────────────────────────────
+  const [generateTarget, setGenerateTarget] = useState(null) // report to generate
+  const [genCaseId, setGenCaseId]           = useState('')
+  const [genLoading, setGenLoading]         = useState(false)
+  const [genResult, setGenResult]           = useState(null)  // { generated_html, merge_data, report_name }
+  const [genError, setGenError]             = useState(null)
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -2367,6 +2453,71 @@ function MergeReportsSection({ token }) {
     } catch { alert('Network error.') }
   }
 
+  function openGenerate(r) {
+    setGenerateTarget(r)
+    setGenCaseId('')
+    setGenResult(null)
+    setGenError(null)
+  }
+
+  async function handleGenerate() {
+    if (!generateTarget) return
+    setGenLoading(true); setGenError(null); setGenResult(null)
+    try {
+      const res = await fetch(`/api/cm/merge-reports/${generateTarget.id}/generate`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ case_id: genCaseId ? Number(genCaseId) : undefined }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setGenError(d.error || 'Generate failed.'); return }
+      setGenResult(d)
+    } catch { setGenError('Network error.') }
+    finally { setGenLoading(false) }
+  }
+
+  function handleDownloadHtml() {
+    if (!genResult?.generated_html) return
+    const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>${genResult.report_name || 'Merge Report'}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;
+         color: #1e293b; max-width: 800px; margin: 40px auto; padding: 0 24px; }
+  img { max-width: 100%; } table { border-collapse: collapse; width: 100%; }
+  td,th { border: 1px solid #d1d5db; padding: 6px 10px; } th { background: #f9fafb; }
+  @media print { body { margin: 0; padding: 20px; } }
+</style>
+</head><body>
+${genResult.generated_html}
+</body></html>`
+    const blob = new Blob([fullHtml], { type: 'text/html' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `${(genResult.report_name || 'merge-report').replace(/\s+/g, '_')}.html`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function handlePrintPdf() {
+    if (!genResult?.generated_html) return
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>${genResult.report_name || 'Merge Report'}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 13px; line-height: 1.6;
+         color: #1e293b; max-width: 800px; margin: 40px auto; padding: 0 24px; }
+  img { max-width: 100%; } table { border-collapse: collapse; width: 100%; }
+  td,th { border: 1px solid #d1d5db; padding: 6px 10px; } th { background: #f9fafb; }
+</style>
+</head><body>
+${genResult.generated_html}
+<script>window.onload = function(){ window.print(); }</script>
+</body></html>`)
+    win.document.close()
+  }
+
   return (
     <div>
       <div className="cm-section-header">
@@ -2404,6 +2555,7 @@ function MergeReportsSection({ token }) {
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditReport(r); setShowDrawer(true) }}>Edit</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(r)}>Check Out</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setCheckInReport(r)}>Check In</button>
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" style={{ color: '#7c3aed', borderColor: '#7c3aed' }} onClick={() => openGenerate(r)}>⚡ Generate</button>
                     {/* CM-E10: Schedule */}
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={async () => {
                       const cron = prompt('Set schedule (cron expression):\ne.g. "0 9 * * 1" = every Monday 9am\nLeave blank to remove schedule:')
@@ -2426,6 +2578,98 @@ function MergeReportsSection({ token }) {
       {checkInReport && (
         <CheckInModal item={checkInReport} onClose={() => setCheckInReport(null)} onConfirm={handleCheckIn} loading={checkInLoading} />
       )}
+
+      {/* ── Generate from Live Case Modal ──────────────────────────── */}
+      {generateTarget && (
+        <div className="cm-modal-overlay" onClick={() => setGenerateTarget(null)}>
+          <div
+            className="cm-modal"
+            style={{ width: 760, maxWidth: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="cm-modal-header">
+              <h3 className="cm-modal-title">⚡ Generate — {generateTarget.name}</h3>
+              <button className="cm-modal-close" onClick={() => setGenerateTarget(null)}>✕</button>
+            </div>
+
+            {/* Input row */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
+                  Case ID <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional — leave blank to preview field placeholders)</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 142"
+                  value={genCaseId}
+                  onChange={e => setGenCaseId(e.target.value)}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
+                />
+              </div>
+              <button
+                className="cm-btn cm-btn-primary"
+                onClick={handleGenerate}
+                disabled={genLoading}
+                style={{ background: '#7c3aed', borderColor: '#7c3aed', flexShrink: 0 }}
+              >
+                {genLoading ? 'Generating…' : '⚡ Generate'}
+              </button>
+            </div>
+
+            {genError && (
+              <div style={{ padding: '12px 20px', background: '#fef2f2', color: '#dc2626', fontSize: 13, borderBottom: '1px solid #fecaca' }}>
+                {genError}
+              </div>
+            )}
+
+            {/* Preview pane */}
+            {genResult && (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                {/* Merge data summary */}
+                <div style={{ padding: '10px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', flexWrap: 'wrap', gap: 12, background: '#f8fafc' }}>
+                  {Object.entries(genResult.merge_data).filter(([, v]) => v).map(([k, v]) => (
+                    <span key={k} style={{ fontSize: 11, color: '#475569' }}>
+                      <strong style={{ color: '#1e293b' }}>{k.replace(/_/g, ' ')}</strong>: {v}
+                    </span>
+                  ))}
+                </div>
+                {/* Rendered HTML iframe */}
+                <iframe
+                  title="Generated merge report"
+                  style={{ flex: 1, border: 'none', minHeight: 340 }}
+                  srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>body{font-family:Arial,sans-serif;font-size:13px;line-height:1.6;
+color:#1e293b;padding:20px 28px;margin:0;word-wrap:break-word;}
+img{max-width:100%;}table{border-collapse:collapse;width:100%;}
+td,th{border:1px solid #d1d5db;padding:6px 10px;}th{background:#f9fafb;}</style>
+</head><body>${genResult.generated_html}</body></html>`}
+                  sandbox="allow-same-origin"
+                />
+                {/* Download actions */}
+                <div style={{ padding: '10px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 10, background: '#fff', flexShrink: 0 }}>
+                  <button className="cm-btn cm-btn-secondary" onClick={handleDownloadHtml}>
+                    ⬇ Download HTML
+                  </button>
+                  <button className="cm-btn cm-btn-secondary" onClick={handlePrintPdf}>
+                    🖨 Print / Save as PDF
+                  </button>
+                  <span style={{ fontSize: 12, color: '#94a3b8', alignSelf: 'center', marginLeft: 'auto' }}>
+                    Generated {genResult.case_id ? `for Case #${genResult.case_id}` : 'without case data'} · {new Date().toLocaleTimeString()}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!genResult && !genLoading && !genError && (
+              <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                Enter a Case ID above and click Generate to populate this report with live case data,<br />
+                or click Generate without a Case ID to preview the report with field placeholders.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -2443,6 +2687,9 @@ function TemplateDrawer({ template, token, onClose, onSaved }) {
     status: template?.status || 'Active',
   })
   const [saving, setSaving] = useState(false)
+  const [preview, setPreview] = useState(null)
+  const [previewCaseId, setPreviewCaseId] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   async function handleSave() {
     if (!form.name.trim()) return alert('Template name is required.')
@@ -2458,6 +2705,22 @@ function TemplateDrawer({ template, token, onClose, onSaved }) {
     setSaving(false)
   }
 
+  async function handlePreview() {
+    if (!template?.id) return alert('Save the template first before previewing.')
+    setPreviewLoading(true)
+    try {
+      const res = await fetch(`/api/cm/templates/${template.id}/render`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ case_id: previewCaseId ? Number(previewCaseId) : null }),
+      })
+      const d = await res.json()
+      if (res.ok) setPreview(d)
+      else alert(d.error || 'Preview failed.')
+    } catch { alert('Network error.') }
+    setPreviewLoading(false)
+  }
+
   return (
     <>
       <div className="cm-drawer-overlay" onClick={onClose} />
@@ -2471,6 +2734,8 @@ function TemplateDrawer({ template, token, onClose, onSaved }) {
             <label className="cm-form-label">Template Type <span className="required">*</span></label>
             <select className="cm-form-select" value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}>
               <option>Response</option>
+              <option>Transmission</option>
+              <option>Correspondence</option>
               <option>Email</option>
               <option>Acknowledgment</option>
             </select>
@@ -2501,6 +2766,35 @@ function TemplateDrawer({ template, token, onClose, onSaved }) {
             </div>
           </div>
         </div>
+        {isEdit && (
+          <div style={{ padding: '0 24px 16px', borderTop: '1px solid var(--border)' }}>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '12px 0 8px', fontWeight: 600 }}>MERGE FIELD PREVIEW</p>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 8px' }}>
+              Supported fields: {'{{case_number}} {{case_type}} {{patient_name}} {{patient_email}} {{product_name}} {{agent_name}} {{org_name}} {{date}}'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <input
+                className="cm-form-input"
+                placeholder="Case ID (optional)"
+                value={previewCaseId}
+                onChange={e => setPreviewCaseId(e.target.value)}
+                style={{ width: 130 }}
+              />
+              <button className="cm-btn cm-btn-secondary" onClick={handlePreview} disabled={previewLoading}>
+                {previewLoading ? 'Rendering…' : 'Preview with Case Data'}
+              </button>
+              {preview && <button className="cm-btn cm-btn-secondary" onClick={() => setPreview(null)}>✕ Clear</button>}
+            </div>
+            {preview && (
+              <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 12, background: 'var(--surface-raised)', fontSize: 13 }}>
+                {preview.rendered_subject && (
+                  <p style={{ margin: '0 0 8px', fontWeight: 600 }}>Subject: {preview.rendered_subject}</p>
+                )}
+                <div dangerouslySetInnerHTML={{ __html: preview.rendered_body || '' }} />
+              </div>
+            )}
+          </div>
+        )}
         <div className="cm-drawer-footer">
           <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="cm-btn cm-btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
@@ -2553,6 +2847,8 @@ function TemplatesSection({ token }) {
         <select className="cm-form-select" style={{ width: 180 }} value={filters.type} onChange={e => setFilters(p => ({ ...p, type: e.target.value }))}>
           <option value="">All Types</option>
           <option>Response</option>
+          <option>Transmission</option>
+          <option>Correspondence</option>
           <option>Email</option>
           <option>Acknowledgment</option>
         </select>

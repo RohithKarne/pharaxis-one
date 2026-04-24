@@ -137,12 +137,16 @@ export default function CaseFormPage() {
   const [dynFieldValues, setDynFieldValues] = useState({})
   const [dynFieldSaving, setDynFieldSaving] = useState(false)
 
-  // MI Responses (Sprint 16)
+  // MI Responses (Sprint 16 + D1 full workflow)
   const [miResponses, setMiResponses] = useState([])
   const [miRespLoading, setMiRespLoading] = useState(false)
   const [miRespModal, setMiRespModal] = useState(false)
   const [miRespForm, setMiRespForm] = useState({ response_text: '', channel: 'email', responded_at: '', follow_up_required: false })
   const [miRespSaving, setMiRespSaving] = useState(false)
+  // D1: E-sign modal for APPROVED/SENT transitions
+  const [miEsignModal, setMiEsignModal] = useState(null) // { responseId, targetStatus }
+  const [miEsignForm, setMiEsignForm] = useState({ password: '', reason: '' })
+  const [miEsignSaving, setMiEsignSaving] = useState(false)
 
   // AE Transmissions (Sprint 16)
   const [aeTransmissions, setAeTransmissions] = useState([])
@@ -957,6 +961,61 @@ export default function CaseFormPage() {
     }
   }
 
+  // D1: advance MI response status (Submit/Approve require e-sign modal for APPROVED/SENT)
+  async function advanceMiStatus(responseId, targetStatus) {
+    if (['APPROVED', 'SENT'].includes(targetStatus)) {
+      setMiEsignModal({ responseId, targetStatus })
+      setMiEsignForm({ password: '', reason: '' })
+      return
+    }
+    // READY transition — no e-sign needed
+    try {
+      const res = await fetch(`${API}/cases/${id}/mi-responses/${responseId}/status`, {
+        method: 'PATCH', headers, body: JSON.stringify({ response_status: targetStatus, reason: `Moved to ${targetStatus}` }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setMiResponses(prev => prev.map(r => r.id === responseId ? { ...r, response_status: data.response_status } : r))
+      setSavedMsg(`MI Response → ${targetStatus}`)
+      setTimeout(() => setSavedMsg(''), 2000)
+    } catch (err) { alert(err.message) }
+  }
+
+  async function submitMiEsign() {
+    if (miEsignSaving || !miEsignModal) return
+    if (!miEsignForm.password.trim()) { alert('Password is required for electronic signature.'); return }
+    if (!miEsignForm.reason.trim())   { alert('Reason is required for electronic signature.'); return }
+    setMiEsignSaving(true)
+    try {
+      const res = await fetch(`${API}/cases/${id}/mi-responses/${miEsignModal.responseId}/status`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ response_status: miEsignModal.targetStatus, password: miEsignForm.password, reason: miEsignForm.reason }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setMiResponses(prev => prev.map(r => r.id === miEsignModal.responseId ? { ...r, response_status: data.response_status, approved_by: data.approved_by, approved_at: data.approved_at } : r))
+      setMiEsignModal(null)
+      setMiEsignForm({ password: '', reason: '' })
+      setSavedMsg(`MI Response e-signed → ${miEsignModal.targetStatus}`)
+      setTimeout(() => setSavedMsg(''), 2500)
+    } catch (err) { alert(err.message) }
+    finally { setMiEsignSaving(false) }
+  }
+
+  async function discardMiResponse(responseId) {
+    if (!window.confirm('Discard this draft response? This cannot be undone.')) return
+    try {
+      const res = await fetch(`${API}/cases/${id}/mi-responses/${responseId}/discard`, {
+        method: 'PATCH', headers, body: JSON.stringify({ reason: 'Discarded by user' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setMiResponses(prev => prev.map(r => r.id === responseId ? { ...r, response_status: 'VOIDED' } : r))
+      setSavedMsg('Draft discarded')
+      setTimeout(() => setSavedMsg(''), 2000)
+    } catch (err) { alert(err.message) }
+  }
+
   // ── AE Transmissions (Sprint 16) ──────────────────────────────────────────
 
   async function loadAeTransmissions() {
@@ -1532,45 +1591,43 @@ export default function CaseFormPage() {
                 </>
               )}
 
-              {/* MI Response History */}
+              {/* MI Response History — D1: DRAFT→READY→APPROVED→SENT with e-sign */}
               <div className="cf-response-history">
                 <div className="cf-response-history-title">📋 Response History</div>
                 {miRespLoading && <div className="cf-empty-msg">Loading responses…</div>}
                 {!miRespLoading && miResponses.length === 0 && (
                   <div className="cf-empty-msg">No MI responses recorded yet. Click "Record MI Response" to log one.</div>
                 )}
-                {!miRespLoading && miResponses.map(r => (
-                  <div key={r.id} className="cf-response-card">
-                    <div className="cf-response-top">
-                      <span className="cf-response-channel">{r.channel}</span>
-                      <span className="cf-response-date">{r.responded_at ? String(r.responded_at).slice(0, 10) : '-'}</span>
-                      {r.follow_up_required ? <span className="cf-followup-badge">⚠ Follow-up Required</span> : null}
-                      <span className="cf-followup-badge" style={{
-                        background: r.response_status === 'SENT' ? '#dcfce7' : r.response_status === 'APPROVED' ? '#dbeafe' : '#fef3c7',
-                        color: r.response_status === 'SENT' ? '#166534' : r.response_status === 'APPROVED' ? '#1d4ed8' : '#92400e',
-                      }}>{r.response_status || 'SENT'}</span>
-                      <span className="cf-response-meta">by {r.responded_by_name || 'User'}</span>
+                {!miRespLoading && miResponses.map(r => {
+                  const st = r.response_status || 'DRAFT'
+                  const isVoided = st === 'VOIDED'
+                  const isSent   = st === 'SENT'
+                  return (
+                    <div key={r.id} className={`cf-response-card${isVoided ? ' cf-response-voided' : ''}`}>
+                      <div className="cf-response-top">
+                        <span className={`cf-mi-status-badge cf-mi-status--${st.toLowerCase()}`}>{st}</span>
+                        <span className="cf-response-channel">{r.channel}</span>
+                        <span className="cf-response-date">{r.responded_at ? String(r.responded_at).slice(0, 10) : '-'}</span>
+                        {r.follow_up_required ? <span className="cf-followup-badge">⚠ Follow-up</span> : null}
+                        <span className="cf-response-meta">by {r.responded_by_name || 'User'}</span>
+                        {r.approved_by_name && <span className="cf-response-meta">• signed by {r.approved_by_name}</span>}
+                      </div>
+                      {r.response_text && <div className="cf-response-text">{r.response_text}</div>}
+                      {!isVoided && !isSent && (
+                        <div className="cf-mi-transition-row">
+                          {st === 'DRAFT' && <>
+                            <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => advanceMiStatus(r.id, 'READY')}>Submit for Review →</button>
+                            <button className="cf-mi-trans-btn cf-mi-trans-discard" onClick={() => discardMiResponse(r.id)}>Discard Draft</button>
+                          </>}
+                          {st === 'READY' && <button className="cf-mi-trans-btn cf-mi-trans-approve" onClick={() => advanceMiStatus(r.id, 'APPROVED')}>🔏 Approve (e-sign required)</button>}
+                          {st === 'APPROVED' && <button className="cf-mi-trans-btn cf-mi-trans-send" onClick={() => advanceMiStatus(r.id, 'SENT')}>📤 Mark Sent (e-sign required)</button>}
+                        </div>
+                      )}
+                      {isSent   && <div className="cf-mi-final-badge">✅ Sent — Record Immutable</div>}
+                      {isVoided && <div className="cf-mi-voided-label">🚫 Discarded</div>}
                     </div>
-                    <div className="cf-response-text">{r.response_text}</div>
-                    <div className="cf-tx-status-actions" style={{ marginTop: 10 }}>
-                      {r.response_status !== 'READY' && r.response_status !== 'SENT' && (
-                        <button className="cf-tx-status-btn" onClick={() => changeMiResponseStatus(r.id, 'READY')}>
-                          Mark Ready
-                        </button>
-                      )}
-                      {r.response_status !== 'APPROVED' && r.response_status !== 'SENT' && (
-                        <button className="cf-tx-status-btn" onClick={() => changeMiResponseStatus(r.id, 'APPROVED')}>
-                          Approve
-                        </button>
-                      )}
-                      {r.response_status !== 'SENT' && (
-                        <button className="cf-tx-status-btn active" onClick={() => changeMiResponseStatus(r.id, 'SENT')}>
-                          Send
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
           </div>
         )}
@@ -1881,6 +1938,9 @@ export default function CaseFormPage() {
               <button className="cf-corr-modal-close" onClick={() => !miRespSaving && setMiRespModal(false)}>✕</button>
             </div>
             <div className="cf-corr-compose-body">
+              <div style={{ padding: '8px 12px', marginBottom: 14, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, fontSize: 12, color: '#1e40af' }}>
+                ℹ️ Responses are saved as <strong>DRAFT</strong>. Use the workflow buttons in the history panel to submit for review, approve, and mark as sent (e-sign required per 21 CFR Part 11).
+              </div>
               <div className="cf-form-grid">
                 <div className="cf-form-field">
                   <label>Channel</label>
@@ -1915,11 +1975,8 @@ export default function CaseFormPage() {
             </div>
             <div className="cf-form-actions" style={{ padding: '12px 14px', marginTop: 0 }}>
               <button className="cf-cancel-btn" onClick={() => !miRespSaving && setMiRespModal(false)}>Cancel</button>
-              <button className="cf-open-btn" onClick={() => submitMiResponse('DRAFT')} disabled={miRespSaving}>
-                {miRespSaving ? 'Saving…' : 'Save Draft'}
-              </button>
-              <button className="cf-save-btn" onClick={() => submitMiResponse('SENT')} disabled={miRespSaving}>
-                {miRespSaving ? 'Recording…' : 'Send Response'}
+              <button className="cf-save-btn" onClick={() => submitMiResponse('DRAFT')} disabled={miRespSaving}>
+                {miRespSaving ? 'Saving…' : '💾 Save as Draft'}
               </button>
             </div>
           </div>
@@ -1974,14 +2031,264 @@ export default function CaseFormPage() {
           </div>
         </div>
       )}
+
+      {/* ── MI E-Sign Modal (21 CFR Part 11) ────────────────────────────── */}
+      {miEsignModal && (
+        <div className="cf-corr-compose-overlay" onClick={() => !miEsignSaving && (setMiEsignModal(null), setMiEsignForm({ password: '', reason: '' }))}>
+          <div className="cf-esign-modal" onClick={e => e.stopPropagation()}>
+            <div className="cf-corr-compose-header">
+              <div className="cf-corr-compose-title">
+                🔏 Electronic Signature — {miEsignModal.targetStatus === 'APPROVED' ? 'Approve MI Response' : 'Mark Response as Sent'}
+              </div>
+              <button className="cf-corr-modal-close" onClick={() => !miEsignSaving && (setMiEsignModal(null), setMiEsignForm({ password: '', reason: '' }))}>✕</button>
+            </div>
+            <div className="cf-corr-compose-body">
+              <div className="cf-esign-notice">
+                <span className="cf-esign-icon">⚠️</span>
+                <span>This action requires your electronic signature per 21 CFR Part 11. Your identity will be recorded against this approval.</span>
+              </div>
+              <div className="cf-esign-fields">
+                <div className="cf-form-field">
+                  <label>Your Password <span style={{ color: '#dc2626' }}>*</span></label>
+                  <input
+                    type="password"
+                    value={miEsignForm.password}
+                    onChange={e => setMiEsignForm(p => ({ ...p, password: e.target.value }))}
+                    placeholder="Enter your login password to confirm identity"
+                    disabled={miEsignSaving}
+                    autoComplete="current-password"
+                  />
+                </div>
+                <div className="cf-form-field">
+                  <label>Reason / Justification <span style={{ color: '#dc2626' }}>*</span></label>
+                  <textarea
+                    rows={3}
+                    value={miEsignForm.reason}
+                    onChange={e => setMiEsignForm(p => ({ ...p, reason: e.target.value }))}
+                    placeholder={miEsignModal.targetStatus === 'APPROVED'
+                      ? 'e.g. Reviewed and approved per SOP MI-001'
+                      : 'e.g. Response transmitted to HCP via email per confirmed receipt'}
+                    disabled={miEsignSaving}
+                  />
+                </div>
+                <div className="cf-esign-target-info">
+                  <span className="cf-esign-label">Target Status:</span>
+                  <span className={`cf-mi-status-badge cf-mi-status--${(miEsignModal.targetStatus || '').toLowerCase()}`}>
+                    {miEsignModal.targetStatus}
+                  </span>
+                </div>
+              </div>
+              {miEsignSaving && (
+                <div className="cf-esign-progress">🔐 Verifying identity and recording e-signature…</div>
+              )}
+            </div>
+            <div className="cf-form-actions" style={{ padding: '12px 16px', marginTop: 0 }}>
+              <button className="cf-cancel-btn" onClick={() => !miEsignSaving && (setMiEsignModal(null), setMiEsignForm({ password: '', reason: '' }))} disabled={miEsignSaving}>
+                Cancel
+              </button>
+              <button
+                className={`cf-save-btn cf-esign-confirm-btn ${miEsignModal.targetStatus === 'APPROVED' ? 'cf-esign-approve' : 'cf-esign-send'}`}
+                onClick={submitMiEsign}
+                disabled={miEsignSaving}
+              >
+                {miEsignSaving ? 'Processing…' : (miEsignModal.targetStatus === 'APPROVED' ? '🔏 Confirm Approval' : '📤 Confirm Sent')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </MIMSLayout>
   )
 }
 
+// ── AE Multi-Row Sub-Component ───────────────────────────────────────────────
+
+function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, onRowsChange }) {
+  const [showForm, setShowForm]   = useState(false)
+  const [saving,   setSaving]     = useState(false)
+  const [deleting, setDeleting]   = useState(null)
+
+  // ── blank form per tab ──────────────────────────────────────────────────────
+  const blankForm = () => {
+    if (tabKey === 'lab-results')    return { test_name: '', result: '', unit: '', normal_range: '', test_date: '' }
+    if (tabKey === 'medical-history') return { condition_name: '', start_date: '', end_date: '', is_ongoing: false, notes: '' }
+    if (tabKey === 'product-info')   return { product_name: '', dose: '', dose_unit: '', route_of_admin: '', frequency: '', start_date: '', end_date: '', indication: '', is_suspect: true, is_concomitant: false }
+    return {}
+  }
+  const [form, setForm] = useState(blankForm)
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  const API = import.meta.env.VITE_API_URL || '/api'
+
+  const deleteUrl = (rowId) => {
+    if (tabKey === 'lab-results')     return `${API}/cases/ae/lab-results/${rowId}`
+    if (tabKey === 'medical-history') return `${API}/cases/ae/medical-history/${rowId}`
+    if (tabKey === 'product-info')    return `${API}/cases/ae/product-info/${rowId}`
+    return null
+  }
+  const postUrl = () => `${API}/cases/ae/versions/${versionId}/${tabKey}`
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const body = { ...form }
+      if (typeof body.is_ongoing === 'boolean')    body.is_ongoing    = body.is_ongoing    ? 1 : 0
+      if (typeof body.is_suspect === 'boolean')    body.is_suspect    = body.is_suspect    ? 1 : 0
+      if (typeof body.is_concomitant === 'boolean') body.is_concomitant = body.is_concomitant ? 1 : 0
+      const res  = await fetch(postUrl(), { method: 'POST', headers, body: JSON.stringify(body) })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || 'Add failed'); return }
+      onRowsChange([...(Array.isArray(rows) ? rows : []), data])
+      setForm(blankForm())
+      setShowForm(false)
+    } catch { alert('Network error') } finally { setSaving(false) }
+  }
+
+  async function handleDelete(rowId) {
+    if (!window.confirm('Remove this record?')) return
+    setDeleting(rowId)
+    try {
+      const url = deleteUrl(rowId)
+      if (!url) return
+      const res = await fetch(url, { method: 'DELETE', headers })
+      if (res.ok) onRowsChange((rows || []).filter(r => r.id !== rowId))
+      else alert('Delete failed')
+    } catch { alert('Network error') } finally { setDeleting(null) }
+  }
+
+  const safeRows = Array.isArray(rows) ? rows : []
+
+  // ── column definitions ──────────────────────────────────────────────────────
+  const labCols    = [
+    { key: 'test_name',    label: 'Test Name' },
+    { key: 'result',       label: 'Result' },
+    { key: 'unit',         label: 'Unit' },
+    { key: 'normal_range', label: 'Normal Range' },
+    { key: 'test_date',    label: 'Test Date' },
+  ]
+  const mhCols     = [
+    { key: 'condition_name', label: 'Condition' },
+    { key: 'start_date',     label: 'Start Date' },
+    { key: 'end_date',       label: 'End Date' },
+    { key: 'is_ongoing',     label: 'Ongoing', render: v => v ? '✅' : '—' },
+    { key: 'notes',          label: 'Notes' },
+  ]
+  const piCols     = [
+    { key: 'product_name',   label: 'Product' },
+    { key: 'dose',           label: 'Dose' },
+    { key: 'dose_unit',      label: 'Unit' },
+    { key: 'route_of_admin', label: 'Route' },
+    { key: 'frequency',      label: 'Frequency' },
+    { key: 'indication',     label: 'Indication' },
+    { key: 'is_suspect',     label: 'Suspect', render: v => v ? '✅' : '—' },
+    { key: 'is_concomitant', label: 'Concomitant', render: v => v ? '✅' : '—' },
+  ]
+  const cols = tabKey === 'lab-results' ? labCols : tabKey === 'medical-history' ? mhCols : piCols
+
+  return (
+    <div className="cf-multirow-section">
+      {/* Row Table */}
+      {safeRows.length === 0 ? (
+        <div className="cf-multirow-empty">No records yet. {!locked && 'Use "+ Add Row" to add one.'}</div>
+      ) : (
+        <div className="cf-multirow-table-wrap">
+          <table className="cf-multirow-table">
+            <thead>
+              <tr>
+                {cols.map(c => <th key={c.key}>{c.label}</th>)}
+                {!locked && <th style={{ width: 40 }}></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {safeRows.map(row => (
+                <tr key={row.id} style={{ opacity: deleting === row.id ? 0.4 : 1 }}>
+                  {cols.map(c => (
+                    <td key={c.key}>
+                      {c.render ? c.render(row[c.key]) : (row[c.key] != null && row[c.key] !== '' ? String(row[c.key]) : '—')}
+                    </td>
+                  ))}
+                  {!locked && (
+                    <td>
+                      <button className="cf-multirow-del-btn" onClick={() => handleDelete(row.id)} disabled={deleting === row.id} title="Remove">✕</button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Add Row */}
+      {!locked && (
+        <div className="cf-multirow-add-section">
+          {!showForm ? (
+            <button className="cf-multirow-add-btn" onClick={() => setShowForm(true)}>+ Add Row</button>
+          ) : (
+            <form className="cf-multirow-form" onSubmit={handleAdd}>
+              <div className="cf-form-grid">
+                {/* Lab Results Form */}
+                {tabKey === 'lab-results' && <>
+                  <div className="cf-form-field"><label>Test Name</label><input value={form.test_name} onChange={e => set('test_name', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Result</label><input value={form.result} onChange={e => set('result', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Unit</label><input value={form.unit} onChange={e => set('unit', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Normal Range</label><input value={form.normal_range} onChange={e => set('normal_range', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Test Date</label><input type="date" value={form.test_date} onChange={e => set('test_date', e.target.value)} /></div>
+                </>}
+                {/* Medical History Form */}
+                {tabKey === 'medical-history' && <>
+                  <div className="cf-form-field"><label>Condition Name</label><input value={form.condition_name} onChange={e => set('condition_name', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Start Date</label><input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>End Date</label><input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
+                  <div className="cf-form-field">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={form.is_ongoing} onChange={e => set('is_ongoing', e.target.checked)} />
+                      Ongoing
+                    </label>
+                  </div>
+                  <div className="cf-form-field cf-form-field--full"><label>Notes</label><textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} /></div>
+                </>}
+                {/* Product Info Form */}
+                {tabKey === 'product-info' && <>
+                  <div className="cf-form-field"><label>Product Name</label><input value={form.product_name} onChange={e => set('product_name', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Dose</label><input value={form.dose} onChange={e => set('dose', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Dose Unit</label><input value={form.dose_unit} onChange={e => set('dose_unit', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Route of Admin</label><input value={form.route_of_admin} onChange={e => set('route_of_admin', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Frequency</label><input value={form.frequency} onChange={e => set('frequency', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Start Date</label><input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>End Date</label><input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
+                  <div className="cf-form-field cf-form-field--full"><label>Indication</label><input value={form.indication} onChange={e => set('indication', e.target.value)} /></div>
+                  <div className="cf-form-field">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={form.is_suspect} onChange={e => set('is_suspect', e.target.checked)} />
+                      Suspect Drug
+                    </label>
+                  </div>
+                  <div className="cf-form-field">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={form.is_concomitant} onChange={e => set('is_concomitant', e.target.checked)} />
+                      Concomitant Med
+                    </label>
+                  </div>
+                </>}
+              </div>
+              <div className="cf-form-actions" style={{ paddingLeft: 0, marginTop: 10 }}>
+                <button type="button" className="cf-cancel-btn" onClick={() => { setShowForm(false); setForm(blankForm()) }}>Cancel</button>
+                <button type="submit" className="cf-save-btn" disabled={saving}>{saving ? 'Adding…' : '+ Add Record'}</button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── AE Tab Panel ──────────────────────────────────────────────────────────────
 
-function AETabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions, getFieldConfig = () => null }) {
+function AETabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions, getFieldConfig = () => null, versionId, headers }) {
   const d = data || {}
   const set = (key, val) => onChange({ ...d, [key]: val })
 
@@ -2071,9 +2378,14 @@ function AETabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions
       )}
 
       {(tabKey === 'lab-results' || tabKey === 'medical-history' || tabKey === 'product-info') && (
-        <div className="cf-tab-list-note">
-          Multi-row data for this tab is managed via the API. Inline row editing coming in the next UI iteration.
-        </div>
+        <AEMultiRowTab
+          tabKey={tabKey}
+          rows={Array.isArray(data) ? data : []}
+          locked={locked}
+          versionId={versionId}
+          headers={headers}
+          onRowsChange={onChange}
+        />
       )}
 
       {(tabKey === 'lab-notes' || tabKey === 'medical-notes') && (

@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 
@@ -15,10 +15,12 @@ const TABS = ['Inbox', 'Pending', 'Processed', 'Non-Processed', 'Sent']
 const TAB_STATUS = { Sent: 'outbox' }
 const COLORS = ['red', 'yellow', 'green', 'blue']
 const PRIORITIES = ['high', 'medium', 'low']
+const TRIAGE_STATES = ['new', 'in_review', 'linked', 'converted', 'no_action', 'closed']
 const PRIORITY_ICON = { high: '🔴', medium: '🟡', low: '🟢' }
 const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 export default function InboxPage() {
+  const location = useLocation()
   const navigate = useNavigate()
   const { user, siteId } = useAuth()
 
@@ -53,12 +55,16 @@ export default function InboxPage() {
   const [filterFrom, setFilterFrom]   = useState('')
   const [filterTo, setFilterTo]       = useState('')
   const [bulkSelected, setBulkSelected] = useState(new Set())
+  const [bulkTriageState, setBulkTriageState] = useState('')
+  const [bulkAssignee, setBulkAssignee] = useState('')
+  const [bulkPriority, setBulkPriority] = useState('')
+  const [bulkSnoozeUntil, setBulkSnoozeUntil] = useState('')
 
   // ── Phase 2 state ─────────────────────────────────────────────
   const [users, setUsers]           = useState([])           // F1
   const [templates, setTemplates]   = useState([])           // F3
   const [advFilters, setAdvFilters] = useState({             // F8
-    color: '', priority: '', readStatus: '', isLocked: '', assignee: '',
+    color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '',
   })
   const [showAdvFilters, setShowAdvFilters] = useState(false)
   const [savedViews, setSavedViews]         = useState([])   // F9
@@ -69,6 +75,11 @@ export default function InboxPage() {
   const [savingNote, setSavingNote]         = useState(false)
   const [threadItems, setThreadItems]       = useState([])   // F12
   const [threadExpanded, setThreadExpanded] = useState(true)
+  const [recommendationsExpanded, setRecommendationsExpanded] = useState(true)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false)
+  const [senderHistory, setSenderHistory] = useState({ previous_inquiries: [], linked_cases: [], previous_inquiry_count: 0, linked_case_count: 0 })
+  const [recommendations, setRecommendations] = useState([])
   const [caseFlow, setCaseFlow] = useState({
     open: false,
     mode: 'create', // create | append
@@ -91,6 +102,20 @@ export default function InboxPage() {
     loadUsers()
     loadTemplates()
   }, [])
+
+  useEffect(() => {
+    const reportFilters = location.state?.reportFilters
+    if (!reportFilters) return
+    setAdvFilters(prev => ({
+      ...prev,
+      assignee: reportFilters.assignee || '',
+      triageState: reportFilters.triageState || '',
+      queueName: reportFilters.queueName || '',
+      firstTouchSla: reportFilters.firstTouchSla || '',
+      responseSla: reportFilters.responseSla || '',
+    }))
+    setPage(1)
+  }, [location.state])
 
   const AUTH_H = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('mims_token')}` }
 
@@ -186,6 +211,47 @@ export default function InboxPage() {
     } catch { setThreadItems([]) }
   }
 
+  async function loadHistory(id) {
+    setHistoryLoading(true)
+    try {
+      const res = await fetch(`/api/inbox/${id}/history`, { headers: AUTH_H })
+      if (res.ok) {
+        const data = await res.json()
+        setSenderHistory(data || { previous_inquiries: [], linked_cases: [], previous_inquiry_count: 0, linked_case_count: 0 })
+      } else {
+        setSenderHistory({ previous_inquiries: [], linked_cases: [], previous_inquiry_count: 0, linked_case_count: 0 })
+      }
+    } catch {
+      setSenderHistory({ previous_inquiries: [], linked_cases: [], previous_inquiry_count: 0, linked_case_count: 0 })
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  async function loadRecommendations(id) {
+    setRecommendationsLoading(true)
+    try {
+      const res = await fetch(`/api/inbox/${id}/recommendations`, { headers: AUTH_H })
+      if (res.ok) {
+        const data = await res.json()
+        setRecommendations(data.recommendations || [])
+      } else {
+        setRecommendations([])
+      }
+    } catch {
+      setRecommendations([])
+    } finally {
+      setRecommendationsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const selectInquiryId = Number(location.state?.selectInquiryId || 0)
+    if (!selectInquiryId || inquiries.length === 0) return
+    const target = inquiries.find(item => Number(item.id) === selectInquiryId)
+    if (target) selectInquiry(target)
+  }, [location.state, inquiries])
+
   // ── Actions ───────────────────────────────────────────────────
 
   async function fetchEmails() {
@@ -199,6 +265,8 @@ export default function InboxPage() {
 
   function selectInquiry(inq) {
     setSelected(inq)
+    setThreadExpanded(true)
+    setRecommendationsExpanded(true)
     if (inq.attachments_count > 0) loadAttachments(inq.id)
     else setAttachments([])
     if (!inq.is_read) {
@@ -206,8 +274,12 @@ export default function InboxPage() {
       updateInquiries(prev => prev.map(i => i.id === inq.id ? { ...i, is_read: true } : i))
     }
     setNotes([]); setNewNote(''); setThreadItems([])
+    setSenderHistory({ previous_inquiries: [], linked_cases: [], previous_inquiry_count: 0, linked_case_count: 0 })
+    setRecommendations([])
     loadNotes(inq.id)
     loadThread(inq.id)
+    loadHistory(inq.id)
+    loadRecommendations(inq.id)
   }
 
   function openReply() {
@@ -302,12 +374,12 @@ export default function InboxPage() {
     }
   }
 
-  async function linkInquiryToCase(caseId) {
+  async function linkInquiryToCase(caseId, linkMode = 'linked') {
     if (!selected) return false
     const res = await fetch(`/api/inbox/${selected.id}/link-case`, {
       method: 'POST',
       headers: AUTH_H,
-      body: JSON.stringify({ case_id: caseId }),
+      body: JSON.stringify({ case_id: caseId, link_mode: linkMode }),
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
@@ -315,9 +387,9 @@ export default function InboxPage() {
       return false
     }
     updateInquiries(prev => prev.map(i => (
-      i.id === selected.id ? { ...i, status: 'processed', case_id: caseId } : i
+      i.id === selected.id ? { ...i, status: 'processed', case_id: caseId, triage_state: linkMode } : i
     )))
-    setSelected(prev => prev ? ({ ...prev, status: 'processed', case_id: caseId }) : prev)
+    setSelected(prev => prev ? ({ ...prev, status: 'processed', case_id: caseId, triage_state: linkMode }) : prev)
     return true
   }
 
@@ -329,6 +401,12 @@ export default function InboxPage() {
     }
     setCaseFlow(prev => ({ ...prev, actionBusy: true, actionError: '' }))
     try {
+      // S19-P1: carry inquiry context into case — pre-fill description + internal notes
+      const senderName   = (selected.sender || '').split('@')[0] || 'Unknown'
+      const subjectText  = selected.subject || '(No subject)'
+      const bodySnippet  = (selected.body || '').slice(0, 1000).trim()
+      const contextNotes = `[Inbox] From: ${selected.sender || '—'} | Subject: ${subjectText} | Received: ${selected.received_at ? new Date(selected.received_at).toLocaleString() : '—'}`
+
       const createRes = await fetch('/api/cases', {
         method: 'POST',
         headers: AUTH_H,
@@ -337,6 +415,8 @@ export default function InboxPage() {
           case_type: caseFlow.caseType,
           intake_channel: 'email',
           date_received: toDateOnly(selected.received_at),
+          description:    bodySnippet  || null,
+          internal_notes: contextNotes || null,
         }),
       })
       const created = await createRes.json().catch(() => ({}))
@@ -350,7 +430,7 @@ export default function InboxPage() {
         headers: AUTH_H,
       })
 
-      const linked = await linkInquiryToCase(created.id)
+      const linked = await linkInquiryToCase(created.id, 'converted')
       if (!linked) {
         setCaseFlow(prev => ({ ...prev, actionBusy: false }))
         return
@@ -366,7 +446,7 @@ export default function InboxPage() {
   async function appendToExistingCase(caseId) {
     if (!selected || !caseId) return
     setCaseFlow(prev => ({ ...prev, actionBusy: true, actionError: '' }))
-    const linked = await linkInquiryToCase(caseId)
+    const linked = await linkInquiryToCase(caseId, 'linked')
     if (!linked) {
       setCaseFlow(prev => ({ ...prev, actionBusy: false }))
       return
@@ -434,21 +514,42 @@ export default function InboxPage() {
     })
   }
 
-  function bulkUpdateStatus(status) {
-    bulkSelected.forEach(id => {
-      patchInquiry(id, { status })
-      updateInquiries(prev => prev.map(i => i.id === id ? { ...i, status } : i))
-    })
-    setBulkSelected(new Set()); setSelected(null)
+  async function applyBulkUpdates(extraPayload = {}) {
+    const ids = [...bulkSelected]
+    if (ids.length === 0) return
+
+    const payload = { ids, ...extraPayload }
+    if (bulkTriageState) payload.triage_state = bulkTriageState
+    if (bulkAssignee) payload.assigned_to = bulkAssignee === '__UNASSIGNED__' ? null : bulkAssignee
+    if (bulkPriority) payload.priority = bulkPriority
+    if (bulkSnoozeUntil) payload.snoozed_until = `${bulkSnoozeUntil}T18:00:00`
+
+    if (Object.keys(payload).length <= 1) return
+
+    if (inboxSource === 'db') {
+      await fetch('/api/inbox/bulk-update', {
+        method: 'POST',
+        headers: AUTH_H,
+        body: JSON.stringify(payload),
+      }).catch(() => {})
+    }
+
+    await loadInquiries({ force: true })
+    setBulkSelected(new Set())
+    setSelected(null)
+    setBulkTriageState('')
+    setBulkAssignee('')
+    setBulkPriority('')
+    setBulkSnoozeUntil('')
   }
 
   function exportCSV() {
-    const headers = ['ID', 'From', 'To', 'Subject', 'Received', 'Status', 'Priority', 'Assigned To', 'Due Date', 'Color', 'Locked By']
+    const headers = ['ID', 'From', 'To', 'Subject', 'Received', 'Status', 'Triage State', 'Queue', 'Priority', 'Assigned To', 'Due Date', 'First Touch SLA', 'Response SLA', 'Color', 'Locked By']
     const esc = v => `"${String(v || '').replace(/"/g, '""')}"`
     const rows = filtered.map(i => [
       i.id, esc(i.sender), esc(i.recipient), esc(i.subject),
-      i.received_at, i.status, i.priority || '', i.assigned_to || '',
-      i.due_date || '', i.color || '', i.locked_by || '',
+      i.received_at, i.status, i.triage_state || '', i.queue_name || '', i.priority || '', i.assigned_to || '',
+      i.due_date || '', i.first_touch_sla_status || '', i.response_sla_status || '', i.color || '', i.locked_by || '',
     ])
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -494,7 +595,7 @@ export default function InboxPage() {
     setSearch(view.search || '')
     setFilterFrom(view.filterFrom || '')
     setFilterTo(view.filterTo || '')
-    setAdvFilters(view.advFilters || { color: '', priority: '', readStatus: '', isLocked: '', assignee: '' })
+    setAdvFilters(view.advFilters || { color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '' })
     setPage(1)
   }
 
@@ -530,9 +631,15 @@ export default function InboxPage() {
         (advFilters.readStatus === 'unread' ? !i.is_read : !!i.is_read)
       const matchLock     = !advFilters.isLocked ||
         (advFilters.isLocked === 'locked' ? i.is_locked : !i.is_locked)
-      const matchAssignee = !advFilters.assignee || i.assigned_to === advFilters.assignee
+      const matchAssignee = !advFilters.assignee ||
+        (advFilters.assignee === '__UNASSIGNED__' ? !i.assigned_to : i.assigned_to === advFilters.assignee)
+      const matchTriage   = !advFilters.triageState || i.triage_state === advFilters.triageState
+      const matchQueue    = !advFilters.queueName || i.queue_name === advFilters.queueName
+      const matchFirstTouch = !advFilters.firstTouchSla || i.first_touch_sla_status === advFilters.firstTouchSla
+      const matchResponse = !advFilters.responseSla || i.response_sla_status === advFilters.responseSla
       return matchTab && matchSearch && matchFrom && matchTo &&
-             matchColor && matchPriority && matchRead && matchLock && matchAssignee
+             matchColor && matchPriority && matchRead && matchLock && matchAssignee &&
+             matchTriage && matchQueue && matchFirstTouch && matchResponse
     })
     result.sort((a, b) => {
       const da = new Date(a.received_at), db = new Date(b.received_at)
@@ -540,6 +647,23 @@ export default function InboxPage() {
     })
     return result
   }, [inquiries, activeTab, search, sortAsc, filterFrom, filterTo, advFilters])
+
+  const queueOptions = useMemo(
+    () => [...new Set(inquiries.map(inquiry => inquiry.queue_name).filter(Boolean))].sort(),
+    [inquiries]
+  )
+
+  const opsSummary = useMemo(() => {
+    const actionable = inquiries.filter(item => item.status !== 'outbox')
+    return {
+      total: actionable.length,
+      active: actionable.filter(item => ['new', 'in_review'].includes(item.triage_state)).length,
+      unassigned: actionable.filter(item => !item.assigned_to).length,
+      firstTouchBreached: actionable.filter(item => item.first_touch_sla_status === 'breached' && !item.first_touched_at).length,
+      responseBreached: actionable.filter(item => item.response_sla_status === 'breached' && item.first_touched_at && !item.first_response_at).length,
+      exceptions: actionable.filter(item => item.exception_reason).length,
+    }
+  }, [inquiries])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -612,6 +736,22 @@ export default function InboxPage() {
                 ))}
               </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, padding: '10px 12px 0' }}>
+                {[
+                  { label: 'Active', value: opsSummary.active, tone: '#1d4ed8' },
+                  { label: 'Unassigned', value: opsSummary.unassigned, tone: '#b45309' },
+                  { label: 'Exceptions', value: opsSummary.exceptions, tone: '#b91c1c' },
+                  { label: 'First Touch SLA', value: opsSummary.firstTouchBreached, tone: '#b91c1c' },
+                  { label: 'Response SLA', value: opsSummary.responseBreached, tone: '#991b1b' },
+                  { label: 'Total', value: opsSummary.total, tone: '#0f172a' },
+                ].map(card => (
+                  <div key={card.label} style={{ border: '1px solid var(--border)', borderRadius: 10, background: '#fff', padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{card.label}</div>
+                    <div style={{ marginTop: 4, fontSize: 20, fontWeight: 700, color: card.tone }}>{card.value}</div>
+                  </div>
+                ))}
+              </div>
+
               {/* F9: Saved Views chips */}
               {savedViews.length > 0 && (
                 <div className="saved-views-bar">
@@ -651,7 +791,7 @@ export default function InboxPage() {
                 </button>
                 {hasAdvFilters && (
                   <button className="inbox-sort-btn" style={{ fontSize: 11 }}
-                    onClick={() => setAdvFilters({ color: '', priority: '', readStatus: '', isLocked: '', assignee: '' })}>
+                    onClick={() => setAdvFilters({ color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '' })}>
                     Clear
                   </button>
                 )}
@@ -685,7 +825,34 @@ export default function InboxPage() {
                     <select value={advFilters.assignee}
                       onChange={e => { setAdvFilters(f => ({ ...f, assignee: e.target.value })); setPage(1) }}>
                       <option value="">All Assignees</option>
+                      <option value="__UNASSIGNED__">Unassigned</option>
                       {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                    </select>
+                    <select value={advFilters.triageState}
+                      onChange={e => { setAdvFilters(f => ({ ...f, triageState: e.target.value })); setPage(1) }}>
+                      <option value="">All Triage States</option>
+                      {TRIAGE_STATES.map(state => <option key={state} value={state}>{state.replace(/_/g, ' ')}</option>)}
+                    </select>
+                    <select value={advFilters.queueName}
+                      onChange={e => { setAdvFilters(f => ({ ...f, queueName: e.target.value })); setPage(1) }}>
+                      <option value="">All Queues</option>
+                      {queueOptions.map(queue => <option key={queue} value={queue}>{queue}</option>)}
+                    </select>
+                    <select value={advFilters.firstTouchSla}
+                      onChange={e => { setAdvFilters(f => ({ ...f, firstTouchSla: e.target.value })); setPage(1) }}>
+                      <option value="">First Touch SLA</option>
+                      <option value="breached">Breached</option>
+                      <option value="at_risk">At Risk</option>
+                      <option value="on_track">On Track</option>
+                      <option value="met">Met</option>
+                    </select>
+                    <select value={advFilters.responseSla}
+                      onChange={e => { setAdvFilters(f => ({ ...f, responseSla: e.target.value })); setPage(1) }}>
+                      <option value="">Response SLA</option>
+                      <option value="breached">Breached</option>
+                      <option value="at_risk">At Risk</option>
+                      <option value="on_track">On Track</option>
+                      <option value="met">Met</option>
                     </select>
                   </div>
                   {/* F9: Save current view */}
@@ -705,9 +872,22 @@ export default function InboxPage() {
               {bulkSelected.size > 0 && (
                 <div className="inbox-bulk-bar">
                   <span className="bulk-count">{bulkSelected.size} selected</span>
-                  <button className="inbox-sort-btn" onClick={() => bulkUpdateStatus('processed')}>✓ Processed</button>
-                  <button className="inbox-sort-btn" onClick={() => bulkUpdateStatus('pending')}>⏳ Pending</button>
-                  <button className="inbox-sort-btn" onClick={() => bulkUpdateStatus('non_processed')}>✗ Non-Processed</button>
+                  <select value={bulkTriageState} onChange={e => setBulkTriageState(e.target.value)} className="meta-select" style={{ minWidth: 130 }}>
+                    <option value="">Triage State</option>
+                    {TRIAGE_STATES.map(state => <option key={state} value={state}>{state.replace(/_/g, ' ')}</option>)}
+                  </select>
+                  <select value={bulkAssignee} onChange={e => setBulkAssignee(e.target.value)} className="meta-select" style={{ minWidth: 140 }}>
+                    <option value="">Assign To</option>
+                    <option value="__UNASSIGNED__">Unassigned</option>
+                    {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                  </select>
+                  <select value={bulkPriority} onChange={e => setBulkPriority(e.target.value)} className="meta-select" style={{ minWidth: 120 }}>
+                    <option value="">Priority</option>
+                    {PRIORITIES.map(priority => <option key={priority} value={priority}>{priority}</option>)}
+                  </select>
+                  <input type="date" value={bulkSnoozeUntil} onChange={e => setBulkSnoozeUntil(e.target.value)} className="meta-date-input" />
+                  <button className="inbox-sort-btn" onClick={() => applyBulkUpdates()}>Apply</button>
+                  <button className="inbox-sort-btn" onClick={() => applyBulkUpdates({ status: 'processed', triage_state: 'closed', closed_at: new Date().toISOString() })}>Close</button>
                   <button className="inbox-sort-btn" onClick={() => setBulkSelected(new Set())}>Cancel</button>
                 </div>
               )}
@@ -783,6 +963,12 @@ export default function InboxPage() {
                                   {dueStatus === 'today'   && <span className="due-chip due-today-chip">⏰ Due Today</span>}
                                 </div>
                               )}
+                              <div className="inbox-row-meta-row">
+                                {inq.queue_name && <span className="assignee-tag">📥 {inq.queue_name}</span>}
+                                {inq.triage_state && <span className="assignee-tag">Workflow: {inq.triage_state.replace(/_/g, ' ')}</span>}
+                                {inq.first_touch_sla_status === 'breached' && !inq.first_touched_at && <span className="due-chip due-overdue-chip">First Touch SLA</span>}
+                                {inq.response_sla_status === 'breached' && inq.first_touched_at && !inq.first_response_at && <span className="due-chip due-overdue-chip">Response SLA</span>}
+                              </div>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                               <span className="inbox-row-time">{formatTime(inq.received_at)}</span>
@@ -865,6 +1051,39 @@ export default function InboxPage() {
                         </select>
                       </span>
 
+                      <span className="meta-label">Triage State</span>
+                      <span className="meta-value">
+                        <select className="meta-select"
+                          value={selected.triage_state || 'new'}
+                          onChange={e => {
+                            const value = e.target.value
+                            patchInquiry(selected.id, { triage_state: value })
+                            updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, triage_state: value } : i))
+                            setSelected(s => ({ ...s, triage_state: value }))
+                          }}>
+                          {TRIAGE_STATES.map(state => <option key={state} value={state}>{state.replace(/_/g, ' ')}</option>)}
+                        </select>
+                      </span>
+
+                      <span className="meta-label">Queue</span>
+                      <span className="meta-value">
+                        <select className="meta-select"
+                          value={selected.queue_name || ''}
+                          onChange={e => {
+                            const value = e.target.value || null
+                            patchInquiry(selected.id, { queue_name: value })
+                            updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, queue_name: value } : i))
+                            setSelected(s => ({ ...s, queue_name: value }))
+                          }}>
+                          <option value="">Select queue</option>
+                          {queueOptions.map(queue => <option key={queue} value={queue}>{queue}</option>)}
+                          {!queueOptions.includes('Medical Information') && <option value="Medical Information">Medical Information</option>}
+                          {!queueOptions.includes('Safety') && <option value="Safety">Safety</option>}
+                          {!queueOptions.includes('Quality') && <option value="Quality">Quality</option>}
+                          {!queueOptions.includes('Regulatory') && <option value="Regulatory">Regulatory</option>}
+                        </select>
+                      </span>
+
                       {/* F2: Priority */}
                       <span className="meta-label">Priority</span>
                       <span className="meta-value">
@@ -898,6 +1117,28 @@ export default function InboxPage() {
                         {dueDateStatus(selected.due_date) === 'overdue' && <span className="due-badge due-overdue">Overdue</span>}
                         {dueDateStatus(selected.due_date) === 'today'   && <span className="due-badge due-today">Due Today</span>}
                       </span>
+
+                      <span className="meta-label">First Touch SLA</span>
+                      <span className="meta-value">
+                        <span className={`due-badge ${selected.first_touch_sla_status === 'breached' ? 'due-overdue' : 'due-today'}`}>
+                          {selected.first_touch_sla_status || 'untracked'}
+                        </span>
+                        {selected.first_touch_due_at ? ` due ${formatFullDate(selected.first_touch_due_at)}` : ''}
+                      </span>
+
+                      <span className="meta-label">Response SLA</span>
+                      <span className="meta-value">
+                        <span className={`due-badge ${selected.response_sla_status === 'breached' ? 'due-overdue' : 'due-today'}`}>
+                          {selected.response_sla_status || 'untracked'}
+                        </span>
+                        {selected.response_due_at ? ` due ${formatFullDate(selected.response_due_at)}` : ''}
+                      </span>
+
+                      <span className="meta-label">Routing</span>
+                      <span className="meta-value">{selected.routing_reason || 'No routing reason'}</span>
+
+                      <span className="meta-label">Exception</span>
+                      <span className="meta-value">{selected.exception_reason || 'None'}</span>
 
                       {/* Attachments */}
                       {selected.attachments_count > 0 && (
@@ -971,19 +1212,27 @@ export default function InboxPage() {
                     </button>
                     <button className="btn btn-outline" style={{ fontSize: 12, padding: '6px 14px' }}
                       onClick={() => {
-                        patchInquiry(selected.id, { status: 'pending' })
-                        updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, status: 'pending' } : i))
+                        patchInquiry(selected.id, { status: 'pending', triage_state: 'in_review', first_touched_at: new Date().toISOString() })
+                        updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, status: 'pending', triage_state: 'in_review', first_touched_at: new Date().toISOString() } : i))
                         setSelected(null)
                       }}>
-                      ⏳ Mark Pending
+                      ⏳ In Review
                     </button>
                     <button className="btn btn-outline" style={{ fontSize: 12, padding: '6px 14px' }}
                       onClick={() => {
-                        patchInquiry(selected.id, { status: 'non_processed' })
-                        updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, status: 'non_processed' } : i))
+                        patchInquiry(selected.id, { status: 'non_processed', triage_state: 'no_action', closed_at: new Date().toISOString() })
+                        updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, status: 'non_processed', triage_state: 'no_action', closed_at: new Date().toISOString() } : i))
                         setSelected(null)
                       }}>
-                      ✗ Non-Processed
+                      ✗ No Action
+                    </button>
+                    <button className="btn btn-outline" style={{ fontSize: 12, padding: '6px 14px' }}
+                      onClick={() => {
+                        patchInquiry(selected.id, { status: 'processed', triage_state: 'closed', closed_at: new Date().toISOString() })
+                        updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, status: 'processed', triage_state: 'closed', closed_at: new Date().toISOString() } : i))
+                        setSelected(null)
+                      }}>
+                      ✓ Close
                     </button>
                   </div>
 
@@ -1016,6 +1265,70 @@ export default function InboxPage() {
                           </button>
                         </div>
                       </>
+                    )}
+                  </div>
+
+                  <div className="notes-section">
+                    <div className="notes-section-header">📇 Sender and Case History</div>
+                    {historyLoading ? (
+                      <div className="notes-loading">Loading history…</div>
+                    ) : (
+                      <>
+                        <div className="notes-empty" style={{ marginBottom: 8 }}>
+                          {senderHistory.previous_inquiry_count || 0} prior inquiries • {senderHistory.linked_case_count || 0} linked cases
+                        </div>
+                        {senderHistory.previous_inquiries.map(item => (
+                          <div key={item.id} className="note-item">
+                            <div className="note-meta">{formatFullDate(item.received_at)} · {item.triage_state || item.status}</div>
+                            <div className="note-body">{item.subject || '(No subject)'}</div>
+                          </div>
+                        ))}
+                        {senderHistory.linked_cases.map(caseItem => (
+                          <button
+                            key={caseItem.id}
+                            className="btn btn-outline"
+                            style={{ fontSize: 12, marginTop: 6, marginRight: 6 }}
+                            onClick={() => navigate(`/cases/${caseItem.id}`, { state: { from: '/inbox' } })}
+                          >
+                            {caseItem.case_number || `Case #${caseItem.id}`} · {caseItem.case_type || '—'} · {caseItem.status_name || '—'}
+                          </button>
+                        ))}
+                        {senderHistory.previous_inquiries.length === 0 && senderHistory.linked_cases.length === 0 && (
+                          <div className="notes-empty">No prior sender history found.</div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  <div className="thread-section">
+                    <button className="thread-toggle" onClick={() => setRecommendationsExpanded(e => !e)}>
+                      {recommendationsExpanded ? '▾' : '▸'} Inbox-to-Case Recommendations ({recommendations.length})
+                    </button>
+                    {recommendationsExpanded && (
+                      <div className="thread-list">
+                        {recommendationsLoading && <div className="notes-loading">Loading recommendations…</div>}
+                        {!recommendationsLoading && recommendations.length === 0 && <div className="notes-empty">No strong case recommendations yet.</div>}
+                        {!recommendationsLoading && recommendations.map(item => (
+                          <div key={item.id} className="thread-item">
+                            <div className="thread-item-header">
+                              <span className="thread-source">{item.recommendation}</span>
+                              <span className="thread-time">{item.confidence}</span>
+                            </div>
+                            <div className="thread-item-meta">{item.case_number || `Case #${item.id}`} · {item.case_type || '—'} · {item.status_name || '—'}</div>
+                            <div className="thread-item-body">
+                              Reporter match: {item.reporter_match} • Sender match: {item.sender_match} • Case number match: {item.case_number_match}
+                            </div>
+                            <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => appendToExistingCase(item.id)}>
+                                Link This Case
+                              </button>
+                              <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => navigate(`/cases/${item.id}`, { state: { from: '/inbox' } })}>
+                                Open Case
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
 

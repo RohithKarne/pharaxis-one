@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
+const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -125,6 +126,24 @@ router.patch('/templates/:id/status', authenticate, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Template not found.' });
 
     const newStatus = existing.status === 'Active' ? 'Inactive' : 'Active';
+    if (newStatus === 'Active' && req.user.orgId) {
+      const evidenceGate = await enforceEvidenceGate({
+        orgId: req.user.orgId,
+        contentType: 'template',
+        contentId: Number(id),
+        mode: 'response',
+        actorUserId: req.user.userId,
+        metadata: { route: '/api/cm/templates/:id/status', action: 'activate' },
+      });
+      if (!evidenceGate.allow) {
+        return res.status(422).json({
+          error: 'Evidence Chain Compiler blocked template activation.',
+          run_id: evidenceGate.run_id,
+          evidence: evidenceGate.result,
+        });
+      }
+    }
+
     await pool.execute(
       'UPDATE cm_templates SET status = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
       [newStatus, req.user.userId, id]
@@ -133,6 +152,139 @@ router.patch('/templates/:id/status', authenticate, async (req, res) => {
     res.json({ message: `Template ${newStatus === 'Active' ? 'activated' : 'deactivated'}.`, status: newStatus });
   } catch (err) {
     console.error('PATCH /cm/templates/:id/status error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/cm/templates/:id/checkin — snapshot current body as a new version
+router.post('/templates/:id/checkin', authenticate, async (req, res) => {
+  try {
+    const { notes } = req.body;
+    const [[tmpl]] = await pool.execute('SELECT * FROM cm_templates WHERE id = ?', [req.params.id]);
+    if (!tmpl) return res.status(404).json({ error: 'Template not found.' });
+
+    const newMinor = (tmpl.version_minor || 0) + 1;
+    const versionStr = `${tmpl.version_major || 1}.${newMinor}`;
+
+    await pool.execute(
+      'UPDATE cm_templates SET version_minor = ?, version_notes = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
+      [newMinor, notes || null, req.user.userId, req.params.id]
+    );
+    await pool.execute(
+      `INSERT INTO cm_version_history (entity_type, entity_id, version, status, notes, author_id)
+       VALUES ('template', ?, ?, 'Active', ?, ?)`,
+      [req.params.id, versionStr, notes || 'Version saved', req.user.userId]
+    );
+    await audit(req.user.userId, req.user.email, 'CHECKIN', 'cm_template', Number(req.params.id), { version: versionStr });
+    res.json({ message: `Template saved as version ${versionStr}.`, version: versionStr });
+  } catch (err) {
+    console.error('POST /cm/templates/:id/checkin error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/templates/:id/versions — version history for a template
+router.get('/templates/:id/versions', authenticate, async (req, res) => {
+  try {
+    const [versions] = await pool.execute(
+      `SELECT vh.*, u.name AS author_name
+       FROM cm_version_history vh
+       LEFT JOIN users u ON u.id = vh.author_id
+       WHERE vh.entity_type = 'template' AND vh.entity_id = ?
+       ORDER BY vh.created_at DESC`,
+      [req.params.id]
+    );
+    res.json({ versions });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/cm/templates/:id/render — render template with live case data (merge fields)
+// Supported merge fields: {{case_number}}, {{case_type}}, {{patient_name}}, {{patient_email}},
+//   {{product_name}}, {{agent_name}}, {{org_name}}, {{date}}
+router.post('/templates/:id/render', authenticate, async (req, res) => {
+  try {
+    const { case_id } = req.body;
+    if (req.user.orgId) {
+      const evidenceGate = await enforceEvidenceGate({
+        orgId: req.user.orgId,
+        contentType: 'template',
+        contentId: Number(req.params.id),
+        mode: 'response',
+        actorUserId: req.user.userId,
+        metadata: { route: '/api/cm/templates/:id/render', case_id: case_id || null },
+      });
+      if (!evidenceGate.allow) {
+        return res.status(422).json({
+          error: 'Evidence Chain Compiler blocked template rendering for response use.',
+          run_id: evidenceGate.run_id,
+          evidence: evidenceGate.result,
+        });
+      }
+    }
+
+    const [[template]] = await pool.execute('SELECT * FROM cm_templates WHERE id = ?', [req.params.id]);
+    if (!template) return res.status(404).json({ error: 'Template not found.' });
+
+    // Build merge data
+    const mergeData = {
+      date: new Date().toLocaleDateString('en-US', { dateStyle: 'long' }),
+      agent_name: req.user.name || req.user.email || '',
+      case_number: '',
+      case_type: '',
+      patient_name: '',
+      patient_email: '',
+      product_name: '',
+      org_name: '',
+    };
+
+    if (case_id) {
+      const [[caseRow]] = await pool.execute(
+        `SELECT c.case_number, c.case_type, o.name AS org_name
+         FROM cases c
+         LEFT JOIN organisations o ON o.id = c.org_id
+         WHERE c.id = ?`,
+        [case_id]
+      );
+      if (caseRow) {
+        mergeData.case_number = caseRow.case_number || '';
+        mergeData.case_type   = caseRow.case_type || '';
+        mergeData.org_name    = caseRow.org_name || '';
+      }
+
+      const [[contactRow]] = await pool.execute(
+        `SELECT CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,'')) AS full_name, email
+         FROM case_contacts WHERE case_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`,
+        [case_id]
+      );
+      if (contactRow) {
+        mergeData.patient_name  = contactRow.full_name?.trim() || '';
+        mergeData.patient_email = contactRow.email || '';
+      }
+
+      const [[miRow]] = await pool.execute(
+        `SELECT product FROM case_mi WHERE case_id = ? ORDER BY id ASC LIMIT 1`,
+        [case_id]
+      );
+      if (miRow?.product) mergeData.product_name = miRow.product;
+    }
+
+    // Apply merge fields to subject and body
+    function applyMerge(text) {
+      if (!text) return text;
+      return text.replace(/\{\{(\w+)\}\}/g, (_, key) => mergeData[key] !== undefined ? mergeData[key] : `{{${key}}}`);
+    }
+
+    res.json({
+      rendered_subject: applyMerge(template.subject),
+      rendered_body:    applyMerge(template.body_html),
+      merge_data:       mergeData,
+      template_id:      template.id,
+      template_name:    template.name,
+    });
+  } catch (err) {
+    console.error('POST /cm/templates/:id/render error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });

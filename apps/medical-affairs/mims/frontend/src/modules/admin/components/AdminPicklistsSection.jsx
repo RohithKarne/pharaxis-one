@@ -140,6 +140,10 @@ export default function AdminPicklistsSection({ contentSection, H, flash: flashP
   const [depCheckLoading, setDepCheckLoading] = useState(false)
   const [depCheckProceedFn, setDepCheckProceedFn] = useState(null)
 
+  // ── D2: Impact Preview ──────────────────────────────────────────────────────
+  const [impactPanel, setImpactPanel] = useState(null)   // { data, label }
+  const [impactLoading, setImpactLoading] = useState(false)
+
   const selectedPicklistCategory = picklistCategories.find(c => c.id === selectedPicklistCategoryId) || null
   const selectedPicklistField = selectedPicklistCategory?.fields?.find(f => f.id === selectedPicklistFieldId) || null
   const picklistHasSelection = Boolean(selectedPicklistFieldId && selectedPicklistField)
@@ -150,6 +154,25 @@ export default function AdminPicklistsSection({ contentSection, H, flash: flashP
     setMsg({ text, type })
     setTimeout(() => setMsg({ text: '', type: '' }), 5000)
     if (typeof flashParent === 'function') flashParent(text, type)
+  }
+
+  // ── D2: Blast-radius preview for picklist taxonomy changes ──────────────────
+  async function fetchImpact(entityId, label) {
+    setImpactLoading(true)
+    setImpactPanel(null)
+    try {
+      const res = await fetch('/api/admin/impact-preview', {
+        method: 'POST', headers: H,
+        body: JSON.stringify({ change_type: 'taxonomy', entity_id: entityId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { flash(data.error || 'Impact preview failed.', 'error'); return }
+      setImpactPanel({ data, label })
+    } catch {
+      flash('Could not load impact preview.', 'error')
+    } finally {
+      setImpactLoading(false)
+    }
   }
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -845,6 +868,14 @@ export default function AdminPicklistsSection({ contentSection, H, flash: flashP
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button
                               className="btn btn-outline"
+                              style={{ fontSize: 11, padding: '2px 9px', color: '#b45309', borderColor: '#d97706' }}
+                              disabled={impactLoading}
+                              onClick={() => fetchImpact(row.id, `Picklist: ${row.name || row.value}`)}
+                            >
+                              {impactLoading ? '…' : '⚠ Impact'}
+                            </button>
+                            <button
+                              className="btn btn-outline"
                               style={{ fontSize: 11, padding: '2px 9px', color: row.status === 'Active' ? 'var(--warning)' : 'var(--success)', borderColor: row.status === 'Active' ? 'var(--warning)' : 'var(--success)' }}
                               onClick={async () => {
                                 try {
@@ -998,6 +1029,73 @@ export default function AdminPicklistsSection({ contentSection, H, flash: flashP
             </div>
           </div>
         )}
+
+        {/* ── D2: Taxonomy Impact Preview Modal ─────────────────────────────── */}
+        {impactPanel && (() => {
+          const { data, label } = impactPanel
+          const riskColor = data.risk_level === 'high' ? '#dc2626' : data.risk_level === 'medium' ? '#d97706' : '#16a34a'
+          const riskBg    = data.risk_level === 'high' ? '#fee2e2' : data.risk_level === 'medium' ? '#fef3c7' : '#dcfce7'
+          return (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.48)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+              onClick={() => setImpactPanel(null)}>
+              <div style={{ background: 'var(--surface)', borderRadius: 10, width: '100%', maxWidth: 560, boxShadow: '0 20px 60px rgba(0,0,0,0.28)', overflow: 'hidden' }}
+                onClick={e => e.stopPropagation()}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>⚠ Master-Data Impact Preview</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{label}</div>
+                  </div>
+                  <button onClick={() => setImpactPanel(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }}>✕</button>
+                </div>
+                <div style={{ padding: '20px 24px' }}>
+                  <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+                    <div style={{ flex: 1, padding: '14px 16px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, textAlign: 'center' }}>
+                      <div style={{ fontSize: 28, fontWeight: 800 }}>{data.affected_cases ?? 0}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Affected Records</div>
+                    </div>
+                    {data.affected_ae_records != null && (
+                      <div style={{ flex: 1, padding: '14px 16px', background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 8, textAlign: 'center' }}>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: '#dc2626' }}>{data.affected_ae_records}</div>
+                        <div style={{ fontSize: 12, color: '#dc2626', marginTop: 2 }}>AE Records</div>
+                      </div>
+                    )}
+                    {data.affected_pc_records != null && (
+                      <div style={{ flex: 1, padding: '14px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, textAlign: 'center' }}>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: '#d97706' }}>{data.affected_pc_records}</div>
+                        <div style={{ fontSize: 12, color: '#d97706', marginTop: 2 }}>PC Records</div>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 90 }}>
+                      <span style={{ padding: '6px 14px', borderRadius: 20, background: riskBg, color: riskColor, fontWeight: 800, fontSize: 12, textTransform: 'uppercase' }}>
+                        {data.risk_level} risk
+                      </span>
+                    </div>
+                  </div>
+                  {data.affected_dynamic_values != null && data.affected_dynamic_values > 0 && (
+                    <div style={{ marginBottom: 14, padding: '8px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, fontSize: 13, color: '#1e40af' }}>
+                      📋 {data.affected_dynamic_values} additional dynamic field value(s) also reference this taxonomy entry.
+                    </div>
+                  )}
+                  {(data.warnings || []).length > 0 && data.warnings.map((w, i) => (
+                    <div key={i} style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 13, color: '#78350f', marginBottom: 6, lineHeight: 1.5 }}>
+                      ⚠ {w}
+                    </div>
+                  ))}
+                  {data.affected_cases === 0 && (data.warnings || []).length === 0 && (
+                    <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 13, color: '#15803d' }}>
+                      ✅ No existing records reference this taxonomy value. Safe to modify.
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: '12px 24px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button onClick={() => setImpactPanel(null)} style={{ padding: '8px 24px', background: 'var(--primary, #4f6ef7)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                    Close Preview
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </MIMSLayout>
     )
   }

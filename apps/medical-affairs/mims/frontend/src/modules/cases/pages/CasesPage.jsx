@@ -16,6 +16,21 @@ const API = import.meta.env.VITE_API_URL || '/api'
 const CASE_TYPE_COLORS = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 const PRIORITY_COLORS  = { normal: '#6b7280', high: '#f59e0b', urgent: '#ef4444' }
 
+// S19-P0: SLA badge — computed from sla_due date returned by /my and /unassigned
+function SlaBadge({ slaDue }) {
+  if (!slaDue) return null
+  const due   = new Date(slaDue)
+  const now   = new Date()
+  const diffH = (due - now) / (1000 * 60 * 60)   // hours remaining
+  if (diffH < 0) {
+    return <span style={{ display:'inline-block', padding:'1px 7px', borderRadius:10, fontSize:11, fontWeight:700, background:'#fee2e2', color:'#dc2626', marginLeft:4 }}>SLA ✕</span>
+  }
+  if (diffH < 48) {
+    return <span style={{ display:'inline-block', padding:'1px 7px', borderRadius:10, fontSize:11, fontWeight:700, background:'#fef9c3', color:'#854d0e', marginLeft:4 }}>SLA ⚠</span>
+  }
+  return <span style={{ display:'inline-block', padding:'1px 7px', borderRadius:10, fontSize:11, fontWeight:600, background:'#dcfce7', color:'#15803d', marginLeft:4 }}>SLA ✓</span>
+}
+
 export default function CasesPage() {
   const navigate        = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -453,6 +468,7 @@ export default function CasesPage() {
                 <th>Site</th>
                 <th>Status</th>
                 <th>Priority</th>
+                <th>SLA</th>
                 <th>Date Received</th>
                 <th>Owner</th>
                 <th></th>
@@ -480,6 +496,7 @@ export default function CasesPage() {
                       {c.priority || 'normal'}
                     </span>
                   </td>
+                  <td><SlaBadge slaDue={c.sla_due} /></td>
                   <td>{c.date_received ? c.date_received.slice(0, 10) : '—'}</td>
                   <td>{c.owner_name || '—'}</td>
                   <td>

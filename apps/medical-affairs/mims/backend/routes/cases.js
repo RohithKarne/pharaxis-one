@@ -11,12 +11,18 @@
 
 const express = require('express');
 const router  = express.Router();
-const bcrypt  = require('bcryptjs');
+let bcrypt;
+try {
+  bcrypt = require('bcryptjs');
+} catch (_) {
+  bcrypt = require('bcrypt');
+}
 const pool    = require('../database/db');
 const { authenticate, requireRole, requireOrg } = require('../middleware/auth');
 const { checkTransitionAllowed } = require('../services/workflowEngine');
 const { logger } = require('../services/logger');
 const { createNotification } = require('../services/notificationCenterService');
+const { fireIntegrationEvent } = require('../services/integrationEngine');
 const {
   calculateAeDueDate,
   calculatePcDueDate,
@@ -33,6 +39,9 @@ const CASE_SORT_MAP = Object.freeze({
   communication_count: 'communication_count',
   last_comm_at: 'comm.last_comm_at',
 });
+
+const FORM_RULE_PRECEDENCE = Object.freeze(['hide', 'disable', 'show', 'require', 'optional']);
+const DEFAULT_UNMASK_ROLES = Object.freeze(['admin', 'superadmin']);
 
 function toDateOnlyOrNull(value) {
   if (value === undefined || value === null || value === '') return null;
@@ -184,7 +193,7 @@ async function pushNotification(userId, { category = 'general', title, message, 
 // Verify a case belongs to the requesting user's org. Returns the case row or null.
 async function verifyCaseOrg(caseId, req) {
   const [[c]] = await pool.execute(
-    'SELECT id, org_id, case_number, case_owner_id, status_id FROM cases WHERE id = ?',
+    'SELECT id, org_id, site_id, case_type, case_number, case_owner_id, status_id FROM cases WHERE id = ?',
     [caseId]
   );
   if (!c) return null;
@@ -197,6 +206,248 @@ function parseStoredJson(value, fallback = null) {
   if (!value) return fallback;
   if (typeof value === 'object') return value;
   try { return JSON.parse(value); } catch (_) { return fallback; }
+}
+
+function normalizeFieldOverrides(value) {
+  const parsed = parseStoredJson(value, {});
+  const precedence = new Map(FORM_RULE_PRECEDENCE.map((key, index) => [key, index]));
+  const normalizeRulesArray = (rules) => {
+    if (!Array.isArray(rules)) return rules;
+    return [...rules].sort((a, b) => {
+      const left = String(a?.action || a?.effect || '').trim().toLowerCase();
+      const right = String(b?.action || b?.effect || '').trim().toLowerCase();
+      const leftRank = precedence.has(left) ? precedence.get(left) : 999;
+      const rightRank = precedence.has(right) ? precedence.get(right) : 999;
+      if (leftRank !== rightRank) return leftRank - rightRank;
+      return 0;
+    });
+  };
+
+  if (Array.isArray(parsed?.rules)) {
+    return { ...parsed, rules: normalizeRulesArray(parsed.rules), rule_precedence: FORM_RULE_PRECEDENCE };
+  }
+  if (Array.isArray(parsed?.conditional_rules)) {
+    return { ...parsed, conditional_rules: normalizeRulesArray(parsed.conditional_rules), rule_precedence: FORM_RULE_PRECEDENCE };
+  }
+  if (parsed && typeof parsed === 'object') {
+    const next = { ...parsed, rule_precedence: FORM_RULE_PRECEDENCE };
+    for (const key of Object.keys(next)) {
+      if (Array.isArray(next[key])) {
+        next[key] = normalizeRulesArray(next[key]);
+        continue;
+      }
+      if (next[key] && typeof next[key] === 'object') {
+        if (Array.isArray(next[key].rules)) next[key] = { ...next[key], rules: normalizeRulesArray(next[key].rules) };
+        if (Array.isArray(next[key].conditional_rules)) {
+          next[key] = { ...next[key], conditional_rules: normalizeRulesArray(next[key].conditional_rules) };
+        }
+      }
+    }
+    return next;
+  }
+  return { rule_precedence: FORM_RULE_PRECEDENCE };
+}
+
+function normalizeRole(role) {
+  return String(role || '').trim().toLowerCase();
+}
+
+function parseRolesCsv(value) {
+  const source = String(value || '').trim();
+  if (!source) return DEFAULT_UNMASK_ROLES;
+  return source
+    .split(',')
+    .map((item) => normalizeRole(item))
+    .filter(Boolean);
+}
+
+function canViewSensitiveField(role, unmaskRoles) {
+  const normalizedRole = normalizeRole(role);
+  if (!normalizedRole) return false;
+  return parseRolesCsv(unmaskRoles).includes(normalizedRole);
+}
+
+function maskStringValue(value, pattern = 'partial') {
+  if (value === null || value === undefined) return value;
+  const text = String(value);
+  if (!text) return text;
+  const mode = String(pattern || 'partial').trim().toLowerCase();
+  if (mode === 'full') return '***';
+  if (mode === 'last4') {
+    if (text.length <= 4) return '*'.repeat(text.length);
+    return `${'*'.repeat(text.length - 4)}${text.slice(-4)}`;
+  }
+  if (text.length <= 2) return '*'.repeat(text.length);
+  return `${text[0]}${'*'.repeat(Math.max(1, text.length - 2))}${text[text.length - 1]}`;
+}
+
+function parseDateForPicklistFilter(value) {
+  const parsed = toDateOnlyOrNull(value);
+  if (parsed) return parsed;
+  return toDateOnlyOrNull(new Date()) || null;
+}
+
+async function findActivePicklistEntry(orgId, fieldType, value, asOfDate) {
+  const field = String(fieldType || '').trim();
+  const candidate = String(value || '').trim();
+  if (!field || !candidate) return null;
+  const scopedDate = parseDateForPicklistFilter(asOfDate);
+  const [rows] = await pool.execute(
+    `SELECT
+       p.id,
+       p.value,
+       p.effective_from,
+       p.effective_to,
+       p.name AS label
+     FROM picklists p
+     LEFT JOIN picklist_fields pf ON pf.id = p.field_id
+     WHERE p.org_id = ?
+       AND p.status = 'Active'
+       AND LOWER(TRIM(COALESCE(pf.name, p.field_type, ''))) = LOWER(TRIM(?))
+       AND LOWER(TRIM(COALESCE(p.value, ''))) = LOWER(TRIM(?))
+       AND (
+         ? IS NULL
+         OR (COALESCE(p.effective_from, '1900-01-01') <= ? AND COALESCE(p.effective_to, '2999-12-31') >= ?)
+       )
+     ORDER BY p.id DESC
+     LIMIT 1`,
+    [orgId, field, candidate, scopedDate, scopedDate, scopedDate]
+  );
+  return rows?.[0] || null;
+}
+
+async function assertActivePicklistValue(orgId, fieldType, value, asOfDate, label) {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const row = await findActivePicklistEntry(orgId, fieldType, value, asOfDate);
+  if (!row) {
+    throw new Error(`${label || fieldType} must be an active governed value.`);
+  }
+  return row;
+}
+
+async function buildReporterPatientSchemaSnapshot(conn, orgId, caseType) {
+  if (!orgId || !caseType) {
+    return {
+      reporterSchemaVersion: null,
+      reporterSnapshot: null,
+      patientSchemaVersion: null,
+      patientSnapshot: null,
+    };
+  }
+
+  const [fields] = await conn.execute(
+    `SELECT section_name, field_name, field_type, is_required, sort_order, updated_at
+     FROM field_setup
+     WHERE (org_id = ? OR org_id IS NULL)
+       AND section_name IN ('Contact / Requestor', 'AE — Patient Information', 'PC — Patient Information')
+       AND is_hidden = 0
+     ORDER BY section_name, sort_order, id`,
+    [orgId]
+  );
+
+  const reporterFields = fields
+    .filter((row) => row.section_name === 'Contact / Requestor')
+    .map((row) => ({
+      field_name: row.field_name,
+      field_type: row.field_type,
+      is_required: Number(row.is_required || 0),
+      sort_order: Number(row.sort_order || 0),
+    }));
+
+  const patientSection = caseType === 'AE'
+    ? 'AE — Patient Information'
+    : caseType === 'PC'
+      ? 'PC — Patient Information'
+      : null;
+
+  const patientFields = patientSection
+    ? fields
+      .filter((row) => row.section_name === patientSection)
+      .map((row) => ({
+        field_name: row.field_name,
+        field_type: row.field_type,
+        is_required: Number(row.is_required || 0),
+        sort_order: Number(row.sort_order || 0),
+      }))
+    : [];
+
+  const latestUpdatedAt = fields
+    .map((row) => {
+      const ms = row?.updated_at ? new Date(row.updated_at).getTime() : 0;
+      return Number.isFinite(ms) ? ms : 0;
+    })
+    .reduce((max, current) => Math.max(max, current), 0);
+  const stamp = latestUpdatedAt ? new Date(latestUpdatedAt).toISOString() : 'baseline';
+
+  return {
+    reporterSchemaVersion: reporterFields.length ? `reporter-${caseType}-${stamp}-${reporterFields.length}` : null,
+    reporterSnapshot: reporterFields.length ? { section: 'Contact / Requestor', fields: reporterFields } : null,
+    patientSchemaVersion: patientFields.length ? `patient-${caseType}-${stamp}-${patientFields.length}` : null,
+    patientSnapshot: patientFields.length ? { section: patientSection, fields: patientFields } : null,
+  };
+}
+
+async function loadSensitiveFieldConfigMap(orgId) {
+  if (!orgId) return new Map();
+  const [rows] = await pool.execute(
+    `SELECT section_name, field_name, masking_pattern, unmask_roles
+     FROM field_setup
+     WHERE (org_id = ? OR org_id IS NULL) AND is_sensitive = 1`,
+    [orgId]
+  );
+  const map = new Map();
+  for (const row of rows || []) {
+    map.set(`${row.section_name}::${row.field_name}`, {
+      masking_pattern: row.masking_pattern || 'partial',
+      unmask_roles: row.unmask_roles || DEFAULT_UNMASK_ROLES.join(','),
+    });
+  }
+  return map;
+}
+
+function applySensitiveMask(configMap, role, sectionName, fieldName, value) {
+  const key = `${sectionName}::${fieldName}`;
+  const cfg = configMap.get(key);
+  if (!cfg) return { value, masked: false };
+  if (canViewSensitiveField(role, cfg.unmask_roles)) return { value, masked: false };
+  return { value: maskStringValue(value, cfg.masking_pattern), masked: true };
+}
+
+async function emitOutboundEvent(orgId, eventType, payload, entityType = null, entityId = null) {
+  if (!orgId || !eventType) return;
+  let logId = null;
+  try {
+    const [inserted] = await pool.execute(
+      `INSERT INTO outbound_event_log (org_id, event_type, entity_type, entity_id, payload_json, status, attempts)
+       VALUES (?, ?, ?, ?, ?, 'queued', 0)`,
+      [orgId, eventType, entityType || null, entityId || null, JSON.stringify(payload || {})]
+    );
+    logId = inserted.insertId || null;
+  } catch (_) {
+    logId = null;
+  }
+
+  try {
+    const outcomes = await fireIntegrationEvent(orgId, eventType, payload || {});
+    const hasFailures = Array.isArray(outcomes) && outcomes.some((item) => item.status === 'rejected');
+    if (logId) {
+      await pool.execute(
+        `UPDATE outbound_event_log
+         SET status = ?, attempts = attempts + 1, last_attempt_at = NOW(), last_error = ?
+         WHERE id = ?`,
+        [hasFailures ? 'failed' : 'sent', hasFailures ? 'One or more integrations rejected the payload.' : null, logId]
+      );
+    }
+  } catch (err) {
+    if (logId) {
+      await pool.execute(
+        `UPDATE outbound_event_log
+         SET status = 'failed', attempts = attempts + 1, last_attempt_at = NOW(), last_error = ?
+         WHERE id = ?`,
+        [err?.message || 'Outbound event dispatch failed.', logId]
+      );
+    }
+  }
 }
 
 function normalizeAeTransmissionPriority(value) {
@@ -672,7 +923,8 @@ router.get('/cases/my', authenticate, async (req, res) => {
       params.push(req.user.orgId);
     }
     const [rows] = await pool.execute(
-      `SELECT c.*, o.name AS org_name, s.name AS site_name, ws.name AS status_name, u.name AS owner_name
+      `SELECT c.*, o.name AS org_name, s.name AS site_name, ws.name AS status_name, u.name AS owner_name,
+              (SELECT MIN(mi.response_required_by) FROM case_mi mi WHERE mi.case_id = c.id) AS sla_due
        FROM cases c
        LEFT JOIN organisations   o  ON c.org_id    = o.id
        LEFT JOIN sites           s  ON c.site_id   = s.id
@@ -703,7 +955,8 @@ router.get('/cases/unassigned', authenticate, async (req, res) => {
       params.push(req.user.orgId);
     }
     const [rows] = await pool.execute(
-      `SELECT c.*, o.name AS org_name, s.name AS site_name, ws.name AS status_name, u.name AS owner_name
+      `SELECT c.*, o.name AS org_name, s.name AS site_name, ws.name AS status_name, u.name AS owner_name,
+              (SELECT MIN(mi.response_required_by) FROM case_mi mi WHERE mi.case_id = c.id) AS sla_due
        FROM cases c
        LEFT JOIN organisations   o  ON c.org_id    = o.id
        LEFT JOIN sites           s  ON c.site_id   = s.id
@@ -721,6 +974,58 @@ router.get('/cases/unassigned', authenticate, async (req, res) => {
   }
 });
 
+
+// GET /api/cases/mi-responses/log — Response log: all MI responses (SENT) across cases (S19-P0)
+router.get('/cases/mi-responses/log', authenticate, async (req, res) => {
+  try {
+    const { status, from_date, to_date, search, page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const orgClause = req.user.role === 'superadmin' ? '' : ' AND c.org_id = ?';
+    const orgParams = req.user.role === 'superadmin' ? [] : [req.user.orgId];
+
+    let where = `WHERE 1=1${orgClause}`;
+    const params = [...orgParams];
+
+    if (status)    { where += ' AND r.response_status = ?'; params.push(status); }
+    if (from_date) { where += ' AND r.created_at >= ?';     params.push(from_date); }
+    if (to_date)   { where += ' AND r.created_at <= ?';     params.push(to_date + ' 23:59:59'); }
+    if (search) {
+      where += ' AND (c.case_number LIKE ? OR r.response_text LIKE ? OR r.author_name LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    const countSql = `SELECT COUNT(*) AS total
+      FROM case_mi_responses r
+      JOIN cases c ON c.id = r.case_id
+      ${where}`;
+    const [[{ total }]] = await pool.execute(countSql, params);
+
+    const dataSql = `
+      SELECT r.id, r.case_id, r.response_status, r.response_channel, r.response_date,
+             r.response_text, r.follow_up_required, r.author_id, r.author_name,
+             r.approved_by, r.approved_at, r.created_at,
+             c.case_number, c.case_type, c.priority,
+             approver.name AS approved_by_name,
+             (SELECT CONCAT(cc.first_name,' ',cc.last_name)
+              FROM case_contacts cc WHERE cc.case_id = c.id ORDER BY cc.is_primary DESC, cc.id ASC LIMIT 1
+             ) AS recipient_name,
+             (SELECT COALESCE(cc.email,'')
+              FROM case_contacts cc WHERE cc.case_id = c.id ORDER BY cc.is_primary DESC, cc.id ASC LIMIT 1
+             ) AS recipient_email
+      FROM case_mi_responses r
+      JOIN cases c ON c.id = r.case_id
+      LEFT JOIN users approver ON approver.id = r.approved_by
+      ${where}
+      ORDER BY r.created_at DESC
+      LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
+
+    const [rows] = await pool.execute(dataSql, params);
+    res.json({ responses: rows, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
+  } catch (err) {
+    logger.error({ err }, 'GET /cases/mi-responses/log error');
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // GET /api/cases/dashboard-summary — Home dashboard stats/recent/alerts (Sprint 14 G11)
 router.get('/cases/dashboard-summary', authenticate, async (req, res) => {
@@ -760,6 +1065,23 @@ router.get('/cases/dashboard-summary', authenticate, async (req, res) => {
       [req.user.userId]
     );
 
+    // S19-P1: MI KPIs — pending approvals, sent today, SLA breaches
+    const miOrgClause = req.user.role === 'superadmin' ? '' : ' AND c.org_id = ?';
+    const miOrgParams = req.user.role === 'superadmin' ? [] : [req.user.orgId];
+    const [[miStats]] = await pool.execute(
+      `SELECT
+        COALESCE(SUM(CASE WHEN r.response_status IN ('DRAFT','READY') THEN 1 ELSE 0 END), 0) AS pending_responses,
+        COALESCE(SUM(CASE WHEN r.response_status = 'APPROVED' THEN 1 ELSE 0 END), 0)         AS pending_approval,
+        COALESCE(SUM(CASE WHEN r.response_status = 'SENT' AND DATE(r.approved_at) = CURDATE() THEN 1 ELSE 0 END), 0) AS sent_today,
+        COALESCE(SUM(CASE WHEN mi.response_required_by IS NOT NULL AND mi.response_required_by < CURDATE()
+                           AND r.response_status NOT IN ('SENT','VOIDED') THEN 1 ELSE 0 END), 0) AS sla_breached
+       FROM case_mi_responses r
+       JOIN cases c ON c.id = r.case_id
+       JOIN case_mi mi ON mi.id = r.mi_tab_id
+       WHERE c.is_deleted = 0 AND r.response_status != 'VOIDED'${miOrgClause}`,
+      miOrgParams
+    );
+
     return res.json({
       stats: {
         total_cases: Number(counts.total_cases || 0),
@@ -767,6 +1089,12 @@ router.get('/cases/dashboard-summary', authenticate, async (req, res) => {
         my_cases: Number(counts.my_cases || 0),
         unassigned_cases: Number(counts.unassigned_cases || 0),
         priority_cases: Number(counts.priority_cases || 0),
+      },
+      mi_stats: {
+        pending_responses: Number(miStats?.pending_responses || 0),
+        pending_approval:  Number(miStats?.pending_approval  || 0),
+        sent_today:        Number(miStats?.sent_today        || 0),
+        sla_breached:      Number(miStats?.sla_breached      || 0),
       },
       recentCases,
       alerts,
@@ -800,20 +1128,22 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
     );
 
     const [fields] = await pool.execute(
-      `SELECT id, section_name, field_name, field_type, is_required, is_hidden, is_disabled, custom_label, help_text, picklist_type, lookup_target, sort_order, max_length, default_value
+      `SELECT id, section_name, field_name, field_type, is_required, is_hidden, is_disabled, custom_label, help_text, picklist_type, lookup_target, sort_order, max_length, default_value, is_sensitive, masking_pattern, unmask_roles
        FROM field_setup
        WHERE (org_id = ? OR org_id IS NULL) AND is_hidden = 0
        ORDER BY section_name, sort_order, id`,
       [orgId]
     );
 
+    const today = toDateOnlyOrNull(new Date());
     const [picklists] = await pool.execute(
       `SELECT pf.name AS field_type, p.value, p.name AS label
        FROM picklists p
        JOIN picklist_fields pf ON p.field_id = pf.id
        WHERE p.org_id = ? AND p.status = 'Active'
+         AND (? IS NULL OR (COALESCE(p.effective_from, '1900-01-01') <= ? AND COALESCE(p.effective_to, '2999-12-31') >= ?))
        ORDER BY pf.name, p.id`,
-      [orgId]
+      [orgId, today, today, today]
     );
 
     const picklistMap = picklists.reduce((acc, row) => {
@@ -835,12 +1165,12 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
       return {
         section_name: section.section_name,
         is_visible: section.is_visible,
-        field_overrides: section.field_overrides,
+        field_overrides: normalizeFieldOverrides(section.field_overrides),
         fields: sectionFields,
       };
     });
 
-    return res.json({ case_type, sections: sectionsWithFields });
+    return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields });
   } catch (err) {
     logger.error({ err, route: '/api/cases/form-config', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to load case form config');
     return res.status(500).json({ error: err.message });
@@ -994,6 +1324,28 @@ router.get('/cases/:id/schema-snapshot', authenticate, async (req, res) => {
   }
 });
 
+router.get('/cases/:id/intake-schema-snapshot', authenticate, async (req, res) => {
+  try {
+    const currentCase = await verifyCaseOrg(req.params.id, req);
+    if (!currentCase) return res.status(403).json({ error: 'Access denied' });
+
+    const [[row]] = await pool.execute(
+      `SELECT reporter_schema_version, reporter_schema_snapshot, patient_schema_version, patient_schema_snapshot
+       FROM cases
+       WHERE id = ?`,
+      [req.params.id]
+    );
+    return res.json({
+      reporter_schema_version: row?.reporter_schema_version || null,
+      reporter_snapshot: parseStoredJson(row?.reporter_schema_snapshot, null),
+      patient_schema_version: row?.patient_schema_version || null,
+      patient_snapshot: parseStoredJson(row?.patient_schema_snapshot, null),
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── CREATE CASE (F-13) ───────────────────────────────────────────────────────
 
 // POST /api/cases — create new case with intake fields captured at creation time (CF-E1–E5)
@@ -1025,6 +1377,47 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
       return res.status(400).json({ error: 'case_type must be MI, AE, or PC' });
     }
     const dateReceived = toDateOnlyOrNull(date_received);
+    const validationDate = dateReceived || toDateOnlyOrNull(new Date());
+
+    // Sprint 17 governance: strict controlled vocab and taxonomy validation
+    let reporterTypeValue = reporter?.reporter_type || 'HCP';
+    let patientGenderValue = patient?.gender || null;
+    let patientAgeUnitValue = patient?.age_unit || (patient ? 'years' : null);
+    let aeRouteValue = ae_intake?.route_of_admin || null;
+    let aeOutcomeValue = ae_intake?.outcome || null;
+    let pcCategoryTaxonomy = null;
+
+    if (reporter && reporterTypeValue) {
+      const resolved = await assertActivePicklistValue(org_id, 'reporter_type', reporterTypeValue, validationDate, 'Reporter Type');
+      reporterTypeValue = resolved?.value || reporterTypeValue;
+    }
+    if (patient && patientAgeUnitValue) {
+      const resolved = await assertActivePicklistValue(org_id, 'age_unit', patientAgeUnitValue, validationDate, 'Age Unit');
+      patientAgeUnitValue = resolved?.value || patientAgeUnitValue;
+    }
+    if (patient && patientGenderValue) {
+      const resolved = await assertActivePicklistValue(org_id, 'gender', patientGenderValue, validationDate, 'Gender');
+      patientGenderValue = resolved?.value || patientGenderValue;
+    }
+    if (case_type === 'AE' && ae_intake) {
+      if (aeRouteValue) {
+        const resolved = await assertActivePicklistValue(org_id, 'route_of_admin', aeRouteValue, validationDate, 'AE route_of_admin');
+        aeRouteValue = resolved?.value || aeRouteValue;
+      }
+      if (aeOutcomeValue) {
+        const resolved = await assertActivePicklistValue(org_id, 'ae_outcome', aeOutcomeValue, validationDate, 'AE outcome');
+        aeOutcomeValue = resolved?.value || aeOutcomeValue;
+      }
+    }
+    if (case_type === 'PC' && pc_intake && pc_intake.complaint_category) {
+      pcCategoryTaxonomy = await assertActivePicklistValue(
+        org_id,
+        'pc_category',
+        pc_intake.complaint_category,
+        validationDate,
+        'PC complaint_category'
+      );
+    }
 
     // 1. Insert core case
     let result;
@@ -1054,7 +1447,7 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
            email=VALUES(email), phone=VALUES(phone), reporter_type=VALUES(reporter_type),
            country=VALUES(country), organisation=VALUES(organisation)`,
         [caseId, reporter.first_name || null, reporter.last_name || null, reporter.email || null,
-         reporter.phone || null, reporter.reporter_type || 'HCP', reporter.country || null, reporter.organisation || null]
+         reporter.phone || null, reporterTypeValue || 'HCP', reporter.country || null, reporter.organisation || null]
       );
     }
 
@@ -1066,7 +1459,7 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
          ON DUPLICATE KEY UPDATE initials=VALUES(initials), age=VALUES(age), age_unit=VALUES(age_unit),
            gender=VALUES(gender), weight_kg=VALUES(weight_kg)`,
         [caseId, patient.initials || null, patient.age ? Number(patient.age) : null,
-         patient.age_unit || 'years', patient.gender || null, patient.weight_kg ? Number(patient.weight_kg) : null]
+         patientAgeUnitValue || 'years', patientGenderValue || null, patient.weight_kg ? Number(patient.weight_kg) : null]
       );
     }
 
@@ -1088,10 +1481,10 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
            is_disability=VALUES(is_disability), is_congenital_anomaly=VALUES(is_congenital_anomaly),
            is_other_medically_important=VALUES(is_other_medically_important)`,
         [caseId, ae_intake.suspect_drug_name || null, ae_intake.batch_lot_number || null,
-         ae_intake.dose || null, ae_intake.route_of_admin || null,
+         ae_intake.dose || null, aeRouteValue || null,
          toDateOnlyOrNull(ae_intake.treatment_start_date), toDateOnlyOrNull(ae_intake.treatment_stop_date),
          ae_intake.reaction_description || null, toDateOnlyOrNull(ae_intake.reaction_onset_date),
-         ae_intake.outcome || null,
+         aeOutcomeValue || null,
          ae_intake.is_serious ? 1 : 0, ae_intake.is_death ? 1 : 0, ae_intake.is_life_threatening ? 1 : 0,
          ae_intake.is_hospitalization ? 1 : 0, ae_intake.is_prolonged_hospitalization ? 1 : 0,
          ae_intake.is_disability ? 1 : 0, ae_intake.is_congenital_anomaly ? 1 : 0,
@@ -1104,15 +1497,23 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
       await conn.execute(
         `INSERT INTO case_pc_intake
            (case_id, product_name, batch_lot_number, expiry_date, purchase_date,
-            complaint_category, complaint_description, sample_available, sample_return_requested)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            complaint_category, complaint_taxonomy_id, complaint_taxonomy_label, complaint_taxonomy_effective_from, complaint_taxonomy_effective_to,
+            complaint_description, sample_available, sample_return_requested)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE product_name=VALUES(product_name), batch_lot_number=VALUES(batch_lot_number),
            expiry_date=VALUES(expiry_date), purchase_date=VALUES(purchase_date),
            complaint_category=VALUES(complaint_category), complaint_description=VALUES(complaint_description),
+           complaint_taxonomy_id=VALUES(complaint_taxonomy_id), complaint_taxonomy_label=VALUES(complaint_taxonomy_label),
+           complaint_taxonomy_effective_from=VALUES(complaint_taxonomy_effective_from), complaint_taxonomy_effective_to=VALUES(complaint_taxonomy_effective_to),
            sample_available=VALUES(sample_available), sample_return_requested=VALUES(sample_return_requested)`,
         [caseId, pc_intake.product_name || null, pc_intake.batch_lot_number || null,
          toDateOnlyOrNull(pc_intake.expiry_date), toDateOnlyOrNull(pc_intake.purchase_date),
-         pc_intake.complaint_category || null, pc_intake.complaint_description || null,
+         pcCategoryTaxonomy?.value || pc_intake.complaint_category || null,
+         pcCategoryTaxonomy?.id || null,
+         pcCategoryTaxonomy?.label || pcCategoryTaxonomy?.value || null,
+         pcCategoryTaxonomy?.effective_from || null,
+         pcCategoryTaxonomy?.effective_to || null,
+         pc_intake.complaint_description || null,
          pc_intake.sample_available ? 1 : 0, pc_intake.sample_return_requested ? 1 : 0]
       );
     }
@@ -1137,6 +1538,27 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
          SET field_schema_version = ?, field_schema_snapshot = ?
          WHERE id = ?`,
         [schemaVersion, JSON.stringify(snapshot), caseId]
+      );
+    }
+    const {
+      reporterSchemaVersion,
+      reporterSnapshot,
+      patientSchemaVersion,
+      patientSnapshot,
+    } = await buildReporterPatientSchemaSnapshot(conn, org_id, case_type);
+    if (reporterSchemaVersion || patientSchemaVersion) {
+      await conn.execute(
+        `UPDATE cases
+         SET reporter_schema_version = ?, reporter_schema_snapshot = ?,
+             patient_schema_version = ?, patient_schema_snapshot = ?
+         WHERE id = ?`,
+        [
+          reporterSchemaVersion || null,
+          reporterSnapshot ? JSON.stringify(reporterSnapshot) : null,
+          patientSchemaVersion || null,
+          patientSnapshot ? JSON.stringify(patientSnapshot) : null,
+          caseId,
+        ]
       );
     }
 
@@ -1169,6 +1591,12 @@ router.post('/cases', authenticate, requireOrg, async (req, res) => {
         eventKey: 'case-duplicate-detected',
       }).catch(() => {});
     }
+    emitOutboundEvent(org_id, 'case.created', {
+      case_id: caseId,
+      case_number: newCase.case_number || null,
+      case_type: case_type || null,
+      intake_channel,
+    }, 'case', String(caseId)).catch(() => {});
     logger.info({ case_id: caseId, org_id, user_id: req.user?.userId, case_type }, 'Case created with intake data');
     res.status(201).json({ ...newCase, duplicate_candidates: duplicateCandidates });
   } catch (err) {
@@ -1402,7 +1830,7 @@ router.put('/cases/:id', authenticate, async (req, res) => {
     if (!owned) return res.status(403).json({ error: 'Access denied' });
 
     const [[currentCase]] = await pool.execute(
-      `SELECT id, org_id, status_id, case_owner_id, case_number, priority, date_received,
+      `SELECT id, org_id, site_id, status_id, case_owner_id, case_number, priority, date_received,
               description, internal_notes, intake_channel
        FROM cases
        WHERE id = ? AND is_deleted = 0
@@ -1414,6 +1842,7 @@ router.put('/cases/:id', authenticate, async (req, res) => {
     const body = req.body || {};
 
     let nextStatusId = currentCase.status_id;
+    let statusTransitionRule = null;
     if (hasOwn(body, 'status_id')) {
       if (body.status_id === '' || body.status_id === null) {
         nextStatusId = null;
@@ -1427,6 +1856,28 @@ router.put('/cases/:id', authenticate, async (req, res) => {
       if (nextStatusId !== null && Number(nextStatusId) !== Number(currentCase.status_id || 0)) {
         const result = await checkTransitionAllowed(currentCase.org_id, currentCase.status_id, nextStatusId);
         if (!result.allowed) return res.status(400).json({ error: result.reason });
+        const [ruleRows] = await pool.execute(
+          `SELECT id, require_password, require_comment
+           FROM workflow_rules
+           WHERE is_active = 1
+             AND from_state_id = ?
+             AND to_state_id = ?
+             AND (site_id IS NULL OR site_id = ?)
+           ORDER BY CASE WHEN site_id = ? THEN 0 ELSE 1 END, id
+           LIMIT 1`,
+          [currentCase.status_id, nextStatusId, currentCase.site_id || null, currentCase.site_id || null]
+        );
+        statusTransitionRule = ruleRows?.[0] || null;
+        if (Number(statusTransitionRule?.require_password || 0) === 1) {
+          const password = String(body.password || '');
+          const reason = String(body.reason || '').trim();
+          if (!password || !reason) {
+            return res.status(400).json({ error: 'password and reason are required for this status transition.' });
+          }
+          const [[userWithHash]] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.user.userId]);
+          const valid = userWithHash?.password ? await bcrypt.compare(password, userWithHash.password) : false;
+          if (!valid) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
+        }
       }
     }
 
@@ -1528,6 +1979,13 @@ router.put('/cases/:id', authenticate, async (req, res) => {
     const caseRef = updated.case_number || currentCase.case_number || `Case ${req.params.id}`;
     if (statusChanged) {
       await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'STATUS_CHANGED', 'status_id', previousStatusId, updatedStatusId);
+      await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'case_status', req.params.id, {
+        case_id: Number(req.params.id),
+        from_status_id: previousStatusId,
+        to_status_id: updatedStatusId,
+        workflow_rule_id: statusTransitionRule?.id || null,
+        esigned: Number(statusTransitionRule?.require_password || 0) === 1,
+      });
       if (updatedOwnerId && Number(updatedOwnerId) !== Number(req.user.userId)) {
         await pushNotification(updatedOwnerId, {
           category: 'case_status',
@@ -1562,6 +2020,15 @@ router.put('/cases/:id', authenticate, async (req, res) => {
     }
 
     logger.info({ case_id: req.params?.id, user_id: req.user?.userId, status_changed: statusChanged, owner_changed: ownerChanged }, 'Case updated');
+    if (statusChanged || ownerChanged) {
+      emitOutboundEvent(currentCase.org_id, 'case.updated', {
+        case_id: Number(req.params.id),
+        case_number: updated.case_number || currentCase.case_number || null,
+        status_id: updatedStatusId,
+        owner_id: updatedOwnerId,
+        changed_by: req.user.userId,
+      }, 'case', String(req.params.id)).catch(() => {});
+    }
     res.json(updated);
   } catch (err) {
     logger.error({ err, route: '/api/cases/:id', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to update case');
@@ -1611,8 +2078,8 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
     const { mi_tab_id, response_text, response_channel, response_date, follow_up_required, cm_document_id } = req.body;
     const channel = response_channel || req.body?.channel || null;
     const responseDate = toDateOnlyOrNull(response_date || req.body?.responded_at);
-    const responseStatus = String(req.body?.response_status || 'SENT').toUpperCase();
-    const validStatuses = ['DRAFT', 'READY', 'APPROVED', 'SENT'];
+    const responseStatus = String(req.body?.response_status || 'READY').toUpperCase();
+    const validStatuses = ['DRAFT', 'READY'];
     if (!validStatuses.includes(responseStatus)) {
       return res.status(400).json({ error: `response_status must be one of: ${validStatuses.join(', ')}` });
     }
@@ -1690,9 +2157,9 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     const reason = String(req.body?.reason || '').trim();
     const password = String(req.body?.password || '');
     const allowedTransitions = {
-      DRAFT: new Set(['READY', 'APPROVED']),
-      READY: new Set(['DRAFT', 'APPROVED']),
-      APPROVED: new Set(['READY', 'SENT']),
+      DRAFT: new Set(['READY']),
+      READY: new Set(['APPROVED']),
+      APPROVED: new Set(['SENT']),
       SENT: new Set([]),
     };
     if (existing.response_status && !allowedTransitions[existing.response_status]?.has(responseStatus)) {
@@ -1712,14 +2179,17 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
       }
     }
 
+    // F7 FIX: set is_finalized=1 when advancing beyond DRAFT (DB-level immutability guard)
+    const isFinalized = responseStatus !== 'DRAFT' ? 1 : 0;
     await pool.execute(
       `UPDATE case_mi_responses
        SET response_status = ?,
+           is_finalized = CASE WHEN ? != 'DRAFT' THEN 1 ELSE is_finalized END,
            draft_saved_at = CASE WHEN ? = 'DRAFT' THEN NOW() ELSE draft_saved_at END,
            approved_by = CASE WHEN ? IN ('APPROVED', 'SENT') THEN ? ELSE approved_by END,
            approved_at = CASE WHEN ? IN ('APPROVED', 'SENT') THEN NOW() ELSE approved_at END
        WHERE id = ? AND case_id = ?`,
-      [responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, req.params.responseId, req.params.id]
+      [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, req.params.responseId, req.params.id]
     );
     await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_STATUS', 'mi_response_status', existing.response_status, responseStatus);
     await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
@@ -1730,7 +2200,7 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
       esigned: ['APPROVED', 'SENT'].includes(responseStatus),
     });
 
-    const [[caseRow]] = await pool.execute('SELECT case_owner_id, case_number FROM cases WHERE id = ?', [req.params.id]);
+    const [[caseRow]] = await pool.execute('SELECT org_id, case_owner_id, case_number FROM cases WHERE id = ?', [req.params.id]);
     if (caseRow?.case_owner_id && Number(caseRow.case_owner_id) !== Number(req.user.userId)) {
       await createNotification(caseRow.case_owner_id, {
         category: 'mi_response',
@@ -1744,11 +2214,146 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
       }).catch(() => {});
     }
 
+    emitOutboundEvent(caseRow?.org_id || req.user.orgId, 'case.mi_response.status_changed', {
+      case_id: Number(req.params.id),
+      response_id: Number(req.params.responseId),
+      from_status: existing.response_status,
+      to_status: responseStatus,
+      changed_by: req.user.userId,
+    }, 'mi_response', String(req.params.responseId)).catch(() => {});
+
+    // ── S19-P0: Send actual email when MI response reaches SENT ─────────────
+    if (responseStatus === 'SENT') {
+      try {
+        const nodemailer = require('nodemailer');
+
+        // 1. Fetch response text
+        const [[respRow]] = await pool.execute(
+          `SELECT response_text FROM case_mi_responses WHERE id = ?`,
+          [req.params.responseId]
+        );
+
+        // 2. Fetch primary contact email for this case
+        const [[contactRow]] = await pool.execute(
+          `SELECT COALESCE(cc.email, ct.email) AS recipient_email,
+                  CONCAT(COALESCE(cc.first_name, ct.first_name, ''), ' ', COALESCE(cc.last_name, ct.last_name, '')) AS recipient_name
+           FROM case_contacts cc
+           LEFT JOIN contacts ct ON ct.id = cc.contact_id
+           WHERE cc.case_id = ? AND cc.email IS NOT NULL AND cc.email != ''
+           ORDER BY cc.is_primary DESC, cc.id ASC
+           LIMIT 1`,
+          [req.params.id]
+        );
+
+        // 3. Fetch outbound SMTP account for the case's site
+        const [[siteRow]] = await pool.execute(
+          `SELECT site_id FROM cases WHERE id = ?`, [req.params.id]
+        );
+        const siteId = siteRow?.site_id;
+        let smtpAccount = null;
+        if (siteId) {
+          const [[byPurpose]] = await pool.execute(
+            `SELECT ea.* FROM site_email_purpose sep
+             JOIN email_accounts ea ON ea.id = sep.email_account_id
+             WHERE sep.site_id = ? AND sep.purpose = 'response'
+               AND ea.is_active = 1 AND ea.smtp_host IS NOT NULL
+             LIMIT 1`,
+            [siteId]
+          );
+          smtpAccount = byPurpose || null;
+        }
+        if (!smtpAccount) {
+          const [[fallback]] = await pool.execute(
+            `SELECT * FROM email_accounts
+             WHERE is_active = 1 AND smtp_host IS NOT NULL AND smtp_port IS NOT NULL
+               AND smtp_username IS NOT NULL AND smtp_password IS NOT NULL
+             LIMIT 1`
+          );
+          smtpAccount = fallback || null;
+        }
+
+        if (smtpAccount && contactRow?.recipient_email && respRow?.response_text) {
+          const secure = smtpAccount.smtp_encryption === 'SSL/TLS';
+          const requireTLS = smtpAccount.smtp_encryption === 'STARTTLS';
+          const transporter = nodemailer.createTransport({
+            host: smtpAccount.smtp_host,
+            port: smtpAccount.smtp_port,
+            secure,
+            requireTLS,
+            auth: { user: smtpAccount.smtp_username, pass: smtpAccount.smtp_password },
+            tls: { rejectUnauthorized: false },
+            connectionTimeout: 10000,
+          });
+
+          const fromLabel = smtpAccount.display_name || smtpAccount.account_name || 'Medical Information';
+          const fromAddr  = smtpAccount.from_email || smtpAccount.smtp_username;
+          const subject   = `Medical Information Response — Case ${caseRow?.case_number || req.params.id}`;
+
+          await transporter.sendMail({
+            from: `"${fromLabel}" <${fromAddr}>`,
+            to:   contactRow.recipient_email,
+            subject,
+            text: respRow.response_text,
+          });
+
+          // Log to transmission_audit_trail
+          await pool.execute(
+            `INSERT INTO transmission_audit_trail
+               (case_id, user_id, user_name, target_system, payload_summary, status, response_code)
+             VALUES (?, ?, ?, 'MI Email', ?, 'Sent', 200)`,
+            [
+              req.params.id,
+              req.user.userId,
+              req.user.email,
+              `MI response to ${contactRow.recipient_email} — Case ${caseRow?.case_number || req.params.id}`,
+            ]
+          );
+        }
+      } catch (emailErr) {
+        // Non-fatal — SENT status is already committed; log the failure
+        logger.error({ err: emailErr, case_id: req.params.id, response_id: req.params.responseId }, 'MI response email delivery failed');
+        await pool.execute(
+          `INSERT INTO transmission_audit_trail
+             (case_id, user_id, user_name, target_system, payload_summary, status, response_code)
+           VALUES (?, ?, ?, 'MI Email', ?, 'Failed', 500)`,
+          [req.params.id, req.user.userId, req.user.email, `MI email failed: ${emailErr.message}`]
+        ).catch(() => {});
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const row = await getMiResponseRow(req.params.id, req.params.responseId);
     return res.json(row);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
+});
+
+// F6+D1 FIX: PATCH /cases/:id/mi-responses/:responseId/discard — VOIDED terminal (DRAFT only)
+router.patch('/cases/:id/mi-responses/:responseId/discard', authenticate, async (req, res) => {
+  try {
+    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    const [[existing]] = await pool.execute(
+      `SELECT id, response_status, is_finalized FROM case_mi_responses WHERE id = ? AND case_id = ?`,
+      [req.params.responseId, req.params.id]
+    );
+    if (!existing) return res.status(404).json({ error: 'Response not found.' });
+    if (existing.response_status !== 'DRAFT') {
+      return res.status(400).json({ error: `Only DRAFT responses can be discarded. Current status: ${existing.response_status}.` });
+    }
+    const reason = String(req.body?.reason || '').trim() || 'Discarded by user';
+    await pool.execute(
+      `UPDATE case_mi_responses SET response_status = 'VOIDED', voided_at = NOW(), voided_by = ? WHERE id = ? AND case_id = ?`,
+      [req.user.userId, req.params.responseId, req.params.id]
+    );
+    // F8 FIX: audit trail for VOIDED (21 CFR Part 11 — every status change must be recorded)
+    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_VOIDED', 'mi_response_status', 'DRAFT', 'VOIDED');
+    await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
+      case_id: Number(req.params.id), from_status: 'DRAFT', to_status: 'VOIDED', reason, esigned: false,
+    });
+    const row = await getMiResponseRow(req.params.id, req.params.responseId);
+    return res.json(row);
+  } catch (err) { return res.status(500).json({ error: err.message }); }
 });
 
 // ─── CF-E8/E10: AE TRANSMISSIONS ─────────────────────────────────────────────
@@ -1801,6 +2406,13 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
       metadata: { case_id: req.params.id, transmission_id: result.insertId, priority, due_date: dueDate, sla_status: slaStatus },
       eventKey: 'ae-transmission-created',
     }).catch(() => {});
+    emitOutboundEvent(req.user.orgId, 'case.ae_transmission.created', {
+      case_id: Number(req.params.id),
+      transmission_id: result.insertId,
+      assigned_to: assignedTo,
+      due_date: dueDate,
+      priority,
+    }, 'ae_transmission', String(result.insertId)).catch(() => {});
     const row = await getAeTransmissionRow(req.params.id, result.insertId);
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1813,6 +2425,21 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
     const { status, resolution_notes } = req.body;
     const VALID = ['Pending', 'In Review', 'Accepted', 'Closed'];
     if (status && !VALID.includes(status)) return res.status(400).json({ error: `status must be one of: ${VALID.join(', ')}` });
+    if (status && ['Accepted', 'Closed'].includes(status)) {
+      const password = String(req.body?.password || '');
+      const reason = String(req.body?.reason || '').trim();
+      if (!password || !reason) {
+        return res.status(400).json({ error: 'password and reason are required for electronic signature.' });
+      }
+      const [[userWithHash]] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.user.userId]);
+      const valid = userWithHash?.password ? await bcrypt.compare(password, userWithHash.password) : false;
+      if (!valid) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
+      await writeAuditLog(req.user.userId, req.user.email, 'ESIGN', 'ae_transmission', req.params.txId, {
+        case_id: Number(req.params.id),
+        status,
+        reason,
+      });
+    }
     const [[existingTx]] = await pool.execute(
       'SELECT due_date FROM case_ae_transmissions WHERE id = ? AND case_id = ?',
       [req.params.txId, req.params.id]
@@ -1827,6 +2454,14 @@ router.patch('/cases/:id/ae-transmissions/:txId', authenticate, async (req, res)
        WHERE id = ? AND case_id = ?`,
       [nextStatus, resolution_notes || null, nextStatus ? computeTransmissionSlaStatus(existingTx.due_date, nextStatus) : null, req.params.txId, req.params.id]
     );
+    if (nextStatus) {
+      emitOutboundEvent(req.user.orgId, 'case.ae_transmission.status_changed', {
+        case_id: Number(req.params.id),
+        transmission_id: Number(req.params.txId),
+        status: nextStatus,
+        updated_by: req.user.userId,
+      }, 'ae_transmission', String(req.params.txId)).catch(() => {});
+    }
     const row = await getAeTransmissionRow(req.params.id, req.params.txId);
     res.json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1880,6 +2515,13 @@ router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
       metadata: { case_id: req.params.id, transmission_id: result.insertId, priority, due_date: dueDate, sla_status: slaStatus },
       eventKey: 'pc-transmission-created',
     }).catch(() => {});
+    emitOutboundEvent(req.user.orgId, 'case.pc_transmission.created', {
+      case_id: Number(req.params.id),
+      transmission_id: result.insertId,
+      assigned_to: assignedTo,
+      due_date: dueDate,
+      priority,
+    }, 'pc_transmission', String(result.insertId)).catch(() => {});
     const row = await getPcTransmissionRow(req.params.id, result.insertId);
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1892,6 +2534,21 @@ router.patch('/cases/:id/pc-transmissions/:txId', authenticate, async (req, res)
     const { status, resolution_notes } = req.body;
     const VALID = ['Pending', 'Under Investigation', 'Closed'];
     if (status && !VALID.includes(status)) return res.status(400).json({ error: `status must be one of: ${VALID.join(', ')}` });
+    if (status === 'Closed') {
+      const password = String(req.body?.password || '');
+      const reason = String(req.body?.reason || '').trim();
+      if (!password || !reason) {
+        return res.status(400).json({ error: 'password and reason are required for electronic signature.' });
+      }
+      const [[userWithHash]] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.user.userId]);
+      const valid = userWithHash?.password ? await bcrypt.compare(password, userWithHash.password) : false;
+      if (!valid) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
+      await writeAuditLog(req.user.userId, req.user.email, 'ESIGN', 'pc_transmission', req.params.txId, {
+        case_id: Number(req.params.id),
+        status,
+        reason,
+      });
+    }
     const [[existingTx]] = await pool.execute(
       'SELECT due_date FROM case_pc_transmissions WHERE id = ? AND case_id = ?',
       [req.params.txId, req.params.id]
@@ -1906,6 +2563,14 @@ router.patch('/cases/:id/pc-transmissions/:txId', authenticate, async (req, res)
        WHERE id = ? AND case_id = ?`,
       [nextStatus, resolution_notes || null, nextStatus ? computeTransmissionSlaStatus(existingTx.due_date, nextStatus) : null, req.params.txId, req.params.id]
     );
+    if (nextStatus) {
+      emitOutboundEvent(req.user.orgId, 'case.pc_transmission.status_changed', {
+        case_id: Number(req.params.id),
+        transmission_id: Number(req.params.txId),
+        status: nextStatus,
+        updated_by: req.user.userId,
+      }, 'pc_transmission', String(req.params.txId)).catch(() => {});
+    }
     const row = await getPcTransmissionRow(req.params.id, req.params.txId);
     res.json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1927,13 +2592,34 @@ router.get('/cases/:id/dynamic-fields', authenticate, async (req, res) => {
          f.section_name AS section_label,
          f.picklist_type,
          f.is_required,
-         f.sort_order
+         f.sort_order,
+         f.is_sensitive,
+         f.masking_pattern,
+         f.unmask_roles
        FROM case_dynamic_field_values v
        JOIN field_setup f ON f.id = v.field_id
        WHERE v.case_id = ? ORDER BY f.sort_order, f.id`,
       [req.params.id]
     );
-    res.json(rows);
+    const maskedRows = rows.map((row) => {
+      if (!Number(row.is_sensitive || 0)) return row;
+      const masked = applySensitiveMask(
+        new Map([[`${row.section_label}::${row.field_name}`, {
+          masking_pattern: row.masking_pattern || 'partial',
+          unmask_roles: row.unmask_roles || DEFAULT_UNMASK_ROLES.join(','),
+        }]]),
+        req.user?.role,
+        row.section_label,
+        row.field_name,
+        row.value
+      );
+      return {
+        ...row,
+        value: masked.value,
+        is_masked: masked.masked ? 1 : 0,
+      };
+    });
+    res.json(maskedRows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1960,24 +2646,94 @@ router.post('/cases/:id/dynamic-fields', authenticate, async (req, res) => {
 // GET /api/cases/:id/intake — return reporter + patient + ae_intake/pc_intake for a case
 router.get('/cases/:id/intake', authenticate, async (req, res) => {
   try {
-    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    const owned = await verifyCaseOrg(req.params.id, req);
+    if (!owned) return res.status(403).json({ error: 'Access denied' });
     const caseId = req.params.id;
     const [[reporter]] = await pool.execute('SELECT * FROM case_reporter WHERE case_id = ?', [caseId]);
     const [[patient]] = await pool.execute('SELECT * FROM case_patient WHERE case_id = ?', [caseId]);
     const [[ae_intake]] = await pool.execute('SELECT * FROM case_ae_intake WHERE case_id = ?', [caseId]);
     const [[pc_intake]] = await pool.execute('SELECT * FROM case_pc_intake WHERE case_id = ?', [caseId]);
-    res.json({ reporter: reporter || null, patient: patient || null, ae_intake: ae_intake || null, pc_intake: pc_intake || null });
+
+    const sensitiveMap = await loadSensitiveFieldConfigMap(owned.org_id);
+    const maskByField = (payload, sectionName, mappings) => {
+      if (!payload) return payload;
+      const next = { ...payload };
+      for (const [key, fieldName] of Object.entries(mappings)) {
+        if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
+        const masked = applySensitiveMask(sensitiveMap, req.user?.role, sectionName, fieldName, next[key]);
+        next[key] = masked.value;
+      }
+      return next;
+    };
+
+    const reporterPayload = maskByField(reporter || null, 'Contact / Requestor', {
+      first_name: 'First Name',
+      last_name: 'Last Name',
+      email: 'Email',
+      phone: 'Phone',
+      reporter_type: 'Reporter Type',
+      country: 'Country',
+    });
+    const patientSection = owned.case_type === 'AE' ? 'AE — Patient Information' : 'PC — Patient Information';
+    const patientPayload = maskByField(patient || null, patientSection, {
+      initials: 'Patient Initials',
+      age: 'Age',
+      age_unit: 'Age Unit',
+      gender: 'Gender',
+      weight_kg: 'Weight (kg)',
+    });
+
+    res.json({ reporter: reporterPayload || null, patient: patientPayload || null, ae_intake: ae_intake || null, pc_intake: pc_intake || null });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // PUT /api/cases/:id/intake — update intake data post-creation
 router.put('/cases/:id/intake', authenticate, async (req, res) => {
   try {
-    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    const owned = await verifyCaseOrg(req.params.id, req);
+    if (!owned) return res.status(403).json({ error: 'Access denied' });
     const { reporter, patient, ae_intake, pc_intake } = req.body;
     const caseId = req.params.id;
-    const [[c]] = await pool.execute('SELECT case_type FROM cases WHERE id = ?', [caseId]);
-    if (!c) return res.status(404).json({ error: 'Case not found.' });
+    const validationDate = toDateOnlyOrNull(new Date());
+
+    let reporterTypeValue = reporter?.reporter_type || 'HCP';
+    let patientGenderValue = patient?.gender || null;
+    let patientAgeUnitValue = patient?.age_unit || (patient ? 'years' : null);
+    let aeRouteValue = ae_intake?.route_of_admin || null;
+    let aeOutcomeValue = ae_intake?.outcome || null;
+    let pcCategoryTaxonomy = null;
+
+    if (reporter && reporterTypeValue) {
+      const resolved = await assertActivePicklistValue(owned.org_id, 'reporter_type', reporterTypeValue, validationDate, 'Reporter Type');
+      reporterTypeValue = resolved?.value || reporterTypeValue;
+    }
+    if (patient && patientAgeUnitValue) {
+      const resolved = await assertActivePicklistValue(owned.org_id, 'age_unit', patientAgeUnitValue, validationDate, 'Age Unit');
+      patientAgeUnitValue = resolved?.value || patientAgeUnitValue;
+    }
+    if (patient && patientGenderValue) {
+      const resolved = await assertActivePicklistValue(owned.org_id, 'gender', patientGenderValue, validationDate, 'Gender');
+      patientGenderValue = resolved?.value || patientGenderValue;
+    }
+    if (ae_intake && owned.case_type === 'AE') {
+      if (aeRouteValue) {
+        const resolved = await assertActivePicklistValue(owned.org_id, 'route_of_admin', aeRouteValue, validationDate, 'AE route_of_admin');
+        aeRouteValue = resolved?.value || aeRouteValue;
+      }
+      if (aeOutcomeValue) {
+        const resolved = await assertActivePicklistValue(owned.org_id, 'ae_outcome', aeOutcomeValue, validationDate, 'AE outcome');
+        aeOutcomeValue = resolved?.value || aeOutcomeValue;
+      }
+    }
+    if (pc_intake && owned.case_type === 'PC' && pc_intake.complaint_category) {
+      pcCategoryTaxonomy = await assertActivePicklistValue(
+        owned.org_id,
+        'pc_category',
+        pc_intake.complaint_category,
+        validationDate,
+        'PC complaint_category'
+      );
+    }
 
     if (reporter) {
       await pool.execute(
@@ -1986,7 +2742,7 @@ router.put('/cases/:id/intake', authenticate, async (req, res) => {
          first_name=VALUES(first_name), last_name=VALUES(last_name), email=VALUES(email),
          phone=VALUES(phone), reporter_type=VALUES(reporter_type), country=VALUES(country), organisation=VALUES(organisation)`,
         [caseId, reporter.first_name||null, reporter.last_name||null, reporter.email||null,
-         reporter.phone||null, reporter.reporter_type||'HCP', reporter.country||null, reporter.organisation||null]
+         reporter.phone||null, reporterTypeValue||'HCP', reporter.country||null, reporter.organisation||null]
       );
     }
     if (patient) {
@@ -1994,10 +2750,10 @@ router.put('/cases/:id/intake', authenticate, async (req, res) => {
         `INSERT INTO case_patient (case_id, initials, age, age_unit, gender, weight_kg)
          VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE
          initials=VALUES(initials), age=VALUES(age), age_unit=VALUES(age_unit), gender=VALUES(gender), weight_kg=VALUES(weight_kg)`,
-        [caseId, patient.initials||null, patient.age?Number(patient.age):null, patient.age_unit||'years', patient.gender||null, patient.weight_kg?Number(patient.weight_kg):null]
+        [caseId, patient.initials||null, patient.age?Number(patient.age):null, patientAgeUnitValue||'years', patientGenderValue||null, patient.weight_kg?Number(patient.weight_kg):null]
       );
     }
-    if (ae_intake && c.case_type === 'AE') {
+    if (ae_intake && owned.case_type === 'AE') {
       await pool.execute(
         `INSERT INTO case_ae_intake
            (case_id, suspect_drug_name, batch_lot_number, dose, route_of_admin, treatment_start_date, treatment_stop_date,
@@ -2012,28 +2768,41 @@ router.put('/cases/:id/intake', authenticate, async (req, res) => {
            is_prolonged_hospitalization=VALUES(is_prolonged_hospitalization), is_disability=VALUES(is_disability),
            is_congenital_anomaly=VALUES(is_congenital_anomaly), is_other_medically_important=VALUES(is_other_medically_important)`,
         [caseId, ae_intake.suspect_drug_name||null, ae_intake.batch_lot_number||null, ae_intake.dose||null,
-         ae_intake.route_of_admin||null, toDateOnlyOrNull(ae_intake.treatment_start_date), toDateOnlyOrNull(ae_intake.treatment_stop_date),
-         ae_intake.reaction_description||null, toDateOnlyOrNull(ae_intake.reaction_onset_date), ae_intake.outcome||null,
+         aeRouteValue||null, toDateOnlyOrNull(ae_intake.treatment_start_date), toDateOnlyOrNull(ae_intake.treatment_stop_date),
+         ae_intake.reaction_description||null, toDateOnlyOrNull(ae_intake.reaction_onset_date), aeOutcomeValue||null,
          ae_intake.is_serious?1:0, ae_intake.is_death?1:0, ae_intake.is_life_threatening?1:0,
          ae_intake.is_hospitalization?1:0, ae_intake.is_prolonged_hospitalization?1:0,
          ae_intake.is_disability?1:0, ae_intake.is_congenital_anomaly?1:0, ae_intake.is_other_medically_important?1:0]
       );
     }
-    if (pc_intake && c.case_type === 'PC') {
+    if (pc_intake && owned.case_type === 'PC') {
       await pool.execute(
         `INSERT INTO case_pc_intake (case_id, product_name, batch_lot_number, expiry_date, purchase_date,
-           complaint_category, complaint_description, sample_available, sample_return_requested)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE
+           complaint_category, complaint_taxonomy_id, complaint_taxonomy_label, complaint_taxonomy_effective_from, complaint_taxonomy_effective_to,
+           complaint_description, sample_available, sample_return_requested)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE
          product_name=VALUES(product_name), batch_lot_number=VALUES(batch_lot_number), expiry_date=VALUES(expiry_date),
          purchase_date=VALUES(purchase_date), complaint_category=VALUES(complaint_category),
+         complaint_taxonomy_id=VALUES(complaint_taxonomy_id), complaint_taxonomy_label=VALUES(complaint_taxonomy_label),
+         complaint_taxonomy_effective_from=VALUES(complaint_taxonomy_effective_from), complaint_taxonomy_effective_to=VALUES(complaint_taxonomy_effective_to),
          complaint_description=VALUES(complaint_description), sample_available=VALUES(sample_available),
          sample_return_requested=VALUES(sample_return_requested)`,
         [caseId, pc_intake.product_name||null, pc_intake.batch_lot_number||null,
          toDateOnlyOrNull(pc_intake.expiry_date), toDateOnlyOrNull(pc_intake.purchase_date),
-         pc_intake.complaint_category||null, pc_intake.complaint_description||null,
+         pcCategoryTaxonomy?.value || pc_intake.complaint_category || null,
+         pcCategoryTaxonomy?.id || null,
+         pcCategoryTaxonomy?.label || pcCategoryTaxonomy?.value || null,
+         pcCategoryTaxonomy?.effective_from || null,
+         pcCategoryTaxonomy?.effective_to || null,
+         pc_intake.complaint_description||null,
          pc_intake.sample_available?1:0, pc_intake.sample_return_requested?1:0]
       );
     }
+    emitOutboundEvent(owned.org_id, 'case.intake.updated', {
+      case_id: Number(caseId),
+      case_type: owned.case_type || null,
+      updated_by: req.user.userId,
+    }, 'case', String(caseId)).catch(() => {});
     res.json({ message: 'Intake data updated.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

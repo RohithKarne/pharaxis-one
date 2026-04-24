@@ -5,8 +5,12 @@ const {
   getDailyCaseOpenings,
   getDailyCaseClosures,
   getDailyCaseSummary,
+  getDailyOperationsPack,
+  getInboxPerformanceReport,
+  getInboxSlaReport,
   getTransmissionSlaReport,
 } = require('../services/reportDatasetService');
+const { recordReportRun, listReportRunLedger } = require('../services/reportOpsService');
 const router = express.Router();
 
 function dateFilters(from, to, col) {
@@ -50,6 +54,80 @@ router.get('/reports/daily-case-summary', authenticate, async (req, res) => {
   try {
     const rows = await getDailyCaseSummary(resolveReportOrgId(req), req.query);
     return res.json({ data: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/daily-operations-pack', authenticate, async (req, res) => {
+  try {
+    const rows = await getDailyOperationsPack(resolveReportOrgId(req), req.query);
+    return res.json({ data: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/inbox-performance', authenticate, async (req, res) => {
+  try {
+    const rows = await getInboxPerformanceReport(resolveReportOrgId(req), req.query);
+    return res.json({ data: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/inbox-sla', authenticate, async (req, res) => {
+  try {
+    const rows = await getInboxSlaReport(resolveReportOrgId(req), req.query);
+    return res.json({ data: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/report-run-ledger', authenticate, async (req, res) => {
+  try {
+    const rows = await listReportRunLedger(resolveReportOrgId(req), {
+      limit: req.query.limit,
+      offset: req.query.offset,
+    });
+    return res.json({ data: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/reports/run-log', authenticate, async (req, res) => {
+  try {
+    const {
+      report_key,
+      report_name,
+      filters,
+      timezone_name,
+      row_count,
+      status,
+      error_message,
+    } = req.body || {};
+
+    if (!report_key || !report_name) {
+      return res.status(400).json({ error: 'report_key and report_name are required.' });
+    }
+
+    const id = await recordReportRun({
+      orgId: resolveReportOrgId(req),
+      reportKey: String(report_key),
+      reportName: String(report_name),
+      runMode: 'manual',
+      triggeredBy: req.user.userId || null,
+      filters: filters || null,
+      timezoneName: timezone_name || null,
+      rowCount: Number(row_count || 0),
+      status: status || 'success',
+      errorMessage: error_message || null,
+    });
+
+    return res.json({ id, success: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -691,6 +769,53 @@ router.get('/reports/field-usage', authenticate, async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
+});
+
+// ─── F3 FIX: Report Presets — backend persistence (replaces localStorage) ────
+
+// GET /api/reports/presets
+router.get('/presets', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, name, group_key, report_key, filters, created_at
+       FROM user_report_presets WHERE user_id = ? AND org_id = ?
+       ORDER BY created_at DESC LIMIT 20`,
+      [req.user.userId, req.user.orgId]
+    );
+    rows.forEach(r => {
+      try { r.filters = typeof r.filters === 'string' ? JSON.parse(r.filters) : (r.filters || {}); } catch (_) { r.filters = {}; }
+    });
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/reports/presets
+router.post('/presets', authenticate, async (req, res) => {
+  try {
+    const { name, group_key, report_key, filters } = req.body;
+    if (!name || !group_key || !report_key) return res.status(400).json({ error: 'name, group_key, report_key are required.' });
+    // Upsert by name per user — delete existing with same name first
+    await pool.execute(
+      `DELETE FROM user_report_presets WHERE user_id = ? AND org_id = ? AND name = ?`,
+      [req.user.userId, req.user.orgId, String(name).trim()]
+    );
+    const [result] = await pool.execute(
+      `INSERT INTO user_report_presets (user_id, org_id, name, group_key, report_key, filters) VALUES (?, ?, ?, ?, ?, ?)`,
+      [req.user.userId, req.user.orgId, String(name).trim(), group_key, report_key, JSON.stringify(filters || {})]
+    );
+    res.status(201).json({ id: result.insertId, name: String(name).trim(), group_key, report_key, filters: filters || {} });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/reports/presets/:id
+router.delete('/presets/:id', authenticate, async (req, res) => {
+  try {
+    await pool.execute(
+      `DELETE FROM user_report_presets WHERE id = ? AND user_id = ? AND org_id = ?`,
+      [req.params.id, req.user.userId, req.user.orgId]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

@@ -19,6 +19,9 @@ import CaseFormPage from '../cases/pages/CaseFormPage'
 import CaseQueryPage from '../cases/pages/CaseQueryPage'
 import ExceptionLogsPage from './pages/ExceptionLogsPage'
 import RegressionPage from '../regression/pages/RegressionPage'
+import TransmissionsPage from '../transmissions/pages/TransmissionsPage'
+import BrowseContentPage from '../browse/pages/BrowseContentPage'
+import ResponseLogPage from '../responselog/pages/ResponseLogPage'
 import NoAccessPage from '../../pages/NoAccessPage'
 import ResetPasswordPage from '../../pages/ResetPasswordPage'
 import ExceptionToast from '../../shared/components/ExceptionToast'
@@ -133,6 +136,27 @@ function AppRoutes() {
           <Route path="/regression" element={
             <ProtectedRoute>
               <RegressionPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/response-log" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="mims_core">
+                <ResponseLogPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/transmissions" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="mims_core">
+                <TransmissionsPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/browse-content" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKeys={['browse_content', 'content_mgmt']}>
+                <BrowseContentPage />
+              </ModuleAccessGuard>
             </ProtectedRoute>
           } />
           <Route path="/no-access"       element={<NoAccessPage />} />

@@ -9,16 +9,26 @@ const nodemailer = require('nodemailer');
 
 async function runCmExpiryAlerts() {
   try {
-    // Get all active published/approved documents with expiry dates and alert config
+    // Get all active published/approved documents and FAQs with expiry dates
     const [docs] = await pool.execute(`
       SELECT d.id, d.doc_id, d.name, d.expiry_date, d.alert_days, d.alert_email_account_id,
-             d.owner_user_id, d.org_id,
-             f.org_id AS folder_org_id
+             d.owner_user_id, NULL AS org_id,
+             f.org_id AS folder_org_id, 'document' AS content_type
       FROM cm_documents d
       JOIN cm_folders f ON f.id = d.folder_id
       WHERE d.status IN ('Published', 'Approved')
         AND d.expiry_date IS NOT NULL
         AND d.expiry_date > NOW()
+      UNION ALL
+      SELECT fq.id, NULL AS doc_id, fq.question AS name, fq.expiry_date,
+             NULL AS alert_days, NULL AS alert_email_account_id,
+             fq.created_by AS owner_user_id, NULL AS org_id,
+             fo.org_id AS folder_org_id, 'faq' AS content_type
+      FROM cm_faqs fq
+      JOIN cm_folders fo ON fo.id = fq.folder_id
+      WHERE fq.status IN ('Published', 'Approved')
+        AND fq.expiry_date IS NOT NULL
+        AND fq.expiry_date > NOW()
     `);
 
     for (const doc of docs) {
@@ -111,11 +121,11 @@ async function runCmExpiryAlerts() {
           await transporter.sendMail({
             from: `"MIMS Alerts" <${emailAccount.email_address || emailAccount.username}>`,
             to: sub.email,
-            subject: `⚠️ Document Expiry Alert — ${doc.name} expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+            subject: `⚠️ ${doc.content_type === 'faq' ? 'FAQ' : 'Document'} Expiry Alert — ${doc.name} expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
             html: `
               <p>Hello ${sub.name || sub.email},</p>
               <p>This is an automated alert from MIMS Content Management.</p>
-              <p><strong>${doc.name}</strong> (${doc.doc_id}) is set to expire in <strong>${daysLeft} day${daysLeft === 1 ? '' : 's'}</strong> on <strong>${expiryDate.toDateString()}</strong>.</p>
+              <p><strong>${doc.name}</strong>${doc.doc_id ? ` (${doc.doc_id})` : ''} is set to expire in <strong>${daysLeft} day${daysLeft === 1 ? '' : 's'}</strong> on <strong>${expiryDate.toDateString()}</strong>.</p>
               <p>Please review and take appropriate action before the expiry date.</p>
               <br/>
               <p style="color:#888;font-size:12px;">This is an automated message from MIMS. Do not reply.</p>

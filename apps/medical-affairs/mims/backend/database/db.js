@@ -348,6 +348,18 @@ async function initializeDatabase() {
         assigned_to        VARCHAR(255),
         priority           VARCHAR(50),
         due_date           VARCHAR(100),
+        triage_state       VARCHAR(50)   NOT NULL DEFAULT 'new',
+        queue_name         VARCHAR(100),
+        mailbox_name       VARCHAR(255),
+        snoozed_until      DATETIME,
+        first_touched_at   DATETIME,
+        first_response_at  DATETIME,
+        first_touch_alerted_at DATETIME,
+        response_alerted_at DATETIME,
+        last_action_at     DATETIME,
+        closed_at          DATETIME,
+        routing_reason     VARCHAR(500),
+        exception_reason   VARCHAR(255),
         original_inquiry_id INT,
         case_id            INT,
         created_at         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -355,9 +367,31 @@ async function initializeDatabase() {
         KEY idx_inquiries_account (email_account_id),
         KEY idx_inquiries_status (status),
         KEY idx_inquiries_received (received_at),
-        KEY idx_inquiries_case (case_id)
+        KEY idx_inquiries_case (case_id),
+        KEY idx_inquiries_triage_state (triage_state),
+        KEY idx_inquiries_queue_name (queue_name)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    const sprint18InquiryAlters = [
+      `ALTER TABLE inquiries ADD COLUMN triage_state VARCHAR(50) NOT NULL DEFAULT 'new' AFTER due_date`,
+      `ALTER TABLE inquiries ADD COLUMN queue_name VARCHAR(100) NULL AFTER triage_state`,
+      `ALTER TABLE inquiries ADD COLUMN mailbox_name VARCHAR(255) NULL AFTER queue_name`,
+      `ALTER TABLE inquiries ADD COLUMN snoozed_until DATETIME NULL AFTER mailbox_name`,
+      `ALTER TABLE inquiries ADD COLUMN first_touched_at DATETIME NULL AFTER snoozed_until`,
+      `ALTER TABLE inquiries ADD COLUMN first_response_at DATETIME NULL AFTER first_touched_at`,
+      `ALTER TABLE inquiries ADD COLUMN first_touch_alerted_at DATETIME NULL AFTER first_response_at`,
+      `ALTER TABLE inquiries ADD COLUMN response_alerted_at DATETIME NULL AFTER first_touch_alerted_at`,
+      `ALTER TABLE inquiries ADD COLUMN last_action_at DATETIME NULL AFTER response_alerted_at`,
+      `ALTER TABLE inquiries ADD COLUMN closed_at DATETIME NULL AFTER last_action_at`,
+      `ALTER TABLE inquiries ADD COLUMN routing_reason VARCHAR(500) NULL AFTER closed_at`,
+      `ALTER TABLE inquiries ADD COLUMN exception_reason VARCHAR(255) NULL AFTER routing_reason`,
+      `ALTER TABLE inquiries ADD INDEX idx_inquiries_triage_state (triage_state)`,
+      `ALTER TABLE inquiries ADD INDEX idx_inquiries_queue_name (queue_name)`,
+    ];
+    for (const sql of sprint18InquiryAlters) {
+      try { await conn.execute(sql); } catch (_) { /* already aligned */ }
+    }
 
     // NOTE: MySQL UNIQUE indexes allow multiple NULLs (NULL != NULL in unique context),
     // which replicates the SQLite WHERE ... IS NOT NULL partial index behaviour exactly.
@@ -374,6 +408,29 @@ async function initializeDatabase() {
     `).catch(err => {
       if (err.code !== 'ER_DUP_KEYNAME') throw err;
     });
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS inbox_routing_rules (
+        id                 INT           NOT NULL AUTO_INCREMENT,
+        org_id             INT           NOT NULL,
+        name               VARCHAR(120)  NOT NULL,
+        priority           INT           NOT NULL DEFAULT 100,
+        is_active          TINYINT(1)    NOT NULL DEFAULT 1,
+        sender_contains    VARCHAR(255),
+        recipient_contains VARCHAR(255),
+        subject_contains   VARCHAR(255),
+        body_contains      VARCHAR(255),
+        queue_name         VARCHAR(100)  NOT NULL,
+        assign_to_user_id  INT,
+        routing_note       VARCHAR(255),
+        created_by         INT,
+        created_at         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_inbox_routing_rules_org_active (org_id, is_active, priority),
+        KEY idx_inbox_routing_rules_user (assign_to_user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
 
     // REPLY TEMPLATES — global email reply templates
     await conn.execute(`
@@ -1072,6 +1129,19 @@ async function initializeDatabase() {
     try {
       await conn.execute(`ALTER TABLE picklists ADD KEY idx_picklists_field_id (field_id)`);
     } catch (_) { /* index exists */ }
+    // picklists: taxonomy governance with effective dates (Sprint 17)
+    try {
+      await conn.execute(`ALTER TABLE picklists ADD COLUMN effective_from DATE NULL AFTER status`);
+    } catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try {
+      await conn.execute(`ALTER TABLE picklists ADD COLUMN effective_to DATE NULL AFTER effective_from`);
+    } catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try {
+      await conn.execute(`ALTER TABLE picklists ADD COLUMN governance_note VARCHAR(255) NULL AFTER effective_to`);
+    } catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try {
+      await conn.execute(`ALTER TABLE picklists ADD KEY idx_picklists_effective_window (field_id, status, effective_from, effective_to)`);
+    } catch (_) { /* index exists */ }
 
     // Backfill master picklist category/field hierarchy from legacy rows
     await conn.execute(`
@@ -1152,6 +1222,16 @@ async function initializeDatabase() {
     } catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
     try {
       await conn.execute(`ALTER TABLE field_setup ADD COLUMN default_value VARCHAR(500) AFTER max_length`);
+    } catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    // field_setup: field-level data masking controls (Sprint 17)
+    try {
+      await conn.execute(`ALTER TABLE field_setup ADD COLUMN is_sensitive TINYINT(1) NOT NULL DEFAULT 0 AFTER default_value`);
+    } catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try {
+      await conn.execute(`ALTER TABLE field_setup ADD COLUMN masking_pattern VARCHAR(30) NOT NULL DEFAULT 'partial' AFTER is_sensitive`);
+    } catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try {
+      await conn.execute(`ALTER TABLE field_setup ADD COLUMN unmask_roles VARCHAR(255) NOT NULL DEFAULT 'admin,superadmin' AFTER masking_pattern`);
     } catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
     try {
       await conn.execute(`ALTER TABLE field_setup DROP INDEX uq_field_section_name`);
@@ -1238,6 +1318,10 @@ async function initializeDatabase() {
     const sprint17CaseSchemaAlters = [
       `ALTER TABLE cases ADD COLUMN field_schema_version VARCHAR(150) NULL AFTER date_of_intake`,
       `ALTER TABLE cases ADD COLUMN field_schema_snapshot LONGTEXT NULL AFTER field_schema_version`,
+      `ALTER TABLE cases ADD COLUMN reporter_schema_version VARCHAR(150) NULL AFTER field_schema_snapshot`,
+      `ALTER TABLE cases ADD COLUMN reporter_schema_snapshot LONGTEXT NULL AFTER reporter_schema_version`,
+      `ALTER TABLE cases ADD COLUMN patient_schema_version VARCHAR(150) NULL AFTER reporter_schema_snapshot`,
+      `ALTER TABLE cases ADD COLUMN patient_schema_snapshot LONGTEXT NULL AFTER patient_schema_version`,
     ];
     for (const sql of sprint17CaseSchemaAlters) {
       try { await conn.execute(sql); } catch (_) { /* already aligned */ }
@@ -1884,6 +1968,55 @@ async function initializeDatabase() {
       try { await conn.execute(sql); } catch (_) { /* already aligned */ }
     }
 
+    const sprint17NotificationDeliveryAlters = [
+      `ALTER TABLE notifications ADD COLUMN delivery_status VARCHAR(30) NOT NULL DEFAULT 'delivered' AFTER acknowledged_by`,
+      `ALTER TABLE notifications ADD COLUMN delivery_attempts INT NOT NULL DEFAULT 1 AFTER delivery_status`,
+      `ALTER TABLE notifications ADD COLUMN max_delivery_attempts INT NOT NULL DEFAULT 3 AFTER delivery_attempts`,
+      `ALTER TABLE notifications ADD COLUMN last_delivery_attempt_at DATETIME NULL AFTER max_delivery_attempts`,
+      `ALTER TABLE notifications ADD COLUMN next_retry_at DATETIME NULL AFTER last_delivery_attempt_at`,
+      `ALTER TABLE notifications ADD COLUMN failure_reason TEXT NULL AFTER next_retry_at`,
+      `ALTER TABLE notifications ADD COLUMN delivered_at DATETIME NULL AFTER failure_reason`,
+      `ALTER TABLE notifications ADD INDEX idx_notifications_delivery_status (delivery_status, next_retry_at)`,
+    ];
+    for (const sql of sprint17NotificationDeliveryAlters) {
+      try { await conn.execute(sql); } catch (_) { /* already aligned */ }
+    }
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS notification_delivery_attempts (
+        id               BIGINT        NOT NULL AUTO_INCREMENT,
+        notification_id  INT           NOT NULL,
+        attempt_no       INT           NOT NULL,
+        status           VARCHAR(30)   NOT NULL,
+        error_message    VARCHAR(500),
+        attempted_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_notif_attempts_notification (notification_id),
+        KEY idx_notif_attempts_status (status),
+        KEY idx_notif_attempts_attempted_at (attempted_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS outbound_event_log (
+        id               BIGINT        NOT NULL AUTO_INCREMENT,
+        org_id           INT           NOT NULL,
+        event_type       VARCHAR(100)  NOT NULL,
+        entity_type      VARCHAR(100),
+        entity_id        VARCHAR(100),
+        payload_json     LONGTEXT,
+        status           VARCHAR(30)   NOT NULL DEFAULT 'queued',
+        attempts         INT           NOT NULL DEFAULT 0,
+        last_attempt_at  DATETIME,
+        last_error       VARCHAR(500),
+        created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_outbound_event_org (org_id),
+        KEY idx_outbound_event_status (status),
+        KEY idx_outbound_event_created (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS mims_process_logs (
         id              BIGINT        NOT NULL AUTO_INCREMENT,
@@ -2274,6 +2407,30 @@ async function initializeDatabase() {
     `);
 
     await conn.execute(`
+      CREATE TABLE IF NOT EXISTS report_run_ledger (
+        id               INT           NOT NULL AUTO_INCREMENT,
+        org_id           INT           NOT NULL,
+        report_key       VARCHAR(100)  NOT NULL,
+        report_name      VARCHAR(255)  NOT NULL,
+        run_mode         VARCHAR(20)   NOT NULL DEFAULT 'manual',
+        triggered_by     INT,
+        filters_json     JSON,
+        timezone_name    VARCHAR(100),
+        row_count        INT           NOT NULL DEFAULT 0,
+        delivery_method  VARCHAR(20),
+        delivery_target  VARCHAR(255),
+        status           VARCHAR(20)   NOT NULL DEFAULT 'success',
+        error_message    TEXT,
+        created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_report_run_ledger_org (org_id),
+        KEY idx_report_run_ledger_report (report_key),
+        KEY idx_report_run_ledger_status (status),
+        KEY idx_report_run_ledger_created (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS case_saved_views (
         id             INT           NOT NULL AUTO_INCREMENT,
         org_id         INT           NOT NULL,
@@ -2583,6 +2740,237 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // Template version tracking columns
+    for (const sql of [
+      `ALTER TABLE cm_templates ADD COLUMN version_major INT NOT NULL DEFAULT 1`,
+      `ALTER TABLE cm_templates ADD COLUMN version_minor INT NOT NULL DEFAULT 0`,
+      `ALTER TABLE cm_templates ADD COLUMN version_notes TEXT`,
+    ]) { try { await pool.execute(sql); } catch (_) {} }
+
+    // Merge report generated output columns (Item 14 — live case generation)
+    for (const sql of [
+      `ALTER TABLE cm_merge_reports ADD COLUMN generated_html MEDIUMTEXT`,
+      `ALTER TABLE cm_merge_reports ADD COLUMN generated_at DATETIME`,
+      `ALTER TABLE cm_merge_reports ADD COLUMN generated_for_case INT`,
+    ]) { try { await pool.execute(sql); } catch (_) {} }
+
+    // CM Content Usage — tracks which documents/FAQs/modules were used in MI responses
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS cm_content_usage (
+        id            INT NOT NULL AUTO_INCREMENT,
+        content_type  ENUM('document','faq','module') NOT NULL,
+        content_id    INT NOT NULL,
+        case_id       INT NOT NULL,
+        response_id   INT,
+        used_by       INT NOT NULL,
+        used_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_ccu_content (content_type, content_id),
+        KEY idx_ccu_case (case_id),
+        KEY idx_ccu_response (response_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Policy Graph Engine (Sprint 18 foundation)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS policy_nodes (
+        id          INT NOT NULL AUTO_INCREMENT,
+        org_id      INT NOT NULL,
+        node_scope  ENUM('actor','content','context') NOT NULL,
+        node_key    VARCHAR(120) NOT NULL,
+        match_json  JSON,
+        is_active   TINYINT(1) NOT NULL DEFAULT 1,
+        created_by  INT,
+        updated_by  INT,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_policy_node_scope_key (org_id, node_scope, node_key),
+        KEY idx_policy_nodes_scope_active (org_id, node_scope, is_active)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS policy_edges (
+        id              INT NOT NULL AUTO_INCREMENT,
+        org_id          INT NOT NULL,
+        from_node_id    INT NOT NULL,
+        to_node_id      INT NOT NULL,
+        relation_type   VARCHAR(60) NOT NULL DEFAULT 'applies_to',
+        effect          ENUM('allow','deny') NOT NULL DEFAULT 'allow',
+        priority        INT NOT NULL DEFAULT 100,
+        condition_json  JSON,
+        is_active       TINYINT(1) NOT NULL DEFAULT 1,
+        created_by      INT,
+        updated_by      INT,
+        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_policy_edges_scope_active (org_id, is_active),
+        KEY idx_policy_edges_nodes (org_id, from_node_id, to_node_id),
+        KEY idx_policy_edges_priority (org_id, priority)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS policy_decision_logs (
+        id                INT NOT NULL AUTO_INCREMENT,
+        org_id            INT NOT NULL,
+        actor_user_id     INT,
+        action            VARCHAR(60) NOT NULL DEFAULT 'view',
+        content_type      VARCHAR(60),
+        content_id        INT,
+        result            ENUM('allow','deny','error') NOT NULL DEFAULT 'deny',
+        matched_edge_ids  JSON,
+        reason_json       JSON,
+        request_json      JSON,
+        latency_ms        INT,
+        evaluated_by      INT,
+        created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_policy_logs_org_created (org_id, created_at),
+        KEY idx_policy_logs_result (org_id, result, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Evidence Chain Compiler
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS evidence_chain_rules (
+        id            INT NOT NULL AUTO_INCREMENT,
+        org_id        INT NOT NULL,
+        rule_name     VARCHAR(255) NOT NULL,
+        applies_to    ENUM('all','document','faq','template','module') NOT NULL DEFAULT 'all',
+        mode_scope    ENUM('publish','response','release','both') NOT NULL DEFAULT 'both',
+        check_type    VARCHAR(60) NOT NULL,
+        check_config  JSON,
+        severity      ENUM('block','warning') NOT NULL DEFAULT 'block',
+        priority      INT NOT NULL DEFAULT 100,
+        is_active     TINYINT(1) NOT NULL DEFAULT 1,
+        created_by    INT,
+        updated_by    INT,
+        created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_evidence_rules_scope (org_id, applies_to, mode_scope, is_active),
+        KEY idx_evidence_rules_priority (org_id, priority)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS evidence_chain_runs (
+        id             INT NOT NULL AUTO_INCREMENT,
+        org_id         INT NOT NULL,
+        content_type   ENUM('document','faq','template','module') NOT NULL,
+        content_id     INT NOT NULL,
+        mode           ENUM('publish','response','release') NOT NULL DEFAULT 'publish',
+        result         ENUM('allow','block') NOT NULL DEFAULT 'block',
+        risk_score     INT NOT NULL DEFAULT 0,
+        blockers_json  JSON,
+        warnings_json  JSON,
+        evidence_json  JSON,
+        request_json   JSON,
+        requested_by   INT,
+        created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_evidence_runs_scope (org_id, content_type, content_id, created_at),
+        KEY idx_evidence_runs_result (org_id, result, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Contradiction Radar
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS contradiction_radar_findings (
+        id                 INT NOT NULL AUTO_INCREMENT,
+        org_id             INT NOT NULL,
+        left_source_type   ENUM('document','faq','template','module') NOT NULL,
+        left_source_id     INT NOT NULL,
+        right_source_type  ENUM('document','faq','template','module') NOT NULL,
+        right_source_id    INT NOT NULL,
+        contradiction_type VARCHAR(60) NOT NULL,
+        anchor_key         VARCHAR(190) NOT NULL,
+        overlap_score      DECIMAL(5,2) NOT NULL DEFAULT 0,
+        confidence_score   DECIMAL(5,2) NOT NULL DEFAULT 0,
+        left_snippet       TEXT,
+        right_snippet      TEXT,
+        rationale          TEXT,
+        status             ENUM('open','acknowledged','dismissed','resolved') NOT NULL DEFAULT 'open',
+        detected_by        INT,
+        detected_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        resolved_by        INT,
+        resolved_at        DATETIME,
+        resolution_note    TEXT,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_contradiction_anchor (org_id, left_source_type, left_source_id, right_source_type, right_source_id, contradiction_type, anchor_key),
+        KEY idx_contradiction_status (org_id, status, detected_at),
+        KEY idx_contradiction_left (org_id, left_source_type, left_source_id),
+        KEY idx_contradiction_right (org_id, right_source_type, right_source_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Digital Twin Release Simulator
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS digital_twin_runs (
+        id               INT NOT NULL AUTO_INCREMENT,
+        org_id           INT NOT NULL,
+        scenario_name    VARCHAR(255) NOT NULL,
+        request_json     JSON,
+        metrics_json     JSON,
+        risk_score       INT NOT NULL DEFAULT 0,
+        risk_band        ENUM('low','medium','high') NOT NULL DEFAULT 'low',
+        recommended_gate ENUM('go','review','hold') NOT NULL DEFAULT 'review',
+        simulation_ms    INT NOT NULL DEFAULT 0,
+        simulated_by     INT,
+        created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_digital_twin_scope (org_id, created_at),
+        KEY idx_digital_twin_risk (org_id, risk_band, risk_score)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Adaptive Risk Workflow
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS adaptive_risk_rules (
+        id               INT NOT NULL AUTO_INCREMENT,
+        org_id           INT NOT NULL,
+        rule_name        VARCHAR(255) NOT NULL,
+        min_score        INT NOT NULL DEFAULT 0,
+        max_score        INT NOT NULL DEFAULT 100,
+        decision_action  ENUM('auto_approve','manager_review','medical_review','compliance_escalation','block_release') NOT NULL,
+        escalation_role  VARCHAR(120) NOT NULL DEFAULT 'manager',
+        sla_hours        INT NOT NULL DEFAULT 12,
+        priority         INT NOT NULL DEFAULT 100,
+        is_active        TINYINT(1) NOT NULL DEFAULT 1,
+        created_by       INT,
+        updated_by       INT,
+        created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_adaptive_risk_rules_scope (org_id, is_active, priority),
+        KEY idx_adaptive_risk_rules_band (org_id, min_score, max_score)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS adaptive_risk_decisions (
+        id               INT NOT NULL AUTO_INCREMENT,
+        org_id           INT NOT NULL,
+        context_type     VARCHAR(60) NOT NULL DEFAULT 'release',
+        context_id       INT,
+        context_json     JSON,
+        computed_score   INT NOT NULL DEFAULT 0,
+        decision_action  ENUM('auto_approve','manager_review','medical_review','compliance_escalation','block_release') NOT NULL,
+        escalation_role  VARCHAR(120) NOT NULL DEFAULT 'manager',
+        sla_hours        INT NOT NULL DEFAULT 12,
+        matched_rule_id  INT,
+        decision_reason  TEXT,
+        decided_by       INT,
+        created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_adaptive_risk_decisions_scope (org_id, created_at),
+        KEY idx_adaptive_risk_decisions_action (org_id, decision_action, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // Ensure regression test user exists
     const REGRESSION_EMAIL = 'regression@system';
     const [[existingRegUser]] = await conn.execute('SELECT id FROM users WHERE email = ?', [REGRESSION_EMAIL]);
@@ -2768,6 +3156,10 @@ async function initializeDatabase() {
         expiry_date             DATE,
         purchase_date           DATE,
         complaint_category      VARCHAR(100),
+        complaint_taxonomy_id   INT,
+        complaint_taxonomy_label VARCHAR(255),
+        complaint_taxonomy_effective_from DATE,
+        complaint_taxonomy_effective_to DATE,
         complaint_description   TEXT,
         sample_available        TINYINT(1)    NOT NULL DEFAULT 0,
         sample_return_requested TINYINT(1)    NOT NULL DEFAULT 0,
@@ -2778,6 +3170,17 @@ async function initializeDatabase() {
         KEY idx_case_pc_intake_case (case_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    const sprint17PcTaxonomyAlters = [
+      `ALTER TABLE case_pc_intake ADD COLUMN complaint_taxonomy_id INT NULL AFTER complaint_category`,
+      `ALTER TABLE case_pc_intake ADD COLUMN complaint_taxonomy_label VARCHAR(255) NULL AFTER complaint_taxonomy_id`,
+      `ALTER TABLE case_pc_intake ADD COLUMN complaint_taxonomy_effective_from DATE NULL AFTER complaint_taxonomy_label`,
+      `ALTER TABLE case_pc_intake ADD COLUMN complaint_taxonomy_effective_to DATE NULL AFTER complaint_taxonomy_effective_from`,
+      `ALTER TABLE case_pc_intake ADD KEY idx_case_pc_taxonomy_id (complaint_taxonomy_id)`,
+    ];
+    for (const sql of sprint17PcTaxonomyAlters) {
+      try { await conn.execute(sql); } catch (_) { /* already aligned */ }
+    }
 
     // CASE_MI_RESPONSES — MI response history (one row per response, not overwrite) (CF-E6/E7)
     await conn.execute(`
@@ -2801,7 +3204,7 @@ async function initializeDatabase() {
     `);
 
     const sprint17ResponseAlters = [
-      `ALTER TABLE case_mi_responses ADD COLUMN response_status VARCHAR(20) NOT NULL DEFAULT 'SENT' AFTER follow_up_required`,
+      `ALTER TABLE case_mi_responses ADD COLUMN response_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' AFTER follow_up_required`,
       `ALTER TABLE case_mi_responses ADD COLUMN draft_saved_at DATETIME NULL AFTER response_status`,
       `ALTER TABLE case_mi_responses ADD COLUMN approved_by INT NULL AFTER draft_saved_at`,
       `ALTER TABLE case_mi_responses ADD COLUMN approved_at DATETIME NULL AFTER approved_by`,
@@ -2810,6 +3213,12 @@ async function initializeDatabase() {
     for (const sql of sprint17ResponseAlters) {
       try { await conn.execute(sql); } catch (_) { /* already aligned */ }
     }
+    // T4 FIX: correct the DEFAULT from 'SENT' to 'DRAFT' on existing DBs
+    try {
+      await conn.execute(
+        `ALTER TABLE case_mi_responses MODIFY COLUMN response_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT'`
+      );
+    } catch (_) { /* already correct */ }
 
     // CASE_AE_TRANSMISSIONS — AE internal PV routing (CF-E8/E10)
     await conn.execute(`
@@ -2871,6 +3280,79 @@ async function initializeDatabase() {
     for (const sql of sprint17TransmissionAlters) {
       try { await conn.execute(sql); } catch (_) { /* already aligned */ }
     }
+
+    // ── F7 FIX: MI is_finalized column — DB-level immutability guard ──────────
+    const f7Alters = [
+      `ALTER TABLE case_mi_responses ADD COLUMN is_finalized TINYINT(1) NOT NULL DEFAULT 0 AFTER approved_at`,
+      `ALTER TABLE case_mi_responses ADD COLUMN voided_at DATETIME NULL AFTER is_finalized`,
+      `ALTER TABLE case_mi_responses ADD COLUMN voided_by INT NULL AFTER voided_at`,
+    ];
+    for (const sql of f7Alters) {
+      try { await conn.execute(sql); } catch (_) { /* already aligned */ }
+    }
+
+    // ── F3 FIX: user_report_presets — backend persistence for report presets ─
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS user_report_presets (
+        id          INT           NOT NULL AUTO_INCREMENT,
+        user_id     INT           NOT NULL,
+        org_id      INT           NOT NULL,
+        name        VARCHAR(255)  NOT NULL,
+        group_key   VARCHAR(100)  NOT NULL,
+        report_key  VARCHAR(100)  NOT NULL,
+        filters     JSON,
+        created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_urp_user (user_id),
+        KEY idx_urp_org  (org_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // ── D2 FIX: impact_preview_cache — optional cache table for impact results ─
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS admin_impact_preview_log (
+        id            INT           NOT NULL AUTO_INCREMENT,
+        org_id        INT           NOT NULL,
+        change_type   VARCHAR(50)   NOT NULL,
+        entity_id     INT           NOT NULL,
+        impact_json   JSON,
+        computed_by   INT,
+        computed_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_aip_org_entity (org_id, change_type, entity_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // ── Sprint 21: In-App Help System ────────────────────────────────────────
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS help_articles (
+        id               INT NOT NULL AUTO_INCREMENT,
+        feature_key      VARCHAR(120) NOT NULL,
+        feature_group    VARCHAR(80),
+        tags             JSON,
+        title            VARCHAR(500) NOT NULL,
+        content_html     MEDIUMTEXT NOT NULL,
+        summary          VARCHAR(500),
+        audience         JSON NOT NULL DEFAULT ('["all"]'),
+        org_id           INT DEFAULT NULL,
+        version          INT NOT NULL DEFAULT 1,
+        last_reviewed_at DATETIME DEFAULT NULL,
+        reviewed_by      INT DEFAULT NULL,
+        is_active        TINYINT(1) NOT NULL DEFAULT 1,
+        sort_order       INT NOT NULL DEFAULT 100,
+        view_count       INT NOT NULL DEFAULT 0,
+        created_by       INT DEFAULT NULL,
+        updated_by       INT DEFAULT NULL,
+        created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_help_feature_active (feature_key, is_active),
+        KEY idx_help_group          (feature_group, is_active),
+        KEY idx_help_org            (org_id, feature_key, is_active),
+        FULLTEXT KEY ft_help_search (title, content_html, summary)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
 
     console.log('✅ Database initialized — tables ready');
 

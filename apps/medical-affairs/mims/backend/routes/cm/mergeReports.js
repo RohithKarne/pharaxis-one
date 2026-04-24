@@ -212,6 +212,112 @@ router.post('/merge-reports/:id/checkin', authenticate, async (req, res) => {
   }
 });
 
+// ── CM-E15: Generate merge report from live case data ────────────────────────
+// POST /api/cm/merge-reports/:id/generate
+// Supported merge fields: {{case_number}}, {{case_type}}, {{patient_name}},
+//   {{patient_email}}, {{product_name}}, {{agent_name}}, {{org_name}}, {{date}},
+//   {{report_name}}, {{case_status}}, {{case_priority}}, {{case_assigned_to}}
+router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
+  try {
+    const { case_id } = req.body;
+
+    const [[report]] = await pool.execute(
+      `SELECT mr.*, f.name AS folder_name, f.org_id
+       FROM cm_merge_reports mr
+       LEFT JOIN cm_folders f ON mr.folder_id = f.id
+       WHERE mr.id = ?`,
+      [req.params.id]
+    );
+    if (!report) return res.status(404).json({ error: 'Merge report not found.' });
+    if (!report.content_html) return res.status(422).json({ error: 'Merge report has no HTML content to generate from.' });
+
+    // Build merge data (same pattern as template render)
+    const mergeData = {
+      date:             new Date().toLocaleDateString('en-US', { dateStyle: 'long' }),
+      agent_name:       req.user.name || req.user.email || '',
+      report_name:      report.name || '',
+      case_number:      '',
+      case_type:        '',
+      case_status:      '',
+      case_priority:    '',
+      case_assigned_to: '',
+      patient_name:     '',
+      patient_email:    '',
+      product_name:     '',
+      org_name:         '',
+    };
+
+    if (case_id) {
+      const [[caseRow]] = await pool.execute(
+        `SELECT c.case_number, c.case_type, c.status AS case_status, c.priority,
+                o.name AS org_name,
+                CONCAT(COALESCE(ua.first_name,''), ' ', COALESCE(ua.last_name,'')) AS assigned_name
+         FROM cases c
+         LEFT JOIN organisations o ON o.id = c.org_id
+         LEFT JOIN users ua ON ua.id = c.assigned_to
+         WHERE c.id = ?`,
+        [case_id]
+      );
+      if (caseRow) {
+        mergeData.case_number      = caseRow.case_number   || '';
+        mergeData.case_type        = caseRow.case_type     || '';
+        mergeData.case_status      = caseRow.case_status   || '';
+        mergeData.case_priority    = caseRow.priority      || '';
+        mergeData.case_assigned_to = caseRow.assigned_name?.trim() || '';
+        mergeData.org_name         = caseRow.org_name      || '';
+      }
+
+      const [[contactRow]] = await pool.execute(
+        `SELECT CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,'')) AS full_name, email
+         FROM case_contacts WHERE case_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`,
+        [case_id]
+      );
+      if (contactRow) {
+        mergeData.patient_name  = contactRow.full_name?.trim() || '';
+        mergeData.patient_email = contactRow.email             || '';
+      }
+
+      const [[miRow]] = await pool.execute(
+        `SELECT product FROM case_mi WHERE case_id = ? ORDER BY id ASC LIMIT 1`,
+        [case_id]
+      );
+      if (miRow?.product) mergeData.product_name = miRow.product;
+    }
+
+    function applyMerge(text) {
+      if (!text) return text;
+      return text.replace(/\{\{(\w+)\}\}/g, (_, key) =>
+        mergeData[key] !== undefined ? mergeData[key] : `{{${key}}}`
+      );
+    }
+
+    const generated_html = applyMerge(report.content_html);
+
+    // Persist generated output in case caller wants to store/version it
+    await pool.execute(
+      'UPDATE cm_merge_reports SET generated_html = ?, generated_at = NOW(), generated_for_case = ?, updated_at = NOW() WHERE id = ?',
+      [generated_html, case_id ? Number(case_id) : null, req.params.id]
+    ).catch(() => {}); // column may not exist yet — handled by DB init
+
+    await audit(
+      req.user.userId, req.user.email,
+      'GENERATE', 'cm_merge_report', Number(req.params.id),
+      { case_id: case_id || null }
+    );
+
+    res.json({
+      generated_html,
+      merge_data:  mergeData,
+      report_id:   report.id,
+      report_name: report.name,
+      case_id:     case_id || null,
+    });
+  } catch (err) {
+    console.error('POST /cm/merge-reports/:id/generate error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // ── CM-E10: Merge report scheduling ──────────────────────────────────────────
 
 // GET /api/cm/merge-reports/:id/schedule

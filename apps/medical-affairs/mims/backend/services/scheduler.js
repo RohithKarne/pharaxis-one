@@ -129,6 +129,26 @@ function registerDefaultJobs() {
     },
   })
 
+  registerJob({
+    name: 'inbox-operational-sla',
+    cronExpression: '*/30 * * * *',
+    description: 'Refreshes inbox SLA breach alerts for first touch and response',
+    handler: async () => {
+      const { refreshInboxOperationalAlerts } = require('./inboxGovernanceService');
+      await refreshInboxOperationalAlerts();
+    },
+  })
+
+  registerJob({
+    name: 'notification-delivery-retry',
+    cronExpression: '*/10 * * * *',
+    description: 'Retries failed notification deliveries due for retry',
+    handler: async () => {
+      const { retryFailedNotifications } = require('./notificationCenterService')
+      await retryFailedNotifications(200)
+    },
+  })
+
   // AC-T4: Login audit auto-archive — runs daily at 02:00 UTC
   registerJob({
     name: 'login-audit-archive',

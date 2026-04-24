@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-export default function MIMSHeader({ onBellClick }) {
+export default function MIMSHeader({ onBellClick, onHelpClick }) {
   const { user, token, orgName, orgId, siteName, allOrgs, switchOrg, refreshOrgAccess, logout, getInitials, hasModuleAccess } = useAuth()
   const navigate = useNavigate()
 
@@ -194,7 +194,12 @@ export default function MIMSHeader({ onBellClick }) {
         </div>
 
         {/* Help */}
-        <div className="mims-icon-btn" title="Help">
+        <div
+          className="mims-icon-btn"
+          title="Help"
+          onClick={onHelpClick}
+          style={{ cursor: 'pointer' }}
+        >
           ❓
         </div>
 

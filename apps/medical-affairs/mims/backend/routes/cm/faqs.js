@@ -10,6 +10,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const bcrypt = require('bcrypt');
+const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -39,11 +40,11 @@ function isSuperadmin(req) {
 async function getScopedFaq(req, faqId) {
   const [rows] = await pool.execute(
     isSuperadmin(req)
-      ? `SELECT f.*
+      ? `SELECT f.*, fo.org_id AS folder_org_id
          FROM cm_faqs f
          INNER JOIN cm_folders fo ON f.folder_id = fo.id
          WHERE f.id = ?`
-      : `SELECT f.*
+      : `SELECT f.*, fo.org_id AS folder_org_id
          FROM cm_faqs f
          INNER JOIN cm_folders fo ON f.folder_id = fo.id
          WHERE f.id = ? AND fo.org_id = ?`,
@@ -240,6 +241,24 @@ router.post('/faqs/:id/checkin', authenticate, async (req, res) => {
     const versionStr = `${faq.version_major}.${newMinor}`;
     const nextStatus = faq.approval_required ? 'Pending' : 'Published';
 
+    if (nextStatus === 'Published') {
+      const evidenceGate = await enforceEvidenceGate({
+        orgId: faq.folder_org_id || req.user.orgId,
+        contentType: 'faq',
+        contentId: Number(id),
+        mode: 'publish',
+        actorUserId: req.user.userId,
+        metadata: { route: '/api/cm/faqs/:id/checkin', auto_publish: true },
+      });
+      if (!evidenceGate.allow) {
+        return res.status(422).json({
+          error: 'Evidence Chain Compiler blocked publish during FAQ check-in.',
+          run_id: evidenceGate.run_id,
+          evidence: evidenceGate.result,
+        });
+      }
+    }
+
     await pool.execute(
       `UPDATE cm_faqs SET status = ?, checked_out_by = NULL, checked_out_at = NULL,
          version_minor = ?, updated_by = ?, updated_at = NOW()
@@ -297,6 +316,22 @@ router.post('/faqs/:id/publish', authenticate, async (req, res) => {
     const faq = await getScopedFaq(req, id);
     if (!faq) return res.status(404).json({ error: 'FAQ not found.' });
     if (faq.status !== 'Approved') return res.status(400).json({ error: 'Only Approved FAQs can be published.' });
+
+    const evidenceGate = await enforceEvidenceGate({
+      orgId: faq.folder_org_id || req.user.orgId,
+      contentType: 'faq',
+      contentId: Number(id),
+      mode: 'publish',
+      actorUserId: req.user.userId,
+      metadata: { route: '/api/cm/faqs/:id/publish', reason: reason || null },
+    });
+    if (!evidenceGate.allow) {
+      return res.status(422).json({
+        error: 'Evidence Chain Compiler blocked this FAQ publish request.',
+        run_id: evidenceGate.run_id,
+        evidence: evidenceGate.result,
+      });
+    }
 
     const [[user]] = await pool.execute('SELECT * FROM users WHERE id = ?', [req.user.userId]);
     const match = await bcrypt.compare(password, user.password);

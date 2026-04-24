@@ -193,6 +193,10 @@ export default function AdminWorkflowSection({ contentSection, H, flash }) {
   const [triggerModal, setTriggerModal] = useState(null)
   const [triggerEditTarget, setTriggerEditTarget] = useState(null)
 
+  // ── D2: Impact Preview ─────────────────────────────────────────────────────
+  const [impactPanel, setImpactPanel] = useState(null)   // { data, label }
+  const [impactLoading, setImpactLoading] = useState(false)
+
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (contentSection === 'sites') {
@@ -516,6 +520,25 @@ export default function AdminWorkflowSection({ contentSection, H, flash }) {
     })
     await loadWfActivities()
     flash('Activity updated.')
+  }
+
+  // ── D2: fetch blast-radius from backend ──────────────────────────────────
+  async function fetchImpact(changeType, entityId, label) {
+    setImpactLoading(true)
+    setImpactPanel(null)
+    try {
+      const res = await fetch('/api/admin/impact-preview', {
+        method: 'POST', headers: H,
+        body: JSON.stringify({ change_type: changeType, entity_id: entityId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { flash(data.error || 'Impact preview failed.', 'error'); return }
+      setImpactPanel({ data, label })
+    } catch {
+      flash('Could not load impact preview.', 'error')
+    } finally {
+      setImpactLoading(false)
+    }
   }
 
   async function runDepCheck(row, depEndpoint, proceedFn) {
@@ -1015,13 +1038,23 @@ export default function AdminWorkflowSection({ contentSection, H, flash }) {
                   <div className="card-header"><h3>Workflow States ({workflowStates.length})</h3></div>
                   <div className="card-body" style={{ padding: 0 }}>
                     <table className="admin-table">
-                      <thead><tr><th>State Name</th><th>Status</th></tr></thead>
+                      <thead><tr><th>State Name</th><th>Status</th><th>Impact</th></tr></thead>
                       <tbody>
-                        {workflowStates.length === 0 && <tr><td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No states configured.</td></tr>}
+                        {workflowStates.length === 0 && <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>No states configured.</td></tr>}
                         {workflowStates.map(w => (
                           <tr key={w.id}>
                             <td>{w.name}</td>
                             <td><StatusPill active={w.is_active} /></td>
+                            <td>
+                              <button
+                                className="btn btn-outline"
+                                style={{ fontSize: 11, padding: '3px 10px', color: '#b45309', borderColor: '#d97706' }}
+                                disabled={impactLoading}
+                                onClick={() => fetchImpact('workflow_rule', w.id, `State: ${w.name}`)}
+                              >
+                                {impactLoading ? '…' : '⚠ Preview Impact'}
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1220,10 +1253,10 @@ export default function AdminWorkflowSection({ contentSection, H, flash }) {
                     ) : (
                       <table className="admin-table">
                         <thead>
-                          <tr><th>From State</th><th>To State</th><th>Req Password</th><th>Req Checklist</th><th>Req Comment</th><th>Status</th><th>Action</th></tr>
+                          <tr><th>From State</th><th>To State</th><th>Req Password</th><th>Req Checklist</th><th>Req Comment</th><th>Status</th><th>Impact</th><th>Action</th></tr>
                         </thead>
                         <tbody>
-                          {wfRules.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No transition rules defined.</td></tr>}
+                          {wfRules.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No transition rules defined.</td></tr>}
                           {wfRules.map(rule => (
                             <tr key={rule.id}>
                               <td><strong>{rule.from_state_name || rule.from_state_id}</strong></td>
@@ -1232,6 +1265,16 @@ export default function AdminWorkflowSection({ contentSection, H, flash }) {
                               <td style={{ textAlign: 'center' }}>{rule.require_checklist ? '✅' : '—'}</td>
                               <td style={{ textAlign: 'center' }}>{rule.require_comment ? '✅' : '—'}</td>
                               <td><StatusPill active={rule.is_active} /></td>
+                              <td>
+                                <button
+                                  className="btn btn-outline"
+                                  style={{ fontSize: 11, padding: '3px 10px', color: '#b45309', borderColor: '#d97706' }}
+                                  disabled={impactLoading}
+                                  onClick={() => fetchImpact('workflow_rule', rule.from_state_id, `Rule: ${rule.from_state_name || rule.from_state_id} → ${rule.to_state_name || rule.to_state_id}`)}
+                                >
+                                  {impactLoading ? '…' : '⚠ Preview Impact'}
+                                </button>
+                              </td>
                               <td>
                                 <button className="btn btn-danger" style={{ fontSize: 11, padding: '3px 9px' }} onClick={async () => {
                                   if (!window.confirm('Delete this transition rule?')) return
@@ -1253,6 +1296,9 @@ export default function AdminWorkflowSection({ contentSection, H, flash }) {
             {wfTab === 'diagram' && (
               <WorkflowDiagram states={workflowStates} rules={wfRules} />
             )}
+
+            {/* ── D2: Impact Preview Modal ── */}
+            <ImpactPreviewModal panel={impactPanel} onClose={() => setImpactPanel(null)} />
           </>
         )
 
@@ -1291,4 +1337,109 @@ export default function AdminWorkflowSection({ contentSection, H, flash }) {
     default:
       return null
   }
+}
+
+// ── D2: Shared Impact Preview Modal ──────────────────────────────────────────
+export function ImpactPreviewModal({ panel, onClose }) {
+  if (!panel) return null
+  const { data, label } = panel
+  const riskColor = data.risk_level === 'high' ? '#dc2626' : data.risk_level === 'medium' ? '#d97706' : '#16a34a'
+  const riskBg    = data.risk_level === 'high' ? '#fee2e2' : data.risk_level === 'medium' ? '#fef3c7' : '#dcfce7'
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.48)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={onClose}>
+      <div style={{ background: 'var(--surface)', borderRadius: 10, width: '100%', maxWidth: 560, boxShadow: '0 20px 60px rgba(0,0,0,0.28)', overflow: 'hidden' }}
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>⚠ Master-Data Impact Preview</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{label}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '20px 24px' }}>
+
+          {/* Risk + affected cases */}
+          <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+            <div style={{ flex: 1, padding: '14px 16px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, textAlign: 'center' }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{data.affected_cases ?? 0}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Affected Cases</div>
+            </div>
+            {data.referencing_rules != null && (
+              <div style={{ flex: 1, padding: '14px 16px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{data.referencing_rules}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Referencing Rules</div>
+              </div>
+            )}
+            {data.affected_orgs != null && (
+              <div style={{ flex: 1, padding: '14px 16px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{data.affected_orgs}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Affected Orgs</div>
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 100 }}>
+              <span style={{ padding: '6px 16px', borderRadius: 20, background: riskBg, color: riskColor, fontWeight: 800, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {data.risk_level} risk
+              </span>
+            </div>
+          </div>
+
+          {/* Breakdown by case type */}
+          {data.breakdown_by_case_type && Object.keys(data.breakdown_by_case_type).length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>Breakdown by Case Type</div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {Object.entries(data.breakdown_by_case_type).map(([type, count]) => (
+                  <div key={type} style={{ padding: '6px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}>
+                    <strong>{type}</strong> <span style={{ color: 'var(--text-muted)' }}>({count})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AE / PC / Dynamic breakdown for taxonomy */}
+          {(data.affected_ae_records != null || data.affected_pc_records != null || data.affected_dynamic_values != null) && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>Record Breakdown</div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {data.affected_ae_records != null && <div style={{ padding: '6px 14px', background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 6, fontSize: 13 }}><strong>AE Records</strong>: {data.affected_ae_records}</div>}
+                {data.affected_pc_records != null && <div style={{ padding: '6px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 13 }}><strong>PC Records</strong>: {data.affected_pc_records}</div>}
+                {data.affected_dynamic_values != null && <div style={{ padding: '6px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, fontSize: 13 }}><strong>Dynamic Values</strong>: {data.affected_dynamic_values}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* Warnings */}
+          {(data.warnings || []).length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              {data.warnings.map((w, i) => (
+                <div key={i} style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 13, color: '#78350f', marginBottom: 6, lineHeight: 1.5 }}>
+                  ⚠ {w}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {data.affected_cases === 0 && (data.warnings || []).length === 0 && (
+            <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 13, color: '#15803d' }}>
+              ✅ No existing records are affected by this change. Safe to proceed.
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '12px 24px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '8px 24px', background: 'var(--primary, #4f6ef7)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            Close Preview
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }

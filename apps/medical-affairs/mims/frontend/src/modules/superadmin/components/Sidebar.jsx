@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { key: 'login-audit',   label: 'Login Audit' },
   { key: 'integrations',  label: 'Integrations' },
   { key: 'reports-access', label: 'Reports' },
+  { key: 'help-content',   label: 'Help Content' },
 ]
 
 const S = {

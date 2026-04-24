@@ -1,7 +1,7 @@
 /**
  * MIMSNavbar.jsx — Horizontal navigation bar
  * Grid Home | 1 Inbox | 2 Case Management ▾ | 3 Case Query | 4 Utilities ▾ |
- * 5 Transmissions | 6 Browse Content | 7 Analytics | 8 Reports     + New Case
+ * 5 Transmissions | 6 Browse Content | 7 Reports     + New Case
  *
  * Utilities dropdown contains:
  *   — Exception Log, Session Management (all authenticated users)
@@ -16,7 +16,7 @@ import { useAuth } from '../context/AuthContext'
 
 const CASE_MGMT_ROUTES = { 'My Cases': '/cases?tab=my', 'Unassigned Cases': '/cases?tab=unassigned', 'Deleted Cases': '/cases?tab=deleted' }
 const CASE_MGMT_ITEMS  = ['My Cases', 'Unassigned Cases', 'Deleted Cases']
-const COMING_SOON      = ['Response Log', 'CDR Log', 'Schedule CDR', 'Case Audit Trail', 'Transmission Audit Trail', 'Non Relevant Emails']
+const COMING_SOON      = ['CDR Log', 'Schedule CDR', 'Case Audit Trail', 'Transmission Audit Trail', 'Non Relevant Emails']
 
 export default function MIMSNavbar() {
   const navigate  = useNavigate()
@@ -59,7 +59,7 @@ export default function MIMSNavbar() {
 
   // True if any utility sub-path is currently active
   function isUtilitiesActive() {
-    return ['/exceptions', '/session-management', '/process-explorer', '/regression'].some(p => location.pathname === p)
+    return ['/exceptions', '/session-management', '/process-explorer', '/regression', '/response-log'].some(p => location.pathname === p)
   }
 
   function canAccess(moduleKey)        { return hasModuleAccess(moduleKey) }
@@ -136,6 +136,11 @@ export default function MIMSNavbar() {
                 Session Management
               </Link>
             )}
+            {canAccess('mims_core') && (
+              <Link to="/response-log" className={`mims-nav-dropdown-item ${isActive('/response-log') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                📋 Response Log
+              </Link>
+            )}
 
             {/* Admin-only tools */}
             {isAdmin && (
@@ -173,10 +178,13 @@ export default function MIMSNavbar() {
       {navItem('transmissions', '/transmissions', 'Transmissions')}
 
       {/* Browse Content */}
-      {navItem('browse_content', '/browse-content', 'Browse Content')}
-
-      {/* Analytics */}
-      {navItem('data_visualization', '/analytics', 'Analytics')}
+      {canAccessAny('browse_content', 'content_mgmt')
+        ? (
+          <Link to="/browse-content" className={`mims-nav-tab ${isActive('/browse-content') ? 'active' : ''}`}>
+            Browse Content
+          </Link>
+        )
+        : <button className="mims-nav-tab disabled" title="Access restricted">Browse Content</button>}
 
       {/* Reports */}
       {navItem('reports', '/reports', 'Reports')}
