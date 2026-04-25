@@ -78,7 +78,7 @@ function printResults(summary, testEmail, testUserId) {
   try {
     const { res, data } = await req('/api/auth/login', {
       method: 'POST',
-      body: { email: 'superadmin', password: 'Manager@123' },
+      body: { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
     });
     assert(res.ok && data.token, `Superadmin login failed: ${JSON.stringify(data)}`);
     superToken = data.token;
@@ -136,7 +136,7 @@ function printResults(summary, testEmail, testUserId) {
   try {
     const { res, data } = await req('/api/auth/login', {
       method: 'POST',
-      body: { email: testEmail, password: 'Manager@123' },
+      body: { email: testEmail, password: '__SET_SMOKE_TEST_PASSWORD__' },
     });
     assert(res.ok && data.passwordResetRequired && data.token, `Expected password reset: ${JSON.stringify(data)}`);
     loginToken = data.token;

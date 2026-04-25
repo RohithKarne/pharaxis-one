@@ -11,8 +11,8 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 
 const PAGE_SIZE = 50
-const TABS = ['Inbox', 'Pending', 'Processed', 'Non-Processed', 'Sent']
-const TAB_STATUS = { Sent: 'outbox' }
+const TABS = ['Inbox', 'Pending', 'Processed', 'Non-Processed', 'Outbox']
+const TAB_STATUS = { Outbox: 'outbox' }
 const COLORS = ['red', 'yellow', 'green', 'blue']
 const PRIORITIES = ['high', 'medium', 'low']
 const TRIAGE_STATES = ['new', 'in_review', 'linked', 'converted', 'no_action', 'closed']
@@ -26,6 +26,7 @@ export default function InboxPage() {
 
   const STORAGE_KEY = `mims_inbox_${user?.id || 'guest'}`
   const VIEWS_KEY   = `mims_inbox_views_${user?.id || 'guest'}`
+  const DENSITY_KEY = `mims_inbox_density_${user?.id || 'guest'}`
 
   function saveInquiries(data) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -59,6 +60,13 @@ export default function InboxPage() {
   const [bulkAssignee, setBulkAssignee] = useState('')
   const [bulkPriority, setBulkPriority] = useState('')
   const [bulkSnoozeUntil, setBulkSnoozeUntil] = useState('')
+  const [compactMode, setCompactMode] = useState(() => {
+    try {
+      return localStorage.getItem(DENSITY_KEY) !== 'comfort'
+    } catch {
+      return true
+    }
+  })
 
   // ── Phase 2 state ─────────────────────────────────────────────
   const [users, setUsers]           = useState([])           // F1
@@ -73,9 +81,7 @@ export default function InboxPage() {
   const [newNote, setNewNote]               = useState('')
   const [notesLoading, setNotesLoading]     = useState(false)
   const [savingNote, setSavingNote]         = useState(false)
-  const [threadItems, setThreadItems]       = useState([])   // F12
-  const [threadExpanded, setThreadExpanded] = useState(true)
-  const [recommendationsExpanded, setRecommendationsExpanded] = useState(true)
+  const [insightPanel, setInsightPanel] = useState(null) // notes | history | recommendations | null
   const [historyLoading, setHistoryLoading] = useState(false)
   const [recommendationsLoading, setRecommendationsLoading] = useState(false)
   const [senderHistory, setSenderHistory] = useState({ previous_inquiries: [], linked_cases: [], previous_inquiry_count: 0, linked_case_count: 0 })
@@ -95,6 +101,10 @@ export default function InboxPage() {
   useEffect(() => {
     try { setSavedViews(JSON.parse(localStorage.getItem(VIEWS_KEY) || '[]')) } catch { /* ignore */ }
   }, [VIEWS_KEY])
+
+  useEffect(() => {
+    localStorage.setItem(DENSITY_KEY, compactMode ? 'compact' : 'comfort')
+  }, [compactMode, DENSITY_KEY])
 
   useEffect(() => {
     loadInquiries()
@@ -204,13 +214,6 @@ export default function InboxPage() {
     finally { setNotesLoading(false) }
   }
 
-  async function loadThread(id) {
-    try {
-      const res = await fetch(`/api/inbox/${id}/thread`, { headers: AUTH_H })
-      if (res.ok) { const d = await res.json(); setThreadItems(d.thread || []) }
-    } catch { setThreadItems([]) }
-  }
-
   async function loadHistory(id) {
     setHistoryLoading(true)
     try {
@@ -265,19 +268,17 @@ export default function InboxPage() {
 
   function selectInquiry(inq) {
     setSelected(inq)
-    setThreadExpanded(true)
-    setRecommendationsExpanded(true)
+    setInsightPanel(null)
     if (inq.attachments_count > 0) loadAttachments(inq.id)
     else setAttachments([])
     if (!inq.is_read) {
       patchInquiry(inq.id, { is_read: true })
       updateInquiries(prev => prev.map(i => i.id === inq.id ? { ...i, is_read: true } : i))
     }
-    setNotes([]); setNewNote(''); setThreadItems([])
+    setNotes([]); setNewNote('')
     setSenderHistory({ previous_inquiries: [], linked_cases: [], previous_inquiry_count: 0, linked_case_count: 0 })
     setRecommendations([])
     loadNotes(inq.id)
-    loadThread(inq.id)
     loadHistory(inq.id)
     loadRecommendations(inq.id)
   }
@@ -653,18 +654,6 @@ export default function InboxPage() {
     [inquiries]
   )
 
-  const opsSummary = useMemo(() => {
-    const actionable = inquiries.filter(item => item.status !== 'outbox')
-    return {
-      total: actionable.length,
-      active: actionable.filter(item => ['new', 'in_review'].includes(item.triage_state)).length,
-      unassigned: actionable.filter(item => !item.assigned_to).length,
-      firstTouchBreached: actionable.filter(item => item.first_touch_sla_status === 'breached' && !item.first_touched_at).length,
-      responseBreached: actionable.filter(item => item.response_sla_status === 'breached' && item.first_touched_at && !item.first_response_at).length,
-      exceptions: actionable.filter(item => item.exception_reason).length,
-    }
-  }, [inquiries])
-
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -720,7 +709,7 @@ export default function InboxPage() {
   return (
     <MIMSLayout>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div className="inbox-wrapper">
+        <div className={`inbox-wrapper ${compactMode ? 'compact-mode' : 'comfort-mode'}`}>
 
             {/* ── LEFT PANEL: List ── */}
             <div className="inbox-list-panel">
@@ -736,20 +725,21 @@ export default function InboxPage() {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, padding: '10px 12px 0' }}>
-                {[
-                  { label: 'Active', value: opsSummary.active, tone: '#1d4ed8' },
-                  { label: 'Unassigned', value: opsSummary.unassigned, tone: '#b45309' },
-                  { label: 'Exceptions', value: opsSummary.exceptions, tone: '#b91c1c' },
-                  { label: 'First Touch SLA', value: opsSummary.firstTouchBreached, tone: '#b91c1c' },
-                  { label: 'Response SLA', value: opsSummary.responseBreached, tone: '#991b1b' },
-                  { label: 'Total', value: opsSummary.total, tone: '#0f172a' },
-                ].map(card => (
-                  <div key={card.label} style={{ border: '1px solid var(--border)', borderRadius: 10, background: '#fff', padding: '10px 12px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{card.label}</div>
-                    <div style={{ marginTop: 4, fontSize: 20, fontWeight: 700, color: card.tone }}>{card.value}</div>
-                  </div>
-                ))}
+              <div className="inbox-layout-controls">
+                <div className="inbox-density-switch" role="group" aria-label="Inbox density">
+                  <button
+                    className={`density-option ${compactMode ? 'active' : ''}`}
+                    onClick={() => setCompactMode(true)}
+                  >
+                    Compact
+                  </button>
+                  <button
+                    className={`density-option ${!compactMode ? 'active' : ''}`}
+                    onClick={() => setCompactMode(false)}
+                  >
+                    Comfort
+                  </button>
+                </div>
               </div>
 
               {/* F9: Saved Views chips */}
@@ -902,7 +892,7 @@ export default function InboxPage() {
                     </span>
                   )}
                 </span>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="inbox-sort-actions">
                   <button className="inbox-sort-btn" onClick={fetchEmails} disabled={fetching || loading}>
                     {fetching ? 'Fetching…' : '⬇ Fetch'}
                   </button>
@@ -930,6 +920,7 @@ export default function InboxPage() {
                       <div className="inbox-date-group">{group}</div>
                       {grouped[group].map(inq => {
                         const dueStatus = dueDateStatus(inq.due_date)
+                        const bodyPreview = (inq.body || '').replace(/\s+/g, ' ').trim()
                         return (
                           <div key={inq.id}
                             className={`inbox-row ${selected?.id === inq.id ? 'selected' : ''} ${!inq.is_read ? 'unread' : ''}`}
@@ -942,41 +933,42 @@ export default function InboxPage() {
                             {/* Color bar */}
                             <div className={`inbox-row-color ${inq.color ? colorBarClass[inq.color] : ''}`} />
                             <div className="inbox-row-content">
-                              <div className="inbox-row-sender">
-                                {!inq.is_read && <span className="unread-dot" />}
-                                {inq.is_locked && <span className="lock-icon">🔒 </span>}
-                                {inq.priority && (
-                                  <span className={`priority-dot priority-dot-${inq.priority}`}>
-                                    {PRIORITY_ICON[inq.priority]}
-                                  </span>
-                                )}
-                                {inq.sender}
+                              <div className="inbox-row-headline">
+                                <div className="inbox-row-sender">
+                                  {!inq.is_read && <span className="unread-dot" />}
+                                  {inq.priority && (
+                                    <span className={`priority-dot priority-dot-${inq.priority}`}>
+                                      {PRIORITY_ICON[inq.priority]}
+                                    </span>
+                                  )}
+                                  {inq.sender}
+                                </div>
+                                <div className="inbox-row-head-actions">
+                                  <button
+                                    className={`inbox-lock-btn ${inq.is_locked ? 'locked' : ''}`}
+                                    onClick={e => toggleLock(inq.id, e)}
+                                    title={inq.is_locked ? 'Unlock' : 'Lock'}
+                                  >
+                                    {inq.is_locked ? '🔒' : '🔓'}
+                                  </button>
+                                  <span className="inbox-row-time">{formatTime(inq.received_at)}</span>
+                                </div>
                               </div>
                               <div className="inbox-row-subject">{inq.subject}</div>
-                              {/* F1/F4 row indicators */}
-                              {(inq.assigned_to || dueStatus) && (
-                                <div className="inbox-row-meta-row">
-                                  {inq.assigned_to && (
-                                    <span className="assignee-tag">👤 {inq.assigned_to}</span>
-                                  )}
-                                  {dueStatus === 'overdue' && <span className="due-chip due-overdue-chip">⏰ Overdue</span>}
-                                  {dueStatus === 'today'   && <span className="due-chip due-today-chip">⏰ Due Today</span>}
-                                </div>
-                              )}
                               <div className="inbox-row-meta-row">
+                                {inq.assigned_to && (
+                                  <span className="assignee-tag">👤 {inq.assigned_to}</span>
+                                )}
                                 {inq.queue_name && <span className="assignee-tag">📥 {inq.queue_name}</span>}
                                 {inq.triage_state && <span className="assignee-tag">Workflow: {inq.triage_state.replace(/_/g, ' ')}</span>}
+                                {dueStatus === 'overdue' && <span className="due-chip due-overdue-chip">⏰ Overdue</span>}
+                                {dueStatus === 'today'   && <span className="due-chip due-today-chip">⏰ Due Today</span>}
                                 {inq.first_touch_sla_status === 'breached' && !inq.first_touched_at && <span className="due-chip due-overdue-chip">First Touch SLA</span>}
                                 {inq.response_sla_status === 'breached' && inq.first_touched_at && !inq.first_response_at && <span className="due-chip due-overdue-chip">Response SLA</span>}
                               </div>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                              <span className="inbox-row-time">{formatTime(inq.received_at)}</span>
-                              <button onClick={e => toggleLock(inq.id, e)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: inq.is_locked ? 'var(--warning)' : 'var(--text-muted)' }}
-                                title={inq.is_locked ? 'Unlock' : 'Lock'}>
-                                {inq.is_locked ? '🔒' : '🔓'}
-                              </button>
+                              {!compactMode && bodyPreview && (
+                                <div className="inbox-row-preview">{bodyPreview}</div>
+                              )}
                             </div>
                           </div>
                         )
@@ -1012,32 +1004,39 @@ export default function InboxPage() {
                   {/* Email detail header */}
                   <div className="inbox-detail-header">
                     <div className="inbox-detail-subject">{selected.subject}</div>
-                    <div className="inbox-timezone-note">📅 Dates displayed in {TIMEZONE}</div>
+                    <div className="inbox-timezone-note">Dates displayed in {TIMEZONE}</div>
                     <div className="inbox-detail-meta">
-                      <span className="meta-label">From</span>
-                      <span className="meta-value">{selected.sender}</span>
-                      <span className="meta-label">To</span>
-                      <span className="meta-value">{selected.recipient}</span>
-                      <span className="meta-label">Sent On</span>
-                      <span className="meta-value">{formatFullDate(selected.received_at)}</span>
-                      <span className="meta-label">Received On</span>
-                      <span className="meta-value">{formatFullDate(selected.received_at)}</span>
-                      <span className="meta-label">Case</span>
-                      <span className="meta-value">
-                        {selected.case_id ? (
-                          <button
-                            className="btn btn-outline"
-                            style={{ fontSize: 11, padding: '3px 8px' }}
-                            onClick={() => navigate(`/cases/${selected.case_id}`, { state: { from: '/inbox' } })}
-                          >
-                            Open Case #{selected.case_id}
-                          </button>
-                        ) : 'Not linked'}
-                      </span>
+                      <div className="inbox-meta-item inbox-meta-item-inline">
+                        <span className="meta-label">From</span>
+                        <span className="meta-value" title={selected.sender}>{selected.sender}</span>
+                      </div>
+                      <div className="inbox-meta-item inbox-meta-item-inline">
+                        <span className="meta-label">To</span>
+                        <span className="meta-value" title={selected.recipient}>{selected.recipient}</span>
+                      </div>
+                      <div className="inbox-meta-item inbox-meta-item-inline">
+                        <span className="meta-label">Received</span>
+                        <span className="meta-value">{formatFullDate(selected.received_at)}</span>
+                      </div>
+                      <div className="inbox-meta-item inbox-meta-item-inline">
+                        <span className="meta-label">Case</span>
+                        <span className="meta-value">
+                          {selected.case_id ? (
+                            <button
+                              className="btn btn-outline"
+                              style={{ fontSize: 10.5, padding: '2px 8px', whiteSpace: 'nowrap' }}
+                              onClick={() => navigate(`/cases/${selected.case_id}`, { state: { from: '/inbox' } })}
+                            >
+                              Open Case #{selected.case_id}
+                            </button>
+                          ) : 'Not linked'}
+                        </span>
+                      </div>
+                    </div>
 
-                      {/* F1: Assign */}
-                      <span className="meta-label">Assigned To</span>
-                      <span className="meta-value">
+                    <div className="inbox-detail-controls">
+                      <div className="inbox-control-item">
+                        <span className="meta-label">Assigned To</span>
                         <select className="meta-select"
                           value={selected.assigned_to || ''}
                           onChange={e => {
@@ -1049,10 +1048,10 @@ export default function InboxPage() {
                           <option value="">Unassigned</option>
                           {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
                         </select>
-                      </span>
+                      </div>
 
-                      <span className="meta-label">Triage State</span>
-                      <span className="meta-value">
+                      <div className="inbox-control-item">
+                        <span className="meta-label">Triage State</span>
                         <select className="meta-select"
                           value={selected.triage_state || 'new'}
                           onChange={e => {
@@ -1063,10 +1062,10 @@ export default function InboxPage() {
                           }}>
                           {TRIAGE_STATES.map(state => <option key={state} value={state}>{state.replace(/_/g, ' ')}</option>)}
                         </select>
-                      </span>
+                      </div>
 
-                      <span className="meta-label">Queue</span>
-                      <span className="meta-value">
+                      <div className="inbox-control-item">
+                        <span className="meta-label">Queue</span>
                         <select className="meta-select"
                           value={selected.queue_name || ''}
                           onChange={e => {
@@ -1082,11 +1081,26 @@ export default function InboxPage() {
                           {!queueOptions.includes('Quality') && <option value="Quality">Quality</option>}
                           {!queueOptions.includes('Regulatory') && <option value="Regulatory">Regulatory</option>}
                         </select>
-                      </span>
+                      </div>
 
-                      {/* F2: Priority */}
-                      <span className="meta-label">Priority</span>
-                      <span className="meta-value">
+                      <div className="inbox-control-item">
+                        <span className="meta-label">Due Date</span>
+                        <div className="inbox-due-date-control">
+                          <input type="date" className="meta-date-input"
+                            value={selected.due_date ? selected.due_date.slice(0, 10) : ''}
+                            onChange={e => {
+                              const v = e.target.value || null
+                              patchInquiry(selected.id, { due_date: v })
+                              updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, due_date: v } : i))
+                              setSelected(s => ({ ...s, due_date: v }))
+                            }} />
+                          {dueDateStatus(selected.due_date) === 'overdue' && <span className="due-badge due-overdue">Overdue</span>}
+                          {dueDateStatus(selected.due_date) === 'today'   && <span className="due-badge due-today">Due Today</span>}
+                        </div>
+                      </div>
+
+                      <div className="inbox-control-item">
+                        <span className="meta-label">Priority</span>
                         <div className="priority-picker">
                           {PRIORITIES.map(p => (
                             <button key={p}
@@ -1101,77 +1115,74 @@ export default function InboxPage() {
                             </button>
                           ))}
                         </div>
-                      </span>
-
-                      {/* F4: Due Date */}
-                      <span className="meta-label">Due Date</span>
-                      <span className="meta-value" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <input type="date" className="meta-date-input"
-                          value={selected.due_date ? selected.due_date.slice(0, 10) : ''}
-                          onChange={e => {
-                            const v = e.target.value || null
-                            patchInquiry(selected.id, { due_date: v })
-                            updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, due_date: v } : i))
-                            setSelected(s => ({ ...s, due_date: v }))
-                          }} />
-                        {dueDateStatus(selected.due_date) === 'overdue' && <span className="due-badge due-overdue">Overdue</span>}
-                        {dueDateStatus(selected.due_date) === 'today'   && <span className="due-badge due-today">Due Today</span>}
-                      </span>
-
-                      <span className="meta-label">First Touch SLA</span>
-                      <span className="meta-value">
-                        <span className={`due-badge ${selected.first_touch_sla_status === 'breached' ? 'due-overdue' : 'due-today'}`}>
-                          {selected.first_touch_sla_status || 'untracked'}
-                        </span>
-                        {selected.first_touch_due_at ? ` due ${formatFullDate(selected.first_touch_due_at)}` : ''}
-                      </span>
-
-                      <span className="meta-label">Response SLA</span>
-                      <span className="meta-value">
-                        <span className={`due-badge ${selected.response_sla_status === 'breached' ? 'due-overdue' : 'due-today'}`}>
-                          {selected.response_sla_status || 'untracked'}
-                        </span>
-                        {selected.response_due_at ? ` due ${formatFullDate(selected.response_due_at)}` : ''}
-                      </span>
-
-                      <span className="meta-label">Routing</span>
-                      <span className="meta-value">{selected.routing_reason || 'No routing reason'}</span>
-
-                      <span className="meta-label">Exception</span>
-                      <span className="meta-value">{selected.exception_reason || 'None'}</span>
-
-                      {/* Attachments */}
-                      {selected.attachments_count > 0 && (
-                        <>
-                          <span className="meta-label">Attachments</span>
-                          <span className="meta-value">
-                            {attachments.length === 0 ? (
-                              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading…</span>
-                            ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                {attachments.map(att => (
-                                  <button key={att.id}
-                                    onClick={async () => {
-                                      const r = await fetch(`/api/inbox/attachments/${att.id}/download`, { headers: AUTH_H })
-                                      if (!r.ok) return
-                                      const blob = await r.blob()
-                                      const url = URL.createObjectURL(blob)
-                                      const a = document.createElement('a'); a.href = url; a.download = att.filename; a.click()
-                                      URL.revokeObjectURL(url)
-                                    }}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4, padding: 0, textAlign: 'left' }}>
-                                    📎 {att.filename}
-                                    {att.size_bytes > 0 && (
-                                      <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({(att.size_bytes / 1024).toFixed(1)} KB)</span>
-                                    )}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </span>
-                        </>
-                      )}
+                      </div>
                     </div>
+
+                    <div className="inbox-sla-actions-row">
+                      <div className="inbox-sla-strip">
+                        <span className={`due-badge ${selected.first_touch_sla_status === 'breached' ? 'due-overdue' : 'due-today'}`}>
+                          First Touch: {selected.first_touch_sla_status || 'untracked'}
+                        </span>
+                        {selected.first_touch_due_at && (
+                          <span className="inbox-sla-time">due {formatFullDate(selected.first_touch_due_at)}</span>
+                        )}
+                        <span className={`due-badge ${selected.response_sla_status === 'breached' ? 'due-overdue' : 'due-today'}`}>
+                          Response: {selected.response_sla_status || 'untracked'}
+                        </span>
+                        {selected.response_due_at && (
+                          <span className="inbox-sla-time">due {formatFullDate(selected.response_due_at)}</span>
+                        )}
+                      </div>
+                      <div className="inbox-insight-toolbar">
+                        <button
+                          className={`inbox-insight-btn ${insightPanel === 'notes' ? 'active' : ''}`}
+                          onClick={() => setInsightPanel(p => p === 'notes' ? null : 'notes')}
+                        >
+                          📝 Internal Notes {notes.length > 0 ? `(${notes.length})` : ''}
+                        </button>
+                        <button
+                          className={`inbox-insight-btn ${insightPanel === 'history' ? 'active' : ''}`}
+                          onClick={() => setInsightPanel(p => p === 'history' ? null : 'history')}
+                        >
+                          📇 Sender & Case History
+                        </button>
+                        <button
+                          className={`inbox-insight-btn ${insightPanel === 'recommendations' ? 'active' : ''}`}
+                          onClick={() => setInsightPanel(p => p === 'recommendations' ? null : 'recommendations')}
+                        >
+                          🔎 Inbox-to-Case Recos ({recommendations.length})
+                        </button>
+                      </div>
+                    </div>
+
+                    {selected.attachments_count > 0 && (
+                      <div className="inbox-attachments-row">
+                        <span className="meta-label">Attachments</span>
+                        {attachments.length === 0 ? (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading…</span>
+                        ) : (
+                          <div className="inbox-attachment-list">
+                            {attachments.map(att => (
+                              <button key={att.id}
+                                onClick={async () => {
+                                  const r = await fetch(`/api/inbox/attachments/${att.id}/download`, { headers: AUTH_H })
+                                  if (!r.ok) return
+                                  const blob = await r.blob()
+                                  const url = URL.createObjectURL(blob)
+                                  const a = document.createElement('a'); a.href = url; a.download = att.filename; a.click()
+                                  URL.revokeObjectURL(url)
+                                }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}>
+                                📎 {att.filename}
+                                {att.size_bytes > 0 && (
+                                  <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({(att.size_bytes / 1024).toFixed(1)} KB)</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Action buttons */}
@@ -1210,153 +1221,112 @@ export default function InboxPage() {
                       title={selected.is_locked && selected.locked_by !== user?.name ? `Locked by ${selected.locked_by}` : ''}>
                       {selected.is_locked ? '🔒 Unlock' : '🔓 Lock'}
                     </button>
-                    <button className="btn btn-outline" style={{ fontSize: 12, padding: '6px 14px' }}
-                      onClick={() => {
-                        patchInquiry(selected.id, { status: 'pending', triage_state: 'in_review', first_touched_at: new Date().toISOString() })
-                        updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, status: 'pending', triage_state: 'in_review', first_touched_at: new Date().toISOString() } : i))
-                        setSelected(null)
-                      }}>
-                      ⏳ In Review
-                    </button>
-                    <button className="btn btn-outline" style={{ fontSize: 12, padding: '6px 14px' }}
-                      onClick={() => {
-                        patchInquiry(selected.id, { status: 'non_processed', triage_state: 'no_action', closed_at: new Date().toISOString() })
-                        updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, status: 'non_processed', triage_state: 'no_action', closed_at: new Date().toISOString() } : i))
-                        setSelected(null)
-                      }}>
-                      ✗ No Action
-                    </button>
-                    <button className="btn btn-outline" style={{ fontSize: 12, padding: '6px 14px' }}
-                      onClick={() => {
-                        patchInquiry(selected.id, { status: 'processed', triage_state: 'closed', closed_at: new Date().toISOString() })
-                        updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, status: 'processed', triage_state: 'closed', closed_at: new Date().toISOString() } : i))
-                        setSelected(null)
-                      }}>
-                      ✓ Close
-                    </button>
                   </div>
 
                   {/* Email body */}
                   <div className="inbox-detail-body">{selected.body}</div>
 
-                  {/* F5: Internal Notes */}
-                  <div className="notes-section">
-                    <div className="notes-section-header">
-                      📝 Internal Notes {notes.length > 0 && <span className="notes-count">({notes.length})</span>}
+                  {insightPanel && (
+                    <button className="inbox-side-drawer-backdrop" onClick={() => setInsightPanel(null)} aria-label="Close panel" />
+                  )}
+                  <aside className={`inbox-side-drawer ${insightPanel ? 'open' : ''}`} aria-hidden={!insightPanel}>
+                    <div className="inbox-side-drawer-header">
+                      <span>
+                        {insightPanel === 'notes' && '📝 Internal Notes'}
+                        {insightPanel === 'history' && '📇 Sender and Case History'}
+                        {insightPanel === 'recommendations' && `🔎 Inbox-to-Case Recommendations (${recommendations.length})`}
+                      </span>
+                      <button className="compose-close" onClick={() => setInsightPanel(null)}>✕</button>
                     </div>
-                    {notesLoading ? (
-                      <div className="notes-loading">Loading notes…</div>
-                    ) : (
-                      <>
-                        {notes.length === 0 && <div className="notes-empty">No notes yet.</div>}
-                        {notes.map((n, idx) => (
-                          <div key={idx} className="note-item">
-                            <div className="note-meta">{n.user_name} · {formatFullDate(n.created_at)}</div>
-                            <div className="note-body">{n.note}</div>
-                          </div>
-                        ))}
-                        <div className="note-add">
-                          <textarea className="note-input" rows={2} placeholder="Add internal note…"
-                            value={newNote} onChange={e => setNewNote(e.target.value)}
-                            disabled={savingNote} />
-                          <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }}
-                            onClick={submitNote} disabled={savingNote || !newNote.trim()}>
-                            {savingNote ? 'Saving…' : 'Add Note'}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="notes-section">
-                    <div className="notes-section-header">📇 Sender and Case History</div>
-                    {historyLoading ? (
-                      <div className="notes-loading">Loading history…</div>
-                    ) : (
-                      <>
-                        <div className="notes-empty" style={{ marginBottom: 8 }}>
-                          {senderHistory.previous_inquiry_count || 0} prior inquiries • {senderHistory.linked_case_count || 0} linked cases
-                        </div>
-                        {senderHistory.previous_inquiries.map(item => (
-                          <div key={item.id} className="note-item">
-                            <div className="note-meta">{formatFullDate(item.received_at)} · {item.triage_state || item.status}</div>
-                            <div className="note-body">{item.subject || '(No subject)'}</div>
-                          </div>
-                        ))}
-                        {senderHistory.linked_cases.map(caseItem => (
-                          <button
-                            key={caseItem.id}
-                            className="btn btn-outline"
-                            style={{ fontSize: 12, marginTop: 6, marginRight: 6 }}
-                            onClick={() => navigate(`/cases/${caseItem.id}`, { state: { from: '/inbox' } })}
-                          >
-                            {caseItem.case_number || `Case #${caseItem.id}`} · {caseItem.case_type || '—'} · {caseItem.status_name || '—'}
-                          </button>
-                        ))}
-                        {senderHistory.previous_inquiries.length === 0 && senderHistory.linked_cases.length === 0 && (
-                          <div className="notes-empty">No prior sender history found.</div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  <div className="thread-section">
-                    <button className="thread-toggle" onClick={() => setRecommendationsExpanded(e => !e)}>
-                      {recommendationsExpanded ? '▾' : '▸'} Inbox-to-Case Recommendations ({recommendations.length})
-                    </button>
-                    {recommendationsExpanded && (
-                      <div className="thread-list">
-                        {recommendationsLoading && <div className="notes-loading">Loading recommendations…</div>}
-                        {!recommendationsLoading && recommendations.length === 0 && <div className="notes-empty">No strong case recommendations yet.</div>}
-                        {!recommendationsLoading && recommendations.map(item => (
-                          <div key={item.id} className="thread-item">
-                            <div className="thread-item-header">
-                              <span className="thread-source">{item.recommendation}</span>
-                              <span className="thread-time">{item.confidence}</span>
-                            </div>
-                            <div className="thread-item-meta">{item.case_number || `Case #${item.id}`} · {item.case_type || '—'} · {item.status_name || '—'}</div>
-                            <div className="thread-item-body">
-                              Reporter match: {item.reporter_match} • Sender match: {item.sender_match} • Case number match: {item.case_number_match}
-                            </div>
-                            <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                              <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => appendToExistingCase(item.id)}>
-                                Link This Case
-                              </button>
-                              <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => navigate(`/cases/${item.id}`, { state: { from: '/inbox' } })}>
-                                Open Case
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* F12: Reply Thread */}
-                  {threadItems.length > 0 && (
-                    <div className="thread-section">
-                      <button className="thread-toggle" onClick={() => setThreadExpanded(e => !e)}>
-                        {threadExpanded ? '▾' : '▸'} Thread ({threadItems.length} {threadItems.length === 1 ? 'message' : 'messages'})
-                      </button>
-                      {threadExpanded && (
-                        <div className="thread-list">
-                          {threadItems.map(t => (
-                            <div key={t.id} className="thread-item">
-                              <div className="thread-item-header">
-                                <span className="thread-source">{t.source_tag}</span>
-                                <span className="thread-time">{formatFullDate(t.received_at)}</span>
+                    <div className="inbox-side-drawer-body">
+                      {insightPanel === 'notes' && (
+                        <>
+                          {notesLoading ? (
+                            <div className="notes-loading">Loading notes…</div>
+                          ) : (
+                            <>
+                              {notes.length === 0 && <div className="notes-empty">No notes yet.</div>}
+                              {notes.map((n, idx) => (
+                                <div key={idx} className="note-item">
+                                  <div className="note-meta">{n.user_name} · {formatFullDate(n.created_at)}</div>
+                                  <div className="note-body">{n.note}</div>
+                                </div>
+                              ))}
+                              <div className="note-add">
+                                <textarea className="note-input" rows={3} placeholder="Add internal note…"
+                                  value={newNote} onChange={e => setNewNote(e.target.value)}
+                                  disabled={savingNote} />
+                                <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }}
+                                  onClick={submitNote} disabled={savingNote || !newNote.trim()}>
+                                  {savingNote ? 'Saving…' : 'Add Note'}
+                                </button>
                               </div>
-                              <div className="thread-item-meta">To: {t.recipient}</div>
-                              <div className="thread-item-subject">{t.subject}</div>
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {insightPanel === 'history' && (
+                        <>
+                          {historyLoading ? (
+                            <div className="notes-loading">Loading history…</div>
+                          ) : (
+                            <>
+                              <div className="notes-empty" style={{ marginBottom: 8 }}>
+                                {senderHistory.previous_inquiry_count || 0} prior inquiries • {senderHistory.linked_case_count || 0} linked cases
+                              </div>
+                              {senderHistory.previous_inquiries.map(item => (
+                                <div key={item.id} className="note-item">
+                                  <div className="note-meta">{formatFullDate(item.received_at)} · {item.triage_state || item.status}</div>
+                                  <div className="note-body">{item.subject || '(No subject)'}</div>
+                                </div>
+                              ))}
+                              {senderHistory.linked_cases.map(caseItem => (
+                                <button
+                                  key={caseItem.id}
+                                  className="btn btn-outline"
+                                  style={{ fontSize: 12, marginTop: 6, marginRight: 6 }}
+                                  onClick={() => navigate(`/cases/${caseItem.id}`, { state: { from: '/inbox' } })}
+                                >
+                                  {caseItem.case_number || `Case #${caseItem.id}`} · {caseItem.case_type || '—'} · {caseItem.status_name || '—'}
+                                </button>
+                              ))}
+                              {senderHistory.previous_inquiries.length === 0 && senderHistory.linked_cases.length === 0 && (
+                                <div className="notes-empty">No prior sender history found.</div>
+                              )}
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {insightPanel === 'recommendations' && (
+                        <div className="thread-list">
+                          {recommendationsLoading && <div className="notes-loading">Loading recommendations…</div>}
+                          {!recommendationsLoading && recommendations.length === 0 && <div className="notes-empty">No strong case recommendations yet.</div>}
+                          {!recommendationsLoading && recommendations.map(item => (
+                            <div key={item.id} className="thread-item">
+                              <div className="thread-item-header">
+                                <span className="thread-source">{item.recommendation}</span>
+                                <span className="thread-time">{item.confidence}</span>
+                              </div>
+                              <div className="thread-item-meta">{item.case_number || `Case #${item.id}`} · {item.case_type || '—'} · {item.status_name || '—'}</div>
                               <div className="thread-item-body">
-                                {t.body?.slice(0, 300)}{t.body?.length > 300 ? '…' : ''}
+                                Reporter match: {item.reporter_match} • Sender match: {item.sender_match} • Case number match: {item.case_number_match}
+                              </div>
+                              <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => appendToExistingCase(item.id)}>
+                                  Link This Case
+                                </button>
+                                <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => navigate(`/cases/${item.id}`, { state: { from: '/inbox' } })}>
+                                  Open Case
+                                </button>
                               </div>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
-                  )}
+                  </aside>
                 </>
               )}
             </div>

@@ -20,6 +20,56 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
+function isSuperadmin(req) {
+  return req.user.role === 'superadmin';
+}
+
+function templateScopePredicate(req, alias = 't') {
+  if (isSuperadmin(req)) return '1=1';
+  return `EXISTS (
+    SELECT 1
+    FROM users tu
+    LEFT JOIN user_org_access tua
+      ON tua.user_id = tu.id
+     AND tua.org_id = ?
+     AND tua.is_active = 1
+    WHERE tu.id = ${alias}.created_by
+      AND (tu.org_id = ? OR tua.user_id IS NOT NULL)
+  )`;
+}
+
+function templateScopeParams(req) {
+  return isSuperadmin(req) ? [] : [req.user.orgId, req.user.orgId];
+}
+
+async function getScopedTemplate(req, templateId) {
+  const [rows] = await pool.execute(
+    `SELECT t.*, u.name AS created_by_name, uu.name AS updated_by_name
+     FROM cm_templates t
+     LEFT JOIN users u ON t.created_by = u.id
+     LEFT JOIN users uu ON t.updated_by = uu.id
+     WHERE t.id = ? AND ${templateScopePredicate(req, 't')}`,
+    [templateId, ...templateScopeParams(req)]
+  );
+  return rows[0] || null;
+}
+
+async function getScopedCase(req, caseId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? `SELECT c.id, c.case_number, c.case_type, c.org_id, o.name AS org_name
+         FROM cases c
+         LEFT JOIN organisations o ON o.id = c.org_id
+         WHERE c.id = ?`
+      : `SELECT c.id, c.case_number, c.case_type, c.org_id, o.name AS org_name
+         FROM cases c
+         LEFT JOIN organisations o ON o.id = c.org_id
+         WHERE c.id = ? AND c.org_id = ?`,
+    isSuperadmin(req) ? [caseId] : [caseId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
 // GET /api/cm/templates — list with filters
 router.get('/templates', authenticate, async (req, res) => {
   try {
@@ -32,7 +82,8 @@ router.get('/templates', authenticate, async (req, res) => {
       LEFT JOIN users u ON t.created_by = u.id
       WHERE 1=1
     `;
-    const params = [];
+    const params = [...templateScopeParams(req)];
+    query += ` AND ${templateScopePredicate(req, 't')}`;
 
     if (type) {
       query += ' AND t.type = ?';
@@ -71,7 +122,7 @@ router.post('/templates', authenticate, async (req, res) => {
       [type || 'Response', name.trim(), subject || null, body_html || null, status || 'Active', req.user.userId]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_template', result.insertId, { name, type: type || 'Response' });
-    const [[created]] = await pool.execute('SELECT * FROM cm_templates WHERE id = ?', [result.insertId]);
+    const created = await getScopedTemplate(req, result.insertId);
     res.status(201).json({ message: 'Template created.', id: result.insertId, template: created });
   } catch (err) {
     console.error('POST /cm/templates error:', err);
@@ -82,14 +133,7 @@ router.post('/templates', authenticate, async (req, res) => {
 // GET /api/cm/templates/:id — get template
 router.get('/templates/:id', authenticate, async (req, res) => {
   try {
-    const [[template]] = await pool.execute(
-      `SELECT t.*, u.name AS created_by_name, uu.name AS updated_by_name
-       FROM cm_templates t
-       LEFT JOIN users u ON t.created_by = u.id
-       LEFT JOIN users uu ON t.updated_by = uu.id
-       WHERE t.id = ?`,
-      [req.params.id]
-    );
+    const template = await getScopedTemplate(req, req.params.id);
     if (!template) return res.status(404).json({ error: 'Template not found.' });
     res.json({ template });
   } catch (err) {
@@ -102,7 +146,7 @@ router.get('/templates/:id', authenticate, async (req, res) => {
 router.put('/templates/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const [[existing]] = await pool.execute('SELECT id FROM cm_templates WHERE id = ?', [id]);
+    const existing = await getScopedTemplate(req, id);
     if (!existing) return res.status(404).json({ error: 'Template not found.' });
 
     const { type, name, subject, body_html, status } = req.body;
@@ -122,7 +166,7 @@ router.put('/templates/:id', authenticate, async (req, res) => {
 router.patch('/templates/:id/status', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const [[existing]] = await pool.execute('SELECT id, status, name FROM cm_templates WHERE id = ?', [id]);
+    const existing = await getScopedTemplate(req, id);
     if (!existing) return res.status(404).json({ error: 'Template not found.' });
 
     const newStatus = existing.status === 'Active' ? 'Inactive' : 'Active';
@@ -160,7 +204,7 @@ router.patch('/templates/:id/status', authenticate, async (req, res) => {
 router.post('/templates/:id/checkin', authenticate, async (req, res) => {
   try {
     const { notes } = req.body;
-    const [[tmpl]] = await pool.execute('SELECT * FROM cm_templates WHERE id = ?', [req.params.id]);
+    const tmpl = await getScopedTemplate(req, req.params.id);
     if (!tmpl) return res.status(404).json({ error: 'Template not found.' });
 
     const newMinor = (tmpl.version_minor || 0) + 1;
@@ -186,6 +230,8 @@ router.post('/templates/:id/checkin', authenticate, async (req, res) => {
 // GET /api/cm/templates/:id/versions — version history for a template
 router.get('/templates/:id/versions', authenticate, async (req, res) => {
   try {
+    const template = await getScopedTemplate(req, req.params.id);
+    if (!template) return res.status(404).json({ error: 'Template not found.' });
     const [versions] = await pool.execute(
       `SELECT vh.*, u.name AS author_name
        FROM cm_version_history vh
@@ -206,9 +252,17 @@ router.get('/templates/:id/versions', authenticate, async (req, res) => {
 router.post('/templates/:id/render', authenticate, async (req, res) => {
   try {
     const { case_id } = req.body;
-    if (req.user.orgId) {
+    const template = await getScopedTemplate(req, req.params.id);
+    if (!template) return res.status(404).json({ error: 'Template not found.' });
+    let scopedCase = null;
+    if (case_id) {
+      scopedCase = await getScopedCase(req, case_id);
+      if (!scopedCase) return res.status(404).json({ error: 'Case not found.' });
+    }
+    const evidenceOrgId = Number(req.user.orgId || scopedCase?.org_id || 0) || null;
+    if (evidenceOrgId) {
       const evidenceGate = await enforceEvidenceGate({
-        orgId: req.user.orgId,
+        orgId: evidenceOrgId,
         contentType: 'template',
         contentId: Number(req.params.id),
         mode: 'response',
@@ -224,9 +278,6 @@ router.post('/templates/:id/render', authenticate, async (req, res) => {
       }
     }
 
-    const [[template]] = await pool.execute('SELECT * FROM cm_templates WHERE id = ?', [req.params.id]);
-    if (!template) return res.status(404).json({ error: 'Template not found.' });
-
     // Build merge data
     const mergeData = {
       date: new Date().toLocaleDateString('en-US', { dateStyle: 'long' }),
@@ -240,18 +291,9 @@ router.post('/templates/:id/render', authenticate, async (req, res) => {
     };
 
     if (case_id) {
-      const [[caseRow]] = await pool.execute(
-        `SELECT c.case_number, c.case_type, o.name AS org_name
-         FROM cases c
-         LEFT JOIN organisations o ON o.id = c.org_id
-         WHERE c.id = ?`,
-        [case_id]
-      );
-      if (caseRow) {
-        mergeData.case_number = caseRow.case_number || '';
-        mergeData.case_type   = caseRow.case_type || '';
-        mergeData.org_name    = caseRow.org_name || '';
-      }
+      mergeData.case_number = scopedCase.case_number || '';
+      mergeData.case_type   = scopedCase.case_type || '';
+      mergeData.org_name    = scopedCase.org_name || '';
 
       const [[contactRow]] = await pool.execute(
         `SELECT CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,'')) AS full_name, email

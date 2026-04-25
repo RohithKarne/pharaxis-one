@@ -92,9 +92,9 @@ function run() {
   let emirSenderRuleId = null;
   let scheduledExportId = null;
 
-  const superadminCreds = { email: 'superadmin', password: 'Manager@123' };
-  const adminCredsPrimary = { email: 'vanaja_admin@reviewco.com', password: 'Manager@123' };
-  const adminCredsFallback = { email: 'admin@novartis.com', password: 'Manager@123' };
+  const superadminCreds = { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' };
+  const adminCredsPrimary = { email: 'vanaja_admin@reviewco.com', password: '__SET_SMOKE_TEST_PASSWORD__' };
+  const adminCredsFallback = { email: 'admin@novartis.com', password: '__SET_SMOKE_TEST_PASSWORD__' };
 
   const saAuth = loginWith2Step(superadminCreds.email, superadminCreds.password);
   if (saAuth.ok) {

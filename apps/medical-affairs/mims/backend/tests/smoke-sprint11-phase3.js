@@ -43,7 +43,7 @@ function run() {
 
   try {
     const saLogin = runCurl('POST', '/api/auth/login', {
-      body: { email: 'superadmin', password: 'Manager@123' },
+      body: { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
     });
 
     if (saLogin.status !== 200 || !saLogin.body || !saLogin.body.token) {
@@ -52,7 +52,7 @@ function run() {
     saToken = saLogin.body.token;
 
     const adminLogin = runCurl('POST', '/api/auth/login', {
-      body: { email: 'rohithreddy480@gmail.com', password: 'Manager@123' },
+      body: { email: 'rohithreddy480@gmail.com', password: '__SET_SMOKE_TEST_PASSWORD__' },
     });
 
     if (

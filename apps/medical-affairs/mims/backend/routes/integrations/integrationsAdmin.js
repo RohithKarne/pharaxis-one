@@ -16,7 +16,15 @@ router.get('/superadmin/integrations', authenticate, requireRole("superadmin"), 
        ORDER BY o.name, oi.integration_type`
     );
 
-    return res.json({ integrations: rows });
+    const integrations = rows.map((row) => {
+      const { api_key, ...safeRow } = row;
+      return {
+        ...safeRow,
+        api_key_set: !!String(api_key || '').trim(),
+        api_key_masked: api_key ? `****${String(api_key).slice(-4)}` : null,
+      };
+    });
+    return res.json({ integrations });
   } catch (_error) {
     return res.status(500).json({ error: 'Failed to fetch integrations' });
   }
@@ -63,16 +71,36 @@ router.put('/superadmin/integrations/:id', authenticate, requireRole("superadmin
   try {
     const { id } = req.params;
     const { endpoint_url, api_key, enabled, event_triggers, org_override_allowed } = req.body;
+    const [currentRows] = await pool.query(
+      'SELECT endpoint_url, api_key, enabled, event_triggers, org_override_allowed FROM org_integrations WHERE id = ? LIMIT 1',
+      [id]
+    );
+    if (!currentRows.length) {
+      return res.status(404).json({ error: 'Integration not found' });
+    }
+    const currentIntegration = currentRows[0];
+    const currentApiKey = currentIntegration.api_key;
+    const nextApiKey = api_key === undefined || api_key === null || String(api_key).trim() === ''
+      ? currentApiKey
+      : api_key;
 
-    const eventTriggersValue = Array.isArray(event_triggers)
+    const requestedEventTriggers = Array.isArray(event_triggers)
       ? JSON.stringify(event_triggers)
       : event_triggers;
+    const eventTriggersValue = requestedEventTriggers === undefined
+      ? currentIntegration.event_triggers
+      : requestedEventTriggers;
+    const nextEndpointUrl = endpoint_url === undefined ? currentIntegration.endpoint_url : endpoint_url;
+    const nextEnabled = enabled === undefined ? currentIntegration.enabled : enabled;
+    const nextOrgOverrideAllowed = org_override_allowed === undefined
+      ? currentIntegration.org_override_allowed
+      : org_override_allowed;
 
     await pool.query(
       `UPDATE org_integrations
        SET endpoint_url = ?, api_key = ?, enabled = ?, event_triggers = ?, org_override_allowed = ?, updated_at = NOW()
        WHERE id = ?`,
-      [endpoint_url, api_key, enabled, eventTriggersValue, org_override_allowed, id]
+      [nextEndpointUrl, nextApiKey, nextEnabled, eventTriggersValue, nextOrgOverrideAllowed, id]
     );
 
     return res.json({ message: 'Integration updated' });

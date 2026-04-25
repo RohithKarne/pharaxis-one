@@ -118,6 +118,7 @@ export default function CaseFormPage() {
   const [miTabs,      setMiTabs]      = useState([])
   const [activeMiTab, setActiveMiTab] = useState(0)
   const [miForm,      setMiForm]      = useState({})
+  const [miProducts,  setMiProducts]  = useState([])
 
   // AE component (F-17)
   const [aeVersions,   setAeVersions]   = useState([])
@@ -132,6 +133,14 @@ export default function CaseFormPage() {
   const [activePcTab,  setActivePcTab]  = useState('general')
   const [pcTabData,    setPcTabData]    = useState({})
   const [pcTabLoading, setPcTabLoading] = useState(false)
+
+  // DPPR individual overrides (Feature 8)
+  const [dpprOverrides,    setDpprOverrides]    = useState([])
+  const [dpprTenantRules,  setDpprTenantRules]  = useState([])
+  const [dpprLoading,      setDpprLoading]      = useState(false)
+  const [dpprSaving,       setDpprSaving]       = useState({})   // { [domain]: bool }
+  const [dpprForms,        setDpprForms]        = useState({})   // { [domain]: {action, retention_days, override_reason} }
+  const [dpprMsg,          setDpprMsg]          = useState({})   // { [domain]: string }
 
   // Dynamic fields (Sprint 16)
   const [dynFieldValues, setDynFieldValues] = useState({})
@@ -257,7 +266,7 @@ export default function CaseFormPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search || '')
     const targetSection = params.get('section')
-    const valid = ['info', 'comments', 'contacts', 'correspondence', 'mi', 'ae', 'pc']
+    const valid = ['info', 'comments', 'contacts', 'correspondence', 'mi', 'ae', 'pc', 'dppr']
     if (targetSection && valid.includes(targetSection)) {
       setActiveTab(targetSection)
     }
@@ -265,9 +274,10 @@ export default function CaseFormPage() {
 
   useEffect(() => {
     if (!id) return
-    if (activeTab === 'mi') loadMiResponses()
-    if (activeTab === 'ae') loadAeTransmissions()
-    if (activeTab === 'pc') loadPcTransmissions()
+    if (activeTab === 'mi')   loadMiResponses()
+    if (activeTab === 'ae')   loadAeTransmissions()
+    if (activeTab === 'pc')   loadPcTransmissions()
+    if (activeTab === 'dppr') loadDpprOverrides()
   }, [activeTab, id])
 
   useEffect(() => {
@@ -680,12 +690,17 @@ export default function CaseFormPage() {
 
   async function loadMI() {
     try {
-      const res  = await fetch(`${API}/cases/${id}/mi`, { headers })
-      const data = await res.json()
-      setMiTabs(Array.isArray(data) ? data : [])
-      if (data.length > 0) {
+      const [tabsRes, prodsRes] = await Promise.all([
+        fetch(`${API}/cases/${id}/mi`, { headers }),
+        fetch(`${API}/cases/mi/products`, { headers }),
+      ])
+      const tabsData = await tabsRes.json()
+      const prodsData = await prodsRes.json()
+      setMiTabs(Array.isArray(tabsData) ? tabsData : [])
+      setMiProducts(Array.isArray(prodsData) ? prodsData : [])
+      if (tabsData.length > 0) {
         setActiveMiTab(0)
-        setMiForm(toMiForm(data[0]))
+        setMiForm(toMiForm(tabsData[0]))
       }
     } catch { setMiTabs([]) }
   }
@@ -1098,6 +1113,52 @@ export default function CaseFormPage() {
     } catch (err) { alert(err.message) }
   }
 
+  async function loadDpprOverrides() {
+    if (!id) return
+    setDpprLoading(true)
+    try {
+      const res  = await fetch(`${API}/admin/dppr/cases/${id}/overrides`, { headers })
+      const data = await res.json()
+      if (!res.ok) return
+      setDpprOverrides(data.overrides || [])
+      setDpprTenantRules(data.tenant_rules || [])
+      // Seed form state from existing overrides
+      const forms = {}
+      ;(data.overrides || []).forEach(o => {
+        forms[o.domain] = { action: o.action, retention_days: o.retention_days, override_reason: o.override_reason || '' }
+      })
+      setDpprForms(forms)
+    } catch {}
+    finally { setDpprLoading(false) }
+  }
+
+  async function saveDpprOverride(domain) {
+    const form = dpprForms[domain] || {}
+    if (!form.action) return
+    setDpprSaving(p => ({ ...p, [domain]: true }))
+    setDpprMsg(p => ({ ...p, [domain]: '' }))
+    try {
+      const res  = await fetch(`${API}/admin/dppr/cases/${id}/overrides`, {
+        method: 'PUT', headers,
+        body: JSON.stringify({ domain, action: form.action, retention_days: parseInt(form.retention_days, 10) || 365, override_reason: form.override_reason || '' }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setDpprMsg(p => ({ ...p, [domain]: data.error || 'Error saving.' })); return }
+      setDpprMsg(p => ({ ...p, [domain]: 'Saved.' }))
+      loadDpprOverrides()
+    } catch { setDpprMsg(p => ({ ...p, [domain]: 'Network error.' })) }
+    finally { setDpprSaving(p => ({ ...p, [domain]: false })) }
+  }
+
+  async function removeDpprOverride(domain) {
+    if (!window.confirm(`Remove DPPR override for "${domain}"?`)) return
+    try {
+      await fetch(`${API}/admin/dppr/cases/${id}/overrides/${domain}`, { method: 'DELETE', headers })
+      setDpprMsg(p => ({ ...p, [domain]: 'Override removed.' }))
+      loadDpprOverrides()
+    } catch {}
+  }
+
   function getFieldConfig(sectionName, fieldName) {
     if (!formConfig || !Array.isArray(formConfig.sections)) return null
     const section = formConfig.sections.find(s => s.section_name === sectionName)
@@ -1134,6 +1195,7 @@ export default function CaseFormPage() {
     { key: 'mi',             label: 'MI Component',       badge: miTabs.length > 0 ? miTabs.length : null },
     { key: 'ae',             label: 'AE Component',       badge: aeVersions.length > 0 ? aeVersions.length : null },
     { key: 'pc',             label: 'PC Component',       badge: pcVersions.length > 0 ? pcVersions.length : null },
+    { key: 'dppr',           label: 'Privacy (DPPR)',      badge: dpprOverrides.length > 0 ? dpprOverrides.length : null },
   ]
 
   return (
@@ -1561,6 +1623,13 @@ export default function CaseFormPage() {
                         </div>
                       ))}
                       <div className="cf-form-field">
+                        <label>Product</label>
+                        <select value={miForm.product_id || ''} onChange={e => setMiForm(p => ({ ...p, product_id: e.target.value || null }))}>
+                          <option value="">— None —</option>
+                          {miProducts.map(p => <option key={p.id} value={p.id}>{p.trade_name}</option>)}
+                        </select>
+                      </div>
+                      <div className="cf-form-field">
                         <label>Status</label>
                         <select value={miForm.status || 'Open'} onChange={e => setMiForm(p => ({ ...p, status: e.target.value }))}>
                           {['Open', 'Pending', 'Closed'].map(s => <option key={s}>{s}</option>)}
@@ -1886,6 +1955,137 @@ export default function CaseFormPage() {
           </div>
         )}
 
+        {/* ── Tab: Privacy (DPPR) ── */}
+        {activeTab === 'dppr' && (
+          <div className="cf-tab-pane">
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Case-Level Data Privacy Overrides</div>
+              <div style={{ fontSize: 12, color: '#64748b' }}>
+                Override the tenant-level DPPR rule for individual domains on this case.
+                Overrides must be <strong>equal or more restrictive</strong> than the tenant rule (e.g. you cannot set None if the tenant rule is Delete).
+              </div>
+            </div>
+
+            {dpprLoading && <div className="cf-empty-msg">Loading privacy settings…</div>}
+
+            {!dpprLoading && (() => {
+              const DOMAINS = [
+                { key: 'contact_pii',          label: 'Contact PII',           desc: 'Names, emails, phone numbers of reporters/contacts' },
+                { key: 'medical_data',          label: 'Medical Data',          desc: 'Clinical findings, diagnoses, medical history' },
+                { key: 'case_narrative',        label: 'Case Narrative',        desc: 'Free-text case descriptions and summaries' },
+                { key: 'reporter_info',         label: 'Reporter Info',         desc: 'Reporter identity and contact details' },
+                { key: 'patient_demographics',  label: 'Patient Demographics',  desc: 'Age, gender, weight and other patient identifiers' },
+                { key: 'inquiry_content',       label: 'Inquiry Content',       desc: 'Full text of MI inquiries and responses' },
+              ]
+              const ACTION_RANK = { None: 0, Anonymize: 1, Delete: 2 }
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {DOMAINS.map(domain => {
+                    const override = dpprOverrides.find(o => o.domain === domain.key)
+                    const tenantRules = dpprTenantRules.filter(r => r.domain === domain.key)
+                    const maxTenantAction = tenantRules.reduce((max, r) =>
+                      ACTION_RANK[r.action] > ACTION_RANK[max] ? r.action : max, 'None')
+                    const minTenantRetention = tenantRules.length
+                      ? Math.min(...tenantRules.map(r => r.retention_days))
+                      : 365
+                    const form = dpprForms[domain.key] || { action: override?.action || maxTenantAction || 'None', retention_days: override?.retention_days ?? minTenantRetention, override_reason: override?.override_reason || '' }
+                    const msg  = dpprMsg[domain.key] || ''
+                    const saving = dpprSaving[domain.key]
+
+                    return (
+                      <div key={domain.key} style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                        {/* Domain header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{domain.label}</div>
+                            <div style={{ fontSize: 11, color: '#64748b' }}>{domain.desc}</div>
+                          </div>
+                          {/* Tenant rule badge */}
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 2 }}>Tenant Rule</div>
+                            <span style={{
+                              display: 'inline-block', padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                              background: maxTenantAction === 'Delete' ? '#fee2e2' : maxTenantAction === 'Anonymize' ? '#fef9c3' : '#f1f5f9',
+                              color:      maxTenantAction === 'Delete' ? '#dc2626' : maxTenantAction === 'Anonymize' ? '#854d0e' : '#475569',
+                            }}>
+                              {tenantRules.length === 0 ? 'No Rule' : `${maxTenantAction} / ${minTenantRetention}d`}
+                            </span>
+                          </div>
+                          {override && (
+                            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 700, background: '#eff6ff', color: '#1d4ed8' }}>
+                              Override Active
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Override form */}
+                        <div style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', background: '#fff' }}>
+                          <div className="cf-form-field" style={{ minWidth: 140, margin: 0 }}>
+                            <label style={{ fontSize: 11 }}>Action</label>
+                            <select
+                              value={form.action}
+                              onChange={e => setDpprForms(p => ({ ...p, [domain.key]: { ...form, action: e.target.value } }))}
+                            >
+                              {['None', 'Anonymize', 'Delete']
+                                .filter(a => ACTION_RANK[a] >= ACTION_RANK[maxTenantAction])
+                                .map(a => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                          </div>
+                          <div className="cf-form-field" style={{ minWidth: 120, margin: 0 }}>
+                            <label style={{ fontSize: 11 }}>Retention (days)</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={minTenantRetention}
+                              value={form.retention_days}
+                              onChange={e => setDpprForms(p => ({ ...p, [domain.key]: { ...form, retention_days: e.target.value } }))}
+                            />
+                          </div>
+                          <div className="cf-form-field" style={{ flex: 1, minWidth: 180, margin: 0 }}>
+                            <label style={{ fontSize: 11 }}>Override Reason</label>
+                            <input
+                              type="text"
+                              placeholder="Reason for this override…"
+                              value={form.override_reason}
+                              onChange={e => setDpprForms(p => ({ ...p, [domain.key]: { ...form, override_reason: e.target.value } }))}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                            <button
+                              className="cf-save-btn"
+                              style={{ padding: '7px 14px', fontSize: 12 }}
+                              onClick={() => saveDpprOverride(domain.key)}
+                              disabled={saving}
+                            >
+                              {saving ? 'Saving…' : override ? 'Update' : 'Set Override'}
+                            </button>
+                            {override && (
+                              <button
+                                className="cf-delete-btn"
+                                style={{ padding: '7px 14px', fontSize: 12, background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 7, cursor: 'pointer' }}
+                                onClick={() => removeDpprOverride(domain.key)}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {msg && (
+                          <div style={{ padding: '6px 16px 10px', fontSize: 12, color: msg.includes('error') || msg.includes('Error') || msg.includes('less restrictive') ? '#dc2626' : '#15803d' }}>
+                            {msg}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
       </div>{/* end cf-tab-content */}
 
       {activeCorrItem && (
@@ -2114,6 +2314,7 @@ function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, onRowsChange 
     if (tabKey === 'lab-results')    return { test_name: '', result: '', unit: '', normal_range: '', test_date: '' }
     if (tabKey === 'medical-history') return { condition_name: '', start_date: '', end_date: '', is_ongoing: false, notes: '' }
     if (tabKey === 'product-info')   return { product_name: '', dose: '', dose_unit: '', route_of_admin: '', frequency: '', start_date: '', end_date: '', indication: '', is_suspect: true, is_concomitant: false }
+    if (tabKey === 'events')         return { event_description: '', outcome: '', start_date: '', end_date: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false }
     return {}
   }
   const [form, setForm] = useState(blankForm)
@@ -2125,6 +2326,7 @@ function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, onRowsChange 
     if (tabKey === 'lab-results')     return `${API}/cases/ae/lab-results/${rowId}`
     if (tabKey === 'medical-history') return `${API}/cases/ae/medical-history/${rowId}`
     if (tabKey === 'product-info')    return `${API}/cases/ae/product-info/${rowId}`
+    if (tabKey === 'events')          return `${API}/cases/ae/events/${rowId}`
     return null
   }
   const postUrl = () => `${API}/cases/ae/versions/${versionId}/${tabKey}`
@@ -2134,9 +2336,8 @@ function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, onRowsChange 
     setSaving(true)
     try {
       const body = { ...form }
-      if (typeof body.is_ongoing === 'boolean')    body.is_ongoing    = body.is_ongoing    ? 1 : 0
-      if (typeof body.is_suspect === 'boolean')    body.is_suspect    = body.is_suspect    ? 1 : 0
-      if (typeof body.is_concomitant === 'boolean') body.is_concomitant = body.is_concomitant ? 1 : 0
+      const boolCols = ['is_ongoing','is_suspect','is_concomitant','is_serious','is_death','is_life_threatening','is_hospitalization','is_disability','is_congenital_anomaly','is_other_medically_important']
+      boolCols.forEach(k => { if (typeof body[k] === 'boolean') body[k] = body[k] ? 1 : 0 })
       const res  = await fetch(postUrl(), { method: 'POST', headers, body: JSON.stringify(body) })
       const data = await res.json()
       if (!res.ok) { alert(data.error || 'Add failed'); return }
@@ -2185,7 +2386,15 @@ function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, onRowsChange 
     { key: 'is_suspect',     label: 'Suspect', render: v => v ? '✅' : '—' },
     { key: 'is_concomitant', label: 'Concomitant', render: v => v ? '✅' : '—' },
   ]
-  const cols = tabKey === 'lab-results' ? labCols : tabKey === 'medical-history' ? mhCols : piCols
+  const eventCols = [
+    { key: 'event_description', label: 'Event Description' },
+    { key: 'outcome',           label: 'Outcome' },
+    { key: 'start_date',        label: 'Start Date' },
+    { key: 'end_date',          label: 'End Date' },
+    { key: 'is_serious',        label: 'Serious', render: v => v ? '✅' : '—' },
+    { key: 'is_death',          label: 'Death',   render: v => v ? '✅' : '—' },
+  ]
+  const cols = tabKey === 'lab-results' ? labCols : tabKey === 'medical-history' ? mhCols : tabKey === 'events' ? eventCols : piCols
 
   return (
     <div className="cf-multirow-section">
@@ -2249,6 +2458,24 @@ function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, onRowsChange 
                     </label>
                   </div>
                   <div className="cf-form-field cf-form-field--full"><label>Notes</label><textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} /></div>
+                </>}
+                {/* Events Form */}
+                {tabKey === 'events' && <>
+                  <div className="cf-form-field cf-form-field--full"><label>Event Description</label><textarea rows={2} value={form.event_description} onChange={e => set('event_description', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Outcome</label><input value={form.outcome} onChange={e => set('outcome', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Start Date</label><input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>End Date</label><input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
+                  <div className="cf-form-field">
+                    <label style={{ fontWeight: 600, marginBottom: 4 }}>Seriousness Criteria</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {[['is_serious','Serious'],['is_death','Death'],['is_life_threatening','Life-Threatening'],['is_hospitalization','Hospitalization'],['is_disability','Disability'],['is_congenital_anomaly','Congenital Anomaly'],['is_other_medically_important','Other Medically Important']].map(([k,l]) => (
+                        <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 'normal' }}>
+                          <input type="checkbox" checked={!!form[k]} onChange={e => set(k, e.target.checked)} />
+                          {l}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </>}
                 {/* Product Info Form */}
                 {tabKey === 'product-info' && <>
@@ -2328,32 +2555,14 @@ function AETabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions
       )}
 
       {tabKey === 'events' && (
-        <div>
-          <p className="cf-tab-note">ICH E2B R3 — seriousness criteria stored as individual fields for regulatory export.</p>
-          <div className="cf-form-grid">
-            {fieldRow('Event Description', 'event_description', 'textarea')}
-            {fieldRow('Outcome',           'outcome')}
-            {fieldRow('Start Date',        'start_date', 'date')}
-            {fieldRow('End Date',          'end_date',   'date')}
-          </div>
-          <div className="cf-seriousness-grid">
-            <span className="cf-seriousness-label">Seriousness Criteria:</span>
-            {[
-              ['is_serious',                  'Serious'],
-              ['is_death',                    'Death'],
-              ['is_life_threatening',         'Life-Threatening'],
-              ['is_hospitalization',          'Hospitalization'],
-              ['is_disability',               'Disability / Incapacity'],
-              ['is_congenital_anomaly',       'Congenital Anomaly'],
-              ['is_other_medically_important','Other Medically Important'],
-            ].map(([key, label]) => (
-              <label key={key} className="cf-seriousness-check">
-                <input type="checkbox" checked={!!d[key]} disabled={locked} onChange={e => set(key, e.target.checked ? 1 : 0)} />
-                {label}
-              </label>
-            ))}
-          </div>
-        </div>
+        <AEMultiRowTab
+          tabKey="events"
+          rows={Array.isArray(data) ? data : []}
+          locked={locked}
+          versionId={versionId}
+          headers={headers}
+          onRowsChange={onChange}
+        />
       )}
 
       {tabKey === 'patient-info' && (
@@ -2395,7 +2604,7 @@ function AETabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions
         </div>
       )}
 
-      {!locked && (
+      {!locked && !['events','lab-results','medical-history','product-info'].includes(tabKey) && (
         <div className="cf-form-actions">
           <button className="cf-save-btn" onClick={onSave}>Save</button>
         </div>
@@ -2467,7 +2676,7 @@ function PCTabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions
         <div className="cf-form-grid">
           {fieldRow('Age',                'age',                 'number')}
           {fieldRow('Age Unit',           'age_unit')}
-          {selectRow('Gender',            'gender',              'PC — Patient Information', 'Gender')}
+          {selectRow('Gender',            'sex',                 'PC — Patient Information', 'Gender')}
           {fieldRow('Weight (kg)',        'weight_kg',           'number')}
           {fieldRow('Therapy Start Date', 'therapy_start_date',  'date')}
           {fieldRow('Therapy End Date',   'therapy_end_date',    'date')}
@@ -2490,7 +2699,7 @@ function PCTabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions
 
       {tabKey === 'return-retrieval' && (
         <div className="cf-form-grid">
-          {selectRow('Return Requested',    'return_requested', 'PC — Return & Retrieval', 'Return Requested')}
+          {boolField('Return Requested',    'return_requested')}
           {fieldRow('Return Date',          'return_date',    'date')}
           {fieldRow('Return Method',        'return_method')}
           {boolField('Retrieval Requested', 'retrieval_requested')}
@@ -2504,7 +2713,7 @@ function PCTabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions
       {tabKey === 'replacement' && (
         <div className="cf-form-grid">
           {boolField('Replacement Requested', 'replacement_requested')}
-          {selectRow('Replacement Approved',  'replacement_approved', 'PC — Replacement', 'Replacement Approved')}
+          {boolField('Replacement Approved',  'replacement_approved')}
           {fieldRow('Replacement Date',       'replacement_date',    'date')}
           {fieldRow('Replacement Product',    'replacement_product')}
           {fieldRow('Quantity',               'quantity',            'number')}
@@ -2515,7 +2724,7 @@ function PCTabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions
       {tabKey === 'refund-credit' && (
         <div className="cf-form-grid">
           {boolField('Refund Requested',  'refund_requested')}
-          {selectRow('Refund Approved',   'refund_approved', 'PC — Refund & Credit', 'Refund Approved')}
+          {boolField('Refund Approved',   'refund_approved')}
           {fieldRow('Refund Amount',      'refund_amount',  'number')}
           {boolField('Credit Requested',  'credit_requested')}
           {boolField('Credit Approved',   'credit_approved')}

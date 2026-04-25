@@ -6,14 +6,16 @@
 
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const pool = require('../database/db');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { accountCreationRateLimiter } = require('../middleware/rateLimiters');
 const { validateUpload } = require('../middleware/uploadValidation');
 const { emitSuperadminAlert, getSystemConfig, parseJson } = require('../services/alertService');
 
-const ALLOWED_MODULES = ['mims_core', 'admin_console', 'content_mgmt', 'data_visualization'];
+const ALLOWED_MODULES = ['mims_core', 'admin_console', 'content_mgmt', 'data_visualization', 'reports'];
 const ASSIGNABLE_ROLES = ['admin', 'agent', 'reviewer', 'content_manager'];
 const THRESHOLD_ALERT_EVENTS = new Set(['failed_login_spike', 'two_factor_lockout', 'service_error_threshold']);
 
@@ -29,6 +31,10 @@ async function audit(userId, userName, action, entity, entityId, details) {
 function parseIntSafe(value, fallback) {
   const parsed = parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function generateTemporaryPassword() {
+  return crypto.randomBytes(18).toString('base64').replace(/[+/=]/g, '').slice(0, 20);
 }
 
 function normalizeAlertRulePayload(input, fallback = {}) {
@@ -290,6 +296,12 @@ router.get('/config', authenticate, requireRole('superadmin'), async (_req, res)
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const config = rows.reduce((acc, r) => { acc[r.config_key] = r.config_value; return acc; }, {});
+    const sensitiveKeyPattern = /(password|secret|token|api[_-]?key)/i;
+    for (const [key, value] of Object.entries(config)) {
+      if (!sensitiveKeyPattern.test(key)) continue;
+      config[`${key}_set`] = !!String(value || '').trim();
+      delete config[key];
+    }
     res.json({ config });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
@@ -513,29 +525,29 @@ router.get('/all-users', authenticate, requireRole('superadmin'), async (_req, r
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// POST /api/superadmin/users/create — create user (password auto-set to Manager@123, reset required on first login)
-router.post('/users/create', authenticate, requireRole('superadmin'), async (req, res) => {
+// POST /api/superadmin/users/create — create user with one-time temporary password
+router.post('/users/create', authenticate, requireRole('superadmin'), accountCreationRateLimiter, async (req, res) => {
   try {
     const { name, email, role } = req.body;
     if (!name || !email) return res.status(400).json({ error: 'name and email are required.' });
 
-    const defaultPassword = 'Manager@123';
-    const hash = await bcrypt.hash(defaultPassword, 10);
+    const temporaryPassword = generateTemporaryPassword();
+    const hash = await bcrypt.hash(temporaryPassword, 12);
     const userRole = role || 'agent';
     if (!ASSIGNABLE_ROLES.includes(userRole))
       return res.status(400).json({ error: `Invalid role. Allowed roles: ${ASSIGNABLE_ROLES.join(', ')}.` });
 
     const [result] = await pool.execute(
-      'INSERT INTO users (name, email, password, role, is_active, password_reset_required) VALUES (?, ?, ?, ?, 1, 1)',
+      'INSERT INTO users (name, email, password, role, is_active, password_reset_required, email_verified) VALUES (?, ?, ?, ?, 1, 1, 1)',
       [name.trim(), email.trim().toLowerCase(), hash, userRole]
     );
     const userId = result.insertId;
 
     // Auto-assign default modules by role so user can access the app on first login
     const defaultModules = {
-      admin:           ['mims_core', 'admin_console'],
+      admin:           ['mims_core', 'admin_console', 'data_visualization', 'reports'],
       agent:           ['mims_core'],
-      reviewer:        ['mims_core'],
+      reviewer:        ['mims_core', 'data_visualization', 'reports'],
       content_manager: ['mims_core', 'content_mgmt'],
     };
     const modules = defaultModules[userRole] || ['mims_core'];
@@ -546,8 +558,23 @@ router.post('/users/create', authenticate, requireRole('superadmin'), async (req
       );
     }
 
-    await audit(req.user.userId, req.user.email, 'CREATE', 'user', userId, { name, email, role: userRole, modules });
-    res.status(201).json({ id: userId, name, email, role: userRole, is_active: 1, modules });
+    await audit(req.user.userId, req.user.email, 'CREATE', 'user', userId, {
+      name,
+      email,
+      role: userRole,
+      modules,
+      temporary_password: '[GENERATED]',
+    });
+    res.status(201).json({
+      id: userId,
+      name,
+      email,
+      role: userRole,
+      is_active: 1,
+      modules,
+      temporary_password: temporaryPassword,
+      password_reset_required: 1,
+    });
   } catch { res.status(409).json({ error: 'Email already exists.' }); }
 });
 

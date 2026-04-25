@@ -9,7 +9,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const pool = require('../../database/db');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
 const bcrypt = require('bcrypt');
 const { logger } = require('../../services/logger');
@@ -130,6 +130,60 @@ async function getScopedDocument(req, documentId) {
     isSuperadmin(req) ? [documentId] : [documentId, req.user.orgId]
   );
   return rows[0] || null;
+}
+
+async function getScopedFaq(req, faqId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? `SELECT f.*, fo.org_id AS folder_org_id
+         FROM cm_faqs f
+         INNER JOIN cm_folders fo ON f.folder_id = fo.id
+         WHERE f.id = ?`
+      : `SELECT f.*, fo.org_id AS folder_org_id
+         FROM cm_faqs f
+         INNER JOIN cm_folders fo ON f.folder_id = fo.id
+         WHERE f.id = ? AND fo.org_id = ?`,
+    isSuperadmin(req) ? [faqId] : [faqId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+async function getScopedModule(req, moduleId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? `SELECT m.*, f.org_id AS folder_org_id
+         FROM cm_modules m
+         INNER JOIN cm_folders f ON m.folder_id = f.id
+         WHERE m.id = ?`
+      : `SELECT m.*, f.org_id AS folder_org_id
+         FROM cm_modules m
+         INNER JOIN cm_folders f ON m.folder_id = f.id
+         WHERE m.id = ? AND f.org_id = ?`,
+    isSuperadmin(req) ? [moduleId] : [moduleId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+async function getScopedCase(req, caseId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? 'SELECT id, org_id FROM cases WHERE id = ?'
+      : 'SELECT id, org_id FROM cases WHERE id = ? AND org_id = ?',
+    isSuperadmin(req) ? [caseId] : [caseId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+async function isUserInOrg(userId, orgId) {
+  const [[row]] = await pool.execute(
+    `SELECT u.id
+     FROM users u
+     JOIN user_org_access uoa ON uoa.user_id = u.id
+     WHERE u.id = ? AND uoa.org_id = ? AND uoa.is_active = 1
+     LIMIT 1`,
+    [userId, orgId]
+  );
+  return !!row;
 }
 
 // GET /api/cm/documents — list with filters and pagination
@@ -267,6 +321,29 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
   } finally {
     conn.release();
   }
+});
+
+// GET /api/cm/documents/search — full-text document search (must be before /:id)
+router.get('/documents/search', authenticate, async (req, res) => {
+  try {
+    const { q, folder_id, status } = req.query;
+    if (!q || q.trim().length < 2) return res.status(400).json({ error: 'Query must be at least 2 characters' });
+    let query = `SELECT d.id, d.doc_id, d.name, d.folder_id, d.status, d.response_doc_type, d.version_major, d.version_minor, d.created_at,
+      MATCH(d.name, d.content_html) AGAINST(? IN NATURAL LANGUAGE MODE) AS relevance
+      FROM cm_documents d
+      LEFT JOIN cm_folders f ON d.folder_id = f.id
+      WHERE MATCH(d.name, d.content_html) AGAINST(? IN NATURAL LANGUAGE MODE)`;
+    const params = [q, q];
+    if (!isSuperadmin(req)) {
+      query += ` AND f.org_id = ?`;
+      params.push(req.user.orgId);
+    }
+    if (folder_id) { query += ` AND d.folder_id = ?`; params.push(folder_id); }
+    if (status) { query += ` AND d.status = ?`; params.push(status); }
+    query += ` ORDER BY relevance DESC LIMIT 50`;
+    const [rows] = await pool.execute(query, params);
+    res.json({ documents: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // GET /api/cm/documents/:id — get document with version history
@@ -748,6 +825,8 @@ router.post('/documents/:id/relations', authenticate, async (req, res) => {
 // DELETE /api/cm/documents/:id/relations/:rel_id
 router.delete('/documents/:id/relations/:rel_id', authenticate, async (req, res) => {
   try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
     const [result] = await pool.execute(
       'DELETE FROM cm_document_relations WHERE id = ? AND doc_id = ?',
       [req.params.rel_id, req.params.id]
@@ -800,6 +879,11 @@ router.post('/documents/:id/alert-subs', authenticate, async (req, res) => {
   try {
     const { user_id } = req.body;
     if (!user_id) return res.status(400).json({ error: 'user_id is required.' });
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    if (!isSuperadmin(req) && !await isUserInOrg(user_id, req.user.orgId)) {
+      return res.status(403).json({ error: 'User does not belong to your organisation.' });
+    }
     await pool.execute(
       'INSERT IGNORE INTO cm_document_alert_subs (document_id, user_id, created_by) VALUES (?, ?, ?)',
       [req.params.id, user_id, req.user.userId]
@@ -813,6 +897,8 @@ router.post('/documents/:id/alert-subs', authenticate, async (req, res) => {
 // DELETE /api/cm/documents/:id/alert-subs/:sub_id — remove subscriber
 router.delete('/documents/:id/alert-subs/:sub_id', authenticate, async (req, res) => {
   try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
     await pool.execute(
       'DELETE FROM cm_document_alert_subs WHERE id = ? AND document_id = ?',
       [req.params.sub_id, req.params.id]
@@ -826,6 +912,8 @@ router.delete('/documents/:id/alert-subs/:sub_id', authenticate, async (req, res
 // GET /api/cm/documents/:id/versions — paginated version history (CM-T3)
 router.get('/documents/:id/versions', authenticate, async (req, res) => {
   try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
@@ -845,27 +933,11 @@ router.get('/documents/:id/versions', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/cm/documents/search — full-text document search (CM-E1)
-router.get('/documents/search', authenticate, async (req, res) => {
-  try {
-    const { q, folder_id, status } = req.query;
-    if (!q || q.trim().length < 2) return res.status(400).json({ error: 'Query must be at least 2 characters' });
-    let query = `SELECT id, doc_id, name, folder_id, status, response_doc_type, version_major, version_minor, created_at,
-      MATCH(name, content_html) AGAINST(? IN NATURAL LANGUAGE MODE) AS relevance
-      FROM cm_documents
-      WHERE MATCH(name, content_html) AGAINST(? IN NATURAL LANGUAGE MODE)`;
-    const params = [q, q];
-    if (folder_id) { query += ` AND folder_id = ?`; params.push(folder_id); }
-    if (status) { query += ` AND status = ?`; params.push(status); }
-    query += ` ORDER BY relevance DESC LIMIT 50`;
-    const [rows] = await pool.execute(query, params);
-    res.json({ documents: rows });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // GET /api/cm/documents/:id/version-diff — compare two versions (CM-E2)
 router.get('/documents/:id/version-diff', authenticate, async (req, res) => {
   try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
     const { v1, v2 } = req.query;
     if (!v1 || !v2) return res.status(400).json({ error: 'v1 and v2 version params required' });
     const [versions] = await pool.execute(
@@ -884,15 +956,26 @@ router.get('/documents/:id/version-diff', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents/release-stale-checkouts — auto-release expired checkouts (CM-E4 + CM-T6)
-router.post('/documents/release-stale-checkouts', async (req, res) => {
+router.post('/documents/release-stale-checkouts', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
-    const [result] = await pool.execute(
-      `UPDATE cm_documents
-       SET checked_out_by = NULL, checked_out_at = NULL, checkout_expires_at = NULL
-       WHERE checked_out_by IS NOT NULL
-         AND checkout_expires_at IS NOT NULL
-         AND checkout_expires_at < NOW()`
-    );
+    const [result] = isSuperadmin(req)
+      ? await pool.execute(
+        `UPDATE cm_documents
+         SET checked_out_by = NULL, checked_out_at = NULL, checkout_expires_at = NULL
+         WHERE checked_out_by IS NOT NULL
+           AND checkout_expires_at IS NOT NULL
+           AND checkout_expires_at < NOW()`
+      )
+      : await pool.execute(
+        `UPDATE cm_documents d
+         JOIN cm_folders f ON d.folder_id = f.id
+         SET d.checked_out_by = NULL, d.checked_out_at = NULL, d.checkout_expires_at = NULL
+         WHERE d.checked_out_by IS NOT NULL
+           AND d.checkout_expires_at IS NOT NULL
+           AND d.checkout_expires_at < NOW()
+           AND f.org_id = ?`,
+        [req.user.orgId]
+      );
     res.json({ success: true, released: result.affectedRows });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -966,10 +1049,22 @@ router.post('/content-usage', authenticate, async (req, res) => {
     if (!['document', 'faq', 'module'].includes(content_type)) {
       return res.status(400).json({ error: 'content_type must be document, faq, or module.' });
     }
+    const scopedCase = await getScopedCase(req, case_id);
+    if (!scopedCase) return res.status(404).json({ error: 'Case not found for active organisation.' });
+    if (content_type === 'document') {
+      const doc = await getScopedDocument(req, content_id);
+      if (!doc) return res.status(404).json({ error: 'Document not found for active organisation.' });
+    } else if (content_type === 'faq') {
+      const faq = await getScopedFaq(req, content_id);
+      if (!faq) return res.status(404).json({ error: 'FAQ not found for active organisation.' });
+    } else if (content_type === 'module') {
+      const module = await getScopedModule(req, content_id);
+      if (!module) return res.status(404).json({ error: 'Module not found for active organisation.' });
+    }
     await pool.execute(
       `INSERT INTO cm_content_usage (content_type, content_id, case_id, response_id, used_by)
        VALUES (?, ?, ?, ?, ?)`,
-      [content_type, content_id, case_id, response_id || null, req.user.userId]
+      [content_type, content_id, scopedCase.id, response_id || null, req.user.userId]
     );
     res.status(201).json({ message: 'Usage logged.' });
   } catch (err) {
@@ -981,15 +1076,31 @@ router.post('/content-usage', authenticate, async (req, res) => {
 router.get('/content-usage/:contentType/:contentId', authenticate, async (req, res) => {
   try {
     const { contentType, contentId } = req.params;
+    if (!['document', 'faq', 'module'].includes(contentType)) {
+      return res.status(400).json({ error: 'Invalid contentType.' });
+    }
+    if (!isSuperadmin(req)) {
+      if (contentType === 'document') {
+        const doc = await getScopedDocument(req, contentId);
+        if (!doc) return res.status(404).json({ error: 'Document not found for active organisation.' });
+      } else if (contentType === 'faq') {
+        const faq = await getScopedFaq(req, contentId);
+        if (!faq) return res.status(404).json({ error: 'FAQ not found for active organisation.' });
+      } else if (contentType === 'module') {
+        const module = await getScopedModule(req, contentId);
+        if (!module) return res.status(404).json({ error: 'Module not found for active organisation.' });
+      }
+    }
     const [rows] = await pool.execute(
       `SELECT cu.*, c.case_number, u.name AS used_by_name
        FROM cm_content_usage cu
        LEFT JOIN cases c ON c.id = cu.case_id
        LEFT JOIN users u ON u.id = cu.used_by
        WHERE cu.content_type = ? AND cu.content_id = ?
+       ${isSuperadmin(req) ? '' : 'AND c.org_id = ?'}
        ORDER BY cu.used_at DESC
        LIMIT 100`,
-      [contentType, contentId]
+      isSuperadmin(req) ? [contentType, contentId] : [contentType, contentId, req.user.orgId]
     );
     res.json({ usage: rows, total: rows.length });
   } catch (err) {
@@ -1002,16 +1113,46 @@ router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) =
   try {
     const moduleId = parseInt(req.params.moduleId);
     if (!moduleId) return res.status(400).json({ error: 'Invalid moduleId' });
+    const module = await getScopedModule(req, moduleId);
+    if (!module) return res.status(404).json({ error: 'Module not found for active organisation.' });
     const [docs] = await pool.execute(
-      `SELECT id, doc_id, name, status, version_major, version_minor, updated_at
-       FROM cm_documents
+      `SELECT d.id, d.doc_id, d.name, d.status, d.version_major, d.version_minor, d.updated_at
+       FROM cm_documents d
+       JOIN cm_folders f ON d.folder_id = f.id
        WHERE response_doc_type = 'Module'
-         AND selected_modules IS NOT NULL
-         AND JSON_CONTAINS(selected_modules, CAST(? AS JSON))`,
-      [String(moduleId)]
+         AND d.selected_modules IS NOT NULL
+         AND JSON_CONTAINS(d.selected_modules, CAST(? AS JSON))
+         ${isSuperadmin(req) ? '' : 'AND f.org_id = ?'}`,
+      isSuperadmin(req) ? [String(moduleId)] : [String(moduleId), req.user.orgId]
     );
     res.json({ module_id: moduleId, linked_documents: docs, count: docs.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/cm/documents/:id/download — serve the stored file as a download attachment
+router.get('/documents/:id/download', authenticate, async (req, res) => {
+  try {
+    const [[doc]] = await pool.execute(
+      `SELECT d.file_path, d.file_name, d.file_mime, f.org_id
+       FROM cm_documents d
+       JOIN cm_folders f ON f.id = d.folder_id
+       WHERE d.id = ?`,
+      [req.params.id]
+    );
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    const isSA = req.user.role === 'superadmin';
+    if (!isSA && doc.org_id !== req.user.orgId) return res.status(403).json({ error: 'Forbidden.' });
+    if (!doc.file_path) return res.status(404).json({ error: 'No file attached to this document.' });
+    const absPath = path.isAbsolute(doc.file_path)
+      ? doc.file_path
+      : path.join(__dirname, '../../', doc.file_path);
+    const mime = doc.file_mime || 'application/octet-stream';
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${doc.file_name || 'document'}"`);
+    res.sendFile(absPath, err => {
+      if (err && !res.headersSent) res.status(500).json({ error: 'Could not serve file.' });
+    });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // GET /api/cm/documents/:id/file — serve the stored file inline (for in-app preview)
@@ -1054,6 +1195,8 @@ router.get('/documents/:id/file', authenticate, async (req, res) => {
 // GET /api/cm/documents/:id/activity — paginated activity log
 router.get('/documents/:id/activity', authenticate, async (req, res) => {
   try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;

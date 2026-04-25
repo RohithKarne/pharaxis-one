@@ -26,14 +26,76 @@ async function audit(userId, userName, action, entity, entityId, details) {
   }
 }
 
+function isSuperadmin(req) {
+  return req.user.role === 'superadmin';
+}
+
 function buildInboxOrgScope(req, alias = 'i') {
   const params = [];
   let where = '';
-  if (req.user.role !== 'superadmin') {
+  if (!isSuperadmin(req)) {
     where = `WHERE ${alias}.org_id = ?`;
     params.push(req.user.orgId);
   }
   return { where, params };
+}
+
+async function getScopedInquiry(req, inquiryId, columns = '*') {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? `SELECT ${columns} FROM inquiries WHERE id = ?`
+      : `SELECT ${columns} FROM inquiries WHERE id = ? AND org_id = ?`,
+    isSuperadmin(req)
+      ? [inquiryId]
+      : [inquiryId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+async function getScopedAttachment(req, attachmentId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? `SELECT a.id, a.inquiry_id, a.filename, a.mime_type, a.storage_path, a.size_bytes, i.org_id
+         FROM inquiry_attachments a
+         JOIN inquiries i ON i.id = a.inquiry_id
+         WHERE a.id = ?`
+      : `SELECT a.id, a.inquiry_id, a.filename, a.mime_type, a.storage_path, a.size_bytes, i.org_id
+         FROM inquiry_attachments a
+         JOIN inquiries i ON i.id = a.inquiry_id
+         WHERE a.id = ? AND i.org_id = ?`,
+    isSuperadmin(req)
+      ? [attachmentId]
+      : [attachmentId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+function replyTemplateScopePredicate(req, alias = 'rt') {
+  if (isSuperadmin(req)) return '1=1';
+  return `EXISTS (
+    SELECT 1
+    FROM users ru
+    LEFT JOIN user_org_access rua
+      ON rua.user_id = ru.id
+     AND rua.org_id = ?
+     AND rua.is_active = 1
+    WHERE ru.id = ${alias}.created_by
+      AND (ru.org_id = ? OR rua.user_id IS NOT NULL)
+  )`;
+}
+
+function replyTemplateScopeParams(req) {
+  return isSuperadmin(req) ? [] : [req.user.orgId, req.user.orgId];
+}
+
+async function getScopedReplyTemplate(req, templateId, columns = '*') {
+  const [rows] = await pool.execute(
+    `SELECT ${columns}
+     FROM reply_templates rt
+     WHERE rt.id = ? AND ${replyTemplateScopePredicate(req, 'rt')}`,
+    [templateId, ...replyTemplateScopeParams(req)]
+  );
+  return rows[0] || null;
 }
 
 function textContains(haystack, needle) {
@@ -329,7 +391,12 @@ router.get('/users', authenticate, async (req, res) => {
 router.get('/templates', authenticate, async (_req, res) => {
   try {
     const [rows] = await pool.execute(
-      `SELECT id, name, subject, body FROM reply_templates WHERE is_active = 1 ORDER BY name ASC`
+      `SELECT rt.id, rt.name, rt.subject, rt.body
+       FROM reply_templates rt
+       WHERE rt.is_active = 1
+         AND ${replyTemplateScopePredicate(_req, 'rt')}
+       ORDER BY rt.name ASC`,
+      replyTemplateScopeParams(_req)
     );
     res.json({ templates: rows });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
@@ -352,6 +419,8 @@ router.post('/templates', authenticate, async (req, res) => {
 router.patch('/templates/:tid', authenticate, async (req, res) => {
   try {
     const { tid } = req.params;
+    const existing = await getScopedReplyTemplate(req, tid, 'rt.id');
+    if (!existing) return res.status(404).json({ error: 'Template not found.' });
     const { name, subject, body, is_active } = req.body;
     const updates = [], params = [];
     if (name !== undefined)      { updates.push('name = ?');      params.push(name); }
@@ -369,22 +438,26 @@ router.patch('/templates/:tid', authenticate, async (req, res) => {
 // DELETE /api/inbox/templates/:tid — soft-delete reply template
 router.delete('/templates/:tid', authenticate, async (req, res) => {
   try {
+    const existing = await getScopedReplyTemplate(req, req.params.tid, 'rt.id');
+    if (!existing) return res.status(404).json({ error: 'Template not found.' });
     await pool.execute(`UPDATE reply_templates SET is_active = 0 WHERE id = ?`, [req.params.tid]);
     res.json({ message: 'Deleted.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // POST /api/inbox/fetch — trigger immediate IMAP ingest for all active inbound accounts
-router.post('/fetch', authenticate, async (req, res) => {
+router.post('/fetch', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { ingestAccount } = require('../services/emailPoller');
     const { logService } = require('../services/serviceLogger');
-    const [accounts] = await pool.execute(`
-      SELECT * FROM email_accounts
-      WHERE is_active = 1 AND direction IN ('Inbound', 'Both')
-        AND imap_host IS NOT NULL AND imap_port IS NOT NULL
-        AND imap_username IS NOT NULL AND imap_password IS NOT NULL
-    `);
+    const [accounts] = await pool.execute(
+      `SELECT * FROM email_accounts
+       WHERE is_active = 1 AND direction IN ('Inbound', 'Both')
+         AND imap_host IS NOT NULL AND imap_port IS NOT NULL
+         AND imap_username IS NOT NULL AND imap_password IS NOT NULL
+         ${isSuperadmin(req) ? '' : 'AND org_id = ?'}`,
+      isSuperadmin(req) ? [] : [req.user.orgId]
+    );
 
     let totalIngested = 0;
     for (const account of accounts) {
@@ -638,6 +711,8 @@ router.get('/:id/recommendations', authenticate, async (req, res) => {
 // GET /api/inbox/:id/notes — list internal notes for an inquiry (F5)
 router.get('/:id/notes', authenticate, async (req, res) => {
   try {
+    const inquiry = await getScopedInquiry(req, req.params.id, 'id');
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
     const [rows] = await pool.execute(
       `SELECT id, user_name, note, created_at FROM inquiry_notes
        WHERE inquiry_id = ? ORDER BY created_at ASC`,
@@ -653,7 +728,7 @@ router.post('/:id/notes', authenticate, async (req, res) => {
     const { id } = req.params;
     const { note } = req.body;
     if (!note?.trim()) return res.status(400).json({ error: 'note is required.' });
-    const [[inquiry]] = await pool.execute('SELECT id FROM inquiries WHERE id = ?', [id]);
+    const inquiry = await getScopedInquiry(req, id, 'id');
     if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
     let authorName = req.user?.email || 'Unknown';
     if (req.user?.userId) {
@@ -699,6 +774,8 @@ router.get('/:id/thread', authenticate, async (req, res) => {
 // GET /api/inbox/:id/attachments — list attachments for an inquiry
 router.get('/:id/attachments', authenticate, async (req, res) => {
   try {
+    const inquiry = await getScopedInquiry(req, req.params.id, 'id');
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
     const [rows] = await pool.execute(
       `SELECT id, filename, mime_type, size_bytes FROM inquiry_attachments
        WHERE inquiry_id = ? ORDER BY id ASC`,
@@ -711,10 +788,7 @@ router.get('/:id/attachments', authenticate, async (req, res) => {
 // GET /api/inbox/attachments/:aid/download — stream attachment file
 router.get('/attachments/:aid/download', authenticate, async (req, res) => {
   try {
-    const [[row]] = await pool.execute(
-      `SELECT filename, mime_type, storage_path FROM inquiry_attachments WHERE id = ?`,
-      [req.params.aid]
-    );
+    const row = await getScopedAttachment(req, req.params.aid);
     if (!row) return res.status(404).json({ error: 'Attachment not found.' });
     if (!fs.existsSync(row.storage_path)) return res.status(404).json({ error: 'File not found on server.' });
 
@@ -725,40 +799,55 @@ router.get('/attachments/:aid/download', authenticate, async (req, res) => {
 });
 
 // Helper: resolve the best outbound SMTP account for a given recipient address
-async function getOutboundAccount(recipientEmail) {
+async function getOutboundAccount(recipientEmail, req, inquiryOrgId = null) {
   const rawEmail = recipientEmail
     ? (recipientEmail.match(/<([^>]+)>/) || [null, recipientEmail])[1].trim()
     : null;
+  const scopedOrgId = isSuperadmin(req) ? (inquiryOrgId || null) : req.user.orgId;
+  const orgClause = scopedOrgId ? ' AND org_id = ?' : '';
+  const orgParams = scopedOrgId ? [scopedOrgId] : [];
 
   if (rawEmail) {
-    const [[match]] = await pool.execute(`
+    const [[match]] = await pool.execute(
+      `
       SELECT * FROM email_accounts
       WHERE is_active = 1
         AND smtp_host IS NOT NULL AND smtp_port IS NOT NULL
         AND smtp_username IS NOT NULL AND smtp_password IS NOT NULL
         AND mailbox_email = ?
+        ${orgClause}
       LIMIT 1
-    `, [rawEmail]);
+    `,
+      [rawEmail, ...orgParams]
+    );
     if (match) return match;
   }
 
-  const [[def]] = await pool.execute(`
+  const [[def]] = await pool.execute(
+    `
     SELECT * FROM email_accounts
     WHERE is_active = 1
       AND smtp_host IS NOT NULL AND smtp_port IS NOT NULL
       AND smtp_username IS NOT NULL AND smtp_password IS NOT NULL
       AND is_default_outbound = 1
+      ${orgClause}
     LIMIT 1
-  `);
+  `,
+    orgParams
+  );
   if (def) return def;
 
-  const [[any]] = await pool.execute(`
+  const [[any]] = await pool.execute(
+    `
     SELECT * FROM email_accounts
     WHERE is_active = 1
       AND smtp_host IS NOT NULL AND smtp_port IS NOT NULL
       AND smtp_username IS NOT NULL AND smtp_password IS NOT NULL
+      ${orgClause}
     LIMIT 1
-  `);
+  `,
+    orgParams
+  );
   return any || null;
 }
 
@@ -794,10 +883,10 @@ router.post('/:id/reply', authenticate, async (req, res) => {
     const { to, subject, body } = req.body;
     if (!to || !subject || !body) return res.status(400).json({ error: 'to, subject, and body are required.' });
 
-    const [[inquiry]] = await pool.execute('SELECT id, recipient, case_id FROM inquiries WHERE id = ?', [id]);
+    const inquiry = await getScopedInquiry(req, id, 'id, recipient, case_id, org_id');
     if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
 
-    const account = await getOutboundAccount(inquiry.recipient);
+    const account = await getOutboundAccount(inquiry.recipient, req, inquiry.org_id);
     if (!account) return res.status(400).json({ error: 'No outbound SMTP account configured.' });
 
     const fromAddr = account.from_email || account.smtp_username;
@@ -835,10 +924,10 @@ router.post('/:id/forward', authenticate, async (req, res) => {
     const { to, subject, body } = req.body;
     if (!to || !subject || !body) return res.status(400).json({ error: 'to, subject, and body are required.' });
 
-    const [[inquiry]] = await pool.execute('SELECT id, recipient, case_id FROM inquiries WHERE id = ?', [id]);
+    const inquiry = await getScopedInquiry(req, id, 'id, recipient, case_id, org_id');
     if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
 
-    const account = await getOutboundAccount(inquiry.recipient);
+    const account = await getOutboundAccount(inquiry.recipient, req, inquiry.org_id);
     if (!account) return res.status(400).json({ error: 'No outbound SMTP account configured.' });
 
     const fromAddr = account.from_email || account.smtp_username;

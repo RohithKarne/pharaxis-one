@@ -48,10 +48,10 @@ const userModel = {
    * Create a new user
    * password should already be hashed before calling this
    */
-  async create({ name, email, password, role = 'agent' }) {
+  async create({ name, email, password, role = 'agent', email_verified = 1 }) {
     const [result] = await pool.execute(
-      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-      [name, email, password, role]
+      'INSERT INTO users (name, email, password, role, email_verified) VALUES (?, ?, ?, ?, ?)',
+      [name, email, password, role, email_verified ? 1 : 0]
     );
     const [[row]] = await pool.execute(
       'SELECT id, name, email, role, created_at FROM users WHERE id = ?',

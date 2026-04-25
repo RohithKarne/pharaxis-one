@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { aiGenerationRateLimiter } = require('../../middleware/rateLimiters');
 const { getRouteServiceCatalog } = require('../../services/routeCatalogService');
 const { emitSuperadminAlert } = require('../../services/alertService');
 
@@ -1334,7 +1335,7 @@ router.get('/sql/graph', authenticate, requireRole('admin', 'superadmin'), async
 });
 
 // POST /api/admin/process-logs/sql/nl2sql
-router.post('/sql/nl2sql', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/sql/nl2sql', authenticate, requireRole('admin', 'superadmin'), aiGenerationRateLimiter, async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });

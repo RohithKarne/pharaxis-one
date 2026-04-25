@@ -161,4 +161,17 @@ router.delete('/cases/mi/:miId', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/cases/mi/products — org products list for MI form product selector
+router.get('/cases/mi/products', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      req.user.role === 'superadmin'
+        ? `SELECT id, trade_name FROM products ORDER BY trade_name`
+        : `SELECT id, trade_name FROM products WHERE org_id = ? ORDER BY trade_name`,
+      req.user.role === 'superadmin' ? [] : [req.user.orgId]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

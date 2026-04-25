@@ -5,9 +5,11 @@
 'use strict';
 
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
 const pool = require('../database/db');
+const JWT_SECRET = require('../utils/jwtSecret');
 const {
   OTP_EXPIRY_MINUTES,
   generateTotpSecret,
@@ -22,8 +24,7 @@ const {
 const { emitSuperadminAlert } = require('../services/alertService');
 const geoip = require('geoip-lite');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'mims-dev-secret-change-in-production';
-const SALT_ROUNDS = 10;
+const SALT_ROUNDS = Math.max(10, parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10) || 12);
 
 function resolveIp(req) {
   const forwarded = req?.headers?.['x-forwarded-for'];
@@ -119,7 +120,9 @@ function parseTwoFactorToken(token) {
 
 function parsePasswordResetToken(token) {
   const decoded = jwt.verify(token, JWT_SECRET);
-  if (!decoded.passwordResetFlow) throw new Error('Invalid password reset token.');
+  if (!decoded.passwordResetFlow || !decoded.passwordResetNonce) {
+    throw new Error('Invalid password reset token.');
+  }
   return decoded;
 }
 
@@ -209,7 +212,7 @@ async function updatePasswordWithHistory(userId, currentHash, newPassword) {
     }
     await conn.execute(
       `UPDATE users
-       SET password = ?, password_reset_required = ?, updated_at = NOW()
+       SET password = ?, password_reset_required = ?, password_reset_nonce = NULL, updated_at = NOW()
        WHERE id = ?`,
       [newHash, 0, userId]
     );
@@ -483,6 +486,49 @@ async function verifyEmailChallengeWithoutOrg(userId, challengeType, code) {
   return true;
 }
 
+async function createEmailVerificationChallenge(user) {
+  const code = generateOtpCode();
+  await pool.execute(
+    `INSERT INTO user_email_verification_challenges (user_id, code_hash, expires_at)
+     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
+    [user.id, hashValue(code), OTP_EXPIRY_MINUTES]
+  );
+  await sendEmailOtp({ toEmail: user.email, userName: user.name, code });
+  return { maskedEmail: maskEmail(user.email), expiresInMinutes: OTP_EXPIRY_MINUTES };
+}
+
+async function verifyEmailVerificationChallenge(userId, code) {
+  const [[row]] = await pool.execute(
+    `SELECT id, code_hash, attempts
+     FROM user_email_verification_challenges
+     WHERE user_id = ? AND is_consumed = 0 AND expires_at > NOW() AND attempts < 5
+     ORDER BY id DESC LIMIT 1`,
+    [userId]
+  );
+  if (!row) return false;
+  if (row.code_hash !== hashValue(code)) {
+    await pool.execute(
+      'UPDATE user_email_verification_challenges SET attempts = attempts + 1 WHERE id = ?',
+      [row.id]
+    );
+    return false;
+  }
+  await pool.execute(
+    'UPDATE user_email_verification_challenges SET is_consumed = 1, attempts = attempts + 1 WHERE id = ?',
+    [row.id]
+  );
+  return true;
+}
+
+async function setPasswordResetNonce(userId) {
+  const nonce = crypto.randomBytes(32).toString('hex');
+  await pool.execute(
+    'UPDATE users SET password_reset_nonce = ?, updated_at = NOW() WHERE id = ?',
+    [nonce, userId]
+  );
+  return nonce;
+}
+
 async function beginTotpEnrollment(userId, orgId) {
   const secret = generateTotpSecret();
   await pool.execute(
@@ -538,8 +584,9 @@ const authController = {
         return res.status(400).json({ error: 'Password must be at least 8 characters.' });
       }
 
-      const validRoles = ['admin', 'agent', 'reviewer', 'content_manager', 'superadmin'];
-      const userRole = role && validRoles.includes(role) ? role : 'agent';
+      // Public self-registration cannot escalate privileged roles.
+      const selfRegisterRoles = ['agent', 'reviewer', 'content_manager'];
+      const userRole = role && selfRegisterRoles.includes(role) ? role : 'agent';
 
       if (await userModel.emailExists(email)) {
         return res.status(409).json({ error: 'An account with this email already exists.' });
@@ -551,10 +598,16 @@ const authController = {
         email: email.toLowerCase().trim(),
         password: hashedPassword,
         role: userRole,
+        email_verified: 0,
       });
 
+      const challenge = await createEmailVerificationChallenge(newUser).catch(() => null);
+
       return res.status(201).json({
-        message: 'Account created successfully.',
+        message: 'Account created. Verify your email before signing in.',
+        emailVerificationRequired: true,
+        verificationCodeSent: !!challenge,
+        maskedEmail: challenge?.maskedEmail || maskEmail(newUser.email),
         user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role },
       });
     } catch (err) {
@@ -638,6 +691,25 @@ const authController = {
         [identity]
       );
 
+      if (!Number(user.email_verified)) {
+        const challenge = await createEmailVerificationChallenge(user).catch(() => null);
+        await logLoginAudit({
+          userId: user.id,
+          userName: user.email,
+          role: user.role,
+          status: 'failed',
+          failReason: 'Email address not verified.',
+          authEvent: 'email_verification_required',
+          req,
+        });
+        return res.status(403).json({
+          error: 'Email verification required.',
+          emailVerificationRequired: true,
+          verificationCodeSent: !!challenge,
+          maskedEmail: challenge?.maskedEmail || maskEmail(user.email),
+        });
+      }
+
       if (user.password_reset_required) {
         const resetToken = issueToken({ userId: user.id, email: user.email, role: user.role, passwordResetRequired: true });
         return res.status(200).json({
@@ -720,6 +792,94 @@ const authController = {
     } catch (err) {
       console.error('Login error:', err);
       return res.status(500).json({ error: 'Server error. Please try again.' });
+    }
+  },
+
+  async sendEmailVerificationCode(req, res) {
+    try {
+      const { email, password } = req.body || {};
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required.' });
+      }
+
+      const user = await findUserByLoginIdentifier(email);
+      if (!user) return res.status(404).json({ error: 'User not found.' });
+      if (!user.is_active) return res.status(403).json({ error: 'This account is inactive.' });
+      if (Number(user.email_verified)) {
+        return res.json({ alreadyVerified: true, message: 'Email already verified.' });
+      }
+
+      const passwordMatch = await bcrypt.compare(password, user.password);
+      if (!passwordMatch) {
+        await logLoginAudit({
+          userId: user.id,
+          userName: user.email,
+          role: user.role,
+          status: 'failed',
+          failReason: 'Invalid password for email verification code request.',
+          authEvent: 'email_verification_code_send_failed',
+          req,
+        });
+        return res.status(401).json({ error: 'Invalid email or password.' });
+      }
+
+      const challenge = await createEmailVerificationChallenge(user);
+      await logLoginAudit({
+        userId: user.id,
+        userName: user.email,
+        role: user.role,
+        status: 'success',
+        authEvent: 'email_verification_code_sent',
+        req,
+      });
+      return res.json(challenge);
+    } catch (err) {
+      return res.status(400).json({ error: err.message || 'Could not send verification code.' });
+    }
+  },
+
+  async verifyEmailCode(req, res) {
+    try {
+      const { email, code } = req.body || {};
+      if (!email || !code) {
+        return res.status(400).json({ error: 'Email and code are required.' });
+      }
+
+      const user = await findUserByLoginIdentifier(email);
+      if (!user) return res.status(404).json({ error: 'User not found.' });
+      if (Number(user.email_verified)) {
+        return res.json({ alreadyVerified: true, message: 'Email already verified.' });
+      }
+
+      const verified = await verifyEmailVerificationChallenge(user.id, String(code).trim());
+      if (!verified) {
+        await logLoginAudit({
+          userId: user.id,
+          userName: user.email,
+          role: user.role,
+          status: 'failed',
+          failReason: 'Invalid email verification code.',
+          authEvent: 'email_verification_failed',
+          req,
+        });
+        return res.status(401).json({ error: 'Invalid verification code.' });
+      }
+
+      await pool.execute(
+        'UPDATE users SET email_verified = 1, email_verified_at = NOW(), updated_at = NOW() WHERE id = ?',
+        [user.id]
+      );
+      await logLoginAudit({
+        userId: user.id,
+        userName: user.email,
+        role: user.role,
+        status: 'success',
+        authEvent: 'email_verification_completed',
+        req,
+      });
+      return res.json({ message: 'Email verified successfully. You can now sign in.' });
+    } catch (err) {
+      return res.status(400).json({ error: err.message || 'Could not verify email.' });
     }
   },
 
@@ -1101,7 +1261,13 @@ const authController = {
         return res.status(401).json({ error: 'Invalid verification code.' });
       }
 
-      const resetToken = issuePasswordResetToken({ userId: user.id, email: user.email, role: user.role });
+      const passwordResetNonce = await setPasswordResetNonce(user.id);
+      const resetToken = issuePasswordResetToken({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        passwordResetNonce,
+      });
       await logLoginAudit({
         userId: user.id,
         userName: user.email,
@@ -1127,15 +1293,23 @@ const authController = {
       }
 
       const pending = parsePasswordResetToken(resetToken);
-      const user = await findUserByLoginIdentifier(pending.email);
+      const [[user]] = await pool.execute(
+        `SELECT id, email, role, password, password_reset_nonce
+         FROM users
+         WHERE id = ? LIMIT 1`,
+        [pending.userId]
+      );
       if (!user) return res.status(404).json({ error: 'User not found.' });
+      if (!user.password_reset_nonce || user.password_reset_nonce !== pending.passwordResetNonce) {
+        return res.status(401).json({ error: 'Reset token is invalid or already used.' });
+      }
 
       const result = await updatePasswordWithHistory(pending.userId, user.password, newPassword);
       if (result.reused) {
         await logLoginAudit({
           userId: pending.userId,
-          userName: pending.email,
-          role: pending.role,
+          userName: user.email,
+          role: user.role,
           status: 'failed',
           failReason: 'Password reuse blocked.',
           authEvent: 'password_reuse_blocked',
@@ -1145,8 +1319,8 @@ const authController = {
 
       await logLoginAudit({
         userId: pending.userId,
-        userName: pending.email,
-        role: pending.role,
+        userName: user.email,
+        role: user.role,
         status: 'success',
         authEvent: 'forgot_password_reset_completed',
       });

@@ -115,7 +115,7 @@ test.describe('MIMS Admin Console', () => {
       request,
       [
         { email: 'vanaja_admin@reviewco.com', password: 'Test@1234' },
-        { email: 'vanaja_admin@reviewco.com', password: 'Manager@123' },
+        { email: 'vanaja_admin@reviewco.com', password: '__SET_SMOKE_TEST_PASSWORD__' },
       ],
       'admin',
       ['admin_console', 'mims_core']

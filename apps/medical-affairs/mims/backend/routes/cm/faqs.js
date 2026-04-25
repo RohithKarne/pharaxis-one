@@ -356,6 +356,8 @@ router.post('/faqs/:id/publish', authenticate, async (req, res) => {
 // POST /api/cm/faqs/:id/view — increment view count (CM-E6)
 router.post('/faqs/:id/view', authenticate, async (req, res) => {
   try {
+    const faq = await getScopedFaq(req, req.params.id);
+    if (!faq) return res.status(404).json({ error: 'FAQ not found.' });
     // Try to increment view_count column; if column doesn't exist, just return ok
     await pool.execute(`UPDATE cm_faqs SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?`, [req.params.id]).catch(() => {});
     res.json({ success: true });
@@ -367,13 +369,18 @@ router.patch('/faqs/bulk-tags', authenticate, async (req, res) => {
   try {
     const { ids, tags } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids required' });
+    const normalizedIds = ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+    if (normalizedIds.length === 0) return res.status(400).json({ error: 'No valid FAQ ids supplied.' });
     const tagsStr = Array.isArray(tags) ? tags.join(',') : (tags || '');
-    const placeholders = ids.map(() => '?').join(',');
-    await pool.execute(
-      `UPDATE cm_faqs SET search_tags = ?, updated_by = ?, updated_at = NOW() WHERE id IN (${placeholders})`,
-      [tagsStr, req.user?.id || null, ...ids]
-    );
-    res.json({ success: true, updated: ids.length });
+    const placeholders = normalizedIds.map(() => '?').join(',');
+    let query = `UPDATE cm_faqs SET search_tags = ?, updated_by = ?, updated_at = NOW() WHERE id IN (${placeholders})`;
+    const params = [tagsStr, req.user.userId, ...normalizedIds];
+    if (!isSuperadmin(req)) {
+      query += ` AND folder_id IN (SELECT id FROM cm_folders WHERE org_id = ?)`;
+      params.push(req.user.orgId);
+    }
+    const [result] = await pool.execute(query, params);
+    res.json({ success: true, updated: Number(result.affectedRows || 0) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

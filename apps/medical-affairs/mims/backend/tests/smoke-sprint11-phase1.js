@@ -44,7 +44,7 @@ function run() {
 
   try {
     const saLogin = runCurl('POST', '/api/auth/login', {
-      body: { email: 'superadmin', password: 'Manager@123' },
+      body: { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
     });
 
     if (saLogin.status !== 200 || !saLogin.body || !saLogin.body.token) {
@@ -53,7 +53,7 @@ function run() {
     saToken = saLogin.body.token;
 
     const adminLogin = runCurl('POST', '/api/auth/login', {
-      body: { email: 'rohithreddy480@gmail.com', password: 'Manager@123' },
+      body: { email: 'rohithreddy480@gmail.com', password: '__SET_SMOKE_TEST_PASSWORD__' },
     });
 
     if (
@@ -107,7 +107,7 @@ function run() {
     {
       name: 'TEST 5 — export/cases with invalid x-api-key returns 401',
       run: () => {
-        const res = runCurl('GET', '/api/integrations/export/cases', { apiKey: 'invalid-key-xyz' });
+        const res = runCurl('GET', '/api/integrations/export/cases', { apiKey: '__SET_INVALID_TEST_API_KEY__' });
         const pass = res.status === 401;
         return { pass, detail: `status=${res.status}` };
       },

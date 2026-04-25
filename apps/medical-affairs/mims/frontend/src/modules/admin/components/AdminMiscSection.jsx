@@ -111,88 +111,11 @@ function AuditDiffModal({ entry, onClose }) {
 }
 
 function AuditAdminPanel({ auditLogs, auditFilter, setAuditFilter, loadAuditLogs, loadAll, H, flash }) {
-  const [diffEntry,   setDiffEntry]   = useState(null)
-  const [caseId,      setCaseId]      = useState('')
-  const [caseEntries, setCaseEntries] = useState(null)
-  const [caseLoading, setCaseLoading] = useState(false)
-
-  async function loadCaseAudit() {
-    if (!caseId.trim()) return
-    setCaseLoading(true)
-    try {
-      const res  = await fetch(`/api/admin/case-audit-trail/${caseId.trim()}?limit=200`, { headers: H })
-      const data = await res.json()
-      setCaseEntries(res.ok ? (data.entries || []) : null)
-      if (!res.ok) flash(data.error || 'Failed to load case audit trail.', 'error')
-    } catch { flash('Network error.', 'error') }
-    finally { setCaseLoading(false) }
-  }
-
-  function exportCaseAuditCsv() {
-    if (!caseEntries?.length) return
-    const header = 'id,case_id,user_name,action_type,field_name,old_value,new_value,timestamp'
-    const rows = caseEntries.map(e => [
-      e.id, e.case_id,
-      `"${(e.user_name||'').replace(/"/g,'""')}"`,
-      e.action_type, e.field_name || '',
-      `"${String(e.old_value||'').replace(/"/g,'""')}"`,
-      `"${String(e.new_value||'').replace(/"/g,'""')}"`,
-      e.timestamp
-    ].join(','))
-    const csv = [header, ...rows].join('\n')
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv' }))
-    a.download = `case-${caseId}-audit.csv`; a.click()
-  }
+  const [diffEntry, setDiffEntry] = useState(null)
 
   return (
     <>
       <SectionHeader title="Admin Audit Trail" desc="21 CFR Part 11 — all system changes. Read-only." onExport exportData={auditLogs} exportFile="admin-audit.csv" />
-
-      {/* Per-case field audit (case_audit_trail table) */}
-      <div className="card" style={{ marginBottom:16 }}>
-        <div className="card-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <h3>Case Field-Level Audit (F-09)</h3>
-          {caseEntries && <button className="btn btn-outline" style={{ fontSize:12 }} onClick={exportCaseAuditCsv}>⬇ Export CSV</button>}
-        </div>
-        <div className="card-body">
-          <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:caseEntries ? 16 : 0 }}>
-            <input className="form-control" placeholder="Enter Case ID or Case Number" value={caseId} onChange={e => setCaseId(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && loadCaseAudit()} style={{ maxWidth:260 }} />
-            <button className="btn btn-primary" onClick={loadCaseAudit} disabled={caseLoading || !caseId.trim()} style={{ fontSize:12 }}>
-              {caseLoading ? 'Loading…' : 'Load Audit Trail'}
-            </button>
-            {caseEntries && <button className="btn btn-outline" style={{ fontSize:12 }} onClick={() => setCaseEntries(null)}>Clear</button>}
-          </div>
-          {caseEntries && (
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Timestamp</th><th>User</th><th>Action</th><th>Field</th>
-                  <th style={{ color:'#dc2626' }}>Before</th>
-                  <th style={{ color:'#15803d' }}>After</th>
-                </tr>
-              </thead>
-              <tbody>
-                {caseEntries.length === 0 && <tr><td colSpan={6} style={{ textAlign:'center', color:'var(--text-muted)', padding:24 }}>No audit entries for this case.</td></tr>}
-                {caseEntries.map(e => (
-                  <tr key={e.id}>
-                    <td style={{ fontSize:11, color:'var(--text-muted)', whiteSpace:'nowrap' }}>{fmtDateIST(e.timestamp)}</td>
-                    <td style={{ fontSize:12 }}>{e.user_name || e.user_id}</td>
-                    <td><span className="badge badge-new" style={{ fontSize:10 }}>{e.action_type}</span></td>
-                    <td style={{ fontSize:12, fontWeight:600 }}>{e.field_name || '—'}</td>
-                    <td style={{ fontSize:12, color:'#dc2626', background:'#fff5f5', padding:'4px 8px', borderRadius:4 }}>
-                      {e.old_value != null ? String(e.old_value).slice(0, 80) : '—'}
-                    </td>
-                    <td style={{ fontSize:12, color:'#15803d', background:'#f0fdf4', padding:'4px 8px', borderRadius:4 }}>
-                      {e.new_value != null ? String(e.new_value).slice(0, 80) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
 
       {/* System-wide audit log */}
       <div className="card" style={{ marginBottom:16 }}>

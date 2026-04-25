@@ -92,7 +92,7 @@ async function loginAdmin() {
 async function loginSuperadmin() {
   const r = await req('POST', '/api/auth/login', {
     email: 'superadmin@mims.io',
-    password: 'SuperAdmin@123',
+    password: '__SET_SMOKE_TEST_PASSWORD__',
   });
 
   if (r.error) {

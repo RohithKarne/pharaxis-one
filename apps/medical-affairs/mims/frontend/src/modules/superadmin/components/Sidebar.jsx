@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { key: 'integrations',  label: 'Integrations' },
   { key: 'reports-access', label: 'Reports' },
   { key: 'help-content',   label: 'Help Content' },
+  { key: 'copy-division',  label: 'Copy Division' },
 ]
 
 const S = {

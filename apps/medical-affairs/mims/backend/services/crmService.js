@@ -84,7 +84,10 @@ async function syncCaseToCrm(orgId, caseId) {
     throw new Error('Invalid caseId');
   }
 
-  const [caseRows] = await pool.query('SELECT * FROM cases WHERE id = ? LIMIT 1', [numericCaseId]);
+  const [caseRows] = await pool.query(
+    'SELECT * FROM cases WHERE id = ? AND org_id = ? AND is_deleted = 0 LIMIT 1',
+    [numericCaseId, orgId]
+  );
   if (!caseRows || caseRows.length === 0) {
     throw new Error('Case not found');
   }

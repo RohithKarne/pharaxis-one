@@ -75,7 +75,7 @@ async function run() {
   // Test 1 — Superadmin login
   let res = await req('POST', '/api/auth/login', {
     email: 'superadmin',
-    password: 'Manager@123'
+    password: '__SET_SMOKE_TEST_PASSWORD__'
   });
   assert('Test 1 status', res.status === 200, 'status=' + res.status);
   assert('Test 1 token', !!(res.body && res.body.token), JSON.stringify(res.body));
@@ -84,7 +84,7 @@ async function run() {
   // Test 2 — Admin login
   res = await req('POST', '/api/auth/login', {
     email: 'rohithreddy480@gmail.com',
-    password: 'Manager@123'
+    password: '__SET_SMOKE_TEST_PASSWORD__'
   });
   assert('Test 2 status', res.status === 200, 'status=' + res.status);
   assert('Test 2 token/challengeToken', !!(res.body && (res.body.token || res.body.challengeToken)), JSON.stringify(res.body));

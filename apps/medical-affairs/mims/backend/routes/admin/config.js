@@ -212,7 +212,13 @@ router.post('/users', authenticate, requireRole('admin', 'superadmin'), async (r
     const userRole = role && validRoles.includes(role) ? role : 'agent';
     if (await userModel.emailExists(email)) return res.status(409).json({ error: 'An account with this email already exists.' });
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await userModel.create({ name, email: email.toLowerCase().trim(), password: hashedPassword, role: userRole });
+    const newUser = await userModel.create({
+      name,
+      email: email.toLowerCase().trim(),
+      password: hashedPassword,
+      role: userRole,
+      email_verified: 1,
+    });
     await audit(req.user.userId, req.user.email, 'CREATE', 'user', newUser.id, { name, email, role: userRole });
     res.status(201).json({ user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role, is_active: 1, created_at: newUser.created_at } });
   } catch (err) {

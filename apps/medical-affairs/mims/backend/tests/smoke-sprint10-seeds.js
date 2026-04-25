@@ -5,7 +5,7 @@ const mysql = require('mysql2/promise');
 process.env.MYSQL_HOST = 'localhost';
 process.env.MYSQL_PORT = '3306';
 process.env.MYSQL_USER = 'devuser';
-process.env.MYSQL_PASSWORD = 'devpass';
+process.env.MYSQL_PASSWORD = '__SET_MYSQL_PASSWORD__';
 process.env.MYSQL_DATABASE = 'pharaxis_mims_dev';
 
 const { seedNewOrg } = require('../services/seedService');
@@ -14,7 +14,7 @@ const DB_CONFIG = {
   host: 'localhost',
   port: 3306,
   user: 'devuser',
-  password: 'devpass',
+  password: '__SET_MYSQL_PASSWORD__',
   database: 'pharaxis_mims_dev',
 };
 

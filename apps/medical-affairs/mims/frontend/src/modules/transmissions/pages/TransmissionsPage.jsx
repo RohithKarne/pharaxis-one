@@ -13,6 +13,14 @@ import '../transmissions.css'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
+function logScreenEvent(token, action, context) {
+  fetch(`${API}/admin/transmission-screen-audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action, context }),
+  }).catch(() => {})
+}
+
 const STATUS_COLORS = {
   Sent:    { bg: '#dcfce7', color: '#15803d' },
   Failed:  { bg: '#fee2e2', color: '#dc2626' },
@@ -58,6 +66,10 @@ export default function TransmissionsPage() {
   const [toDate,     setToDate]     = useState('')
   const [page,       setPage]       = useState(1)
   const limit = 50
+
+  useEffect(() => {
+    logScreenEvent(token, 'PAGE_VIEW', {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchEntries = useCallback(async () => {
     setLoading(true)
@@ -105,7 +117,7 @@ export default function TransmissionsPage() {
             <h1 className="tx-title">Transmissions</h1>
             <span className="tx-subtitle">Outbound case transmissions to external systems</span>
           </div>
-          <button className="tx-refresh-btn" onClick={fetchEntries} disabled={loading}>
+          <button className="tx-refresh-btn" onClick={() => { logScreenEvent(token, 'REFRESH', {}); fetchEntries() }} disabled={loading}>
             {loading ? '⟳ Loading…' : '⟳ Refresh'}
           </button>
         </div>
@@ -118,10 +130,10 @@ export default function TransmissionsPage() {
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
           />
-          <select className="tx-filter-select" value={system} onChange={e => { setSystem(e.target.value); setPage(1) }}>
+          <select className="tx-filter-select" value={system} onChange={e => { setSystem(e.target.value); setPage(1); logScreenEvent(token, 'FILTER_APPLIED', { target_system: e.target.value }) }}>
             {TARGET_SYSTEMS.map(s => <option key={s}>{s}</option>)}
           </select>
-          <select className="tx-filter-select" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}>
+          <select className="tx-filter-select" value={status} onChange={e => { setStatus(e.target.value); setPage(1); logScreenEvent(token, 'FILTER_APPLIED', { status: e.target.value }) }}>
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
           <input
@@ -142,7 +154,10 @@ export default function TransmissionsPage() {
           {(search || system !== 'All' || status !== 'All' || fromDate || toDate) && (
             <button
               className="tx-clear-btn"
-              onClick={() => { setSearch(''); setSystem('All'); setStatus('All'); setFromDate(''); setToDate(''); setPage(1) }}
+              onClick={() => {
+                logScreenEvent(token, 'FILTER_CLEARED', {})
+                setSearch(''); setSystem('All'); setStatus('All'); setFromDate(''); setToDate(''); setPage(1)
+              }}
             >
               ✕ Clear
             </button>

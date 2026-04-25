@@ -16,7 +16,7 @@ import { useAuth } from '../context/AuthContext'
 
 const CASE_MGMT_ROUTES = { 'My Cases': '/cases?tab=my', 'Unassigned Cases': '/cases?tab=unassigned', 'Deleted Cases': '/cases?tab=deleted' }
 const CASE_MGMT_ITEMS  = ['My Cases', 'Unassigned Cases', 'Deleted Cases']
-const COMING_SOON      = ['CDR Log', 'Schedule CDR', 'Case Audit Trail', 'Transmission Audit Trail', 'Non Relevant Emails']
+const COMING_SOON      = ['CDR Log', 'Schedule CDR', 'Non Relevant Emails']
 
 export default function MIMSNavbar() {
   const navigate  = useNavigate()
@@ -59,7 +59,7 @@ export default function MIMSNavbar() {
 
   // True if any utility sub-path is currently active
   function isUtilitiesActive() {
-    return ['/exceptions', '/session-management', '/process-explorer', '/regression', '/response-log'].some(p => location.pathname === p)
+    return ['/exceptions', '/session-management', '/process-explorer', '/regression', '/response-log', '/response-error-log', '/case-audit-trail', '/cm-audit-trail', '/transmission-error-log', '/transmission-audit-trail', '/copy-division', '/dppr'].some(p => location.pathname === p)
   }
 
   function canAccess(moduleKey)        { return hasModuleAccess(moduleKey) }
@@ -141,6 +141,11 @@ export default function MIMSNavbar() {
                 📋 Response Log
               </Link>
             )}
+            {isAdmin && (
+              <Link to="/response-error-log" className={`mims-nav-dropdown-item ${isActive('/response-error-log') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                Response Error Log
+              </Link>
+            )}
 
             {/* Admin-only tools */}
             {isAdmin && (
@@ -158,6 +163,36 @@ export default function MIMSNavbar() {
             {isAdmin && (
               <Link to="/regression" className={`mims-nav-dropdown-item ${isActive('/regression') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
                 🧪 Regression Testing
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/case-audit-trail" className={`mims-nav-dropdown-item ${isActive('/case-audit-trail') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                Case Audit Trail
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/cm-audit-trail" className={`mims-nav-dropdown-item ${isActive('/cm-audit-trail') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                CM Audit Trail
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/transmission-error-log" className={`mims-nav-dropdown-item ${isActive('/transmission-error-log') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                Transmission Error Log
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/transmission-audit-trail" className={`mims-nav-dropdown-item ${isActive('/transmission-audit-trail') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                Transmission Audit Trail
+              </Link>
+            )}
+            {user?.role === 'superadmin' && (
+              <Link to="/copy-division" className={`mims-nav-dropdown-item ${isActive('/copy-division') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                Copy Division
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/dppr" className={`mims-nav-dropdown-item ${isActive('/dppr') ? 'active' : ''}`} onClick={() => setUtilitiesOpen(false)}>
+                🔒 Data Privacy (DPPR)
               </Link>
             )}
 

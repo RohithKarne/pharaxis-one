@@ -18,6 +18,9 @@
  *               → Response sent back to browser
  */
 
+// Load .env before anything else (Node 20.12+ built-in, no dotenv package needed)
+try { process.loadEnvFile(); } catch (_) {}
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -34,22 +37,20 @@ const {
 const { logger } = require('./services/logger');
 const { requestContext, attachRequestIdHeader } = require('./middleware/requestContext');
 const { captureApiExceptions } = require('./middleware/exceptionCapture');
+const { securityHeaders } = require('./middleware/securityHeaders');
+const { inputSecurityMiddleware } = require('./middleware/inputSecurity');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { startSchemaTracker, stopSchemaTracker } = require('./services/schemaTracker');
 const { startScheduler, stopScheduler } = require('./services/scheduler');
-const rateLimit = require('express-rate-limit');
-const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 10 : 100000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many attempts. Please try again after 15 minutes.' },
-});
+const { startDpprScheduler }           = require('./services/dpprScheduler');
+const { apiRateLimiter, authRateLimiter } = require('./middleware/rateLimiters');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 // Some environments disallow binding to 0.0.0.0; stick to localhost for dev.
 const HOST = process.env.HOST || '127.0.0.1';
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
 
 const API_LATEST_VERSION = 'v1';
 const API_SUPPORTED_VERSIONS = ['v1'];
@@ -71,15 +72,22 @@ function getApiVersionContract(requestedVersion = API_LATEST_VERSION) {
 // CORS — allows the frontend (served from the same origin) to call the API
 // In production, you'd restrict this to specific domains
 app.use(cors());
+app.use(securityHeaders);
 
 // Parse incoming JSON request bodies (needed for login/register POST requests)
-app.use(express.json());
+app.use(express.json({ limit: process.env.INPUT_JSON_LIMIT || '1mb' }));
 
 // Parse URL-encoded form data (for HTML form submissions)
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({
+  extended: true,
+  limit: process.env.INPUT_URLENCODED_LIMIT || '1mb',
+  parameterLimit: Number.parseInt(process.env.INPUT_PARAM_LIMIT || '2000', 10),
+}));
 app.use(requestContext);
 app.use(attachRequestIdHeader);
 app.use(captureApiExceptions);
+app.use('/api', inputSecurityMiddleware);
+app.use('/api', apiRateLimiter);
 
 // Process Explorer telemetry — captures all API traffic for automatic flow visibility.
 let lastProcessLogPurgeAt = 0;
@@ -133,7 +141,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// ─── Admin Console — Extended Routes ────────────────────────────────────────
+// ─── Admin Console — Extended Routes (updated 2026-04-25b) ──────────────────
 app.use('/api/admin', require('./routes/admin/regression'));
 app.use('/api/admin', require('./routes/admin/picklists'));
 app.use('/api/admin', require('./routes/admin/miCategories'));
@@ -146,7 +154,11 @@ app.use('/api/admin', require('./routes/admin/caseNumbering'));
 app.use('/api/admin', require('./routes/admin/caseFormDefinition'));
 app.use('/api/admin', require('./routes/admin/workflowActivities'));
 app.use('/api/admin', require('./routes/admin/caseAuditTrail'));
+app.use('/api/admin', require('./routes/admin/cmAuditTrail'));
+app.use('/api/admin', require('./routes/admin/responseErrorLog'));
 app.use('/api/admin', require('./routes/admin/transmissionAuditTrail'));
+app.use('/api/admin', require('./routes/admin/copyDivision'));
+app.use('/api/admin', require('./routes/admin/dppr'));
 
 // ─── Case Management Routes (Phase 2) ────────────────────────────────────────
 app.use('/api', require('./routes/cases'));          // F-13 + F-15
@@ -244,6 +256,7 @@ app.use('/api', require('./routes/integrations/mirIntegration'));
 app.use('/api', require('./routes/integrations/crmIntegration'));
 app.use('/api', require('./routes/integrations/caseImport'));
 app.use('/api', require('./routes/integrations/scheduledExports'));
+app.use('/api', require('./routes/reportModule'));
 app.use('/api', require('./routes/reports'));
 app.use('/api', require('./routes/integrations/vaultAdmin'));
 app.use('/api', require('./routes/integrations/emirAdmin'));
@@ -274,7 +287,7 @@ apiV1Router.get('/version', (_req, res) => {
   res.json(getApiVersionContract('v1'));
 });
 
-apiV1Router.use('/auth', require('./routes/auth'));
+apiV1Router.use('/auth', authRateLimiter, require('./routes/auth'));
 apiV1Router.use('/inbox', require('./routes/inbox'));
 
 apiV1Router.use('/admin', require('./routes/admin/regression'));
@@ -289,7 +302,11 @@ apiV1Router.use('/admin', require('./routes/admin/caseNumbering'));
 apiV1Router.use('/admin', require('./routes/admin/caseFormDefinition'));
 apiV1Router.use('/admin', require('./routes/admin/workflowActivities'));
 apiV1Router.use('/admin', require('./routes/admin/caseAuditTrail'));
+apiV1Router.use('/admin', require('./routes/admin/cmAuditTrail'));
+apiV1Router.use('/admin', require('./routes/admin/responseErrorLog'));
 apiV1Router.use('/admin', require('./routes/admin/transmissionAuditTrail'));
+apiV1Router.use('/admin', require('./routes/admin/copyDivision'));
+apiV1Router.use('/admin', require('./routes/admin/dppr'));
 apiV1Router.use('/admin', require('./routes/admin/serviceLogs'));
 apiV1Router.use('/admin', require('./routes/admin/systemActivity'));
 apiV1Router.use('/admin', require('./routes/admin/observability'));
@@ -314,6 +331,7 @@ apiV1Router.use('/', require('./routes/caseMI'));
 apiV1Router.use('/', require('./routes/caseAE'));
 apiV1Router.use('/', require('./routes/casePC'));
 apiV1Router.use('/', require('./routes/notifications'));
+apiV1Router.use('/', require('./routes/reportModule'));
 apiV1Router.use('/', require('./routes/reports'));
 
 apiV1Router.use('/cm', require('./routes/cm/picklists'));
@@ -362,6 +380,7 @@ if (!isTestEnv) {
   initPromise.then(() => {
     startPoller();
     startScheduler();
+    startDpprScheduler();
     startSchemaTracker();
     server = app.listen(PORT, HOST, () => {
       logger.info({ host: HOST, port: PORT }, 'MIMS server started');

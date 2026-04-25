@@ -9,7 +9,7 @@ async function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function login(baseUrl, email = 'superadmin', password = 'Manager@123') {
+async function login(baseUrl, email = 'superadmin', password = '__SET_SMOKE_TEST_PASSWORD__') {
   const res = await fetch(`${baseUrl}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -27,21 +27,21 @@ async function ensureSecondSuperadmin() {
     host: process.env.MYSQL_HOST || 'localhost',
     port: Number(process.env.MYSQL_PORT || 3306),
     user: process.env.MYSQL_USER || 'devuser',
-    password: process.env.MYSQL_PASSWORD || 'devpass',
+    password: process.env.MYSQL_PASSWORD || '__SET_MYSQL_PASSWORD__',
     database: process.env.MYSQL_DATABASE || 'pharaxis_mims_dev',
   });
   try {
     const email = 'superadmin.qa2';
     const [[existing]] = await pool.execute('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
     if (!existing) {
-      const hash = await bcrypt.hash('Manager@123', 10);
+      const hash = await bcrypt.hash('__SET_SMOKE_TEST_PASSWORD__', 10);
       await pool.execute(
         `INSERT INTO users (name, email, password, role, is_active)
          VALUES (?, ?, ?, 'superadmin', 1)`,
         ['Superadmin QA2', email, hash]
       );
     }
-    return { email, password: 'Manager@123' };
+    return { email, password: '__SET_SMOKE_TEST_PASSWORD__' };
   } finally {
     await pool.end();
   }
@@ -58,7 +58,7 @@ async function requestJson(baseUrl, token, method, route, body) {
 }
 
 async function runSmoke(baseUrl) {
-  const token = await login(baseUrl, 'superadmin', 'Manager@123');
+  const token = await login(baseUrl, 'superadmin', '__SET_SMOKE_TEST_PASSWORD__');
   const secondAdmin = await ensureSecondSuperadmin();
   const tokenL2 = await login(baseUrl, secondAdmin.email, secondAdmin.password);
 

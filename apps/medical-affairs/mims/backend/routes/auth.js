@@ -3,9 +3,15 @@
 const express        = require('express');
 const router         = express.Router();
 const authController = require('../controllers/authController');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireRole } = require('../middleware/auth');
 const pool           = require('../database/db');
 const { logger } = require('../services/logger');
+const {
+  accountCreationRateLimiter,
+  loginRateLimiter,
+  recoveryRateLimiter,
+  verificationRateLimiter,
+} = require('../middleware/rateLimiters');
 
 function extractBearerToken(req) {
   const authHeader = req.headers.authorization || '';
@@ -47,15 +53,17 @@ function isExpired(expiresAt) {
 }
 
 // Public
-router.post('/register',       authController.register);
-router.post('/login',          authController.login);
-router.post('/forgot-password/send-code', authController.sendForgotPasswordCode);
-router.post('/forgot-password/verify-code', authController.verifyForgotPasswordCode);
-router.post('/forgot-password/reset', authController.completeForgotPasswordReset);
-router.post('/2fa/send-email-code', authController.sendTwoFactorEmailCode);
-router.post('/2fa/setup/totp', authController.beginTotpSetup);
-router.post('/2fa/verify',     authController.verifyTwoFactor);
-router.post('/2fa/skip-setup', authController.skipTwoFactorSetup);
+router.post('/register', accountCreationRateLimiter, authController.register);
+router.post('/login', loginRateLimiter, authController.login);
+router.post('/email-verification/send-code', verificationRateLimiter, authController.sendEmailVerificationCode);
+router.post('/email-verification/verify-code', verificationRateLimiter, authController.verifyEmailCode);
+router.post('/forgot-password/send-code', recoveryRateLimiter, authController.sendForgotPasswordCode);
+router.post('/forgot-password/verify-code', verificationRateLimiter, authController.verifyForgotPasswordCode);
+router.post('/forgot-password/reset', recoveryRateLimiter, authController.completeForgotPasswordReset);
+router.post('/2fa/send-email-code', verificationRateLimiter, authController.sendTwoFactorEmailCode);
+router.post('/2fa/setup/totp', verificationRateLimiter, authController.beginTotpSetup);
+router.post('/2fa/verify', verificationRateLimiter, authController.verifyTwoFactor);
+router.post('/2fa/skip-setup', verificationRateLimiter, authController.skipTwoFactorSetup);
 
 // Protected
 router.get('/me',              authenticate, authController.me);
@@ -176,7 +184,7 @@ router.post('/logout', authenticate, async (req, res) => {
 });
 
 // POST /api/auth/unlock-user — admin manually unlocks a locked account (AC-E6)
-router.post('/unlock-user', authenticate, async (req, res) => {
+router.post('/unlock-user', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { user_id } = req.body;
     if (!user_id) return res.status(400).json({ error: 'user_id required' });

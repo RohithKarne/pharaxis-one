@@ -78,9 +78,9 @@ CP Portal is a separate white-label HCP/patient-facing portal. Future integratio
 | Location | `/usr/local/mysql/` on Mac |
 | Port | 3306 |
 | Database name | `pharaxis_mims_dev` |
-| User | `devuser` / `devpass` |
+| User | `devuser` / `__SET_MYSQL_PASSWORD__` |
 | Start | System Settings → MySQL → Start (or auto-starts on Mac boot via launchd) |
-| CLI | `/usr/local/mysql/bin/mysql -u devuser -pdevpass pharaxis_mims_dev` |
+| CLI | `/usr/local/mysql/bin/mysql -u devuser -p__SET_MYSQL_PASSWORD__ pharaxis_mims_dev` |
 | GUI | DBeaver — host: `localhost`, port: `3306`, allowPublicKeyRetrieval: true, useSSL: false |
 
 ### Infrastructure
@@ -124,7 +124,7 @@ npm run dev
 
 **Default Superadmin login:**
 - Username: `superadmin`
-- Password: `Manager@123`
+- Password: `__SET_SMOKE_TEST_PASSWORD__`
 - This is the **only** superadmin account. No other user can be assigned the superadmin role — blocked at both API and UI level.
 - The login field on the login page is `type="text"` (not `type="email"`) to support the `superadmin` username which has no `@`.
 
@@ -196,7 +196,7 @@ if (req.user.role !== 'superadmin') {
 - Security challenge expiry must be generated from **DB time** (`NOW()` / `DATE_ADD`) rather than app-side JS timestamps. This was a real defect found during QA and fixed.
 
 ### Password Reset Flow
-1. New users created with `password_reset_required = 1` and default password `Manager@123`
+1. New users created with `password_reset_required = 1` and default password `__SET_SMOKE_TEST_PASSWORD__`
 2. On login, if flag is set, server returns `{ passwordResetRequired: true, token: resetToken }`
 3. Frontend redirects to `/reset-password` (NOT `/dashboard`)
 4. After reset, flag cleared, user gets fresh JWT with modules and org context

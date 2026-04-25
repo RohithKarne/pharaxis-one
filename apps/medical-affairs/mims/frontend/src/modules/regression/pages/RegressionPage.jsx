@@ -131,16 +131,29 @@ function OverviewTab({ report, running, onRun }) {
 // ── API Catalog Tab ───────────────────────────────────────────────────────────
 
 function ApiCatalogTab({ token }) {
+  const [catalog, setCatalog] = useState({ routes: [], covered_routes: 0, uncovered_routes: 0, total_tests: 0 })
   const [routes, setRoutes] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('ALL')
+  const [coverageFilter, setCoverageFilter] = useState('ALL')
 
   useEffect(() => {
     fetch('/api/admin/regression/api-catalog', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : { routes: [] })
-      .then(d => setRoutes(d.routes || []))
-      .catch(() => setRoutes([]))
+      .then(r => r.ok ? r.json() : { routes: [], covered_routes: 0, uncovered_routes: 0, total_tests: 0 })
+      .then(d => {
+        setCatalog({
+          routes: d.routes || [],
+          covered_routes: d.covered_routes || 0,
+          uncovered_routes: d.uncovered_routes || 0,
+          total_tests: d.total_tests || 0,
+        })
+        setRoutes(d.routes || [])
+      })
+      .catch(() => {
+        setCatalog({ routes: [], covered_routes: 0, uncovered_routes: 0, total_tests: 0 })
+        setRoutes([])
+      })
       .finally(() => setLoading(false))
   }, [token])
 
@@ -148,19 +161,32 @@ function ApiCatalogTab({ token }) {
   const METHOD_COLORS = { GET: '#2563eb', POST: '#16a34a', PUT: '#d97706', DELETE: '#dc2626', PATCH: '#7c3aed', DEFAULT: '#6b7280' }
 
   const filtered = routes.filter(r => {
-    const matchSearch = !search || r.path.toLowerCase().includes(search.toLowerCase())
+    const matchSearch = !search || r.path.toLowerCase().includes(search.toLowerCase()) || String(r.source_module || '').toLowerCase().includes(search.toLowerCase())
     const matchFilter = filter === 'ALL' || r.method === filter
-    return matchSearch && matchFilter
+    const matchCoverage = coverageFilter === 'ALL' || (coverageFilter === 'COVERED' ? r.covered : !r.covered)
+    return matchSearch && matchFilter && matchCoverage
   })
 
   if (loading) return <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 40 }}>Loading API catalog…</p>
 
   return (
     <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 180px))', gap: 12, marginBottom: 16 }}>
+        {[
+          { label: 'Covered APIs', value: catalog.covered_routes, color: '#16a34a', bg: '#f0fdf4' },
+          { label: 'Uncovered APIs', value: catalog.uncovered_routes, color: '#dc2626', bg: '#fef2f2' },
+          { label: 'Regression Tests', value: catalog.total_tests, color: 'var(--text-primary)', bg: 'var(--surface)' },
+        ].map(card => (
+          <div key={card.label} style={{ padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 8, background: card.bg }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: card.color }}>{card.value}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{card.label}</div>
+          </div>
+        ))}
+      </div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           style={{ padding: '7px 12px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, width: 300, background: 'var(--surface)', color: 'var(--text-primary)' }}
-          placeholder="Search routes…"
+          placeholder="Search routes or modules…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -172,18 +198,32 @@ function ApiCatalogTab({ token }) {
             </button>
           ))}
         </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['ALL', 'COVERED', 'UNCOVERED'].map(item => (
+            <button key={item} onClick={() => setCoverageFilter(item)}
+              style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', background: coverageFilter === item ? 'var(--primary)' : 'none', color: coverageFilter === item ? '#fff' : 'var(--text-secondary)' }}>
+              {item}
+            </button>
+          ))}
+        </div>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>{filtered.length} / {routes.length} routes</span>
       </div>
       <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', background: 'var(--bg)', borderBottom: '2px solid var(--border)', padding: '6px 12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '80px minmax(0, 1fr) 120px 160px', background: 'var(--bg)', borderBottom: '2px solid var(--border)', padding: '6px 12px', gap: 12 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>METHOD</span>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>PATH</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>COVERAGE</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>MODULE</span>
         </div>
         <div style={{ maxHeight: 500, overflowY: 'auto' }}>
           {filtered.map((r, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 1fr', padding: '7px 12px', borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'var(--surface)' : 'var(--bg)', fontSize: 13 }}>
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px minmax(0, 1fr) 120px 160px', padding: '7px 12px', borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'var(--surface)' : 'var(--bg)', fontSize: 13, gap: 12, alignItems: 'center' }}>
               <span style={{ fontWeight: 700, color: METHOD_COLORS[r.method] || METHOD_COLORS.DEFAULT, fontSize: 11 }}>{r.method}</span>
               <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-primary)' }}>{r.path}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: r.covered ? '#16a34a' : '#dc2626' }}>
+                {r.covered ? `Covered (${r.matched_tests?.length || 0})` : 'Uncovered'}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.source_module || 'Core'}</span>
             </div>
           ))}
         </div>

@@ -97,6 +97,15 @@ async function sendWithRetry(endpointUrl, apiKey, eventType, payload, orgId, int
         `Integration webhook failed after ${MAX_ATTEMPTS} attempts for org ${orgId}, integration ${integrationId}:`,
         err.message
       );
+      try {
+        const logId = crypto.randomUUID();
+        await pool.execute(
+          `INSERT INTO transmission_error_logs (log_id, org_id, case_id, target_system, error_type, error_message, details)
+           VALUES (?, ?, NULL, 'Integration Webhook', 'WEBHOOK_FAILED', ?, ?)`,
+          [logId, orgId, String(err.message || '').slice(0, 2000),
+           JSON.stringify({ integration_id: integrationId, attempts: MAX_ATTEMPTS })]
+        );
+      } catch (_) {}
       return false;
     }
   }

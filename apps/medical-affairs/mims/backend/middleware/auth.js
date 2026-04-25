@@ -2,7 +2,7 @@
 
 const pool = require('../database/db');
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'mims-dev-secret-change-in-production';
+const JWT_SECRET = require('../utils/jwtSecret');
 
 /**
  * authenticate — verifies JWT and injects req.user

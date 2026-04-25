@@ -31,6 +31,18 @@ const {
   getCaseDuplicateCandidates,
 } = require('../services/caseGovernanceService');
 
+async function logResponseError(orgId, caseId, errorType, errorMessage, details) {
+  try {
+    const logId = crypto.randomUUID();
+    await pool.execute(
+      `INSERT INTO response_error_logs (log_id, org_id, case_id, error_type, error_message, details)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [logId, orgId, caseId || null, errorType, String(errorMessage || '').slice(0, 2000), JSON.stringify(details || {})]
+    );
+    return logId;
+  } catch (_) {}
+}
+
 const CASE_SORT_MAP = Object.freeze({
   created_at: 'c.created_at',
   updated_at: 'c.updated_at',
@@ -2318,6 +2330,11 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
            VALUES (?, ?, ?, 'MI Email', ?, 'Failed', 500)`,
           [req.params.id, req.user.userId, req.user.email, `MI email failed: ${emailErr.message}`]
         ).catch(() => {});
+        await logResponseError(
+          req.user.orgId, req.params.id,
+          'EMAIL_DELIVERY_FAILED', emailErr.message,
+          { response_id: req.params.responseId, user: req.user.email }
+        );
       }
     }
     // ────────────────────────────────────────────────────────────────────────
@@ -2325,6 +2342,7 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     const row = await getMiResponseRow(req.params.id, req.params.responseId);
     return res.json(row);
   } catch (err) {
+    await logResponseError(req.user?.orgId, req.params.id, 'API_ERROR', err.message, { route: 'PATCH mi-response status', user: req.user?.email });
     return res.status(500).json({ error: err.message });
   }
 });

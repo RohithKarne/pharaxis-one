@@ -13,6 +13,7 @@ const MODULES = [
   { key: 'admin_console', label: 'Admin Console' },
   { key: 'content_mgmt', label: 'Content Management' },
   { key: 'data_visualization', label: 'Data Visualization' },
+  { key: 'reports', label: 'Reports' },
 ]
 
 const ROLES = ['admin', 'agent', 'reviewer', 'content_manager']

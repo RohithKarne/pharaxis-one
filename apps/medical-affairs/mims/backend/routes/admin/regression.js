@@ -15,7 +15,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
-const { runRegressionSuite, getDbHealth, getApiCatalog, discoverTests } = require('../../services/regressionRunner');
+const { runRegressionSuite, getDbHealth, getApiCatalog, getRegressionCoverage, discoverTests } = require('../../services/regressionRunner');
 
 // Rate limit: track last run time per user in memory
 const lastRunAt = {};
@@ -85,7 +85,14 @@ router.get('/regression/db-health', authenticate, requireRole('admin', 'superadm
 router.get('/regression/api-catalog', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const routes = getApiCatalog(req.app);
-    res.json({ routes, total: routes.length });
+    const coverage = getRegressionCoverage();
+    res.json({
+      routes,
+      total: routes.length,
+      covered_routes: coverage.covered_routes,
+      uncovered_routes: coverage.uncovered_routes,
+      total_tests: coverage.total_tests,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -94,20 +101,11 @@ router.get('/regression/api-catalog', authenticate, requireRole('admin', 'supera
 // ── GET /api/admin/regression/coverage ────────────────────────────────────────
 router.get('/regression/coverage', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
-    const routes = getApiCatalog(req.app);
+    const coverage = getRegressionCoverage();
     const tests = discoverTests();
-
-    // Build set of paths that have at least one test referencing them
-    // We check test names and module names heuristically
-    const coveredModules = new Set(tests.map(t => t.module));
-    const totalRoutes = routes.length;
-    const totalTests = tests.length;
-
     res.json({
-      total_routes: totalRoutes,
-      total_tests: totalTests,
-      covered_modules: [...coveredModules],
-      routes,
+      ...coverage,
+      covered_modules: [...new Set(tests.map(t => t.module).filter(Boolean))],
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

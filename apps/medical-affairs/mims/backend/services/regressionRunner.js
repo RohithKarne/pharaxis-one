@@ -12,11 +12,15 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const pool = require('../database/db');
+const { normalizePath } = require('./processExplorerService');
+const { getRouteServiceCatalog } = require('./routeCatalogService');
 
 const TESTS_DIR = path.join(__dirname, '../regression-tests');
 const BASE_URL = `http://127.0.0.1:${process.env.PORT || 3000}`;
-const REGRESSION_EMAIL = 'regression@system';
-const REGRESSION_PASSWORD = 'Regression@System123';
+const REGRESSION_EMAIL = String(process.env.REGRESSION_EMAIL || '').trim();
+const REGRESSION_PASSWORD = String(process.env.REGRESSION_PASSWORD || '');
+const REGRESSION_FALLBACK_EMAIL = String(process.env.REGRESSION_FALLBACK_EMAIL || '').trim();
+const REGRESSION_FALLBACK_PASSWORD = String(process.env.REGRESSION_FALLBACK_PASSWORD || '');
 const DELAY_MS = 50;
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
@@ -84,52 +88,105 @@ async function ensureRegressionUserOrgAccess() {
   }
 }
 
+async function resolveAuthToken(email, password) {
+  const res = await makeRequest('POST', '/api/auth/login', { email, password }, null);
+  if (res.status !== 200) return null;
+  if (res.body?.token) return res.body.token;
+
+  if (res.body?.challengeToken) {
+    const skip = await makeRequest('POST', '/api/auth/2fa/skip-setup', {
+      challengeToken: res.body.challengeToken,
+    }, null);
+    if (skip.status === 200 && skip.body?.token) return skip.body.token;
+  }
+
+  return null;
+}
+
 async function getToken() {
+  if (!REGRESSION_EMAIL || !REGRESSION_PASSWORD) {
+    console.warn('[Regression] Missing REGRESSION_EMAIL or REGRESSION_PASSWORD. Token bootstrap skipped.');
+    return null;
+  }
+
   // First attempt
+  const directToken = await resolveAuthToken(REGRESSION_EMAIL, REGRESSION_PASSWORD);
+  if (directToken) return directToken;
+
   const res = await makeRequest('POST', '/api/auth/login', {
     email: REGRESSION_EMAIL,
     password: REGRESSION_PASSWORD,
   }, null);
 
-  if (res.status === 200 && res.body?.token) return res.body.token;
-
   // If noOrgAccess, self-heal the user_org_access row and retry once
   if (res.status === 200 && res.body?.noOrgAccess) {
     console.warn('[Regression] Regression user has no org access — self-healing...');
     await ensureRegressionUserOrgAccess();
-    const retry = await makeRequest('POST', '/api/auth/login', {
-      email: REGRESSION_EMAIL,
-      password: REGRESSION_PASSWORD,
-    }, null);
-    if (retry.status === 200 && retry.body?.token) {
+    const retryToken = await resolveAuthToken(REGRESSION_EMAIL, REGRESSION_PASSWORD);
+    if (retryToken) {
       console.log('[Regression] Self-heal succeeded — regression user now has org access.');
-      return retry.body.token;
+      return retryToken;
     }
   }
 
-  // Final fallback: superadmin (orgId will be null — only use for non-org-scoped tests)
-  console.warn('[Regression] Falling back to superadmin token. Org-scoped tests may fail.');
-  const res2 = await makeRequest('POST', '/api/auth/login', {
-    email: 'superadmin',
-    password: 'Manager@123',
-  }, null);
-  return res2.body?.token || null;
+  // Optional fallback account for non-org-scoped test execution.
+  if (!REGRESSION_FALLBACK_EMAIL || !REGRESSION_FALLBACK_PASSWORD) {
+    return null;
+  }
+
+  console.warn('[Regression] Falling back to configured fallback token. Org-scoped tests may fail.');
+  return resolveAuthToken(REGRESSION_FALLBACK_EMAIL, REGRESSION_FALLBACK_PASSWORD);
 }
 
 // ── Test discovery ────────────────────────────────────────────────────────────
 function discoverTests() {
   if (!fs.existsSync(TESTS_DIR)) return [];
+  for (const cacheKey of Object.keys(require.cache)) {
+    if (cacheKey.startsWith(TESTS_DIR)) delete require.cache[cacheKey];
+  }
   const files = fs.readdirSync(TESTS_DIR).filter(f => f.endsWith('.tests.js')).sort();
   const all = [];
   for (const file of files) {
     try {
-      const tests = require(path.join(TESTS_DIR, file));
+      const absPath = path.join(TESTS_DIR, file);
+      const tests = require(absPath);
       if (Array.isArray(tests)) all.push(...tests);
     } catch (err) {
       console.error(`[Regression] Failed to load ${file}:`, err.message);
     }
   }
   return all;
+}
+
+function normalizeCatalogPath(pathname) {
+  const normalized = normalizePath(String(pathname || '').trim() || '/').replace(/\/+/g, '/');
+  return normalized.length > 1 ? normalized.replace(/\/$/, '') : normalized;
+}
+
+function extractCoveredSignatures(tests) {
+  const covered = new Map();
+
+  for (const test of tests) {
+    const signatures = new Set();
+    const explicit = Array.isArray(test.covers) ? test.covers : [];
+    for (const item of explicit) {
+      const match = String(item || '').trim().match(/^(GET|POST|PUT|PATCH|DELETE)\s+(.+)$/i);
+      if (!match) continue;
+      signatures.add(`${match[1].toUpperCase()} ${normalizeCatalogPath(match[2])}`);
+    }
+
+    const inferredMatches = String(test.name || '').matchAll(/\b(GET|POST|PUT|PATCH|DELETE)\s+(\/api\/[^\s]+)/gi);
+    for (const match of inferredMatches) {
+      signatures.add(`${match[1].toUpperCase()} ${normalizeCatalogPath(match[2])}`);
+    }
+
+    for (const signature of signatures) {
+      if (!covered.has(signature)) covered.set(signature, []);
+      covered.get(signature).push(test.name);
+    }
+  }
+
+  return covered;
 }
 
 // ── DB health check ───────────────────────────────────────────────────────────
@@ -162,27 +219,48 @@ async function getDbHealth() {
 }
 
 // ── API catalog ───────────────────────────────────────────────────────────────
-function getApiCatalog(app) {
-  const routes = [];
-  if (!app || !app._router) return routes;
+function getRegressionCoverage() {
+  const tests = discoverTests();
+  const coveredBySignature = extractCoveredSignatures(tests);
+  const routes = getRouteServiceCatalog()
+    .filter(route => String(route.path_pattern || '').startsWith('/api/'))
+    .map((route) => {
+      const method = String(route.method || '').toUpperCase();
+      const path = normalizeCatalogPath(route.path_pattern);
+      const signature = `${method} ${path}`;
+      const matchedTests = coveredBySignature.get(signature) || [];
+      return {
+        method,
+        path,
+        signature,
+        covered: matchedTests.length > 0,
+        matched_tests: matchedTests,
+        source_module: route.source_module || 'Core',
+        route_file: route.route_file || null,
+      };
+    })
+    .sort((a, b) => {
+      const moduleCompare = String(a.source_module).localeCompare(String(b.source_module));
+      if (moduleCompare !== 0) return moduleCompare;
+      const pathCompare = String(a.path).localeCompare(String(b.path));
+      if (pathCompare !== 0) return pathCompare;
+      return String(a.method).localeCompare(String(b.method));
+    });
 
-  function extractRoutes(stack, prefix) {
-    for (const layer of stack) {
-      if (layer.route) {
-        const methods = Object.keys(layer.route.methods).map(m => m.toUpperCase());
-        for (const method of methods) {
-          routes.push({ method, path: prefix + layer.route.path });
-        }
-      } else if (layer.name === 'router' && layer.handle?.stack) {
-        const match = layer.regexp?.source?.match(/^\\\/([^\\?]+)/);
-        const sub = match ? '/' + match[1].replace(/\\\//g, '/') : '';
-        extractRoutes(layer.handle.stack, prefix + sub);
-      }
-    }
-  }
+  const coveredRoutes = routes.filter(route => route.covered).length;
+  const uncoveredRoutes = routes.length - coveredRoutes;
 
-  extractRoutes(app._router.stack, '');
-  return routes.sort((a, b) => a.path.localeCompare(b.path));
+  return {
+    total_routes: routes.length,
+    covered_routes: coveredRoutes,
+    uncovered_routes: uncoveredRoutes,
+    total_tests: tests.length,
+    routes,
+  };
+}
+
+function getApiCatalog() {
+  return getRegressionCoverage().routes;
 }
 
 // ── Main runner ───────────────────────────────────────────────────────────────
@@ -243,6 +321,7 @@ async function runRegressionSuite({ runByUserId, app } = {}) {
     failed,
     skipped,
     healthScore,
+    coverage: getRegressionCoverage(),
     modules: Object.values(modules),
     results,
   };
@@ -261,4 +340,4 @@ async function runRegressionSuite({ runByUserId, app } = {}) {
   return report;
 }
 
-module.exports = { runRegressionSuite, getDbHealth, getApiCatalog, discoverTests };
+module.exports = { runRegressionSuite, getDbHealth, getApiCatalog, getRegressionCoverage, discoverTests };

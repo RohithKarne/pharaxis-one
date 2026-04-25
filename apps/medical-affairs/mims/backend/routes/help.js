@@ -92,7 +92,7 @@ router.get('/help', authenticate, async (req, res) => {
           updated_at DESC
         LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
       `;
-      const [rows] = await pool.execute(q, [roleJson, orgId, orgId, ...extraParams]);
+      const [rows] = await pool.execute(q, [roleJson, orgId, ...extraParams, orgId]);
       return rows;
     }
 

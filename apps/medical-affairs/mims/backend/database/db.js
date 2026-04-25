@@ -17,13 +17,26 @@
 const mysql  = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 
+const isProd = process.env.NODE_ENV === 'production';
+const MYSQL_HOST = process.env.MYSQL_HOST || 'localhost';
+const MYSQL_PORT = parseInt(process.env.MYSQL_PORT || '3306', 10);
+const MYSQL_USER = process.env.MYSQL_USER || 'mims_user';
+const MYSQL_PASSWORD = process.env.MYSQL_PASSWORD || '';
+const MYSQL_DATABASE = process.env.MYSQL_DATABASE || 'pharaxis_mims_dev';
+
+if (isProd) {
+  if (!MYSQL_USER) throw new Error('MYSQL_USER is required in production.');
+  if (!MYSQL_PASSWORD) throw new Error('MYSQL_PASSWORD is required in production.');
+  if (!MYSQL_DATABASE) throw new Error('MYSQL_DATABASE is required in production.');
+}
+
 // ── Connection Pool ──────────────────────────────────────────────────────────
 const pool = mysql.createPool({
-  host:               process.env.MYSQL_HOST     || 'localhost',
-  port:               parseInt(process.env.MYSQL_PORT || '3306', 10),
-  user:               process.env.MYSQL_USER     || 'devuser',
-  password:           process.env.MYSQL_PASSWORD || 'devpass',
-  database:           process.env.MYSQL_DATABASE || 'pharaxis_mims_dev',
+  host:               MYSQL_HOST,
+  port:               MYSQL_PORT,
+  user:               MYSQL_USER,
+  password:           MYSQL_PASSWORD,
+  database:           MYSQL_DATABASE,
   waitForConnections: true,
   connectionLimit:    10,
   queueLimit:         0,
@@ -45,6 +58,9 @@ async function initializeDatabase() {
         password               VARCHAR(255)  NOT NULL,
         role                   VARCHAR(50)   NOT NULL DEFAULT 'agent',
         is_active              TINYINT(1)    NOT NULL DEFAULT 1,
+        email_verified         TINYINT(1)    NOT NULL DEFAULT 1,
+        email_verified_at      DATETIME      NULL,
+        password_reset_nonce   VARCHAR(128)  NULL,
         failed_login_attempts  INT           DEFAULT 0,
         locked_until           DATETIME      NULL,
         created_at             DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -59,10 +75,19 @@ async function initializeDatabase() {
     try {
       await pool.execute(`ALTER TABLE users ADD COLUMN locked_until DATETIME NULL`);
     } catch (_) {}
+    try {
+      await pool.execute(`ALTER TABLE users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1`);
+    } catch (_) {}
+    try {
+      await pool.execute(`ALTER TABLE users ADD COLUMN email_verified_at DATETIME NULL`);
+    } catch (_) {}
+    try {
+      await pool.execute(`ALTER TABLE users ADD COLUMN password_reset_nonce VARCHAR(128) NULL`);
+    } catch (_) {}
 
     // Bootstrap: ensure default Superadmin account exists.
     // Never overwrite password on subsequent restarts.
-    const DEFAULT_SUPERADMIN_EMAIL = 'superadmin';
+    const DEFAULT_SUPERADMIN_EMAIL = (process.env.BOOTSTRAP_SUPERADMIN_EMAIL || 'superadmin').trim();
     const [[existingSuperadmin]] = await conn.execute(
       'SELECT id FROM users WHERE email = ?',
       [DEFAULT_SUPERADMIN_EMAIL]
@@ -73,9 +98,13 @@ async function initializeDatabase() {
         ['Superadmin', existingSuperadmin.id]
       );
     } else {
-      const defaultHash = await bcrypt.hash('Manager@123', 10);
+      const bootstrapPassword = String(process.env.BOOTSTRAP_SUPERADMIN_PASSWORD || '');
+      if (!bootstrapPassword) {
+        throw new Error('BOOTSTRAP_SUPERADMIN_PASSWORD must be set to initialize the superadmin account.');
+      }
+      const defaultHash = await bcrypt.hash(bootstrapPassword, 12);
       await conn.execute(
-        `INSERT INTO users (name, email, password, role, is_active) VALUES (?, ?, ?, 'superadmin', 1)`,
+        `INSERT INTO users (name, email, password, role, is_active, email_verified) VALUES (?, ?, ?, 'superadmin', 1, 1)`,
         ['Superadmin', DEFAULT_SUPERADMIN_EMAIL, defaultHash]
       );
     }
@@ -206,13 +235,13 @@ async function initializeDatabase() {
     if (permCount === 0) {
       const modules = ['mims_core','inbox','case_mgmt','case_query','utilities','transmissions',
                        'browse_content','analytics','user_mgmt','admin_console',
-                       'content_mgmt','data_visualization','superadmin_console'];
+                       'content_mgmt','data_visualization','reports','superadmin_console'];
       const defaultAccess = {
-        superadmin:      { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:1,user_mgmt:1,admin_console:1,content_mgmt:1,data_visualization:1,superadmin_console:1 },
-        admin:           { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:1,user_mgmt:1,admin_console:1,content_mgmt:1,data_visualization:1,superadmin_console:0 },
-        agent:           { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:0,user_mgmt:0,admin_console:0,content_mgmt:0,data_visualization:0,superadmin_console:0 },
-        reviewer:        { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:0,transmissions:0,browse_content:1,analytics:1,user_mgmt:0,admin_console:0,content_mgmt:0,data_visualization:1,superadmin_console:0 },
-        content_manager: { mims_core:0,inbox:0,case_mgmt:0,case_query:0,utilities:0,transmissions:0,browse_content:1,analytics:0,user_mgmt:0,admin_console:0,content_mgmt:1,data_visualization:0,superadmin_console:0 },
+        superadmin:      { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:1,user_mgmt:1,admin_console:1,content_mgmt:1,data_visualization:1,reports:1,superadmin_console:1 },
+        admin:           { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:1,user_mgmt:1,admin_console:1,content_mgmt:1,data_visualization:1,reports:1,superadmin_console:0 },
+        agent:           { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:0,user_mgmt:0,admin_console:0,content_mgmt:0,data_visualization:0,reports:0,superadmin_console:0 },
+        reviewer:        { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:0,transmissions:0,browse_content:1,analytics:1,user_mgmt:0,admin_console:0,content_mgmt:0,data_visualization:1,reports:1,superadmin_console:0 },
+        content_manager: { mims_core:0,inbox:0,case_mgmt:0,case_query:0,utilities:0,transmissions:0,browse_content:1,analytics:0,user_mgmt:0,admin_console:0,content_mgmt:1,data_visualization:0,reports:0,superadmin_console:0 },
       };
       for (const role of Object.keys(defaultAccess)) {
         for (const mod of modules) {
@@ -226,11 +255,11 @@ async function initializeDatabase() {
 
     // Migration-safe: ensure new modules exist on already-seeded DBs
     const migrateEntries = [
-      ['superadmin','mims_core',1],['superadmin','content_mgmt',1],['superadmin','data_visualization',1],['superadmin','superadmin_console',1],
-      ['admin','mims_core',1],['admin','content_mgmt',1],['admin','data_visualization',1],['admin','superadmin_console',0],
-      ['agent','mims_core',1],['agent','content_mgmt',0],['agent','data_visualization',0],['agent','superadmin_console',0],
-      ['reviewer','mims_core',1],['reviewer','content_mgmt',0],['reviewer','data_visualization',1],['reviewer','superadmin_console',0],
-      ['content_manager','mims_core',0],['content_manager','content_mgmt',1],['content_manager','data_visualization',0],['content_manager','superadmin_console',0],
+      ['superadmin','mims_core',1],['superadmin','content_mgmt',1],['superadmin','data_visualization',1],['superadmin','reports',1],['superadmin','superadmin_console',1],
+      ['admin','mims_core',1],['admin','content_mgmt',1],['admin','data_visualization',1],['admin','reports',1],['admin','superadmin_console',0],
+      ['agent','mims_core',1],['agent','content_mgmt',0],['agent','data_visualization',0],['agent','reports',0],['agent','superadmin_console',0],
+      ['reviewer','mims_core',1],['reviewer','content_mgmt',0],['reviewer','data_visualization',1],['reviewer','reports',1],['reviewer','superadmin_console',0],
+      ['content_manager','mims_core',0],['content_manager','content_mgmt',1],['content_manager','data_visualization',0],['content_manager','reports',0],['content_manager','superadmin_console',0],
     ];
     for (const [role, mod, access] of migrateEntries) {
       await conn.execute(
@@ -242,13 +271,20 @@ async function initializeDatabase() {
     // Ensure superadmin has full access across all modules
     const allModules = ['mims_core','inbox','case_mgmt','case_query','utilities','transmissions',
                         'browse_content','analytics','user_mgmt','admin_console',
-                        'content_mgmt','data_visualization','superadmin_console'];
+                        'content_mgmt','data_visualization','reports','superadmin_console'];
     for (const mod of allModules) {
       await conn.execute(
         'INSERT IGNORE INTO role_permissions (role, module, can_access) VALUES (?, ?, 1)',
         ['superadmin', mod]
       );
     }
+
+    await conn.execute(
+      `INSERT IGNORE INTO user_module_permissions (user_id, module, can_access)
+       SELECT ump.user_id, 'reports', 1
+       FROM user_module_permissions ump
+       WHERE ump.module = 'data_visualization' AND ump.can_access = 1`
+    );
 
     // LOGIN AUDIT TRAIL — 21 CFR Part 11 compliance (AUD-02)
     await conn.execute(`
@@ -1112,6 +1148,59 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS response_error_logs (
+        id          INT NOT NULL AUTO_INCREMENT,
+        log_id      VARCHAR(36) NOT NULL,
+        org_id      INT NOT NULL,
+        case_id     INT,
+        error_type  VARCHAR(100) NOT NULL,
+        error_message TEXT,
+        details     JSON,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_resp_err_log_id (log_id),
+        KEY idx_resp_err_org (org_id),
+        KEY idx_resp_err_case (case_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS transmission_error_logs (
+        id          INT NOT NULL AUTO_INCREMENT,
+        log_id      VARCHAR(36) NOT NULL,
+        org_id      INT NOT NULL,
+        case_id     INT,
+        target_system VARCHAR(100),
+        error_type  VARCHAR(100) NOT NULL,
+        error_message TEXT,
+        details     JSON,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_trans_err_log_id (log_id),
+        KEY idx_trans_err_org (org_id),
+        KEY idx_trans_err_case (case_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // TRANSMISSION_SCREEN_AUDIT — user interaction log for the transmissions screen
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS transmission_screen_audit (
+        id          INT NOT NULL AUTO_INCREMENT,
+        org_id      INT NOT NULL,
+        user_id     INT NOT NULL,
+        user_name   VARCHAR(255),
+        action      VARCHAR(100) NOT NULL,
+        context     JSON,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_tsa_org     (org_id),
+        KEY idx_tsa_user    (user_id),
+        KEY idx_tsa_action  (action),
+        KEY idx_tsa_created (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // ── COLUMN ENHANCEMENTS — EXISTING TABLES ────────────────────────────────
 
     // picklists: add category column for grouping (F-04)
@@ -1576,6 +1665,21 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // CASE_AE_FLEX_FIELDS — AE flex/custom fields (one row per version)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_ae_flex_fields (
+        id          INT           NOT NULL AUTO_INCREMENT,
+        version_id  INT           NOT NULL,
+        ae_flex_1   VARCHAR(500),
+        ae_flex_2   VARCHAR(500),
+        ae_flex_3   VARCHAR(500),
+        created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_ae_flex_version (version_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // CASE_PC_VERSIONS — PC component version control (F-18)
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS case_pc_versions (
@@ -1877,6 +1981,22 @@ async function initializeDatabase() {
         KEY idx_2fa_challenge_exp (expires_at),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (org_id) REFERENCES organisations(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS user_email_verification_challenges (
+        id             INT          NOT NULL AUTO_INCREMENT,
+        user_id        INT          NOT NULL,
+        code_hash      VARCHAR(255) NOT NULL,
+        expires_at     DATETIME     NOT NULL,
+        is_consumed    TINYINT(1)   NOT NULL DEFAULT 0,
+        attempts       INT          NOT NULL DEFAULT 0,
+        created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_email_verif_user (user_id),
+        KEY idx_email_verif_exp (expires_at),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
@@ -2971,32 +3091,35 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
-    // Ensure regression test user exists
-    const REGRESSION_EMAIL = 'regression@system';
-    const [[existingRegUser]] = await conn.execute('SELECT id FROM users WHERE email = ?', [REGRESSION_EMAIL]);
-    if (!existingRegUser) {
-      const regHash = await bcrypt.hash('Regression@System123', 10);
-      await conn.execute(
-        `INSERT INTO users (name, email, password, role, is_active) VALUES (?, ?, ?, 'admin', 1)`,
-        ['Regression Test User', REGRESSION_EMAIL, regHash]
-      );
-    }
-    // Ensure regression user has org access so orgId is set in JWT (needed for org-scoped endpoints).
-    // Runs on every startup so it self-heals if orgs were created after the first boot.
-    try {
-      const [[regUserRow]] = await conn.execute('SELECT id FROM users WHERE email = ?', [REGRESSION_EMAIL]);
-      if (regUserRow?.id) {
-        const [[firstOrg]] = await conn.execute(
-          `SELECT id FROM organisations WHERE is_active = 1 ORDER BY id ASC LIMIT 1`
+    // Ensure regression test user exists only when explicit credentials are provided.
+    const REGRESSION_EMAIL = String(process.env.REGRESSION_EMAIL || '').trim();
+    const REGRESSION_PASSWORD = String(process.env.REGRESSION_PASSWORD || '');
+    if (REGRESSION_EMAIL && REGRESSION_PASSWORD) {
+      const [[existingRegUser]] = await conn.execute('SELECT id FROM users WHERE email = ?', [REGRESSION_EMAIL]);
+      if (!existingRegUser) {
+        const regHash = await bcrypt.hash(REGRESSION_PASSWORD, 12);
+        await conn.execute(
+          `INSERT INTO users (name, email, password, role, is_active) VALUES (?, ?, ?, 'admin', 1)`,
+          ['Regression Test User', REGRESSION_EMAIL, regHash]
         );
-        if (firstOrg?.id) {
-          await conn.execute(
-            `INSERT IGNORE INTO user_org_access (user_id, org_id, is_active) VALUES (?, ?, 1)`,
-            [regUserRow.id, firstOrg.id]
-          );
-        }
       }
-    } catch (_) { /* organisations table may not exist yet on fresh DB — safe to skip */ }
+      // Ensure regression user has org access so orgId is set in JWT (needed for org-scoped endpoints).
+      // Runs on every startup so it self-heals if orgs were created after the first boot.
+      try {
+        const [[regUserRow]] = await conn.execute('SELECT id FROM users WHERE email = ?', [REGRESSION_EMAIL]);
+        if (regUserRow?.id) {
+          const [[firstOrg]] = await conn.execute(
+            `SELECT id FROM organisations WHERE is_active = 1 ORDER BY id ASC LIMIT 1`
+          );
+          if (firstOrg?.id) {
+            await conn.execute(
+              `INSERT IGNORE INTO user_org_access (user_id, org_id, is_active) VALUES (?, ?, 1)`,
+              [regUserRow.id, firstOrg.id]
+            );
+          }
+        }
+      } catch (_) { /* organisations table may not exist yet on fresh DB — safe to skip */ }
+    }
 
     // ── Sprint 15: New CM tables ──────────────────────────────────────────────
 
@@ -3309,6 +3432,87 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS report_definitions (
+        id               INT           NOT NULL AUTO_INCREMENT,
+        org_id           INT           DEFAULT NULL,
+        report_key       VARCHAR(120)  NOT NULL,
+        dataset_key      VARCHAR(120)  NOT NULL,
+        name             VARCHAR(255)  NOT NULL,
+        description      TEXT,
+        group_key        VARCHAR(80)   NOT NULL,
+        allowed_filters  JSON,
+        default_filters  JSON,
+        selected_columns JSON,
+        visibility_scope VARCHAR(40)   NOT NULL DEFAULT 'shared',
+        is_system        TINYINT(1)    NOT NULL DEFAULT 0,
+        is_active        TINYINT(1)    NOT NULL DEFAULT 1,
+        created_by       INT           DEFAULT NULL,
+        updated_by       INT           DEFAULT NULL,
+        created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_report_definition_key (report_key),
+        KEY idx_report_definitions_org (org_id, is_active),
+        KEY idx_report_definitions_group (group_key, is_active)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS report_dashboards (
+        id               INT           NOT NULL AUTO_INCREMENT,
+        org_id           INT           DEFAULT NULL,
+        dashboard_key    VARCHAR(120)  NOT NULL,
+        name             VARCHAR(255)  NOT NULL,
+        description      TEXT,
+        layout_json      JSON,
+        widgets_json     JSON,
+        visibility_scope VARCHAR(40)   NOT NULL DEFAULT 'shared',
+        is_system        TINYINT(1)    NOT NULL DEFAULT 0,
+        is_active        TINYINT(1)    NOT NULL DEFAULT 1,
+        created_by       INT           DEFAULT NULL,
+        updated_by       INT           DEFAULT NULL,
+        created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_report_dashboard_key (dashboard_key),
+        KEY idx_report_dashboards_org (org_id, is_active)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS report_module_configs (
+        id                      INT           NOT NULL AUTO_INCREMENT,
+        org_id                  INT           NOT NULL,
+        default_timezone        VARCHAR(100)  NOT NULL DEFAULT 'America/New_York',
+        default_delivery_method VARCHAR(20)   NOT NULL DEFAULT 'email',
+        default_delivery_target VARCHAR(255)  DEFAULT NULL,
+        email_from_name         VARCHAR(255)  NOT NULL DEFAULT 'MIMS Reports',
+        reply_to_email          VARCHAR(255)  DEFAULT NULL,
+        scheduler_enabled       TINYINT(1)    NOT NULL DEFAULT 1,
+        digest_subject_prefix   VARCHAR(255)  NOT NULL DEFAULT '[MIMS Reports]',
+        run_log_retention_days  INT           NOT NULL DEFAULT 90,
+        updated_by              INT           DEFAULT NULL,
+        created_at              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_report_module_configs_org (org_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    const reportModuleAlters = [
+      `ALTER TABLE scheduled_export_configs ADD COLUMN target_type VARCHAR(20) NOT NULL DEFAULT 'report' AFTER export_name`,
+      `ALTER TABLE scheduled_export_configs ADD COLUMN target_id INT NULL AFTER report_key`,
+      `ALTER TABLE scheduled_export_configs ADD COLUMN email_subject VARCHAR(255) NULL AFTER delivery_target`,
+      `ALTER TABLE scheduled_export_configs ADD INDEX idx_scheduled_export_target (target_type, target_id)`,
+      `ALTER TABLE report_run_ledger ADD COLUMN target_type VARCHAR(20) NOT NULL DEFAULT 'report' AFTER report_name`,
+      `ALTER TABLE report_run_ledger ADD COLUMN target_id INT NULL AFTER target_type`,
+      `ALTER TABLE report_run_ledger ADD INDEX idx_report_run_target (target_type, target_id)`,
+    ];
+    for (const sql of reportModuleAlters) {
+      try { await conn.execute(sql); } catch (_) { /* already aligned */ }
+    }
+
     // ── D2 FIX: impact_preview_cache — optional cache table for impact results ─
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS admin_impact_preview_log (
@@ -3351,6 +3555,91 @@ async function initializeDatabase() {
         KEY idx_help_group          (feature_group, is_active),
         KEY idx_help_org            (org_id, feature_key, is_active),
         FULLTEXT KEY ft_help_search (title, content_html, summary)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // ── DPPR — Data Protection & Privacy Rules ───────────────────────────────
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS dppr_rules (
+        id              INT NOT NULL AUTO_INCREMENT,
+        org_id          INT NOT NULL,
+        rule_name       VARCHAR(255) NOT NULL,
+        domain          VARCHAR(100) NOT NULL,
+        contact_type    VARCHAR(50)  NOT NULL DEFAULT 'all',
+        consent_type    VARCHAR(50)  NOT NULL DEFAULT 'all',
+        action          ENUM('None','Anonymize','Delete') NOT NULL DEFAULT 'None',
+        retention_days  INT NOT NULL DEFAULT 365,
+        is_active       TINYINT(1)   NOT NULL DEFAULT 1,
+        created_by      INT DEFAULT NULL,
+        updated_by      INT DEFAULT NULL,
+        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_dppr_org_active (org_id, is_active)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS dppr_execution_log (
+        id               INT NOT NULL AUTO_INCREMENT,
+        org_id           INT NOT NULL,
+        rule_id          INT DEFAULT NULL,
+        triggered_by     ENUM('scheduler','manual') NOT NULL DEFAULT 'scheduler',
+        executed_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        records_scanned  INT NOT NULL DEFAULT 0,
+        records_affected INT NOT NULL DEFAULT 0,
+        action_taken     VARCHAR(50) NOT NULL,
+        status           ENUM('success','partial','failed') NOT NULL DEFAULT 'success',
+        error_message    TEXT DEFAULT NULL,
+        duration_ms      INT DEFAULT NULL,
+        run_summary      JSON DEFAULT NULL,
+        PRIMARY KEY (id),
+        KEY idx_dppr_log_org  (org_id),
+        KEY idx_dppr_log_rule (rule_id),
+        KEY idx_dppr_log_date (executed_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_dppr_overrides (
+        id               INT NOT NULL AUTO_INCREMENT,
+        case_id          INT NOT NULL,
+        org_id           INT NOT NULL,
+        domain           VARCHAR(100) NOT NULL,
+        action           ENUM('None','Anonymize','Delete') NOT NULL DEFAULT 'None',
+        retention_days   INT NOT NULL DEFAULT 365,
+        override_reason  VARCHAR(500) DEFAULT NULL,
+        created_by       INT DEFAULT NULL,
+        updated_by       INT DEFAULT NULL,
+        created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_case_domain (case_id, domain),
+        KEY idx_dppr_ov_case (case_id),
+        KEY idx_dppr_ov_org  (org_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // ── PC QA Fix: missing columns + flex-fields table ───────────────────────
+    const pcQaAlters = [
+      `ALTER TABLE case_pc_general ADD COLUMN IF NOT EXISTS pc_status VARCHAR(50) NULL AFTER pc_category`,
+      `ALTER TABLE case_pc_general ADD COLUMN IF NOT EXISTS pc_classification VARCHAR(100) NULL AFTER pc_status`,
+      `ALTER TABLE case_pc_patient_info ADD COLUMN IF NOT EXISTS injury_experienced VARCHAR(100) NULL AFTER indication`,
+    ];
+    for (const sql of pcQaAlters) {
+      try { await conn.execute(sql); } catch (_) { /* column already exists */ }
+    }
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS case_pc_flex_fields (
+        id          INT  NOT NULL AUTO_INCREMENT,
+        version_id  INT  NOT NULL,
+        pc_flex_1   VARCHAR(500),
+        pc_flex_2   VARCHAR(500),
+        pc_flex_3   VARCHAR(500),
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_pc_flex_version (version_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 

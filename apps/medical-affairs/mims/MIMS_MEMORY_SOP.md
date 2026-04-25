@@ -81,9 +81,9 @@ CP Portal: separate white-label HCP/patient portal. Future: CP Portal → MIMS v
 | Location | `/usr/local/mysql/` on Mac |
 | Port | 3306 |
 | Database name | `pharaxis_mims_dev` |
-| User | `devuser` / `devpass` |
+| User | `devuser` / `__SET_MYSQL_PASSWORD__` |
 | Start | System Settings → MySQL → Start (or auto-starts on Mac boot via launchd) |
-| CLI | `/usr/local/mysql/bin/mysql -u devuser -pdevpass pharaxis_mims_dev` |
+| CLI | `/usr/local/mysql/bin/mysql -u devuser -p__SET_MYSQL_PASSWORD__ pharaxis_mims_dev` |
 | GUI | DBeaver — host: `localhost`, port: `3306`, allowPublicKeyRetrieval: true, useSSL: false |
 
 ### Infrastructure
@@ -127,7 +127,7 @@ npm run dev
 
 **Default Superadmin login:**
 - Username: `superadmin`
-- Password: `Manager@123`
+- Password: `__SET_SMOKE_TEST_PASSWORD__`
 - Only superadmin account. No other user can be assigned superadmin role — blocked at API + UI level.
 - Login field is `type="text"` (not `type="email"`) to support `superadmin` username (no `@`).
 
@@ -197,7 +197,7 @@ if (req.user.role !== 'superadmin') {
 - Security challenge expiry must use **DB time** (`NOW()` / `DATE_ADD`), not JS timestamps. Real QA defect — fixed.
 
 ### Password Reset Flow
-1. New users created with `password_reset_required = 1` and default password `Manager@123`
+1. New users created with `password_reset_required = 1` and default password `__SET_SMOKE_TEST_PASSWORD__`
 2. On login, if flag set, server returns `{ passwordResetRequired: true, token: resetToken }`
 3. Frontend redirects to `/reset-password` (NOT `/dashboard`)
 4. After reset, flag cleared, user gets fresh JWT with modules + org context
@@ -608,7 +608,7 @@ Key functions:
 - `getApiCatalog(app)` — traverses `app._router.stack` recursively to list all registered routes
 - `discoverTests()` — fs.readdirSync scans `regression-tests/` for `*.tests.js` files. New test files auto-detected without config changes.
 
-**Regression user:** `regression@system` / `Regression@System123`, role=`admin`. Seeded in `db.js`. Must have `user_org_access` row — self-healed at test time if missing.
+**Regression user:** `regression@system` / `__SET_REGRESSION_PASSWORD__`, role=`admin`. Seeded in `db.js`. Must have `user_org_access` row — self-healed at test time if missing.
 
 **Test files location:** `mims/backend/regression-tests/*.tests.js`
 
@@ -682,6 +682,7 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 | Sprint 17 | Master-data Impact Preview (D2) | CLOSED — 2026-04-22 | D2: POST `/api/admin/impact-preview` — blast-radius for workflow/field/taxonomy changes. 5-min TTL cache. "Preview Impact" buttons in AdminWorkflowSection and AdminPicklistsSection. ImpactPreviewModal with risk_level badge + breakdown table. | None |
 | Sprint 18 | UX Completions — AE Multi-row, Transmissions, Browse Content | CLOSED — 2026-04-22 | C2: AEMultiRowTab component — inline CRUD for Lab Results, Medical History, Product Info (frontend only; backend was already complete). H1: TransmissionsPage `/transmissions` — filtered log with stats strip. H2: BrowseContentPage `/browse-content` — card grid + folder sidebar + detail sidebar. Both wired into App.jsx + existing navbar links activated. | None |
 | Sprint 19 | P0/P1 Completions — Email delivery, Response Log, SLA, Dashboard KPIs, Audit Trail UX | CLOSED — 2026-04-23 | P0: MI SENT transition now sends nodemailer email to primary case contact (SMTP from site_email_purpose/fallback), logs to transmission_audit_trail. P0: ResponseLogPage `/response-log` — full filtered MI response log with detail modal. P0: SLA badge on case list (green/amber/red from response_required_by). P1: Dashboard MI KPI section (pending/approval/sent today/SLA breached). P1: Inbox→Case carries email subject+body+sender into description+internal_notes. P1: Audit Trail UI rebuilt — per-case field audit (before/after diff in red/green + CSV export) + system audit log "Diff" modal per row. | None |
+| Sprint 20 | DPPR + Audit Trail Redesign + Copy Division Fix | CLOSED — 2026-04-25 | F-CopyDiv: Copy Division org dropdown fixed (removed `subdomain` column that doesn't exist in organisations table). F-7 DPPR: tenant-level data privacy rules — `dppr_rules`, `dppr_execution_log`, `case_dppr_overrides` tables; 9-route backend (`/api/admin/dppr/*`); DPPRPage.jsx with Privacy Rules + Execution History tabs, Run Now, scheduler at 02:00 UTC (`dpprScheduler.js`). F-8 Individual DPPR: "Privacy (DPPR)" tab added to CaseFormPage — per-domain override UI (action/retention_days/reason), enforces ≥ restrictive constraint vs tenant rule. Audit Trail Redesign: all 3 audit pages rebuilt as two-panel versioned UI — left = summary list, right = click-to-expand version history with before/after diff (Case: red/green field-level; CM: entity changelog with details col; Transmission: numbered records with payload/response detail). CM audit trail `entity_id` filter added to backend. | None |
 
 ---
 
@@ -714,6 +715,17 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 | Inbox→Case context carry | P1-5 | ✅ DONE | createCaseFromInquiry() now passes `description` (email body, first 1000 chars) and `internal_notes` (sender + subject + received timestamp) into POST /api/cases. Agent no longer has to retype inquiry content. |
 | Case Audit Trail UI rebuild | P1-7 | ✅ DONE | AdminMiscSection audit-admin section replaced with AuditAdminPanel component: (1) Case Field Audit — enter case ID → before/after diff table (red = old, green = new) + CSV export; (2) System Audit Log — "Diff" button per row → modal showing parsed change details. |
 
+**Sprint 20 — CLOSED (2026-04-25). All items delivered.**
+
+| Item | ID | Status | Detail |
+|------|----|--------|--------|
+| Copy Division dropdown fix | BUG-1 | ✅ DONE | `copyDivision.js` queried non-existent `subdomain` column. Fixed: query now `SELECT id, name FROM organisations`. Frontend option label stripped subdomain suffix. |
+| Feature 7: DPPR (tenant-level) | F-7 | ✅ DONE | 3 new DB tables (`dppr_rules`, `dppr_execution_log`, `case_dppr_overrides`). 9-route backend at `/api/admin/dppr/*`. `DPPRPage.jsx` — Privacy Rules tab (CRUD, toggle, Run Now) + Execution History tab. `dpprScheduler.js` — node-cron at 02:00 UTC. Navbar link added. ACTION_RANK enforces Delete > Anonymize > None ordering. |
+| Feature 8: Individual DPPR | F-8 | ✅ DONE | "Privacy (DPPR)" tab in CaseFormPage (8th tab). Per-domain override form: action (filtered to ≥ tenant rule), retention_days (capped at tenant minimum), override_reason. Set/Update/Remove per domain. Badge shows active override count. Wired to `PUT/DELETE /api/admin/dppr/cases/:caseId/overrides`. |
+| Audit Trail Redesign — Case | AT-1 | ✅ DONE | `CaseAuditTrailPage.jsx` rebuilt: left panel = case summary list (search, pagination); right panel = entries grouped into versions (30s window, same user), each version expandable to field-by-field before/after diff table. New backend endpoint `GET /case-audit-trail/cases-summary`. CSS namespace: `cat-`. |
+| Audit Trail Redesign — CM | AT-2 | ✅ DONE | `CMAuditTrailPage.jsx` rebuilt: left = entity list (filter by type); right = versioned changelog per entity. Backend: `entity_id` filter added to `GET /cm-audit-trail`. New `GET /cm-audit-trail/entities-summary` endpoint. CSS namespace: `cmat-`. |
+| Audit Trail Redesign — Transmission | AT-3 | ✅ DONE | `TransmissionAuditTrailPage.jsx` rebuilt: left = cases with transmissions (sent/failed counts); right = numbered transmission records (#1 oldest→#N newest), each expandable to show target system, status, response code, sent by, payload summary. New `GET /transmission-audit-trail/cases-summary` endpoint. CSS namespace: `tat-`. |
+
 **Next sprint planning:** TBD by Rohith.
 
 ---
@@ -733,8 +745,10 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 | 9 | Forgot-password + change-password browser QA needed after password-history rule addition. Backend done, UI/browser evidence pending. | QA follow-up | High | Karthik |
 | 10 | ~~npm vulnerabilities — 19 flagged (8 high, 9 moderate, 2 low).~~ | **RESOLVED Sprint 16** — `npm audit fix` run. DOMPurify patched. Backend lockfile created. 0 vulnerabilities. | — | — |
 | 11 | Chunk size warning in Vite build — main bundle ~1.2MB. Not an error; no action needed unless performance is flagged. | Build debt | Low | Varun |
-| 12 | PC Case — no end-to-end QA walkthrough done since backend was built. PC has 7 tabs + version control. Needs verification pass. | QA gap | Medium | Karthik |
+| 12 | ~~PC Case — no end-to-end QA walkthrough done since backend was built.~~ | **RESOLVED Sprint 20 QA** — 6 bugs found and fixed: (1) `pc-flex-fields` tab had no backend route — added GET/PUT + `case_pc_flex_fields` table. (2) General tab `pc_status`/`pc_classification` fields not saved — added columns + backend support. (3) Patient-info `gender` key mismatch with DB column `sex` — fixed frontend key. (4) Patient-info `injury_experienced` not saved — added column + backend support. (5) `return_requested` rendered as picklist select but DB is TINYINT boolean — changed to checkbox. (6) `replacement_approved` and `refund_approved` same issue — changed to checkboxes. | — | — |
 | 13 | MI email delivery depends on SMTP being configured in Admin Console → Email Accounts with `site_email_purpose` = 'response'. If not configured, email is silently skipped (SENT status is still committed). | Config dependency | High | Varun / Karthik |
+| 14 | DPPR scheduler runs at 02:00 UTC daily. Requires server restart after first deploy to register cron. DPPR Privacy (DPPR) tab in CaseFormPage visible to admin/superadmin only — non-admin users will see 401 on load (handled silently). | Config / deploy | High | Varun |
+| 15 | After any backend route file change (e.g. `cmAuditTrail.js` entity_id filter), server must be restarted — nodemon or manual `node --env-file=.env backend/server.js`. | Ops | Medium | Varun |
 
 ---
 
@@ -767,7 +781,7 @@ Non-negotiable. Ignoring causes bugs.
 | SuperAdmin alerts | Alert rules configurable, can be enabled/disabled. Inactive rule = no alert event or notification fired. |
 | CM route paths | CM router mounted at `/api/cm`. Route paths inside must NOT repeat the prefix. Use `/picklists` NOT `/cm/picklists`. Duplication = double path bug. |
 | CM owner lock | `owner_user_id` set on first checkin. Only owner can publish. Others must request release (resets to Draft, clears owner). Publisher overwrites as new owner. |
-| Regression test user | `regression@system` / `Regression@System123`, role=`admin`. Must have `user_org_access` row for orgId in JWT. `regressionRunner.getToken()` self-heals via `ensureRegressionUserOrgAccess()` if missing — no manual fix needed. |
+| Regression test user | `regression@system` / `__SET_REGRESSION_PASSWORD__`, role=`admin`. Must have `user_org_access` row for orgId in JWT. `regressionRunner.getToken()` self-heals via `ensureRegressionUserOrgAccess()` if missing — no manual fix needed. |
 | Regression test paths | New test files: drop a `*.tests.js` file in `mims/backend/regression-tests/`. Auto-discovered — no config changes. Audit-log endpoint is `/api/admin/audit-logs` (PLURAL). |
 | AuthContext useCallback | `refreshOrgAccess` is wrapped in `useCallback([KEY, user?.role])`. Any new async function added to AuthContext used in a useEffect dep array MUST also be `useCallback` to prevent infinite render loops. |
 | ExceptionToast | Silenced — returns null. All API exceptions logged to `console.warn('[MIMS Exception]', ...)` only. Do not re-add visual popup without Rohith approval. |

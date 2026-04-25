@@ -1,0 +1,68 @@
+/* ── Transmission Audit Trail Page ── namespace: tat- ─────────────────────── */
+
+.tat-page { display:flex; flex-direction:column; gap:0; padding:24px 28px; min-height:100%; }
+.tat-top  { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.tat-title    { font-size:22px; font-weight:700; color:#0f172a; margin:0; }
+.tat-subtitle { font-size:13px; color:#64748b; }
+
+.tat-refresh-btn { padding:8px 16px; background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; border-radius:7px; font-size:13px; font-weight:500; cursor:pointer; white-space:nowrap; }
+.tat-refresh-btn:hover:not(:disabled) { background:#e2e8f0; }
+.tat-refresh-btn:disabled { opacity:.5; cursor:not-allowed; }
+
+/* Panels */
+.tat-panels { display:flex; gap:0; flex:1; min-height:calc(100vh - 180px); border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.06); }
+
+/* Left */
+.tat-left { width:340px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid #e2e8f0; background:#f8fafc; }
+.tat-left-hdr { padding:14px 16px; border-bottom:1px solid #e2e8f0; display:flex; flex-direction:column; gap:8px; background:#fff; }
+.tat-left-title { font-size:13px; font-weight:700; color:#0f172a; }
+.tat-search { width:100%; padding:7px 10px; border:1px solid #cbd5e1; border-radius:7px; font-size:13px; box-sizing:border-box; }
+.tat-left-list { flex:1; overflow-y:auto; }
+.tat-case-item { padding:12px 16px; border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background .12s; }
+.tat-case-item:hover { background:#f1f5f9; }
+.tat-case-item.active { background:#eff6ff; border-left:3px solid #0891b2; }
+.tat-case-item-num  { font-size:13px; font-weight:700; color:#1e293b; }
+.tat-case-item-meta { font-size:11px; color:#64748b; margin-top:2px; }
+.tat-case-item-stats { display:flex; gap:8px; margin-top:4px; flex-wrap:wrap; }
+.tat-case-item-stat  { font-size:11px; color:#475569; background:#e2e8f0; border-radius:4px; padding:1px 6px; }
+.tat-case-item-sent   { background:#dcfce7; color:#15803d; }
+.tat-case-item-failed { background:#fee2e2; color:#dc2626; }
+.tat-left-empty   { padding:40px 16px; text-align:center; color:#94a3b8; font-size:13px; }
+.tat-left-loading { padding:40px 16px; text-align:center; color:#94a3b8; font-size:13px; }
+.tat-left-pagination { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-top:1px solid #e2e8f0; background:#fff; }
+.tat-left-pg-btn  { padding:4px 10px; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:5px; font-size:12px; cursor:pointer; }
+.tat-left-pg-btn:disabled { opacity:.4; cursor:not-allowed; }
+.tat-left-pg-info { font-size:11px; color:#64748b; }
+
+/* Right */
+.tat-right { flex:1; display:flex; flex-direction:column; background:#fff; overflow:hidden; }
+.tat-right-empty { flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; color:#94a3b8; }
+.tat-right-empty-icon { font-size:36px; opacity:.4; }
+.tat-right-hdr { padding:14px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
+.tat-right-case { font-size:15px; font-weight:700; color:#0f172a; }
+.tat-right-sub  { font-size:12px; color:#64748b; margin-top:2px; }
+.tat-right-body { flex:1; overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:10px; }
+.tat-right-loading { padding:40px; text-align:center; color:#94a3b8; font-size:14px; }
+.tat-error-banner { padding:12px 16px; background:#fee2e2; color:#dc2626; border:1px solid #fecaca; border-radius:8px; font-size:13px; }
+
+/* Transmission records */
+.tat-tx { border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }
+.tat-tx-hdr { display:flex; align-items:center; gap:12px; padding:10px 14px; background:#f8fafc; cursor:pointer; user-select:none; }
+.tat-tx-hdr:hover { background:#f1f5f9; }
+.tat-tx-num    { font-size:12px; font-weight:700; color:#fff; border-radius:20px; padding:2px 9px; flex-shrink:0; }
+.tat-tx-num.sent   { background:#0891b2; }
+.tat-tx-num.failed { background:#dc2626; }
+.tat-tx-system { font-size:13px; font-weight:600; color:#1e293b; flex:1; }
+.tat-tx-time   { font-size:11px; color:#64748b; white-space:nowrap; }
+.tat-tx-status { font-size:11px; font-weight:700; padding:2px 8px; border-radius:8px; flex-shrink:0; }
+.tat-tx-status.sent   { background:#dcfce7; color:#15803d; }
+.tat-tx-status.failed { background:#fee2e2; color:#dc2626; }
+.tat-tx-chevron { font-size:12px; color:#94a3b8; transition:transform .2s; }
+.tat-tx-chevron.open { transform:rotate(90deg); }
+
+.tat-tx-body { background:#fff; border-top:1px solid #e2e8f0; padding:14px 18px; display:flex; flex-direction:column; gap:10px; }
+.tat-tx-grid { display:flex; flex-direction:column; gap:8px; }
+.tat-tx-row  { display:flex; gap:12px; align-items:flex-start; }
+.tat-tx-label { font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; min-width:110px; flex-shrink:0; padding-top:1px; }
+.tat-tx-val   { font-size:13px; color:#1e293b; word-break:break-word; }
+.tat-tx-payload { background:#f8fafc; border:1px solid #e2e8f0; border-radius:7px; padding:10px 14px; font-size:12px; color:#334155; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto; }

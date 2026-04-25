@@ -36,6 +36,13 @@ async function verifyCaseContactOrg(ccId, req) {
   return Number(row.org_id) === Number(req.user.orgId);
 }
 
+async function verifyMasterContactOrg(contactId, req) {
+  const [[row]] = await pool.execute('SELECT org_id FROM contacts WHERE id = ?', [contactId]);
+  if (!row) return false;
+  if (req.user.role === 'superadmin') return true;
+  return Number(row.org_id) === Number(req.user.orgId);
+}
+
 // GET /api/cases/:id/contacts — list contacts attached to a case
 router.get('/cases/:id/contacts', authenticate, async (req, res) => {
   try {
@@ -70,6 +77,10 @@ router.post('/cases/:id/contacts', authenticate, async (req, res) => {
       specialty, institution, phone, email, address
     } = req.body;
 
+    if (contact_id && !await verifyMasterContactOrg(contact_id, req)) {
+      return res.status(403).json({ error: 'Invalid contact reference for your organisation.' });
+    }
+
     const [result] = await pool.execute(
       `INSERT INTO case_contacts
         (case_id, contact_id, contact_role, do_not_update_master, is_primary,
@@ -86,7 +97,7 @@ router.post('/cases/:id/contacts', authenticate, async (req, res) => {
 
     // DNUMD sync-back: if master updates are allowed and contact exists, sync fields back
     if (!do_not_update_master && contact_id) {
-      await syncBackToMaster(contact_id, { first_name, specialty, institution, phone, email });
+      await syncBackToMaster(contact_id, { first_name, specialty, institution, phone, email }, req);
     }
 
     const [[row]] = await pool.execute(
@@ -147,7 +158,9 @@ router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
 
     // DNUMD sync-back on edit
     if (cc && !cc.do_not_update_master && cc.contact_id) {
-      await syncBackToMaster(cc.contact_id, { first_name, specialty, institution, phone, email });
+      if (await verifyMasterContactOrg(cc.contact_id, req)) {
+        await syncBackToMaster(cc.contact_id, { first_name, specialty, institution, phone, email }, req);
+      }
     }
 
     res.json(cc);
@@ -204,7 +217,7 @@ router.get('/cases/contacts/search', authenticate, async (req, res) => {
 
 // ─── INTERNAL HELPER ─────────────────────────────────────────────────────────
 
-async function syncBackToMaster(contactId, fields) {
+async function syncBackToMaster(contactId, fields, req) {
   const updates = [];
   const params  = [];
   const map = {
@@ -221,9 +234,17 @@ async function syncBackToMaster(contactId, fields) {
     }
   }
   if (updates.length) {
-    params.push(contactId);
+    if (req?.user?.role === 'superadmin') {
+      params.push(contactId);
+      await pool.execute(
+        `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`,
+        params
+      );
+      return;
+    }
+    params.push(contactId, req.user.orgId);
     await pool.execute(
-      `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE contacts SET ${updates.join(', ')} WHERE id = ? AND org_id = ?`,
       params
     );
   }

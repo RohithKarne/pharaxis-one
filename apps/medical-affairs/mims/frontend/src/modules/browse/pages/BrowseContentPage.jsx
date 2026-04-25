@@ -44,17 +44,55 @@ function StatusBadge({ status }) {
 
 function DetailSidebar({ doc, token, onClose }) {
   const [activeTab, setActiveTab] = useState('details')
+  const [fileBlobUrl, setFileBlobUrl] = useState('')
+  const [fileLoading, setFileLoading] = useState(false)
+  const [fileError, setFileError] = useState('')
   // Reset to details tab when doc changes
   useEffect(() => { setActiveTab('details') }, [doc?.id])
 
-  if (!doc) return null
-
-  const hasHtml    = !!(doc.content_html || doc.assembled_html)
-  const hasFile    = !!(doc.file_path && doc.file_mime)
-  const isPdf      = hasFile && (doc.file_mime || '').includes('pdf')
-  const isImage    = hasFile && (doc.file_mime || '').startsWith('image/')
+  const hasHtml    = !!(doc?.content_html || doc?.assembled_html)
+  const hasFile    = !!(doc?.file_path && doc?.file_mime)
+  const isPdf      = hasFile && (doc?.file_mime || '').includes('pdf')
+  const isImage    = hasFile && (doc?.file_mime || '').startsWith('image/')
   const canPreview = hasHtml || isPdf || isImage
-  const fileUrl    = `${API}/cm/documents/${doc.id}/file`
+  const fileUrl    = doc ? `${API}/cm/documents/${doc.id}/file` : ''
+
+  useEffect(() => {
+    let active = true
+    let blobUrl = ''
+
+    setFileError('')
+    setFileBlobUrl('')
+    if (!doc || !hasFile || !token) return () => {}
+
+    setFileLoading(true)
+    ;(async () => {
+      try {
+        const res = await fetch(fileUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) throw new Error('Failed to fetch file')
+        const blob = await res.blob()
+        blobUrl = URL.createObjectURL(blob)
+        if (!active) {
+          URL.revokeObjectURL(blobUrl)
+          return
+        }
+        setFileBlobUrl(blobUrl)
+      } catch (_) {
+        if (active) setFileError('Unable to load secure file preview.')
+      } finally {
+        if (active) setFileLoading(false)
+      }
+    })()
+
+    return () => {
+      active = false
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+    }
+  }, [doc?.id, fileUrl, hasFile, token])
+
+  if (!doc) return null
 
   return (
     <div className="bc-sidebar-overlay" onClick={onClose}>
@@ -147,14 +185,19 @@ function DetailSidebar({ doc, token, onClose }) {
             )}
             {hasFile && (
               <div className="bc-detail-row" style={{ marginTop: 12 }}>
-                <a
-                  href={`${fileUrl}?token=${encodeURIComponent(token)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="bc-download-link"
-                >
-                  ⬇ Download {doc.file_name || 'file'}
-                </a>
+                {fileBlobUrl ? (
+                  <a
+                    href={fileBlobUrl}
+                    download={doc.file_name || 'document'}
+                    className="bc-download-link"
+                  >
+                    ⬇ Download {doc.file_name || 'file'}
+                  </a>
+                ) : (
+                  <span className="bc-download-link" style={{ opacity: 0.7 }}>
+                    {fileLoading ? 'Loading secure file…' : (fileError || 'File unavailable')}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -190,7 +233,7 @@ function DetailSidebar({ doc, token, onClose }) {
               <iframe
                 className="bc-preview-iframe"
                 title="PDF preview"
-                src={`${fileUrl}?token=${encodeURIComponent(token)}`}
+                src={fileBlobUrl}
               />
             )}
 
@@ -198,7 +241,7 @@ function DetailSidebar({ doc, token, onClose }) {
             {!hasHtml && isImage && (
               <div className="bc-preview-image-wrap">
                 <img
-                  src={`${fileUrl}?token=${encodeURIComponent(token)}`}
+                  src={fileBlobUrl}
                   alt={doc.file_name || doc.name}
                   className="bc-preview-image"
                 />
@@ -208,14 +251,20 @@ function DetailSidebar({ doc, token, onClose }) {
             {/* Open in new tab link */}
             {hasFile && (
               <div className="bc-preview-footer">
-                <a
-                  href={`${fileUrl}?token=${encodeURIComponent(token)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="bc-download-link"
-                >
-                  ↗ Open in new tab
-                </a>
+                {fileBlobUrl ? (
+                  <a
+                    href={fileBlobUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bc-download-link"
+                  >
+                    ↗ Open in new tab
+                  </a>
+                ) : (
+                  <span className="bc-download-link" style={{ opacity: 0.7 }}>
+                    {fileLoading ? 'Loading secure file…' : (fileError || 'File unavailable')}
+                  </span>
+                )}
               </div>
             )}
           </div>

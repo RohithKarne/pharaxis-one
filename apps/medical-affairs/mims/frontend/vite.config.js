@@ -14,9 +14,9 @@ export default defineConfig({
   server: {
     // Proxy API + static backend assets to Express on port 3000 during local dev.
     proxy: {
-      '/api': 'http://localhost:3000',
-      '/storage': 'http://localhost:3000',
-      '/uploads': 'http://localhost:3000',
+      '/api': 'http://127.0.0.1:3000',
+      '/storage': 'http://127.0.0.1:3000',
+      '/uploads': 'http://127.0.0.1:3000',
     }
   },
   build: {

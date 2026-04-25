@@ -249,7 +249,7 @@ export default function LoginPage() {
 
       if (!res.ok) return showAlert(data.error || 'Registration failed.')
 
-      showAlert('Account created! Please sign in.', 'success')
+      showAlert(data.message || 'Account created! Please sign in.', 'success')
       setActiveTab('login')
       setLoginForm(f => ({ ...f, email: regForm.email }))
     } catch {
@@ -546,8 +546,6 @@ export default function LoginPage() {
                   <option value="agent">Agent</option>
                   <option value="reviewer">Reviewer</option>
                   <option value="content_manager">Content Manager</option>
-                  <option value="admin">Admin</option>
-                  <option value="superadmin">Super Admin</option>
                 </select>
               </div>
               <button className="btn btn-accent btn-block mt-8" type="submit" disabled={loading}>

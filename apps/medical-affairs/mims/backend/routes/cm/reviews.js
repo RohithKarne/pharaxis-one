@@ -36,6 +36,31 @@ function reviewOrgFilter(req) {
   return isSuperadmin(req) ? { clause: '', params: [] } : { clause: ' AND COALESCE(fd.org_id, ff.org_id) = ?', params: [req.user.orgId] };
 }
 
+async function getScopedReview(req, reviewId) {
+  const scope = reviewOrgFilter(req);
+  const [[review]] = await pool.execute(
+    `SELECT r.*, COALESCE(fd.org_id, ff.org_id) AS org_id
+     FROM cm_reviews r
+     ${reviewOrgJoins()}
+     WHERE r.id = ?${scope.clause}
+     LIMIT 1`,
+    [reviewId, ...scope.params]
+  );
+  return review || null;
+}
+
+async function isUserInScopeOrg(userId, orgId) {
+  const [[row]] = await pool.execute(
+    `SELECT u.id
+     FROM users u
+     JOIN user_org_access uoa ON uoa.user_id = u.id
+     WHERE u.id = ? AND uoa.org_id = ? AND uoa.is_active = 1
+     LIMIT 1`,
+    [userId, orgId]
+  );
+  return !!row;
+}
+
 // GET /api/cm/reviews — get my review tasks (where I am a reviewer)
 router.get('/reviews', authenticate, async (req, res) => {
   try {
@@ -119,6 +144,8 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
     const { id } = req.params;
     const { status, reason } = req.body;
     if (!status) return res.status(400).json({ error: 'status is required.' });
+    const review = await getScopedReview(req, id);
+    if (!review) return res.status(404).json({ error: 'Review not found.' });
 
     const [[reviewer]] = await pool.execute(
       'SELECT id FROM cm_reviewers WHERE review_id = ? AND user_id = ?',
@@ -147,14 +174,7 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
 router.post('/reviews/:id/close', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const scope = reviewOrgFilter(req);
-    const [[review]] = await pool.execute(
-      `SELECT r.*
-       FROM cm_reviews r
-       ${reviewOrgJoins()}
-       WHERE r.id = ?${scope.clause}`,
-      [id, ...scope.params]
-    );
+    const review = await getScopedReview(req, id);
     if (!review) return res.status(404).json({ error: 'Review not found.' });
     if (review.created_by !== req.user.userId) {
       return res.status(403).json({ error: 'Only the review owner can close a review.' });
@@ -206,14 +226,7 @@ router.post('/reviews/:id/end', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    const scope = reviewOrgFilter(req);
-    const [[review]] = await pool.execute(
-      `SELECT r.*
-       FROM cm_reviews r
-       ${reviewOrgJoins()}
-       WHERE r.id = ?${scope.clause}`,
-      [id, ...scope.params]
-    );
+    const review = await getScopedReview(req, id);
     if (!review) return res.status(404).json({ error: 'Review not found.' });
     if (review.created_by !== req.user.userId) {
       return res.status(403).json({ error: 'Only the review owner can end a review.' });
@@ -267,14 +280,7 @@ router.put('/reviews/:id/transfer', authenticate, async (req, res) => {
     const { new_owner_id } = req.body;
     if (!new_owner_id) return res.status(400).json({ error: 'new_owner_id is required.' });
 
-    const scope = reviewOrgFilter(req);
-    const [[review]] = await pool.execute(
-      `SELECT r.*
-       FROM cm_reviews r
-       ${reviewOrgJoins()}
-       WHERE r.id = ?${scope.clause}`,
-      [id, ...scope.params]
-    );
+    const review = await getScopedReview(req, id);
     if (!review) return res.status(404).json({ error: 'Review not found.' });
     if (review.created_by !== req.user.userId) {
       return res.status(403).json({ error: 'Only the review owner can transfer ownership.' });
@@ -282,6 +288,9 @@ router.put('/reviews/:id/transfer', authenticate, async (req, res) => {
 
     const [[newOwner]] = await pool.execute('SELECT id, name, email FROM users WHERE id = ?', [new_owner_id]);
     if (!newOwner) return res.status(404).json({ error: 'New owner user not found.' });
+    if (!isSuperadmin(req) && !await isUserInScopeOrg(new_owner_id, req.user.orgId)) {
+      return res.status(403).json({ error: 'New owner must belong to your organisation.' });
+    }
 
     await pool.execute(
       'UPDATE cm_reviews SET created_by = ?, updated_at = NOW() WHERE id = ?',
@@ -300,6 +309,8 @@ router.put('/reviews/:id/transfer', authenticate, async (req, res) => {
 // GET /api/cm/reviews/:reviewId/config
 router.get('/reviews/:reviewId/config', authenticate, async (req, res) => {
   try {
+    const review = await getScopedReview(req, req.params.reviewId);
+    if (!review) return res.status(404).json({ error: 'Review not found.' });
     const [rows] = await pool.execute(
       `SELECT rc.* FROM cm_review_config rc
        JOIN cm_reviews r ON r.doc_id = rc.doc_id
@@ -319,7 +330,7 @@ router.patch('/reviews/:reviewId/config', authenticate, async (req, res) => {
     if (!['sequential', 'parallel'].includes(review_mode)) {
       return res.status(400).json({ error: 'review_mode must be sequential or parallel' });
     }
-    const [[review]] = await pool.execute('SELECT id, doc_id FROM cm_reviews WHERE id = ?', [req.params.reviewId]);
+    const review = await getScopedReview(req, req.params.reviewId);
     if (!review) return res.status(404).json({ error: 'Review not found' });
     await pool.execute(
       `INSERT INTO cm_review_config (doc_id, review_mode, updated_by)

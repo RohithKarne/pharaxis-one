@@ -40,7 +40,7 @@ function printResult(row) {
 function run() {
   const results = [];
   const email = 'vanaja_admin@reviewco.com';
-  const password = 'Manager@123';
+  const password = '__SET_SMOKE_TEST_PASSWORD__';
 
   let challengeToken = null;
   let token = null;

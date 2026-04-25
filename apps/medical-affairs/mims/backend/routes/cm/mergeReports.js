@@ -37,6 +37,46 @@ async function addVersionHistory(entityId, version, status, notes, authorId) {
   } catch (_) {}
 }
 
+function isSuperadmin(req) {
+  return req.user.role === 'superadmin';
+}
+
+async function getScopedFolder(req, folderId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? 'SELECT id, org_id FROM cm_folders WHERE id = ?'
+      : 'SELECT id, org_id FROM cm_folders WHERE id = ? AND org_id = ?',
+    isSuperadmin(req) ? [folderId] : [folderId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+async function getScopedMergeReport(req, reportId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? `SELECT mr.*, f.org_id AS folder_org_id
+         FROM cm_merge_reports mr
+         LEFT JOIN cm_folders f ON mr.folder_id = f.id
+         WHERE mr.id = ?`
+      : `SELECT mr.*, f.org_id AS folder_org_id
+         FROM cm_merge_reports mr
+         LEFT JOIN cm_folders f ON mr.folder_id = f.id
+         WHERE mr.id = ? AND f.org_id = ?`,
+    isSuperadmin(req) ? [reportId] : [reportId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+async function getScopedCase(req, caseId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? 'SELECT id, org_id FROM cases WHERE id = ?'
+      : 'SELECT id, org_id FROM cases WHERE id = ? AND org_id = ?',
+    isSuperadmin(req) ? [caseId] : [caseId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
 // GET /api/cm/merge-reports — list merge reports
 router.get('/merge-reports', authenticate, async (req, res) => {
   try {
@@ -52,6 +92,11 @@ router.get('/merge-reports', authenticate, async (req, res) => {
       WHERE 1=1
     `;
     const params = [];
+
+    if (!isSuperadmin(req)) {
+      query += ' AND f.org_id = ?';
+      params.push(req.user.orgId);
+    }
 
     if (status) {
       query += ' AND mr.status = ?';
@@ -87,6 +132,8 @@ router.post('/merge-reports', authenticate, upload.single('file'), validateUploa
   try {
     const { folder_id, name, content_html } = req.body;
     if (!folder_id || !name) return res.status(400).json({ error: 'folder_id and name are required.' });
+    const folder = await getScopedFolder(req, folder_id);
+    if (!folder) return res.status(404).json({ error: 'Folder not found for active organisation.' });
 
     const filePath = req.file ? req.file.path : null;
 
@@ -107,15 +154,23 @@ router.post('/merge-reports', authenticate, upload.single('file'), validateUploa
 // GET /api/cm/merge-reports/:id — get merge report
 router.get('/merge-reports/:id', authenticate, async (req, res) => {
   try {
-    const [[report]] = await pool.execute(
-      `SELECT mr.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name
-       FROM cm_merge_reports mr
-       LEFT JOIN cm_folders f ON mr.folder_id = f.id
-       LEFT JOIN users u ON mr.created_by = u.id
-       LEFT JOIN users cu ON mr.checked_out_by = cu.id
-       WHERE mr.id = ?`,
-      [req.params.id]
+    const [rows] = await pool.execute(
+      isSuperadmin(req)
+        ? `SELECT mr.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name
+           FROM cm_merge_reports mr
+           LEFT JOIN cm_folders f ON mr.folder_id = f.id
+           LEFT JOIN users u ON mr.created_by = u.id
+           LEFT JOIN users cu ON mr.checked_out_by = cu.id
+           WHERE mr.id = ?`
+        : `SELECT mr.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name
+           FROM cm_merge_reports mr
+           LEFT JOIN cm_folders f ON mr.folder_id = f.id
+           LEFT JOIN users u ON mr.created_by = u.id
+           LEFT JOIN users cu ON mr.checked_out_by = cu.id
+           WHERE mr.id = ? AND f.org_id = ?`,
+      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
+    const report = rows[0];
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });
 
     const [versions] = await pool.execute(
@@ -138,7 +193,7 @@ router.get('/merge-reports/:id', authenticate, async (req, res) => {
 router.put('/merge-reports/:id', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
   try {
     const { id } = req.params;
-    const [[report]] = await pool.execute('SELECT * FROM cm_merge_reports WHERE id = ?', [id]);
+    const report = await getScopedMergeReport(req, id);
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });
 
     if (report.status !== 'Draft' && !(report.status === 'CheckedOut' && report.checked_out_by === req.user.userId)) {
@@ -164,7 +219,7 @@ router.put('/merge-reports/:id', authenticate, upload.single('file'), validateUp
 router.post('/merge-reports/:id/checkout', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const [[report]] = await pool.execute('SELECT * FROM cm_merge_reports WHERE id = ?', [id]);
+    const report = await getScopedMergeReport(req, id);
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });
     if (report.status !== 'Draft') return res.status(400).json({ error: 'Only Draft merge reports can be checked out.' });
     if (report.checked_out_by) return res.status(400).json({ error: 'Merge report is already checked out.' });
@@ -186,7 +241,7 @@ router.post('/merge-reports/:id/checkin', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { notes } = req.body;
-    const [[report]] = await pool.execute('SELECT * FROM cm_merge_reports WHERE id = ?', [id]);
+    const report = await getScopedMergeReport(req, id);
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });
     if (report.status !== 'CheckedOut') return res.status(400).json({ error: 'Merge report is not checked out.' });
     if (report.checked_out_by !== req.user.userId) {
@@ -221,13 +276,7 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
   try {
     const { case_id } = req.body;
 
-    const [[report]] = await pool.execute(
-      `SELECT mr.*, f.name AS folder_name, f.org_id
-       FROM cm_merge_reports mr
-       LEFT JOIN cm_folders f ON mr.folder_id = f.id
-       WHERE mr.id = ?`,
-      [req.params.id]
-    );
+    const report = await getScopedMergeReport(req, req.params.id);
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });
     if (!report.content_html) return res.status(422).json({ error: 'Merge report has no HTML content to generate from.' });
 
@@ -248,6 +297,8 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
     };
 
     if (case_id) {
+      const scopedCase = await getScopedCase(req, case_id);
+      if (!scopedCase) return res.status(404).json({ error: 'Case not found for active organisation.' });
       const [[caseRow]] = await pool.execute(
         `SELECT c.case_number, c.case_type, c.status AS case_status, c.priority,
                 o.name AS org_name,
@@ -256,7 +307,7 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
          LEFT JOIN organisations o ON o.id = c.org_id
          LEFT JOIN users ua ON ua.id = c.assigned_to
          WHERE c.id = ?`,
-        [case_id]
+        [scopedCase.id]
       );
       if (caseRow) {
         mergeData.case_number      = caseRow.case_number   || '';
@@ -270,7 +321,7 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
       const [[contactRow]] = await pool.execute(
         `SELECT CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,'')) AS full_name, email
          FROM case_contacts WHERE case_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`,
-        [case_id]
+        [scopedCase.id]
       );
       if (contactRow) {
         mergeData.patient_name  = contactRow.full_name?.trim() || '';
@@ -279,7 +330,7 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
 
       const [[miRow]] = await pool.execute(
         `SELECT product FROM case_mi WHERE case_id = ? ORDER BY id ASC LIMIT 1`,
-        [case_id]
+        [scopedCase.id]
       );
       if (miRow?.product) mergeData.product_name = miRow.product;
     }
@@ -323,12 +374,15 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
 // GET /api/cm/merge-reports/:id/schedule
 router.get('/merge-reports/:id/schedule', authenticate, async (req, res) => {
   try {
+    const report = await getScopedMergeReport(req, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Merge report not found.' });
     const [jobs] = await pool.execute(
       `SELECT * FROM scheduled_jobs
        WHERE job_type = 'cm_merge_report'
          AND JSON_UNQUOTE(JSON_EXTRACT(job_config, '$.merge_report_id')) = ?
+         ${isSuperadmin(req) ? '' : 'AND org_id = ?'}
        LIMIT 1`,
-      [String(req.params.id)]
+      isSuperadmin(req) ? [String(req.params.id)] : [String(req.params.id), req.user.orgId]
     );
     res.json({ schedule: jobs[0] || null });
   } catch (err) {
@@ -339,9 +393,11 @@ router.get('/merge-reports/:id/schedule', authenticate, async (req, res) => {
 // POST /api/cm/merge-reports/:id/schedule
 router.post('/merge-reports/:id/schedule', authenticate, async (req, res) => {
   try {
+    const report = await getScopedMergeReport(req, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Merge report not found.' });
     const { cron_expression, email_recipients, is_active } = req.body;
     if (!cron_expression) return res.status(400).json({ error: 'cron_expression required' });
-    const orgId = req.user.orgId || null;
+    const orgId = isSuperadmin(req) ? (report.folder_org_id || null) : req.user.orgId;
     const jobConfig = JSON.stringify({
       merge_report_id: Number(req.params.id),
       email_recipients: Array.isArray(email_recipients) ? email_recipients : [],
@@ -357,6 +413,25 @@ router.post('/merge-reports/:id/schedule', authenticate, async (req, res) => {
     res.json({ success: true, message: 'Merge report schedule saved.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cm/merge-reports/:id/archive — archive a merge report
+router.post('/merge-reports/:id/archive', authenticate, async (req, res) => {
+  try {
+    const report = await getScopedMergeReport(req, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Merge report not found.' });
+    const { reason } = req.body;
+    await pool.execute(
+      "UPDATE cm_merge_reports SET status = 'Archived', updated_by = ?, updated_at = NOW() WHERE id = ?",
+      [req.user.userId, req.params.id]
+    );
+    await addVersionHistory(Number(req.params.id), `${report.version_major || 1}.${report.version_minor || 0}`, 'Archived', reason || 'Manually archived', req.user.userId);
+    await audit(req.user.userId, req.user.email, 'ARCHIVE', 'cm_merge_report', Number(req.params.id), { name: report.name });
+    res.json({ message: 'Merge report archived.' });
+  } catch (err) {
+    console.error('POST /cm/merge-reports/:id/archive error:', err);
+    res.status(500).json({ error: 'Server error.' });
   }
 });
 

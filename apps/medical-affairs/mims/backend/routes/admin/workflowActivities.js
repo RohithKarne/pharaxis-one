@@ -19,13 +19,61 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
+function isSuperadmin(req) {
+  return req.user.role === 'superadmin';
+}
+
+function scopedOrgId(req, explicitOrgId = null) {
+  return isSuperadmin(req) ? (explicitOrgId || null) : req.user.orgId;
+}
+
+async function getScopedActivity(req, activityId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? 'SELECT * FROM workflow_activities WHERE id = ?'
+      : 'SELECT * FROM workflow_activities WHERE id = ? AND org_id = ?',
+    isSuperadmin(req) ? [activityId] : [activityId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+async function getScopedTrigger(req, triggerId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? `SELECT t.*, a.org_id
+         FROM workflow_activity_triggers t
+         JOIN workflow_activities a ON a.id = t.activity_id
+         WHERE t.id = ?`
+      : `SELECT t.*, a.org_id
+         FROM workflow_activity_triggers t
+         JOIN workflow_activities a ON a.id = t.activity_id
+         WHERE t.id = ? AND a.org_id = ?`,
+    isSuperadmin(req) ? [triggerId] : [triggerId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+async function isTargetStateInScope(req, targetStateId) {
+  if (!targetStateId) return true;
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? 'SELECT id FROM workflow_states WHERE id = ?'
+      : 'SELECT id FROM workflow_states WHERE id = ? AND (org_id = ? OR org_id IS NULL)',
+    isSuperadmin(req) ? [targetStateId] : [targetStateId, req.user.orgId]
+  );
+  return !!rows[0];
+}
+
 // ─── WORKFLOW ACTIVITIES ──────────────────────────────────────────────────────
 
 // GET /api/admin/workflow-activities — list all activities
 router.get('/workflow-activities', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const [activities] = await pool.execute(
-      'SELECT * FROM workflow_activities ORDER BY id'
+      `SELECT * FROM workflow_activities
+       ${isSuperadmin(req) ? '' : 'WHERE org_id = ?'}
+       ORDER BY id`,
+      isSuperadmin(req) ? [] : [req.user.orgId]
     );
     res.json({ activities });
   } catch (err) {
@@ -37,12 +85,13 @@ router.get('/workflow-activities', authenticate, requireRole('admin', 'superadmi
 // POST /api/admin/workflow-activities — create activity
 router.post('/workflow-activities', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, org_id } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
 
+    const orgId = scopedOrgId(req, org_id);
     const [result] = await pool.execute(
-      'INSERT INTO workflow_activities (name, description) VALUES (?, ?)',
-      [name.trim(), description || null]
+      'INSERT INTO workflow_activities (name, description, org_id) VALUES (?, ?, ?)',
+      [name.trim(), description || null, orgId]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'workflow_activity', result.insertId, { name });
     const [[created]] = await pool.execute('SELECT * FROM workflow_activities WHERE id = ?', [result.insertId]);
@@ -58,7 +107,7 @@ router.post('/workflow-activities', authenticate, requireRole('admin', 'superadm
 router.put('/workflow-activities/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const [[existing]] = await pool.execute('SELECT id FROM workflow_activities WHERE id = ?', [id]);
+    const existing = await getScopedActivity(req, id);
     if (!existing) return res.status(404).json({ error: 'Activity not found.' });
 
     const { name, description, is_active } = req.body;
@@ -86,8 +135,9 @@ router.get('/workflow-activity-triggers', authenticate, requireRole('admin', 'su
       FROM workflow_activity_triggers t
       LEFT JOIN workflow_activities a ON t.activity_id = a.id
       LEFT JOIN workflow_states ws ON t.target_state_id = ws.id
+      ${isSuperadmin(req) ? '' : 'WHERE a.org_id = ?'}
       ORDER BY a.name, t.trigger_type
-    `);
+    `, isSuperadmin(req) ? [] : [req.user.orgId]);
     res.json({ triggers });
   } catch (err) {
     console.error('GET /workflow-activity-triggers error:', err);
@@ -102,6 +152,11 @@ router.post('/workflow-activity-triggers', authenticate, requireRole('admin', 's
     if (!activity_id || !trigger_type) {
       return res.status(400).json({ error: 'activity_id and trigger_type are required.' });
     }
+    const activity = await getScopedActivity(req, activity_id);
+    if (!activity) return res.status(404).json({ error: 'Activity not found for active organisation.' });
+    if (!await isTargetStateInScope(req, target_state_id)) {
+      return res.status(404).json({ error: 'Target workflow state not found for active organisation.' });
+    }
 
     const [result] = await pool.execute(
       `INSERT INTO workflow_activity_triggers (activity_id, trigger_type, target_state_id, alert_rule, assign_to)
@@ -115,7 +170,8 @@ router.post('/workflow-activity-triggers', authenticate, requireRole('admin', 's
       LEFT JOIN workflow_activities a ON t.activity_id = a.id
       LEFT JOIN workflow_states ws ON t.target_state_id = ws.id
       WHERE t.id = ?
-    `, [result.insertId]);
+      ${isSuperadmin(req) ? '' : 'AND a.org_id = ?'}
+    `, isSuperadmin(req) ? [result.insertId] : [result.insertId, req.user.orgId]);
     res.status(201).json({ message: 'Trigger created.', trigger: created });
   } catch (err) {
     console.error('POST /workflow-activity-triggers error:', err);
@@ -127,12 +183,17 @@ router.post('/workflow-activity-triggers', authenticate, requireRole('admin', 's
 router.put('/workflow-activity-triggers/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const [[existing]] = await pool.execute('SELECT id FROM workflow_activity_triggers WHERE id = ?', [id]);
+    const existing = await getScopedTrigger(req, id);
     if (!existing) return res.status(404).json({ error: 'Trigger not found.' });
 
     const { activity_id, trigger_type, target_state_id, alert_rule, assign_to, is_active } = req.body;
     if (!activity_id || !trigger_type) {
       return res.status(400).json({ error: 'activity_id and trigger_type are required.' });
+    }
+    const activity = await getScopedActivity(req, activity_id);
+    if (!activity) return res.status(404).json({ error: 'Activity not found for active organisation.' });
+    if (!await isTargetStateInScope(req, target_state_id)) {
+      return res.status(404).json({ error: 'Target workflow state not found for active organisation.' });
     }
 
     await pool.execute(
@@ -153,7 +214,7 @@ router.put('/workflow-activity-triggers/:id', authenticate, requireRole('admin',
 router.delete('/workflow-activity-triggers/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const [[existing]] = await pool.execute('SELECT id FROM workflow_activity_triggers WHERE id = ?', [id]);
+    const existing = await getScopedTrigger(req, id);
     if (!existing) return res.status(404).json({ error: 'Trigger not found.' });
 
     await pool.execute('DELETE FROM workflow_activity_triggers WHERE id = ?', [id]);

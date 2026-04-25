@@ -3,8 +3,15 @@
 const pool = require('../database/db');
 const nodemailer = require('nodemailer');
 const { createNotification } = require('./notificationCenterService');
-const { getDatasetByReportKey } = require('./reportDatasetService');
 const { recordReportRun } = require('./reportOpsService');
+const {
+  getReportDefinitionById,
+  getReportDefinitionByKey,
+  runReportDefinition,
+  getDashboardById,
+  runDashboard,
+  getModuleConfig,
+} = require('./reportModuleService');
 
 function escapeCSV(value) {
   if (value == null) return '';
@@ -28,9 +35,26 @@ function parseFilters(filters) {
 function buildCSV(rows) {
   if (!rows || rows.length === 0) return 'No data\n';
 
-  const headers = Object.keys(rows[0]);
+  const headers = Array.from(
+    rows.reduce((set, row) => {
+      Object.keys(row || {}).forEach((key) => set.add(key));
+      return set;
+    }, new Set())
+  );
   const dataRows = rows.map((row) => headers.map((header) => escapeCSV(row[header])).join(','));
   return [headers.join(','), ...dataRows].join('\n');
+}
+
+async function loadSystemConfig() {
+  const [rows] = await pool.execute(
+    `SELECT config_key, config_value
+     FROM system_config
+     WHERE config_key IN ('smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username', 'smtp_password', 'smtp_from_email', 'smtp_from_name')`
+  );
+  return rows.reduce((acc, row) => {
+    acc[row.config_key] = row.config_value;
+    return acc;
+  }, {});
 }
 
 function validateTimezone(timezoneName) {
@@ -137,11 +161,12 @@ function computeNextRunAtUtc(config, now = new Date()) {
   return candidateUtc;
 }
 
-function getDefaultFiltersForRun(config, now = new Date()) {
+function getDefaultFiltersForRun(config, now = new Date(), reportKeyOverride = null) {
   const parsedFilters = parseFilters(config.filters);
   if (parsedFilters.date || parsedFilters.date_from || parsedFilters.date_to) return parsedFilters;
 
-  if (!String(config.report_key || '').startsWith('daily-case-')) return parsedFilters;
+  const effectiveKey = String(reportKeyOverride || config.report_key || '');
+  if (!(effectiveKey.startsWith('daily-case-') || effectiveKey === 'daily-operations-pack')) return parsedFilters;
 
   const timezoneName = validateTimezone(config.timezone_name) ? config.timezone_name : 'UTC';
   const zonedNow = getZonedParts(now, timezoneName);
@@ -151,13 +176,26 @@ function getDefaultFiltersForRun(config, now = new Date()) {
 }
 
 async function deliverByEmail(config, csvContent) {
+  const systemConfig = await loadSystemConfig();
+  const moduleConfig = await getModuleConfig(config.org_id);
+  const host = process.env.SMTP_HOST || systemConfig.smtp_host || '';
+  const port = Number(process.env.SMTP_PORT || systemConfig.smtp_port || 0);
+  const username = process.env.SMTP_USER || systemConfig.smtp_username || '';
+  const password = process.env.SMTP_PASS || systemConfig.smtp_password || '';
+  const encryption = process.env.SMTP_ENCRYPTION || systemConfig.smtp_encryption || 'STARTTLS';
+  const fromEmail = process.env.SMTP_FROM_EMAIL || systemConfig.smtp_from_email || username;
+  const fromName = moduleConfig.email_from_name || systemConfig.smtp_from_name || 'MIMS Reports';
+
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || '',
-    port: Number(process.env.SMTP_PORT || 0),
+    host,
+    port,
+    secure: encryption === 'SSL/TLS',
+    requireTLS: encryption === 'STARTTLS',
     auth: {
-      user: process.env.SMTP_USER || '',
-      pass: process.env.SMTP_PASS || '',
+      user: username,
+      pass: password,
     },
+    tls: { rejectUnauthorized: false },
   });
 
   if (!config.delivery_target) {
@@ -168,10 +206,11 @@ async function deliverByEmail(config, csvContent) {
   const safeName = (config.export_name || 'scheduled_export').replace(/[^a-zA-Z0-9_-]/g, '_');
 
   await transporter.sendMail({
-    from: process.env.SMTP_USER || '',
+    from: `"${fromName}" <${fromEmail}>`,
     to: config.delivery_target,
-    subject: `Scheduled report: ${config.export_name}`,
-    text: `Attached report ${config.report_key || 'case-summary'} for org ${config.org_id}.`,
+    replyTo: moduleConfig.reply_to_email || undefined,
+    subject: config.email_subject || `${moduleConfig.digest_subject_prefix || '[MIMS Reports]'} ${config.export_name}`,
+    text: `Attached ${config.target_type || 'report'} output for ${config.export_name}.`,
     attachments: [
       {
         filename: `${safeName}_${fileDate}.csv`,
@@ -201,6 +240,9 @@ async function runScheduledExports(now = new Date()) {
   );
 
   for (const config of configs) {
+    const moduleConfig = await getModuleConfig(config.org_id);
+    if (!Number(moduleConfig.scheduler_enabled || 0)) continue;
+
     const nextRunAt = config.next_run_at_utc ? new Date(config.next_run_at_utc) : computeNextRunAtUtc(config, now);
     if (!(config.next_run_at_utc)) {
       await pool.query(
@@ -214,20 +256,55 @@ async function runScheduledExports(now = new Date()) {
     let runStatus = 'success';
     let lastError = null;
     let rowCount = 0;
+    let runTargetType = config.target_type || 'report';
+    let runTargetId = config.target_id || null;
+    let resolvedReportKey = config.report_key || 'case-summary';
+    let resolvedReportName = config.export_name || config.report_key || 'Scheduled Report';
 
     try {
-      const filters = getDefaultFiltersForRun(config, now);
-      const rows = await getDatasetByReportKey(config.report_key || 'case-summary', config.org_id, filters);
-      rowCount = rows.length;
-      const csvContent = buildCSV(rows);
+      let csvRows = [];
+
+      if ((config.target_type || 'report') === 'dashboard') {
+        const dashboard = await getDashboardById(config.org_id, config.target_id);
+        if (!dashboard) throw new Error('Scheduled dashboard target not found');
+        const filters = getDefaultFiltersForRun(config, now);
+        const dashboardPayload = await runDashboard(dashboard, config.org_id, filters);
+        csvRows = dashboardPayload.csv_rows;
+        rowCount = csvRows.length;
+        resolvedReportKey = dashboard.dashboard_key;
+        resolvedReportName = dashboard.name;
+        runTargetType = 'dashboard';
+        runTargetId = dashboard.id;
+      } else {
+        let definition = null;
+        if (config.target_id) {
+          definition = await getReportDefinitionById(config.org_id, config.target_id);
+        }
+        if (!definition && config.report_key) {
+          definition = await getReportDefinitionByKey(config.org_id, config.report_key);
+        }
+        if (!definition) {
+          throw new Error('Scheduled report target not found');
+        }
+        const filters = getDefaultFiltersForRun(config, now, definition.dataset_key);
+        const reportPayload = await runReportDefinition(definition, config.org_id, filters);
+        csvRows = reportPayload.rows;
+        rowCount = reportPayload.row_count;
+        resolvedReportKey = definition.report_key;
+        resolvedReportName = definition.name;
+        runTargetType = 'report';
+        runTargetId = definition.id;
+      }
+
+      const csvContent = buildCSV(csvRows);
 
       if (config.delivery_method === 'email') {
         await deliverByEmail(config, csvContent);
       } else if (config.delivery_method === 'in_app') {
-        await deliverInApp(config, rows.length);
+        await deliverInApp(config, rowCount);
       } else {
         console.log(
-          `[ScheduledExport] report ran id=${config.id} report_key=${config.report_key || 'case-summary'} rows=${rows.length}`
+          `[ScheduledExport] report ran id=${config.id} target=${resolvedReportKey} rows=${rowCount}`
         );
       }
     } catch (err) {
@@ -240,8 +317,10 @@ async function runScheduledExports(now = new Date()) {
       const next = computeNextRunAtUtc(config, new Date(now.getTime() + 60 * 1000));
       await recordReportRun({
         orgId: config.org_id,
-        reportKey: config.report_key || 'case-summary',
-        reportName: config.export_name || config.report_key || 'Scheduled Report',
+        reportKey: resolvedReportKey,
+        reportName: resolvedReportName,
+        targetType: runTargetType,
+        targetId: runTargetId,
         runMode: 'scheduled',
         triggeredBy: config.created_by || null,
         filters: getDefaultFiltersForRun(config, now),
@@ -280,7 +359,10 @@ async function createExportConfig(orgId, userId, data) {
     err.statusCode = 400;
     throw err;
   }
-  if ((data.delivery_method || 'email') === 'email' && !String(data.delivery_target || '').trim()) {
+  const moduleConfig = await getModuleConfig(orgId);
+  const deliveryMethod = data.delivery_method || moduleConfig.default_delivery_method || 'email';
+  const deliveryTarget = String(data.delivery_target || moduleConfig.default_delivery_target || '').trim();
+  if (deliveryMethod === 'email' && !deliveryTarget) {
     const err = new Error('delivery_target is required for email delivery');
     err.statusCode = 400;
     throw err;
@@ -289,10 +371,17 @@ async function createExportConfig(orgId, userId, data) {
   const scheduleFrequency = String(data.schedule_frequency || 'daily').toLowerCase() === 'weekly' ? 'weekly' : 'daily';
   const scheduleTimeLocal = String(data.schedule_time_local || '08:00');
   const scheduleWeekday = Number.isInteger(Number(data.schedule_weekday)) ? Number(data.schedule_weekday) : 1;
+  const targetType = String(data.target_type || 'report').toLowerCase() === 'dashboard' ? 'dashboard' : 'report';
+  const targetId = data.target_id ? Number(data.target_id) : null;
+  const reportDefinition = targetType === 'report' && targetId
+    ? await getReportDefinitionById(orgId, targetId)
+    : null;
 
   const payload = {
     export_name: exportName,
-    report_key: data.report_key || 'daily-case-summary',
+    target_type: targetType,
+    report_key: data.report_key || reportDefinition?.report_key || (targetType === 'dashboard' ? `dashboard-${targetId || 'bundle'}` : 'daily-case-summary'),
+    target_id: targetId,
     export_format: data.export_format || 'csv',
     cron_expression: data.cron_expression || '0 6 * * 1',
     schedule_frequency: scheduleFrequency,
@@ -300,21 +389,24 @@ async function createExportConfig(orgId, userId, data) {
     schedule_weekday: scheduleWeekday,
     timezone_name: timezoneName,
     filters: data.filters ? JSON.stringify(data.filters) : null,
-    delivery_method: data.delivery_method || 'email',
-    delivery_target: data.delivery_target || null,
+    delivery_method: deliveryMethod,
+    delivery_target: deliveryTarget || null,
+    email_subject: data.email_subject || null,
   };
 
   const nextRunAtUtc = computeNextRunAtUtc(payload);
 
   const [result] = await pool.query(
     `INSERT INTO scheduled_export_configs
-       (org_id, export_name, report_key, export_format, cron_expression, schedule_frequency, schedule_time_local,
-        schedule_weekday, timezone_name, next_run_at_utc, filters, delivery_method, delivery_target, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (org_id, export_name, target_type, report_key, target_id, export_format, cron_expression, schedule_frequency, schedule_time_local,
+        schedule_weekday, timezone_name, next_run_at_utc, filters, delivery_method, delivery_target, email_subject, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       orgId,
       payload.export_name,
+      payload.target_type,
       payload.report_key,
+      payload.target_id,
       payload.export_format,
       payload.cron_expression,
       payload.schedule_frequency,
@@ -325,6 +417,7 @@ async function createExportConfig(orgId, userId, data) {
       payload.filters,
       payload.delivery_method,
       payload.delivery_target,
+      payload.email_subject,
       userId,
     ]
   );
@@ -354,8 +447,10 @@ async function updateExportConfig(id, orgId, data) {
     schedule_weekday: Object.prototype.hasOwnProperty.call(data, 'schedule_weekday')
       ? Number(data.schedule_weekday)
       : existing.schedule_weekday,
-    report_key: data.report_key || existing.report_key || 'case-summary',
+    target_type: data.target_type ? (String(data.target_type).toLowerCase() === 'dashboard' ? 'dashboard' : 'report') : existing.target_type || 'report',
+    target_id: Object.prototype.hasOwnProperty.call(data, 'target_id') ? Number(data.target_id || 0) || null : existing.target_id,
   };
+  nextConfig.report_key = data.report_key || existing.report_key || (nextConfig.target_type === 'dashboard' ? `dashboard-${nextConfig.target_id || 'bundle'}` : 'case-summary');
 
   if (Object.prototype.hasOwnProperty.call(data, 'delivery_method') && nextConfig.delivery_method === 'email' && !String(nextConfig.delivery_target || '').trim()) {
     const err = new Error('delivery_target is required for email delivery');
@@ -367,7 +462,9 @@ async function updateExportConfig(id, orgId, data) {
   const values = [];
   const allowed = [
     'export_name',
+    'target_type',
     'report_key',
+    'target_id',
     'export_format',
     'cron_expression',
     'schedule_frequency',
@@ -377,6 +474,7 @@ async function updateExportConfig(id, orgId, data) {
     'filters',
     'delivery_method',
     'delivery_target',
+    'email_subject',
     'is_active',
   ];
 

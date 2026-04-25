@@ -117,6 +117,9 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
 // PUT /api/cases/pc/versions/:versionId/status
 router.put('/cases/pc/versions/:versionId/status', authenticate, async (req, res) => {
   try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status required' });
     await pool.execute(
@@ -146,17 +149,22 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { complaint_description, pc_category, date_of_complaint, date_received, severity, additional_info } = req.body;
+    const { complaint_description, pc_status, pc_category, pc_classification, date_of_complaint, date_received, severity, additional_info } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_general
-        (version_id, complaint_description, pc_category, date_of_complaint, date_received, severity, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+        (version_id, complaint_description, pc_status, pc_category, pc_classification, date_of_complaint, date_received, severity, additional_info)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         complaint_description = VALUES(complaint_description),
-        pc_category = VALUES(pc_category), date_of_complaint = VALUES(date_of_complaint),
-        date_received = VALUES(date_received), severity = VALUES(severity),
+        pc_status = VALUES(pc_status),
+        pc_category = VALUES(pc_category),
+        pc_classification = VALUES(pc_classification),
+        date_of_complaint = VALUES(date_of_complaint),
+        date_received = VALUES(date_received),
+        severity = VALUES(severity),
         additional_info = VALUES(additional_info)`,
-      [req.params.versionId, complaint_description || null, pc_category || null,
+      [req.params.versionId, complaint_description || null, pc_status || null,
+       pc_category || null, pc_classification || null,
        date_of_complaint || null, date_received || null, severity || null, additional_info || null]
     );
     const [[row]] = await pool.execute(
@@ -182,19 +190,20 @@ router.put('/cases/pc/versions/:versionId/patient-info', authenticate, async (re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { age, age_unit, sex, weight_kg, therapy_start_date, therapy_end_date, indication, additional_info } = req.body;
+    const { age, age_unit, sex, weight_kg, therapy_start_date, therapy_end_date, indication, injury_experienced, additional_info } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_patient_info
-        (version_id, age, age_unit, sex, weight_kg, therapy_start_date, therapy_end_date, indication, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, age, age_unit, sex, weight_kg, therapy_start_date, therapy_end_date, indication, injury_experienced, additional_info)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         age = VALUES(age), age_unit = VALUES(age_unit), sex = VALUES(sex),
         weight_kg = VALUES(weight_kg), therapy_start_date = VALUES(therapy_start_date),
         therapy_end_date = VALUES(therapy_end_date), indication = VALUES(indication),
+        injury_experienced = VALUES(injury_experienced),
         additional_info = VALUES(additional_info)`,
       [req.params.versionId, age || null, age_unit || null, sex || null,
        weight_kg || null, therapy_start_date || null, therapy_end_date || null,
-       indication || null, additional_info || null]
+       indication || null, injury_experienced || null, additional_info || null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_patient_info WHERE version_id = ?', [req.params.versionId]
@@ -354,6 +363,39 @@ router.put('/cases/pc/versions/:versionId/refund-credit', authenticate, async (r
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_refund_credit WHERE version_id = ?', [req.params.versionId]
+    );
+    res.json(row);
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
+
+// ─── TAB: PC FLEX FIELDS ──────────────────────────────────────────────────────
+
+router.get('/cases/pc/versions/:versionId/pc-flex-fields', authenticate, async (req, res) => {
+  try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
+    const [[row]] = await pool.execute(
+      'SELECT * FROM case_pc_flex_fields WHERE version_id = ?', [req.params.versionId]
+    );
+    res.json(row || {});
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/cases/pc/versions/:versionId/pc-flex-fields', authenticate, async (req, res) => {
+  try {
+    if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
+    await guardLocked(req.params.versionId);
+    const { pc_flex_1, pc_flex_2, pc_flex_3 } = req.body;
+    await pool.execute(
+      `INSERT INTO case_pc_flex_fields (version_id, pc_flex_1, pc_flex_2, pc_flex_3)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+        pc_flex_1 = VALUES(pc_flex_1),
+        pc_flex_2 = VALUES(pc_flex_2),
+        pc_flex_3 = VALUES(pc_flex_3)`,
+      [req.params.versionId, pc_flex_1 || null, pc_flex_2 || null, pc_flex_3 || null]
+    );
+    const [[row]] = await pool.execute(
+      'SELECT * FROM case_pc_flex_fields WHERE version_id = ?', [req.params.versionId]
     );
     res.json(row);
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }

@@ -27,6 +27,56 @@ function getScopedOrgId(req, providedOrgId = null) {
   return isSuperadmin(req) ? (providedOrgId || null) : req.user.orgId;
 }
 
+async function getScopedFolder(req, folderId) {
+  const [rows] = await pool.execute(
+    isSuperadmin(req)
+      ? 'SELECT * FROM cm_folders WHERE id = ?'
+      : 'SELECT * FROM cm_folders WHERE id = ? AND org_id = ?',
+    isSuperadmin(req) ? [folderId] : [folderId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+async function verifyScopedEntity(req, entityType, entityId) {
+  const id = Number(entityId);
+  if (!Number.isInteger(id) || id <= 0) return false;
+
+  if (entityType === 'folder') {
+    return !!(await getScopedFolder(req, id));
+  }
+  if (entityType === 'document') {
+    const [rows] = await pool.execute(
+      isSuperadmin(req)
+        ? `SELECT d.id
+           FROM cm_documents d
+           JOIN cm_folders f ON f.id = d.folder_id
+           WHERE d.id = ?`
+        : `SELECT d.id
+           FROM cm_documents d
+           JOIN cm_folders f ON f.id = d.folder_id
+           WHERE d.id = ? AND f.org_id = ?`,
+      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+    );
+    return !!rows[0];
+  }
+  if (entityType === 'faq') {
+    const [rows] = await pool.execute(
+      isSuperadmin(req)
+        ? `SELECT q.id
+           FROM cm_faqs q
+           JOIN cm_folders f ON f.id = q.folder_id
+           WHERE q.id = ?`
+        : `SELECT q.id
+           FROM cm_faqs q
+           JOIN cm_folders f ON f.id = q.folder_id
+           WHERE q.id = ? AND f.org_id = ?`,
+      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+    );
+    return !!rows[0];
+  }
+  return false;
+}
+
 // GET /api/cm/folders — list active folders
 router.get('/folders', authenticate, async (req, res) => {
   try {
@@ -157,12 +207,15 @@ router.delete('/folders/:id', authenticate, async (req, res) => {
 // GET /api/cm/folders/:id/permissions
 router.get('/folders/:id/permissions', authenticate, async (req, res) => {
   try {
+    const folder = await getScopedFolder(req, req.params.id);
+    if (!folder) return res.status(404).json({ error: 'Folder not found.' });
     const [perms] = await pool.execute(
       `SELECT fp.*, sg.name AS group_name
        FROM cm_folder_permissions fp
        JOIN security_groups sg ON sg.id = fp.security_group_id
-       WHERE fp.folder_id = ?`,
-      [req.params.id]
+       WHERE fp.folder_id = ?
+       ${isSuperadmin(req) ? '' : 'AND sg.org_id = ?'}`,
+      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     res.json({ permissions: perms });
   } catch (err) {
@@ -173,8 +226,17 @@ router.get('/folders/:id/permissions', authenticate, async (req, res) => {
 // POST /api/cm/folders/:id/permissions
 router.post('/folders/:id/permissions', authenticate, async (req, res) => {
   try {
+    const folder = await getScopedFolder(req, req.params.id);
+    if (!folder) return res.status(404).json({ error: 'Folder not found.' });
     const { security_group_id, permission_level } = req.body;
     if (!security_group_id) return res.status(400).json({ error: 'security_group_id required' });
+    const [groups] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT id FROM security_groups WHERE id = ?'
+        : 'SELECT id FROM security_groups WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [security_group_id] : [security_group_id, req.user.orgId]
+    );
+    if (!groups[0]) return res.status(404).json({ error: 'Security group not found for active organisation.' });
     await pool.execute(
       `INSERT INTO cm_folder_permissions (folder_id, security_group_id, permission_level, created_by)
        VALUES (?, ?, ?, ?)
@@ -191,6 +253,15 @@ router.post('/folders/:id/permissions', authenticate, async (req, res) => {
 // DELETE /api/cm/folders/:id/permissions/:groupId
 router.delete('/folders/:id/permissions/:groupId', authenticate, async (req, res) => {
   try {
+    const folder = await getScopedFolder(req, req.params.id);
+    if (!folder) return res.status(404).json({ error: 'Folder not found.' });
+    const [groups] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT id FROM security_groups WHERE id = ?'
+        : 'SELECT id FROM security_groups WHERE id = ? AND org_id = ?',
+      isSuperadmin(req) ? [req.params.groupId] : [req.params.groupId, req.user.orgId]
+    );
+    if (!groups[0]) return res.status(404).json({ error: 'Security group not found for active organisation.' });
     await pool.execute(
       `DELETE FROM cm_folder_permissions WHERE folder_id = ? AND security_group_id = ?`,
       [req.params.id, req.params.groupId]
@@ -211,7 +282,7 @@ router.get('/folders/bookmarks', authenticate, async (req, res) => {
         CASE b.entity_type
           WHEN 'document' THEN (SELECT name FROM cm_documents WHERE id = b.entity_id)
           WHEN 'folder'   THEN (SELECT name FROM cm_folders WHERE id = b.entity_id)
-          WHEN 'faq'      THEN (SELECT title FROM cm_faqs WHERE id = b.entity_id)
+          WHEN 'faq'      THEN (SELECT question FROM cm_faqs WHERE id = b.entity_id)
         END AS entity_name
        FROM cm_browse_bookmarks b
        WHERE b.user_id = ?
@@ -229,6 +300,9 @@ router.post('/folders/bookmarks', authenticate, async (req, res) => {
   try {
     const { entity_type, entity_id } = req.body;
     if (!entity_type || !entity_id) return res.status(400).json({ error: 'entity_type and entity_id required' });
+    if (!await verifyScopedEntity(req, entity_type, entity_id)) {
+      return res.status(404).json({ error: 'Entity not found for active organisation.' });
+    }
     await pool.execute(
       `INSERT IGNORE INTO cm_browse_bookmarks (user_id, entity_type, entity_id) VALUES (?, ?, ?)`,
       [req.user.userId, entity_type, entity_id]

@@ -154,7 +154,7 @@ test.describe('Phase 3 — Integration Screens', () => {
         request,
         [
           { email: 'vanaja_admin@reviewco.com', password: 'Test@1234' },
-          { email: 'vanaja_admin@reviewco.com', password: 'Manager@123' },
+          { email: 'vanaja_admin@reviewco.com', password: '__SET_SMOKE_TEST_PASSWORD__' },
         ],
         'admin',
         ['admin_console', 'mims_core']
@@ -250,9 +250,9 @@ test.describe('Phase 3 — Integration Screens', () => {
       const { session, failures } = await resolveLoginSession(
         request,
         [
-          { email: 'superadmin', password: 'Manager@123' },
+          { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
           { email: 'superadmin', password: 'Test@1234' },
-          { email: 'superadmin@mims.io', password: 'SuperAdmin@123' },
+          { email: 'superadmin@mims.io', password: '__SET_SMOKE_TEST_PASSWORD__' },
           { email: 'superadmin@mims.io', password: 'Test@1234' },
         ],
         'superadmin',

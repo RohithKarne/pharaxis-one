@@ -30,7 +30,7 @@ function assert(condition, message) {
 
   const superLogin = await req('/api/auth/login', {
     method: 'POST',
-    body: { email: 'superadmin', password: 'Manager@123' },
+    body: { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
   });
   assert(superLogin.res.ok, `Superadmin login failed: ${JSON.stringify(superLogin.data)}`);
   const superToken = superLogin.data.token;
@@ -78,7 +78,7 @@ function assert(condition, message) {
 
   const initialLogin = await req('/api/auth/login', {
     method: 'POST',
-    body: { email, password: 'Manager@123' },
+    body: { email, password: '__SET_SMOKE_TEST_PASSWORD__' },
   });
   assert(initialLogin.res.ok && initialLogin.data.passwordResetRequired, `Expected password reset flow, got: ${JSON.stringify(initialLogin.data)}`);
   summary.push(['Initial login prompts reset', 'PASS']);

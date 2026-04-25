@@ -38,6 +38,19 @@ function adminOnly(req, res, next) {
   next();
 }
 
+function isSuperadmin(req) {
+  return req.user?.role === 'superadmin';
+}
+
+function helpScope(req, alias = 'ha', { includeGlobal = true } = {}) {
+  if (isSuperadmin(req)) return { clause: '', params: [] };
+  const globalClause = includeGlobal ? ` OR ${alias}.org_id IS NULL` : '';
+  return {
+    clause: ` AND (${alias}.org_id = ?${globalClause})`,
+    params: [req.user.orgId],
+  };
+}
+
 // Known feature keys — source of truth for coverage report
 const KNOWN_FEATURE_KEYS = [
   'general',
@@ -70,14 +83,22 @@ const KNOWN_FEATURE_KEYS = [
   'browse',
 ];
 
+// ── GET /api/admin/help/cache-bust — manual cache clear (admin only) ─────────
+router.post('/help/cache-bust', authenticate, adminOnly, (_req, res) => {
+  cacheBust();
+  res.json({ success: true, message: 'Help cache cleared.' });
+});
+
 // ── GET /api/admin/help ───────────────────────────────────────────────────────
 router.get('/help', authenticate, adminOnly, async (req, res) => {
   try {
     const { feature_key, feature_group, audience, search, is_active, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
-    const params = [];
+    const scope = helpScope(req, 'ha', { includeGlobal: false });
+    const params = [...scope.params];
 
     let where = 'WHERE 1=1';
+    where += scope.clause;
 
     if (is_active !== undefined) {
       where += ' AND is_active = ?';
@@ -139,6 +160,7 @@ router.post('/help', authenticate, adminOnly, async (req, res) => {
 
     const audienceVal = Array.isArray(audience) ? audience : ['all'];
     const tagsVal = Array.isArray(tags) ? tags : [];
+    const resolvedOrgId = isSuperadmin(req) ? (org_id || null) : req.user.orgId;
 
     const [result] = await pool.execute(
       `INSERT INTO help_articles
@@ -149,7 +171,7 @@ router.post('/help', authenticate, adminOnly, async (req, res) => {
         feature_key, feature_group || null, JSON.stringify(tagsVal),
         title, content_html, summary || null,
         JSON.stringify(audienceVal),
-        org_id || null,
+        resolvedOrgId,
         sort_order !== undefined ? parseInt(sort_order, 10) : 100,
         is_active !== false ? 1 : 0,
         req.user.userId, req.user.userId,
@@ -167,6 +189,7 @@ router.post('/help', authenticate, adminOnly, async (req, res) => {
 // ── GET /api/admin/help/stale ─────────────────────────────────────────────────
 router.get('/help/stale', authenticate, adminOnly, async (req, res) => {
   try {
+    const scope = helpScope(req, 'ha', { includeGlobal: false });
     const [articles] = await pool.execute(
       `SELECT ha.id, ha.feature_key, ha.feature_group, ha.title, ha.summary,
               ha.last_reviewed_at, ha.version, ha.is_active,
@@ -175,8 +198,10 @@ router.get('/help/stale', authenticate, adminOnly, async (req, res) => {
        FROM help_articles ha
        LEFT JOIN users u ON u.id = ha.reviewed_by
        WHERE ha.is_active = 1
+         ${scope.clause}
          AND (ha.last_reviewed_at IS NULL OR ha.last_reviewed_at < DATE_SUB(NOW(), INTERVAL 90 DAY))
-       ORDER BY days_since_review DESC`
+       ORDER BY days_since_review DESC`,
+      scope.params
     );
     res.json({ articles, count: articles.length });
   } catch (err) {
@@ -188,10 +213,13 @@ router.get('/help/stale', authenticate, adminOnly, async (req, res) => {
 // ── GET /api/admin/help/coverage ──────────────────────────────────────────────
 router.get('/help/coverage', authenticate, adminOnly, async (req, res) => {
   try {
+    const scope = helpScope(req, 'ha', { includeGlobal: false });
     const [rows] = await pool.execute(
       `SELECT feature_key, COUNT(*) AS article_count
-       FROM help_articles WHERE is_active = 1
-       GROUP BY feature_key`
+       FROM help_articles ha WHERE ha.is_active = 1
+       ${scope.clause}
+       GROUP BY feature_key`,
+      scope.params
     );
     const coveredKeys = new Set(rows.map(r => r.feature_key));
     const coverage = KNOWN_FEATURE_KEYS.map(key => ({
@@ -233,11 +261,12 @@ router.post('/help/bulk-import', authenticate, adminOnly, async (req, res) => {
 
         const audienceVal = Array.isArray(audience) ? audience : ['all'];
         const tagsVal = Array.isArray(tags) ? tags : [];
+        const resolvedOrgId = isSuperadmin(req) ? (org_id || null) : req.user.orgId;
 
         // Upsert on (feature_key, title) — if both match, update content
         const [[existing]] = await pool.execute(
-          'SELECT id, version FROM help_articles WHERE feature_key = ? AND title = ? LIMIT 1',
-          [feature_key, title]
+          'SELECT id, version FROM help_articles WHERE feature_key = ? AND title = ? AND org_id <=> ? LIMIT 1',
+          [feature_key, title, resolvedOrgId]
         );
 
         if (existing) {
@@ -249,7 +278,7 @@ router.post('/help/bulk-import', authenticate, adminOnly, async (req, res) => {
              WHERE id = ?`,
             [
               feature_group || null, JSON.stringify(tagsVal), content_html, summary || null,
-              JSON.stringify(audienceVal), org_id || null,
+              JSON.stringify(audienceVal), resolvedOrgId,
               sort_order !== undefined ? parseInt(sort_order, 10) : 100,
               is_active !== false ? 1 : 0,
               (existing.version || 1) + 1, req.user.userId,
@@ -266,7 +295,7 @@ router.post('/help/bulk-import', authenticate, adminOnly, async (req, res) => {
             [
               feature_key, feature_group || null, JSON.stringify(tagsVal),
               title, content_html, summary || null,
-              JSON.stringify(audienceVal), org_id || null,
+              JSON.stringify(audienceVal), resolvedOrgId,
               sort_order !== undefined ? parseInt(sort_order, 10) : 100,
               is_active !== false ? 1 : 0,
               req.user.userId, req.user.userId,
@@ -291,14 +320,15 @@ router.post('/help/bulk-import', authenticate, adminOnly, async (req, res) => {
 // ── GET /api/admin/help/:id ───────────────────────────────────────────────────
 router.get('/help/:id', authenticate, adminOnly, async (req, res) => {
   try {
+    const scope = helpScope(req, 'ha', { includeGlobal: false });
     const [[article]] = await pool.execute(
       `SELECT ha.*, u.name AS created_by_name, uu.name AS updated_by_name, rv.name AS reviewed_by_name
        FROM help_articles ha
        LEFT JOIN users u  ON u.id  = ha.created_by
        LEFT JOIN users uu ON uu.id = ha.updated_by
        LEFT JOIN users rv ON rv.id = ha.reviewed_by
-       WHERE ha.id = ?`,
-      [req.params.id]
+       WHERE ha.id = ? ${scope.clause}`,
+      [req.params.id, ...scope.params]
     );
     if (!article) return res.status(404).json({ error: 'Help article not found.' });
     res.json({ article });
@@ -311,13 +341,20 @@ router.get('/help/:id', authenticate, adminOnly, async (req, res) => {
 // ── PUT /api/admin/help/:id ───────────────────────────────────────────────────
 router.put('/help/:id', authenticate, adminOnly, async (req, res) => {
   try {
-    const [[existing]] = await pool.execute('SELECT * FROM help_articles WHERE id = ?', [req.params.id]);
+    const scope = helpScope(req, 'ha', { includeGlobal: false });
+    const [[existing]] = await pool.execute(
+      `SELECT * FROM help_articles ha WHERE ha.id = ? ${scope.clause}`,
+      [req.params.id, ...scope.params]
+    );
     if (!existing) return res.status(404).json({ error: 'Help article not found.' });
 
     const {
       feature_key, feature_group, tags, title, content_html,
       summary, audience, org_id, sort_order, is_active,
     } = req.body;
+    const resolvedOrgId = isSuperadmin(req)
+      ? (org_id !== undefined ? org_id : existing.org_id)
+      : req.user.orgId;
 
     const audienceVal = audience !== undefined
       ? (Array.isArray(audience) ? audience : ['all'])
@@ -350,7 +387,7 @@ router.put('/help/:id', authenticate, adminOnly, async (req, res) => {
         content_html    !== undefined ? content_html    : existing.content_html,
         summary         !== undefined ? summary         : existing.summary,
         JSON.stringify(audienceVal),
-        org_id          !== undefined ? org_id          : existing.org_id,
+        resolvedOrgId,
         sort_order      !== undefined ? parseInt(sort_order, 10) : existing.sort_order,
         is_active       !== undefined ? (is_active ? 1 : 0) : existing.is_active,
         req.user.userId,
@@ -369,7 +406,11 @@ router.put('/help/:id', authenticate, adminOnly, async (req, res) => {
 // ── DELETE /api/admin/help/:id — soft delete ──────────────────────────────────
 router.delete('/help/:id', authenticate, adminOnly, async (req, res) => {
   try {
-    const [[existing]] = await pool.execute('SELECT id FROM help_articles WHERE id = ?', [req.params.id]);
+    const scope = helpScope(req, 'ha', { includeGlobal: false });
+    const [[existing]] = await pool.execute(
+      `SELECT id FROM help_articles ha WHERE ha.id = ? ${scope.clause}`,
+      [req.params.id, ...scope.params]
+    );
     if (!existing) return res.status(404).json({ error: 'Help article not found.' });
 
     await pool.execute(
@@ -387,7 +428,11 @@ router.delete('/help/:id', authenticate, adminOnly, async (req, res) => {
 // ── PATCH /api/admin/help/:id/reviewed ────────────────────────────────────────
 router.patch('/help/:id/reviewed', authenticate, adminOnly, async (req, res) => {
   try {
-    const [[existing]] = await pool.execute('SELECT id FROM help_articles WHERE id = ?', [req.params.id]);
+    const scope = helpScope(req, 'ha', { includeGlobal: false });
+    const [[existing]] = await pool.execute(
+      `SELECT id FROM help_articles ha WHERE ha.id = ? ${scope.clause}`,
+      [req.params.id, ...scope.params]
+    );
     if (!existing) return res.status(404).json({ error: 'Help article not found.' });
 
     await pool.execute(

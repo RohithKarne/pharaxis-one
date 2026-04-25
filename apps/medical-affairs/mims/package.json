@@ -5,8 +5,9 @@
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",
-    "dev": "nodemon backend/server.js",
-    "dev:all": "concurrently -n backend,frontend -c cyan,magenta \"nodemon backend/server.js\" \"cd frontend && npm run dev\"",
+    "dev": "nodemon --exec \"node --env-file=.env\" backend/server.js",
+    "dev:all": "concurrently -n backend,frontend -c cyan,magenta \"nodemon --exec 'node --env-file=.env' backend/server.js\" \"cd frontend && npm run dev\"",
+    "security:scan": "bash ./scripts/security-scan.sh",
     "test": "jest --testPathPatterns=backend/tests",
     "test:process-explorer-guard": "node backend/tests/process-explorer-guard.js",
     "test:smoke:process-explorer-ops": "node backend/tests/smoke-process-explorer-ops.js",

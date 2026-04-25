@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
+const { aiGenerationRateLimiter } = require('../../middleware/rateLimiters');
 const {
   normalizeContentType,
   normalizeMode,
@@ -230,7 +231,7 @@ router.put('/evidence-chain/rules/:id', authenticate, requireRole('admin', 'supe
   }
 });
 
-router.post('/evidence-chain/compile', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/evidence-chain/compile', authenticate, requireRole('admin', 'superadmin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
     if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
@@ -269,7 +270,7 @@ router.get('/evidence-chain/runs', authenticate, requireRole('admin', 'superadmi
   }
 });
 
-router.post('/contradiction-radar/scan', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/contradiction-radar/scan', authenticate, requireRole('admin', 'superadmin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
     if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
@@ -353,7 +354,7 @@ router.put('/contradiction-radar/findings/:id/status', authenticate, requireRole
   }
 });
 
-router.post('/digital-twin/simulate', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/digital-twin/simulate', authenticate, requireRole('admin', 'superadmin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
     if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
@@ -557,7 +558,7 @@ router.put('/adaptive-risk/rules/:id', authenticate, requireRole('admin', 'super
   }
 });
 
-router.post('/adaptive-risk/evaluate', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/adaptive-risk/evaluate', authenticate, requireRole('admin', 'superadmin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
     if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });

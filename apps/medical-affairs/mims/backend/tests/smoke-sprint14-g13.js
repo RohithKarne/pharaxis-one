@@ -50,12 +50,12 @@ async function loginWithCandidates() {
     },
     {
       email: 'superadmin',
-      password: 'Manager@123',
+      password: '__SET_SMOKE_TEST_PASSWORD__',
       label: 'superadmin-short',
     },
     {
       email: 'superadmin@mims.io',
-      password: 'SuperAdmin@123',
+      password: '__SET_SMOKE_TEST_PASSWORD__',
       label: 'superadmin-email',
     },
   ];

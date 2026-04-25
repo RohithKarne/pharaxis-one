@@ -16,6 +16,8 @@ async function recordReportRun(payload) {
     orgId,
     reportKey,
     reportName,
+    targetType = 'report',
+    targetId = null,
     runMode = 'manual',
     triggeredBy = null,
     filters = null,
@@ -31,13 +33,15 @@ async function recordReportRun(payload) {
 
   const [result] = await pool.execute(
     `INSERT INTO report_run_ledger
-       (org_id, report_key, report_name, run_mode, triggered_by, filters_json, timezone_name, row_count,
+       (org_id, report_key, report_name, target_type, target_id, run_mode, triggered_by, filters_json, timezone_name, row_count,
         delivery_method, delivery_target, status, error_message)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       orgId,
       reportKey,
       reportName,
+      targetType || 'report',
+      targetId || null,
       runMode,
       triggeredBy,
       serializeFilters(filters),
@@ -69,6 +73,8 @@ async function listReportRunLedger(orgId, options = {}) {
        r.id,
        r.report_key,
        r.report_name,
+       r.target_type,
+       r.target_id,
        r.run_mode,
        r.timezone_name,
        r.row_count,

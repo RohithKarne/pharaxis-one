@@ -22,6 +22,13 @@ import RegressionPage from '../regression/pages/RegressionPage'
 import TransmissionsPage from '../transmissions/pages/TransmissionsPage'
 import BrowseContentPage from '../browse/pages/BrowseContentPage'
 import ResponseLogPage from '../responselog/pages/ResponseLogPage'
+import CaseAuditTrailPage from '../audittrail/pages/CaseAuditTrailPage'
+import CMAuditTrailPage from '../audittrail/pages/CMAuditTrailPage'
+import ResponseErrorLogPage from '../responselog/pages/ResponseErrorLogPage'
+import TransmissionErrorLogPage from '../transmissions/pages/TransmissionErrorLogPage'
+import TransmissionAuditTrailPage from '../transmissions/pages/TransmissionAuditTrailPage'
+import CopyDivisionPage from '../admin/pages/CopyDivisionPage'
+import DPPRPage from '../admin/pages/DPPRPage'
 import NoAccessPage from '../../pages/NoAccessPage'
 import ResetPasswordPage from '../../pages/ResetPasswordPage'
 import ExceptionToast from '../../shared/components/ExceptionToast'
@@ -142,6 +149,55 @@ function AppRoutes() {
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
                 <ResponseLogPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/case-audit-trail" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <CaseAuditTrailPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/cm-audit-trail" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <CMAuditTrailPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/response-error-log" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <ResponseErrorLogPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/transmission-error-log" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <TransmissionErrorLogPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/transmission-audit-trail" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <TransmissionAuditTrailPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/copy-division" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <CopyDivisionPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/dppr" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <DPPRPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
