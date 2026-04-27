@@ -20,41 +20,12 @@ import {
   getAdminSectionLabel,
   normalizeAdminSection,
 } from '../adminConsoleConfig'
+import { fmtDateIST } from '../components/AdminShared'
 
 const STATUS_COLORS = {
   success: { bg: '#e6f4ee', color: '#007a5a', label: 'Success' },
   failed:  { bg: '#fde8ef', color: '#e01e5a', label: 'Failed'  },
   warning: { bg: '#fdf3d0', color: '#b8860b', label: 'Warning' },
-}
-
-function parseUtcDate(s) {
-  if (!s) return null
-  const str = String(s).trim()
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(str)) {
-    const [date, time] = str.split(' ')
-    const [y, m, d] = date.split('-').map(Number)
-    const [hh, mm, ss] = time.split(':').map(Number)
-    return new Date(Date.UTC(y, m - 1, d, hh, mm, ss))
-  }
-  const d = new Date(str)
-  return isNaN(d) ? null : d
-}
-
-function fmtDateIST(s) {
-  const d = parseUtcDate(s)
-  if (!d) return s || '—'
-  // Manual IST formatting to avoid browser timezone support inconsistencies
-  const istMs = d.getTime() + 330 * 60 * 1000
-  const ist = new Date(istMs)
-  const pad = n => String(n).padStart(2, '0')
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const day = pad(ist.getUTCDate())
-  const mon = months[ist.getUTCMonth()]
-  const year = ist.getUTCFullYear()
-  const hour = pad(ist.getUTCHours())
-  const min = pad(ist.getUTCMinutes())
-  const sec = pad(ist.getUTCSeconds())
-  return `${day} ${mon} ${year}, ${hour}:${min}:${sec} IST`
 }
 
 function ServiceLogTab({ logs, sources, filter, onFilterChange, onRefine, page, pageSize, total, totalPages, loading, onPageChange, onPageSizeChange }) {

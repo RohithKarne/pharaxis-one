@@ -98,7 +98,7 @@ router.get('/admin/cases/export/e2b', authenticate, async (req, res) => {
     if (!case_id) return res.status(400).json({ error: 'case_id is required' });
 
     const [caseRows] = await pool.query(
-      `SELECT c.id, c.case_number, c.date_received, c.country, u.name AS case_owner, o.name AS organisation_name
+      `SELECT c.id, c.case_number, c.case_type, c.date_received, u.name AS case_owner, o.name AS organisation_name
        FROM cases c
        LEFT JOIN users u ON c.case_owner_id = u.id
        LEFT JOIN organisations o ON c.org_id = o.id
@@ -112,11 +112,7 @@ router.get('/admin/cases/export/e2b', authenticate, async (req, res) => {
     }
 
     const caseData = caseRows[0];
-    const [aeRows] = await pool.query(
-      'SELECT id FROM case_ae WHERE case_id = ? LIMIT 1',
-      [caseData.id]
-    );
-    const hasAe = aeRows.length > 0;
+    const hasAe = String(caseData.case_type || '').toUpperCase() === 'AE';
 
     function formatDateTimeYYYYMMDDHHMMSS(dt) {
       const d = dt ? new Date(dt) : new Date();
@@ -152,7 +148,7 @@ router.get('/admin/cases/export/e2b', authenticate, async (req, res) => {
   </ichicsrmessageheader>
   <safetyreport>
     <safetyreportid>${caseData.case_number}</safetyreportid>
-    <primarysourcecountry>${caseData.country || 'UNKNOWN'}</primarysourcecountry>
+    <primarysourcecountry>UNKNOWN</primarysourcecountry>
     <reporttype>1</reporttype>
     <serious>${hasAe ? 1 : 2}</serious>
     <seriousnessother>1</seriousnessother>

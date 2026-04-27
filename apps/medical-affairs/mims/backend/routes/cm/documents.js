@@ -914,13 +914,13 @@ router.get('/documents/:id/versions', authenticate, async (req, res) => {
   try {
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
     const offset = (page - 1) * limit;
     const [versions] = await pool.execute(
       `SELECT * FROM cm_version_history WHERE entity_type = 'document' AND entity_id = ?
-       ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      [req.params.id, limit, offset]
+       ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+      [req.params.id]
     );
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) as total FROM cm_version_history WHERE entity_type = 'document' AND entity_id = ?`,
@@ -1197,12 +1197,12 @@ router.get('/documents/:id/activity', authenticate, async (req, res) => {
   try {
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 20));
     const offset = (page - 1) * limit;
     const [logs] = await pool.execute(
-      `SELECT * FROM cm_document_activity_log WHERE doc_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      [req.params.id, limit, offset]
+      `SELECT * FROM cm_document_activity_log WHERE doc_id = ? ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+      [req.params.id]
     );
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) as total FROM cm_document_activity_log WHERE doc_id = ?`,

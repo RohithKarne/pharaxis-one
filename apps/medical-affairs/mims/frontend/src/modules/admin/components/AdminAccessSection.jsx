@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SectionHeader, StatusPill } from './AdminShared'
 
 const MODULES = [
   { key: 'mims_core', label: 'MIMS Core' },
@@ -112,19 +113,6 @@ const LEGACY_SEC_PERMS = {
   ],
 }
 
-function SectionHeader({ title, desc }) {
-  return (
-    <div className="admin-section-header">
-      <div>
-        <h2>{title}</h2>
-        {desc && <p>{desc}</p>}
-      </div>
-    </div>
-  )
-}
-
-function StatusPill({ active }) {
-  return <span className={`status-pill ${active ? 'active' : 'inactive'}`}>{active ? 'Active' : 'Inactive'}</span>
 }
 
 export default function AdminAccessSection({ contentSection, H, flash }) {

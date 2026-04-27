@@ -124,7 +124,9 @@ router.get('/case-audit-trail/:caseId', authenticate, requireRole('admin', 'supe
       return res.status(404).json({ error: 'Case not found.' });
     }
     const { action_type, user_id, from_date, to_date, page = 1, limit = 100 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const lim = Math.max(1, parseInt(limit, 10) || 100);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const offset = (pageNum - 1) * lim;
 
     let query = 'SELECT * FROM case_audit_trail WHERE case_id = ?';
     const params = [caseId];
@@ -137,11 +139,10 @@ router.get('/case-audit-trail/:caseId', authenticate, requireRole('admin', 'supe
     const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) AS total');
     const [[{ total }]] = await pool.execute(countQuery, params);
 
-    query += ` ORDER BY timestamp DESC LIMIT ? OFFSET ?`;
-    params.push(parseInt(limit, 10), offset);
+    query += ` ORDER BY timestamp DESC LIMIT ${lim} OFFSET ${offset}`;
     const [entries] = await pool.execute(query, params);
 
-    res.json({ entries, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
+    res.json({ entries, total, page: pageNum, limit: lim });
   } catch (err) {
     console.error('GET /case-audit-trail/:caseId error:', err);
     res.status(500).json({ error: 'Server error.' });

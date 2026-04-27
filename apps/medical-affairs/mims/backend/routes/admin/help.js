@@ -22,6 +22,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
+const { validate, schemas } = require('../../middleware/validate');
 
 // Import public cache buster
 let cacheBust = () => {};
@@ -123,7 +124,7 @@ router.get('/help', authenticate, adminOnly, async (req, res) => {
     }
 
     const [[{ total }]] = await pool.execute(
-      `SELECT COUNT(*) AS total FROM help_articles ${where}`,
+      `SELECT COUNT(*) AS total FROM help_articles ha ${where}`,
       params
     );
 
@@ -147,7 +148,7 @@ router.get('/help', authenticate, adminOnly, async (req, res) => {
 });
 
 // ── POST /api/admin/help ──────────────────────────────────────────────────────
-router.post('/help', authenticate, adminOnly, async (req, res) => {
+router.post('/help', authenticate, adminOnly, validate(schemas.createHelpArticle), async (req, res) => {
   try {
     const {
       feature_key, feature_group, tags, title, content_html,

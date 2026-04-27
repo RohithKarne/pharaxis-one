@@ -26,6 +26,7 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { validate, schemas } = require('../../middleware/validate');
 const { applyDpprRules } = require('../../services/dpprScheduler');
 
 // ── Data domains catalogue ────────────────────────────────────────────────────
@@ -172,7 +173,7 @@ router.get('/dppr', authenticate, async (req, res) => {
 });
 
 // ── POST /api/admin/dppr ──────────────────────────────────────────────────────
-router.post('/dppr', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/dppr', authenticate, requireRole('admin', 'superadmin'), validate(schemas.createDpprRule), async (req, res) => {
   try {
     const { rule_name, domain, contact_type = 'all', consent_type = 'all',
             action = 'None', retention_days = 365, is_active = 1, org_id } = req.body;

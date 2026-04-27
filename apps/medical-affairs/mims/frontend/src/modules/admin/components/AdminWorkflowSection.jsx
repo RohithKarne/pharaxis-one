@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { SectionHeader, StatusPill } from './AdminShared'
 
 // ── AC-E2: Workflow State Transition Diagram (pure SVG, no extra packages) ────
 
@@ -121,21 +122,6 @@ function WorkflowDiagram({ states, rules }) {
       </div>
     </div>
   )
-}
-
-function SectionHeader({ title, desc }) {
-  return (
-    <div className="admin-section-header">
-      <div>
-        <h2>{title}</h2>
-        {desc && <p>{desc}</p>}
-      </div>
-    </div>
-  )
-}
-
-function StatusPill({ active }) {
-  return <span className={`status-pill ${active ? 'active' : 'inactive'}`}>{active ? 'Active' : 'Inactive'}</span>
 }
 
 function InlineForm({ placeholder, value, onChange, onSubmit, btnLabel = '+ Add' }) {

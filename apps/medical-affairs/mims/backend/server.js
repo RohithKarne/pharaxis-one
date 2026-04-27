@@ -166,6 +166,7 @@ app.use('/api', require('./routes/caseContacts'));   // F-14
 app.use('/api', require('./routes/caseMI'));         // F-16
 app.use('/api', require('./routes/caseAE'));         // F-17
 app.use('/api', require('./routes/casePC'));         // F-18
+app.use('/api', require('./routes/caseQA'));         // Sprint 15 — AI QA Engine
 app.use('/api', require('./routes/notifications'));  // G10 notifications feed
 
 // ─── Content Management Routes ───────────────────────────────────────────────

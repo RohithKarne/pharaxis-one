@@ -3,12 +3,84 @@
  * Admin module regression tests
  */
 const pool = require('../database/db')
+let bcrypt
+try {
+  bcrypt = require('bcryptjs')
+} catch (_) {
+  bcrypt = require('bcrypt')
+}
 const { getFirstUser, uniqueName } = require('./helpers');
 
 async function getFirstOrg(makeRequest, token) {
   const res = await makeRequest('GET', '/api/admin/orgs', null, token)
   const orgs = Array.isArray(res.body?.orgs) ? res.body.orgs : []
   return orgs[0] || null
+}
+
+async function getFirstSite(makeRequest, token) {
+  const res = await makeRequest('GET', '/api/admin/sites', null, token)
+  const sites = Array.isArray(res.body?.sites) ? res.body.sites : []
+  return sites[0] || null
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const [, payload] = String(token || '').split('.')
+    if (!payload) return {}
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+  } catch (_) {
+    return {}
+  }
+}
+
+async function loginForToken(makeRequest, email, password) {
+  const login = await makeRequest('POST', '/api/auth/login', { email, password }, null)
+  if (login.status !== 200) {
+    return { status: login.status, token: null, body: login.body }
+  }
+  if (login.body?.token) {
+    return { status: login.status, token: login.body.token, body: login.body }
+  }
+  if (login.body?.challengeToken) {
+    const skip = await makeRequest('POST', '/api/auth/2fa/skip-setup', {
+      challengeToken: login.body.challengeToken,
+    }, null)
+    return { status: skip.status, token: skip.body?.token || null, body: skip.body }
+  }
+  return { status: login.status, token: null, body: login.body }
+}
+
+async function createTemporarySuperadmin(makeRequest) {
+  const email = `${uniqueName('regression-superadmin').toLowerCase()}@example.com`
+  const password = 'TempSuperadmin@123'
+  const hash = await bcrypt.hash(password, 10)
+  const [insert] = await pool.execute(
+    `INSERT INTO users (name, email, password, role, is_active, email_verified)
+     VALUES (?, ?, ?, 'superadmin', 1, 1)`,
+    ['Regression Superadmin', email, hash]
+  )
+  const userId = Number(insert.insertId || 0)
+  const login = await loginForToken(makeRequest, email, password)
+  return { userId, email, password, token: login.token, status: login.status, body: login.body }
+}
+
+async function createTemporaryOrgScopedSuperadmin(makeRequest, orgId, siteId) {
+  const email = `${uniqueName('regression-org-superadmin').toLowerCase()}@example.com`
+  const password = 'TempOrgSuperadmin@123'
+  const hash = await bcrypt.hash(password, 10)
+  const [insert] = await pool.execute(
+    `INSERT INTO users (name, email, password, role, is_active, email_verified)
+     VALUES (?, ?, ?, 'admin', 1, 1)`,
+    ['Regression Org Superadmin', email, hash]
+  )
+  const userId = Number(insert.insertId || 0)
+  await pool.execute(
+    `INSERT INTO user_org_access (user_id, org_id, primary_site_id, role_at_org, site_permission, is_active, last_accessed_at)
+     VALUES (?, ?, ?, 'superadmin', 'all', 1, NOW())`,
+    [userId, orgId, siteId || null]
+  )
+  const login = await loginForToken(makeRequest, email, password)
+  return { userId, email, password, token: login.token, status: login.status, body: login.body }
 }
 
 module.exports = [
@@ -424,6 +496,957 @@ module.exports = [
       return {
         pass,
         details: `invalidCreate=${invalidCreate.status}, getSite=${getSite.status}, updateSite=${updateSite.status}`,
+      }
+    }
+  },
+  {
+    name: 'Admin contacts routes cover CRUD lifecycle with cleanup',
+    module: 'Admin — Contacts',
+    covers: [
+      'GET /api/admin/contacts',
+      'POST /api/admin/contacts',
+      'GET /api/admin/contacts/:id',
+      'PUT /api/admin/contacts/:id',
+      'DELETE /api/admin/contacts/:id',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let contactId = null
+      try {
+        const site = await getFirstSite(makeRequest, token)
+        const firstName = uniqueName('RegressionContact')
+        const email = `${firstName.toLowerCase()}@example.com`
+
+        const listBefore = await makeRequest('GET', `/api/admin/contacts?search=${encodeURIComponent(firstName)}`, null, token)
+        const create = await makeRequest('POST', '/api/admin/contacts', {
+          type: 'HCP',
+          first_name: firstName,
+          last_name: 'User',
+          specialty: 'Oncology',
+          institution: 'Regression Institute',
+          email,
+          phone: '9999991111',
+          site_id: site?.id || null,
+          notes: 'Regression contact notes',
+          address: 'Regression address',
+          do_not_update_master: false,
+        }, token)
+        contactId = Number(create.body?.id || create.body?.contact?.id || 0)
+        if (listBefore.status !== 200 || create.status !== 201 || !contactId) {
+          return { pass: false, details: `listBefore=${listBefore.status}, create=${create.status}, contactId=${contactId}` }
+        }
+
+        const getOne = await makeRequest('GET', `/api/admin/contacts/${contactId}`, null, token)
+        const update = await makeRequest('PUT', `/api/admin/contacts/${contactId}`, {
+          type: 'HCP',
+          first_name: `${firstName}Updated`,
+          last_name: 'User',
+          specialty: 'Medical',
+          institution: 'Regression Institute Updated',
+          email,
+          phone: '9999992222',
+          site_id: site?.id || null,
+          notes: 'Regression contact notes updated',
+          address: 'Regression address updated',
+          do_not_update_master: true,
+        }, token)
+        const del = await makeRequest('DELETE', `/api/admin/contacts/${contactId}`, null, token)
+
+        return {
+          pass: getOne.status === 200 && update.status === 200 && del.status === 200,
+          details: `listBefore=${listBefore.status}, create=${create.status}, getOne=${getOne.status}, update=${update.status}, delete=${del.status}`,
+        }
+      } finally {
+        if (contactId) {
+          await pool.execute('UPDATE contacts SET is_active = 0 WHERE id = ?', [contactId]).catch(() => {})
+        }
+      }
+    }
+  },
+  {
+    name: 'Admin company reps routes cover CRUD and import lifecycle with cleanup',
+    module: 'Admin — Company Reps',
+    covers: [
+      'GET /api/admin/company-reps',
+      'POST /api/admin/company-reps',
+      'PUT /api/admin/company-reps/:id',
+      'POST /api/admin/company-reps/import',
+      'DELETE /api/admin/company-reps/:id',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let repId = null
+      let importedRepId = null
+      try {
+        const repName = uniqueName('Regression Rep')
+        const repEmail = `${repName.toLowerCase().replace(/\s+/g, '-')}@example.com`
+        const importedName = uniqueName('Imported Rep')
+        const importedEmail = `${importedName.toLowerCase().replace(/\s+/g, '-')}@example.com`
+
+        const listBefore = await makeRequest('GET', `/api/admin/company-reps?search=${encodeURIComponent(repName)}`, null, token)
+        const create = await makeRequest('POST', '/api/admin/company-reps', {
+          name: repName,
+          title: 'MSL',
+          territory: 'South',
+          email: repEmail,
+          phone: '8888881111',
+        }, token)
+        repId = Number(create.body?.id || create.body?.rep?.id || 0)
+        if (listBefore.status !== 200 || create.status !== 201 || !repId) {
+          return { pass: false, details: `listBefore=${listBefore.status}, create=${create.status}, repId=${repId}` }
+        }
+
+        const update = await makeRequest('PUT', `/api/admin/company-reps/${repId}`, {
+          name: `${repName} Updated`,
+          title: 'Senior MSL',
+          territory: 'West',
+          email: repEmail,
+          phone: '8888882222',
+        }, token)
+        const importRes = await makeRequest('POST', '/api/admin/company-reps/import', {
+          rows: [{ name: importedName, email: importedEmail, phone: '8888883333', territory: 'North' }],
+        }, token)
+        const [[importedRow]] = await pool.execute('SELECT id FROM company_reps WHERE email = ? ORDER BY id DESC LIMIT 1', [importedEmail])
+        importedRepId = Number(importedRow?.id || 0)
+        const del = await makeRequest('DELETE', `/api/admin/company-reps/${repId}`, null, token)
+
+        return {
+          pass: update.status === 200 && importRes.status === 200 && Number(importRes.body?.imported || 0) >= 1 && del.status === 200,
+          details: `listBefore=${listBefore.status}, create=${create.status}, update=${update.status}, import=${importRes.status}, imported=${importRes.body?.imported || 0}, delete=${del.status}`,
+        }
+      } finally {
+        if (repId) {
+          await pool.execute('UPDATE company_reps SET is_active = 0 WHERE id = ?', [repId]).catch(() => {})
+        }
+        if (importedRepId) {
+          await pool.execute('UPDATE company_reps SET is_active = 0 WHERE id = ?', [importedRepId]).catch(() => {})
+        }
+      }
+    }
+  },
+  {
+    name: 'Admin scheduled exports routes cover lifecycle',
+    module: 'Admin — Scheduled Exports',
+    covers: [
+      'GET /api/admin/exports/scheduled',
+      'POST /api/admin/exports/scheduled',
+      'PUT /api/admin/exports/scheduled/:id',
+      'DELETE /api/admin/exports/scheduled/:id',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let configId = null
+      try {
+        const listBefore = await makeRequest('GET', '/api/admin/exports/scheduled', null, token)
+        const create = await makeRequest('POST', '/api/admin/exports/scheduled', {
+          export_name: uniqueName('Regression Export'),
+          report_key: 'daily-case-summary',
+          schedule_frequency: 'daily',
+          schedule_time_local: '08:00',
+          timezone_name: 'Asia/Kolkata',
+          delivery_method: 'email',
+          delivery_target: 'regression@example.com',
+          email_subject: 'Regression Scheduled Export',
+        }, token)
+        configId = Number(create.body?.id || 0)
+        if (listBefore.status !== 200 || create.status !== 200 || !configId) {
+          return { pass: false, details: `listBefore=${listBefore.status}, create=${create.status}, configId=${configId}` }
+        }
+
+        const update = await makeRequest('PUT', `/api/admin/exports/scheduled/${configId}`, {
+          export_name: uniqueName('Regression Export Updated'),
+          schedule_frequency: 'weekly',
+          schedule_weekday: 2,
+          schedule_time_local: '09:15',
+          timezone_name: 'UTC',
+          delivery_target: 'regression-updated@example.com',
+          email_subject: 'Regression Scheduled Export Updated',
+          is_active: true,
+        }, token)
+        const del = await makeRequest('DELETE', `/api/admin/exports/scheduled/${configId}`, null, token)
+
+        return {
+          pass: update.status === 200 && del.status === 200,
+          details: `listBefore=${listBefore.status}, create=${create.status}, update=${update.status}, delete=${del.status}`,
+        }
+      } finally {
+        if (configId) await pool.execute('DELETE FROM scheduled_export_configs WHERE id = ?', [configId]).catch(() => {})
+      }
+    }
+  },
+  {
+    name: 'Admin esig verify and impact preview routes cover validation flow',
+    module: 'Admin — eSig and Impact Preview',
+    covers: [
+      'POST /api/admin/esig-verify',
+      'POST /api/admin/impact-preview',
+    ],
+    run: async ({ makeRequest, token }) => {
+      const esig = await makeRequest('POST', '/api/admin/esig-verify', {
+        password: process.env.REGRESSION_PASSWORD || 'Test@1234',
+        reason: 'Regression verification',
+        action: 'APPROVE',
+        entity: 'regression_suite',
+        entity_id: 1,
+      }, token)
+      const impact = await makeRequest('POST', '/api/admin/impact-preview', {
+        change_type: 'taxonomy',
+        entity_id: 1,
+      }, token)
+
+      return {
+        pass: esig.status === 200 &&
+          esig.body?.verified === true &&
+          impact.status === 200 &&
+          String(impact.body?.change_type || '') === 'taxonomy',
+        details: `esig=${esig.status}, impact=${impact.status}`,
+      }
+    }
+  },
+  {
+    name: 'Admin help routes cover article lifecycle review import and cache flows',
+    module: 'Admin — Help',
+    covers: [
+      'GET /api/admin/help',
+      'POST /api/admin/help',
+      'GET /api/admin/help/:id',
+      'PUT /api/admin/help/:id',
+      'DELETE /api/admin/help/:id',
+      'PATCH /api/admin/help/:id/reviewed',
+      'POST /api/admin/help/bulk-import',
+      'POST /api/admin/help/cache-bust',
+      'GET /api/admin/help/coverage',
+      'GET /api/admin/help/stale',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let articleId = null
+      let importedArticleId = null
+      try {
+        const featureKey = 'admin.picklists'
+        const title = uniqueName('Regression Help')
+        const importedTitle = uniqueName('Regression Help Imported')
+
+        const cacheBust = await makeRequest('POST', '/api/admin/help/cache-bust', {}, token)
+        const listBefore = await makeRequest('GET', `/api/admin/help?feature_key=${encodeURIComponent(featureKey)}`, null, token)
+        const create = await makeRequest('POST', '/api/admin/help', {
+          feature_key: featureKey,
+          feature_group: 'admin',
+          tags: ['regression', 'help'],
+          title,
+          content_html: '<p>Regression help content</p>',
+          summary: 'Regression help summary',
+          audience: ['all'],
+          sort_order: 7,
+          is_active: true,
+        }, token)
+        articleId = Number(create.body?.id || 0)
+        if (cacheBust.status !== 200 || listBefore.status !== 200 || create.status !== 201 || !articleId) {
+          return { pass: false, details: `cacheBust=${cacheBust.status}, listBefore=${listBefore.status}, create=${create.status}, articleId=${articleId}` }
+        }
+
+        const getOne = await makeRequest('GET', `/api/admin/help/${articleId}`, null, token)
+        const update = await makeRequest('PUT', `/api/admin/help/${articleId}`, {
+          feature_key: featureKey,
+          feature_group: 'admin',
+          tags: ['regression', 'updated'],
+          title,
+          content_html: '<p>Regression help content updated</p>',
+          summary: 'Regression help summary updated',
+          audience: ['all'],
+          sort_order: 8,
+          is_active: true,
+        }, token)
+        const reviewed = await makeRequest('PATCH', `/api/admin/help/${articleId}/reviewed`, {}, token)
+        const stale = await makeRequest('GET', '/api/admin/help/stale', null, token)
+        const coverage = await makeRequest('GET', '/api/admin/help/coverage', null, token)
+        const bulkImport = await makeRequest('POST', '/api/admin/help/bulk-import', {
+          articles: [{
+            feature_key: 'reports',
+            feature_group: 'reports',
+            tags: ['bulk', 'regression'],
+            title: importedTitle,
+            content_html: '<p>Imported regression help article</p>',
+            summary: 'Imported regression help summary',
+            audience: ['all'],
+            sort_order: 9,
+            is_active: true,
+          }],
+        }, token)
+        const [[importedRow]] = await pool.execute(
+          'SELECT id FROM help_articles WHERE title = ? ORDER BY id DESC LIMIT 1',
+          [importedTitle]
+        )
+        importedArticleId = Number(importedRow?.id || 0)
+        const del = await makeRequest('DELETE', `/api/admin/help/${articleId}`, null, token)
+
+        const coverageRows = Array.isArray(coverage.body?.coverage) ? coverage.body.coverage : []
+        return {
+          pass: getOne.status === 200 &&
+            update.status === 200 &&
+            reviewed.status === 200 &&
+            stale.status === 200 &&
+            coverage.status === 200 &&
+            coverageRows.some((row) => row?.feature_key === featureKey) &&
+            bulkImport.status === 200 &&
+            del.status === 200,
+          details: `cacheBust=${cacheBust.status}, listBefore=${listBefore.status}, create=${create.status}, getOne=${getOne.status}, update=${update.status}, reviewed=${reviewed.status}, stale=${stale.status}, coverage=${coverage.status}, bulkImport=${bulkImport.status}, delete=${del.status}`,
+        }
+      } finally {
+        if (articleId) await pool.execute('DELETE FROM help_articles WHERE id = ?', [articleId]).catch(() => {})
+        if (importedArticleId) await pool.execute('DELETE FROM help_articles WHERE id = ?', [importedArticleId]).catch(() => {})
+      }
+    }
+  },
+  {
+    name: 'Admin integrations routes cover CRM MIR OAuth2 and Vault flows',
+    module: 'Admin — Integrations',
+    covers: [
+      'POST /api/admin/integrations/crm/sync-case/:caseId',
+      'GET /api/admin/integrations/crm/sync-log',
+      'POST /api/admin/integrations/crm/test-connection',
+      'POST /api/admin/integrations/mir/send-case/:caseId',
+      'GET /api/admin/integrations/mir/sync-log',
+      'POST /api/admin/integrations/mir/test-connection',
+      'POST /api/admin/integrations/oauth2/token',
+      'DELETE /api/admin/integrations/oauth2/token',
+      'POST /api/admin/integrations/vault/test-connection',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let caseId = null
+      let crmLogId = null
+      let mirLogId = null
+      let vaultConfigId = null
+      try {
+        const auth = decodeJwtPayload(token)
+        const orgId = Number(auth.orgId || auth.org_id || 0)
+        if (!orgId) return { pass: false, details: 'No orgId on admin token.' }
+
+        const site = await getFirstSite(makeRequest, token)
+        if (!site?.id) return { pass: false, details: 'No site available for integrations case.' }
+
+        const createCase = await makeRequest('POST', '/api/cases', {
+          site_id: site.id,
+          case_type: 'MI',
+          intake_channel: 'manual',
+          date_received: '2026-04-25',
+        }, token)
+        caseId = Number(createCase.body?.id || 0)
+        if (createCase.status !== 201 || !caseId) {
+          return { pass: false, details: `createCase=${createCase.status}` }
+        }
+
+        const [crmInsert] = await pool.execute(
+          `INSERT INTO crm_sync_log (org_id, case_id, platform, direction, status, crm_reference, error_message, payload)
+           VALUES (?, ?, 'salesforce', 'outbound', 'failed', NULL, 'Regression CRM sync log', ?)`,
+          [orgId, caseId, JSON.stringify({ source: 'regression-crm-log' })]
+        )
+        crmLogId = Number(crmInsert.insertId || 0)
+        const [mirInsert] = await pool.execute(
+          `INSERT INTO mir_sync_log (org_id, case_id, direction, status, mir_reference, error_message, payload)
+           VALUES (?, ?, 'outbound', 'error', NULL, 'Regression MIR sync log', ?)`,
+          [orgId, caseId, JSON.stringify({ source: 'regression-mir-log' })]
+        )
+        mirLogId = Number(mirInsert.insertId || 0)
+
+        const crmTest = await makeRequest('POST', '/api/admin/integrations/crm/test-connection', {}, token)
+        const crmSync = await makeRequest('POST', `/api/admin/integrations/crm/sync-case/${caseId}`, {}, token)
+        const crmLog = await makeRequest('GET', '/api/admin/integrations/crm/sync-log', null, token)
+
+        const mirTest = await makeRequest('POST', '/api/admin/integrations/mir/test-connection', {}, token)
+        const mirSend = await makeRequest('POST', `/api/admin/integrations/mir/send-case/${caseId}`, {}, token)
+        const mirLog = await makeRequest('GET', '/api/admin/integrations/mir/sync-log', null, token)
+
+        const oauthPost = await makeRequest('POST', '/api/admin/integrations/oauth2/token', {
+          integrationType: 'salesforce',
+        }, token)
+        const oauthDelete = await makeRequest('DELETE', '/api/admin/integrations/oauth2/token', {
+          integrationType: 'salesforce',
+        }, token)
+
+        const [vaultInsert] = await pool.execute(
+          `INSERT INTO org_vault_config
+           (org_id, vault_domain, vault_username, vault_password, vault_api_version, poll_interval_hours, enabled)
+           VALUES (?, ?, ?, ?, ?, ?, 1)`,
+          [orgId, 'http://127.0.0.1:1', 'vault-user', 'vault-pass', 'v24.1', 12]
+        )
+        vaultConfigId = Number(vaultInsert.insertId || 0)
+        const vaultTest = await makeRequest('POST', '/api/admin/integrations/vault/test-connection', {}, token)
+
+        return {
+          pass: crmTest.status === 200 &&
+            crmTest.body?.success === false &&
+            crmSync.status === 500 &&
+            crmLog.status === 200 &&
+            Array.isArray(crmLog.body?.logs) &&
+            crmLog.body.logs.some((row) => Number(row?.id || 0) === crmLogId) &&
+            mirTest.status === 200 &&
+            mirTest.body?.success === false &&
+            mirSend.status === 500 &&
+            mirLog.status === 200 &&
+            Array.isArray(mirLog.body?.logs) &&
+            mirLog.body.logs.some((row) => Number(row?.id || 0) === mirLogId) &&
+            oauthPost.status === 400 &&
+            oauthDelete.status === 200 &&
+            vaultTest.status === 400,
+          details: `crmTest=${crmTest.status}, crmSync=${crmSync.status}, crmLog=${crmLog.status}, mirTest=${mirTest.status}, mirSend=${mirSend.status}, mirLog=${mirLog.status}, oauthPost=${oauthPost.status}, oauthDelete=${oauthDelete.status}, vaultTest=${vaultTest.status}`,
+        }
+      } finally {
+        if (crmLogId) await pool.execute('DELETE FROM crm_sync_log WHERE id = ?', [crmLogId]).catch(() => {})
+        if (mirLogId) await pool.execute('DELETE FROM mir_sync_log WHERE id = ?', [mirLogId]).catch(() => {})
+        if (vaultConfigId) await pool.execute('DELETE FROM org_vault_config WHERE id = ?', [vaultConfigId]).catch(() => {})
+        if (caseId) await pool.execute('DELETE FROM cases WHERE id = ?', [caseId]).catch(() => {})
+      }
+    }
+  },
+  {
+    name: 'Admin observability permissions and process explorer SQL routes cover lifecycle',
+    module: 'Admin — Observability and Process Explorer',
+    covers: [
+      'GET /api/admin/observability/exceptions',
+      'GET /api/admin/observability/summary',
+      'PUT /api/admin/permissions',
+      'GET /api/admin/process-logs',
+      'GET /api/admin/process-logs/config',
+      'POST /api/admin/process-logs/flow-map',
+      'GET /api/admin/process-logs/library',
+      'POST /api/admin/process-logs/refresh',
+      'DELETE /api/admin/process-logs/purge',
+      'GET /api/admin/process-logs/sql/audit',
+      'POST /api/admin/process-logs/sql/execute',
+      'POST /api/admin/process-logs/sql/explain',
+      'GET /api/admin/process-logs/sql/graph',
+      'POST /api/admin/process-logs/sql/nl2sql',
+      'GET /api/admin/process-logs/sql/saved',
+      'POST /api/admin/process-logs/sql/saved',
+      'PUT /api/admin/process-logs/sql/saved/:id',
+      'DELETE /api/admin/process-logs/sql/saved/:id',
+      'GET /api/admin/process-logs/sql/schema',
+      'GET /api/admin/process-logs/sql/suggest',
+      'POST /api/admin/process-logs/sql/validate',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let savedQueryId = null
+      let originalProcessExplorerEnabled = null
+      try {
+        const auth = decodeJwtPayload(token)
+        const orgId = Number(auth.orgId || auth.org_id || 0)
+        if (!orgId) return { pass: false, details: 'No orgId on admin token.' }
+
+        const [[orgRow]] = await pool.execute(
+          'SELECT process_explorer_enabled FROM organisations WHERE id = ? LIMIT 1',
+          [orgId]
+        )
+        originalProcessExplorerEnabled = orgRow ? Number(orgRow.process_explorer_enabled || 0) : 0
+        if (!originalProcessExplorerEnabled) {
+          await pool.execute('UPDATE organisations SET process_explorer_enabled = 1 WHERE id = ?', [orgId])
+        }
+
+        const [[permRow]] = await pool.execute(
+          'SELECT can_access FROM role_permissions WHERE role = ? AND module = ? LIMIT 1',
+          ['admin', 'reports']
+        )
+        const originalCanAccess = permRow ? Number(permRow.can_access || 0) : 1
+
+        const observabilitySummary = await makeRequest('GET', '/api/admin/observability/summary', null, token)
+        const observabilityExceptions = await makeRequest('GET', '/api/admin/observability/exceptions', null, token)
+        const permissionsUpdate = await makeRequest('PUT', '/api/admin/permissions', {
+          role: 'admin',
+          module: 'reports',
+          can_access: !!originalCanAccess,
+        }, token)
+
+        const config = await makeRequest('GET', '/api/admin/process-logs/config', null, token)
+        const schema = await makeRequest('GET', '/api/admin/process-logs/sql/schema', null, token)
+        const suggest = await makeRequest('GET', '/api/admin/process-logs/sql/suggest?q=case', null, token)
+        const explain = await makeRequest('POST', '/api/admin/process-logs/sql/explain', {
+          sql: 'SELECT id FROM cases WHERE id = :id',
+        }, token)
+        const validate = await makeRequest('POST', '/api/admin/process-logs/sql/validate', {
+          sql: 'SELECT id FROM cases LIMIT 5',
+        }, token)
+        const nl2sql = await makeRequest('POST', '/api/admin/process-logs/sql/nl2sql', {
+          prompt: 'show failed cases this week',
+        }, token)
+        const graph = await makeRequest('GET', '/api/admin/process-logs/sql/graph', null, token)
+        const execute = await makeRequest('POST', '/api/admin/process-logs/sql/execute', {
+          sql: 'SELECT id FROM organisations WHERE id = :id',
+          params: { id: orgId },
+          mode: 'dry_run',
+          limit_rows: 10,
+        }, token)
+        const audit = await makeRequest('GET', '/api/admin/process-logs/sql/audit?limit=20', null, token)
+        const savedListBefore = await makeRequest('GET', '/api/admin/process-logs/sql/saved', null, token)
+        const savedCreate = await makeRequest('POST', '/api/admin/process-logs/sql/saved', {
+          name: uniqueName('Regression Saved SQL'),
+          description: 'Regression saved SQL query',
+          category: 'regression',
+          tags: ['regression', 'sql'],
+          sql_text: 'SELECT id FROM organisations LIMIT 5',
+          is_shared: false,
+        }, token)
+        savedQueryId = Number(savedCreate.body?.id || 0)
+        const savedUpdate = await makeRequest('PUT', `/api/admin/process-logs/sql/saved/${savedQueryId}`, {
+          name: uniqueName('Regression Saved SQL Updated'),
+          description: 'Regression saved SQL query updated',
+          category: 'regression',
+          tags: ['updated'],
+          sql_text: 'SELECT id FROM organisations LIMIT 3',
+          is_shared: false,
+          is_active: true,
+        }, token)
+        const processLogs = await makeRequest('GET', '/api/admin/process-logs?limit=20', null, token)
+        const library = await makeRequest('GET', '/api/admin/process-logs/library', null, token)
+        const flowMap = await makeRequest('POST', '/api/admin/process-logs/flow-map', {
+          method: 'POST',
+          path_pattern: '/api/admin/process-logs/sql/execute',
+        }, token)
+        const refresh = await makeRequest('POST', '/api/admin/process-logs/refresh', {}, token)
+        const purge = await makeRequest('DELETE', '/api/admin/process-logs/purge?days=365', null, token)
+        const savedDelete = await makeRequest('DELETE', `/api/admin/process-logs/sql/saved/${savedQueryId}`, null, token)
+
+        return {
+          pass: observabilitySummary.status === 200 &&
+            observabilityExceptions.status === 200 &&
+            permissionsUpdate.status === 200 &&
+            config.status === 200 &&
+            config.body?.allowed === true &&
+            schema.status === 200 &&
+            suggest.status === 200 &&
+            explain.status === 200 &&
+            validate.status === 200 &&
+            nl2sql.status === 200 &&
+            graph.status === 200 &&
+            execute.status === 200 &&
+            audit.status === 200 &&
+            savedListBefore.status === 200 &&
+            savedCreate.status === 201 &&
+            savedQueryId > 0 &&
+            savedUpdate.status === 200 &&
+            processLogs.status === 200 &&
+            library.status === 200 &&
+            flowMap.status === 200 &&
+            refresh.status === 200 &&
+            purge.status === 200 &&
+            savedDelete.status === 200,
+          details: `obsSummary=${observabilitySummary.status}, obsExceptions=${observabilityExceptions.status}, permissions=${permissionsUpdate.status}, config=${config.status}, schema=${schema.status}, suggest=${suggest.status}, explain=${explain.status}, validate=${validate.status}, nl2sql=${nl2sql.status}, graph=${graph.status}, execute=${execute.status}, audit=${audit.status}, savedList=${savedListBefore.status}, savedCreate=${savedCreate.status}, savedUpdate=${savedUpdate.status}, processLogs=${processLogs.status}, library=${library.status}, flowMap=${flowMap.status}, refresh=${refresh.status}, purge=${purge.status}, savedDelete=${savedDelete.status}`,
+        }
+      } finally {
+        if (savedQueryId) await pool.execute('DELETE FROM process_explorer_saved_queries WHERE id = ?', [savedQueryId]).catch(() => {})
+        if (originalProcessExplorerEnabled != null) {
+          await pool.execute('UPDATE organisations SET process_explorer_enabled = ? WHERE id = ?', [originalProcessExplorerEnabled, Number(decodeJwtPayload(token).orgId || 0)]).catch(() => {})
+        }
+      }
+    }
+  },
+  {
+    name: 'Admin process explorer ops routes cover request approval rejection analytics and snapshots',
+    module: 'Admin — Process Explorer Ops',
+    covers: [
+      'GET /api/admin/process-logs/ops/analytics',
+      'GET /api/admin/process-logs/ops/metrics',
+      'POST /api/admin/process-logs/ops/request',
+      'GET /api/admin/process-logs/ops/requests',
+      'POST /api/admin/process-logs/ops/requests/:id/approve',
+      'POST /api/admin/process-logs/ops/requests/:id/reject',
+      'GET /api/admin/process-logs/ops/requests/:id/snapshots',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let originalProcessExplorerEnabled = null
+      let approveRequestId = null
+      let rejectRequestId = null
+      let tempSuperadminUserId = null
+      try {
+        const auth = decodeJwtPayload(token)
+        const orgId = Number(auth.orgId || auth.org_id || 0)
+        if (!orgId) return { pass: false, details: 'No orgId on admin token.' }
+        const site = await getFirstSite(makeRequest, token)
+
+        const [[orgRow]] = await pool.execute(
+          'SELECT process_explorer_enabled FROM organisations WHERE id = ? LIMIT 1',
+          [orgId]
+        )
+        originalProcessExplorerEnabled = orgRow ? Number(orgRow.process_explorer_enabled || 0) : 0
+        if (!originalProcessExplorerEnabled) {
+          await pool.execute('UPDATE organisations SET process_explorer_enabled = 1 WHERE id = ?', [orgId])
+        }
+
+        const scopedSuperadmin = await createTemporaryOrgScopedSuperadmin(makeRequest, orgId, site?.id || null)
+        tempSuperadminUserId = scopedSuperadmin.userId
+        if (scopedSuperadmin.status !== 200 || !scopedSuperadmin.token) {
+          return { pass: false, details: `scopedSuperadminLogin=${scopedSuperadmin.status}` }
+        }
+
+        const requestListBefore = await makeRequest('GET', '/api/admin/process-logs/ops/requests?status=all', null, token)
+        const approveRequest = await makeRequest('POST', '/api/admin/process-logs/ops/request', {
+          action_type: 'rollback',
+          route_method: 'POST',
+          route_path_pattern: '/api/admin/process-logs/ops/rollback',
+          entity_type: 'org',
+          entity_id: String(orgId),
+          reason: 'Regression rollback approval path validation',
+          request_payload: {
+            rollback_sql: 'UPDATE organisations SET updated_at = NOW() WHERE id = :id',
+            rollback_params: { id: orgId },
+          },
+          confirmation_text: 'CONFIRM SAFE OPS',
+        }, token)
+        approveRequestId = Number(approveRequest.body?.request_id || 0)
+
+        const rejectRequest = await makeRequest('POST', '/api/admin/process-logs/ops/request', {
+          action_type: 'rollback',
+          route_method: 'POST',
+          route_path_pattern: '/api/admin/process-logs/ops/rollback',
+          entity_type: 'org',
+          entity_id: String(orgId),
+          reason: 'Regression rollback rejection path validation',
+          request_payload: {
+            rollback_sql: 'UPDATE organisations SET updated_at = NOW() WHERE id = :id',
+            rollback_params: { id: orgId },
+          },
+          confirmation_text: 'CONFIRM SAFE OPS',
+        }, token)
+        rejectRequestId = Number(rejectRequest.body?.request_id || 0)
+
+        const approve = await makeRequest('POST', `/api/admin/process-logs/ops/requests/${approveRequestId}/approve`, {
+          confirmation_text: 'CONFIRM SAFE OPS',
+        }, scopedSuperadmin.token)
+        const reject = await makeRequest('POST', `/api/admin/process-logs/ops/requests/${rejectRequestId}/reject`, {
+          reason: 'Regression rejection approved by superadmin',
+        }, scopedSuperadmin.token)
+
+        const requestsAfter = await makeRequest('GET', '/api/admin/process-logs/ops/requests?status=all', null, token)
+        const metrics = await makeRequest('GET', '/api/admin/process-logs/ops/metrics', null, token)
+        const analytics = await makeRequest('GET', '/api/admin/process-logs/ops/analytics', null, token)
+        const snapshots = await makeRequest('GET', `/api/admin/process-logs/ops/requests/${approveRequestId}/snapshots`, null, token)
+
+        return {
+          pass: requestListBefore.status === 200 &&
+            approveRequest.status === 201 &&
+            approveRequestId > 0 &&
+            rejectRequest.status === 201 &&
+            rejectRequestId > 0 &&
+            approve.status === 200 &&
+            reject.status === 200 &&
+            requestsAfter.status === 200 &&
+            Array.isArray(requestsAfter.body?.requests) &&
+            requestsAfter.body.requests.some((row) => Number(row?.id || 0) === approveRequestId) &&
+            metrics.status === 200 &&
+            analytics.status === 200 &&
+            snapshots.status === 200 &&
+            Array.isArray(snapshots.body?.snapshots),
+          details: `requestsBefore=${requestListBefore.status}, createApprove=${approveRequest.status}, createReject=${rejectRequest.status}, approve=${approve.status}, reject=${reject.status}, requestsAfter=${requestsAfter.status}, metrics=${metrics.status}, analytics=${analytics.status}, snapshots=${snapshots.status}`,
+        }
+      } finally {
+        if (approveRequestId) await pool.execute('DELETE FROM process_explorer_ops_snapshots WHERE ops_request_id = ?', [approveRequestId]).catch(() => {})
+        if (approveRequestId) await pool.execute('DELETE FROM process_explorer_ops_requests WHERE id = ?', [approveRequestId]).catch(() => {})
+        if (rejectRequestId) await pool.execute('DELETE FROM process_explorer_ops_snapshots WHERE ops_request_id = ?', [rejectRequestId]).catch(() => {})
+        if (rejectRequestId) await pool.execute('DELETE FROM process_explorer_ops_requests WHERE id = ?', [rejectRequestId]).catch(() => {})
+        if (tempSuperadminUserId) await pool.execute('DELETE FROM sessions WHERE user_id = ?', [tempSuperadminUserId]).catch(() => {})
+        if (tempSuperadminUserId) await pool.execute('DELETE FROM user_org_access WHERE user_id = ?', [tempSuperadminUserId]).catch(() => {})
+        if (tempSuperadminUserId) await pool.execute('DELETE FROM users WHERE id = ?', [tempSuperadminUserId]).catch(() => {})
+        if (originalProcessExplorerEnabled != null) {
+          await pool.execute('UPDATE organisations SET process_explorer_enabled = ? WHERE id = ?', [originalProcessExplorerEnabled, Number(decodeJwtPayload(token).orgId || 0)]).catch(() => {})
+        }
+      }
+    }
+  },
+  {
+    name: 'Admin copy division routes cover superadmin org preview and execute flow',
+    module: 'Admin — Copy Division',
+    covers: [
+      'GET /api/admin/copy-division/orgs',
+      'GET /api/admin/copy-division/categories',
+      'POST /api/admin/copy-division/preview',
+      'POST /api/admin/copy-division/execute',
+    ],
+    run: async ({ makeRequest }) => {
+      let sourceOrgId = null
+      let targetOrgId = null
+      let tempSuperadminUserId = null
+      try {
+        const superadmin = await createTemporarySuperadmin(makeRequest)
+        tempSuperadminUserId = superadmin.userId
+        if (superadmin.status !== 200 || !superadmin.token) {
+          return { pass: false, details: `superadminLogin=${superadmin.status}` }
+        }
+
+        const sourceOrgName = uniqueName('Regression Copy Source')
+        const targetOrgName = uniqueName('Regression Copy Target')
+        const [sourceInsert] = await pool.execute(
+          'INSERT INTO organisations (name, is_active) VALUES (?, 1)',
+          [sourceOrgName]
+        )
+        sourceOrgId = Number(sourceInsert.insertId || 0)
+        const [targetInsert] = await pool.execute(
+          'INSERT INTO organisations (name, is_active) VALUES (?, 1)',
+          [targetOrgName]
+        )
+        targetOrgId = Number(targetInsert.insertId || 0)
+
+        const orgs = await makeRequest('GET', '/api/admin/copy-division/orgs', null, superadmin.token)
+        const categories = await makeRequest('GET', '/api/admin/copy-division/categories', null, superadmin.token)
+        const preview = await makeRequest('POST', '/api/admin/copy-division/preview', {
+          source_org_id: sourceOrgId,
+          categories: ['products'],
+        }, superadmin.token)
+        const execute = await makeRequest('POST', '/api/admin/copy-division/execute', {
+          source_org_id: sourceOrgId,
+          target_org_id: targetOrgId,
+          categories: ['products'],
+          overwrite: false,
+        }, superadmin.token)
+
+        const listedOrgs = Array.isArray(orgs.body?.orgs) ? orgs.body.orgs : []
+        const categoryRows = Array.isArray(categories.body?.categories) ? categories.body.categories : []
+        const productsPreview = preview.body?.preview?.products || {}
+
+        return {
+          pass: orgs.status === 200 &&
+            listedOrgs.some((row) => Number(row?.id || 0) === sourceOrgId) &&
+            listedOrgs.some((row) => Number(row?.id || 0) === targetOrgId) &&
+            categories.status === 200 &&
+            categoryRows.some((row) => row?.key === 'products') &&
+            preview.status === 200 &&
+            Object.prototype.hasOwnProperty.call(productsPreview, 'products') &&
+            execute.status === 200 &&
+            execute.body?.ok === true,
+          details: `superadminLogin=${superadmin.status}, orgs=${orgs.status}, categories=${categories.status}, preview=${preview.status}, execute=${execute.status}`,
+        }
+      } finally {
+        if (targetOrgId) await pool.execute(`DELETE FROM audit_logs WHERE entity = 'org_config_copy' AND entity_id = ?`, [targetOrgId]).catch(() => {})
+        if (targetOrgId) await pool.execute('DELETE FROM organisations WHERE id = ?', [targetOrgId]).catch(() => {})
+        if (sourceOrgId) await pool.execute('DELETE FROM organisations WHERE id = ?', [sourceOrgId]).catch(() => {})
+        if (tempSuperadminUserId) await pool.execute('DELETE FROM sessions WHERE user_id = ?', [tempSuperadminUserId]).catch(() => {})
+        if (tempSuperadminUserId) await pool.execute('DELETE FROM user_module_permissions WHERE user_id = ?', [tempSuperadminUserId]).catch(() => {})
+        if (tempSuperadminUserId) await pool.execute('DELETE FROM users WHERE id = ?', [tempSuperadminUserId]).catch(() => {})
+      }
+    }
+  },
+  {
+    name: 'Admin EMIR routes cover sender routing and receive lifecycle',
+    module: 'Admin — EMIR',
+    covers: [
+      'POST /api/admin/emir/receive',
+      'GET /api/admin/emir/routing-rules',
+      'POST /api/admin/emir/routing-rules',
+      'PUT /api/admin/emir/routing-rules/:id',
+      'DELETE /api/admin/emir/routing-rules/:id',
+      'GET /api/admin/emir/sender-rules',
+      'POST /api/admin/emir/sender-rules',
+      'PUT /api/admin/emir/sender-rules/:id',
+      'DELETE /api/admin/emir/sender-rules/:id',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let senderRuleId = null
+      let routingRuleId = null
+      let emirRequestId = null
+      let createdCaseId = null
+      let createdConfigId = null
+      let restoreConfig = null
+      try {
+        const auth = decodeJwtPayload(token)
+        const orgId = Number(auth.orgId || auth.org_id || 0)
+        const userId = Number(auth.userId || auth.user_id || 0)
+        if (!orgId || !userId) {
+          return { pass: false, details: 'Unable to resolve orgId/userId from auth token.' }
+        }
+
+        const trustedSender = `${uniqueName('emir.sender').toLowerCase()}@example.com`
+        const [[existingConfig]] = await pool.execute(
+          'SELECT * FROM org_emir_config WHERE org_id = ? LIMIT 1',
+          [orgId]
+        )
+        if (existingConfig) {
+          restoreConfig = {
+            inbound_email: existingConfig.inbound_email,
+            sender_whitelist: existingConfig.sender_whitelist,
+            ack_template: existingConfig.ack_template,
+            enabled: existingConfig.enabled,
+          }
+          let whitelist = existingConfig.sender_whitelist
+          if (typeof whitelist === 'string' && whitelist) {
+            try { whitelist = JSON.parse(whitelist) } catch (_) {}
+          }
+          whitelist = Array.isArray(whitelist) ? whitelist : []
+          if (!whitelist.includes(trustedSender)) whitelist.push(trustedSender)
+          await pool.execute(
+            `UPDATE org_emir_config
+             SET inbound_email = ?, sender_whitelist = ?, ack_template = ?, enabled = 1
+             WHERE org_id = ?`,
+            [
+              existingConfig.inbound_email || `emir-${orgId}@example.com`,
+              JSON.stringify(whitelist),
+              existingConfig.ack_template || 'Regression ACK {{reference}}',
+              orgId,
+            ]
+          )
+        } else {
+          const [configInsert] = await pool.execute(
+            `INSERT INTO org_emir_config (org_id, inbound_email, sender_whitelist, ack_template, enabled)
+             VALUES (?, ?, ?, ?, 1)`,
+            [orgId, `emir-${orgId}@example.com`, JSON.stringify([trustedSender]), 'Regression ACK {{reference}}']
+          )
+          createdConfigId = Number(configInsert.insertId || 0)
+        }
+
+        const senderList = await makeRequest('GET', '/api/admin/emir/sender-rules', null, token)
+        const senderCreate = await makeRequest('POST', '/api/admin/emir/sender-rules', {
+          sender_email: trustedSender,
+          sender_name: 'Regression Sender',
+          is_trusted: true,
+          notes: 'Regression sender rule',
+        }, token)
+        senderRuleId = Number(senderCreate.body?.id || 0)
+        const senderUpdate = await makeRequest('PUT', `/api/admin/emir/sender-rules/${senderRuleId}`, {
+          sender_email: trustedSender,
+          sender_name: 'Regression Sender Updated',
+          is_trusted: true,
+          notes: 'Regression sender rule updated',
+        }, token)
+
+        const routingList = await makeRequest('GET', '/api/admin/emir/routing-rules', null, token)
+        const routingCreate = await makeRequest('POST', '/api/admin/emir/routing-rules', {
+          rule_name: uniqueName('Regression EMIR Route'),
+          match_field: 'from_email',
+          match_value: trustedSender,
+          route_to_queue: 'Medical',
+          route_to_user_id: userId,
+          priority: 1,
+          is_active: true,
+        }, token)
+        routingRuleId = Number(routingCreate.body?.id || 0)
+        const routingUpdate = await makeRequest('PUT', `/api/admin/emir/routing-rules/${routingRuleId}`, {
+          rule_name: uniqueName('Regression EMIR Route Updated'),
+          match_field: 'subject',
+          match_value: 'Regression Subject',
+          route_to_queue: 'General',
+          route_to_user_id: userId,
+          priority: 2,
+          is_active: true,
+        }, token)
+
+        const receive = await makeRequest('POST', '/api/admin/emir/receive', {
+          from_email: trustedSender,
+          subject: 'Regression Subject',
+          body: 'Regression EMIR body',
+          attachments: [],
+        }, token)
+        createdCaseId = Number(receive.body?.case_id || 0)
+        if (receive.status === 200 && receive.body?.reference_number) {
+          const [[requestRow]] = await pool.execute(
+            'SELECT id FROM emir_requests WHERE reference_number = ? LIMIT 1',
+            [receive.body.reference_number]
+          )
+          emirRequestId = Number(requestRow?.id || 0)
+        }
+
+        const routingDelete = await makeRequest('DELETE', `/api/admin/emir/routing-rules/${routingRuleId}`, null, token)
+        const senderDelete = await makeRequest('DELETE', `/api/admin/emir/sender-rules/${senderRuleId}`, null, token)
+
+        return {
+          pass: senderList.status === 200 &&
+            Array.isArray(senderList.body) &&
+            senderCreate.status === 200 &&
+            senderRuleId > 0 &&
+            senderUpdate.status === 200 &&
+            routingList.status === 200 &&
+            Array.isArray(routingList.body) &&
+            routingCreate.status === 200 &&
+            routingRuleId > 0 &&
+            routingUpdate.status === 200 &&
+            receive.status === 200 &&
+            createdCaseId > 0 &&
+            routingDelete.status === 200 &&
+            senderDelete.status === 200,
+          details: `senderList=${senderList.status}, senderCreate=${senderCreate.status}, senderUpdate=${senderUpdate.status}, routingList=${routingList.status}, routingCreate=${routingCreate.status}, routingUpdate=${routingUpdate.status}, receive=${receive.status}, routingDelete=${routingDelete.status}, senderDelete=${senderDelete.status}`,
+        }
+      } finally {
+        if (createdCaseId) await pool.execute('DELETE FROM cases WHERE id = ?', [createdCaseId]).catch(() => {})
+        if (emirRequestId) await pool.execute('DELETE FROM emir_audit_log WHERE emir_request_id = ?', [emirRequestId]).catch(() => {})
+        if (emirRequestId) await pool.execute('DELETE FROM emir_attachments WHERE emir_request_id = ?', [emirRequestId]).catch(() => {})
+        if (emirRequestId) await pool.execute('DELETE FROM emir_requests WHERE id = ?', [emirRequestId]).catch(() => {})
+        if (routingRuleId) await pool.execute('DELETE FROM emir_routing_rules WHERE id = ?', [routingRuleId]).catch(() => {})
+        if (senderRuleId) await pool.execute('DELETE FROM emir_sender_rules WHERE id = ?', [senderRuleId]).catch(() => {})
+        if (createdConfigId) {
+          await pool.execute('DELETE FROM org_emir_config WHERE id = ?', [createdConfigId]).catch(() => {})
+        } else if (restoreConfig && decodeJwtPayload(token).orgId) {
+          await pool.execute(
+            `UPDATE org_emir_config
+             SET inbound_email = ?, sender_whitelist = ?, ack_template = ?, enabled = ?
+             WHERE org_id = ?`,
+            [
+              restoreConfig.inbound_email,
+              restoreConfig.sender_whitelist,
+              restoreConfig.ack_template,
+              restoreConfig.enabled,
+              Number(decodeJwtPayload(token).orgId),
+            ]
+          ).catch(() => {})
+        }
+      }
+    }
+  },
+  {
+    name: 'Admin DPPR routes cover rule lifecycle and execution flow',
+    module: 'Admin — DPPR',
+    covers: [
+      'GET /api/admin/dppr/domains',
+      'GET /api/admin/dppr',
+      'POST /api/admin/dppr',
+      'GET /api/admin/dppr/:id',
+      'PUT /api/admin/dppr/:id',
+      'PATCH /api/admin/dppr/:id/toggle',
+      'GET /api/admin/dppr/execution-log',
+      'POST /api/admin/dppr/run-now',
+      'DELETE /api/admin/dppr/:id',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let ruleId = null
+      try {
+        const domains = await makeRequest('GET', '/api/admin/dppr/domains', null, token)
+        const listBefore = await makeRequest('GET', '/api/admin/dppr', null, token)
+        const create = await makeRequest('POST', '/api/admin/dppr', {
+          rule_name: uniqueName('Regression DPPR'),
+          domain: 'reporter_info',
+          contact_type: 'all',
+          consent_type: 'all',
+          action: 'Anonymize',
+          retention_days: 180,
+          is_active: true,
+        }, token)
+        ruleId = Number(create.body?.id || 0)
+        if (domains.status !== 200 || listBefore.status !== 200 || create.status !== 201 || !ruleId) {
+          return {
+            pass: false,
+            details: `domains=${domains.status}, listBefore=${listBefore.status}, create=${create.status}, ruleId=${ruleId}`,
+          }
+        }
+
+        const getOne = await makeRequest('GET', `/api/admin/dppr/${ruleId}`, null, token)
+        const update = await makeRequest('PUT', `/api/admin/dppr/${ruleId}`, {
+          rule_name: uniqueName('Regression DPPR Updated'),
+          domain: 'reporter_info',
+          contact_type: 'hcp',
+          consent_type: 'all',
+          action: 'Delete',
+          retention_days: 200,
+          is_active: true,
+        }, token)
+        const runNow = await makeRequest('POST', '/api/admin/dppr/run-now', {}, token)
+        const executionLog = await makeRequest('GET', '/api/admin/dppr/execution-log', null, token)
+        const toggle = await makeRequest('PATCH', `/api/admin/dppr/${ruleId}/toggle`, null, token)
+        const del = await makeRequest('DELETE', `/api/admin/dppr/${ruleId}`, null, token)
+
+        return {
+          pass: getOne.status === 200 &&
+            update.status === 200 &&
+            runNow.status === 200 &&
+            executionLog.status === 200 &&
+            toggle.status === 200 &&
+            del.status === 200,
+          details: `domains=${domains.status}, listBefore=${listBefore.status}, create=${create.status}, getOne=${getOne.status}, update=${update.status}, runNow=${runNow.status}, executionLog=${executionLog.status}, toggle=${toggle.status}, delete=${del.status}`,
+        }
+      } finally {
+        if (ruleId) {
+          await pool.execute('DELETE FROM dppr_rules WHERE id = ?', [ruleId]).catch(() => {})
+        }
       }
     }
   },
@@ -928,6 +1951,270 @@ module.exports = [
         if (productId) await pool.execute('DELETE FROM product_country_authorizations WHERE product_id = ?', [productId]).catch(() => {})
         if (productId) await pool.execute('DELETE FROM product_approvals WHERE product_id = ?', [productId]).catch(() => {})
         if (productId) await pool.execute('DELETE FROM products WHERE id = ?', [productId]).catch(() => {})
+      }
+    }
+  },
+  {
+    name: 'Admin case audit routes cover summary list detail and create',
+    module: 'Admin — Case Operations',
+    covers: [
+      'GET /api/admin/case-audit-trail/cases-summary',
+      'GET /api/admin/case-audit-trail',
+      'GET /api/admin/case-audit-trail/:caseId',
+      'POST /api/admin/case-audit-trail',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let caseId = null
+      let auditId = null
+      try {
+        const site = await getFirstSite(makeRequest, token)
+        if (!site?.id) return { pass: false, details: 'No site available for admin case audit test.' }
+
+        const createCase = await makeRequest('POST', '/api/cases', {
+          site_id: site.id,
+          case_type: 'MI',
+          intake_channel: 'manual',
+          date_received: '2026-04-25',
+        }, token)
+        caseId = Number(createCase.body?.id || 0)
+        if (createCase.status !== 201 || !caseId) {
+          return { pass: false, details: `createCase=${createCase.status}` }
+        }
+
+        const createAudit = await makeRequest('POST', '/api/admin/case-audit-trail', {
+          case_id: caseId,
+          action_type: 'REGRESSION_UPDATE',
+          field_name: 'priority',
+          old_value: 'normal',
+          new_value: 'high',
+        }, token)
+        auditId = Number(createAudit.body?.id || 0)
+        const summaryRes = await makeRequest('GET', `/api/admin/case-audit-trail/cases-summary?search=${caseId}`, null, token)
+        const listRes = await makeRequest('GET', `/api/admin/case-audit-trail?case_id=${caseId}`, null, token)
+        const detailRes = await makeRequest('GET', `/api/admin/case-audit-trail/${caseId}`, null, token)
+
+        return {
+          pass: createAudit.status === 201 &&
+            auditId > 0 &&
+            summaryRes.status === 200 &&
+            Array.isArray(summaryRes.body?.cases) &&
+            listRes.status === 200 &&
+            Array.isArray(listRes.body?.entries) &&
+            listRes.body.entries.some((entry) => Number(entry?.id || 0) === auditId) &&
+            detailRes.status === 200 &&
+            Array.isArray(detailRes.body?.entries) &&
+            detailRes.body.entries.some((entry) => Number(entry?.id || 0) === auditId),
+          details: `createAudit=${createAudit.status}, summary=${summaryRes.status}, list=${listRes.status}, detail=${detailRes.status}`,
+        }
+      } finally {
+        if (caseId) await pool.execute('DELETE FROM case_audit_trail WHERE case_id = ?', [caseId]).catch(() => {})
+        if (caseId) await pool.execute('DELETE FROM cases WHERE id = ?', [caseId]).catch(() => {})
+      }
+    }
+  },
+  {
+    name: 'Admin audit trail routes cover list export and CM summaries',
+    module: 'Admin — Audit Trail',
+    covers: [
+      'GET /api/admin/audit-trail',
+      'GET /api/admin/audit-trail/export',
+      'GET /api/admin/cm-audit-trail',
+      'GET /api/admin/cm-audit-trail/entities-summary',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let standardAuditId = null
+      let cmAuditId = null
+      try {
+        const user = await getFirstUser(makeRequest, token)
+        if (!user?.id) return { pass: false, details: 'No user available for audit trail test.' }
+        const standardEntityId = Math.floor(Date.now() / 1000)
+        const cmEntityId = String(standardEntityId + 1)
+
+        const [standardInsert] = await pool.execute(
+          `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [user.id, user.name || user.email || 'Regression User', 'REGRESSION_AUDIT', 'contact', standardEntityId, JSON.stringify({ source: 'regression-standard-audit' })]
+        )
+        standardAuditId = Number(standardInsert.insertId || 0)
+
+        const [cmInsert] = await pool.execute(
+          `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [user.id, user.name || user.email || 'Regression User', 'REGRESSION_CM_AUDIT', 'cm_document', cmEntityId, JSON.stringify({ source: 'regression-cm-audit' })]
+        )
+        cmAuditId = Number(cmInsert.insertId || 0)
+
+        const auditList = await makeRequest('GET', '/api/admin/audit-trail?action=REGRESSION_AUDIT&entity=contact', null, token)
+        const auditExport = await makeRequest('GET', '/api/admin/audit-trail/export?action=REGRESSION_AUDIT&entity=contact', null, token)
+        const cmList = await makeRequest('GET', `/api/admin/cm-audit-trail?entity=cm_document&entity_id=${encodeURIComponent(cmEntityId)}`, null, token)
+        const cmSummary = await makeRequest('GET', '/api/admin/cm-audit-trail/entities-summary?entity=cm_document', null, token)
+
+        return {
+          pass: auditList.status === 200 &&
+            Array.isArray(auditList.body?.entries) &&
+            auditList.body.entries.some((entry) => Number(entry?.id || 0) === standardAuditId) &&
+            auditExport.status === 200 &&
+            typeof auditExport.body === 'string' &&
+            auditExport.body.includes('id,user_id,user_name,action,entity,entity_id,details,created_at') &&
+            cmList.status === 200 &&
+            Array.isArray(cmList.body?.entries) &&
+            cmList.body.entries.some((entry) => Number(entry?.id || 0) === cmAuditId) &&
+            cmSummary.status === 200 &&
+            Array.isArray(cmSummary.body?.entities) &&
+            cmSummary.body.entities.some((entry) => String(entry?.entity || '') === 'cm_document'),
+          details: `auditList=${auditList.status}, auditExport=${auditExport.status}, cmList=${cmList.status}, cmSummary=${cmSummary.status}`,
+        }
+      } finally {
+        if (standardAuditId) await pool.execute('DELETE FROM audit_logs WHERE id = ?', [standardAuditId]).catch(() => {})
+        if (cmAuditId) await pool.execute('DELETE FROM audit_logs WHERE id = ?', [cmAuditId]).catch(() => {})
+      }
+    }
+  },
+  {
+    name: 'Admin case export import and transmission routes cover operational flow',
+    module: 'Admin — Case Operations',
+    covers: [
+      'GET /api/admin/cases/export',
+      'GET /api/admin/cases/export/e2b',
+      'GET /api/admin/cases/export/xlsx',
+      'GET /api/admin/cases/export/pdf',
+      'POST /api/admin/cases/import/upload',
+      'GET /api/admin/cases/import/jobs',
+      'GET /api/admin/cases/import/jobs/:id',
+      'GET /api/admin/transmission-audit-trail/cases-summary',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let caseId = null
+      let importJobId = null
+      let firstUserId = null
+      try {
+        const site = await getFirstSite(makeRequest, token)
+        const firstUser = await getFirstUser(makeRequest, token)
+        if (!site?.id) return { pass: false, details: 'No site available for admin ops export/import test.' }
+        if (!firstUser?.id) return { pass: false, details: 'No user available for admin ops export/import test.' }
+        firstUserId = Number(firstUser.id)
+
+        const createCase = await makeRequest('POST', '/api/cases', {
+          site_id: site.id,
+          case_type: 'AE',
+          intake_channel: 'manual',
+          date_received: '2026-04-25',
+        }, token)
+        caseId = Number(createCase.body?.id || 0)
+        const orgId = Number(createCase.body?.org_id || 0)
+        if (createCase.status !== 201 || !caseId || !orgId) {
+          return { pass: false, details: `createCase=${createCase.status}` }
+        }
+
+        await pool.execute(
+          `INSERT INTO transmission_audit_trail (case_id, user_id, user_name, target_system, payload_summary, status, response_code)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [caseId, firstUserId, firstUser.name || firstUser.email || 'Regression User', 'Argus', 'Regression transmission', 'Sent', '200']
+        ).catch(() => {})
+
+        const [jobInsert] = await pool.execute(
+          `INSERT INTO case_import_jobs (org_id, filename, status, total_rows, imported_rows, failed_rows, error_log, created_by)
+           VALUES (?, ?, 'completed', ?, ?, ?, ?, ?)`,
+          [orgId, `regression-${Date.now()}.csv`, 1, 1, 0, JSON.stringify([]), firstUserId]
+        ).catch(() => [{ insertId: 0 }])
+        importJobId = Number(jobInsert?.insertId || 0)
+
+        const exportCsv = await makeRequest('GET', '/api/admin/cases/export?case_type=AE', null, token)
+        const exportE2b = await makeRequest('GET', `/api/admin/cases/export/e2b?case_id=${caseId}`, null, token)
+        const exportXlsx = await makeRequest('GET', '/api/admin/cases/export/xlsx?case_type=AE', null, token)
+        const exportPdf = await makeRequest('GET', '/api/admin/cases/export/pdf?case_type=AE', null, token)
+        const importUpload = await makeRequest('POST', '/api/admin/cases/import/upload', {}, token)
+        const importJobs = await makeRequest('GET', '/api/admin/cases/import/jobs', null, token)
+        const importJobDetail = importJobId
+          ? await makeRequest('GET', `/api/admin/cases/import/jobs/${importJobId}`, null, token)
+          : { status: 0, body: null }
+        const transmissionSummary = await makeRequest('GET', `/api/admin/transmission-audit-trail/cases-summary?search=${caseId}`, null, token)
+
+        const xlsxPass = exportXlsx.status === 200
+          ? String(exportXlsx.headers?.['content-type'] || '').includes('spreadsheetml')
+          : exportXlsx.status === 500 && String(exportXlsx.body?.error || '').includes('exceljs')
+        const pdfPass = exportPdf.status === 200
+          ? String(exportPdf.headers?.['content-type'] || '').includes('application/pdf')
+          : exportPdf.status === 500 && String(exportPdf.body?.error || '').includes('pdfkit')
+
+        return {
+          pass: exportCsv.status === 200 &&
+            String(exportCsv.headers?.['content-type'] || '').includes('text/csv') &&
+            exportE2b.status === 200 &&
+            String(exportE2b.headers?.['content-type'] || '').includes('application/xml') &&
+            xlsxPass &&
+            pdfPass &&
+            importUpload.status === 400 &&
+            importJobs.status === 200 &&
+            Array.isArray(importJobs.body?.jobs) &&
+            importJobId > 0 &&
+            importJobDetail.status === 200 &&
+            Number(importJobDetail.body?.job?.id || 0) === importJobId &&
+            transmissionSummary.status === 200 &&
+            Array.isArray(transmissionSummary.body?.cases),
+          details: `csv=${exportCsv.status}, e2b=${exportE2b.status}, xlsx=${exportXlsx.status}, pdf=${exportPdf.status}, importUpload=${importUpload.status}, importJobs=${importJobs.status}, importJobDetail=${importJobDetail.status}, transmissionSummary=${transmissionSummary.status}`,
+        }
+      } finally {
+        if (importJobId) await pool.execute('DELETE FROM case_import_jobs WHERE id = ?', [importJobId]).catch(() => {})
+        if (caseId) await pool.execute('DELETE FROM transmission_audit_trail WHERE case_id = ?', [caseId]).catch(() => {})
+        if (caseId) await pool.execute('DELETE FROM case_audit_trail WHERE case_id = ?', [caseId]).catch(() => {})
+        if (caseId) await pool.execute('DELETE FROM cases WHERE id = ?', [caseId]).catch(() => {})
+      }
+    }
+  },
+  {
+    name: 'Admin DPPR case override routes cover lifecycle',
+    module: 'Admin — DPPR',
+    covers: [
+      'GET /api/admin/dppr/cases/:caseId/overrides',
+      'PUT /api/admin/dppr/cases/:caseId/overrides',
+      'DELETE /api/admin/dppr/cases/:caseId/overrides/:domain',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let caseId = null
+      try {
+        const site = await getFirstSite(makeRequest, token)
+        if (!site?.id) return { pass: false, details: 'No site available for DPPR override test.' }
+
+        const createCase = await makeRequest('POST', '/api/cases', {
+          site_id: site.id,
+          case_type: 'MI',
+          intake_channel: 'manual',
+          date_received: '2026-04-25',
+        }, token)
+        caseId = Number(createCase.body?.id || 0)
+        if (createCase.status !== 201 || !caseId) {
+          return { pass: false, details: `createCase=${createCase.status}` }
+        }
+
+        const getBefore = await makeRequest('GET', `/api/admin/dppr/cases/${caseId}/overrides`, null, token)
+        const putOverride = await makeRequest('PUT', `/api/admin/dppr/cases/${caseId}/overrides`, {
+          domain: 'reporter_info',
+          action: 'Delete',
+          retention_days: 30,
+          override_reason: 'Regression override',
+        }, token)
+        const getAfter = await makeRequest('GET', `/api/admin/dppr/cases/${caseId}/overrides`, null, token)
+        const deleteOverride = await makeRequest('DELETE', `/api/admin/dppr/cases/${caseId}/overrides/reporter_info`, null, token)
+        const getFinal = await makeRequest('GET', `/api/admin/dppr/cases/${caseId}/overrides`, null, token)
+
+        return {
+          pass: getBefore.status === 200 &&
+            Array.isArray(getBefore.body?.overrides) &&
+            putOverride.status === 200 &&
+            getAfter.status === 200 &&
+            Array.isArray(getAfter.body?.overrides) &&
+            getAfter.body.overrides.some((row) => String(row?.domain || '') === 'reporter_info') &&
+            deleteOverride.status === 200 &&
+            getFinal.status === 200 &&
+            Array.isArray(getFinal.body?.overrides) &&
+            !getFinal.body.overrides.some((row) => String(row?.domain || '') === 'reporter_info'),
+          details: `getBefore=${getBefore.status}, putOverride=${putOverride.status}, getAfter=${getAfter.status}, deleteOverride=${deleteOverride.status}, getFinal=${getFinal.status}`,
+        }
+      } finally {
+        if (caseId) await pool.execute('DELETE FROM case_dppr_overrides WHERE case_id = ?', [caseId]).catch(() => {})
+        if (caseId) await pool.execute('DELETE FROM case_audit_trail WHERE case_id = ?', [caseId]).catch(() => {})
+        if (caseId) await pool.execute('DELETE FROM cases WHERE id = ?', [caseId]).catch(() => {})
       }
     }
   },

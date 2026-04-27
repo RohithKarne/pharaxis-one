@@ -154,25 +154,48 @@ router.get('/help/search', authenticate, async (req, res) => {
     const roleJson = JSON.stringify(role);
     const safeLimit = Math.min(parseInt(limit, 10) || 10, 50);
 
-    // FULLTEXT BOOLEAN MODE search
-    const [articles] = await pool.execute(
-      `SELECT id, feature_key, feature_group, tags, title, summary, content_html,
-              audience, version, sort_order, view_count, last_reviewed_at, updated_at,
-              MATCH(title, content_html, summary) AGAINST (? IN BOOLEAN MODE) AS relevance
-       FROM help_articles
-       WHERE is_active = 1
-         AND MATCH(title, content_html, summary) AGAINST (? IN BOOLEAN MODE)
-         AND (
-           JSON_CONTAINS(audience, '"all"')
-           OR JSON_CONTAINS(audience, ?)
-         )
-         AND (org_id IS NULL OR org_id = ?)
-       ORDER BY relevance DESC, sort_order ASC
-       LIMIT ?`,
-      [q, q, roleJson, orgId, safeLimit]
-    );
+    try {
+      const [articles] = await pool.execute(
+        `SELECT id, feature_key, feature_group, tags, title, summary, content_html,
+                audience, version, sort_order, view_count, last_reviewed_at, updated_at,
+                MATCH(title, content_html, summary) AGAINST (? IN BOOLEAN MODE) AS relevance
+         FROM help_articles
+         WHERE is_active = 1
+           AND MATCH(title, content_html, summary) AGAINST (? IN BOOLEAN MODE)
+           AND (
+             JSON_CONTAINS(audience, '"all"')
+             OR JSON_CONTAINS(audience, ?)
+           )
+           AND (org_id IS NULL OR org_id = ?)
+         ORDER BY relevance DESC, sort_order ASC
+         LIMIT ?`,
+        [q, q, roleJson, orgId, safeLimit]
+      );
 
-    res.json({ articles, query: q });
+      return res.json({ articles, query: q });
+    } catch (fullTextErr) {
+      const like = `%${q.trim()}%`;
+      const [articles] = await pool.execute(
+        `SELECT id, feature_key, feature_group, tags, title, summary, content_html,
+                audience, version, sort_order, view_count, last_reviewed_at, updated_at
+         FROM help_articles
+         WHERE is_active = 1
+           AND (
+             title LIKE ?
+             OR summary LIKE ?
+             OR content_html LIKE ?
+           )
+           AND (
+             JSON_CONTAINS(audience, '"all"')
+             OR JSON_CONTAINS(audience, ?)
+           )
+           AND (org_id IS NULL OR org_id = ?)
+         ORDER BY sort_order ASC, updated_at DESC
+         LIMIT ${safeLimit}`,
+        [like, like, like, roleJson, orgId]
+      );
+      return res.json({ articles, query: q, fallback: 'like' });
+    }
   } catch (err) {
     console.error('GET /api/help/search error:', err);
     res.status(500).json({ error: 'Server error.' });

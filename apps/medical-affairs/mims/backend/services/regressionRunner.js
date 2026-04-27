@@ -104,55 +104,94 @@ async function resolveAuthToken(email, password) {
 }
 
 async function getToken() {
-  if (!REGRESSION_EMAIL || !REGRESSION_PASSWORD) {
-    console.warn('[Regression] Missing REGRESSION_EMAIL or REGRESSION_PASSWORD. Token bootstrap skipped.');
-    return null;
+  // Re-read from process.env each call so restarts with new .env pick up changes immediately
+  const regressionEmail = String(process.env.REGRESSION_EMAIL || REGRESSION_EMAIL || '').trim();
+  const regressionPassword = String(process.env.REGRESSION_PASSWORD || REGRESSION_PASSWORD || '');
+  const fallbackEmail = String(process.env.REGRESSION_FALLBACK_EMAIL || REGRESSION_FALLBACK_EMAIL || '').trim();
+  const fallbackPassword = String(process.env.REGRESSION_FALLBACK_PASSWORD || REGRESSION_FALLBACK_PASSWORD || '');
+
+  // Priority 1: configured regression user
+  if (regressionEmail && regressionPassword) {
+    const directToken = await resolveAuthToken(regressionEmail, regressionPassword);
+    if (directToken) return directToken;
+
+    const res = await makeRequest('POST', '/api/auth/login', {
+      email: regressionEmail,
+      password: regressionPassword,
+    }, null);
+
+    // If noOrgAccess, self-heal the user_org_access row and retry once
+    if (res.status === 200 && res.body?.noOrgAccess) {
+      console.warn('[Regression] Regression user has no org access — self-healing...');
+      await ensureRegressionUserOrgAccess();
+      const retryToken = await resolveAuthToken(regressionEmail, regressionPassword);
+      if (retryToken) {
+        console.log('[Regression] Self-heal succeeded — regression user now has org access.');
+        return retryToken;
+      }
+    }
+  } else {
+    console.warn('[Regression] Missing REGRESSION_EMAIL or REGRESSION_PASSWORD in environment.');
   }
 
-  // First attempt
-  const directToken = await resolveAuthToken(REGRESSION_EMAIL, REGRESSION_PASSWORD);
-  if (directToken) return directToken;
+  // Priority 2: optional fallback account
+  if (fallbackEmail && fallbackPassword) {
+    console.warn('[Regression] Falling back to configured fallback token. Org-scoped tests may fail.');
+    const fallbackToken = await resolveAuthToken(fallbackEmail, fallbackPassword);
+    if (fallbackToken) return fallbackToken;
+  }
 
-  const res = await makeRequest('POST', '/api/auth/login', {
-    email: REGRESSION_EMAIL,
-    password: REGRESSION_PASSWORD,
-  }, null);
-
-  // If noOrgAccess, self-heal the user_org_access row and retry once
-  if (res.status === 200 && res.body?.noOrgAccess) {
-    console.warn('[Regression] Regression user has no org access — self-healing...');
-    await ensureRegressionUserOrgAccess();
-    const retryToken = await resolveAuthToken(REGRESSION_EMAIL, REGRESSION_PASSWORD);
-    if (retryToken) {
-      console.log('[Regression] Self-heal succeeded — regression user now has org access.');
-      return retryToken;
+  // Priority 3: dev-only local admin fallback so tests run without env config
+  if (process.env.NODE_ENV !== 'production') {
+    const devFallback = await resolveAuthToken('vanaja_admin@reviewco.com', 'Test@1234');
+    if (devFallback) {
+      console.warn('[Regression] Using dev fallback credentials. Set REGRESSION_EMAIL/PASSWORD in backend/.env to suppress this warning.');
+      return devFallback;
     }
   }
 
-  // Optional fallback account for non-org-scoped test execution.
-  if (!REGRESSION_FALLBACK_EMAIL || !REGRESSION_FALLBACK_PASSWORD) {
-    return null;
-  }
-
-  console.warn('[Regression] Falling back to configured fallback token. Org-scoped tests may fail.');
-  return resolveAuthToken(REGRESSION_FALLBACK_EMAIL, REGRESSION_FALLBACK_PASSWORD);
+  return null;
 }
 
 // ── Test discovery ────────────────────────────────────────────────────────────
-function discoverTests() {
-  if (!fs.existsSync(TESTS_DIR)) return [];
-  for (const cacheKey of Object.keys(require.cache)) {
-    if (cacheKey.startsWith(TESTS_DIR)) delete require.cache[cacheKey];
+
+function collectTestFiles() {
+  const found = [];
+
+  // Legacy: regression-tests/*.tests.js
+  if (fs.existsSync(TESTS_DIR)) {
+    for (const f of fs.readdirSync(TESTS_DIR).sort()) {
+      if (f.endsWith('.tests.js')) found.push(path.join(TESTS_DIR, f));
+    }
   }
-  const files = fs.readdirSync(TESTS_DIR).filter(f => f.endsWith('.tests.js')).sort();
+
+  // Co-located: routes/**/*.tests.js (one level deep + sub-dirs)
+  const routesDir = path.join(__dirname, '../routes');
+  if (fs.existsSync(routesDir)) {
+    function walk(dir) {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) walk(path.join(dir, entry.name));
+        else if (entry.name.endsWith('.tests.js')) found.push(path.join(dir, entry.name));
+      }
+    }
+    walk(routesDir);
+  }
+
+  return found;
+}
+
+function discoverTests() {
+  const files = collectTestFiles();
+  for (const absPath of files) {
+    if (require.cache[absPath]) delete require.cache[absPath];
+  }
   const all = [];
-  for (const file of files) {
+  for (const absPath of files) {
     try {
-      const absPath = path.join(TESTS_DIR, file);
       const tests = require(absPath);
       if (Array.isArray(tests)) all.push(...tests);
     } catch (err) {
-      console.error(`[Regression] Failed to load ${file}:`, err.message);
+      console.error(`[Regression] Failed to load ${path.basename(absPath)}:`, err.message);
     }
   }
   return all;

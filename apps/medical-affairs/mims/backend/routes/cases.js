@@ -19,6 +19,7 @@ try {
 }
 const pool    = require('../database/db');
 const { authenticate, requireRole, requireOrg } = require('../middleware/auth');
+const { validate, schemas } = require('../middleware/validate');
 const { checkTransitionAllowed } = require('../services/workflowEngine');
 const { logger } = require('../services/logger');
 const { createNotification } = require('../services/notificationCenterService');
@@ -617,7 +618,7 @@ router.get('/cases/saved-views', authenticate, async (req, res) => {
   }
 });
 
-router.post('/cases/saved-views', authenticate, async (req, res) => {
+router.post('/cases/saved-views', authenticate, validate(schemas.savedView), async (req, res) => {
   try {
     if (!req.user.orgId) return res.status(400).json({ error: 'Organisation context required.' });
     const name = String(req.body?.name || '').trim();
@@ -1361,7 +1362,7 @@ router.get('/cases/:id/intake-schema-snapshot', authenticate, async (req, res) =
 // ─── CREATE CASE (F-13) ───────────────────────────────────────────────────────
 
 // POST /api/cases — create new case with intake fields captured at creation time (CF-E1–E5)
-router.post('/cases', authenticate, requireOrg, async (req, res) => {
+router.post('/cases', authenticate, requireOrg, validate(schemas.createCase), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -1836,7 +1837,7 @@ router.post('/cases/:id/reassign', authenticate, async (req, res) => {
 // ─── UPDATE CASE — F-15 Case Information Section ─────────────────────────────
 
 // PUT /api/cases/:id — update case info fields (also handles auto-save)
-router.put('/cases/:id', authenticate, async (req, res) => {
+router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req, res) => {
   try {
     const owned = await verifyCaseOrg(req.params.id, req);
     if (!owned) return res.status(403).json({ error: 'Access denied' });

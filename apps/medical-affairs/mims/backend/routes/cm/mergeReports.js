@@ -398,16 +398,33 @@ router.post('/merge-reports/:id/schedule', authenticate, async (req, res) => {
     const { cron_expression, email_recipients, is_active } = req.body;
     if (!cron_expression) return res.status(400).json({ error: 'cron_expression required' });
     const orgId = isSuperadmin(req) ? (report.folder_org_id || null) : req.user.orgId;
+    const jobName = `cm-merge-report-${orgId || 'global'}-${Number(req.params.id)}`;
     const jobConfig = JSON.stringify({
       merge_report_id: Number(req.params.id),
       email_recipients: Array.isArray(email_recipients) ? email_recipients : [],
     });
     await pool.execute(
-      `INSERT INTO scheduled_jobs (org_id, job_type, job_config, schedule_cron, is_active, created_at, updated_at)
-       VALUES (?, 'cm_merge_report', ?, ?, ?, NOW(), NOW())
-       ON DUPLICATE KEY UPDATE job_config = VALUES(job_config), schedule_cron = VALUES(schedule_cron),
-                               is_active = VALUES(is_active), updated_at = NOW()`,
-      [orgId, jobConfig, cron_expression, is_active !== false ? 1 : 0]
+      `INSERT INTO scheduled_jobs
+         (job_name, cron_expression, description, is_active, org_id, job_type, job_config, schedule_cron, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'cm_merge_report', ?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE
+         cron_expression = VALUES(cron_expression),
+         description = VALUES(description),
+         is_active = VALUES(is_active),
+         org_id = VALUES(org_id),
+         job_type = VALUES(job_type),
+         job_config = VALUES(job_config),
+         schedule_cron = VALUES(schedule_cron),
+         updated_at = NOW()`,
+      [
+        jobName,
+        cron_expression,
+        `CM merge report schedule for report ${Number(req.params.id)}`,
+        is_active !== false ? 1 : 0,
+        orgId,
+        jobConfig,
+        cron_expression,
+      ]
     );
     await audit(req.user.userId, req.user.email, 'SET_MERGE_SCHEDULE', 'cm_merge_report', Number(req.params.id), { cron_expression });
     res.json({ success: true, message: 'Merge report schedule saved.' });

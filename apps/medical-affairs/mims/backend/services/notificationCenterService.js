@@ -117,14 +117,12 @@ async function retryFailedNotifications(limit = 100, options = {}) {
     whereParts.push('user_id = ?');
     params.push(userId);
   }
-  params.push(safeLimit);
-
   const [rows] = await pool.execute(
     `SELECT id, delivery_attempts, max_delivery_attempts
      FROM notifications
      WHERE ${whereParts.join(' AND ')}
      ORDER BY COALESCE(next_retry_at, created_at) ASC
-     LIMIT ?`,
+     LIMIT ${safeLimit}`,
     params
   );
 

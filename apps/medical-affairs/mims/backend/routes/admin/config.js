@@ -8,6 +8,7 @@ const pool = require('../../database/db');
 const bcrypt = require('bcrypt');
 const userModel = require('../../models/userModel');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
+const { validate, schemas } = require('../../middleware/validate');
 const { logService } = require('../../services/serviceLogger');
 
 async function audit(userId, userName, action, entity, entityId, details) {
@@ -40,7 +41,7 @@ router.get('/workflow-states', authenticate, requireRole('admin', 'superadmin'),
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.post('/workflow-states', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/workflow-states', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createWorkflowState), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
@@ -133,7 +134,7 @@ router.get('/products', authenticate, requireRole('admin', 'superadmin'), requir
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.post('/products', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/products', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createProduct), async (req, res) => {
   try {
     const { trade_name } = req.body;
     if (!trade_name) return res.status(400).json({ error: 'Trade name is required.' });
@@ -742,6 +743,36 @@ router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 
     });
     res.status(500).json({ error: msg });
   }
+});
+
+// GET /api/admin/system-config — read one or all system_config values
+router.get('/system-config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { key } = req.query;
+    if (key) {
+      const [[row]] = await pool.execute(
+        'SELECT config_key, config_value FROM system_config WHERE config_key = ?', [key]
+      );
+      return res.json(row || { config_key: key, config_value: null });
+    }
+    const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
+    res.json({ configs: rows });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+// POST /api/admin/system-config — upsert a system_config key/value
+router.post('/system-config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const { key, value } = req.body;
+    if (!key) return res.status(400).json({ error: 'key is required.' });
+    await pool.execute(
+      `INSERT INTO system_config (config_key, config_value)
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE config_value = VALUES(config_value), updated_at = NOW()`,
+      [key, value != null ? String(value) : null]
+    );
+    res.json({ success: true, config_key: key, config_value: value });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 module.exports = router;

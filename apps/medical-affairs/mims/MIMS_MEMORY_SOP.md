@@ -24,6 +24,7 @@
 | 2026-04-18 | Bala | Sprint 15 active changes: CM Phase 4 (4 new document tabs), Regression Testing Suite built, navbar restructured (Utilities dropdown), auth infinite-loop fixed, ExceptionToast silenced, regression mi-categories self-heal fix. Sections 6, 7, 9, 9b, 11, 12, 13 updated. |
 | 2026-04-22 | Bala | Sprints 16-18 closed. MI Full Approval Workflow (DRAFT→READY→APPROVED→SENT + e-sign), AE multi-row tab CRUD, Transmissions page, Browse Content page, Impact Preview, npm audit fix, MI bypass fix, DB DEFAULT fix. All sections updated. |
 | 2026-04-23 | Bala | Sprint 19 closed. MI email delivery on SENT transition, Response Log page, SLA badge on case list, Dashboard MI KPIs, Inbox→Case context carry, Case Audit Trail diff UI + per-case CSV. Sections 6, 7, 9b, 10, 11, 12, 13 updated. |
+| 2026-04-26 | Bala | Sprint 21 (Sprints A+B+C combined) in progress. Sprint A: shared apiClient.js created, regression tests co-located, Joi validation added. Sprint B: db.js split into 001-015 migrations. Sprint C: ContentPage.jsx 3950→68 lines (14 sub-components extracted to content/components/), CaseFormPage 2856→2273 lines (5 components extracted), AdminMiscSection 1782→23 lines (6 panels extracted to AdminProductsPanel, AdminAuditPanel, AdminEmailAccountsPanel, AdminContactMasterPanel, AdminCaseNumberingPanel + AdminShared.jsx created, duplicates removed from AdminWorkflowSection + AdminAccessSection). Total −6,000+ lines from monoliths, 30+ focused files created. |
 
 ---
 
@@ -602,13 +603,13 @@ Full regression test engine. Auto-discovers `*.tests.js` files from `mims/backen
 
 Key functions:
 - `runRegressionSuite({ runByUserId, app })` — runs all discovered tests, returns structured report
-- `getToken()` — logs in as `regression@system` (role=admin). If `noOrgAccess`, calls `ensureRegressionUserOrgAccess()` to self-heal, then retries. Falls back to superadmin only if everything fails.
+- `getToken()` — reads `REGRESSION_EMAIL`/`REGRESSION_PASSWORD` from `process.env` (set in `backend/.env`). Handles 2FA orgs via challengeToken→skip-setup flow. Dev-mode fallback to `vanaja_admin@reviewco.com` if env vars missing. Falls back to `REGRESSION_FALLBACK_EMAIL` if primary fails.
 - `ensureRegressionUserOrgAccess()` — directly INSERTs `user_org_access` row for regression user using first active org. Called automatically on `noOrgAccess` during test run.
 - `getDbHealth()` — SHOW TABLES + DESCRIBE per table + row counts
 - `getApiCatalog(app)` — traverses `app._router.stack` recursively to list all registered routes
 - `discoverTests()` — fs.readdirSync scans `regression-tests/` for `*.tests.js` files. New test files auto-detected without config changes.
 
-**Regression user:** `regression@system` / `__SET_REGRESSION_PASSWORD__`, role=`admin`. Seeded in `db.js`. Must have `user_org_access` row — self-healed at test time if missing.
+**Regression credentials:** Set in `mims/backend/.env` (NOT the top-level `mims/.env`). Server CWD is `backend/` so `--env-file=.env` loads `backend/.env`. Missing credentials = token null = 170 tests fail with 401. Current: `REGRESSION_EMAIL=vanaja_admin@reviewco.com` / `REGRESSION_PASSWORD=Test@1234`.
 
 **Test files location:** `mims/backend/regression-tests/*.tests.js`
 

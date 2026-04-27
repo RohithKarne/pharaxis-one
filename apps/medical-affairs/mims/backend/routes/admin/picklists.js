@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
+const { validate, schemas } = require('../../middleware/validate');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -473,7 +474,7 @@ router.get('/picklists/export', authenticate, requireRole('admin', 'superadmin')
 });
 
 // POST /api/admin/picklists — create new picklist value
-router.post('/picklists', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/picklists', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createPicklist), async (req, res) => {
   try {
     const { name, value, description, status } = req.body;
     if (!value) {
@@ -537,7 +538,7 @@ router.post('/picklists', authenticate, requireRole('admin', 'superadmin'), requ
 });
 
 // PUT /api/admin/picklists/:id — update picklist value
-router.put('/picklists/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/picklists/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.updatePicklist), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [[existing]] = await pool.execute(

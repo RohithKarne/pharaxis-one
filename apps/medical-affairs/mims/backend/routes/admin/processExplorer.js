@@ -1359,8 +1359,8 @@ router.get('/sql/audit', authenticate, requireRole('admin', 'superadmin'), async
        FROM process_explorer_sql_audit
        WHERE org_id = ?
        ORDER BY id DESC
-       LIMIT ?`,
-      [req.user.orgId || 0, limit]
+       LIMIT ${limit}`,
+      [req.user.orgId || 0]
     );
     return res.json({ logs: rows || [] });
   } catch (err) {

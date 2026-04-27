@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
+const { validate, schemas } = require('../../middleware/validate');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -87,7 +88,7 @@ router.get('/security-groups', authenticate, requireRole('admin', 'superadmin'),
 });
 
 // POST /api/admin/security-groups — create group
-router.post('/security-groups', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/security-groups', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createSecurityGroup), async (req, res) => {
   try {
     const { name, description, privileges } = req.body;
     if (!name || !String(name).trim()) {

@@ -106,6 +106,15 @@ export const ADMIN_NAV_GROUPS = [
     ],
   },
   {
+    key: 'qa-engine',
+    title: 'AI QA Engine',
+    items: [
+      { key: 'qa-reports',   label: 'Retrospective QA Reports', active: true },
+      { key: 'qa-rules',     label: 'QA Rules Configuration',   active: true },
+      { key: 'qa-overrides', label: 'Override Dashboard',        active: true },
+    ],
+  },
+  {
     key: 'content-management',
     title: 'Content Management',
     items: [

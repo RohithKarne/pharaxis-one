@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
+const { validate, schemas } = require('../../middleware/validate');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -70,7 +71,7 @@ router.get('/contacts', authenticate, requireRole('admin', 'superadmin'), requir
 });
 
 // POST /api/admin/contacts — create contact
-router.post('/contacts', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/contacts', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createContact), async (req, res) => {
   try {
     const { type, first_name, last_name, specialty, institution, email, phone, site_id, notes, address, do_not_update_master } = req.body;
     if (!first_name) return res.status(400).json({ error: 'first_name is required.' });

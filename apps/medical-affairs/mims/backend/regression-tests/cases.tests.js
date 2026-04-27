@@ -56,6 +56,14 @@ async function cleanupCaseArtifacts(caseId) {
     ['DELETE FROM case_ae_medical_notes WHERE version_id IN (SELECT id FROM case_ae_versions WHERE case_id = ?)', [caseId]],
     ['DELETE FROM case_ae_flex_fields WHERE version_id IN (SELECT id FROM case_ae_versions WHERE case_id = ?)', [caseId]],
     ['DELETE FROM case_ae_versions WHERE case_id = ?', [caseId]],
+    ['DELETE FROM case_pc_general WHERE version_id IN (SELECT id FROM case_pc_versions WHERE case_id = ?)', [caseId]],
+    ['DELETE FROM case_pc_patient_info WHERE version_id IN (SELECT id FROM case_pc_versions WHERE case_id = ?)', [caseId]],
+    ['DELETE FROM case_pc_product_info WHERE version_id IN (SELECT id FROM case_pc_versions WHERE case_id = ?)', [caseId]],
+    ['DELETE FROM case_pc_return_retrieval WHERE version_id IN (SELECT id FROM case_pc_versions WHERE case_id = ?)', [caseId]],
+    ['DELETE FROM case_pc_replacement WHERE version_id IN (SELECT id FROM case_pc_versions WHERE case_id = ?)', [caseId]],
+    ['DELETE FROM case_pc_refund_credit WHERE version_id IN (SELECT id FROM case_pc_versions WHERE case_id = ?)', [caseId]],
+    ['DELETE FROM case_pc_flex_fields WHERE version_id IN (SELECT id FROM case_pc_versions WHERE case_id = ?)', [caseId]],
+    ['DELETE FROM case_pc_versions WHERE case_id = ?', [caseId]],
     ['DELETE FROM case_ae_transmissions WHERE case_id = ?', [caseId]],
     ['DELETE FROM case_pc_transmissions WHERE case_id = ?', [caseId]],
     ['DELETE FROM case_dynamic_field_values WHERE case_id = ?', [caseId]],
@@ -494,6 +502,18 @@ module.exports = [
     }
   },
   {
+    name: 'MI products route returns product selector options',
+    module: 'Cases',
+    covers: ['GET /api/cases/mi/products'],
+    run: async ({ makeRequest, token }) => {
+      const products = await makeRequest('GET', '/api/cases/mi/products', null, token)
+      return {
+        pass: products.status === 200 && Array.isArray(products.body),
+        details: `products=${products.status}, count=${Array.isArray(products.body) ? products.body.length : 'n/a'}`,
+      }
+    }
+  },
+  {
     name: 'AE versioned tabs cover lifecycle',
     module: 'Cases',
     covers: [
@@ -669,6 +689,240 @@ module.exports = [
             deleteHistory.status === 200 &&
             deleteProduct.status === 200,
           details: `versionsBefore=${versionsBefore.status}, createVersion=${createVersion.status}, status=${statusRes.status}, generalBefore=${generalBefore.status}, generalUpdate=${generalUpdate.status}, eventsBefore=${eventsBefore.status}, createEvent=${createEvent.status}, updateEvent=${updateEvent.status}, patientBefore=${patientBefore.status}, patientUpdate=${patientUpdate.status}, labBefore=${labBefore.status}, createLab=${createLab.status}, labNotesBefore=${labNotesBefore.status}, labNotesUpdate=${labNotesUpdate.status}, historyBefore=${historyBefore.status}, createHistory=${createHistory.status}, medicalNotesBefore=${medicalNotesBefore.status}, medicalNotesUpdate=${medicalNotesUpdate.status}, productBefore=${productBefore.status}, createProduct=${createProduct.status}, flexBefore=${flexBefore.status}, flexUpdate=${flexUpdate.status}, deleteEvent=${deleteEvent.status}, deleteLab=${deleteLab.status}, deleteHistory=${deleteHistory.status}, deleteProduct=${deleteProduct.status}`,
+        }
+      } finally {
+        await cleanupCaseArtifacts(caseId)
+      }
+    }
+  },
+  {
+    name: 'PC versioned tabs cover lifecycle',
+    module: 'Cases',
+    covers: [
+      'GET /api/cases/:id/pc/versions',
+      'POST /api/cases/:id/pc/versions',
+      'PUT /api/cases/pc/versions/:versionId/status',
+      'GET /api/cases/pc/versions/:versionId/general',
+      'PUT /api/cases/pc/versions/:versionId/general',
+      'GET /api/cases/pc/versions/:versionId/patient-info',
+      'PUT /api/cases/pc/versions/:versionId/patient-info',
+      'GET /api/cases/pc/versions/:versionId/product-info',
+      'PUT /api/cases/pc/versions/:versionId/product-info',
+      'GET /api/cases/pc/versions/:versionId/return-retrieval',
+      'PUT /api/cases/pc/versions/:versionId/return-retrieval',
+      'GET /api/cases/pc/versions/:versionId/replacement',
+      'PUT /api/cases/pc/versions/:versionId/replacement',
+      'GET /api/cases/pc/versions/:versionId/refund-credit',
+      'PUT /api/cases/pc/versions/:versionId/refund-credit',
+      'GET /api/cases/pc/versions/:versionId/pc-flex-fields',
+      'PUT /api/cases/pc/versions/:versionId/pc-flex-fields',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let caseId = null
+      try {
+        const site = await getFirstSite(makeRequest, token)
+        if (!site?.id) return { pass: false, details: 'No site available for PC version lifecycle.' }
+
+        const createCase = await makeRequest('POST', '/api/cases', {
+          site_id: site.id,
+          case_type: 'PC',
+          intake_channel: 'manual',
+          date_received: '2026-04-25',
+        }, token)
+        caseId = Number(createCase.body?.id || 0)
+        if (createCase.status !== 201 || !caseId) {
+          return { pass: false, details: `createCase=${createCase.status}` }
+        }
+
+        const versionsBefore = await makeRequest('GET', `/api/cases/${caseId}/pc/versions`, null, token)
+        const createVersion = await makeRequest('POST', `/api/cases/${caseId}/pc/versions`, {}, token)
+        const versionId = Number(createVersion.body?.id || 0)
+        if (versionsBefore.status !== 200 || createVersion.status !== 201 || !versionId) {
+          return { pass: false, details: `versionsBefore=${versionsBefore.status}, createVersion=${createVersion.status}` }
+        }
+
+        const statusRes = await makeRequest('PUT', `/api/cases/pc/versions/${versionId}/status`, {
+          status: 'In Review',
+        }, token)
+
+        const generalBefore = await makeRequest('GET', `/api/cases/pc/versions/${versionId}/general`, null, token)
+        const generalUpdate = await makeRequest('PUT', `/api/cases/pc/versions/${versionId}/general`, {
+          complaint_description: 'Regression PC complaint',
+          pc_status: 'Open',
+          pc_category: 'Quality',
+          pc_classification: 'Critical',
+          date_of_complaint: '2026-04-20',
+          date_received: '2026-04-21',
+          severity: 'High',
+          additional_info: 'Regression PC general notes',
+        }, token)
+
+        const patientBefore = await makeRequest('GET', `/api/cases/pc/versions/${versionId}/patient-info`, null, token)
+        const patientUpdate = await makeRequest('PUT', `/api/cases/pc/versions/${versionId}/patient-info`, {
+          age: 38,
+          age_unit: 'years',
+          sex: 'Male',
+          weight_kg: 72,
+          therapy_start_date: '2026-04-01',
+          therapy_end_date: '2026-04-15',
+          indication: 'Regression indication',
+          injury_experienced: 'No',
+          additional_info: 'Regression PC patient info',
+        }, token)
+
+        const productBefore = await makeRequest('GET', `/api/cases/pc/versions/${versionId}/product-info`, null, token)
+        const productUpdate = await makeRequest('PUT', `/api/cases/pc/versions/${versionId}/product-info`, {
+          product_name: 'Regression PC Product',
+          lot_number: 'LOT-REG-001',
+          expiry_date: '2027-12-31',
+          quantity_available: true,
+          storage_conditions: 'Room temperature',
+          additional_info: 'Regression PC product info',
+        }, token)
+
+        const returnBefore = await makeRequest('GET', `/api/cases/pc/versions/${versionId}/return-retrieval`, null, token)
+        const returnUpdate = await makeRequest('PUT', `/api/cases/pc/versions/${versionId}/return-retrieval`, {
+          return_requested: true,
+          return_date: '2026-04-23',
+          return_method: 'Courier',
+          retrieval_requested: true,
+          retrieval_date: '2026-04-24',
+          retrieval_method: 'Pickup',
+          tracking_number: 'TRACK-PC-001',
+          notes: 'Regression return notes',
+        }, token)
+
+        const replacementBefore = await makeRequest('GET', `/api/cases/pc/versions/${versionId}/replacement`, null, token)
+        const replacementUpdate = await makeRequest('PUT', `/api/cases/pc/versions/${versionId}/replacement`, {
+          replacement_requested: true,
+          replacement_approved: true,
+          replacement_date: '2026-04-25',
+          replacement_product: 'Replacement SKU',
+          quantity: 2,
+          notes: 'Regression replacement notes',
+        }, token)
+
+        const refundBefore = await makeRequest('GET', `/api/cases/pc/versions/${versionId}/refund-credit`, null, token)
+        const refundUpdate = await makeRequest('PUT', `/api/cases/pc/versions/${versionId}/refund-credit`, {
+          refund_requested: true,
+          refund_approved: true,
+          refund_amount: 120.5,
+          credit_requested: true,
+          credit_approved: false,
+          credit_amount: 80,
+          notes: 'Regression refund notes',
+        }, token)
+
+        const flexBefore = await makeRequest('GET', `/api/cases/pc/versions/${versionId}/pc-flex-fields`, null, token)
+        const flexUpdate = await makeRequest('PUT', `/api/cases/pc/versions/${versionId}/pc-flex-fields`, {
+          pc_flex_1: 'PC Flex 1',
+          pc_flex_2: 'PC Flex 2',
+          pc_flex_3: 'PC Flex 3',
+        }, token)
+
+        return {
+          pass: statusRes.status === 200 &&
+            generalBefore.status === 200 &&
+            generalUpdate.status === 200 &&
+            patientBefore.status === 200 &&
+            patientUpdate.status === 200 &&
+            productBefore.status === 200 &&
+            productUpdate.status === 200 &&
+            returnBefore.status === 200 &&
+            returnUpdate.status === 200 &&
+            replacementBefore.status === 200 &&
+            replacementUpdate.status === 200 &&
+            refundBefore.status === 200 &&
+            refundUpdate.status === 200 &&
+            flexBefore.status === 200 &&
+            flexUpdate.status === 200,
+          details: `versionsBefore=${versionsBefore.status}, createVersion=${createVersion.status}, status=${statusRes.status}, generalBefore=${generalBefore.status}, generalUpdate=${generalUpdate.status}, patientBefore=${patientBefore.status}, patientUpdate=${patientUpdate.status}, productBefore=${productBefore.status}, productUpdate=${productUpdate.status}, returnBefore=${returnBefore.status}, returnUpdate=${returnUpdate.status}, replacementBefore=${replacementBefore.status}, replacementUpdate=${replacementUpdate.status}, refundBefore=${refundBefore.status}, refundUpdate=${refundUpdate.status}, flexBefore=${flexBefore.status}, flexUpdate=${flexUpdate.status}`,
+        }
+      } finally {
+        await cleanupCaseArtifacts(caseId)
+      }
+    }
+  },
+  {
+    name: 'Case dynamic fields and MI response transitions cover lifecycle',
+    module: 'Cases',
+    covers: [
+      'GET /api/cases/:id/dynamic-fields',
+      'POST /api/cases/:id/dynamic-fields',
+      'GET /api/cases/mi-responses/log',
+      'PATCH /api/cases/:id/mi-responses/:responseId/status',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let caseId = null
+      try {
+        const site = await getFirstSite(makeRequest, token)
+        if (!site?.id) return { pass: false, details: 'No site available for MI dynamic-field lifecycle.' }
+
+        const createCase = await makeRequest('POST', '/api/cases', {
+          site_id: site.id,
+          case_type: 'MI',
+          intake_channel: 'manual',
+          date_received: '2026-04-25',
+        }, token)
+        caseId = Number(createCase.body?.id || 0)
+        if (createCase.status !== 201 || !caseId) {
+          return { pass: false, details: `createCase=${createCase.status}` }
+        }
+
+        let fieldId = 0
+        try {
+          const snapshot = typeof createCase.body?.field_schema_snapshot === 'string'
+            ? JSON.parse(createCase.body.field_schema_snapshot)
+            : createCase.body?.field_schema_snapshot
+          const field = Array.isArray(snapshot?.sections)
+            ? snapshot.sections.flatMap((section) => Array.isArray(section?.fields) ? section.fields : []).find((item) => Number(item?.id || 0) > 0)
+            : null
+          fieldId = Number(field?.id || 0)
+        } catch (_) {}
+        if (!fieldId) {
+          return { pass: false, details: 'No dynamic field id found in case schema snapshot.' }
+        }
+
+        const dynamicBefore = await makeRequest('GET', `/api/cases/${caseId}/dynamic-fields`, null, token)
+        const dynamicSave = await makeRequest('POST', `/api/cases/${caseId}/dynamic-fields`, {
+          fields: [{ field_id: fieldId, field_value: 'Regression dynamic value' }],
+        }, token)
+        const dynamicAfter = await makeRequest('GET', `/api/cases/${caseId}/dynamic-fields`, null, token)
+
+        const createMi = await makeRequest('POST', `/api/cases/${caseId}/mi`, {
+          mi_category: 'General',
+          question_summary: 'Regression MI transition summary',
+          detailed_question: 'Regression MI transition detail',
+          status: 'Open',
+        }, token)
+        const miId = Number(createMi.body?.id || 0)
+        const createResponse = await makeRequest('POST', `/api/cases/${caseId}/mi-responses`, {
+          mi_tab_id: miId,
+          response_text: 'Regression MI status transition body',
+          response_channel: 'Email',
+          response_status: 'DRAFT',
+        }, token)
+        const responseId = Number(createResponse.body?.id || 0)
+        const patchStatus = await makeRequest('PATCH', `/api/cases/${caseId}/mi-responses/${responseId}/status`, {
+          response_status: 'READY',
+        }, token)
+        const responseLog = await makeRequest('GET', '/api/cases/mi-responses/log?search=Regression%20MI%20status%20transition%20body', null, token)
+
+        return {
+          pass: dynamicBefore.status === 200 &&
+            dynamicSave.status === 200 &&
+            dynamicAfter.status === 200 &&
+            Array.isArray(dynamicAfter.body) &&
+            dynamicAfter.body.some((row) => Number(row?.field_definition_id || 0) === fieldId) &&
+            createMi.status === 201 &&
+            miId > 0 &&
+            createResponse.status === 201 &&
+            responseId > 0 &&
+            patchStatus.status === 200 &&
+            String(patchStatus.body?.response_status || '').toUpperCase() === 'READY' &&
+            responseLog.status === 200 &&
+            Array.isArray(responseLog.body?.responses),
+          details: `dynamicBefore=${dynamicBefore.status}, dynamicSave=${dynamicSave.status}, dynamicAfter=${dynamicAfter.status}, createMi=${createMi.status}, createResponse=${createResponse.status}, patchStatus=${patchStatus.status}, responseLog=${responseLog.status}`,
         }
       } finally {
         await cleanupCaseArtifacts(caseId)

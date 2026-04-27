@@ -11,6 +11,7 @@ const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const pool = require('../database/db');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { validate, schemas } = require('../middleware/validate');
 const { accountCreationRateLimiter } = require('../middleware/rateLimiters');
 const { validateUpload } = require('../middleware/uploadValidation');
 const { emitSuperadminAlert, getSystemConfig, parseJson } = require('../services/alertService');
@@ -220,7 +221,7 @@ router.get('/orgs', authenticate, requireRole('superadmin'), async (_req, res) =
 });
 
 // POST /api/superadmin/orgs — create organisation
-router.post('/orgs', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/orgs', authenticate, requireRole('superadmin'), validate(schemas.createOrg), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Organisation name is required.' });
   try {
@@ -526,7 +527,7 @@ router.get('/all-users', authenticate, requireRole('superadmin'), async (_req, r
 });
 
 // POST /api/superadmin/users/create — create user with one-time temporary password
-router.post('/users/create', authenticate, requireRole('superadmin'), accountCreationRateLimiter, async (req, res) => {
+router.post('/users/create', authenticate, requireRole('superadmin'), accountCreationRateLimiter, validate(schemas.createUser), async (req, res) => {
   try {
     const { name, email, role } = req.body;
     if (!name || !email) return res.status(400).json({ error: 'name and email are required.' });

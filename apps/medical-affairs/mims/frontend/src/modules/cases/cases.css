@@ -2503,3 +2503,125 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ─── AI QA Engine — Sprint 15 ───────────────────────────────── */
+
+.cf-qa-run-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.cf-qa-run-btn:hover:not(:disabled) { background: #dbeafe; }
+.cf-qa-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cf-qa-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.cf-qa-badge--warn  { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+.cf-qa-badge--pass  { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+
+/* QA Warning Panel */
+.cf-qa-panel {
+  margin: 0 24px 12px;
+  border-radius: 8px;
+  padding: 14px 18px;
+  font-size: 13.5px;
+}
+.cf-qa-panel--critical  { background: #fef2f2; border: 1.5px solid #fca5a5; }
+.cf-qa-panel--warning   { background: #fffbeb; border: 1.5px solid #fcd34d; }
+.cf-qa-panel--overridden { background: #f0fdf4; border: 1.5px solid #86efac; color: #15803d; font-weight: 500; }
+
+.cf-qa-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.cf-qa-panel-title {
+  font-weight: 600;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cf-qa-panel-score {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.cf-qa-panel-counts { display: flex; gap: 6px; }
+
+.cf-qa-critical-badge {
+  background: #fee2e2; color: #991b1b;
+  padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
+}
+.cf-qa-warning-badge {
+  background: #fef3c7; color: #92400e;
+  padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
+}
+
+.cf-qa-flags-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cf-qa-flag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.cf-qa-flag--critical { background: #fff1f2; border-left: 3px solid #ef4444; }
+.cf-qa-flag--warning  { background: #fffbeb; border-left: 3px solid #f59e0b; }
+
+.cf-qa-flag-icon  { font-size: 14px; }
+.cf-qa-flag-name  { flex: 1; font-weight: 500; color: #374151; }
+.cf-qa-flag-field { font-size: 11px; color: #9ca3af; background: #f3f4f6; padding: 1px 6px; border-radius: 8px; }
+
+.cf-qa-override-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.cf-qa-override-input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+}
+.cf-qa-override-input:focus { outline: none; border-color: #6b7280; }
+
+.cf-qa-override-btn {
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #374151;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.cf-qa-override-btn:hover:not(:disabled) { background: #1f2937; }
+.cf-qa-override-btn:disabled { opacity: 0.45; cursor: not-allowed; }
