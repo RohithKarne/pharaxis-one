@@ -113,8 +113,6 @@ const LEGACY_SEC_PERMS = {
   ],
 }
 
-}
-
 export default function AdminAccessSection({ contentSection, H, flash }) {
   const [permissions, setPermissions] = useState([])
   const [permissionsLoading, setPermissionsLoading] = useState(false)
