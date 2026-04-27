@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './DPPRPage.css'
@@ -127,7 +128,7 @@ export default function DPPRPage() {
   }
 
   async function deleteRule(rule) {
-    if (!window.confirm(`Deactivate rule "${rule.rule_name}"?`)) return
+    if (!await confirm(`Deactivate rule "${rule.rule_name}"?`)) return
     await fetch(`/api/admin/dppr/${rule.id}`, { method: 'DELETE', headers: H })
     fetchRules(page)
   }

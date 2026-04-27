@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader, StatusPill } from './AdminShared'
 
 export default function AdminEmailAccountsPanel({ H, flash }) {
@@ -129,7 +130,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
 
   async function runEmailAction(account, action) {
     const actionLabel = action === 'fetch-now' ? 'fetch emails now' : action === 'test-imap' ? 'run IMAP test' : action === 'test-smtp' ? 'run SMTP test' : `run ${action}`
-    if (!window.confirm(`Confirm to ${actionLabel} for "${account.account_name}"?`)) return
+    if (!await confirm(`Confirm to ${actionLabel} for "${account.account_name}"?`)) return
     const key = `${action}-${account.id}`
     setEmailTestingId(key)
     try {

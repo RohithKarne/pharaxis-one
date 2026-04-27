@@ -1,4 +1,5 @@
 import { startTransition, useDeferredValue, useEffect, useState } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -442,7 +443,7 @@ export default function ReportsPage() {
 
   async function deleteSelectedReport() {
     if (!selectedReport || selectedReport.is_system) return
-    if (!window.confirm(`Delete report "${selectedReport.name}"?`)) return
+    if (!await confirm(`Delete report "${selectedReport.name}"?`)) return
     try {
       await apiJson(`/api/reports/module/definitions/${selectedReport.id}`, { method: 'DELETE' })
       setSelectedReportId(null)
@@ -494,7 +495,7 @@ export default function ReportsPage() {
 
   async function deleteSelectedDashboard() {
     if (!selectedDashboard || selectedDashboard.is_system) return
-    if (!window.confirm(`Delete dashboard "${selectedDashboard.name}"?`)) return
+    if (!await confirm(`Delete dashboard "${selectedDashboard.name}"?`)) return
     try {
       await apiJson(`/api/reports/module/dashboards/${selectedDashboard.id}`, { method: 'DELETE' })
       setSelectedDashboardId(null)
@@ -562,7 +563,7 @@ export default function ReportsPage() {
   }
 
   async function removeSchedule(id) {
-    if (!window.confirm('Delete this schedule?')) return
+    if (!await confirm('Delete this schedule?')) return
     try {
       await apiJson(`/api/reports/module/schedules/${id}`, { method: 'DELETE' })
       if (Number(editingScheduleId) === Number(id)) setEditingScheduleId(null)

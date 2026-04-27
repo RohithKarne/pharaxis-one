@@ -1,4 +1,6 @@
+import toast from '../../../shared/utils/toast'
 import { useState, useEffect, useCallback } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 
 const RELATION_TYPES = ['Supports', 'Supersedes', 'Translated From', 'Referenced By']
 
@@ -49,17 +51,17 @@ export function AssociatedDocsPanel({ docId, token }) {
         body: JSON.stringify({ related_doc_id: selectedDoc.id, relation_type: relationType }),
       })
       if (res.ok) { setShowSearch(false); setSelectedDoc(null); setSearch(''); setSearchResults([]); load() }
-      else { const d = await res.json(); alert(d.error || 'Failed to link.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Failed to link.') }
+    } catch { toast.error('Network error.') }
     setAdding(false)
   }
 
   async function handleRemove(relId) {
-    if (!window.confirm('Remove this linked document?')) return
+    if (!await confirm('Remove this linked document?')) return
     try {
       await fetch(`/api/cm/documents/${docId}/relations/${relId}`, { method: 'DELETE', headers: H })
       load()
-    } catch { alert('Network error.') }
+    } catch { toast.error('Network error.') }
   }
 
   return (
@@ -292,8 +294,8 @@ export function VersionAlertsPanel({ docId, token }) {
         method: 'PUT', headers: H,
         body: JSON.stringify({ alert_days: config.alert_days, alert_email_account_id: config.alert_email_account_id || null }),
       })
-      if (!res.ok) { const d = await res.json(); alert(d.error || 'Save failed.') }
-    } catch { alert('Network error.') }
+      if (!res.ok) { const d = await res.json(); toast.error(d.error || 'Save failed.') }
+    } catch { toast.error('Network error.') }
     setSaving(false)
   }
 
@@ -305,8 +307,8 @@ export function VersionAlertsPanel({ docId, token }) {
         method: 'POST', headers: H, body: JSON.stringify({ user_id: Number(selectedUser) }),
       })
       if (res.ok) { setSelectedUser(''); load() }
-      else { const d = await res.json(); alert(d.error || 'Failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Failed.') }
+    } catch { toast.error('Network error.') }
     setAddingUser(false)
   }
 
@@ -314,7 +316,7 @@ export function VersionAlertsPanel({ docId, token }) {
     try {
       await fetch(`/api/cm/documents/${docId}/alert-subs/${subId}`, { method: 'DELETE', headers: H })
       load()
-    } catch { alert('Network error.') }
+    } catch { toast.error('Network error.') }
   }
 
   if (loading) return <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 40 }}>Loading…</p>

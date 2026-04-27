@@ -1,0 +1,231 @@
+import { useState, useEffect } from 'react'
+import toast from '../../../shared/utils/toast'
+import PCTabPanel from './PCTabPanel'
+
+const API = import.meta.env.VITE_API_URL || '/api'
+
+const PC_TABS = [
+  { key: 'general',          label: 'General' },
+  { key: 'pc-flex-fields',   label: 'PC Flex Fields' },
+  { key: 'patient-info',     label: 'PC Patient Info' },
+  { key: 'product-info',     label: 'Product Info' },
+  { key: 'return-retrieval', label: 'Return / Retrieval' },
+  { key: 'replacement',      label: 'Replacement' },
+  { key: 'refund-credit',    label: 'Refund / Credit' },
+]
+
+export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklistOptions, onCountChange }) {
+  const [pcVersions,   setPcVersions]   = useState([])
+  const [activePcVer,  setActivePcVer]  = useState(null)
+  const [activePcTab,  setActivePcTab]  = useState('general')
+  const [pcTabData,    setPcTabData]    = useState({})
+  const [pcTabLoading, setPcTabLoading] = useState(false)
+
+  const [pcTransmissions, setPcTransmissions] = useState([])
+  const [pcTxLoading,     setPcTxLoading]     = useState(false)
+  const [pcTxDrawer,      setPcTxDrawer]      = useState(false)
+  const [pcTxForm,        setPcTxForm]        = useState({ assigned_to_id: '', priority: 'routine', notes: '' })
+  const [pcTxSaving,      setPcTxSaving]      = useState(false)
+
+  useEffect(() => { loadPCVersions(); loadPcTransmissions() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isLocked = (ver) => ver && ver.is_locked === 1
+
+  async function loadPCVersions() {
+    try {
+      const res  = await fetch(`${API}/cases/${id}/pc/versions`, { headers })
+      const data = await res.json()
+      const list = Array.isArray(data) ? data : []
+      setPcVersions(list)
+      onCountChange?.(list.length)
+      if (list.length > 0) { setActivePcVer(list[list.length - 1]); loadPCTab(list[list.length - 1].id, 'general') }
+    } catch { setPcVersions([]) }
+  }
+
+  async function loadPCTab(versionId, tabKey) {
+    setPcTabLoading(true)
+    try {
+      const res  = await fetch(`${API}/cases/pc/versions/${versionId}/${tabKey}`, { headers })
+      const data = await res.json()
+      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
+    } catch {}
+    finally { setPcTabLoading(false) }
+  }
+
+  function switchPCTab(tabKey) {
+    setActivePcTab(tabKey)
+    if (activePcVer) loadPCTab(activePcVer.id, tabKey)
+  }
+
+  async function createPCVersion() {
+    try {
+      const res  = await fetch(`${API}/cases/${id}/pc/versions`, { method: 'POST', headers })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      const updated = [...pcVersions.map(v => v.id === (pcVersions[pcVersions.length - 1]?.id) ? { ...v, is_locked: 1 } : v), data]
+      setPcVersions(updated)
+      onCountChange?.(updated.length)
+      setActivePcVer(data)
+      setActivePcTab('general')
+      loadPCTab(data.id, 'general')
+    } catch (err) { toast.error(err.message) }
+  }
+
+  async function savePCTab() {
+    if (!activePcVer || isLocked(activePcVer)) return
+    const tabData = pcTabData[`${activePcVer.id}_${activePcTab}`] || {}
+    try {
+      const res  = await fetch(`${API}/cases/pc/versions/${activePcVer.id}/${activePcTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: data }))
+      setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
+    } catch (err) { toast.error(err.message) }
+  }
+
+  async function loadPcTransmissions() {
+    setPcTxLoading(true)
+    try {
+      const res  = await fetch(`${API}/cases/${id}/pc-transmissions`, { headers })
+      const data = await res.json()
+      setPcTransmissions(Array.isArray(data) ? data : [])
+    } catch { setPcTransmissions([]) }
+    finally { setPcTxLoading(false) }
+  }
+
+  async function createPcTransmission() {
+    if (pcTxSaving) return
+    setPcTxSaving(true)
+    try {
+      const res  = await fetch(`${API}/cases/${id}/pc-transmissions`, { method: 'POST', headers, body: JSON.stringify(pcTxForm) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setPcTransmissions(prev => [data, ...prev])
+      setPcTxDrawer(false)
+      setPcTxForm({ assigned_to_id: '', priority: 'routine', notes: '' })
+      setSavedMsg('Routed to Quality team'); setTimeout(() => setSavedMsg(''), 2500)
+    } catch (err) { toast.error(err.message) }
+    finally { setPcTxSaving(false) }
+  }
+
+  async function updatePcTxStatus(txId, status) {
+    try {
+      const res  = await fetch(`${API}/cases/${id}/pc-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status }) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setPcTransmissions(prev => prev.map(t => t.id === txId ? data : t))
+    } catch (err) { toast.error(err.message) }
+  }
+
+  return (
+    <div className="cf-tab-pane">
+      <div className="cf-section-header-row">
+        <button className="cf-add-btn" onClick={createPCVersion}>+ New Version</button>
+        <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)}>
+          🧪 {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
+        </button>
+      </div>
+
+      {pcVersions.length === 0 ? (
+        <div className="cf-empty-msg">No PC versions yet. Click "+ New Version" to start.</div>
+      ) : (
+        <>
+          <div className="cf-version-bar">
+            {pcVersions.map(v => (
+              <button
+                key={v.id}
+                className={`cf-version-btn ${activePcVer?.id === v.id ? 'active' : ''} ${v.is_locked ? 'locked' : ''}`}
+                onClick={() => { setActivePcVer(v); loadPCTab(v.id, activePcTab) }}
+              >
+                V{v.version_number}
+                {v.is_locked && <span className="cf-lock-icon">🔒</span>}
+                <span className={`cf-ver-status ${v.status.toLowerCase()}`}>{v.status}</span>
+              </button>
+            ))}
+          </div>
+
+          {isLocked(activePcVer) && (
+            <div className="cf-locked-notice">This version is locked (read-only). Create a new version to continue editing.</div>
+          )}
+
+          <div className="cf-tab-bar">
+            {PC_TABS.map(t => (
+              <button key={t.key} className={`cf-tab-btn ${activePcTab === t.key ? 'active' : ''}`} onClick={() => switchPCTab(t.key)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {pcTabLoading ? (
+            <div className="cf-tab-loading">Loading…</div>
+          ) : (
+            <PCTabPanel
+              tabKey={activePcTab}
+              data={pcTabData[`${activePcVer?.id}_${activePcTab}`] || {}}
+              onChange={d => setPcTabData(prev => ({ ...prev, [`${activePcVer?.id}_${activePcTab}`]: d }))}
+              locked={isLocked(activePcVer)}
+              getPicklistOptions={getPicklistOptions}
+              versionId={activePcVer?.id}
+              headers={headers}
+              onSave={savePCTab}
+            />
+          )}
+        </>
+      )}
+
+      {pcTxDrawer && (
+        <div className="cf-tx-drawer">
+          <div className="cf-tx-drawer-title">New PC Routing → Quality Team</div>
+          <div className="cf-form-grid">
+            <div className="cf-form-field">
+              <label>Assign To (Quality Team)</label>
+              <select value={pcTxForm.assigned_to_id} onChange={e => setPcTxForm(p => ({ ...p, assigned_to_id: e.target.value }))}>
+                <option value="">— Select Assignee —</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+            <div className="cf-form-field">
+              <label>Priority</label>
+              <select value={pcTxForm.priority} onChange={e => setPcTxForm(p => ({ ...p, priority: e.target.value }))}>
+                <option value="routine">Routine</option>
+                <option value="expedited">Expedited</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div className="cf-form-field cf-form-field--full">
+              <label>Notes for Quality Team</label>
+              <textarea rows={3} value={pcTxForm.notes} onChange={e => setPcTxForm(p => ({ ...p, notes: e.target.value }))} placeholder="Context and notes for quality team…" />
+            </div>
+          </div>
+          <div className="cf-form-actions">
+            <button className="cf-cancel-btn" onClick={() => setPcTxDrawer(false)}>Cancel</button>
+            <button className="cf-save-btn" onClick={createPcTransmission} disabled={pcTxSaving}>
+              {pcTxSaving ? 'Routing…' : 'Route to Quality'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="cf-tx-tracker">
+        <div className="cf-tx-tracker-title">PC Quality Routing Tracker</div>
+        {pcTxLoading && <div className="cf-empty-msg">Loading routings…</div>}
+        {!pcTxLoading && pcTransmissions.length === 0 && <div className="cf-empty-msg">No PC routings created yet.</div>}
+        {!pcTxLoading && pcTransmissions.map(tx => (
+          <div key={tx.id} className="cf-tx-card">
+            <div className="cf-tx-card-top">
+              <span className={`cf-tx-status-badge cf-tx-status--${(tx.status || '').toLowerCase().replace(/\s+/g, '-')}`}>{tx.status}</span>
+              <span className="cf-tx-meta">Priority: <strong>{tx.priority}</strong></span>
+              <span className="cf-tx-meta">→ {tx.assignee_name || 'Unassigned'}</span>
+            </div>
+            {tx.notes && <div className="cf-tx-narrative">{tx.notes}</div>}
+            <div className="cf-tx-status-actions">
+              {['Pending', 'Under Investigation', 'Closed'].map(s => (
+                <button key={s} className={`cf-tx-status-btn${tx.status === s ? ' active' : ''}`} onClick={() => updatePcTxStatus(tx.id, s)} disabled={tx.status === s}>{s}</button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

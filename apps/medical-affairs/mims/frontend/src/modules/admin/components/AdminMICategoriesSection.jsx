@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import toast from '../../../shared/utils/toast'
+import { confirm } from '../../../shared/utils/confirm'
 
 export default function AdminMICategoriesSection({ H }) {
   const [categories, setCategories] = useState([])
@@ -64,12 +66,12 @@ export default function AdminMICategoriesSection({ H }) {
   }
 
   async function handleDelete(cat) {
-    if (!window.confirm(`Delete "${cat.name}"? This cannot be undone.`)) return
+    if (!await confirm(`Delete "${cat.name}"? This cannot be undone.`)) return
     try {
       const res = await fetch(`/api/admin/mi-categories/${cat.id}`, { method: 'DELETE', headers: H })
       if (res.ok) load()
-      else { const d = await res.json(); alert(d.error || 'Delete failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Delete failed.') }
+    } catch { toast.error('Network error.') }
   }
 
   return (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 import { IntegrationSectionHeader } from './AdminIntegrationShared'
 
 export default function AdminCaseImportPanel({ H }) {
@@ -306,7 +307,7 @@ export default function AdminCaseImportPanel({ H }) {
                   <td style={{ padding: '6px 8px' }}>{cfg.is_active ? '✓' : '—'}</td>
                   <td style={{ padding: '6px 8px' }}>
                     <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }} onClick={async () => {
-                      if (!window.confirm('Delete this scheduled export?')) return
+                      if (!await confirm('Delete this scheduled export?')) return
                       try {
                         await fetch(`/api/admin/exports/scheduled/${cfg.id}`, { method: 'DELETE', headers: H })
                         setScheduledExports(prev => prev.filter((_, idx) => idx !== i))

@@ -5,6 +5,8 @@ import ProtectedRoute from '../../shared/components/ProtectedRoute'
 import ModuleAccessGuard from '../../shared/components/ModuleAccessGuard'
 import { useIdleTimer } from '../../shared/hooks/useIdleTimer'
 import SessionTimeoutModal from '../../shared/components/SessionTimeoutModal'
+import ToastContainer from '../../shared/components/ToastContainer'
+import ConfirmModal from '../../shared/components/ConfirmModal'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import SessionManagementPage from './pages/SessionManagementPage'
@@ -52,6 +54,8 @@ function AppRoutes() {
   return (
     <>
       <SessionTimeoutModal visible={showWarning} remainingSeconds={warnSeconds} onStay={handleStay} />
+      <ToastContainer />
+      <ConfirmModal />
       <ExceptionToast />
       <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />

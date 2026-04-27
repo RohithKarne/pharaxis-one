@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import FlowDiagram from '../processExplorer/FlowDiagram'
 import { FLOW_TEMPLATES, generateFlow } from '../processExplorer/flowTemplates'
@@ -189,7 +190,7 @@ export default function ProcessExplorerPage() {
   }, [fetchConfig])
 
   async function purgeOldLogs() {
-    if (!window.confirm(`Delete logs older than ${retention} days?`)) return
+    if (!await confirm(`Delete logs older than ${retention} days?`)) return
     await fetch(`/api/admin/process-logs/purge?days=${retention}`, { method: 'DELETE', headers })
     if (hasFetched) fetchLogs()
     if (tab === 'library') fetchLibrary()

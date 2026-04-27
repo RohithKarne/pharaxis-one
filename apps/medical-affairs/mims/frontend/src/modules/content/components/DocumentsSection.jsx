@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import DocumentCreationScreen from './DocumentCreationScreen'
 import { CheckInModal, InitiateReviewModal, ApproveModal, PublishModal, ReviewStatusModal } from './ContentModals'
@@ -84,9 +85,9 @@ export default function DocumentsSection({ token, user }) {
       if (res.ok) {
         setSelectedDocIds([])
         loadDocs()
-        if (d.failed?.length > 0) alert(`${d.success} succeeded. ${d.failed.length} failed:\n${d.failed.map(f => `ID ${f.id}: ${f.reason}`).join('\n')}`)
-      } else alert(d.error || 'Bulk action failed.')
-    } catch { alert('Network error.') }
+        if (d.failed?.length > 0) toast.error(`${d.success} succeeded. ${d.failed.length} failed:\n${d.failed.map(f => `ID ${f.id}: ${f.reason}`).join('\n')}`)
+      } else toast.error(d.error || 'Bulk action failed.')
+    } catch { toast.error('Network error.') }
     setBulkLoading(false)
   }
 
@@ -151,8 +152,8 @@ export default function DocumentsSection({ token, user }) {
     try {
       const res = await fetch(`/api/cm/documents/${doc.id}/checkout`, { method: 'POST', headers: authHeaders })
       if (res.ok) loadDocs()
-      else { const d = await res.json(); alert(d.error || 'Check out failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Check out failed.') }
+    } catch { toast.error('Network error.') }
   }
 
   async function handleCheckIn() {
@@ -160,8 +161,8 @@ export default function DocumentsSection({ token, user }) {
     try {
       const res = await fetch(`/api/cm/documents/${checkInDoc.id}/checkin`, { method: 'POST', headers: authHeaders })
       if (res.ok) { setCheckInDoc(null); loadDocs() }
-      else { const d = await res.json(); alert(d.error || 'Check in failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
+    } catch { toast.error('Network error.') }
     setCheckInLoading(false)
   }
 
@@ -170,8 +171,8 @@ export default function DocumentsSection({ token, user }) {
     try {
       const res = await fetch(`/api/cm/documents/${doc.id}/archive`, { method: 'POST', headers: authHeaders })
       if (res.ok) loadDocs()
-      else { const d = await res.json(); alert(d.error || 'Archive failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Archive failed.') }
+    } catch { toast.error('Network error.') }
   }
 
   function getDocActions(doc) {

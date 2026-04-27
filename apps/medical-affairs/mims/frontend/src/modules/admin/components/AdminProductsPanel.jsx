@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader, StatusPill } from './AdminShared'
 
 export default function AdminProductsPanel({ H, flash }) {
@@ -78,7 +79,7 @@ export default function AdminProductsPanel({ H, flash }) {
   }
 
   async function deleteApproval(a) {
-    if (!window.confirm(`Delete approval "${a.approval_number}"?`)) return
+    if (!await confirm(`Delete approval "${a.approval_number}"?`)) return
     await fetch(`/api/admin/products/approvals/${a.id}`, { method: 'DELETE', headers: H })
     await loadProductApprovals(selectedProduct.id)
     flash('Approval deleted.')
@@ -97,7 +98,7 @@ export default function AdminProductsPanel({ H, flash }) {
   }
 
   async function deleteCountryAuth(a) {
-    if (!window.confirm(`Delete authorization for "${a.country}"?`)) return
+    if (!await confirm(`Delete authorization for "${a.country}"?`)) return
     await fetch(`/api/admin/products/country-authorizations/${a.id}`, { method: 'DELETE', headers: H })
     await loadProductCountryAuths(selectedProduct.id)
     flash('Authorization deleted.')

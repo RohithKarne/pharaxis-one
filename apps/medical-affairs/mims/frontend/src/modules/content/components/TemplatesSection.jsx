@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 
@@ -18,21 +19,21 @@ function TemplateDrawer({ template, token, onClose, onSaved }) {
   const [previewLoading, setPreviewLoading] = useState(false)
 
   async function handleSave() {
-    if (!form.name.trim()) return alert('Template name is required.')
-    if (!form.body || form.body === '<p></p>') return alert('Body is required.')
+    if (!form.name.trim()) return toast.warn('Template name is required.')
+    if (!form.body || form.body === '<p></p>') return toast.warn('Body is required.')
     setSaving(true)
     try {
       const url = isEdit ? `/api/cm/templates/${template.id}` : '/api/cm/templates'
       const method = isEdit ? 'PUT' : 'POST'
       const res = await fetch(url, { method, headers: authHeaders, body: JSON.stringify(form) })
       if (res.ok) { onSaved(); onClose() }
-      else { const d = await res.json(); alert(d.error || 'Save failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
+    } catch { toast.error('Network error.') }
     setSaving(false)
   }
 
   async function handlePreview() {
-    if (!template?.id) return alert('Save the template first before previewing.')
+    if (!template?.id) return toast.warn('Save the template first before previewing.')
     setPreviewLoading(true)
     try {
       const res = await fetch(`/api/cm/templates/${template.id}/render`, {
@@ -42,8 +43,8 @@ function TemplateDrawer({ template, token, onClose, onSaved }) {
       })
       const d = await res.json()
       if (res.ok) setPreview(d)
-      else alert(d.error || 'Preview failed.')
-    } catch { alert('Network error.') }
+      else toast.error(d.error || 'Preview failed.')
+    } catch { toast.error('Network error.') }
     setPreviewLoading(false)
   }
 
@@ -157,8 +158,8 @@ export default function TemplatesSection({ token }) {
         method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: newStatus })
       })
       if (res.ok) load()
-      else { const d = await res.json(); alert(d.error || 'Failed to update status.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Failed to update status.') }
+    } catch { toast.error('Network error.') }
   }
 
   return (

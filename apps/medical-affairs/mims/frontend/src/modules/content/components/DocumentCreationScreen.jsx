@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import toast from '../../../shared/utils/toast'
 import RichTextEditor from './RichTextEditor'
 import { normalizeSelectedModules } from './ContentUtils'
 import { AssociatedDocsPanel, VersionDiffPanel, VersionAlertsPanel } from './ContentPanels'
@@ -124,8 +125,8 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
   }
 
   async function handleSave(checkIn = false) {
-    if (!form.folder_id) return alert('Folder is required.')
-    if (!form.name.trim()) return alert('Document name is required.')
+    if (!form.folder_id) return toast.warn('Folder is required.')
+    if (!form.name.trim()) return toast.warn('Document name is required.')
     setSaving(true)
     try {
       const fd = new FormData()
@@ -150,13 +151,13 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
           })
           if (!ciRes.ok) {
             const ciErr = await ciRes.json()
-            alert(`Saved but check-in failed: ${ciErr.error || 'Unknown error'}`)
+            toast.error(`Saved but check-in failed: ${ciErr.error || 'Unknown error'}`)
           }
         }
         onSaved(); onClose()
       }
-      else { const d = await res.json(); alert(d.error || 'Save failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
+    } catch { toast.error('Network error.') }
     setSaving(false)
   }
 

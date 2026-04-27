@@ -5,6 +5,8 @@ import ProtectedRoute from '../components/ProtectedRoute'
 import LoginPage from '../pages/LoginPage'
 import ModuleAccessGuard from '../components/ModuleAccessGuard'
 import SessionTimeoutModal from '../components/SessionTimeoutModal'
+import ToastContainer from '../components/ToastContainer'
+import ConfirmModal from '../components/ConfirmModal'
 import { useIdleTimer } from '../hooks/useIdleTimer'
 
 /**
@@ -36,6 +38,8 @@ export default function createModuleApp({ MainPage, appName, appTagline, moduleK
     return (
       <>
         <SessionTimeoutModal visible={showWarning} remainingSeconds={warnSeconds} onStay={handleStay} />
+        <ToastContainer />
+        <ConfirmModal />
         <Routes>
           <Route path="/login" element={<LoginPage redirectTo="/" appName={appName} appTagline={appTagline} allowUsername={allowUsername} />} />
           <Route path="/" element={

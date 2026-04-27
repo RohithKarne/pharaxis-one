@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 
 function safeParseJson(label, raw) {
   const text = String(raw || '').trim()
@@ -343,7 +344,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
   }
 
   async function deleteNode(node) {
-    if (!window.confirm(`Delete node "${node.node_key}"?`)) return
+    if (!await confirm(`Delete node "${node.node_key}"?`)) return
 
     try {
       const res = await fetch(withOrg(`/api/admin/policy/nodes/${node.id}`), {
@@ -422,7 +423,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
   }
 
   async function deleteEdge(edge) {
-    if (!window.confirm(`Delete edge #${edge.id} (${edge.from_key} → ${edge.to_key})?`)) return
+    if (!await confirm(`Delete edge #${edge.id} (${edge.from_key} → ${edge.to_key})?`)) return
 
     try {
       const res = await fetch(withOrg(`/api/admin/policy/edges/${edge.id}`), {

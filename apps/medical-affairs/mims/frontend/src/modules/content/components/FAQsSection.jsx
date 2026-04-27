@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 import { CheckInModal } from './ContentModals'
@@ -16,17 +17,17 @@ function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
 
   async function handleSave(checkIn = false) {
-    if (!form.folder_id) return alert('Folder is required.')
-    if (!form.question.trim()) return alert('Question is required.')
-    if (!form.answer || form.answer === '<p></p>') return alert('Answer is required.')
+    if (!form.folder_id) return toast.warn('Folder is required.')
+    if (!form.question.trim()) return toast.warn('Question is required.')
+    if (!form.answer || form.answer === '<p></p>') return toast.warn('Answer is required.')
     setSaving(true)
     try {
       const url = isEdit ? `/api/cm/faqs/${faq.id}` : '/api/cm/faqs'
       const method = isEdit ? 'PUT' : 'POST'
       const res = await fetch(url, { method, headers: authHeaders, body: JSON.stringify({ ...form, check_in: checkIn }) })
       if (res.ok) { onSaved(); onClose() }
-      else { const d = await res.json(); alert(d.error || 'Save failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
+    } catch { toast.error('Network error.') }
     setSaving(false)
   }
 
@@ -119,8 +120,8 @@ export default function FAQsSection({ token, user }) {
     try {
       const res = await fetch(`/api/cm/faqs/${faq.id}/checkout`, { method: 'POST', headers: authHeaders })
       if (res.ok) loadFaqs()
-      else { const d = await res.json(); alert(d.error || 'Check out failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Check out failed.') }
+    } catch { toast.error('Network error.') }
   }
 
   async function handleCheckIn() {
@@ -128,8 +129,8 @@ export default function FAQsSection({ token, user }) {
     try {
       const res = await fetch(`/api/cm/faqs/${checkInFaq.id}/checkin`, { method: 'POST', headers: authHeaders })
       if (res.ok) { setCheckInFaq(null); loadFaqs() }
-      else { const d = await res.json(); alert(d.error || 'Check in failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
+    } catch { toast.error('Network error.') }
     setCheckInLoading(false)
   }
 
@@ -204,7 +205,7 @@ export default function FAQsSection({ token, user }) {
                 const tags = bulkTagInput.split(',').map(t => t.trim()).filter(Boolean)
                 const res = await fetch('/api/cm/faqs/bulk-tags', { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ ids: selectedFaqIds, tags }) })
                 if (res.ok) { loadFaqs(); setSelectedFaqIds([]); setShowBulkTag(false); setBulkTagInput('') }
-                else alert('Bulk tag failed.')
+                else toast.error('Bulk tag failed.')
               }}>Apply Tags</button>
             </div>
           </div>

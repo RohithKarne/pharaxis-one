@@ -1,4 +1,6 @@
+import toast from '../../../shared/utils/toast'
 import { useState, useEffect, useCallback } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 
 const CM_FIELD_TYPES = [
   { key: 'document_category', label: 'Document Category' },
@@ -46,7 +48,7 @@ function CMOrgAlertsSettings({ token }) {
     setSaving(p => ({ ...p, [key]: true }))
     try {
       await fetch('/api/cm/settings', { method: 'PUT', headers: H, body: JSON.stringify({ setting_key: key, setting_value: value }) })
-    } catch { alert('Network error.') }
+    } catch { toast.error('Network error.') }
     setSaving(p => ({ ...p, [key]: false }))
   }
 
@@ -204,12 +206,12 @@ export default function CMSettingsSection({ token }) {
   }
 
   async function handleDelete(item) {
-    if (!window.confirm(`Delete "${item.label}"? This cannot be undone.`)) return
+    if (!await confirm(`Delete "${item.label}"? This cannot be undone.`)) return
     try {
       const res = await fetch(`/api/cm/picklists/${item.id}`, { method: 'DELETE', headers: H })
       if (res.ok) loadPicklists(activeField)
-      else { const d = await res.json(); alert(d.error || 'Delete failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Delete failed.') }
+    } catch { toast.error('Network error.') }
   }
 
   const currentFieldLabel = CM_FIELD_TYPES.find(f => f.key === activeField)?.label || activeField

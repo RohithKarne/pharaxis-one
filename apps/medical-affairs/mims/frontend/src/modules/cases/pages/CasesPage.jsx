@@ -6,6 +6,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import toast from '../../../shared/utils/toast'
+import { confirm } from '../../../shared/utils/confirm'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -153,7 +155,7 @@ export default function CasesPage() {
     if (!name || !name.trim()) return
 
     const isShared = ['admin', 'superadmin'].includes(user?.role)
-      ? window.confirm('Save this as a shared team view?')
+      ? await confirm('Save this as a shared team view?')
       : false
 
     setViewSaving(true)
@@ -176,14 +178,14 @@ export default function CasesPage() {
       setActiveViewId(data.view?.id || null)
       await loadSavedViews()
     } catch (err) {
-      alert(err.message || 'Failed to save view')
+      toast.error(err.message || 'Failed to save view')
     } finally {
       setViewSaving(false)
     }
   }
 
   async function deleteSavedView(viewId) {
-    if (!window.confirm('Delete this saved view?')) return
+    if (!await confirm('Delete this saved view?')) return
     try {
       const res = await fetch(`${API}/cases/saved-views/${viewId}`, { method: 'DELETE', headers })
       const data = await res.json()
@@ -191,7 +193,7 @@ export default function CasesPage() {
       if (Number(activeViewId) === Number(viewId)) setActiveViewId(null)
       await loadSavedViews()
     } catch (err) {
-      alert(err.message || 'Failed to delete view')
+      toast.error(err.message || 'Failed to delete view')
     }
   }
 
@@ -287,7 +289,7 @@ export default function CasesPage() {
         }
       }
       if (candidates.length > 0) {
-        const proceed = window.confirm(`Potential duplicates found (${candidates.length}). Create this case anyway?`)
+        const proceed = await confirm(`Potential duplicates found (${candidates.length}). Create this case anyway?`)
         if (!proceed) return
       }
 
@@ -307,7 +309,7 @@ export default function CasesPage() {
       setModalOpen(false)
       navigate(`/cases/${data.id}`, { state: { from: '/cases' } })
     } catch (err) {
-      alert(err.message)
+      toast.error(err.message)
     } finally {
       setCreating(false)
     }

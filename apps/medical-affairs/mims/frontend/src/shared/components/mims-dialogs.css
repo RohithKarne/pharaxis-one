@@ -1,0 +1,114 @@
+/* ── Toast Stack ─────────────────────────────────────────────────────── */
+.mims-toast-stack {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.mims-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 280px;
+  max-width: 420px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.14);
+  pointer-events: all;
+  animation: mims-toast-in 0.18s ease;
+}
+
+@keyframes mims-toast-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.mims-toast--success { background: #f0fdf4; border: 1px solid #86efac; color: #15803d; }
+.mims-toast--error   { background: #fef2f2; border: 1px solid #fca5a5; color: #dc2626; }
+.mims-toast--warn    { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; }
+.mims-toast--info    { background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; }
+
+.mims-toast-icon { font-size: 14px; flex-shrink: 0; }
+.mims-toast-msg  { flex: 1; line-height: 1.4; }
+.mims-toast-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.5;
+  padding: 0 2px;
+  flex-shrink: 0;
+  color: inherit;
+}
+.mims-toast-close:hover { opacity: 1; }
+
+/* ── Confirm Modal ───────────────────────────────────────────────────── */
+.mims-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mims-confirm-modal {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  padding: 28px 28px 20px;
+  min-width: 320px;
+  max-width: 460px;
+  width: 90vw;
+}
+
+.mims-confirm-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.mims-confirm-msg {
+  font-size: 14px;
+  color: #334155;
+  line-height: 1.55;
+  margin-bottom: 22px;
+}
+
+.mims-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.mims-confirm-btn {
+  padding: 8px 20px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: opacity 0.12s;
+}
+.mims-confirm-btn:hover { opacity: 0.85; }
+
+.mims-confirm-cancel {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.mims-confirm-ok {
+  background: #1e40af;
+  color: #fff;
+}

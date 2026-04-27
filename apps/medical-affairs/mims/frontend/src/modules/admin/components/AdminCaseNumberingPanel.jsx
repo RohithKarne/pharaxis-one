@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader } from './AdminShared'
 
 const CASE_TYPES = ['ALL', 'MI', 'AE', 'PC']
@@ -54,7 +55,7 @@ export default function AdminCaseNumberingPanel({ H, flash }) {
   }
 
   async function deleteCaseNumConfig(id) {
-    if (!window.confirm('Delete this configuration?')) return
+    if (!await confirm('Delete this configuration?')) return
     const res = await fetch(`/api/admin/case-number-config/${id}`, { method: 'DELETE', headers: H })
     if (res.ok) { flash('Deleted.', 'success'); loadCaseNumConfigs() }
     else { const d = await res.json(); flash(d.error, 'error') }

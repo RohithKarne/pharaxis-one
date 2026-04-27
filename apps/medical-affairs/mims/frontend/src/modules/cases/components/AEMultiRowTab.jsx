@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import toast from '../../../shared/utils/toast'
+import { confirm } from '../../../shared/utils/confirm'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -35,23 +37,23 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
       boolCols.forEach(k => { if (typeof body[k] === 'boolean') body[k] = body[k] ? 1 : 0 })
       const res  = await fetch(postUrl(), { method: 'POST', headers, body: JSON.stringify(body) })
       const data = await res.json()
-      if (!res.ok) { alert(data.error || 'Add failed'); return }
+      if (!res.ok) { toast.error(data.error || 'Add failed'); return }
       onRowsChange([...(Array.isArray(rows) ? rows : []), data])
       setForm(blankForm())
       setShowForm(false)
-    } catch { alert('Network error') } finally { setSaving(false) }
+    } catch { toast.error('Network error') } finally { setSaving(false) }
   }
 
   async function handleDelete(rowId) {
-    if (!window.confirm('Remove this record?')) return
+    if (!await confirm('Remove this record?')) return
     setDeleting(rowId)
     try {
       const url = deleteUrl(rowId)
       if (!url) return
       const res = await fetch(url, { method: 'DELETE', headers })
       if (res.ok) onRowsChange((rows || []).filter(r => r.id !== rowId))
-      else alert('Delete failed')
-    } catch { alert('Network error') } finally { setDeleting(null) }
+      else toast.error('Delete failed')
+    } catch { toast.error('Network error') } finally { setDeleting(null) }
   }
 
   const safeRows = Array.isArray(rows) ? rows : []

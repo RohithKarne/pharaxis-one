@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader } from './AdminShared'
 
 export default function AdminContactMasterPanel({ H, flash }) {
@@ -51,7 +52,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
 
   async function deleteContact(c) {
     const contactName = `${c.first_name || ''} ${c.last_name || ''}`.trim() || `#${c.id}`
-    if (!window.confirm(`Delete contact "${contactName}"?`)) return
+    if (!await confirm(`Delete contact "${contactName}"?`)) return
     const res = await fetch(`/api/admin/contacts/${c.id}`, { method: 'DELETE', headers: H })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Delete failed.', 'error')
@@ -82,7 +83,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
   }
 
   async function deleteRep(r) {
-    if (!window.confirm(`Delete representative "${r.name}"?`)) return
+    if (!await confirm(`Delete representative "${r.name}"?`)) return
     const res = await fetch(`/api/admin/company-reps/${r.id}`, { method: 'DELETE', headers: H })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Delete failed.', 'error')

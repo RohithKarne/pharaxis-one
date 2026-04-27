@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 
 export default function FolderManager({ show, onClose, token }) {
@@ -54,8 +55,8 @@ export default function FolderManager({ show, onClose, token }) {
         body: JSON.stringify({ group_id: Number(permGroupId), permission_level: permLevel }),
       })
       if (res.ok) { setPermGroupId(''); loadPermissions(permFolder.id) }
-      else { const d = await res.json(); alert(d.error || 'Failed to add permission.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Failed to add permission.') }
+    } catch { toast.error('Network error.') }
   }
 
   async function handleRemovePermission(groupId) {
@@ -63,7 +64,7 @@ export default function FolderManager({ show, onClose, token }) {
     try {
       const res = await fetch(`/api/cm/folders/${permFolder.id}/permissions/${groupId}`, { method: 'DELETE', headers: authHeaders })
       if (res.ok) loadPermissions(permFolder.id)
-    } catch { alert('Network error.') }
+    } catch { toast.error('Network error.') }
   }
 
   useEffect(() => { if (show) load() }, [show, load])
@@ -81,15 +82,15 @@ export default function FolderManager({ show, onClose, token }) {
   }
 
   async function handleSave() {
-    if (!form.name.trim()) return alert('Folder name is required.')
+    if (!form.name.trim()) return toast.warn('Folder name is required.')
     setSaving(true)
     try {
       const url = editFolder ? `/api/cm/folders/${editFolder.id}` : '/api/cm/folders'
       const method = editFolder ? 'PUT' : 'POST'
       const res = await fetch(url, { method, headers: authHeaders, body: JSON.stringify(form) })
       if (res.ok) { setShowForm(false); load() }
-      else { const d = await res.json(); alert(d.error || 'Save failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
+    } catch { toast.error('Network error.') }
     setSaving(false)
   }
 

@@ -24,7 +24,16 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         superadmin: resolve(__dirname, 'superadmin.html'),
-      }
+      },
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@tiptap'))                          return 'editor'
+            if (id.includes('jspdf') || id.includes('xlsx'))    return 'export-libs'
+            if (id.includes('react'))                           return 'vendor'
+          }
+        },
+      },
     }
   }
 })

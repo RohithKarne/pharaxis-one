@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import toast from '../../../shared/utils/toast'
 
 export function CheckInModal({ item, onClose, onConfirm, loading }) {
   return (
@@ -39,17 +40,17 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
   }
 
   async function handleSubmit() {
-    if (!form.title.trim()) return alert('Review title is required.')
-    if (!form.planned_end_date) return alert('Planned end date is required.')
-    if (!form.reviewers.length) return alert('Select at least one reviewer.')
+    if (!form.title.trim()) return toast.warn('Review title is required.')
+    if (!form.planned_end_date) return toast.warn('Planned end date is required.')
+    if (!form.reviewers.length) return toast.warn('Select at least one reviewer.')
     setLoading(true)
     try {
       const res = await fetch(`/api/cm/documents/${doc.id}/initiate-review`, {
         method: 'POST', headers: authHeaders, body: JSON.stringify(form)
       })
       if (res.ok) { onDone(); onClose() }
-      else { const d = await res.json(); alert(d.error || 'Failed to initiate review.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Failed to initiate review.') }
+    } catch { toast.error('Network error.') }
     setLoading(false)
   }
 
@@ -101,16 +102,16 @@ export function ApproveModal({ doc, user, token, onClose, onDone }) {
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
-    if (!form.password) return alert('Password is required.')
-    if (!form.reason.trim()) return alert('Reason is required.')
+    if (!form.password) return toast.warn('Password is required.')
+    if (!form.reason.trim()) return toast.warn('Reason is required.')
     setLoading(true)
     try {
       const res = await fetch(`/api/cm/documents/${doc.id}/approve`, {
         method: 'POST', headers: authHeaders, body: JSON.stringify(form)
       })
       if (res.ok) { onDone(); onClose() }
-      else { const d = await res.json(); alert(d.error || 'Approval failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Approval failed.') }
+    } catch { toast.error('Network error.') }
     setLoading(false)
   }
 
@@ -146,16 +147,16 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
-    if (!form.password) return alert('Password is required.')
-    if (!form.reason.trim()) return alert('Reason is required.')
+    if (!form.password) return toast.warn('Password is required.')
+    if (!form.reason.trim()) return toast.warn('Reason is required.')
     setLoading(true)
     try {
       const res = await fetch(`/api/cm/documents/${doc.id}/publish`, {
         method: 'POST', headers: authHeaders, body: JSON.stringify(form)
       })
       if (res.ok) { onDone(); onClose() }
-      else { const d = await res.json(); alert(d.error || 'Publish failed.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Publish failed.') }
+    } catch { toast.error('Network error.') }
     setLoading(false)
   }
 
@@ -199,15 +200,15 @@ export function ReviewStatusModal({ review, token, onClose, onDone }) {
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
-    if (!form.reason.trim()) return alert('Reason is required.')
+    if (!form.reason.trim()) return toast.warn('Reason is required.')
     setLoading(true)
     try {
       const res = await fetch(`/api/cm/reviews/${review.id}/reviewer-status`, {
         method: 'PUT', headers: authHeaders, body: JSON.stringify(form)
       })
       if (res.ok) { onDone(); onClose() }
-      else { const d = await res.json(); alert(d.error || 'Failed to update status.') }
-    } catch { alert('Network error.') }
+      else { const d = await res.json(); toast.error(d.error || 'Failed to update status.') }
+    } catch { toast.error('Network error.') }
     setLoading(false)
   }
 

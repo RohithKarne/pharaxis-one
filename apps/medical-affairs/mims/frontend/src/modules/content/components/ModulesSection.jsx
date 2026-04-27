@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import toast from '../../../shared/utils/toast'
+import { confirm } from '../../../shared/utils/confirm'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 
@@ -26,8 +28,8 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
   })
 
   async function handleSave() {
-    if (!form.folder_id) return alert('Folder is required.')
-    if (!form.name.trim()) return alert('Module name is required.')
+    if (!form.folder_id) return toast.warn('Folder is required.')
+    if (!form.name.trim()) return toast.warn('Module name is required.')
     setSaving(true)
     try {
       const fd = new FormData()
@@ -44,10 +46,10 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
         onClose()
       } else {
         const d = await res.json()
-        alert(d.error || 'Save failed.')
+        toast.error(d.error || 'Save failed.')
       }
     } catch {
-      alert('Network error.')
+      toast.error('Network error.')
     }
     setSaving(false)
   }
@@ -189,21 +191,21 @@ export default function ModulesSection({ token }) {
   useEffect(() => { loadModules() }, [loadModules])
 
   async function handleArchive(moduleDoc) {
-    if (!confirm(`Archive module "${moduleDoc.name}"? Linked documents using this module will also be archived.`)) return
+    if (!await confirm(`Archive module "${moduleDoc.name}"? Linked documents using this module will also be archived.`)) return
     try {
       const res = await fetch(`/api/cm/modules/${moduleDoc.id}/archive`, { method: 'POST', headers: authHeaders })
       if (res.ok) {
         const d = await res.json()
         if (d.archived_linked_documents > 0) {
-          alert(`Module archived. ${d.archived_linked_documents} linked document(s) were auto-archived.`)
+          toast.info(`Module archived. ${d.archived_linked_documents} linked document(s) were auto-archived.`)
         }
         loadModules()
       } else {
         const d = await res.json()
-        alert(d.error || 'Archive failed.')
+        toast.error(d.error || 'Archive failed.')
       }
     } catch {
-      alert('Network error.')
+      toast.error('Network error.')
     }
   }
 
@@ -271,7 +273,7 @@ export default function ModulesSection({ token }) {
                         if (res.ok) {
                           const d = await res.json()
                           const names = d.linked_documents.map(doc => `• ${doc.name} (${doc.status})`).join('\n') || 'No documents linked.'
-                          alert(`Module "${m.name}" — Used in ${d.count} document(s):\n\n${names}`)
+                          toast.info(`Module "${m.name}" — Used in ${d.count} document(s):\n\n${names}`)
                         }
                       } catch { /* silent */ }
                     }}>Usage</button>

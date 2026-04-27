@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader } from './AdminShared'
 
 const LEGACY_SEC_TABS = [
@@ -165,7 +166,7 @@ export default function AdminUserSecurityGroupsPanel({ H, flash }) {
 
   async function deleteLegacySecGroup() {
     if (!selectedLegacySecGroup) return
-    if (!window.confirm(`Delete security group "${selectedLegacySecGroup.name}"?`)) return
+    if (!await confirm(`Delete security group "${selectedLegacySecGroup.name}"?`)) return
     const response = await fetch(`/api/admin/security-groups/${selectedLegacySecGroup.id}`, { method: 'DELETE', headers: H })
     const data = await response.json()
     if (!response.ok) return flash(formatSecGroupDependencyMessage(data), 'error')
@@ -192,7 +193,7 @@ export default function AdminUserSecurityGroupsPanel({ H, flash }) {
 
   async function removeUserFromLegacySecGroup(userId) {
     if (!selectedLegacySecGroup) return
-    if (!window.confirm('Remove this user from selected security group?')) return
+    if (!await confirm('Remove this user from selected security group?')) return
     const response = await fetch(`/api/admin/security-groups/${selectedLegacySecGroup.id}/users/${userId}`, { method: 'DELETE', headers: H })
     const data = await response.json()
     if (!response.ok) return flash(data.error || 'Failed to remove user.', 'error')

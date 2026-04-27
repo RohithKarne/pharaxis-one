@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { confirm } from '../../../shared/utils/confirm'
 import { StatusPill } from './AdminShared'
 
 function formatSecGroupDependencyMessage(data) {
@@ -95,7 +96,7 @@ export default function AdminSecurityGroupsPanel({ H, flash }) {
   }
 
   async function deactivateSecGroup(group) {
-    if (!window.confirm(`Deactivate group ${group.name}?`)) return
+    if (!await confirm(`Deactivate group ${group.name}?`)) return
     setSecGroupMsg('')
     try {
       const response = await fetch(`/api/admin/security-groups/${group.id}`, { method: 'DELETE', headers: H })
