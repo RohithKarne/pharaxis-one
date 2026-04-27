@@ -8,7 +8,7 @@
     "dev:all": "concurrently -n backend,frontend -c cyan,magenta \"nodemon backend/server.js\" \"cd frontend && npm run dev\""
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.20.0",
+    "@anthropic-ai/sdk": "^0.91.1",
     "@google/generative-ai": "^0.2.0",
     "bcrypt": "^6.0.0",
     "concurrently": "^8.2.2",
