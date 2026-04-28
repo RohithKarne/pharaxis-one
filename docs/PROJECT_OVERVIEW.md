@@ -9,33 +9,29 @@ Pharaxis-One groups medical-affairs and platform products into a single operatio
 ### 1) Medical Affairs
 - **MIMS**: Core system for inquiry/case lifecycle, admin workflows, process telemetry, and operational reporting.
 - **CP Portal**: Client/public interaction layer for submissions, documents, and content delivery.
-- **Publications**: Multi-tenant publication lifecycle management for concept, review, submission, and compliance tracking.
 
 ### 2) Platform Services
 - **AI-Agent**: Provider-integrated AI service layer (OpenAI/Claude/Gemini adapters) with usage/config administration.
-- **Vault**: Document/content vault foundations with authentication and superadmin controls.
+- **Vault**: Regulated content management platform — Veeva Vault challenger for life sciences and healthcare.
 
-### 3) Quality & Safety
+### 3) Quality Management
 - **QMS**: Sprint 1 baseline delivered (auth/superadmin, document control, CAPA, deviations, audits, validation, platform shared services).
-- **Safety**: Sprint 1 and Sprint 2 delivered (admin/config foundations + case management, regulatory workflows, narratives, listedness/expectedness).
 
 ## Current State Snapshot
 
-| Area | Status |
+| App | Status |
 |---|---|
-| MIMS | Active and extensive implementation |
-| CP Portal | Implemented and maintained |
-| Publications | Sprint 1 kickoff baseline added in repo |
-| AI-Agent | Implemented and evolving |
-| Vault | Implemented foundational modules |
-| QMS | Sprint 1 completed and active in repo |
-| Safety | Sprint 1 + Sprint 2 completed and active in repo |
+| MIMS | Active — Sprint 21 complete |
+| CP Portal | Stable — hotfix only |
+| AI-Agent | Sprint 1 complete |
+| Vault | Sprint 1 in progress — primary build focus |
+| QMS | Sprint 1 complete |
 
 ## Technical Baseline
 
 - Backend stack: Node.js + Express
-- Frontend stack: React + Vite (MIMS/CP Portal/Publications/AI-Agent/Vault/Safety), Vue + Vite + Tailwind (QMS)
-- Database: MySQL + PostgreSQL (service-specific DB per app)
+- Frontend stack: React + Vite (MIMS / CP Portal / AI-Agent / Vault), Vue + Vite + Tailwind (QMS)
+- Database: MySQL (MIMS, CP Portal, AI-Agent, Vault) + PostgreSQL (QMS)
 - CI: GitHub Actions
 - Dependency management: npm + Dependabot
 
@@ -50,4 +46,4 @@ Pharaxis-One groups medical-affairs and platform products into a single operatio
 1. Start with root `README.md`.
 2. Read `docs/ARCHITECTURE.md` and `docs/DB_DETAILS.md`.
 3. Move to app-specific folders under `apps/`.
-4. Use `.github/workflows/ci.yml` to understand CI quality gates.
+4. Use `.github/workflows/deploy.yml` to understand CI/CD pipeline.

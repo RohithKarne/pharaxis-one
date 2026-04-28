@@ -10,7 +10,7 @@
 
 ## 1. Purpose
 
-This SOP is the dedicated operating guide for the MIMS team.
+This SOP is the dedicated operating guide for the Pharaxis One team.
 
 It explains:
 - who is in the team
@@ -35,8 +35,9 @@ This SOP applies to:
 - leadership visibility and escalation
 
 Product focus:
-- MIMS is the sole active focus
-- CP Portal gets hotfix support only if explicitly required
+- Pharaxis Vault is the primary build focus
+- MIMS Sprint 21 complete — external team handles ongoing sprints
+- CP Portal gets hotfix support only if explicitly required by Rohith
 
 ---
 
@@ -112,7 +113,7 @@ Rohith Karne (CEO & Co-Founder)
 ## 6. Team Operating Principles
 
 These rules apply to every team:
-- MIMS is the active priority
+- Pharaxis Vault is the active build priority
 - no silent decisions
 - all communication stays visible in chat
 - no work begins on unclear scope
@@ -1155,7 +1156,7 @@ Claude Code and Codex CLI serve distinct roles. Neither substitutes for the othe
 codex exec -c 'sandbox_permissions=["disk-full-read-access", "disk-write-access"]' "your prompt here"
 ```
 
-- Run from the project root: `/Users/rohithkarne/MIMS-CP Portal/`
+- Run from the project root: `/Users/rohithkarne/Pharaxis-One/`
 - Prompt must be specific enough to execute without ambiguity
 - Non-interactive — must include everything needed in the prompt itself
 
