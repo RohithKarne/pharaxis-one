@@ -1,3 +1,4 @@
+import { httpFetch } from '../api/httpFetch.js'
 const TELEMETRY_ENDPOINT = '/api/telemetry/client-error';
 
 function randomId() {
@@ -26,7 +27,7 @@ export function sendClientError(payload = {}) {
       timestamp: new Date().toISOString(),
     });
 
-    fetch(TELEMETRY_ENDPOINT, {
+    httpFetch(TELEMETRY_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,

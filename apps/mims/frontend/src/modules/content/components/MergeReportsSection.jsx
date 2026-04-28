@@ -3,6 +3,7 @@ import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 import { CheckInModal } from './ContentModals'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function MergeReportDrawer({ report, folders, token, onClose, onSaved }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -21,7 +22,7 @@ function MergeReportDrawer({ report, folders, token, onClose, onSaved }) {
     try {
       const url = isEdit ? `/api/cm/merge-reports/${report.id}` : '/api/cm/merge-reports'
       const method = isEdit ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: authHeaders, body: JSON.stringify({ ...form, check_in: checkIn }) })
+      const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify({ ...form, check_in: checkIn }) })
       if (res.ok) { onSaved(); onClose() }
       else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
     } catch { toast.error('Network error.') }
@@ -84,8 +85,8 @@ export default function MergeReportsSection({ token }) {
     setLoading(true)
     try {
       const [rRes, fRes] = await Promise.all([
-        fetch('/api/cm/merge-reports', { headers: authHeaders }),
-        fetch('/api/cm/folders', { headers: authHeaders }),
+        httpFetch('/api/cm/merge-reports', { headers: authHeaders }),
+        httpFetch('/api/cm/folders', { headers: authHeaders }),
       ])
       if (rRes.ok) setReports((await rRes.json()).reports || [])
       if (fRes.ok) setFolders((await fRes.json()).folders || [])
@@ -97,7 +98,7 @@ export default function MergeReportsSection({ token }) {
 
   async function handleCheckOut(r) {
     try {
-      const res = await fetch(`/api/cm/merge-reports/${r.id}/checkout`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/merge-reports/${r.id}/checkout`, { method: 'POST', headers: authHeaders })
       if (res.ok) load()
       else { const d = await res.json(); toast.error(d.error || 'Check out failed.') }
     } catch { toast.error('Network error.') }
@@ -106,7 +107,7 @@ export default function MergeReportsSection({ token }) {
   async function handleCheckIn() {
     setCheckInLoading(true)
     try {
-      const res = await fetch(`/api/cm/merge-reports/${checkInReport.id}/checkin`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/merge-reports/${checkInReport.id}/checkin`, { method: 'POST', headers: authHeaders })
       if (res.ok) { setCheckInReport(null); load() }
       else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
     } catch { toast.error('Network error.') }
@@ -116,7 +117,7 @@ export default function MergeReportsSection({ token }) {
   async function handleArchive(r) {
     if (!confirm(`Archive "${r.name}"?`)) return
     try {
-      const res = await fetch(`/api/cm/merge-reports/${r.id}/archive`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/merge-reports/${r.id}/archive`, { method: 'POST', headers: authHeaders })
       if (res.ok) load()
       else { const d = await res.json(); toast.error(d.error || 'Archive failed.') }
     } catch { toast.error('Network error.') }
@@ -133,7 +134,7 @@ export default function MergeReportsSection({ token }) {
     if (!generateTarget) return
     setGenLoading(true); setGenError(null); setGenResult(null)
     try {
-      const res = await fetch(`/api/cm/merge-reports/${generateTarget.id}/generate`, {
+      const res = await httpFetch(`/api/cm/merge-reports/${generateTarget.id}/generate`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ case_id: genCaseId ? Number(genCaseId) : undefined }),
@@ -229,7 +230,7 @@ ${genResult.generated_html}
                       const cron = prompt('Set schedule (cron expression):\ne.g. "0 9 * * 1" = every Monday 9am\nLeave blank to remove schedule:')
                       if (cron === null) return
                       const emails = prompt('Email recipients (comma-separated, leave blank for none):') || ''
-                      const res = await fetch(`/api/cm/merge-reports/${r.id}/schedule`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ cron_expression: cron, email_recipients: emails.split(',').map(e => e.trim()).filter(Boolean), is_active: !!cron }) })
+                      const res = await httpFetch(`/api/cm/merge-reports/${r.id}/schedule`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ cron_expression: cron, email_recipients: emails.split(',').map(e => e.trim()).filter(Boolean), is_active: !!cron }) })
                       if (res.ok) toast.info(cron ? 'Schedule saved.' : 'Schedule removed.') ; else toast.info('Schedule save failed.')
                     }}>⏱ Schedule</button>
                     <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(r)}>Archive</button>

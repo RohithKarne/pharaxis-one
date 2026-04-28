@@ -1,6 +1,7 @@
 import toast from '../../../shared/utils/toast'
 import { useState, useEffect, useCallback } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const RELATION_TYPES = ['Supports', 'Supersedes', 'Translated From', 'Referenced By']
 
@@ -19,7 +20,7 @@ export function AssociatedDocsPanel({ docId, token }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/cm/documents/${docId}/relations`, { headers: H })
+      const res = await httpFetch(`/api/cm/documents/${docId}/relations`, { headers: H })
       if (res.ok) setRelations((await res.json()).relations || [])
     } catch { /* silent */ }
     setLoading(false)
@@ -32,7 +33,7 @@ export function AssociatedDocsPanel({ docId, token }) {
     if (q.length < 2) { setSearchResults([]); return }
     setSearching(true)
     try {
-      const res = await fetch(`/api/cm/documents?search=${encodeURIComponent(q)}&limit=10`, { headers: H })
+      const res = await httpFetch(`/api/cm/documents?search=${encodeURIComponent(q)}&limit=10`, { headers: H })
       if (res.ok) {
         const data = await res.json()
         const docs = (data.documents || []).filter(d => d.id !== docId)
@@ -46,7 +47,7 @@ export function AssociatedDocsPanel({ docId, token }) {
     if (!selectedDoc) return
     setAdding(true)
     try {
-      const res = await fetch(`/api/cm/documents/${docId}/relations`, {
+      const res = await httpFetch(`/api/cm/documents/${docId}/relations`, {
         method: 'POST', headers: H,
         body: JSON.stringify({ related_doc_id: selectedDoc.id, relation_type: relationType }),
       })
@@ -59,7 +60,7 @@ export function AssociatedDocsPanel({ docId, token }) {
   async function handleRemove(relId) {
     if (!await confirm('Remove this linked document?')) return
     try {
-      await fetch(`/api/cm/documents/${docId}/relations/${relId}`, { method: 'DELETE', headers: H })
+      await httpFetch(`/api/cm/documents/${docId}/relations/${relId}`, { method: 'DELETE', headers: H })
       load()
     } catch { toast.error('Network error.') }
   }
@@ -166,7 +167,7 @@ export function VersionDiffPanel({ docId, token }) {
 
   useEffect(() => {
     setLoading(true)
-    fetch(`/api/cm/documents/${docId}/versions?limit=20`, { headers: H })
+    httpFetch(`/api/cm/documents/${docId}/versions?limit=20`, { headers: H })
       .then(r => r.ok ? r.json() : { versions: [] })
       .then(d => setVersions(d.versions || []))
       .catch(() => {})
@@ -178,7 +179,7 @@ export function VersionDiffPanel({ docId, token }) {
     if (v1 === v2) { setDiffError('Select two different versions.'); return }
     setDiffError(''); setDiffLoading(true); setDiff(null)
     try {
-      const res = await fetch(`/api/cm/documents/${docId}/version-diff?v1=${encodeURIComponent(v1)}&v2=${encodeURIComponent(v2)}`, { headers: H })
+      const res = await httpFetch(`/api/cm/documents/${docId}/version-diff?v1=${encodeURIComponent(v1)}&v2=${encodeURIComponent(v2)}`, { headers: H })
       if (res.ok) { const d = await res.json(); setDiff(d) }
       else { const d = await res.json(); setDiffError(d.error || 'Failed to load diff.') }
     } catch { setDiffError('Network error.') }
@@ -258,9 +259,9 @@ export function VersionAlertsPanel({ docId, token }) {
     setLoading(true)
     try {
       const [cfgRes, emailRes, usersRes] = await Promise.all([
-        fetch(`/api/cm/documents/${docId}/alert-config`, { headers: H }),
-        fetch('/api/admin/email-accounts', { headers: H }),
-        fetch('/api/users', { headers: H }),
+        httpFetch(`/api/cm/documents/${docId}/alert-config`, { headers: H }),
+        httpFetch('/api/admin/email-accounts', { headers: H }),
+        httpFetch('/api/users', { headers: H }),
       ])
       if (cfgRes.ok) {
         const d = await cfgRes.json()
@@ -290,7 +291,7 @@ export function VersionAlertsPanel({ docId, token }) {
   async function handleSave() {
     setSaving(true)
     try {
-      const res = await fetch(`/api/cm/documents/${docId}/alert-config`, {
+      const res = await httpFetch(`/api/cm/documents/${docId}/alert-config`, {
         method: 'PUT', headers: H,
         body: JSON.stringify({ alert_days: config.alert_days, alert_email_account_id: config.alert_email_account_id || null }),
       })
@@ -303,7 +304,7 @@ export function VersionAlertsPanel({ docId, token }) {
     if (!selectedUser) return
     setAddingUser(true)
     try {
-      const res = await fetch(`/api/cm/documents/${docId}/alert-subs`, {
+      const res = await httpFetch(`/api/cm/documents/${docId}/alert-subs`, {
         method: 'POST', headers: H, body: JSON.stringify({ user_id: Number(selectedUser) }),
       })
       if (res.ok) { setSelectedUser(''); load() }
@@ -314,7 +315,7 @@ export function VersionAlertsPanel({ docId, token }) {
 
   async function removeSub(subId) {
     try {
-      await fetch(`/api/cm/documents/${docId}/alert-subs/${subId}`, { method: 'DELETE', headers: H })
+      await httpFetch(`/api/cm/documents/${docId}/alert-subs/${subId}`, { method: 'DELETE', headers: H })
       load()
     } catch { toast.error('Network error.') }
   }

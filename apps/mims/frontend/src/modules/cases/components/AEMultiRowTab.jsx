@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -35,7 +36,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
       const body = { ...form }
       const boolCols = ['is_ongoing','is_suspect','is_concomitant','is_serious','is_death','is_life_threatening','is_hospitalization','is_disability','is_congenital_anomaly','is_other_medically_important']
       boolCols.forEach(k => { if (typeof body[k] === 'boolean') body[k] = body[k] ? 1 : 0 })
-      const res  = await fetch(postUrl(), { method: 'POST', headers, body: JSON.stringify(body) })
+      const res  = await httpFetch(postUrl(), { method: 'POST', headers, body: JSON.stringify(body) })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error || 'Add failed'); return }
       onRowsChange([...(Array.isArray(rows) ? rows : []), data])
@@ -50,7 +51,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
     try {
       const url = deleteUrl(rowId)
       if (!url) return
-      const res = await fetch(url, { method: 'DELETE', headers })
+      const res = await httpFetch(url, { method: 'DELETE', headers })
       if (res.ok) onRowsChange((rows || []).filter(r => r.id !== rowId))
       else toast.error('Delete failed')
     } catch { toast.error('Network error') } finally { setDeleting(null) }

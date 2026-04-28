@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader, StatusPill } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function AdminEmailAccountsPanel({ H, flash }) {
   const [currentUser, setCurrentUser] = useState(null)
@@ -34,21 +35,21 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
 
   async function loadCurrentUser() {
     try {
-      const me = await fetch('/api/auth/me', { headers: H }).then(r => r.json())
+      const me = await httpFetch('/api/auth/me', { headers: H }).then(r => r.json())
       setCurrentUser(me || null)
     } catch { setCurrentUser(null) }
   }
 
   async function loadOrgs() {
     try {
-      const d = await fetch('/api/admin/orgs', { headers: H }).then(r => r.json())
+      const d = await httpFetch('/api/admin/orgs', { headers: H }).then(r => r.json())
       setOrgs(d.orgs || [])
     } catch { setOrgs([]) }
   }
 
   async function loadEmailAccounts() {
     try {
-      const res = await fetch('/api/admin/email-accounts', { headers: H })
+      const res = await httpFetch('/api/admin/email-accounts', { headers: H })
       const d = await readJson(res)
       if (!res.ok) { setEmailAccounts([]); return }
       setEmailAccounts(d.accounts || [])
@@ -102,7 +103,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
     e.preventDefault()
     const isEdit = emailModal === 'edit'
     const url = isEdit ? `/api/admin/email-accounts/${emailEditTarget.id}` : '/api/admin/email-accounts'
-    const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(emailForm) })
+    const res = await httpFetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(emailForm) })
     const d = await readJson(res)
     if (!res.ok) return flash(d.error || 'Request failed. Is the backend running on :3000?', 'error')
     await loadEmailAccounts()
@@ -111,7 +112,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
   }
 
   async function toggleEmailAccount(account) {
-    const res = await fetch(`/api/admin/email-accounts/${account.id}/toggle`, { method: 'PATCH', headers: H })
+    const res = await httpFetch(`/api/admin/email-accounts/${account.id}/toggle`, { method: 'PATCH', headers: H })
     const d = await readJson(res)
     if (!res.ok) return flash(d.error || 'Status update failed.', 'error')
     await loadEmailAccounts()
@@ -120,7 +121,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
 
   async function deleteEmailAccount(account) {
     esigConfirm(`Delete email account "${account.account_name}"? This will remove credentials from storage.`, 'email_account', account.id, async () => {
-      const res = await fetch(`/api/admin/email-accounts/${account.id}`, { method: 'DELETE', headers: H })
+      const res = await httpFetch(`/api/admin/email-accounts/${account.id}`, { method: 'DELETE', headers: H })
       const d = await readJson(res)
       if (!res.ok) return flash(d.error || 'Delete failed.', 'error')
       await loadEmailAccounts()
@@ -134,7 +135,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
     const key = `${action}-${account.id}`
     setEmailTestingId(key)
     try {
-      const res = await fetch(`/api/admin/email-accounts/${account.id}/${action}`, { method: 'POST', headers: H })
+      const res = await httpFetch(`/api/admin/email-accounts/${account.id}/${action}`, { method: 'POST', headers: H })
       const d = await readJson(res)
       if (!res.ok) {
         if (action === 'test-smtp') setSmtpErrorModal({ account_name: account.account_name, error: d.error || 'SMTP test failed.', tested_at: 'Just now' })
@@ -157,7 +158,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
     if (!sendTestModalId) return
     setEmailTestingId(`send-${sendTestModalId}`)
     try {
-      const res = await fetch(`/api/admin/email-accounts/${sendTestModalId}/send-test`, { method: 'POST', headers: H, body: JSON.stringify({ recipient: sendTestRecipient }) })
+      const res = await httpFetch(`/api/admin/email-accounts/${sendTestModalId}/send-test`, { method: 'POST', headers: H, body: JSON.stringify({ recipient: sendTestRecipient }) })
       const d = await readJson(res)
       if (!res.ok || d.status === 'fail') {
         const account = emailAccounts.find(a => a.id === sendTestModalId)
@@ -268,7 +269,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
               <button className="btn btn-danger" onClick={async () => {
                 if (!esigForm.password || !esigForm.reason) { setEsigError('Both password and reason are required.'); return }
                 try {
-                  const r = await fetch('/api/admin/esig-verify', { method: 'POST', headers: H, body: JSON.stringify({ password: esigForm.password, reason: esigForm.reason, action: esigAction.msg, entity: esigAction.entity, entity_id: esigAction.entityId }) })
+                  const r = await httpFetch('/api/admin/esig-verify', { method: 'POST', headers: H, body: JSON.stringify({ password: esigForm.password, reason: esigForm.reason, action: esigAction.msg, entity: esigAction.entity, entity_id: esigAction.entityId }) })
                   const d = await r.json()
                   if (!r.ok) { setEsigError(d.error || 'Signature rejected.'); return }
                   await esigAction.onConfirm()

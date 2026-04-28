@@ -1,8 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
-
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
+const { httpFetch } = require('../utils/httpFetch');
 
 function parseConfig(rawConfig) {
   if (!rawConfig) return null;
@@ -84,7 +83,7 @@ async function refreshToken(orgId, integrationType) {
         }).toString();
       }
 
-      const res = await fetch(endpoint, {
+      const res = await httpFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
@@ -107,7 +106,7 @@ async function refreshToken(orgId, integrationType) {
         scope: String(config.scope || ''),
       }).toString();
 
-      const res = await fetch(endpoint, {
+      const res = await httpFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
@@ -128,7 +127,7 @@ async function refreshToken(orgId, integrationType) {
         password: String(config.password || ''),
       }).toString();
 
-      const res = await fetch(endpoint, {
+      const res = await httpFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,

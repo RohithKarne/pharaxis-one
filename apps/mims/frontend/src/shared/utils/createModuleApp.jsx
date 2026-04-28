@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../context/AuthContext'
+import { setSessionExpiryHandler } from '../api/httpFetch'
 import ProtectedRoute from '../components/ProtectedRoute'
 import LoginPage from '../pages/LoginPage'
 import ModuleAccessGuard from '../components/ModuleAccessGuard'
@@ -19,6 +20,14 @@ export default function createModuleApp({ MainPage, appName, appTagline, moduleK
     const navigate = useNavigate()
     const [showWarning, setShowWarning] = useState(false)
     const [warnSeconds, setWarnSeconds] = useState(120)
+
+    useEffect(() => {
+      setSessionExpiryHandler(async () => {
+        await logout()
+        navigate('/login', { replace: true })
+      })
+      return () => setSessionExpiryHandler(null)
+    }, [logout, navigate])
 
     const { reset } = useIdleTimer({
       timeoutMinutes: user ? sessionTimeout : 0,

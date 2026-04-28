@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './CMAuditTrailPage.css'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -154,7 +155,7 @@ function RightPanel({ entityItem, token }) {
     if (!entityItem) return
     setLoading(true); setError(null); setVersions([])
     const p = new URLSearchParams({ entity: entityItem.entity, entity_id: entityItem.entity_id, limit: 500, page: 1 })
-    fetch(`${API}/admin/cm-audit-trail?${p}`, { headers })
+    httpFetch(`${API}/admin/cm-audit-trail?${p}`, { headers })
       .then(r => r.json())
       .then(data => {
         if (data.error) { setError(data.error); return }
@@ -219,7 +220,7 @@ export default function CMAuditTrailPage() {
     try {
       const params = new URLSearchParams({ page, limit })
       if (entityFilter) params.set('entity', entityFilter)
-      const res  = await fetch(`${API}/admin/cm-audit-trail/entities-summary?${params}`, { headers })
+      const res  = await httpFetch(`${API}/admin/cm-audit-trail/entities-summary?${params}`, { headers })
       const data = await res.json()
       if (!res.ok) { setLeftError(data.error || 'Failed to load entities.'); return }
       setEntities(data.entities || [])

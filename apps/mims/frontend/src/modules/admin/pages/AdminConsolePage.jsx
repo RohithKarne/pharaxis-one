@@ -15,12 +15,14 @@ import AdminPicklistsSection from '../components/AdminPicklistsSection'
 import AdminMICategoriesSection from '../components/AdminMICategoriesSection'
 import AdminPolicyGraphSection from '../components/AdminPolicyGraphSection'
 import AdminContentIntelligenceSection from '../components/AdminContentIntelligenceSection'
+import AdminQASection from '../components/AdminQASection'
 import {
   ADMIN_NAV_GROUPS,
   getAdminSectionLabel,
   normalizeAdminSection,
 } from '../adminConsoleConfig'
 import { fmtDateIST } from '../components/AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const STATUS_COLORS = {
   success: { bg: '#e6f4ee', color: '#007a5a', label: 'Success' },
@@ -522,12 +524,12 @@ export default function AdminConsolePage() {
   async function loadAll() {
     try {
       const [o, wf, src, p, a, u] = await Promise.all([
-        fetch('/api/admin/orgs', { headers: H }).then(r => r.json()).catch(() => ({ orgs: [] })),
-        fetch('/api/admin/workflow-states', { headers: H }).then(r => r.json()).catch(() => ({ states: [] })),
-        fetch('/api/admin/source-types', { headers: H }).then(r => r.json()).catch(() => ({ sources: [] })),
-        fetch('/api/admin/products', { headers: H }).then(r => r.json()).catch(() => ({ products: [] })),
-        fetch('/api/admin/audit-logs', { headers: H }).then(r => r.json()).catch(() => ({ logs: [] })),
-        fetch('/api/admin/users', { headers: H }).then(r => r.json()).catch(() => ({ users: [] })),
+        httpFetch('/api/admin/orgs', { headers: H }).then(r => r.json()).catch(() => ({ orgs: [] })),
+        httpFetch('/api/admin/workflow-states', { headers: H }).then(r => r.json()).catch(() => ({ states: [] })),
+        httpFetch('/api/admin/source-types', { headers: H }).then(r => r.json()).catch(() => ({ sources: [] })),
+        httpFetch('/api/admin/products', { headers: H }).then(r => r.json()).catch(() => ({ products: [] })),
+        httpFetch('/api/admin/audit-logs', { headers: H }).then(r => r.json()).catch(() => ({ logs: [] })),
+        httpFetch('/api/admin/users', { headers: H }).then(r => r.json()).catch(() => ({ users: [] })),
       ])
       setOrgs(o.orgs || [])
       setWorkflowStates(wf.states || [])
@@ -550,7 +552,7 @@ export default function AdminConsolePage() {
       })
       // strip empty values so API doesn't filter on them
       for (const [k, v] of [...params.entries()]) { if (!v) params.delete(k) }
-      const d = await fetch(`/api/admin/service-logs?${params}`, { headers: H }).then(r => r.json())
+      const d = await httpFetch(`/api/admin/service-logs?${params}`, { headers: H }).then(r => r.json())
       setSvcLogs(d.data || [])
       setSvcSources(d.sources || [])
       setSvcTotal(d.total || 0)
@@ -571,7 +573,7 @@ export default function AdminConsolePage() {
         page_size: overrides.page_size ?? sysPageSize,
       })
       for (const [k, v] of [...params.entries()]) { if (!v) params.delete(k) }
-      const d = await fetch(`/api/admin/system-activity?${params}`, { headers: H }).then(r => r.json())
+      const d = await httpFetch(`/api/admin/system-activity?${params}`, { headers: H }).then(r => r.json())
       setSysRows(d.data || [])
       setSysSummary(d.summary || { total: 0, success: 0, failed: 0, warning: 0 })
       setSysTotal(d.total || 0)
@@ -592,7 +594,7 @@ export default function AdminConsolePage() {
         page_size: '20',
       })
       for (const [k, v] of [...params.entries()]) { if (!v) params.delete(k) }
-      const d = await fetch(`/api/admin/observability/exceptions?${params}`, { headers: H }).then(r => r.json())
+      const d = await httpFetch(`/api/admin/observability/exceptions?${params}`, { headers: H }).then(r => r.json())
       setExRows(d.data || [])
       setExTotal(d.total || 0)
       setExTotalPages(d.total_pages || 1)
@@ -604,7 +606,7 @@ export default function AdminConsolePage() {
   }
 
   async function loadSites(orgId) {
-    const d = await fetch(`/api/admin/orgs/${orgId}/sites`, { headers: H }).then(r => r.json())
+    const d = await httpFetch(`/api/admin/orgs/${orgId}/sites`, { headers: H }).then(r => r.json())
     setSites(prev => ({ ...prev, [orgId]: d.sites || [] }))
   }
 
@@ -624,7 +626,7 @@ export default function AdminConsolePage() {
 
   async function createOrg(e) {
     e.preventDefault()
-    const res = await fetch('/api/admin/orgs', { method: 'POST', headers: H, body: JSON.stringify(orgForm) })
+    const res = await httpFetch('/api/admin/orgs', { method: 'POST', headers: H, body: JSON.stringify(orgForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error, 'error')
     setOrgs(prev => [...prev, d])
@@ -640,7 +642,7 @@ export default function AdminConsolePage() {
 
   async function createWf(e) {
     e.preventDefault()
-    const res = await fetch('/api/admin/workflow-states', { method: 'POST', headers: H, body: JSON.stringify(wfForm) })
+    const res = await httpFetch('/api/admin/workflow-states', { method: 'POST', headers: H, body: JSON.stringify(wfForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error, 'error')
     setWorkflowStates(prev => [...prev, d])
@@ -650,7 +652,7 @@ export default function AdminConsolePage() {
 
   async function toggleWf(wf) {
     esigConfirm(`${wf.is_active ? 'Deactivate' : 'Activate'} workflow state "${wf.name}"`, 'workflow_state', wf.id, async () => {
-      await fetch(`/api/admin/workflow-states/${wf.id}`, { method: 'PUT', headers: H, body: JSON.stringify({ name: wf.name, is_active: !wf.is_active }) })
+      await httpFetch(`/api/admin/workflow-states/${wf.id}`, { method: 'PUT', headers: H, body: JSON.stringify({ name: wf.name, is_active: !wf.is_active }) })
       setWorkflowStates(prev => prev.map(w => w.id === wf.id ? { ...w, is_active: w.is_active ? 0 : 1 } : w))
       flash('Status updated.')
     })
@@ -759,6 +761,11 @@ export default function AdminConsolePage() {
       case 'case-import':
         return <AdminIntegrationSection contentSection={contentSection} H={H} flash={flash} />
 
+      case 'qa-reports':
+      case 'qa-rules':
+      case 'qa-overrides':
+        return <AdminQASection contentSection={contentSection} H={H} />
+
       default: {
         const found = ADMIN_NAV_GROUPS.flatMap((group) => group.items).find((item) => item.key === activeSection)
         return <ComingSoon label={found?.label || sectionLabel || activeSection} />
@@ -855,7 +862,7 @@ export default function AdminConsolePage() {
               <button className="btn btn-danger" onClick={async () => {
                 if (!esigForm.password || !esigForm.reason) { setEsigError('Both password and reason are required.'); return }
                 try {
-                  const r = await fetch('/api/admin/esig-verify', {
+                  const r = await httpFetch('/api/admin/esig-verify', {
                     method: 'POST', headers: H,
                     body: JSON.stringify({ password: esigForm.password, reason: esigForm.reason, action: esigAction.msg, entity: esigAction.entity, entity_id: esigAction.entityId })
                   })

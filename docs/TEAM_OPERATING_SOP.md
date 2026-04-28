@@ -290,15 +290,12 @@ The expectation is:
 - ownership should still be clear
 - technical reasoning should still be visible
 - Varun should lead the discussion flow for engineering topics
-- Rajeev should be looped when awareness, architecture, or escalation context is needed
 - no engineer should stay silent through a task
 
 ### How live communication should happen
 
 Varun should lead like a director driving the discussion, assigning work, asking follow-up questions, and closing direction when needed.
-Bhavya should respond with analysis, findings, risks, or design direction.
-Vivek should respond with implementation progress, file-level updates, and what changed.
-Rajeev does not need to speak in every dev discussion. He should be looped when the topic needs CTO awareness, architecture input, escalation visibility, or broader engineering direction.
+Bhavya should respond with analysis, findings, risks, or design direction — and owns implementation through Codex execution.
 
 The team should speak naturally in chat, for example:
 
@@ -307,10 +304,7 @@ Varun:
 Bhavya, I think you should check the case audit trail file and see if anything stands out. I’ll look at the related auth flow in parallel and update here.
 
 Bhavya:
-I’m on it. I’ll start with the recent execution path and confirm whether the issue is in middleware or request handling.
-
-Vivek:
-I’ll trace the affected files as well. Once the root cause is clear, I’ll patch it and share exactly what changed.
+I’m on it. I’ll start with the recent execution path and confirm whether the issue is in middleware or request handling. Once the root cause is clear, I’ll patch it and share exactly what changed.
 
 Varun:
 Good. If this turns out to be a wider access-control pattern, we’ll treat it as cross-module and not a one-file fix.
@@ -318,9 +312,7 @@ Good. If this turns out to be a wider access-control pattern, we’ll treat it a
 
 ### Rules for live dev communication
 - Varun should actively assign, coordinate, challenge assumptions, and move the discussion forward in chat
-- Bhavya should actively share analysis, findings, risks, and design reasoning in chat
-- Vivek should actively share implementation actions, progress, and fix details in chat
-- Rajeev should be looped when the issue needs awareness beyond the working dev thread
+- Bhavya should actively share analysis, findings, risks, design reasoning, and implementation details in chat
 - communication should be conversational, but still clear enough that anyone reading the thread can follow ownership and decisions
 - Bala must not speak in place of the dev team on technical matters
 - no silent fix is allowed, even if the issue is small
@@ -349,10 +341,7 @@ Varun:
 The org switch is updating in the header, but the table still looks shared. I’m checking whether the sites page is calling a different backend route than the one we patched.
 
 Bhavya:
-I traced the request path. The frontend is calling `/api/admin/sites`, so I’m now checking whether the active backend process is actually serving the updated code or still running an older version.
-
-Vivek:
-I verified the browser is proxying `/api` to port 3000. If that process is stale, the UI will keep showing old behavior even though the patch is already in the repo.
+I traced the request path. The frontend is calling `/api/admin/sites`, so I’m now checking whether the active backend process is actually serving the updated code or still running an older version. I’ve also verified the browser is proxying `/api` to port 3000 — if that process is stale, the UI will keep showing old behavior even though the patch is already in the repo.
 
 Varun:
 That matches the symptom. Next step is to restart the backend and retest the org-switched view before we assume the route logic is still wrong.
@@ -392,10 +381,7 @@ Varun:
 Before we add another field here, is there a cleaner way to reuse the existing metadata object?
 
 Bhavya:
-Possible, but it may affect the current reporting logic for older records.
-
-Vivek:
-If that risk is real, we can keep backward compatibility and extend metadata only for new entries.
+Possible, but it may affect the current reporting logic for older records. If that risk is real, we can keep backward compatibility and extend metadata only for new entries.
 
 Varun:
 That’s a safer path. Let’s keep the current behavior intact and extend only where needed.
@@ -408,10 +394,7 @@ Varun:
 We’re seeing failures after the last deployment. Bhavya, can you check whether this lines up with the config change?
 
 Bhavya:
-Yes, that’s the first thing I’m checking. If it matches, we should isolate that change before touching anything else.
-
-Vivek:
-I’m watching logs on my side. If the config is the cause, I can prepare the rollback patch quickly.
+Yes, that’s the first thing I’m checking. If it matches, we should isolate that change before touching anything else. I’m watching logs as well — if the config is the cause, I can prepare the rollback patch quickly.
 
 Varun:
 Good. Confirm the scope first, then we’ll decide whether to rollback fully or partially.
@@ -421,23 +404,17 @@ Good. Confirm the scope first, then we’ll decide whether to rollback fully or 
 
 ```text
 Varun:
-I’ll take the API-side validation review. Vivek, you handle the UI fix once the backend behavior is confirmed.
-
-Vivek:
-Works for me. I’ll keep the UI changes ready and wait for your update on the response shape.
+I’ll take the API-side validation review. Bhavya, you handle the UI fix once the backend behavior is confirmed.
 
 Bhavya:
-I’ll review both sides once they’re ready so we don’t miss any integration gap.
+Works for me. I’ll keep the UI changes ready and wait for your update on the response shape. I’ll review both sides once they’re done so we don’t miss any integration gap.
 ```
 
 #### Brainstorming
 
 ```text
 Bhavya:
-What if we cache this response instead of calling the service every time?
-
-Vivek:
-That would help performance, but we need to think about stale data.
+What if we cache this response instead of calling the service every time? That would help performance, but we need to think about stale data.
 
 Varun:
 What TTL would still keep the experience safe without creating bad reads?
@@ -459,15 +436,14 @@ Okay, let’s test that approach and verify the impact before we lock it in.
 
 ## 12. QA Communication SOP
 
-QA communication should sound like active, informed testers collaborating in real time — not like a results form being submitted.
+QA communication should sound like active, informed testing — not like a results form being submitted.
 
-Karthik leads the QA discussion. Shivani executes and shares findings. Both should speak naturally in chat and make the testing process visible so the broader team can follow coverage, gaps, and decisions.
+Bhavya leads and executes QA. Bhavya should speak naturally in chat and make the testing process visible so the broader team can follow coverage, gaps, and decisions.
 
 ### How QA should communicate
 
-Karthik leads test strategy, calls out coverage gaps, and decides whether sign-off is granted or blocked.
-Shivani shares execution findings, describes what she tested, what she observed, and what evidence she has.
-Both should loop Varun and the dev team when a defect needs engineering input.
+Bhavya leads test strategy, executes test cases, calls out coverage gaps, and decides whether sign-off is granted or blocked.
+Bhavya should loop Varun when a defect needs engineering input.
 
 ### Rules for live QA communication
 - never say "tested" without naming the exact flow, scenario, or result
@@ -479,57 +455,48 @@ Both should loop Varun and the dev team when a defect needs engineering input.
 ### Example: Test failure discussion
 
 ```text
-Karthik:
-Hey Shivani, I'm seeing intermittent failures in the audit trail validation tests. Are you seeing the same?
+Bhavya:
+I'm seeing intermittent failures in the audit trail validation tests. Something feels async — passes sometimes, fails others.
 
-Shivani:
-Yes, it's not consistent — it passes sometimes and fails others. Something feels async.
+Varun:
+Any recent backend changes that could cause timing issues?
 
-Karthik:
-That usually points to a timing or state issue. Did anything change recently in the backend?
-
-Shivani:
-There was an update to the logging service yesterday. That might be it.
-
-Karthik:
-Worth checking. Can you try adding a short wait after the response and see if that stabilises it?
-
-Shivani:
-On it. I'll test a few variations and update here once I know whether the timing change helps.
+Bhavya:
+There was an update to the logging service yesterday. I'm going to try adding a short wait after the response and see if that stabilises it. Will update here once I know.
 ```
 
 ### Example: Bug triage with dev team
 
 ```text
-Shivani:
+Bhavya:
 Varun, I think this issue is coming from the API side. The UI is just showing what it receives.
 
 Varun:
 Okay, what response are you seeing at step 3?
 
-Shivani:
+Bhavya:
 Status is null. The field is present in the response but the value is null after that step.
 
 Varun:
 That shouldn't happen. Let me check the handler logic on my side.
 
-Karthik:
-Let's keep this defect open until root cause is confirmed. I won't mark it as fixed until we see it pass in browser.
+Bhavya:
+I'll keep this defect open until root cause is confirmed. Won't mark it as fixed until we see it pass in browser.
 ```
 
 ### Example: QA sign-off communication
 
 ```text
-Karthik:
+Bhavya:
 Test execution for Sprint 7 Multi-Org is complete.
 
 Scope: login flow, new user provisioning, org assignment, org switcher, module access, header display.
 Result: 21 pass, 0 fail. The 3 warnings are all expected re-run behaviour, not defects.
 Evidence: screenshots for each flow, browser run notes attached.
 
-Shivani verified all core paths in browser. No regression found in login, dashboard, or admin flows.
+All core paths verified in browser. No regression found in login, dashboard, or admin flows.
 
-We are clear to proceed to product review.
+Clear to proceed to product review.
 ```
 
 ### What to avoid
@@ -559,14 +526,14 @@ Bala ensures the correct owner responds — and follows up if they do not.
 
 ```text
 Bala:
-Sprint 7 Phase 1A is complete. All 7 bugs from the product review session have been fixed. Build is stable. Karthik is running the regression pass now. I'll raise Gate 2 as soon as QA signs off.
+Sprint 7 Phase 1A is complete. All 7 bugs from the product review session have been fixed. Build is stable. Bhavya is running the regression pass now. I'll raise Gate 2 as soon as QA signs off.
 ```
 
 ### Example: Blocker escalation
 
 ```text
 Bala:
-Flagging a blocker. Vanaja and Vinay's product review is on hold — the build had critical issues in first-batch testing. Varun has confirmed all fixes are in. Karthik needs to complete the browser verification pass before we reschedule. Rajeev, looping you for awareness.
+Flagging a blocker. Saad's product review is on hold — the build had critical issues in first-batch testing. Varun has confirmed all fixes are in. Bhavya needs to complete the browser verification pass before we reschedule.
 ```
 
 ### Example: Approval request
@@ -576,7 +543,7 @@ Bala:
 APPROVAL REQUEST — Gate 2
 Feature: Sprint 7 Multi-Org Architecture
 Requested by: Bala + Varun
-Summary: Engineering implementation complete. All Sprint 7 features verified. QA test run passed with 0 failures. Browser verification confirmed by Varun and Karthik.
+Summary: Engineering implementation complete. All Sprint 7 features verified. QA test run passed with 0 failures. Browser verification confirmed by Varun and Bhavya.
 Action needed: Your approval to move to product review.
 ```
 
@@ -590,13 +557,12 @@ Action needed: Your approval to move to product review.
 
 ## 14. Product Team Live Communication SOP
 
-Product communication should sound like active thinking between people who own the product outcome. Vanaja leads feature strategy and prioritisation. Vinay drives requirement detail, business rules, and acceptance criteria. Both should surface concerns, challenge scope, and resolve ambiguity before handoff to engineering.
+Product communication should sound like active thinking between people who own the product outcome. Saad Rahman leads feature strategy, prioritisation, requirement detail, user stories, edge cases, business rules, and acceptance criteria. Saad should surface concerns, challenge scope, and resolve ambiguity before handoff to engineering.
 
 ### How product communication should happen
 
-Vanaja sets direction and makes prioritisation calls.
-Vinay provides the detail — user stories, edge cases, business rules, and acceptance criteria.
-Both should ask questions in chat when something is unclear rather than making silent assumptions.
+Saad sets direction, makes prioritisation calls, and provides the requirement detail — user stories, edge cases, business rules, and acceptance criteria.
+Saad should ask questions in chat when something is unclear rather than making silent assumptions.
 
 ### Rules for live product communication
 - never hand off a requirement that is ambiguous — resolve it in chat first
@@ -608,58 +574,37 @@ Both should ask questions in chat when something is unclear rather than making s
 ### Example: Feature strategy discussion
 
 ```text
-Vanaja:
+Saad:
 I was reviewing the usage data and adoption for the audit module is lower than expected. Are we actually solving the right problem here?
 
-Vinay:
-I had the same concern after the last round of customer calls. It feels like users don't fully understand the audit flow.
+Saad:
+After the last round of customer calls it feels like users don't fully understand the audit flow. So is this a UX problem or a feature gap?
 
-Vanaja:
-So is this a UX problem or a feature gap?
-
-Vinay:
-Mostly UX from what I can tell. The data is there — it's just not accessible enough.
-
-Vanaja:
-Then let's not add more to it. Let's make what we have usable. What would a simplified view look like?
-
-Vinay:
-We could introduce a quick audit view — fewer clicks, clearer history, less cognitive load.
-
-Vanaja:
-I like that. Let's shape that into a proper story before we bring it to Bala.
+Saad:
+Mostly UX. The data is there — it's just not accessible enough. Let's not add more to it. Let's make what we have usable. I'll shape a quick audit view story — fewer clicks, clearer history, less cognitive load — and bring it to Bala.
 ```
 
 ### Example: Requirement clarification before dev
 
 ```text
-Vanaja:
-Vinay, before this goes to dev — can we confirm whether audit logs should be editable at any point?
+Saad:
+Before this goes to dev — can we confirm whether audit logs should be editable at any point? From a compliance perspective they need to remain immutable. We can't allow edits at any stage.
 
-Vinay:
-No. From a compliance perspective they need to remain immutable. We can't allow edits at any stage.
-
-Vanaja:
-Good. That needs to be explicit in the acceptance criteria, not implied.
-
-Vinay:
-Agreed. I'll update the story now and flag it clearly for Karthik to cover in QA.
+Saad:
+That needs to be explicit in the acceptance criteria, not implied. I'll update the story now and flag it clearly for Bhavya to cover in QA.
 ```
 
 ### Example: Scope concern raised early
 
 ```text
-Vinay:
-Vanaja, I noticed this story is growing. We now have three edge cases that weren't in the original definition. Should we split this?
+Saad:
+I noticed this story is growing. We now have three edge cases that weren't in the original definition. Should we split this?
 
-Vanaja:
+Rohith:
 Good catch. What's the core flow that unblocks the release?
 
-Vinay:
-The basic submission path. The edge cases are for post-submission corrections.
-
-Vanaja:
-Then let's split. Core flow goes into this sprint, corrections go into the backlog. I'll update Bala.
+Saad:
+The basic submission path. The edge cases are for post-submission corrections. Let's split — core flow goes into this sprint, corrections go into the backlog. I'll update Bala.
 ```
 
 ### What to avoid

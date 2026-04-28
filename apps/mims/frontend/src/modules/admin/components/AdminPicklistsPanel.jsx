@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { useNavigate } from 'react-router-dom'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function escapeCsvCell(value) {
   if (value == null) return ''
@@ -123,7 +124,7 @@ export default function AdminPicklistsPanel({ H }) {
 
   async function loadPicklistHierarchy() {
     try {
-      const res = await fetch('/api/admin/picklists/categories?include_fields=1&include_inactive=1', { headers: H })
+      const res = await httpFetch('/api/admin/picklists/categories?include_fields=1&include_inactive=1', { headers: H })
       let d = {}
       try { d = await res.json() } catch { d = {} }
       if (!res.ok) {
@@ -163,7 +164,7 @@ export default function AdminPicklistsPanel({ H }) {
         search: overrides.search ?? picklistFilter.search ?? '',
         field_id: overrides.field_id ?? selectedPicklistFieldId ?? '',
       })
-      const res = await fetch(`/api/admin/picklists?${params}`, { headers: H })
+      const res = await httpFetch(`/api/admin/picklists?${params}`, { headers: H })
       const d = await res.json()
       setPicklists(d.data || d.picklists || [])
       setPicklistTotal(d.total || 0)
@@ -179,7 +180,7 @@ export default function AdminPicklistsPanel({ H }) {
     try {
       let categoryId = null
       let fieldId = null
-      const categoryRes = await fetch('/api/admin/picklists/categories', { method: 'POST', headers: H, body: JSON.stringify({ name: categoryName }) })
+      const categoryRes = await httpFetch('/api/admin/picklists/categories', { method: 'POST', headers: H, body: JSON.stringify({ name: categoryName }) })
       let categoryData = {}
       try { categoryData = await categoryRes.json() } catch { categoryData = {} }
       if (categoryRes.ok) {
@@ -187,7 +188,7 @@ export default function AdminPicklistsPanel({ H }) {
       } else if (categoryRes.status === 404) {
         return flash('Category API not found. Please restart backend and retry.', 'error')
       } else if (categoryRes.status === 409) {
-        const existingRes = await fetch('/api/admin/picklists/categories?include_fields=1&include_inactive=1', { headers: H })
+        const existingRes = await httpFetch('/api/admin/picklists/categories?include_fields=1&include_inactive=1', { headers: H })
         let existingData = {}
         try { existingData = await existingRes.json() } catch { existingData = {} }
         const existingCategory = (existingData.categories || []).find(c => String(c.name || '').toLowerCase() === categoryName.toLowerCase())
@@ -196,7 +197,7 @@ export default function AdminPicklistsPanel({ H }) {
       } else {
         return flash(categoryData.error || 'Unable to create category.', 'error')
       }
-      const fieldRes = await fetch('/api/admin/picklists/fields', { method: 'POST', headers: H, body: JSON.stringify({ category_id: categoryId, name: firstFieldName }) })
+      const fieldRes = await httpFetch('/api/admin/picklists/fields', { method: 'POST', headers: H, body: JSON.stringify({ category_id: categoryId, name: firstFieldName }) })
       let fieldData = {}
       try { fieldData = await fieldRes.json() } catch { fieldData = {} }
       if (fieldRes.ok) {
@@ -204,7 +205,7 @@ export default function AdminPicklistsPanel({ H }) {
       } else if (fieldRes.status === 404) {
         return flash('Field API not found. Please restart backend and retry.', 'error')
       } else if (fieldRes.status === 409) {
-        const existingRes = await fetch(`/api/admin/picklists/fields?category_id=${categoryId}&include_inactive=1`, { headers: H })
+        const existingRes = await httpFetch(`/api/admin/picklists/fields?category_id=${categoryId}&include_inactive=1`, { headers: H })
         let existingData = {}
         try { existingData = await existingRes.json() } catch { existingData = {} }
         const existingField = (existingData.fields || []).find(f => String(f.name || '').toLowerCase() === firstFieldName.toLowerCase())
@@ -229,7 +230,7 @@ export default function AdminPicklistsPanel({ H }) {
     const categoryId = Number(picklistFieldForm.category_id || selectedPicklistCategoryId || 0)
     const fieldName = String(picklistFieldForm.field_name || '').trim()
     if (!categoryId || !fieldName) return flash('Category and field name are required.', 'error')
-    const res = await fetch('/api/admin/picklists/fields', { method: 'POST', headers: H, body: JSON.stringify({ category_id: categoryId, name: fieldName }) })
+    const res = await httpFetch('/api/admin/picklists/fields', { method: 'POST', headers: H, body: JSON.stringify({ category_id: categoryId, name: fieldName }) })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Unable to create field.', 'error')
     setPicklistFieldModal(false)
@@ -246,12 +247,12 @@ export default function AdminPicklistsPanel({ H }) {
     const isEdit = picklistModal === 'edit'
     let result
     if (isEdit) {
-      const res = await fetch(`/api/admin/picklists/${picklistEditTarget.id}`, { method: 'PUT', headers: H, body: JSON.stringify(picklistForm) })
+      const res = await httpFetch(`/api/admin/picklists/${picklistEditTarget.id}`, { method: 'PUT', headers: H, body: JSON.stringify(picklistForm) })
       const d = await res.json()
       if (!res.ok) { flash(d.error || 'Save failed.', 'error'); return }
       result = { ok: true }
     } else {
-      const res = await fetch('/api/admin/picklists', { method: 'POST', headers: H, body: JSON.stringify(picklistForm) })
+      const res = await httpFetch('/api/admin/picklists', { method: 'POST', headers: H, body: JSON.stringify(picklistForm) })
       const d = await res.json()
       if (!res.ok) { flash(d.error || 'Save failed.', 'error'); return }
       result = { ok: true }
@@ -266,14 +267,14 @@ export default function AdminPicklistsPanel({ H }) {
   async function deletePicklist(row) {
     setDepCheckLoading(true)
     try {
-      const depRes = await fetch(`/api/admin/dependencies/picklist/${row.id}`, { headers: H })
+      const depRes = await httpFetch(`/api/admin/dependencies/picklist/${row.id}`, { headers: H })
       const depData = await depRes.json()
       const deps = depData.dependencies || []
       if (deps.length > 0 && depData.total > 0) {
         setDepCheckModal({ row, deps })
         setDepCheckProceedFn(() => async () => {
           setDepCheckModal(null)
-          const res = await fetch(`/api/admin/picklists/${row.id}`, { method: 'DELETE', headers: H })
+          const res = await httpFetch(`/api/admin/picklists/${row.id}`, { method: 'DELETE', headers: H })
           const d = await res.json()
           if (!res.ok) return flash(d.error || 'Delete failed.', 'error')
           await loadPicklists({ field_id: selectedPicklistFieldId, page: picklistPage })
@@ -285,7 +286,7 @@ export default function AdminPicklistsPanel({ H }) {
     } catch (_) {}
     finally { setDepCheckLoading(false) }
     if (!await confirm(`Deactivate picklist "${row.name}"?`)) return
-    const res = await fetch(`/api/admin/picklists/${row.id}`, { method: 'DELETE', headers: H })
+    const res = await httpFetch(`/api/admin/picklists/${row.id}`, { method: 'DELETE', headers: H })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Delete failed.', 'error')
     await loadPicklists({ field_id: selectedPicklistFieldId, page: picklistPage })
@@ -297,7 +298,7 @@ export default function AdminPicklistsPanel({ H }) {
     if (!picklistSelectedIds.length || !selectedPicklistFieldId) return
     setPicklistBulkUpdating(true)
     try {
-      const res = await fetch('/api/admin/picklists/bulk-status', { method: 'POST', headers: H, body: JSON.stringify({ ids: picklistSelectedIds, status, field_id: selectedPicklistFieldId }) })
+      const res = await httpFetch('/api/admin/picklists/bulk-status', { method: 'POST', headers: H, body: JSON.stringify({ ids: picklistSelectedIds, status, field_id: selectedPicklistFieldId }) })
       const d = await res.json()
       if (!res.ok) return flash(d.error || 'Bulk update failed.', 'error')
       setPicklistSelectedIds([])
@@ -309,7 +310,7 @@ export default function AdminPicklistsPanel({ H }) {
   async function fetchImpact(entityId, label) {
     setImpactLoading(true); setImpactPanel(null)
     try {
-      const res = await fetch('/api/admin/impact-preview', { method: 'POST', headers: H, body: JSON.stringify({ change_type: 'taxonomy', entity_id: entityId }) })
+      const res = await httpFetch('/api/admin/impact-preview', { method: 'POST', headers: H, body: JSON.stringify({ change_type: 'taxonomy', entity_id: entityId }) })
       const data = await res.json()
       if (!res.ok) { flash(data.error || 'Impact preview failed.', 'error'); return }
       setImpactPanel({ data, label })
@@ -370,7 +371,7 @@ export default function AdminPicklistsPanel({ H }) {
               <div className="ac-picklists-right-actions">
                 <button className="btn btn-outline" onClick={async () => {
                   try {
-                    const res = await fetch('/api/admin/picklists/export', { headers: H })
+                    const res = await httpFetch('/api/admin/picklists/export', { headers: H })
                     const data = await res.json()
                     const csv = toCsv(data.picklists || data.data || data || [])
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -384,7 +385,7 @@ export default function AdminPicklistsPanel({ H }) {
                   try {
                     const rows = parseCsv(await file.text())
                     if (!rows.length) return flash('No valid rows found in CSV.', 'error')
-                    const res = await fetch('/api/admin/picklists/bulk', { method: 'POST', headers: H, body: JSON.stringify({ items: rows }) })
+                    const res = await httpFetch('/api/admin/picklists/bulk', { method: 'POST', headers: H, body: JSON.stringify({ items: rows }) })
                     const d = await res.json()
                     if (!res.ok) return flash(d.error || 'Upload failed.', 'error')
                     await loadPicklistHierarchy()
@@ -420,7 +421,7 @@ export default function AdminPicklistsPanel({ H }) {
             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
               <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={() => {
                 const params = selectedPicklistFieldId ? `?category=${encodeURIComponent(selectedPicklistFieldId)}` : ''
-                fetch(`/api/admin/picklists/export-csv${params}`, { headers: H })
+                httpFetch(`/api/admin/picklists/export-csv${params}`, { headers: H })
                   .then(r => r.blob()).then(blob => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'picklists.csv'; a.click(); URL.revokeObjectURL(url) })
                   .catch(() => flash('Export failed.', 'error'))
               }}>⬇ Export CSV</button>
@@ -436,7 +437,7 @@ export default function AdminPicklistsPanel({ H }) {
                   const descIdx = header.findIndex(h => h.toLowerCase().includes('desc'))
                   const rows = lines.slice(1).map(line => { const cols = line.split(','); return { name: cols[nameIdx]?.replace(/"/g,'').trim(), value: cols[valueIdx]?.replace(/"/g,'').trim(), description: cols[descIdx]?.replace(/"/g,'').trim() } }).filter(r => r.name && r.value)
                   if (!rows.length) return flash('No valid rows found in CSV.', 'error')
-                  const res = await fetch('/api/admin/picklists/import-csv', { method: 'POST', headers: H, body: JSON.stringify({ rows }) })
+                  const res = await httpFetch('/api/admin/picklists/import-csv', { method: 'POST', headers: H, body: JSON.stringify({ rows }) })
                   const d = await res.json()
                   if (!res.ok) return flash(d.error || 'Import failed.', 'error')
                   flash(`Imported ${d.imported} picklist values.`)
@@ -480,7 +481,7 @@ export default function AdminPicklistsPanel({ H }) {
                           <button className="btn btn-outline" style={{ fontSize: 11, padding: '2px 9px', color: row.status === 'Active' ? 'var(--warning)' : 'var(--success)', borderColor: row.status === 'Active' ? 'var(--warning)' : 'var(--success)' }}
                             onClick={async () => {
                               try {
-                                const res = await fetch(`/api/admin/picklists/${row.id}/toggle`, { method: 'PATCH', headers: H })
+                                const res = await httpFetch(`/api/admin/picklists/${row.id}/toggle`, { method: 'PATCH', headers: H })
                                 const d = await res.json()
                                 if (!res.ok) return flash(d.error || 'Toggle failed.', 'error')
                                 await loadPicklists({ field_id: selectedPicklistFieldId, page: picklistPage })

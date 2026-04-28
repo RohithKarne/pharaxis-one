@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -22,7 +23,7 @@ export default function CaseContactsTab({ id, headers, onCountChange }) {
 
   async function loadContacts() {
     try {
-      const res  = await fetch(`${API}/cases/${id}/contacts`, { headers })
+      const res  = await httpFetch(`${API}/cases/${id}/contacts`, { headers })
       const data = await res.json()
       const list = Array.isArray(data) ? data : []
       setContacts(list)
@@ -34,7 +35,7 @@ export default function CaseContactsTab({ id, headers, onCountChange }) {
     if (q.length < 2) { setContactHits([]); return }
     setSearchLoading(true)
     try {
-      const res  = await fetch(`${API}/cases/contacts/search?q=${encodeURIComponent(q)}`, { headers })
+      const res  = await httpFetch(`${API}/cases/contacts/search?q=${encodeURIComponent(q)}`, { headers })
       const data = await res.json()
       setContactHits(Array.isArray(data) ? data : [])
     } catch { setContactHits([]) }
@@ -61,7 +62,7 @@ export default function CaseContactsTab({ id, headers, onCountChange }) {
 
   async function saveContact() {
     try {
-      const res  = await fetch(`${API}/cases/${id}/contacts`, {
+      const res  = await httpFetch(`${API}/cases/${id}/contacts`, {
         method: 'POST', headers, body: JSON.stringify(addContactForm),
       })
       const data = await res.json()
@@ -78,7 +79,7 @@ export default function CaseContactsTab({ id, headers, onCountChange }) {
   async function removeContact(ccId) {
     if (!await confirm('Remove this contact from the case?')) return
     try {
-      await fetch(`${API}/cases/contacts/${ccId}`, { method: 'DELETE', headers })
+      await httpFetch(`${API}/cases/contacts/${ccId}`, { method: 'DELETE', headers })
       const updated = contacts.filter(c => c.id !== ccId)
       setContacts(updated)
       onCountChange?.(updated.length)

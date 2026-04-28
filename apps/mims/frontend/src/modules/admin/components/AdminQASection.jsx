@@ -78,7 +78,7 @@ function ScoreBadge({ score }) {
     <span style={{ background: bg, color, padding: '2px 8px', borderRadius: 10, fontWeight: 600, fontSize: 12 }}>
       {score}/100
     </span>
-
+  )
 }
 
 // ─── Retrospective QA Reports Panel ──────────────────────────────────────────
@@ -201,7 +201,7 @@ function QAReportsPanel({ H }) {
           <div style={{ color: 'var(--text-secondary)' }}>Failed to load report detail.</div>
         )}
       </div>
-
+    )
   }
 
   return (
@@ -290,7 +290,7 @@ function QAReportsPanel({ H }) {
         </table>
       )}
     </div>
-
+  )
 }
 
 // ─── QA Rules Config Panel ────────────────────────────────────────────────────
@@ -413,7 +413,7 @@ function QARulesPanel({ H }) {
         ))
       )}
     </div>
-
+  )
 }
 
 // ─── Manager Override Dashboard Panel ────────────────────────────────────────
@@ -502,7 +502,7 @@ function QAOverridesPanel({ H }) {
         </table>
       )}
     </div>
-
+  )
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -530,5 +530,5 @@ export default function AdminQASection({ contentSection, H }) {
       </div>
       <Component H={H} />
     </div>
-
+  )
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { StatusPill } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const SITE_TABS = [
   { key: 'general',   label: 'General' },
@@ -51,13 +52,13 @@ export default function AdminSitesPanel({ H, flash }) {
   }
 
   async function loadOrgs() {
-    try { const d = await fetch('/api/admin/orgs', { headers: H }).then(r => r.json()); setOrgs(d.orgs || []) }
+    try { const d = await httpFetch('/api/admin/orgs', { headers: H }).then(r => r.json()); setOrgs(d.orgs || []) }
     catch { setOrgs([]) }
   }
 
   async function loadEmailAccounts() {
     try {
-      const res = await fetch('/api/admin/email-accounts', { headers: H })
+      const res = await httpFetch('/api/admin/email-accounts', { headers: H })
       const d = await readJson(res)
       setEmailAccounts(res.ok ? (d.accounts || []) : [])
     } catch { setEmailAccounts([]) }
@@ -65,7 +66,7 @@ export default function AdminSitesPanel({ H, flash }) {
 
   async function loadAllSites() {
     setSitesLoading(true)
-    try { const d = await fetch('/api/admin/sites', { headers: H }).then(r => r.json()); setSitesList(d.sites || []) }
+    try { const d = await httpFetch('/api/admin/sites', { headers: H }).then(r => r.json()); setSitesList(d.sites || []) }
     catch { flash('Failed to load sites.', 'error') } finally { setSitesLoading(false) }
   }
 
@@ -73,7 +74,7 @@ export default function AdminSitesPanel({ H, flash }) {
     e.preventDefault()
     setNewSiteSaving(true)
     try {
-      const res = await fetch('/api/admin/sites', { method: 'POST', headers: H, body: JSON.stringify(newSiteForm) })
+      const res = await httpFetch('/api/admin/sites', { method: 'POST', headers: H, body: JSON.stringify(newSiteForm) })
       const d = await res.json()
       if (!res.ok) return flash(d.error || 'Create failed.', 'error')
       flash('Site created.', 'success')
@@ -97,13 +98,13 @@ export default function AdminSitesPanel({ H, flash }) {
     setSiteTabLoading(true)
     try {
       if (tab === 'response') {
-        const d = await fetch(`/api/admin/sites/${siteId}/response-template`, { headers: H }).then(r => r.json())
+        const d = await httpFetch(`/api/admin/sites/${siteId}/response-template`, { headers: H }).then(r => r.json())
         setSiteResponseTemplate(d.template || { subject: '', body_html: '' })
       } else if (tab === 'retention') {
-        const d = await fetch(`/api/admin/sites/${siteId}/data-retention`, { headers: H }).then(r => r.json())
+        const d = await httpFetch(`/api/admin/sites/${siteId}/data-retention`, { headers: H }).then(r => r.json())
         setSiteRetentionRules(d.rules || [])
       } else if (tab === 'alerts') {
-        const d = await fetch(`/api/admin/sites/${siteId}/alerts`, { headers: H }).then(r => r.json())
+        const d = await httpFetch(`/api/admin/sites/${siteId}/alerts`, { headers: H }).then(r => r.json())
         setSiteAlerts(d.alerts || [])
       }
     } catch { /* silent */ } finally { setSiteTabLoading(false) }
@@ -111,7 +112,7 @@ export default function AdminSitesPanel({ H, flash }) {
 
   async function loadSiteEmailPurposes(siteId) {
     try {
-      const d = await fetch(`/api/admin/sites/${siteId}/email-purpose`, { headers: H }).then(r => r.json())
+      const d = await httpFetch(`/api/admin/sites/${siteId}/email-purpose`, { headers: H }).then(r => r.json())
       const map = { response: [], transmissions: [], correspondence: [], fax: [] }
       for (const row of (d.purposes || [])) {
         if (map[row.purpose] !== undefined) map[row.purpose].push(row.email_account_id)
@@ -125,7 +126,7 @@ export default function AdminSitesPanel({ H, flash }) {
     if (!selectedSite) return
     setSiteGeneralSaving(true)
     try {
-      const res = await fetch(`/api/admin/sites/${selectedSite.id}`, { method: 'PUT', headers: H, body: JSON.stringify(siteGeneralForm) })
+      const res = await httpFetch(`/api/admin/sites/${selectedSite.id}`, { method: 'PUT', headers: H, body: JSON.stringify(siteGeneralForm) })
       const d = await res.json()
       if (!res.ok) return flash(d.error || 'Save failed.', 'error')
       flash('Site updated.', 'success')
@@ -139,7 +140,7 @@ export default function AdminSitesPanel({ H, flash }) {
     setSiteEmailPurposeSaving(true)
     try {
       const assignments = Object.entries(siteEmailPurposes).map(([purpose, ids]) => ({ purpose, email_account_ids: ids }))
-      const res = await fetch(`/api/admin/sites/${selectedSite.id}/email-purpose`, { method: 'PUT', headers: H, body: JSON.stringify({ assignments }) })
+      const res = await httpFetch(`/api/admin/sites/${selectedSite.id}/email-purpose`, { method: 'PUT', headers: H, body: JSON.stringify({ assignments }) })
       const d = await res.json()
       if (!res.ok) return flash(d.error || 'Save failed.', 'error')
       flash('Email account assignments saved.', 'success')
@@ -149,7 +150,7 @@ export default function AdminSitesPanel({ H, flash }) {
   async function saveSiteResponseTemplate(e) {
     e.preventDefault()
     if (!selectedSite) return
-    const res = await fetch(`/api/admin/sites/${selectedSite.id}/response-template`, { method: 'PUT', headers: H, body: JSON.stringify(siteResponseTemplate) })
+    const res = await httpFetch(`/api/admin/sites/${selectedSite.id}/response-template`, { method: 'PUT', headers: H, body: JSON.stringify(siteResponseTemplate) })
     const d = await res.json()
     if (!res.ok) return flash(d.error, 'error')
     setSiteResponseTemplate(d.template)
@@ -159,7 +160,7 @@ export default function AdminSitesPanel({ H, flash }) {
   async function saveSiteRetention(e) {
     e.preventDefault()
     if (!selectedSite) return
-    const res = await fetch(`/api/admin/sites/${selectedSite.id}/data-retention`, { method: 'PUT', headers: H, body: JSON.stringify(siteRetentionForm) })
+    const res = await httpFetch(`/api/admin/sites/${selectedSite.id}/data-retention`, { method: 'PUT', headers: H, body: JSON.stringify(siteRetentionForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error, 'error')
     setSiteRetentionRules(d.rules)
@@ -169,7 +170,7 @@ export default function AdminSitesPanel({ H, flash }) {
   async function addSiteAlert(e) {
     e.preventDefault()
     if (!selectedSite) return
-    const res = await fetch(`/api/admin/sites/${selectedSite.id}/alerts`, { method: 'POST', headers: H, body: JSON.stringify(siteAlertForm) })
+    const res = await httpFetch(`/api/admin/sites/${selectedSite.id}/alerts`, { method: 'POST', headers: H, body: JSON.stringify(siteAlertForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error, 'error')
     setSiteAlerts(prev => [...prev, d.alert])
@@ -179,7 +180,7 @@ export default function AdminSitesPanel({ H, flash }) {
 
   async function deleteSiteAlert(alertId) {
     if (!selectedSite || !await confirm('Delete this site alert?')) return
-    const res = await fetch(`/api/admin/sites/${selectedSite.id}/alerts/${alertId}`, { method: 'DELETE', headers: H })
+    const res = await httpFetch(`/api/admin/sites/${selectedSite.id}/alerts/${alertId}`, { method: 'DELETE', headers: H })
     if (res.ok) { setSiteAlerts(prev => prev.filter(a => a.id !== alertId)); flash('Deleted.', 'success') }
   }
 

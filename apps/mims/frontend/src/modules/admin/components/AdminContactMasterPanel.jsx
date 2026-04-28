@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function AdminContactMasterPanel({ H, flash }) {
   const [orgs, setOrgs] = useState([])
@@ -23,7 +24,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
 
   async function loadOrgs() {
     try {
-      const d = await fetch('/api/admin/orgs', { headers: H }).then(r => r.json())
+      const d = await httpFetch('/api/admin/orgs', { headers: H }).then(r => r.json())
       setOrgs(d.orgs || [])
     } catch { setOrgs([]) }
   }
@@ -32,7 +33,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
     setContactsLoading(true)
     try {
       const params = new URLSearchParams({ search, type })
-      const res = await fetch(`/api/admin/contacts?${params}`, { headers: H })
+      const res = await httpFetch(`/api/admin/contacts?${params}`, { headers: H })
       const d = await res.json()
       setContacts(d.contacts || [])
     } catch { /* silent */ } finally { setContactsLoading(false) }
@@ -42,7 +43,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
     e.preventDefault()
     const isEdit = contactModal === 'edit'
     const url = isEdit ? `/api/admin/contacts/${contactEditTarget.id}` : '/api/admin/contacts'
-    const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(contactForm) })
+    const res = await httpFetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(contactForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Save failed.', 'error')
     await loadContacts()
@@ -53,7 +54,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
   async function deleteContact(c) {
     const contactName = `${c.first_name || ''} ${c.last_name || ''}`.trim() || `#${c.id}`
     if (!await confirm(`Delete contact "${contactName}"?`)) return
-    const res = await fetch(`/api/admin/contacts/${c.id}`, { method: 'DELETE', headers: H })
+    const res = await httpFetch(`/api/admin/contacts/${c.id}`, { method: 'DELETE', headers: H })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Delete failed.', 'error')
     setContacts(prev => prev.filter(x => x.id !== c.id))
@@ -64,7 +65,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
     setRepsLoading(true)
     try {
       const params = new URLSearchParams({ search })
-      const res = await fetch(`/api/admin/company-reps?${params}`, { headers: H })
+      const res = await httpFetch(`/api/admin/company-reps?${params}`, { headers: H })
       const d = await res.json()
       setCompanyReps(d.reps || [])
     } catch { /* silent */ } finally { setRepsLoading(false) }
@@ -74,7 +75,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
     e.preventDefault()
     const isEdit = repModal === 'edit'
     const url = isEdit ? `/api/admin/company-reps/${repEditTarget.id}` : '/api/admin/company-reps'
-    const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(repForm) })
+    const res = await httpFetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(repForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Save failed.', 'error')
     await loadCompanyReps()
@@ -84,7 +85,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
 
   async function deleteRep(r) {
     if (!await confirm(`Delete representative "${r.name}"?`)) return
-    const res = await fetch(`/api/admin/company-reps/${r.id}`, { method: 'DELETE', headers: H })
+    const res = await httpFetch(`/api/admin/company-reps/${r.id}`, { method: 'DELETE', headers: H })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Delete failed.', 'error')
     setCompanyReps(prev => prev.filter(x => x.id !== r.id))
@@ -206,7 +207,7 @@ export default function AdminContactMasterPanel({ H, flash }) {
                   return { name: cols[nameIdx]?.replace(/"/g,'').trim(), email: cols[emailIdx]?.replace(/"/g,'').trim(), phone: cols[phoneIdx]?.replace(/"/g,'').trim(), territory: cols[territoryIdx]?.replace(/"/g,'').trim() }
                 }).filter(r => r.name)
                 if (!rows.length) return flash('No valid rows in CSV.', 'error')
-                const res = await fetch('/api/admin/company-reps/import', { method: 'POST', headers: H, body: JSON.stringify({ rows }) })
+                const res = await httpFetch('/api/admin/company-reps/import', { method: 'POST', headers: H, body: JSON.stringify({ rows }) })
                 const d = await res.json()
                 if (!res.ok) return flash(d.error || 'Import failed.', 'error')
                 flash(`Imported ${d.imported} representatives.`)

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function AdminNavButton({ item, isActive, onNavigate, compact = false }) {
   return (
@@ -22,7 +23,7 @@ export function AdminConsoleBrandHero({ title, subtitle, showOverviewAction = fa
   useEffect(() => {
     if (!token) return
     let cancelled = false
-    fetch('/api/auth/org-logo', { headers: { Authorization: `Bearer ${token}` } })
+    httpFetch('/api/auth/org-logo', { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!cancelled) setOrgLogoUrl(data?.logo_url || null)

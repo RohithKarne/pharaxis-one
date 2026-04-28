@@ -24,7 +24,7 @@ MIMS is the core medical-affairs operations system in Pharaxis-One.
 ## Run Locally
 
 ```bash
-cd apps/medical-affairs/mims
+cd apps/mims
 npm install
 npm run dev:all
 ```

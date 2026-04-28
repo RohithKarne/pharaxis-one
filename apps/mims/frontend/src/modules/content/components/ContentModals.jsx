@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import toast from '../../../shared/utils/toast'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export function CheckInModal({ item, onClose, onConfirm, loading }) {
   return (
@@ -26,7 +27,7 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    fetch('/api/admin/users', { headers: authHeaders })
+    httpFetch('/api/admin/users', { headers: authHeaders })
       .then(r => r.ok ? r.json() : [])
       .then(d => setUsers(Array.isArray(d) ? d : d.users || []))
       .catch(() => {})
@@ -45,7 +46,7 @@ export function InitiateReviewModal({ doc, token, onClose, onDone }) {
     if (!form.reviewers.length) return toast.warn('Select at least one reviewer.')
     setLoading(true)
     try {
-      const res = await fetch(`/api/cm/documents/${doc.id}/initiate-review`, {
+      const res = await httpFetch(`/api/cm/documents/${doc.id}/initiate-review`, {
         method: 'POST', headers: authHeaders, body: JSON.stringify(form)
       })
       if (res.ok) { onDone(); onClose() }
@@ -106,7 +107,7 @@ export function ApproveModal({ doc, user, token, onClose, onDone }) {
     if (!form.reason.trim()) return toast.warn('Reason is required.')
     setLoading(true)
     try {
-      const res = await fetch(`/api/cm/documents/${doc.id}/approve`, {
+      const res = await httpFetch(`/api/cm/documents/${doc.id}/approve`, {
         method: 'POST', headers: authHeaders, body: JSON.stringify(form)
       })
       if (res.ok) { onDone(); onClose() }
@@ -151,7 +152,7 @@ export function PublishModal({ doc, user, token, onClose, onDone }) {
     if (!form.reason.trim()) return toast.warn('Reason is required.')
     setLoading(true)
     try {
-      const res = await fetch(`/api/cm/documents/${doc.id}/publish`, {
+      const res = await httpFetch(`/api/cm/documents/${doc.id}/publish`, {
         method: 'POST', headers: authHeaders, body: JSON.stringify(form)
       })
       if (res.ok) { onDone(); onClose() }
@@ -203,7 +204,7 @@ export function ReviewStatusModal({ review, token, onClose, onDone }) {
     if (!form.reason.trim()) return toast.warn('Reason is required.')
     setLoading(true)
     try {
-      const res = await fetch(`/api/cm/reviews/${review.id}/reviewer-status`, {
+      const res = await httpFetch(`/api/cm/reviews/${review.id}/reviewer-status`, {
         method: 'PUT', headers: authHeaders, body: JSON.stringify(form)
       })
       if (res.ok) { onDone(); onClose() }

@@ -6,6 +6,7 @@
  */
 
 import { createContext, useContext, useState, useCallback } from 'react'
+import { httpFetch } from '../api/httpFetch.js'
 
 const AuthContext = createContext(null)
 
@@ -81,7 +82,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     try {
       const savedToken = localStorage.getItem(`${KEY}_token`)
       if (savedToken) {
-        await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${savedToken}` } })
+        await httpFetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${savedToken}` } })
       }
     } catch { /* silent */ }
     setUser(null); setToken(null); setModules([]); setOrgId(null); setSiteId(null); setOrgName(null); setSiteName(null); setAllOrgs([]); setSessionTimeout(30)
@@ -93,7 +94,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   // Switch active org — calls API, stores new token + org info, reloads app
   async function switchOrg(newOrgId) {
     const savedToken = localStorage.getItem(`${KEY}_token`)
-    const res  = await fetch('/api/auth/switch-org', {
+    const res  = await httpFetch('/api/auth/switch-org', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${savedToken}` },
       body: JSON.stringify({ orgId: newOrgId })
@@ -115,7 +116,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     const savedToken = localStorage.getItem(`${KEY}_token`)
     if (!savedToken || user?.role === 'superadmin') return
 
-    const res = await fetch('/api/auth/me', {
+    const res = await httpFetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${savedToken}` },
     })
     if (!res.ok) return
@@ -130,7 +131,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     const fallbackOrgId = nextOrgs[0].orgId
     if (!fallbackOrgId) return
 
-    const switchRes = await fetch('/api/auth/switch-org', {
+    const switchRes = await httpFetch('/api/auth/switch-org', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

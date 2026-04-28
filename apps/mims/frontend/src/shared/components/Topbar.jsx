@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { httpFetch } from '../api/httpFetch.js'
 
 export default function Topbar({ title, onToggleSidebar }) {
   const { user, logout, getInitials, formatRole, orgId, orgName, allOrgs, switchOrg } = useAuth()
@@ -27,7 +28,7 @@ export default function Topbar({ title, onToggleSidebar }) {
     let cancelled = false
     async function ping() {
       try {
-        const res = await fetch('/api/health', { cache: 'no-store' })
+        const res = await httpFetch('/api/health', { cache: 'no-store' })
         if (!cancelled) setBackendOnline(res.ok)
       } catch { if (!cancelled) setBackendOnline(false) }
     }

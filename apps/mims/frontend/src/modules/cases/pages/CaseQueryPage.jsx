@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -55,7 +56,7 @@ export default function CaseQueryPage() {
       if (filters.corr_from) q.set('corr_from', filters.corr_from)
       if (filters.corr_to) q.set('corr_to', filters.corr_to)
       if (filters.corr_party.trim()) q.set('corr_party', filters.corr_party.trim())
-      const res = await fetch(`${API}/cases?${q.toString()}`, { headers })
+      const res = await httpFetch(`${API}/cases?${q.toString()}`, { headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load case query results.')
       const nextRows = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : [])

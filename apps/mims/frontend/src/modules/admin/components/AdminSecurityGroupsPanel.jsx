@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { StatusPill } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function formatSecGroupDependencyMessage(data) {
   const count = Number(data?.dependency?.active_member_count || 0)
@@ -36,7 +37,7 @@ export default function AdminSecurityGroupsPanel({ H, flash }) {
   async function loadSecGroups() {
     setSecGroupsLoading(true)
     try {
-      const data = await fetch('/api/admin/security-groups', { headers: H }).then(r => r.json()).catch(() => ({ groups: [] }))
+      const data = await httpFetch('/api/admin/security-groups', { headers: H }).then(r => r.json()).catch(() => ({ groups: [] }))
       setSecGroups(data.groups || [])
     } finally {
       setSecGroupsLoading(false)
@@ -49,7 +50,7 @@ export default function AdminSecurityGroupsPanel({ H, flash }) {
     setSecGroupAddMsg('')
     setSecGroupMembersLoading(true)
     try {
-      const data = await fetch(`/api/admin/security-groups/${group.id}`, { headers: H }).then(r => r.json()).catch(() => ({ members: [] }))
+      const data = await httpFetch(`/api/admin/security-groups/${group.id}`, { headers: H }).then(r => r.json()).catch(() => ({ members: [] }))
       setSecGroupSelected({ ...group, members: data.members || [] })
     } finally {
       setSecGroupMembersLoading(false)
@@ -61,7 +62,7 @@ export default function AdminSecurityGroupsPanel({ H, flash }) {
     setSecGroupMsg('')
     try {
       if (secGroupEditTarget) {
-        const response = await fetch(`/api/admin/security-groups/${secGroupEditTarget.id}`, {
+        const response = await httpFetch(`/api/admin/security-groups/${secGroupEditTarget.id}`, {
           method: 'PUT',
           headers: H,
           body: JSON.stringify({ name: secGroupForm.name, description: secGroupForm.description, is_active: 1 }),
@@ -76,7 +77,7 @@ export default function AdminSecurityGroupsPanel({ H, flash }) {
           setSecGroupMsg(data.error || 'Update failed.')
         }
       } else {
-        const response = await fetch('/api/admin/security-groups', {
+        const response = await httpFetch('/api/admin/security-groups', {
           method: 'POST',
           headers: H,
           body: JSON.stringify({ name: secGroupForm.name, description: secGroupForm.description }),
@@ -99,7 +100,7 @@ export default function AdminSecurityGroupsPanel({ H, flash }) {
     if (!await confirm(`Deactivate group ${group.name}?`)) return
     setSecGroupMsg('')
     try {
-      const response = await fetch(`/api/admin/security-groups/${group.id}`, { method: 'DELETE', headers: H })
+      const response = await httpFetch(`/api/admin/security-groups/${group.id}`, { method: 'DELETE', headers: H })
       const data = await response.json().catch(() => ({}))
       if (response.ok) {
         setSecGroupMsg('✓ Group deactivated.')
@@ -120,7 +121,7 @@ export default function AdminSecurityGroupsPanel({ H, flash }) {
   async function addSecGroupUser() {
     if (!secGroupSelected || !secGroupAddUserId) return
     setSecGroupAddMsg('')
-    const response = await fetch(`/api/admin/security-groups/${secGroupSelected.id}/users`, {
+    const response = await httpFetch(`/api/admin/security-groups/${secGroupSelected.id}/users`, {
       method: 'POST',
       headers: H,
       body: JSON.stringify({ user_id: parseInt(secGroupAddUserId, 10) }),
@@ -129,7 +130,7 @@ export default function AdminSecurityGroupsPanel({ H, flash }) {
     if (response.ok) {
       setSecGroupAddMsg('✓ User added.')
       setSecGroupAddUserId('')
-      const updated = await fetch(`/api/admin/security-groups/${secGroupSelected.id}`, { headers: H }).then(r => r.json()).catch(() => ({ members: [] }))
+      const updated = await httpFetch(`/api/admin/security-groups/${secGroupSelected.id}`, { headers: H }).then(r => r.json()).catch(() => ({ members: [] }))
       setSecGroupSelected(prev => ({ ...prev, members: updated.members || [] }))
     } else {
       setSecGroupAddMsg(data.error || 'Failed.')
@@ -138,7 +139,7 @@ export default function AdminSecurityGroupsPanel({ H, flash }) {
 
   async function removeSecGroupUser(userId) {
     if (!secGroupSelected) return
-    const response = await fetch(`/api/admin/security-groups/${secGroupSelected.id}/users/${userId}`, { method: 'DELETE', headers: H })
+    const response = await httpFetch(`/api/admin/security-groups/${secGroupSelected.id}/users/${userId}`, { method: 'DELETE', headers: H })
     if (response.ok) {
       setSecGroupSelected(prev => ({ ...prev, members: (prev.members || []).filter(member => member.id !== userId) }))
     }
@@ -195,7 +196,7 @@ export default function AdminSecurityGroupsPanel({ H, flash }) {
                         <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => { setSecGroupEditTarget(group); setSecGroupForm({ name: group.name, description: group.description || '' }); setSecGroupMsg('') }}>✏ Edit</button>
                         <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={async () => {
                           try {
-                            const res = await fetch(`/api/admin/security-groups/${group.id}/clone`, { method: 'POST', headers: H })
+                            const res = await httpFetch(`/api/admin/security-groups/${group.id}/clone`, { method: 'POST', headers: H })
                             const d = await res.json()
                             if (!res.ok) return flash(d.error || 'Clone failed.', 'error')
                             loadSecGroups()

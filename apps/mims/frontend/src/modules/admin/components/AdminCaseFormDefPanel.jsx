@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function SectionHeader({ title, desc, msg }) {
   return (
@@ -34,7 +35,7 @@ export default function AdminCaseFormDefPanel({ H }) {
 
   async function loadOrgs() {
     try {
-      const d = await fetch('/api/admin/orgs', { headers: H }).then(r => r.json()).catch(() => ({ orgs: [] }))
+      const d = await httpFetch('/api/admin/orgs', { headers: H }).then(r => r.json()).catch(() => ({ orgs: [] }))
       setOrgs(d.orgs || [])
     } catch { setOrgs([]) }
   }
@@ -43,7 +44,7 @@ export default function AdminCaseFormDefPanel({ H }) {
     setCaseFormDefLoading(true)
     try {
       const params = new URLSearchParams({ case_type: caseType, ...(orgId ? { org_id: orgId } : {}) })
-      const d = await fetch(`/api/admin/case-form-definition?${params}`, { headers: H }).then(r => r.json())
+      const d = await httpFetch(`/api/admin/case-form-definition?${params}`, { headers: H }).then(r => r.json())
       setCaseFormDefSections(d.sections || [])
     } catch { flash('Failed to load form definition.', 'error') } finally { setCaseFormDefLoading(false) }
   }
@@ -51,7 +52,7 @@ export default function AdminCaseFormDefPanel({ H }) {
   async function saveCaseFormDef() {
     setCaseFormDefSaving(true)
     try {
-      const res = await fetch('/api/admin/case-form-definition', {
+      const res = await httpFetch('/api/admin/case-form-definition', {
         method: 'POST', headers: H,
         body: JSON.stringify({ case_type: caseFormDefCaseType, org_id: caseFormDefOrgId || null, sections: caseFormDefSections })
       })

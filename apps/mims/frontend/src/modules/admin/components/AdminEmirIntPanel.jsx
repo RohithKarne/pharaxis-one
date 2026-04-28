@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { LockedIntegration, IntegrationSectionHeader, useIntegrationHelpers } from './AdminIntegrationShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
   const [saving, setSaving] = useState(false)
@@ -14,7 +15,7 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
   async function save() {
     setSaving(true)
     try {
-      await fetch('/api/admin/integrations/emir/config', { method: 'PUT', headers: H, body: JSON.stringify({ config }) })
+      await httpFetch('/api/admin/integrations/emir/config', { method: 'PUT', headers: H, body: JSON.stringify({ config }) })
     } finally { setSaving(false) }
   }
 
@@ -58,7 +59,7 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
               <td style={{ padding: '6px 8px' }}>{rule.value}</td>
               <td style={{ padding: '6px 8px' }}>{rule.action}</td>
               <td style={{ padding: '6px 8px' }}><button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={async () => {
-                if (rule.id) { try { await fetch(`/api/admin/emir/sender-rules/${rule.id}`, { method: 'DELETE', headers: H }) } catch (_e) {} }
+                if (rule.id) { try { await httpFetch(`/api/admin/emir/sender-rules/${rule.id}`, { method: 'DELETE', headers: H }) } catch (_e) {} }
                 setEmirSenderRules(prev => prev.filter((_, i) => i !== idx))
               }}>Remove</button></td>
             </tr>
@@ -79,7 +80,7 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
         <button className="btn btn-secondary" onClick={async () => {
           if (!emirSenderForm.value) return
           try {
-            const r = await fetch('/api/admin/emir/sender-rules', { method: 'POST', headers: H, body: JSON.stringify(emirSenderForm) })
+            const r = await httpFetch('/api/admin/emir/sender-rules', { method: 'POST', headers: H, body: JSON.stringify(emirSenderForm) })
             const d = await r.json()
             if (r.ok) {
               setEmirSenderRules(prev => [...prev, { ...emirSenderForm, id: d.id }])
@@ -131,7 +132,7 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
               <td style={{ padding: '6px 8px' }}>{rule.case_type}</td>
               <td style={{ padding: '6px 8px' }}>{rule.default_priority}</td>
               <td style={{ padding: '6px 8px' }}><button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={async () => {
-                if (rule.id) { try { await fetch(`/api/admin/emir/routing-rules/${rule.id}`, { method: 'DELETE', headers: H }) } catch (_e) {} }
+                if (rule.id) { try { await httpFetch(`/api/admin/emir/routing-rules/${rule.id}`, { method: 'DELETE', headers: H }) } catch (_e) {} }
                 setEmirRoutingRules(prev => prev.filter((_, i) => i !== idx))
               }}>Remove</button></td>
             </tr>
@@ -166,7 +167,7 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
         <button className="btn btn-secondary" onClick={async () => {
           if (!emirRouteForm.rule_name || !emirRouteForm.match_value) return
           try {
-            const r = await fetch('/api/admin/emir/routing-rules', { method: 'POST', headers: H, body: JSON.stringify(emirRouteForm) })
+            const r = await httpFetch('/api/admin/emir/routing-rules', { method: 'POST', headers: H, body: JSON.stringify(emirRouteForm) })
             const d = await r.json()
             if (r.ok) {
               setEmirRoutingRules(prev => [...prev, { ...emirRouteForm, id: d.id }])

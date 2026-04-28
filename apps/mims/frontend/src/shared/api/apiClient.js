@@ -1,3 +1,4 @@
+import { httpFetch } from './httpFetch.js'
 'use strict'
 
 /**
@@ -17,7 +18,7 @@ export function apiClient(token) {
   }
 
   async function request(url, options = {}) {
-    const res = await fetch(url, { ...options, headers: { ...authHeaders, ...options.headers } })
+    const res = await httpFetch(url, { ...options, headers: { ...authHeaders, ...options.headers } })
     let json
     try { json = await res.json() } catch (_) { json = {} }
     if (!res.ok) {
@@ -35,7 +36,7 @@ export function apiClient(token) {
     put:    (url, body)        => request(url, { method: 'PUT',    body: JSON.stringify(body) }),
     patch:  (url, body)        => request(url, { method: 'PATCH',  body: JSON.stringify(body) }),
     del:    (url)              => request(url, { method: 'DELETE' }),
-    upload: (url, formData)    => fetch(url, {
+    upload: (url, formData)    => httpFetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: formData,

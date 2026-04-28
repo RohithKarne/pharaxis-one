@@ -4,6 +4,7 @@ import AdminCrmIntPanel from './AdminCrmIntPanel'
 import AdminContentIntPanel from './AdminContentIntPanel'
 import AdminEmirIntPanel from './AdminEmirIntPanel'
 import AdminCaseImportPanel from './AdminCaseImportPanel'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const INTEGRATION_SECTIONS = ['mir-int', 'crm-int', 'content-int', 'emir-int', 'case-import']
 const INTEGRATION_TYPES = ['mir', 'crm', 'content', 'emir', 'case_import']
@@ -18,7 +19,7 @@ export default function AdminIntegrationSection({ contentSection, H, flash }) {
 
     ;(async () => {
       try {
-        const res = await fetch('/api/admin/integrations/config', { headers: H })
+        const res = await httpFetch('/api/admin/integrations/config', { headers: H })
         if (res.ok) {
           const d = await res.json()
           if (!cancelled) setIntegrationConfig(d.config || d.configs || {})
@@ -29,7 +30,7 @@ export default function AdminIntegrationSection({ contentSection, H, flash }) {
         try {
           const entries = await Promise.all(INTEGRATION_TYPES.map(async (type) => {
             try {
-              const res = await fetch(`/api/admin/integrations/${type}/config`, { headers: H })
+              const res = await httpFetch(`/api/admin/integrations/${type}/config`, { headers: H })
               const d = await res.json()
               return [type, d.config || {}]
             } catch { return [type, {}] }
@@ -39,7 +40,7 @@ export default function AdminIntegrationSection({ contentSection, H, flash }) {
       }
 
       try {
-        const res = await fetch('/api/admin/integrations', { headers: H })
+        const res = await httpFetch('/api/admin/integrations', { headers: H })
         const d = await res.json()
         const rows = Array.isArray(d.integrations) ? d.integrations : Array.isArray(d) ? d : []
         const nextStatus = rows.reduce((acc, row) => {

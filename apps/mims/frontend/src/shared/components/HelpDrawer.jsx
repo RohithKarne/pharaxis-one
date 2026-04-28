@@ -12,6 +12,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useHelpKey from '../hooks/useHelpKey'
 import './HelpDrawer.css'
+import { httpFetch } from '../api/httpFetch.js'
 
 const API = '/api'
 
@@ -77,7 +78,7 @@ export default function HelpDrawer({ open, onClose }) {
       const params = new URLSearchParams()
       if (featureKey)   params.set('feature_key', featureKey)
       if (featureGroup) params.set('feature_group', featureGroup)
-      const res = await fetch(`${API}/help?${params}`, {
+      const res = await httpFetch(`${API}/help?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (!res.ok) throw new Error('Failed to load help content.')
@@ -111,7 +112,7 @@ export default function HelpDrawer({ open, onClose }) {
       if (!token) return
       setSearchLoading(true)
       try {
-        const res = await fetch(`${API}/help/search?q=${encodeURIComponent(query)}&limit=10`, {
+        const res = await httpFetch(`${API}/help/search?q=${encodeURIComponent(query)}&limit=10`, {
           headers: { Authorization: `Bearer ${token}` }
         })
         const data = await res.json()

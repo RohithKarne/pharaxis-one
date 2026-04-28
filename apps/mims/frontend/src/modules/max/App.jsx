@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../../shared/context/AuthContext'
+import { setSessionExpiryHandler } from '../../shared/api/httpFetch'
 import ProtectedRoute from '../../shared/components/ProtectedRoute'
 import ModuleAccessGuard from '../../shared/components/ModuleAccessGuard'
 import { useIdleTimer } from '../../shared/hooks/useIdleTimer'
@@ -37,8 +38,17 @@ import ExceptionToast from '../../shared/components/ExceptionToast'
 
 function AppRoutes() {
   const { user, sessionTimeout, logout } = useAuth()
+  const navigate = useNavigate()
   const [showWarning, setShowWarning]     = useState(false)
   const [warnSeconds, setWarnSeconds]     = useState(120)
+
+  useEffect(() => {
+    setSessionExpiryHandler(async () => {
+      await logout()
+      navigate('/login', { replace: true })
+    })
+    return () => setSessionExpiryHandler(null)
+  }, [logout, navigate])
 
   const { reset } = useIdleTimer({
     timeoutMinutes: user ? sessionTimeout : 0,

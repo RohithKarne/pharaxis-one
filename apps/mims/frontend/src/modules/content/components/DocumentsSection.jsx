@@ -3,13 +3,14 @@ import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import DocumentCreationScreen from './DocumentCreationScreen'
 import { CheckInModal, InitiateReviewModal, ApproveModal, PublishModal, ReviewStatusModal } from './ContentModals'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function ReviewRowWithMode({ r, authHeaders, onOpen }) {
   const [mode, setMode] = useState(r.review_mode || null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch(`/api/cm/reviews/${r.review_id || r.id}/config`, { headers: authHeaders })
+    httpFetch(`/api/cm/reviews/${r.review_id || r.id}/config`, { headers: authHeaders })
       .then(res => res.ok ? res.json() : null)
       .then(d => { if (d?.config?.review_mode) setMode(d.config.review_mode) })
       .catch(() => {})
@@ -19,7 +20,7 @@ function ReviewRowWithMode({ r, authHeaders, onOpen }) {
     if (saving) return
     setSaving(true)
     try {
-      const res = await fetch(`/api/cm/reviews/${r.review_id || r.id}/config`, {
+      const res = await httpFetch(`/api/cm/reviews/${r.review_id || r.id}/config`, {
         method: 'PATCH', headers: authHeaders,
         body: JSON.stringify({ review_mode: newMode }),
       })
@@ -77,7 +78,7 @@ export default function DocumentsSection({ token, user }) {
     if (!confirm(`${action === 'publish' ? 'Publish' : 'Archive'} ${selectedDocIds.length} document(s)?`)) return
     setBulkLoading(true)
     try {
-      const res = await fetch('/api/cm/documents/bulk', {
+      const res = await httpFetch('/api/cm/documents/bulk', {
         method: 'POST', headers: authHeaders,
         body: JSON.stringify({ action, ids: selectedDocIds }),
       })
@@ -104,7 +105,7 @@ export default function DocumentsSection({ token, user }) {
     setLoading(true)
     try {
       const params = new URLSearchParams({ page, limit: LIMIT, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) })
-      const res = await fetch(`/api/cm/documents?${params}`, { headers: authHeaders })
+      const res = await httpFetch(`/api/cm/documents?${params}`, { headers: authHeaders })
       if (res.ok) {
         const d = await res.json()
         setDocs(Array.isArray(d) ? d : d.documents || [])
@@ -116,28 +117,28 @@ export default function DocumentsSection({ token, user }) {
 
   const loadReviews = useCallback(async () => {
     try {
-      const res = await fetch('/api/cm/reviews', { headers: authHeaders })
+      const res = await httpFetch('/api/cm/reviews', { headers: authHeaders })
       if (res.ok) setReviews((await res.json()).reviews || [])
     } catch { /* silent */ }
   }, [token]) // eslint-disable-line
 
   const loadFolders = useCallback(async () => {
     try {
-      const res = await fetch('/api/cm/folders', { headers: authHeaders })
+      const res = await httpFetch('/api/cm/folders', { headers: authHeaders })
       if (res.ok) setFolders((await res.json()).folders || [])
     } catch { /* silent */ }
   }, [token]) // eslint-disable-line
 
   const loadCheckedIn = useCallback(async () => {
     try {
-      const res = await fetch('/api/cm/documents?status=Pending', { headers: authHeaders })
+      const res = await httpFetch('/api/cm/documents?status=Pending', { headers: authHeaders })
       if (res.ok) { const d = await res.json(); setCheckedInDocs(d.documents || []) }
     } catch { /* silent */ }
   }, [token]) // eslint-disable-line
 
   const loadCheckedOut = useCallback(async () => {
     try {
-      const res = await fetch('/api/cm/documents?status=CheckedOut', { headers: authHeaders })
+      const res = await httpFetch('/api/cm/documents?status=CheckedOut', { headers: authHeaders })
       if (res.ok) { const d = await res.json(); setCheckedOutDocs(d.documents || []) }
     } catch { /* silent */ }
   }, [token]) // eslint-disable-line
@@ -150,7 +151,7 @@ export default function DocumentsSection({ token, user }) {
 
   async function handleCheckOut(doc) {
     try {
-      const res = await fetch(`/api/cm/documents/${doc.id}/checkout`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/documents/${doc.id}/checkout`, { method: 'POST', headers: authHeaders })
       if (res.ok) loadDocs()
       else { const d = await res.json(); toast.error(d.error || 'Check out failed.') }
     } catch { toast.error('Network error.') }
@@ -159,7 +160,7 @@ export default function DocumentsSection({ token, user }) {
   async function handleCheckIn() {
     setCheckInLoading(true)
     try {
-      const res = await fetch(`/api/cm/documents/${checkInDoc.id}/checkin`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/documents/${checkInDoc.id}/checkin`, { method: 'POST', headers: authHeaders })
       if (res.ok) { setCheckInDoc(null); loadDocs() }
       else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
     } catch { toast.error('Network error.') }
@@ -169,7 +170,7 @@ export default function DocumentsSection({ token, user }) {
   async function handleArchive(doc) {
     if (!confirm(`Archive "${doc.name}"? This action cannot be undone.`)) return
     try {
-      const res = await fetch(`/api/cm/documents/${doc.id}/archive`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/documents/${doc.id}/archive`, { method: 'POST', headers: authHeaders })
       if (res.ok) loadDocs()
       else { const d = await res.json(); toast.error(d.error || 'Archive failed.') }
     } catch { toast.error('Network error.') }
@@ -268,7 +269,7 @@ export default function DocumentsSection({ token, user }) {
                 if (e.key === 'Enter' && ftQuery.trim().length >= 2) {
                   setFtSearching(true)
                   try {
-                    const res = await fetch(`/api/cm/documents/search?q=${encodeURIComponent(ftQuery)}`, { headers: authHeaders })
+                    const res = await httpFetch(`/api/cm/documents/search?q=${encodeURIComponent(ftQuery)}`, { headers: authHeaders })
                     if (res.ok) { const d = await res.json(); setFtResults(d.documents || []) }
                   } catch { /* silent */ } finally { setFtSearching(false) }
                 }
@@ -276,7 +277,7 @@ export default function DocumentsSection({ token, user }) {
             <button className="cm-btn cm-btn-secondary" disabled={ftSearching || ftQuery.trim().length < 2} onClick={async () => {
               setFtSearching(true)
               try {
-                const res = await fetch(`/api/cm/documents/search?q=${encodeURIComponent(ftQuery)}`, { headers: authHeaders })
+                const res = await httpFetch(`/api/cm/documents/search?q=${encodeURIComponent(ftQuery)}`, { headers: authHeaders })
                 if (res.ok) { const d = await res.json(); setFtResults(d.documents || []) }
               } catch { /* silent */ } finally { setFtSearching(false) }
             }}>{ftSearching ? 'Searching…' : 'Search Content'}</button>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader, StatusPill } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function AdminProductsPanel({ H, flash }) {
   const [orgs, setOrgs] = useState([])
@@ -21,21 +22,21 @@ export default function AdminProductsPanel({ H, flash }) {
 
   async function loadOrgs() {
     try {
-      const d = await fetch('/api/admin/orgs', { headers: H }).then(r => r.json())
+      const d = await httpFetch('/api/admin/orgs', { headers: H }).then(r => r.json())
       setOrgs(d.orgs || [])
     } catch { setOrgs([]) }
   }
 
   async function loadProducts() {
     try {
-      const d = await fetch('/api/admin/products', { headers: H }).then(r => r.json())
+      const d = await httpFetch('/api/admin/products', { headers: H }).then(r => r.json())
       setProducts(d.products || [])
     } catch { setProducts([]) }
   }
 
   async function createProduct(e) {
     e.preventDefault()
-    const res = await fetch('/api/admin/products', { method: 'POST', headers: H, body: JSON.stringify(productForm) })
+    const res = await httpFetch('/api/admin/products', { method: 'POST', headers: H, body: JSON.stringify(productForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error, 'error')
     setProducts(prev => [...prev, d])
@@ -45,7 +46,7 @@ export default function AdminProductsPanel({ H, flash }) {
 
   async function loadProductApprovals(productId) {
     try {
-      const res = await fetch(`/api/admin/products/${productId}/approvals`, { headers: H })
+      const res = await httpFetch(`/api/admin/products/${productId}/approvals`, { headers: H })
       const d = await res.json()
       setProductApprovals(d.approvals || [])
     } catch { /* silent */ }
@@ -53,7 +54,7 @@ export default function AdminProductsPanel({ H, flash }) {
 
   async function loadProductCountryAuths(productId) {
     try {
-      const res = await fetch(`/api/admin/products/${productId}/country-authorizations`, { headers: H })
+      const res = await httpFetch(`/api/admin/products/${productId}/country-authorizations`, { headers: H })
       const d = await res.json()
       setProductCountryAuths(d.authorizations || [])
     } catch { /* silent */ }
@@ -70,7 +71,7 @@ export default function AdminProductsPanel({ H, flash }) {
     e.preventDefault()
     const isEdit = approvalModal === 'edit'
     const url = isEdit ? `/api/admin/products/approvals/${approvalEditTarget.id}` : `/api/admin/products/${selectedProduct.id}/approvals`
-    const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(approvalForm) })
+    const res = await httpFetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(approvalForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Save failed.', 'error')
     await loadProductApprovals(selectedProduct.id)
@@ -80,7 +81,7 @@ export default function AdminProductsPanel({ H, flash }) {
 
   async function deleteApproval(a) {
     if (!await confirm(`Delete approval "${a.approval_number}"?`)) return
-    await fetch(`/api/admin/products/approvals/${a.id}`, { method: 'DELETE', headers: H })
+    await httpFetch(`/api/admin/products/approvals/${a.id}`, { method: 'DELETE', headers: H })
     await loadProductApprovals(selectedProduct.id)
     flash('Approval deleted.')
   }
@@ -89,7 +90,7 @@ export default function AdminProductsPanel({ H, flash }) {
     e.preventDefault()
     const isEdit = countryAuthModal === 'edit'
     const url = isEdit ? `/api/admin/products/country-authorizations/${countryAuthEditTarget.id}` : `/api/admin/products/${selectedProduct.id}/country-authorizations`
-    const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(countryAuthForm) })
+    const res = await httpFetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(countryAuthForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Save failed.', 'error')
     await loadProductCountryAuths(selectedProduct.id)
@@ -99,7 +100,7 @@ export default function AdminProductsPanel({ H, flash }) {
 
   async function deleteCountryAuth(a) {
     if (!await confirm(`Delete authorization for "${a.country}"?`)) return
-    await fetch(`/api/admin/products/country-authorizations/${a.id}`, { method: 'DELETE', headers: H })
+    await httpFetch(`/api/admin/products/country-authorizations/${a.id}`, { method: 'DELETE', headers: H })
     await loadProductCountryAuths(selectedProduct.id)
     flash('Authorization deleted.')
   }
@@ -152,14 +153,14 @@ export default function AdminProductsPanel({ H, flash }) {
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => selectProductForDetail(p)}>Approvals / Auth →</button>
                           <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }} onClick={async () => {
-                            const res = await fetch(`/api/admin/products/${p.id}/clone`, { method: 'POST', headers: H })
+                            const res = await httpFetch(`/api/admin/products/${p.id}/clone`, { method: 'POST', headers: H })
                             const d = await res.json()
                             if (!res.ok) return flash(d.error || 'Clone failed.', 'error')
                             loadProducts()
                             flash(`Cloned as "${d.trade_name}".`)
                           }}>⧉ Clone</button>
                           {p.is_active && <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px', color: 'var(--warning)', borderColor: 'var(--warning)' }} onClick={async () => {
-                            const res = await fetch('/api/admin/products/bulk-deactivate', { method: 'PATCH', headers: H, body: JSON.stringify({ ids: [p.id] }) })
+                            const res = await httpFetch('/api/admin/products/bulk-deactivate', { method: 'PATCH', headers: H, body: JSON.stringify({ ids: [p.id] }) })
                             if (!res.ok) return flash('Deactivate failed.', 'error')
                             loadProducts(); flash('Product deactivated.')
                           }}>Deactivate</button>}

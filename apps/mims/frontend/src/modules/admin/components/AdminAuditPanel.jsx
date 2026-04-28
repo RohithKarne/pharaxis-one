@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { SectionHeader, fmtDateIST, exportCSV } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function parseDetails(raw) {
   if (!raw) return {}
@@ -69,20 +70,20 @@ export default function AdminAuditPanel({ contentSection, H, flash }) {
 
   async function loadAuditLogs() {
     const params = new URLSearchParams(auditFilter).toString()
-    const d = await fetch(`/api/admin/audit-logs?${params}`, { headers: H }).then(r => r.json())
+    const d = await httpFetch(`/api/admin/audit-logs?${params}`, { headers: H }).then(r => r.json())
     setAuditLogs(d.logs || [])
   }
 
   async function loadAll() {
     try {
-      const a = await fetch('/api/admin/audit-logs', { headers: H }).then(r => r.json()).catch(() => ({ logs: [] }))
+      const a = await httpFetch('/api/admin/audit-logs', { headers: H }).then(r => r.json()).catch(() => ({ logs: [] }))
       setAuditLogs(a.logs || [])
     } catch { flash('Failed to load audit data.', 'error') }
   }
 
   async function loadLoginAudit() {
     const params = new URLSearchParams(loginFilter).toString()
-    const d = await fetch(`/api/admin/login-audit?${params}`, { headers: H }).then(r => r.json())
+    const d = await httpFetch(`/api/admin/login-audit?${params}`, { headers: H }).then(r => r.json())
     setLoginAudit(d.logs || [])
   }
 
@@ -159,8 +160,8 @@ export default function AdminAuditPanel({ contentSection, H, flash }) {
               const threshold = document.getElementById('lockout-threshold')?.value || 5
               const minutes = document.getElementById('lockout-minutes')?.value || 30
               await Promise.all([
-                fetch('/api/admin/system-config', { method: 'POST', headers: H, body: JSON.stringify({ key: 'login_lockout_threshold', value: String(threshold) }) }).catch(() => {}),
-                fetch('/api/admin/system-config', { method: 'POST', headers: H, body: JSON.stringify({ key: 'login_lockout_minutes', value: String(minutes) }) }).catch(() => {})
+                httpFetch('/api/admin/system-config', { method: 'POST', headers: H, body: JSON.stringify({ key: 'login_lockout_threshold', value: String(threshold) }) }).catch(() => {}),
+                httpFetch('/api/admin/system-config', { method: 'POST', headers: H, body: JSON.stringify({ key: 'login_lockout_minutes', value: String(minutes) }) }).catch(() => {})
               ])
               flash('Lockout settings saved.')
             }}>Save Lockout Settings</button>
@@ -196,7 +197,7 @@ export default function AdminAuditPanel({ contentSection, H, flash }) {
                   <td>
                     {l.status === 'failed' && l.user_id && (
                       <button className="btn btn-outline" style={{ fontSize: 11, padding: '2px 8px' }} onClick={async () => {
-                        const res = await fetch('/api/auth/unlock-user', { method: 'POST', headers: H, body: JSON.stringify({ user_id: l.user_id }) })
+                        const res = await httpFetch('/api/auth/unlock-user', { method: 'POST', headers: H, body: JSON.stringify({ user_id: l.user_id }) })
                         const d = await res.json()
                         flash(res.ok ? 'Account unlocked.' : (d.error || 'Unlock failed.'), res.ok ? 'success' : 'error')
                       }}>🔓 Unlock</button>

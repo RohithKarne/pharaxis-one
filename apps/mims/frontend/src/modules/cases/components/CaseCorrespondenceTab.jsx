@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -44,7 +45,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
       if (!activeCorrItem?.id) { setCorrAttachments([]); return }
       setCorrAttLoading(true)
       try {
-        const res  = await fetch(`${API}/inbox/${activeCorrItem.id}/attachments`, { headers })
+        const res  = await httpFetch(`${API}/inbox/${activeCorrItem.id}/attachments`, { headers })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Failed to load attachments.')
         setCorrAttachments(Array.isArray(data.attachments) ? data.attachments : [])
@@ -58,7 +59,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
     setCorrLoading(true)
     setCorrError('')
     try {
-      const res  = await fetch(`${API}/inbox/case/${id}/correspondence`, { headers })
+      const res  = await httpFetch(`${API}/inbox/case/${id}/correspondence`, { headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load correspondence.')
       const list = Array.isArray(data.items) ? data.items : []
@@ -97,7 +98,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
     setCorrCompose(prev => ({ ...prev, sending: true, error: '' }))
     try {
       const endpoint = corrCompose.mode === 'reply' ? 'reply' : 'forward'
-      const res  = await fetch(`${API}/inbox/${corrCompose.inquiryId}/${endpoint}`, {
+      const res  = await httpFetch(`${API}/inbox/${corrCompose.inquiryId}/${endpoint}`, {
         method: 'POST', headers, body: JSON.stringify({ to, subject, body }),
       })
       const data = await res.json()
@@ -113,7 +114,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
 
   async function downloadCorrAttachment(att) {
     try {
-      const r = await fetch(`${API}/inbox/attachments/${att.id}/download`, { headers })
+      const r = await httpFetch(`${API}/inbox/attachments/${att.id}/download`, { headers })
       if (!r.ok) return
       const blob = await r.blob()
       const url  = URL.createObjectURL(blob)
@@ -125,7 +126,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
 
   async function previewCorrAttachment(att) {
     try {
-      const r = await fetch(`${API}/inbox/attachments/${att.id}/download`, { headers })
+      const r = await httpFetch(`${API}/inbox/attachments/${att.id}/download`, { headers })
       if (!r.ok) return
       const blob = await r.blob()
       const url  = URL.createObjectURL(blob)

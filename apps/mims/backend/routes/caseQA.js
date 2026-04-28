@@ -22,6 +22,13 @@ const { authenticate, requireRole, requireOrg } = require('../middleware/auth');
 const { evaluateCase, storeQaResponse, storeOverride, ensureOrgRules } = require('../services/qaRulesEngine');
 const { validate, schemas } = require('../middleware/validate');
 
+function normalizeDateOnly(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
 // ─── POST /api/cases/:id/qa-evaluate ─────────────────────────────────────────
 // Real-time QA evaluation. Builds case payload, runs engine, stores result.
 router.post('/cases/:id/qa-evaluate', authenticate, requireOrg, async (req, res) => {
@@ -47,9 +54,7 @@ router.post('/cases/:id/qa-evaluate', authenticate, requireOrg, async (req, res)
     // Enrich AE-specific fields
     if (caseRow.case_type === 'AE') {
       const [[aeGen]] = await pool.execute(
-        `SELECT ag.reporter_type, ag.reporter_first_name, ag.reporter_last_name,
-                ag.reporter_email, ag.reporter_country,
-                aev.product_name, aev.indication
+        `SELECT ag.report_type, ag.additional_info, ag.date_of_onset, ag.date_of_report
            FROM case_ae_versions aev
            JOIN case_ae_general ag ON ag.version_id = aev.id
           WHERE aev.case_id = ?
@@ -57,16 +62,27 @@ router.post('/cases/:id/qa-evaluate', authenticate, requireOrg, async (req, res)
         [caseId]
       );
       if (aeGen) {
-        payload.reporter_type   = aeGen.reporter_type;
-        payload.reporter_name   = [aeGen.reporter_first_name, aeGen.reporter_last_name].filter(Boolean).join(' ');
-        payload.reporter_email  = aeGen.reporter_email;
-        payload.country         = aeGen.reporter_country;
-        payload.product_name    = aeGen.product_name;
+        payload.reporter_type = aeGen.report_type || null;
+        payload.additional_info = aeGen.additional_info || null;
+        payload.date_of_onset = aeGen.date_of_onset || null;
+        payload.date_of_report = aeGen.date_of_report || null;
       }
 
       const [[aeEvt]] = await pool.execute(
-        `SELECT e.is_serious, e.seriousness_criteria, e.outcome, e.ae_description,
-                e.suspect_drug, e.suspect_drug_dose, e.date_of_death
+        `SELECT e.is_serious,
+                e.outcome,
+                e.event_description AS ae_description,
+                CONCAT_WS(', ',
+                  IF(e.is_death = 1, 'Death', NULL),
+                  IF(e.is_life_threatening = 1, 'Life Threatening', NULL),
+                  IF(e.is_hospitalization = 1, 'Hospitalization', NULL),
+                  IF(e.is_disability = 1, 'Disability', NULL),
+                  IF(e.is_congenital_anomaly = 1, 'Congenital Anomaly', NULL),
+                  IF(e.is_other_medically_important = 1, 'Other Medically Important', NULL)
+                ) AS seriousness_criteria,
+                NULL AS suspect_drug,
+                NULL AS suspect_drug_dose,
+                NULL AS date_of_death
            FROM case_ae_events e
            JOIN case_ae_versions av ON av.id = e.version_id
           WHERE av.case_id = ?
@@ -76,7 +92,7 @@ router.post('/cases/:id/qa-evaluate', authenticate, requireOrg, async (req, res)
       if (aeEvt) Object.assign(payload, aeEvt);
 
       const [[aePatient]] = await pool.execute(
-        `SELECT p.patient_age, p.patient_age_group, p.patient_gender
+        `SELECT p.age AS patient_age, NULL AS patient_age_group, p.sex AS patient_gender
            FROM case_ae_patient_info p
            JOIN case_ae_versions av ON av.id = p.version_id
           WHERE av.case_id = ?
@@ -89,19 +105,28 @@ router.post('/cases/:id/qa-evaluate', authenticate, requireOrg, async (req, res)
     // Enrich MI-specific fields
     if (caseRow.case_type === 'MI') {
       const [[miRow]] = await pool.execute(
-        `SELECT m.reporter_type, m.reporter_name, m.response_provided
+        `SELECT m.response_text, m.response_channel, m.response_status, m.response_date,
+                m.follow_up_required, m.author_name
            FROM case_mi_responses m
           WHERE m.case_id = ?
           ORDER BY m.id DESC LIMIT 1`,
         [caseId]
       );
-      if (miRow) Object.assign(payload, miRow);
+      if (miRow) {
+        payload.response_text = miRow.response_text || null;
+        payload.response_channel = miRow.response_channel || null;
+        payload.response_status = miRow.response_status || null;
+        payload.response_date = miRow.response_date || null;
+        payload.follow_up_required = miRow.follow_up_required;
+        payload.reporter_name = miRow.author_name || null;
+        payload.response_provided = miRow.response_text || null;
+      }
     }
 
     // Enrich PC-specific fields
     if (caseRow.case_type === 'PC') {
       const [[pcGen]] = await pool.execute(
-        `SELECT g.reporter_type, g.reporter_name, g.batch_lot_number
+        `SELECT g.complaint_description, g.pc_category, g.pc_status, g.severity
            FROM case_pc_versions pv
            JOIN case_pc_general g ON g.version_id = pv.id
           WHERE pv.case_id = ?
@@ -222,7 +247,9 @@ router.get('/admin/qa/overrides', authenticate, requireRole('admin', 'superadmin
   if (from_date) { conditions.push('r.override_at >= ?'); params.push(from_date); }
   if (to_date)   { conditions.push('r.override_at <= ?'); params.push(to_date + ' 23:59:59'); }
 
-  const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+  const pageNumber = Math.max(1, parseInt(page, 10) || 1);
+  const limitNumber = Math.max(1, Math.min(200, parseInt(limit, 10) || 50));
+  const offset = (pageNumber - 1) * limitNumber;
 
   try {
     const [rows] = await pool.execute(
@@ -236,8 +263,8 @@ router.get('/admin/qa/overrides', authenticate, requireRole('admin', 'superadmin
          LEFT JOIN users u ON u.id = r.override_by
         WHERE ${conditions.join(' AND ')}
         ORDER BY r.override_at DESC
-        LIMIT ? OFFSET ?`,
-      [...params, parseInt(limit, 10), offset]
+        LIMIT ${limitNumber} OFFSET ${offset}`,
+      params
     );
 
     const [[{ total }]] = await pool.execute(
@@ -245,8 +272,7 @@ router.get('/admin/qa/overrides', authenticate, requireRole('admin', 'superadmin
         WHERE ${conditions.join(' AND ')}`,
       params
     );
-
-    return res.json({ overrides: rows, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
+    return res.json({ overrides: rows, total, page: pageNumber, limit: limitNumber });
   } catch (err) {
     console.error('[QA Overrides]', err.message);
     return res.status(500).json({ error: 'Failed to fetch override data.' });
@@ -266,7 +292,7 @@ router.post('/admin/qa/reports', authenticate, requireRole('admin', 'superadmin'
           case_type_filter, status)
        VALUES (?, ?, ?, ?, ?, ?, 'queued')`,
       [orgId, req.user.userId, report_name,
-       date_range_start || null, date_range_end || null, case_type_filter || null]
+       normalizeDateOnly(date_range_start), normalizeDateOnly(date_range_end), case_type_filter || null]
     );
     const reportId = ins.insertId;
 

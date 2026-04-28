@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { IntegrationSectionHeader } from './AdminIntegrationShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function AdminCaseImportPanel({ H }) {
   const [caseImportTab, setCaseImportTab] = useState('export')
@@ -28,7 +29,7 @@ export default function AdminCaseImportPanel({ H }) {
   async function loadImportJobs() {
     setImportJobLoading(true)
     try {
-      const r = await fetch('/api/admin/cases/import/jobs', { headers: H })
+      const r = await httpFetch('/api/admin/cases/import/jobs', { headers: H })
       const d = await r.json()
       setImportJobHistory(d.jobs || [])
     } catch { setImportJobHistory([]) }
@@ -38,7 +39,7 @@ export default function AdminCaseImportPanel({ H }) {
   async function loadScheduledExports() {
     setScheduledExportsLoading(true)
     try {
-      const r = await fetch('/api/admin/exports/scheduled', { headers: H })
+      const r = await httpFetch('/api/admin/exports/scheduled', { headers: H })
       const d = await r.json()
       setScheduledExports(d.configs || [])
     } catch { setScheduledExports([]) }
@@ -56,7 +57,7 @@ export default function AdminCaseImportPanel({ H }) {
       if (caseExportFilters.status_id)   params.set('status_id', caseExportFilters.status_id)
       if (caseExportFilters.assigned_to) params.set('assigned_to', caseExportFilters.assigned_to)
       params.set('format', caseExportFilters.format || 'csv')
-      const response = await fetch(`/api/admin/cases/export?${params.toString()}`, { headers: H })
+      const response = await httpFetch(`/api/admin/cases/export?${params.toString()}`, { headers: H })
       if (response.headers.get('content-type')?.includes('text/csv')) {
         const blob = await response.blob()
         const url = URL.createObjectURL(blob)
@@ -207,7 +208,7 @@ export default function AdminCaseImportPanel({ H }) {
           try {
             const fd = new FormData()
             fd.append('file', importFile)
-            const res = await fetch('/api/admin/cases/import/upload', { method: 'POST', headers: { Authorization: H.Authorization }, body: fd })
+            const res = await httpFetch('/api/admin/cases/import/upload', { method: 'POST', headers: { Authorization: H.Authorization }, body: fd })
             const d = await res.json()
             if (res.ok) {
               setImportUploadMsg(`✓ Import job started — Job ID: ${d.jobId || d.id || 'queued'}. Check Import Job History to track progress.`)
@@ -275,7 +276,7 @@ export default function AdminCaseImportPanel({ H }) {
               setScheduledExportSaving(true)
               setScheduledExportMsg('')
               try {
-                const r = await fetch('/api/admin/exports/scheduled', { method: 'POST', headers: H, body: JSON.stringify(scheduledExportForm) })
+                const r = await httpFetch('/api/admin/exports/scheduled', { method: 'POST', headers: H, body: JSON.stringify(scheduledExportForm) })
                 const d = await r.json()
                 if (r.ok) {
                   setScheduledExportMsg('Scheduled export created.')
@@ -309,7 +310,7 @@ export default function AdminCaseImportPanel({ H }) {
                     <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }} onClick={async () => {
                       if (!await confirm('Delete this scheduled export?')) return
                       try {
-                        await fetch(`/api/admin/exports/scheduled/${cfg.id}`, { method: 'DELETE', headers: H })
+                        await httpFetch(`/api/admin/exports/scheduled/${cfg.id}`, { method: 'DELETE', headers: H })
                         setScheduledExports(prev => prev.filter((_, idx) => idx !== i))
                       } catch (_e) {}
                     }}>Delete</button>

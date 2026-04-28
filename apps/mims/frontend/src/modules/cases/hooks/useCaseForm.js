@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import toast from '../../../shared/utils/toast'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -27,9 +28,9 @@ export default function useCaseForm(id, token) {
   const loadCase = useCallback(async () => {
     try {
       const [cRes, sRes, uRes] = await Promise.all([
-        fetch(`${API}/cases/${id}`, { headers }),
-        fetch(`${API}/admin/workflow-states`, { headers }),
-        fetch(`${API}/users`, { headers }),
+        httpFetch(`${API}/cases/${id}`, { headers }),
+        httpFetch(`${API}/admin/workflow-states`, { headers }),
+        httpFetch(`${API}/users`, { headers }),
       ])
       const [c, s, u] = await Promise.all([cRes.json(), sRes.json(), uRes.json()])
       setCaseData(c)
@@ -59,7 +60,7 @@ export default function useCaseForm(id, token) {
     let cancelled = false
     async function loadFormConfig() {
       try {
-        const res  = await fetch(`${API}/cases/form-config?case_type=${caseData.case_type}`, {
+        const res  = await httpFetch(`${API}/cases/form-config?case_type=${caseData.case_type}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
         const data = await res.json()
@@ -90,7 +91,7 @@ export default function useCaseForm(id, token) {
         status_id:     infoForm.status_id     ? Number(infoForm.status_id)     : null,
         case_owner_id: infoForm.case_owner_id ? Number(infoForm.case_owner_id) : null,
       }
-      const res  = await fetch(`${API}/cases/${id}`, { method: 'PUT', headers, body: JSON.stringify(payload) })
+      const res  = await httpFetch(`${API}/cases/${id}`, { method: 'PUT', headers, body: JSON.stringify(payload) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setCaseData(prev => ({ ...prev, ...data }))
@@ -101,7 +102,7 @@ export default function useCaseForm(id, token) {
       }))
       setReassignForm(prev => ({ ...prev, new_owner_id: data.case_owner_id ? String(data.case_owner_id) : '' }))
       if (!isAutoSave && !data.case_number) {
-        const nRes  = await fetch(`${API}/cases/${id}/assign-number`, { method: 'POST', headers })
+        const nRes  = await httpFetch(`${API}/cases/${id}/assign-number`, { method: 'POST', headers })
         const nData = await nRes.json()
         if (nData.case_number) setCaseData(prev => ({ ...prev, case_number: nData.case_number }))
       }
@@ -124,7 +125,7 @@ export default function useCaseForm(id, token) {
         new_owner_id: Number(reassignForm.new_owner_id),
         reason: reassignForm.reason.trim() || undefined,
       }
-      const res  = await fetch(`${API}/cases/${id}/reassign`, { method: 'POST', headers, body: JSON.stringify(payload) })
+      const res  = await httpFetch(`${API}/cases/${id}/reassign`, { method: 'POST', headers, body: JSON.stringify(payload) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to reassign case.')
       setCaseData(prev => ({ ...prev, ...data }))
@@ -141,7 +142,7 @@ export default function useCaseForm(id, token) {
 
   async function loadDynFields() {
     try {
-      const res  = await fetch(`${API}/cases/${id}/dynamic-fields`, { headers })
+      const res  = await httpFetch(`${API}/cases/${id}/dynamic-fields`, { headers })
       const data = await res.json()
       if (!res.ok) return
       const map = {}
@@ -158,7 +159,7 @@ export default function useCaseForm(id, token) {
         field_definition_id: Number(field_definition_id),
         value: String(value ?? ''),
       }))
-      const res  = await fetch(`${API}/cases/${id}/dynamic-fields`, {
+      const res  = await httpFetch(`${API}/cases/${id}/dynamic-fields`, {
         method: 'POST', headers, body: JSON.stringify({ fields }),
       })
       const data = await res.json()

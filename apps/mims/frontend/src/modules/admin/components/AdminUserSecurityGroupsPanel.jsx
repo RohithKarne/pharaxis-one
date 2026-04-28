@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const LEGACY_SEC_TABS = [
   { key: 'menu', label: 'Menu Access' },
@@ -97,7 +98,7 @@ export default function AdminUserSecurityGroupsPanel({ H, flash }) {
 
   async function loadAccessUsers() {
     try {
-      const data = await fetch('/api/admin/users', { headers: H }).then(r => r.json())
+      const data = await httpFetch('/api/admin/users', { headers: H }).then(r => r.json())
       setAccessUsers(data.users || [])
     } catch {
       setAccessUsers([])
@@ -107,7 +108,7 @@ export default function AdminUserSecurityGroupsPanel({ H, flash }) {
   async function loadLegacySecGroups() {
     setLegacySecGroupLoading(true)
     try {
-      const data = await fetch('/api/admin/security-groups', { headers: H }).then(r => r.json())
+      const data = await httpFetch('/api/admin/security-groups', { headers: H }).then(r => r.json())
       setLegacySecGroups(data.groups || [])
     } catch {
       setLegacySecGroups([])
@@ -121,7 +122,7 @@ export default function AdminUserSecurityGroupsPanel({ H, flash }) {
     setLegacySecGroupTab('menu')
     setLegacySecGroupForm({ name: group.name, description: group.description || '', permissions: group.privileges || {} })
     try {
-      const data = await fetch(`/api/admin/security-groups/${group.id}`, { headers: H }).then(r => r.json())
+      const data = await httpFetch(`/api/admin/security-groups/${group.id}`, { headers: H }).then(r => r.json())
       setLegacySecGroupUsers(data.members || [])
     } catch {
       setLegacySecGroupUsers([])
@@ -129,7 +130,7 @@ export default function AdminUserSecurityGroupsPanel({ H, flash }) {
   }
 
   async function createLegacySecGroup() {
-    const response = await fetch('/api/admin/security-groups', {
+    const response = await httpFetch('/api/admin/security-groups', {
       method: 'POST',
       headers: H,
       body: JSON.stringify({ name: 'New Group', description: '' }),
@@ -144,7 +145,7 @@ export default function AdminUserSecurityGroupsPanel({ H, flash }) {
     if (!selectedLegacySecGroup) return
     setLegacySecGroupSaving(true)
     try {
-      const response = await fetch(`/api/admin/security-groups/${selectedLegacySecGroup.id}`, {
+      const response = await httpFetch(`/api/admin/security-groups/${selectedLegacySecGroup.id}`, {
         method: 'PUT',
         headers: H,
         body: JSON.stringify({
@@ -167,7 +168,7 @@ export default function AdminUserSecurityGroupsPanel({ H, flash }) {
   async function deleteLegacySecGroup() {
     if (!selectedLegacySecGroup) return
     if (!await confirm(`Delete security group "${selectedLegacySecGroup.name}"?`)) return
-    const response = await fetch(`/api/admin/security-groups/${selectedLegacySecGroup.id}`, { method: 'DELETE', headers: H })
+    const response = await httpFetch(`/api/admin/security-groups/${selectedLegacySecGroup.id}`, { method: 'DELETE', headers: H })
     const data = await response.json()
     if (!response.ok) return flash(formatSecGroupDependencyMessage(data), 'error')
     setSelectedLegacySecGroup(null)
@@ -178,7 +179,7 @@ export default function AdminUserSecurityGroupsPanel({ H, flash }) {
 
   async function addUserToLegacySecGroup() {
     if (!legacySecGroupAddUserVal || !selectedLegacySecGroup) return
-    const response = await fetch(`/api/admin/security-groups/${selectedLegacySecGroup.id}/users`, {
+    const response = await httpFetch(`/api/admin/security-groups/${selectedLegacySecGroup.id}/users`, {
       method: 'POST',
       headers: H,
       body: JSON.stringify({ user_id: legacySecGroupAddUserVal }),
@@ -194,7 +195,7 @@ export default function AdminUserSecurityGroupsPanel({ H, flash }) {
   async function removeUserFromLegacySecGroup(userId) {
     if (!selectedLegacySecGroup) return
     if (!await confirm('Remove this user from selected security group?')) return
-    const response = await fetch(`/api/admin/security-groups/${selectedLegacySecGroup.id}/users/${userId}`, { method: 'DELETE', headers: H })
+    const response = await httpFetch(`/api/admin/security-groups/${selectedLegacySecGroup.id}/users/${userId}`, { method: 'DELETE', headers: H })
     const data = await response.json()
     if (!response.ok) return flash(data.error || 'Failed to remove user.', 'error')
     setLegacySecGroupUsers(prev => prev.filter(user => user.id !== userId))

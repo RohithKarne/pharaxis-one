@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from '../../../shared/utils/toast'
 import PCTabPanel from './PCTabPanel'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -33,7 +34,7 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
 
   async function loadPCVersions() {
     try {
-      const res  = await fetch(`${API}/cases/${id}/pc/versions`, { headers })
+      const res  = await httpFetch(`${API}/cases/${id}/pc/versions`, { headers })
       const data = await res.json()
       const list = Array.isArray(data) ? data : []
       setPcVersions(list)
@@ -45,7 +46,7 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
   async function loadPCTab(versionId, tabKey) {
     setPcTabLoading(true)
     try {
-      const res  = await fetch(`${API}/cases/pc/versions/${versionId}/${tabKey}`, { headers })
+      const res  = await httpFetch(`${API}/cases/pc/versions/${versionId}/${tabKey}`, { headers })
       const data = await res.json()
       setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
     } catch {}
@@ -59,7 +60,7 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
 
   async function createPCVersion() {
     try {
-      const res  = await fetch(`${API}/cases/${id}/pc/versions`, { method: 'POST', headers })
+      const res  = await httpFetch(`${API}/cases/${id}/pc/versions`, { method: 'POST', headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       const updated = [...pcVersions.map(v => v.id === (pcVersions[pcVersions.length - 1]?.id) ? { ...v, is_locked: 1 } : v), data]
@@ -75,7 +76,7 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
     if (!activePcVer || isLocked(activePcVer)) return
     const tabData = pcTabData[`${activePcVer.id}_${activePcTab}`] || {}
     try {
-      const res  = await fetch(`${API}/cases/pc/versions/${activePcVer.id}/${activePcTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
+      const res  = await httpFetch(`${API}/cases/pc/versions/${activePcVer.id}/${activePcTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: data }))
@@ -86,7 +87,7 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
   async function loadPcTransmissions() {
     setPcTxLoading(true)
     try {
-      const res  = await fetch(`${API}/cases/${id}/pc-transmissions`, { headers })
+      const res  = await httpFetch(`${API}/cases/${id}/pc-transmissions`, { headers })
       const data = await res.json()
       setPcTransmissions(Array.isArray(data) ? data : [])
     } catch { setPcTransmissions([]) }
@@ -97,7 +98,7 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
     if (pcTxSaving) return
     setPcTxSaving(true)
     try {
-      const res  = await fetch(`${API}/cases/${id}/pc-transmissions`, { method: 'POST', headers, body: JSON.stringify(pcTxForm) })
+      const res  = await httpFetch(`${API}/cases/${id}/pc-transmissions`, { method: 'POST', headers, body: JSON.stringify(pcTxForm) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setPcTransmissions(prev => [data, ...prev])
@@ -110,7 +111,7 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
 
   async function updatePcTxStatus(txId, status) {
     try {
-      const res  = await fetch(`${API}/cases/${id}/pc-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status }) })
+      const res  = await httpFetch(`${API}/cases/${id}/pc-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setPcTransmissions(prev => prev.map(t => t.id === txId ? data : t))

@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -76,7 +77,7 @@ export default function LoginPage() {
     let cancelled = false
     async function ping() {
       try {
-        const res = await fetch('/api/health', { cache: 'no-store' })
+        const res = await httpFetch('/api/health', { cache: 'no-store' })
         if (!res.ok) throw new Error('health not ok')
         if (!cancelled) setBackendOnline(true)
       } catch {
@@ -98,7 +99,7 @@ export default function LoginPage() {
     setAlert({ show: false })
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await httpFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -144,7 +145,7 @@ export default function LoginPage() {
     setLoading(true)
     setAlert({ show: false })
     try {
-      const res = await fetch('/api/auth/2fa/send-email-code', {
+      const res = await httpFetch('/api/auth/2fa/send-email-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ challengeToken: twoFactor.challengeToken }),
@@ -165,7 +166,7 @@ export default function LoginPage() {
     setLoading(true)
     setAlert({ show: false })
     try {
-      const res = await fetch('/api/auth/2fa/setup/totp', {
+      const res = await httpFetch('/api/auth/2fa/setup/totp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ challengeToken: twoFactor.challengeToken }),
@@ -186,7 +187,7 @@ export default function LoginPage() {
     setLoading(true)
     setAlert({ show: false })
     try {
-      const res = await fetch('/api/auth/2fa/verify', {
+      const res = await httpFetch('/api/auth/2fa/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -218,7 +219,7 @@ export default function LoginPage() {
     setLoading(true)
     setAlert({ show: false })
     try {
-      const res = await fetch('/api/auth/2fa/skip-setup', {
+      const res = await httpFetch('/api/auth/2fa/skip-setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ challengeToken: twoFactor.challengeToken }),
@@ -240,7 +241,7 @@ export default function LoginPage() {
     setAlert({ show: false })
 
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await httpFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(regForm)
@@ -264,7 +265,7 @@ export default function LoginPage() {
     setLoading(true)
     setAlert({ show: false })
     try {
-      const res = await fetch('/api/auth/forgot-password/send-code', {
+      const res = await httpFetch('/api/auth/forgot-password/send-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotForm.email.trim() }),
@@ -286,7 +287,7 @@ export default function LoginPage() {
     setLoading(true)
     setAlert({ show: false })
     try {
-      const res = await fetch('/api/auth/forgot-password/verify-code', {
+      const res = await httpFetch('/api/auth/forgot-password/verify-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotForm.email.trim(), code: forgotForm.code.trim() }),
@@ -309,7 +310,7 @@ export default function LoginPage() {
     setLoading(true)
     setAlert({ show: false })
     try {
-      const res = await fetch('/api/auth/forgot-password/reset', {
+      const res = await httpFetch('/api/auth/forgot-password/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resetToken: forgotMeta.resetToken, newPassword: forgotForm.newPassword }),

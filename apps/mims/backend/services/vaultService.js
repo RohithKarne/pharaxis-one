@@ -1,7 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
+const { httpFetch } = require('../utils/httpFetch');
 
 async function getVaultSession(orgId) {
   const [rows] = await pool.query(
@@ -15,7 +15,7 @@ async function getVaultSession(orgId) {
 
   const config = rows[0];
 
-  const authResponse = await fetch(
+  const authResponse = await httpFetch(
     config.vault_domain + '/api/' + config.vault_api_version + '/auth',
     {
       method: 'POST',
@@ -42,7 +42,7 @@ async function getVaultSession(orgId) {
 }
 
 async function runVQL(session, vql) {
-  const queryResponse = await fetch(
+  const queryResponse = await httpFetch(
     session.vaultDomain + '/api/' + session.apiVersion + '/query',
     {
       method: 'POST',

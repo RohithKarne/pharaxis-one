@@ -51,8 +51,8 @@ function createLimiter({
 const authRateLimiter = createLimiter({
   windowMs: envInt('RATE_LIMIT_AUTH_WINDOW_MS', 15 * 60 * 1000),
   max: process.env.NODE_ENV === 'production'
-    ? envInt('RATE_LIMIT_AUTH_MAX', 60)
-    : envInt('RATE_LIMIT_AUTH_MAX_DEV', 3000),
+    ? envInt('RATE_LIMIT_AUTH_MAX', 90)
+    : envInt('RATE_LIMIT_AUTH_MAX_DEV', 600),
   keyGenerator: getFingerprint,
   message: 'Too many authentication requests. Please try again shortly.',
 });
@@ -60,8 +60,8 @@ const authRateLimiter = createLimiter({
 const loginRateLimiter = createLimiter({
   windowMs: envInt('RATE_LIMIT_LOGIN_WINDOW_MS', 15 * 60 * 1000),
   max: process.env.NODE_ENV === 'production'
-    ? envInt('RATE_LIMIT_LOGIN_MAX', 10)
-    : envInt('RATE_LIMIT_LOGIN_MAX_DEV', 80),
+    ? envInt('RATE_LIMIT_LOGIN_MAX', 8)
+    : envInt('RATE_LIMIT_LOGIN_MAX_DEV', 30),
   keyGenerator: (req) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     return `${getFingerprint(req)}:${email || 'unknown-email'}`;
@@ -73,8 +73,8 @@ const loginRateLimiter = createLimiter({
 const accountCreationRateLimiter = createLimiter({
   windowMs: envInt('RATE_LIMIT_ACCOUNT_CREATE_WINDOW_MS', 60 * 60 * 1000),
   max: process.env.NODE_ENV === 'production'
-    ? envInt('RATE_LIMIT_ACCOUNT_CREATE_MAX', 12)
-    : envInt('RATE_LIMIT_ACCOUNT_CREATE_MAX_DEV', 200),
+    ? envInt('RATE_LIMIT_ACCOUNT_CREATE_MAX', 8)
+    : envInt('RATE_LIMIT_ACCOUNT_CREATE_MAX_DEV', 60),
   keyGenerator: (req) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     return `${getFingerprint(req)}:${email || 'unknown-email'}`;
@@ -85,8 +85,8 @@ const accountCreationRateLimiter = createLimiter({
 const recoveryRateLimiter = createLimiter({
   windowMs: envInt('RATE_LIMIT_RECOVERY_WINDOW_MS', 15 * 60 * 1000),
   max: process.env.NODE_ENV === 'production'
-    ? envInt('RATE_LIMIT_RECOVERY_MAX', 10)
-    : envInt('RATE_LIMIT_RECOVERY_MAX_DEV', 100),
+    ? envInt('RATE_LIMIT_RECOVERY_MAX', 8)
+    : envInt('RATE_LIMIT_RECOVERY_MAX_DEV', 40),
   keyGenerator: (req) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     return `${getFingerprint(req)}:${email || 'unknown-email'}`;
@@ -97,8 +97,8 @@ const recoveryRateLimiter = createLimiter({
 const verificationRateLimiter = createLimiter({
   windowMs: envInt('RATE_LIMIT_VERIFICATION_WINDOW_MS', 15 * 60 * 1000),
   max: process.env.NODE_ENV === 'production'
-    ? envInt('RATE_LIMIT_VERIFICATION_MAX', 15)
-    : envInt('RATE_LIMIT_VERIFICATION_MAX_DEV', 120),
+    ? envInt('RATE_LIMIT_VERIFICATION_MAX', 12)
+    : envInt('RATE_LIMIT_VERIFICATION_MAX_DEV', 60),
   keyGenerator: (req) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     return `${getFingerprint(req)}:${email || 'unknown-email'}`;
@@ -109,8 +109,8 @@ const verificationRateLimiter = createLimiter({
 const apiRateLimiter = createLimiter({
   windowMs: envInt('RATE_LIMIT_API_WINDOW_MS', 15 * 60 * 1000),
   max: process.env.NODE_ENV === 'production'
-    ? envInt('RATE_LIMIT_API_MAX', 2000)
-    : envInt('RATE_LIMIT_API_MAX_DEV', 25000),
+    ? envInt('RATE_LIMIT_API_MAX', 1500)
+    : envInt('RATE_LIMIT_API_MAX_DEV', 8000),
   keyGenerator: (req) => req.user?.userId ? `user:${req.user.userId}` : getFingerprint(req),
   skip: (req) => {
     const path = req.path || '';
@@ -127,8 +127,8 @@ const apiRateLimiter = createLimiter({
 const aiGenerationRateLimiter = createLimiter({
   windowMs: envInt('RATE_LIMIT_AI_WINDOW_MS', 10 * 60 * 1000),
   max: process.env.NODE_ENV === 'production'
-    ? envInt('RATE_LIMIT_AI_MAX', 50)
-    : envInt('RATE_LIMIT_AI_MAX_DEV', 600),
+    ? envInt('RATE_LIMIT_AI_MAX', 30)
+    : envInt('RATE_LIMIT_AI_MAX_DEV', 200),
   keyGenerator: (req) => req.user?.userId ? `user:${req.user.userId}` : getFingerprint(req),
   message: 'Too many AI generation requests. Please wait a moment and retry.',
 });

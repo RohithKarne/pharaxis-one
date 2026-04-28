@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function AdminChangeApprovalsPanel({ H }) {
   const [changeApprovals, setChangeApprovals] = useState([])
@@ -18,8 +19,8 @@ export default function AdminChangeApprovalsPanel({ H }) {
     setChangeApprovalsLoading(true)
     try {
       const [approvalsData, myRequestsData] = await Promise.all([
-        fetch(`/api/admin/change-approvals?status=${changeApprovalsStatusFilter}`, { headers: H }).then(r => r.json()).catch(() => ({ requests: [] })),
-        fetch('/api/admin/change-approvals/my-requests', { headers: H }).then(r => r.json()).catch(() => ({ requests: [] })),
+        httpFetch(`/api/admin/change-approvals?status=${changeApprovalsStatusFilter}`, { headers: H }).then(r => r.json()).catch(() => ({ requests: [] })),
+        httpFetch('/api/admin/change-approvals/my-requests', { headers: H }).then(r => r.json()).catch(() => ({ requests: [] })),
       ])
       setChangeApprovals(approvalsData.requests || [])
       setMyChangeRequests(myRequestsData.requests || [])
@@ -36,7 +37,7 @@ export default function AdminChangeApprovalsPanel({ H }) {
 
   async function approveChangeRequest(id) {
     setChangeActionMsg('')
-    const response = await fetch(`/api/admin/change-approvals/${id}/approve`, { method: 'PUT', headers: H })
+    const response = await httpFetch(`/api/admin/change-approvals/${id}/approve`, { method: 'PUT', headers: H })
     const data = await response.json()
     setChangeActionMsg(response.ok ? '✓ Request approved.' : data.error || 'Failed.')
     if (response.ok) setChangeApprovals(prev => prev.filter(item => item.id !== id))
@@ -44,7 +45,7 @@ export default function AdminChangeApprovalsPanel({ H }) {
 
   async function rejectChangeRequest(id) {
     setChangeActionMsg('')
-    const response = await fetch(`/api/admin/change-approvals/${id}/reject`, {
+    const response = await httpFetch(`/api/admin/change-approvals/${id}/reject`, {
       method: 'PUT',
       headers: H,
       body: JSON.stringify({ rejection_note: changeRejectNote }),

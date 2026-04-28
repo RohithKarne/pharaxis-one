@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = '/api'
 const DASHBOARD_SECTION_DEFAULTS = Object.freeze({
@@ -105,8 +106,8 @@ export default function DashboardPage() {
 
     try {
       const [summaryRes, sessionsRes] = await Promise.all([
-        fetch(`${API}/cases/dashboard-summary`, { headers }),
-        fetch(`${API}/auth/sessions`, { headers }),
+        httpFetch(`${API}/cases/dashboard-summary`, { headers }),
+        httpFetch(`${API}/auth/sessions`, { headers }),
       ])
 
       const [summaryData, sessionsData] = await Promise.all([
@@ -131,7 +132,7 @@ export default function DashboardPage() {
       })
 
       if (canSeeObservability && sectionPrefs.observabilitySnapshot) {
-        const obsRes = await fetch(`${API}/admin/observability/summary`, { headers })
+        const obsRes = await httpFetch(`${API}/admin/observability/summary`, { headers })
         const obsData = await safeJson(obsRes)
         if (obsRes.ok) setObservability(obsData)
       } else {

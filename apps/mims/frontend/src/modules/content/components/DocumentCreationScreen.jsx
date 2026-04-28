@@ -3,6 +3,7 @@ import toast from '../../../shared/utils/toast'
 import RichTextEditor from './RichTextEditor'
 import { normalizeSelectedModules } from './ContentUtils'
 import { AssociatedDocsPanel, VersionDiffPanel, VersionAlertsPanel } from './ContentPanels'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function DocumentCreationScreen({ doc, token, onClose, onSaved }) {
   const isEdit = !!doc?.id
@@ -51,15 +52,15 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
   useEffect(() => {
-    fetch('/api/cm/folders', { headers: { Authorization: `Bearer ${token}` } })
+    httpFetch('/api/cm/folders', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : { folders: [] })
       .then(d => setFolders(d.folders || []))
       .catch(() => setFolders([]))
-    fetch('/api/admin/mi-categories', { headers: { Authorization: `Bearer ${token}` } })
+    httpFetch('/api/admin/mi-categories', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : { categories: [] })
       .then(d => setMiCategories((d.categories || []).filter(c => c.is_active)))
       .catch(() => setMiCategories([]))
-    fetch('/api/cm/picklists?field_type=document_category&active_only=1', { headers: { Authorization: `Bearer ${token}` } })
+    httpFetch('/api/cm/picklists?field_type=document_category&active_only=1', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : { picklists: [] })
       .then(d => setDocCategories(d.picklists || []))
       .catch(() => setDocCategories([]))
@@ -68,7 +69,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
   useEffect(() => {
     if (form.response_doc_type === 'Module') {
       setModulesLoading(true)
-      fetch('/api/cm/modules?status=Published&include_expired=false', { headers: { Authorization: `Bearer ${token}` } })
+      httpFetch('/api/cm/modules?status=Published&include_expired=false', { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.json())
         .then(d => setAvailableModules(d.modules || []))
         .catch(() => setAvailableModules([]))
@@ -139,12 +140,12 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
       if (checkIn) fd.append('check_in', '1')
       const url = isEdit ? `/api/cm/documents/${doc.id}` : '/api/cm/documents'
       const method = isEdit ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: { Authorization: `Bearer ${token}` }, body: fd })
+      const res = await httpFetch(url, { method, headers: { Authorization: `Bearer ${token}` }, body: fd })
       if (res.ok) {
         const data = await res.json()
         if (checkIn) {
           const docId = isEdit ? doc.id : data.id
-          const ciRes = await fetch(`/api/cm/documents/${docId}/checkin`, {
+          const ciRes = await httpFetch(`/api/cm/documents/${docId}/checkin`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ notes: 'Checked in on creation' }),

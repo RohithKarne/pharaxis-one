@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import CaseAssociatedDocs from './CaseAssociatedDocs'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -57,8 +58,8 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
   async function loadMI() {
     try {
       const [tabsRes, prodsRes] = await Promise.all([
-        fetch(`${API}/cases/${id}/mi`, { headers }),
-        fetch(`${API}/cases/mi/products`, { headers }),
+        httpFetch(`${API}/cases/${id}/mi`, { headers }),
+        httpFetch(`${API}/cases/mi/products`, { headers }),
       ])
       const tabsData  = await tabsRes.json()
       const prodsData = await prodsRes.json()
@@ -73,7 +74,7 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
   async function loadMiResponses() {
     setMiRespLoading(true)
     try {
-      const res  = await fetch(`${API}/cases/${id}/mi-responses`, { headers })
+      const res  = await httpFetch(`${API}/cases/${id}/mi-responses`, { headers })
       const data = await res.json()
       setMiResponses(Array.isArray(data) ? data : [])
     } catch { setMiResponses([]) }
@@ -82,7 +83,7 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
 
   async function addMITab() {
     try {
-      const res  = await fetch(`${API}/cases/${id}/mi`, { method: 'POST', headers, body: JSON.stringify({ status: 'Open' }) })
+      const res  = await httpFetch(`${API}/cases/${id}/mi`, { method: 'POST', headers, body: JSON.stringify({ status: 'Open' }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       const updated = [...miTabs, data]
@@ -97,7 +98,7 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
     const tab = miTabs[activeMiTab]
     if (!tab) return
     try {
-      const res  = await fetch(`${API}/cases/mi/${tab.id}`, { method: 'PUT', headers, body: JSON.stringify(miForm) })
+      const res  = await httpFetch(`${API}/cases/mi/${tab.id}`, { method: 'PUT', headers, body: JSON.stringify(miForm) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setMiTabs(prev => prev.map((t, i) => i === activeMiTab ? data : t))
@@ -109,7 +110,7 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
     const tab = miTabs[activeMiTab]
     if (!tab || !await confirm('Delete this MI tab?')) return
     try {
-      await fetch(`${API}/cases/mi/${tab.id}`, { method: 'DELETE', headers })
+      await httpFetch(`${API}/cases/mi/${tab.id}`, { method: 'DELETE', headers })
       const updated = miTabs.filter((_, i) => i !== activeMiTab)
       setMiTabs(updated)
       onCountChange?.(updated.length)
@@ -129,7 +130,7 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
         responded_at:    miRespForm.responded_at || new Date().toISOString().slice(0, 10),
         response_status: responseStatus,
       }
-      const res  = await fetch(`${API}/cases/${id}/mi-responses`, { method: 'POST', headers, body: JSON.stringify(payload) })
+      const res  = await httpFetch(`${API}/cases/${id}/mi-responses`, { method: 'POST', headers, body: JSON.stringify(payload) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setMiResponses(prev => [data, ...prev])
@@ -149,7 +150,7 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
       return
     }
     try {
-      const res  = await fetch(`${API}/cases/${id}/mi-responses/${responseId}/status`, {
+      const res  = await httpFetch(`${API}/cases/${id}/mi-responses/${responseId}/status`, {
         method: 'PATCH', headers, body: JSON.stringify({ response_status: targetStatus, reason: `Moved to ${targetStatus}` }),
       })
       const data = await res.json()
@@ -165,7 +166,7 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
     if (!miEsignForm.reason.trim())   { toast.warn('Reason is required for electronic signature.');   return }
     setMiEsignSaving(true)
     try {
-      const res  = await fetch(`${API}/cases/${id}/mi-responses/${miEsignModal.responseId}/status`, {
+      const res  = await httpFetch(`${API}/cases/${id}/mi-responses/${miEsignModal.responseId}/status`, {
         method: 'PATCH', headers,
         body: JSON.stringify({ response_status: miEsignModal.targetStatus, password: miEsignForm.password, reason: miEsignForm.reason }),
       })
@@ -185,7 +186,7 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
   async function discardMiResponse(responseId) {
     if (!await confirm('Discard this draft response? This cannot be undone.')) return
     try {
-      const res  = await fetch(`${API}/cases/${id}/mi-responses/${responseId}/discard`, {
+      const res  = await httpFetch(`${API}/cases/${id}/mi-responses/${responseId}/discard`, {
         method: 'PATCH', headers, body: JSON.stringify({ reason: 'Discarded by user' }),
       })
       const data = await res.json()

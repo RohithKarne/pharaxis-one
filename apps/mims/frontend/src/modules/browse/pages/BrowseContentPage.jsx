@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../browse.css'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -68,7 +69,7 @@ function DetailSidebar({ doc, token, onClose }) {
     setFileLoading(true)
     ;(async () => {
       try {
-        const res = await fetch(fileUrl, {
+        const res = await httpFetch(fileUrl, {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (!res.ok) throw new Error('Failed to fetch file')
@@ -389,7 +390,7 @@ export default function BrowseContentPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res  = await fetch(`${API}/cm/folders`, { headers })
+        const res  = await httpFetch(`${API}/cm/folders`, { headers })
         const data = await res.json()
         if (res.ok) setFolders(data.folders || [])
       } catch (_) {}
@@ -406,7 +407,7 @@ export default function BrowseContentPage() {
       if (status !== 'All Statuses') params.set('status', status)
       if (docType !== 'All Types')   params.set('doc_type', docType)
       if (search.trim())             params.set('search', search.trim())
-      const res  = await fetch(`${API}/cm/documents?${params}`, { headers })
+      const res  = await httpFetch(`${API}/cm/documents?${params}`, { headers })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Failed to load documents.'); return }
       setDocuments(data.documents || [])
@@ -425,7 +426,7 @@ export default function BrowseContentPage() {
       if (modStatus !== 'All Statuses') params.set('status', modStatus)
       if (modFolderId)                  params.set('folder_id', modFolderId)
       if (modSearch.trim())             params.set('search', modSearch.trim())
-      const res  = await fetch(`${API}/cm/modules?${params}`, { headers })
+      const res  = await httpFetch(`${API}/cm/modules?${params}`, { headers })
       const data = await res.json()
       if (!res.ok) { setModError(data.error || 'Failed to load modules.'); return }
       setModules(data.modules || [])

@@ -3,6 +3,7 @@ import { confirm } from '../../../shared/utils/confirm'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const SECTION_LABELS = {
   overview: 'Overview',
@@ -188,7 +189,7 @@ export default function ReportsPage() {
   const deferredDashboardSearch = useDeferredValue(dashboardSearch)
 
   async function apiJson(url, options = {}) {
-    const response = await fetch(url, {
+    const response = await httpFetch(url, {
       ...options,
       headers: options.headers || headers,
     })

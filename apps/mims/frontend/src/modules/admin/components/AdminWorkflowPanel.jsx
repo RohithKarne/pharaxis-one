@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader, StatusPill } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function WorkflowDiagram({ states, rules }) {
   const activeStates = (states || []).filter(s => s.is_active)
@@ -208,24 +209,24 @@ export default function AdminWorkflowPanel({ H, flash }) {
   useEffect(() => { depProceedRef.current = depCheckProceedFn }, [depCheckProceedFn])
 
   async function loadWorkflowStates() {
-    try { const d = await fetch('/api/admin/workflow-states', { headers: H }).then(r => r.json()); setWorkflowStates(d.states || []) }
+    try { const d = await httpFetch('/api/admin/workflow-states', { headers: H }).then(r => r.json()); setWorkflowStates(d.states || []) }
     catch { setWorkflowStates([]) }
   }
 
   async function loadWfRules() {
     setWfRulesLoading(true)
-    try { const d = await fetch('/api/admin/workflow-rules', { headers: H }).then(r => r.json()); setWfRules(d.rules || []) }
+    try { const d = await httpFetch('/api/admin/workflow-rules', { headers: H }).then(r => r.json()); setWfRules(d.rules || []) }
     catch { setWfRules([]) } finally { setWfRulesLoading(false) }
   }
 
   async function loadWfActivities() {
-    try { const d = await fetch('/api/admin/workflow-activities', { headers: H }).then(r => r.json()); setWfActivities(d.activities || []) }
+    try { const d = await httpFetch('/api/admin/workflow-activities', { headers: H }).then(r => r.json()); setWfActivities(d.activities || []) }
     catch { /* silent */ }
   }
 
   async function loadWfTriggers() {
     setTriggersLoading(true)
-    try { const d = await fetch('/api/admin/workflow-activity-triggers', { headers: H }).then(r => r.json()); setWfTriggers(d.triggers || []) }
+    try { const d = await httpFetch('/api/admin/workflow-activity-triggers', { headers: H }).then(r => r.json()); setWfTriggers(d.triggers || []) }
     catch { /* silent */ } finally { setTriggersLoading(false) }
   }
 
@@ -233,7 +234,7 @@ export default function AdminWorkflowPanel({ H, flash }) {
     e.preventDefault()
     const isEdit = triggerModal === 'edit'
     const url = isEdit ? `/api/admin/workflow-activity-triggers/${triggerEditTarget.id}` : '/api/admin/workflow-activity-triggers'
-    const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(triggerForm) })
+    const res = await httpFetch(url, { method: isEdit ? 'PUT' : 'POST', headers: H, body: JSON.stringify(triggerForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error || 'Save failed.', 'error')
     await loadWfTriggers()
@@ -243,13 +244,13 @@ export default function AdminWorkflowPanel({ H, flash }) {
 
   async function deleteTrigger(t) {
     if (!await confirm(`Delete trigger for "${t.activity_name}" → ${t.trigger_type}?`)) return
-    await fetch(`/api/admin/workflow-activity-triggers/${t.id}`, { method: 'DELETE', headers: H })
+    await httpFetch(`/api/admin/workflow-activity-triggers/${t.id}`, { method: 'DELETE', headers: H })
     await loadWfTriggers()
     flash('Trigger deleted.')
   }
 
   async function toggleWfActivity(act) {
-    await fetch(`/api/admin/workflow-activities/${act.id}`, { method: 'PUT', headers: H, body: JSON.stringify({ name: act.name, description: act.description, is_active: act.is_active ? 0 : 1 }) })
+    await httpFetch(`/api/admin/workflow-activities/${act.id}`, { method: 'PUT', headers: H, body: JSON.stringify({ name: act.name, description: act.description, is_active: act.is_active ? 0 : 1 }) })
     await loadWfActivities()
     flash('Activity updated.')
   }
@@ -257,7 +258,7 @@ export default function AdminWorkflowPanel({ H, flash }) {
   async function fetchImpact(changeType, entityId, label) {
     setImpactLoading(true); setImpactPanel(null)
     try {
-      const res = await fetch('/api/admin/impact-preview', { method: 'POST', headers: H, body: JSON.stringify({ change_type: changeType, entity_id: entityId }) })
+      const res = await httpFetch('/api/admin/impact-preview', { method: 'POST', headers: H, body: JSON.stringify({ change_type: changeType, entity_id: entityId }) })
       const data = await res.json()
       if (!res.ok) { flash(data.error || 'Impact preview failed.', 'error'); return }
       setImpactPanel({ data, label })
@@ -451,12 +452,12 @@ export default function AdminWorkflowPanel({ H, flash }) {
               {wfRuleMsg && <p style={{ marginBottom: 10, fontSize: 13, color: wfRuleMsg.startsWith('✓') ? 'var(--success)' : 'var(--warning)' }}>{wfRuleMsg}</p>}
               <button className="btn btn-primary" disabled={!wfRuleForm.from_state_id || !wfRuleForm.to_state_id} onClick={async () => {
                 setWfRuleMsg('')
-                const r = await fetch('/api/admin/workflow-rules', { method: 'POST', headers: H, body: JSON.stringify({ from_state_id: parseInt(wfRuleForm.from_state_id, 10), to_state_id: parseInt(wfRuleForm.to_state_id, 10), require_password: wfRuleForm.require_password, require_checklist: wfRuleForm.require_checklist, require_comment: wfRuleForm.require_comment }) })
+                const r = await httpFetch('/api/admin/workflow-rules', { method: 'POST', headers: H, body: JSON.stringify({ from_state_id: parseInt(wfRuleForm.from_state_id, 10), to_state_id: parseInt(wfRuleForm.to_state_id, 10), require_password: wfRuleForm.require_password, require_checklist: wfRuleForm.require_checklist, require_comment: wfRuleForm.require_comment }) })
                 const d = await r.json()
                 if (r.ok) {
                   setWfRuleMsg('✓ Rule added.')
                   setWfRuleForm({ from_state_id: '', to_state_id: '', require_password: false, require_checklist: false, require_comment: false })
-                  const list = await fetch('/api/admin/workflow-rules', { headers: H }).then(x => x.json()).catch(() => ({ rules: [] }))
+                  const list = await httpFetch('/api/admin/workflow-rules', { headers: H }).then(x => x.json()).catch(() => ({ rules: [] }))
                   setWfRules(list.rules || [])
                 } else {
                   setWfRuleMsg(d.error || 'Failed to add rule.')
@@ -493,7 +494,7 @@ export default function AdminWorkflowPanel({ H, flash }) {
                         <td>
                           <button className="btn btn-danger" style={{ fontSize: 11, padding: '3px 9px' }} onClick={async () => {
                             if (!await confirm('Delete this transition rule?')) return
-                            const r = await fetch(`/api/admin/workflow-rules/${rule.id}`, { method: 'DELETE', headers: H })
+                            const r = await httpFetch(`/api/admin/workflow-rules/${rule.id}`, { method: 'DELETE', headers: H })
                             if (r.ok) setWfRules(prev => prev.filter(x => x.id !== rule.id))
                           }}>🗑 Delete</button>
                         </td>

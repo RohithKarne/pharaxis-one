@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SectionHeader, StatusPill } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const ROLE_LABELS = {
   admin: 'Administrator',
@@ -20,9 +21,9 @@ export default function AdminUserConfigPanel({ H, flash }) {
   async function loadOrgUsers() {
     setOrgUsersLoading(true)
     try {
-      const me = await fetch('/api/auth/me', { headers: H }).then(r => r.json())
+      const me = await httpFetch('/api/auth/me', { headers: H }).then(r => r.json())
       if (!me.orgId) { setOrgUsers([]); return }
-      const data = await fetch(`/api/admin/orgs/${me.orgId}/users`, { headers: H }).then(r => r.json())
+      const data = await httpFetch(`/api/admin/orgs/${me.orgId}/users`, { headers: H }).then(r => r.json())
       setOrgUsers(data.users || [])
     } catch {
       setOrgUsers([])
@@ -34,8 +35,8 @@ export default function AdminUserConfigPanel({ H, flash }) {
   async function saveUserExpiry(userId) {
     setExpirySaving(true)
     try {
-      const me = await fetch('/api/auth/me', { headers: H }).then(r => r.json())
-      await fetch(`/api/admin/orgs/${me.orgId}/users/${userId}/expiry`, {
+      const me = await httpFetch('/api/auth/me', { headers: H }).then(r => r.json())
+      await httpFetch(`/api/admin/orgs/${me.orgId}/users/${userId}/expiry`, {
         method: 'PUT',
         headers: H,
         body: JSON.stringify({ access_expires_at: expiryDateInput || null }),

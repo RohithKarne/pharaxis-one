@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -28,7 +29,7 @@ export default function CaseDPPRTab({ id, headers }) {
     if (!id) return
     setDpprLoading(true)
     try {
-      const res  = await fetch(`${API}/admin/dppr/cases/${id}/overrides`, { headers })
+      const res  = await httpFetch(`${API}/admin/dppr/cases/${id}/overrides`, { headers })
       const data = await res.json()
       if (!res.ok) return
       setDpprOverrides(data.overrides || [])
@@ -48,7 +49,7 @@ export default function CaseDPPRTab({ id, headers }) {
     setDpprSaving(p => ({ ...p, [domain]: true }))
     setDpprMsg(p => ({ ...p, [domain]: '' }))
     try {
-      const res  = await fetch(`${API}/admin/dppr/cases/${id}/overrides`, {
+      const res  = await httpFetch(`${API}/admin/dppr/cases/${id}/overrides`, {
         method: 'PUT', headers,
         body: JSON.stringify({ domain, action: form.action, retention_days: parseInt(form.retention_days, 10) || 365, override_reason: form.override_reason || '' }),
       })
@@ -63,7 +64,7 @@ export default function CaseDPPRTab({ id, headers }) {
   async function removeDpprOverride(domain) {
     if (!await confirm(`Remove DPPR override for "${domain}"?`)) return
     try {
-      await fetch(`${API}/admin/dppr/cases/${id}/overrides/${domain}`, { method: 'DELETE', headers })
+      await httpFetch(`${API}/admin/dppr/cases/${id}/overrides/${domain}`, { method: 'DELETE', headers })
       setDpprMsg(p => ({ ...p, [domain]: 'Override removed.' }))
       loadDpprOverrides()
     } catch {}

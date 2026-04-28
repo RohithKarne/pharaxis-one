@@ -356,11 +356,12 @@ router.get('/reports/case-ae-summary', authenticate, async (req, res) => {
     const orgId = normalizeOrgId(req.user.orgId);
     const sql = `
       SELECT
-        COUNT(*) as total_ae_cases,
+        COUNT(DISTINCT c.id) as total_ae_cases,
         SUM(CASE WHEN ae.is_serious = 1 THEN 1 ELSE 0 END) as serious,
-        SUM(CASE WHEN ae.outcome IS NOT NULL THEN 1 ELSE 0 END) as with_outcome
+        SUM(CASE WHEN ae.outcome IS NOT NULL AND ae.outcome <> '' THEN 1 ELSE 0 END) as with_outcome
       FROM cases c
-      LEFT JOIN case_ae ae ON c.id = ae.case_id
+      LEFT JOIN case_ae_versions av ON av.case_id = c.id
+      LEFT JOIN case_ae_events ae ON ae.version_id = av.id
       WHERE c.org_id = ? AND c.is_deleted = 0 AND c.case_type = 'AE'
     `;
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { httpFetch } from '../api/httpFetch.js'
 
 const API = '/api'
 
@@ -42,7 +43,7 @@ export default function NotificationOverlay({ open, onClose }) {
       if (categoryFilter) params.set('category', categoryFilter)
       if (unreadOnly) params.set('unread_only', 'true')
       if (ackOnly) params.set('ack_required_only', 'true')
-      const res = await fetch(`${API}/notifications?${params.toString()}`, { headers })
+      const res = await httpFetch(`${API}/notifications?${params.toString()}`, { headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load notifications.')
       const items = Array.isArray(data.notifications) ? data.notifications : []
@@ -68,7 +69,7 @@ export default function NotificationOverlay({ open, onClose }) {
 
   async function markRead(id) {
     try {
-      const res = await fetch(`${API}/notifications/${id}/read`, { method: 'POST', headers })
+      const res = await httpFetch(`${API}/notifications/${id}/read`, { method: 'POST', headers })
       if (!res.ok) return
       setRows(prev => prev.map(n => (n.id === id ? { ...n, is_read: 1, read_at: n.read_at || new Date().toISOString() } : n)))
       setUnread(prev => Math.max(0, prev - 1))
@@ -79,7 +80,7 @@ export default function NotificationOverlay({ open, onClose }) {
 
   async function markAllRead() {
     try {
-      const res = await fetch(`${API}/notifications/read-all`, { method: 'POST', headers })
+      const res = await httpFetch(`${API}/notifications/read-all`, { method: 'POST', headers })
       if (!res.ok) return
       setRows(prev => prev.map(n => ({ ...n, is_read: 1, read_at: n.read_at || new Date().toISOString() })))
       setUnread(0)
@@ -90,7 +91,7 @@ export default function NotificationOverlay({ open, onClose }) {
 
   async function acknowledge(id) {
     try {
-      const res = await fetch(`${API}/notifications/${id}/acknowledge`, { method: 'POST', headers })
+      const res = await httpFetch(`${API}/notifications/${id}/acknowledge`, { method: 'POST', headers })
       if (!res.ok) return
       setRows(prev => prev.map((n) => (
         n.id === id
@@ -112,7 +113,7 @@ export default function NotificationOverlay({ open, onClose }) {
   async function retryNotification(id) {
     setRetryingId(id)
     try {
-      const res = await fetch(`${API}/notifications/${id}/retry`, { method: 'POST', headers })
+      const res = await httpFetch(`${API}/notifications/${id}/retry`, { method: 'POST', headers })
       if (!res.ok) return
       setRows(prev => prev.map((n) => (
         n.id === id
@@ -137,7 +138,7 @@ export default function NotificationOverlay({ open, onClose }) {
   async function retryAllFailed() {
     setRetryingAll(true)
     try {
-      const res = await fetch(`${API}/notifications/retry-failed`, { method: 'POST', headers })
+      const res = await httpFetch(`${API}/notifications/retry-failed`, { method: 'POST', headers })
       if (!res.ok) return
       await loadNotifications()
     } catch (_) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const CASE_TYPES = ['ALL', 'MI', 'AE', 'PC']
 
@@ -17,7 +18,7 @@ export default function AdminCaseNumberingPanel({ H, flash }) {
 
   async function loadOrgs() {
     try {
-      const d = await fetch('/api/admin/orgs', { headers: H }).then(r => r.json())
+      const d = await httpFetch('/api/admin/orgs', { headers: H }).then(r => r.json())
       setOrgs(d.orgs || [])
     } catch { setOrgs([]) }
   }
@@ -25,7 +26,7 @@ export default function AdminCaseNumberingPanel({ H, flash }) {
   async function loadCaseNumConfigs() {
     setCaseNumLoading(true)
     try {
-      const d = await fetch('/api/admin/case-number-config', { headers: H }).then(r => r.json())
+      const d = await httpFetch('/api/admin/case-number-config', { headers: H }).then(r => r.json())
       setCaseNumConfigs(d.configs || [])
     } catch { flash('Failed to load case number configs.', 'error') }
     finally { setCaseNumLoading(false) }
@@ -36,7 +37,7 @@ export default function AdminCaseNumberingPanel({ H, flash }) {
     setCaseNumSaving(true)
     try {
       const payload = { ...caseNumForm, org_id: caseNumOrgId || null }
-      const res = await fetch('/api/admin/case-number-config', { method: 'POST', headers: H, body: JSON.stringify(payload) })
+      const res = await httpFetch('/api/admin/case-number-config', { method: 'POST', headers: H, body: JSON.stringify(payload) })
       const d = await res.json()
       if (!res.ok) return flash(d.error, 'error')
       flash('Case number config saved.', 'success')
@@ -49,14 +50,14 @@ export default function AdminCaseNumberingPanel({ H, flash }) {
     const { prefix, separator, include_year, include_month, seq_length } = caseNumForm
     const params = new URLSearchParams({ prefix, separator, include_year: include_year ? 1 : 0, include_month: include_month ? 1 : 0, seq_length })
     try {
-      const d = await fetch(`/api/admin/case-number-config/preview?${params}`, { headers: H }).then(r => r.json())
+      const d = await httpFetch(`/api/admin/case-number-config/preview?${params}`, { headers: H }).then(r => r.json())
       setCaseNumPreview(d.preview || '')
     } catch { /* silent */ }
   }
 
   async function deleteCaseNumConfig(id) {
     if (!await confirm('Delete this configuration?')) return
-    const res = await fetch(`/api/admin/case-number-config/${id}`, { method: 'DELETE', headers: H })
+    const res = await httpFetch(`/api/admin/case-number-config/${id}`, { method: 'DELETE', headers: H })
     if (res.ok) { flash('Deleted.', 'success'); loadCaseNumConfigs() }
     else { const d = await res.json(); flash(d.error, 'error') }
   }

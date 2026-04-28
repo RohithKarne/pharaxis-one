@@ -9,6 +9,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const PAGE_SIZE = 50
 const TABS = ['Inbox', 'Pending', 'Processed', 'Non-Processed', 'Outbox']
@@ -155,7 +156,7 @@ export default function InboxPage() {
       return
     }
     try {
-      const res = await fetch('/api/inbox', { headers: AUTH_H })
+      const res = await httpFetch('/api/inbox', { headers: AUTH_H })
       if (res.ok) {
         const data = await res.json()
         const inquiryList = data.inquiries || []
@@ -180,7 +181,7 @@ export default function InboxPage() {
     }
     // Always refresh from API in background
     try {
-      const res = await fetch('/api/inbox/users', { headers: AUTH_H })
+      const res = await httpFetch('/api/inbox/users', { headers: AUTH_H })
       if (res.ok) {
         const d = await res.json()
         const list = d.users || []
@@ -192,7 +193,7 @@ export default function InboxPage() {
 
   async function loadTemplates() {
     try {
-      const res = await fetch('/api/inbox/templates', { headers: AUTH_H })
+      const res = await httpFetch('/api/inbox/templates', { headers: AUTH_H })
       if (res.ok) { const d = await res.json(); setTemplates(d.templates || []) }
     } catch { /* ignore */ }
   }
@@ -200,7 +201,7 @@ export default function InboxPage() {
   async function loadAttachments(inquiryId) {
     setAttachments([])
     try {
-      const res = await fetch(`/api/inbox/${inquiryId}/attachments`, { headers: AUTH_H })
+      const res = await httpFetch(`/api/inbox/${inquiryId}/attachments`, { headers: AUTH_H })
       if (res.ok) { const d = await res.json(); setAttachments(d.attachments || []) }
     } catch { setAttachments([]) }
   }
@@ -208,7 +209,7 @@ export default function InboxPage() {
   async function loadNotes(id) {
     setNotesLoading(true)
     try {
-      const res = await fetch(`/api/inbox/${id}/notes`, { headers: AUTH_H })
+      const res = await httpFetch(`/api/inbox/${id}/notes`, { headers: AUTH_H })
       if (res.ok) { const d = await res.json(); setNotes(d.notes || []) }
     } catch { setNotes([]) }
     finally { setNotesLoading(false) }
@@ -217,7 +218,7 @@ export default function InboxPage() {
   async function loadHistory(id) {
     setHistoryLoading(true)
     try {
-      const res = await fetch(`/api/inbox/${id}/history`, { headers: AUTH_H })
+      const res = await httpFetch(`/api/inbox/${id}/history`, { headers: AUTH_H })
       if (res.ok) {
         const data = await res.json()
         setSenderHistory(data || { previous_inquiries: [], linked_cases: [], previous_inquiry_count: 0, linked_case_count: 0 })
@@ -234,7 +235,7 @@ export default function InboxPage() {
   async function loadRecommendations(id) {
     setRecommendationsLoading(true)
     try {
-      const res = await fetch(`/api/inbox/${id}/recommendations`, { headers: AUTH_H })
+      const res = await httpFetch(`/api/inbox/${id}/recommendations`, { headers: AUTH_H })
       if (res.ok) {
         const data = await res.json()
         setRecommendations(data.recommendations || [])
@@ -260,7 +261,7 @@ export default function InboxPage() {
   async function fetchEmails() {
     setFetching(true); setFetchResult(null)
     try {
-      const res = await fetch('/api/inbox/fetch', { method: 'POST', headers: AUTH_H })
+      const res = await httpFetch('/api/inbox/fetch', { method: 'POST', headers: AUTH_H })
       if (res.ok) { const d = await res.json(); setFetchResult(d); await loadInquiries({ force: true }) }
     } catch { /* silently fail */ }
     finally { setFetching(false) }
@@ -310,7 +311,7 @@ export default function InboxPage() {
     setCompose(c => ({ ...c, sending: true, error: null }))
     const endpoint = compose.mode === 'reply' ? 'reply' : 'forward'
     try {
-      const res = await fetch(`/api/inbox/${selected.id}/${endpoint}`, {
+      const res = await httpFetch(`/api/inbox/${selected.id}/${endpoint}`, {
         method: 'POST', headers: AUTH_H,
         body: JSON.stringify({ to: compose.to, subject: compose.subject, body: compose.body }),
       })
@@ -363,7 +364,7 @@ export default function InboxPage() {
     try {
       const q = new URLSearchParams({ limit: '20', deleted: 'false' })
       if (term?.trim()) q.set('search', term.trim())
-      const res = await fetch(`/api/cases?${q.toString()}`, { headers: AUTH_H })
+      const res = await httpFetch(`/api/cases?${q.toString()}`, { headers: AUTH_H })
       if (!res.ok) {
         setCaseFlow(prev => ({ ...prev, searching: false, actionError: 'Failed to load cases.' }))
         return
@@ -377,7 +378,7 @@ export default function InboxPage() {
 
   async function linkInquiryToCase(caseId, linkMode = 'linked') {
     if (!selected) return false
-    const res = await fetch(`/api/inbox/${selected.id}/link-case`, {
+    const res = await httpFetch(`/api/inbox/${selected.id}/link-case`, {
       method: 'POST',
       headers: AUTH_H,
       body: JSON.stringify({ case_id: caseId, link_mode: linkMode }),
@@ -408,7 +409,7 @@ export default function InboxPage() {
       const bodySnippet  = (selected.body || '').slice(0, 1000).trim()
       const contextNotes = `[Inbox] From: ${selected.sender || '—'} | Subject: ${subjectText} | Received: ${selected.received_at ? new Date(selected.received_at).toLocaleString() : '—'}`
 
-      const createRes = await fetch('/api/cases', {
+      const createRes = await httpFetch('/api/cases', {
         method: 'POST',
         headers: AUTH_H,
         body: JSON.stringify({
@@ -426,7 +427,7 @@ export default function InboxPage() {
         return
       }
 
-      await fetch(`/api/cases/${created.id}/assign-number`, {
+      await httpFetch(`/api/cases/${created.id}/assign-number`, {
         method: 'POST',
         headers: AUTH_H,
       })
@@ -464,7 +465,7 @@ export default function InboxPage() {
     setCaseFlow(prev => ({ ...prev, searching: true, actionError: '' }))
     try {
       const q = new URLSearchParams({ limit: '50', deleted: 'false', search: raw })
-      const res = await fetch(`/api/cases?${q.toString()}`, { headers: AUTH_H })
+      const res = await httpFetch(`/api/cases?${q.toString()}`, { headers: AUTH_H })
       if (!res.ok) {
         setCaseFlow(prev => ({ ...prev, searching: false, actionError: 'Failed to search case number.' }))
         return
@@ -485,7 +486,7 @@ export default function InboxPage() {
 
   async function patchInquiry(id, body) {
     if (inboxSource === 'db') {
-      await fetch(`/api/inbox/${id}`, { method: 'PATCH', headers: AUTH_H, body: JSON.stringify(body) }).catch(() => {})
+      await httpFetch(`/api/inbox/${id}`, { method: 'PATCH', headers: AUTH_H, body: JSON.stringify(body) }).catch(() => {})
     }
   }
 
@@ -528,7 +529,7 @@ export default function InboxPage() {
     if (Object.keys(payload).length <= 1) return
 
     if (inboxSource === 'db') {
-      await fetch('/api/inbox/bulk-update', {
+      await httpFetch('/api/inbox/bulk-update', {
         method: 'POST',
         headers: AUTH_H,
         body: JSON.stringify(payload),
@@ -565,7 +566,7 @@ export default function InboxPage() {
     if (!selected || !newNote.trim()) return
     setSavingNote(true)
     try {
-      const res = await fetch(`/api/inbox/${selected.id}/notes`, {
+      const res = await httpFetch(`/api/inbox/${selected.id}/notes`, {
         method: 'POST', headers: AUTH_H,
         body: JSON.stringify({ note: newNote.trim() }),
       })
@@ -1165,7 +1166,7 @@ export default function InboxPage() {
                             {attachments.map(att => (
                               <button key={att.id}
                                 onClick={async () => {
-                                  const r = await fetch(`/api/inbox/attachments/${att.id}/download`, { headers: AUTH_H })
+                                  const r = await httpFetch(`/api/inbox/attachments/${att.id}/download`, { headers: AUTH_H })
                                   if (!r.ok) return
                                   const blob = await r.blob()
                                   const url = URL.createObjectURL(blob)

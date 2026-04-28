@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './TransmissionAuditTrailPage.css'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -82,7 +83,7 @@ function RightPanel({ caseItem, token }) {
   useEffect(() => {
     if (!caseItem) return
     setLoading(true); setError(null); setEntries([])
-    fetch(`${API}/admin/transmission-audit-trail/${caseItem.case_id}`, { headers })
+    httpFetch(`${API}/admin/transmission-audit-trail/${caseItem.case_id}`, { headers })
       .then(r => r.json())
       .then(data => {
         if (data.error) { setError(data.error); return }
@@ -145,7 +146,7 @@ export default function TransmissionAuditTrailPage() {
     try {
       const params = new URLSearchParams({ page, limit })
       if (search.trim()) params.set('search', search.trim())
-      const res  = await fetch(`${API}/admin/transmission-audit-trail/cases-summary?${params}`, { headers })
+      const res  = await httpFetch(`${API}/admin/transmission-audit-trail/cases-summary?${params}`, { headers })
       const data = await res.json()
       if (!res.ok) { setLeftError(data.error || 'Failed to load cases.'); return }
       setCases(data.cases || [])

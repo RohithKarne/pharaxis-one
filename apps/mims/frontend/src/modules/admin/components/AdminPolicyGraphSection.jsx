@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function safeParseJson(label, raw) {
   const text = String(raw || '').trim()
@@ -136,7 +137,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
 
   const loadOrgs = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/orgs', { headers: H })
+      const res = await httpFetch('/api/admin/orgs', { headers: H })
       if (!res.ok) return
       const body = await res.json()
       const nextOrgs = toArray(body.orgs).length > 0 ? toArray(body.orgs) : toArray(body.organisations)
@@ -151,8 +152,8 @@ export default function AdminPolicyGraphSection({ H, flash }) {
     setLoadingRules(true)
     try {
       const [nodesRes, edgesRes] = await Promise.all([
-        fetch(withOrg('/api/admin/policy/nodes'), { headers: H }),
-        fetch(withOrg('/api/admin/policy/edges'), { headers: H }),
+        httpFetch(withOrg('/api/admin/policy/nodes'), { headers: H }),
+        httpFetch(withOrg('/api/admin/policy/edges'), { headers: H }),
       ])
       const nodesBody = await nodesRes.json().catch(() => ({}))
       const edgesBody = await edgesRes.json().catch(() => ({}))
@@ -170,7 +171,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
   const loadDecisionLogs = useCallback(async () => {
     setLogsLoading(true)
     try {
-      const res = await fetch(withOrg(`/api/admin/policy/decision-logs?limit=${logsLimit}`), { headers: H })
+      const res = await httpFetch(withOrg(`/api/admin/policy/decision-logs?limit=${logsLimit}`), { headers: H })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error || 'Failed to load decision logs.')
       setLogs(toArray(body.logs))
@@ -207,7 +208,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
       }
       if (orgIdNum) payload.org_id = orgIdNum
 
-      const res = await fetch('/api/admin/policy/nodes', {
+      const res = await httpFetch('/api/admin/policy/nodes', {
         method: 'POST',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -248,7 +249,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
       }
       if (orgIdNum) payload.org_id = orgIdNum
 
-      const res = await fetch('/api/admin/policy/edges', {
+      const res = await httpFetch('/api/admin/policy/edges', {
         method: 'POST',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -306,7 +307,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
       }
       if (orgIdNum) payload.org_id = orgIdNum
 
-      const res = await fetch(`/api/admin/policy/nodes/${nodeEditor.id}`, {
+      const res = await httpFetch(`/api/admin/policy/nodes/${nodeEditor.id}`, {
         method: 'PUT',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -329,7 +330,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
     if (orgIdNum) payload.org_id = orgIdNum
 
     try {
-      const res = await fetch(`/api/admin/policy/nodes/${node.id}`, {
+      const res = await httpFetch(`/api/admin/policy/nodes/${node.id}`, {
         method: 'PUT',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -347,7 +348,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
     if (!await confirm(`Delete node "${node.node_key}"?`)) return
 
     try {
-      const res = await fetch(withOrg(`/api/admin/policy/nodes/${node.id}`), {
+      const res = await httpFetch(withOrg(`/api/admin/policy/nodes/${node.id}`), {
         method: 'DELETE',
         headers: H,
       })
@@ -385,7 +386,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
       }
       if (orgIdNum) payload.org_id = orgIdNum
 
-      const res = await fetch(`/api/admin/policy/edges/${edgeEditor.id}`, {
+      const res = await httpFetch(`/api/admin/policy/edges/${edgeEditor.id}`, {
         method: 'PUT',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -408,7 +409,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
     if (orgIdNum) payload.org_id = orgIdNum
 
     try {
-      const res = await fetch(`/api/admin/policy/edges/${edge.id}`, {
+      const res = await httpFetch(`/api/admin/policy/edges/${edge.id}`, {
         method: 'PUT',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -426,7 +427,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
     if (!await confirm(`Delete edge #${edge.id} (${edge.from_key} → ${edge.to_key})?`)) return
 
     try {
-      const res = await fetch(withOrg(`/api/admin/policy/edges/${edge.id}`), {
+      const res = await httpFetch(withOrg(`/api/admin/policy/edges/${edge.id}`), {
         method: 'DELETE',
         headers: H,
       })
@@ -457,7 +458,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
       }
       if (orgIdNum) payload.org_id = orgIdNum
 
-      const res = await fetch('/api/admin/policy/evaluate', {
+      const res = await httpFetch('/api/admin/policy/evaluate', {
         method: 'POST',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

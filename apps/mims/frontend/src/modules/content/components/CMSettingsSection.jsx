@@ -1,6 +1,7 @@
 import toast from '../../../shared/utils/toast'
 import { useState, useEffect, useCallback } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const CM_FIELD_TYPES = [
   { key: 'document_category', label: 'Document Category' },
@@ -26,8 +27,8 @@ function CMOrgAlertsSettings({ token }) {
       setLoading(true)
       try {
         const [sRes, eRes] = await Promise.all([
-          fetch('/api/cm/settings', { headers: H }),
-          fetch('/api/admin/email-accounts', { headers: H }),
+          httpFetch('/api/cm/settings', { headers: H }),
+          httpFetch('/api/admin/email-accounts', { headers: H }),
         ])
         if (sRes.ok) {
           const d = await sRes.json()
@@ -47,7 +48,7 @@ function CMOrgAlertsSettings({ token }) {
   async function saveSetting(key, value) {
     setSaving(p => ({ ...p, [key]: true }))
     try {
-      await fetch('/api/cm/settings', { method: 'PUT', headers: H, body: JSON.stringify({ setting_key: key, setting_value: value }) })
+      await httpFetch('/api/cm/settings', { method: 'PUT', headers: H, body: JSON.stringify({ setting_key: key, setting_value: value }) })
     } catch { toast.error('Network error.') }
     setSaving(p => ({ ...p, [key]: false }))
   }
@@ -157,7 +158,7 @@ export default function CMSettingsSection({ token }) {
   const loadPicklists = useCallback(async (fieldType) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/cm/picklists?field_type=${fieldType}`, { headers: H })
+      const res = await httpFetch(`/api/cm/picklists?field_type=${fieldType}`, { headers: H })
       if (res.ok) setPicklists((await res.json()).picklists || [])
       else setPicklists([])
     } catch { setPicklists([]) }
@@ -187,7 +188,7 @@ export default function CMSettingsSection({ token }) {
       const url = editing ? `/api/cm/picklists/${editing.id}` : '/api/cm/picklists'
       const method = editing ? 'PUT' : 'POST'
       const body = { ...form, field_type: activeField }
-      const res = await fetch(url, { method, headers: H, body: JSON.stringify(body) })
+      const res = await httpFetch(url, { method, headers: H, body: JSON.stringify(body) })
       if (res.ok) { setShowForm(false); loadPicklists(activeField) }
       else { const d = await res.json(); setError(d.error || 'Save failed.') }
     } catch { setError('Network error.') }
@@ -196,7 +197,7 @@ export default function CMSettingsSection({ token }) {
 
   async function handleToggle(item) {
     try {
-      await fetch(`/api/cm/picklists/${item.id}`, {
+      await httpFetch(`/api/cm/picklists/${item.id}`, {
         method: 'PUT',
         headers: H,
         body: JSON.stringify({ ...item, is_active: item.is_active ? 0 : 1 }),
@@ -208,7 +209,7 @@ export default function CMSettingsSection({ token }) {
   async function handleDelete(item) {
     if (!await confirm(`Delete "${item.label}"? This cannot be undone.`)) return
     try {
-      const res = await fetch(`/api/cm/picklists/${item.id}`, { method: 'DELETE', headers: H })
+      const res = await httpFetch(`/api/cm/picklists/${item.id}`, { method: 'DELETE', headers: H })
       if (res.ok) loadPicklists(activeField)
       else { const d = await res.json(); toast.error(d.error || 'Delete failed.') }
     } catch { toast.error('Network error.') }

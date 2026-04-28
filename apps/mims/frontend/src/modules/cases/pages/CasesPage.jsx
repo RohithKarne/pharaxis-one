@@ -12,6 +12,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -110,7 +111,7 @@ export default function CasesPage() {
             ? `${API}/cases/unassigned${searchQuery ? `?${searchQuery}` : ''}`
             : `${API}/cases?deleted=true${searchQuery ? `&${searchQuery}` : ''}`
 
-      const res  = await fetch(endpoint, { headers })
+      const res  = await httpFetch(endpoint, { headers })
       const data = await res.json()
       setCases(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -127,7 +128,7 @@ export default function CasesPage() {
     if (!token) return
     setViewsLoading(true)
     try {
-      const res = await fetch(`${API}/cases/saved-views`, { headers })
+      const res = await httpFetch(`${API}/cases/saved-views`, { headers })
       const data = await res.json()
       setSavedViews(Array.isArray(data.views) ? data.views : [])
     } catch (err) {
@@ -160,7 +161,7 @@ export default function CasesPage() {
 
     setViewSaving(true)
     try {
-      const res = await fetch(`${API}/cases/saved-views`, {
+      const res = await httpFetch(`${API}/cases/saved-views`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -187,7 +188,7 @@ export default function CasesPage() {
   async function deleteSavedView(viewId) {
     if (!await confirm('Delete this saved view?')) return
     try {
-      const res = await fetch(`${API}/cases/saved-views/${viewId}`, { method: 'DELETE', headers })
+      const res = await httpFetch(`${API}/cases/saved-views/${viewId}`, { method: 'DELETE', headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to delete view')
       if (Number(activeViewId) === Number(viewId)) setActiveViewId(null)
@@ -212,7 +213,7 @@ export default function CasesPage() {
     setDupCheckLoading(true)
     setDupError('')
     try {
-      const res = await fetch(`${API}/cases/duplicate-check`, {
+      const res = await httpFetch(`${API}/cases/duplicate-check`, {
         method: 'POST',
         headers,
         body: JSON.stringify(buildDuplicatePayload()),
@@ -243,7 +244,7 @@ export default function CasesPage() {
     setDupError('')
     setModalOpen(true)
     try {
-      const res  = await fetch(`${API}/admin/orgs`, { headers })
+      const res  = await httpFetch(`${API}/admin/orgs`, { headers })
       const data = await res.json()
       const list = Array.isArray(data) ? data : (Array.isArray(data.orgs) ? data.orgs : [])
       setOrgs(list.filter(o => o.is_active))
@@ -256,7 +257,7 @@ export default function CasesPage() {
     setSites([])
     if (!orgId) return
     try {
-      const res  = await fetch(`${API}/admin/orgs/${orgId}/sites`, { headers })
+      const res  = await httpFetch(`${API}/admin/orgs/${orgId}/sites`, { headers })
       const data = await res.json()
       const list = Array.isArray(data) ? data : (Array.isArray(data.sites) ? data.sites : [])
       setSites(list.filter(s => s.is_active))
@@ -277,7 +278,7 @@ export default function CasesPage() {
     try {
       let candidates = dupCandidates
       if (candidates.length === 0) {
-        const dupRes = await fetch(`${API}/cases/duplicate-check`, {
+        const dupRes = await httpFetch(`${API}/cases/duplicate-check`, {
           method: 'POST',
           headers,
           body: JSON.stringify(buildDuplicatePayload()),
@@ -303,7 +304,7 @@ export default function CasesPage() {
         ...(newCase.case_type === 'AE' && { ae_intake: { ...aeIntake, is_serious: Object.entries(aeIntake).some(([k, v]) => k.startsWith('is_') && v) } }),
         ...(newCase.case_type === 'PC' && { pc_intake: pcIntake }),
       }
-      const res  = await fetch(`${API}/cases`, { method: 'POST', headers, body: JSON.stringify(body) })
+      const res  = await httpFetch(`${API}/cases`, { method: 'POST', headers, body: JSON.stringify(body) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create case')
       setModalOpen(false)

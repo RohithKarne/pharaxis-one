@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function AdminMICategoriesSection({ H }) {
   const [categories, setCategories] = useState([])
@@ -14,7 +15,7 @@ export default function AdminMICategoriesSection({ H }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/mi-categories', { headers: H })
+      const res = await httpFetch('/api/admin/mi-categories', { headers: H })
       if (res.ok) setCategories((await res.json()).categories || [])
     } catch { /* silent */ }
     setLoading(false)
@@ -43,7 +44,7 @@ export default function AdminMICategoriesSection({ H }) {
     try {
       const url = editing ? `/api/admin/mi-categories/${editing.id}` : '/api/admin/mi-categories'
       const method = editing ? 'PUT' : 'POST'
-      const res = await fetch(url, {
+      const res = await httpFetch(url, {
         method,
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -56,7 +57,7 @@ export default function AdminMICategoriesSection({ H }) {
 
   async function handleToggle(cat) {
     try {
-      await fetch(`/api/admin/mi-categories/${cat.id}`, {
+      await httpFetch(`/api/admin/mi-categories/${cat.id}`, {
         method: 'PUT',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...cat, is_active: cat.is_active ? 0 : 1 }),
@@ -68,7 +69,7 @@ export default function AdminMICategoriesSection({ H }) {
   async function handleDelete(cat) {
     if (!await confirm(`Delete "${cat.name}"? This cannot be undone.`)) return
     try {
-      const res = await fetch(`/api/admin/mi-categories/${cat.id}`, { method: 'DELETE', headers: H })
+      const res = await httpFetch(`/api/admin/mi-categories/${cat.id}`, { method: 'DELETE', headers: H })
       if (res.ok) load()
       else { const d = await res.json(); toast.error(d.error || 'Delete failed.') }
     } catch { toast.error('Network error.') }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function CaseAssociatedDocs({ miTab, token }) {
   const [docs, setDocs] = useState([])
@@ -7,7 +8,7 @@ export default function CaseAssociatedDocs({ miTab, token }) {
   useEffect(() => {
     if (!miTab?.document_id) { setDocs([]); return }
     setLoading(true)
-    fetch(`/api/cm/documents/${miTab.document_id}/relations`, {
+    httpFetch(`/api/cm/documents/${miTab.document_id}/relations`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(r => r.ok ? r.json() : { relations: [] })

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from '../../../shared/utils/toast'
 import AETabPanel from './AETabPanel'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -35,7 +36,7 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
 
   async function loadAEVersions() {
     try {
-      const res  = await fetch(`${API}/cases/${id}/ae/versions`, { headers })
+      const res  = await httpFetch(`${API}/cases/${id}/ae/versions`, { headers })
       const data = await res.json()
       const list = Array.isArray(data) ? data : []
       setAeVersions(list)
@@ -47,7 +48,7 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
   async function loadAETab(versionId, tabKey) {
     setAeTabLoading(true)
     try {
-      const res  = await fetch(`${API}/cases/ae/versions/${versionId}/${tabKey}`, { headers })
+      const res  = await httpFetch(`${API}/cases/ae/versions/${versionId}/${tabKey}`, { headers })
       const data = await res.json()
       setAeTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
     } catch {}
@@ -61,7 +62,7 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
 
   async function createAEVersion() {
     try {
-      const res  = await fetch(`${API}/cases/${id}/ae/versions`, { method: 'POST', headers })
+      const res  = await httpFetch(`${API}/cases/${id}/ae/versions`, { method: 'POST', headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       const updated = [...aeVersions.map(v => v.id === (aeVersions[aeVersions.length - 1]?.id) ? { ...v, is_locked: 1 } : v), data]
@@ -77,7 +78,7 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
     if (!activeAeVer || isLocked(activeAeVer)) return
     const tabData = aeTabData[`${activeAeVer.id}_${activeAeTab}`] || {}
     try {
-      const res  = await fetch(`${API}/cases/ae/versions/${activeAeVer.id}/${activeAeTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
+      const res  = await httpFetch(`${API}/cases/ae/versions/${activeAeVer.id}/${activeAeTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setAeTabData(prev => ({ ...prev, [`${activeAeVer.id}_${activeAeTab}`]: data }))
@@ -88,7 +89,7 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
   async function loadAeTransmissions() {
     setAeTxLoading(true)
     try {
-      const res  = await fetch(`${API}/cases/${id}/ae-transmissions`, { headers })
+      const res  = await httpFetch(`${API}/cases/${id}/ae-transmissions`, { headers })
       const data = await res.json()
       setAeTransmissions(Array.isArray(data) ? data : [])
     } catch { setAeTransmissions([]) }
@@ -99,7 +100,7 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
     if (aeTxSaving) return
     setAeTxSaving(true)
     try {
-      const res  = await fetch(`${API}/cases/${id}/ae-transmissions`, { method: 'POST', headers, body: JSON.stringify(aeTxForm) })
+      const res  = await httpFetch(`${API}/cases/${id}/ae-transmissions`, { method: 'POST', headers, body: JSON.stringify(aeTxForm) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setAeTransmissions(prev => [data, ...prev])
@@ -112,7 +113,7 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
 
   async function updateAeTxStatus(txId, status) {
     try {
-      const res  = await fetch(`${API}/cases/${id}/ae-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status }) })
+      const res  = await httpFetch(`${API}/cases/${id}/ae-transmissions/${txId}`, { method: 'PATCH', headers, body: JSON.stringify({ status }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setAeTransmissions(prev => prev.map(t => t.id === txId ? data : t))

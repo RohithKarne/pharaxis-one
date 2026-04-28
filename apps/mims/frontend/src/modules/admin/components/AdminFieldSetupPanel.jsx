@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function SectionHeader({ title, desc, msg }) {
   return (
@@ -38,7 +39,7 @@ export default function AdminFieldSetupPanel({ H }) {
   async function loadFieldSetup() {
     setFieldSetupLoading(true)
     try {
-      const res = await fetch('/api/admin/field-setup', { headers: H })
+      const res = await httpFetch('/api/admin/field-setup', { headers: H })
       const d = await res.json()
       const sections = Object.entries(d.grouped || {}).map(([section, fields]) => ({ section, fields }))
       setFieldSections(sections)
@@ -50,7 +51,7 @@ export default function AdminFieldSetupPanel({ H }) {
     setFieldSetupSaving(true)
     try {
       const allFields = fieldSections.flatMap(s => s.fields)
-      const res = await fetch('/api/admin/field-setup', { method: 'PUT', headers: H, body: JSON.stringify({ fields: allFields }) })
+      const res = await httpFetch('/api/admin/field-setup', { method: 'PUT', headers: H, body: JSON.stringify({ fields: allFields }) })
       const d = await res.json()
       if (!res.ok) return flash(d.error || 'Save failed.', 'error')
       flash('Field setup saved.')
@@ -69,7 +70,7 @@ export default function AdminFieldSetupPanel({ H }) {
     if (!flexFieldName) return flash('Field name required.', 'error')
     if (!activeFieldSection) return flash('Select a field section first.', 'error')
     try {
-      const res = await fetch('/api/admin/field-setup/flex', {
+      const res = await httpFetch('/api/admin/field-setup/flex', {
         method: 'POST', headers: H,
         body: JSON.stringify({ section_name: activeFieldSection, field_name: flexFieldName, field_type: flexFieldForm.type, picklist_type: (flexFieldForm.picklist_type || '').trim() || null, is_required: 0, sort_order: 999 })
       })
@@ -87,7 +88,7 @@ export default function AdminFieldSetupPanel({ H }) {
   async function deleteFlexField(sectionName, fieldId) {
     if (!sectionName) return flash('Select a field section first.', 'error')
     try {
-      const res = await fetch(`/api/admin/field-setup/flex/${fieldId}`, { method: 'DELETE', headers: H })
+      const res = await httpFetch(`/api/admin/field-setup/flex/${fieldId}`, { method: 'DELETE', headers: H })
       let d = {}
       try { d = await res.json() } catch { d = {} }
       if (!res.ok) return flash(d.error || 'Failed to remove flex field.', 'error')

@@ -3,6 +3,7 @@ import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
   const isEdit = !!moduleDoc?.id
@@ -40,7 +41,7 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
 
       const url = isEdit ? `/api/cm/modules/${moduleDoc.id}` : '/api/cm/modules'
       const method = isEdit ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: { Authorization: `Bearer ${token}` }, body: fd })
+      const res = await httpFetch(url, { method, headers: { Authorization: `Bearer ${token}` }, body: fd })
       if (res.ok) {
         onSaved()
         onClose()
@@ -172,7 +173,7 @@ export default function ModulesSection({ token }) {
 
   const loadFolders = useCallback(async () => {
     try {
-      const res = await fetch('/api/cm/folders', { headers: authHeaders })
+      const res = await httpFetch('/api/cm/folders', { headers: authHeaders })
       if (res.ok) setFolders((await res.json()).folders || [])
     } catch { /* silent */ }
   }, [token]) // eslint-disable-line
@@ -181,7 +182,7 @@ export default function ModulesSection({ token }) {
     setLoading(true)
     try {
       const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)))
-      const res = await fetch(`/api/cm/modules?${params}`, { headers: authHeaders })
+      const res = await httpFetch(`/api/cm/modules?${params}`, { headers: authHeaders })
       if (res.ok) setModules((await res.json()).modules || [])
     } catch { /* silent */ }
     setLoading(false)
@@ -193,7 +194,7 @@ export default function ModulesSection({ token }) {
   async function handleArchive(moduleDoc) {
     if (!await confirm(`Archive module "${moduleDoc.name}"? Linked documents using this module will also be archived.`)) return
     try {
-      const res = await fetch(`/api/cm/modules/${moduleDoc.id}/archive`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/modules/${moduleDoc.id}/archive`, { method: 'POST', headers: authHeaders })
       if (res.ok) {
         const d = await res.json()
         if (d.archived_linked_documents > 0) {
@@ -269,7 +270,7 @@ export default function ModulesSection({ token }) {
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditModule(m); setShowDrawer(true) }}>Edit</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={async () => {
                       try {
-                        const res = await fetch(`/api/cm/documents/module-usage/${m.id}`, { headers: authHeaders })
+                        const res = await httpFetch(`/api/cm/documents/module-usage/${m.id}`, { headers: authHeaders })
                         if (res.ok) {
                           const d = await res.json()
                           const names = d.linked_documents.map(doc => `• ${doc.name} (${doc.status})`).join('\n') || 'No documents linked.'

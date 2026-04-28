@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { httpFetch } from '../api/httpFetch.js'
 
 export default function LoginPage({ redirectTo = '/dashboard', appName = 'MIMS', appTagline = 'Medical Information Management System', allowUsername = false }) {
   const { login } = useAuth()
@@ -26,7 +27,7 @@ export default function LoginPage({ redirectTo = '/dashboard', appName = 'MIMS',
     setLoading(true)
     setAlert({ show: false })
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await httpFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginForm)

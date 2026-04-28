@@ -61,11 +61,13 @@ const schemas = {
   // ── Cases ─────────────────────────────────────────────────────────────────
   createCase: Joi.object({
     case_type:         str(20).valid('MI', 'AE', 'PC').required(),
-    org_id:            id().required(),
+    org_id:            id().optional(),
     site_id:           id().optional(),
     inquiry_id:        id().optional(),
     subject:           str(500).optional(),
     description:       str(5000).optional(),
+    intake_channel:    str(50).optional(),
+    date_received:     isoDate().optional().allow('', null),
     priority:          str(20).optional(),
     source_type_id:    id().optional(),
     product_id:        id().optional(),
@@ -92,17 +94,37 @@ const schemas = {
 
   // ── Admin — Picklists ─────────────────────────────────────────────────────
   createPicklist: Joi.object({
-    name:       str().required(),
-    category:   str().optional(),
-    org_id:     id().optional(),
-    is_active:  bool().optional(),
-    sort_order: Joi.number().integer().min(0).optional(),
+    name:            str().optional(),
+    value:           str().required(),
+    description:     str(1000).optional().allow('', null),
+    category:        str().optional().allow('', null),
+    field_type:      str().optional().allow('', null),
+    field_name:      str().optional().allow('', null),
+    field_id:        id().optional(),
+    org_id:          id().optional(),
+    status:          str(20).optional(),
+    is_active:       bool().optional(),
+    sort_order:      Joi.number().integer().min(0).optional(),
+    effective_from:  isoDate().optional().allow('', null),
+    effective_to:    isoDate().optional().allow('', null),
+    governance_note: str(1000).optional().allow('', null),
   }),
 
   updatePicklist: Joi.object({
-    name:       str().optional(),
-    is_active:  bool().optional(),
-    sort_order: Joi.number().integer().min(0).optional(),
+    name:            str().optional(),
+    value:           str().optional(),
+    description:     str(1000).optional().allow('', null),
+    category:        str().optional().allow('', null),
+    field_type:      str().optional().allow('', null),
+    field_name:      str().optional().allow('', null),
+    field_id:        id().optional(),
+    org_id:          id().optional(),
+    status:          str(20).optional(),
+    is_active:       bool().optional(),
+    sort_order:      Joi.number().integer().min(0).optional(),
+    effective_from:  isoDate().optional().allow('', null),
+    effective_to:    isoDate().optional().allow('', null),
+    governance_note: str(1000).optional().allow('', null),
   }).min(1),
 
   // ── Admin — Sites ─────────────────────────────────────────────────────────
@@ -180,9 +202,10 @@ const schemas = {
 
   // ── Admin — Security Groups ───────────────────────────────────────────────
   createSecurityGroup: Joi.object({
-    org_id:      id().required(),
+    org_id:      id().optional(),
     name:        str().required(),
     description: str(500).optional(),
+    privileges:  Joi.object().optional(),
     is_active:   bool().optional(),
   }),
 
@@ -207,7 +230,7 @@ const schemas = {
 
   // ── Admin — DPPR ──────────────────────────────────────────────────────────
   createDpprRule: Joi.object({
-    org_id:          id().required(),
+    org_id:          id().optional(),
     rule_name:       str().required(),
     domain:          str(100).required(),
     contact_type:    str(50).optional(),
@@ -245,11 +268,10 @@ const schemas = {
 
   // ── QA Engine ────────────────────────────────────────────────────────────
   createQaReport: Joi.object({
-    org_id:      id().required(),
-    name:        str().required(),
-    date_from:   isoDate().optional().allow('', null),
-    date_to:     isoDate().optional().allow('', null),
-    case_type:   str(20).valid('MI', 'AE', 'PC', 'ALL').optional(),
+    report_name:       str().required(),
+    date_range_start:  isoDate().optional().allow('', null),
+    date_range_end:    isoDate().optional().allow('', null),
+    case_type_filter:  str(20).valid('MI', 'AE', 'PC', 'ALL').optional().allow('', null),
   }),
 
   updateQaRule: Joi.object({
@@ -280,7 +302,7 @@ const schemas = {
   createUser: Joi.object({
     name:     str().required(),
     email:    email().required(),
-    password: str(1000).min(8).required(),
+    password: str(1000).min(8).optional(),
     role:     str(50).valid('admin', 'agent', 'reviewer', 'content_manager').required(),
     org_id:   id().optional(),
     site_id:  id().optional(),

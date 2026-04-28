@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../shared/context/AuthContext'
+import { httpFetch } from '../shared/api/httpFetch.js'
 
 export default function ResetPasswordPage() {
   const { token, logout } = useAuth()
@@ -20,7 +21,7 @@ export default function ResetPasswordPage() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await httpFetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ newPassword: form.newPassword })

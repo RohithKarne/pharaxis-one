@@ -5,6 +5,7 @@
 import { useAuth } from '../shared/context/AuthContext'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { httpFetch } from '../shared/api/httpFetch.js'
 
 export default function Topbar({ title, onToggleSidebar }) {
   const { user, orgName, logout, getInitials, formatRole } = useAuth()
@@ -24,7 +25,7 @@ export default function Topbar({ title, onToggleSidebar }) {
     let cancelled = false
     async function ping() {
       try {
-        const res = await fetch('/api/health', { cache: 'no-store' })
+        const res = await httpFetch('/api/health', { cache: 'no-store' })
         if (!res.ok) throw new Error('health not ok')
         if (!cancelled) setBackendOnline(true)
       } catch {

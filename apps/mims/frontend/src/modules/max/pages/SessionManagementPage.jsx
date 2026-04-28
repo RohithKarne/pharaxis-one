@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = '/api'
 
@@ -43,7 +44,7 @@ export default function SessionManagementPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${API}/auth/sessions`, { headers })
+      const res = await httpFetch(`${API}/auth/sessions`, { headers })
       const payload = await res.json()
       if (!res.ok) throw new Error(payload.error || 'Failed to load session management data.')
       setData({
@@ -68,7 +69,7 @@ export default function SessionManagementPage() {
     setRevokingOthers(true)
     setError('')
     try {
-      const res = await fetch(`${API}/auth/sessions/revoke-others`, { method: 'POST', headers })
+      const res = await httpFetch(`${API}/auth/sessions/revoke-others`, { method: 'POST', headers })
       const payload = await res.json()
       if (!res.ok) throw new Error(payload.error || 'Failed to revoke other sessions.')
       await loadSessions()
@@ -84,7 +85,7 @@ export default function SessionManagementPage() {
     setBusySessionId(session.id)
     setError('')
     try {
-      const res = await fetch(`${API}/auth/sessions/${session.id}/revoke`, { method: 'POST', headers })
+      const res = await httpFetch(`${API}/auth/sessions/${session.id}/revoke`, { method: 'POST', headers })
       const payload = await res.json()
       if (!res.ok) throw new Error(payload.error || 'Failed to revoke session.')
 

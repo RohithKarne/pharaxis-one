@@ -7,6 +7,22 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { normalizeFlowTemplate, buildSqlPlaybook } from './flowTemplates'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
+import {
+  buildEnrichment,
+  conceptStyle,
+  ENRICH_FLOW_TITLES,
+  highlightSqlHtml,
+  parseMethodAndPath,
+  shortFile,
+  sqlStatementType,
+  standardLaneIndex,
+  STANDARD_LANES,
+  toVscodeLink,
+  VIRTUAL_LANES,
+  VIRTUAL_LANE_TITLES,
+  wrapLabel,
+} from './flowDiagramUtils'
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const LANE_W   = 220
@@ -41,136 +57,6 @@ const C = {
   border:    'rgba(255,255,255,0.08)',
 }
 
-// Concept pill colours
-const CONCEPT_C = {
-  '🔐': { bg: 'rgba(251,191,36,0.18)',  fg: '#FCD34D' },
-  '💾': { bg: 'rgba(52,211,153,0.18)',  fg: '#34D399' },
-  '🌐': { bg: 'rgba(96,165,250,0.18)',  fg: '#93C5FD' },
-  '🔄': { bg: 'rgba(249,115,22,0.18)',  fg: '#FB923C' },
-  '📧': { bg: 'rgba(167,139,250,0.18)', fg: '#C4B5FD' },
-  '🖥': { bg: 'rgba(148,163,184,0.18)', fg: '#CBD5E1' },
-  '⚡': { bg: 'rgba(251,191,36,0.18)',  fg: '#FCD34D' },
-  '🗄': { bg: 'rgba(52,211,153,0.18)',  fg: '#6EE7B7' },
-}
-
-const WORKSPACE_ROOT = '/Users/rohithkarne/MIMS-CP Portal'
-const STANDARD_LANES = [
-  'Admin',
-  'Frontend',
-  'API Gateway / Router',
-  'Middleware',
-  'Backend',
-  'Auth',
-  'Cache (Redis)',
-  'Database',
-  'Queue / Jobs',
-  'External Services',
-  'File Storage',
-]
-const ENRICH_FLOW_TITLES = new Set(['Admin Login', 'Error — 401 Unauthorized'])
-const VIRTUAL_LANE_TITLES = new Set(['Admin Login'])
-const VIRTUAL_LANES = [
-  'Admin',
-  'Frontend',
-  'API Gateway',
-  'Middleware',
-  'Backend',
-  'Auth',
-  'Cache',
-  'Database',
-  'Queue',
-  'External',
-  'File Storage',
-]
-
-function conceptStyle(tag) {
-  if (!tag) return CONCEPT_C['🖥']
-  for (const [emoji, s] of Object.entries(CONCEPT_C)) {
-    if (tag.startsWith(emoji)) return s
-  }
-  return { bg: 'rgba(255,255,255,0.1)', fg: '#CBD5E1' }
-}
-
-function toVscodeLink(filePath, line) {
-  if (!filePath) return null
-  const raw = String(filePath)
-  const abs = raw.startsWith('/') ? raw : `${WORKSPACE_ROOT}/${raw}`
-  if (!abs.includes('/mims/')) return null
-  const encoded = encodeURI(abs)
-  return `vscode://file/${encoded}${line ? `:${line}` : ''}`
-}
-
-function truncate(text, max) {
-  if (!text) return '-'
-  return text.length > max ? text.slice(0, max - 1) + '…' : text
-}
-
-function mapLaneName(name) {
-  if (!name) return 'External Services'
-  const n = name.toLowerCase()
-  if (n.includes('admin') || n.includes('user')) return 'Admin'
-  if (n.includes('front')) return 'Frontend'
-  if (n.includes('gateway') || n.includes('router') || n.includes('api')) return 'API Gateway / Router'
-  if (n.includes('middleware')) return 'Middleware'
-  if (n.includes('back')) return 'Backend'
-  if (n.includes('auth')) return 'Auth'
-  if (n.includes('cache') || n.includes('redis')) return 'Cache (Redis)'
-  if (n.includes('db') || n.includes('database')) return 'Database'
-  if (n.includes('queue') || n.includes('job') || n.includes('scheduler')) return 'Queue / Jobs'
-  if (n.includes('file') || n.includes('storage') || n.includes('document')) return 'File Storage'
-  if (n.includes('external') || n.includes('email') || n.includes('notify') || n.includes('notification')) return 'External Services'
-  return 'External Services'
-}
-
-function standardLaneIndex(name) {
-  const mapped = mapLaneName(name)
-  const idx = STANDARD_LANES.indexOf(mapped)
-  return idx >= 0 ? idx : STANDARD_LANES.indexOf('External Services')
-}
-
-function inferTypeIcon(step) {
-  const concept = step.concept || ''
-  if (concept.startsWith('🔐')) return '🔐'
-  if (concept.startsWith('💾')) return '🗄'
-  if (concept.startsWith('🌐')) return '🌐'
-  if (concept.startsWith('🔄')) return '🔄'
-  if (concept.startsWith('🖥')) return '🖥'
-  if (concept.startsWith('⚡')) return '⚡'
-  if (concept.startsWith('📧')) return '✉️'
-  return '🔧'
-}
-
-function inferStepType(step) {
-  const concept = step.concept || ''
-  if (concept.includes(' ')) return concept.split(' ').slice(1).join(' ')
-  if (step.dbQuery) return 'DB'
-  if (step.apiRoute) return 'API'
-  return 'Step'
-}
-
-function inferStatus(step, logEntry) {
-  const m = step.statusMeaning || ''
-  const label = step.label || ''
-  const hit = (m + ' ' + label).match(/\\b(401|403|404|422|500)\\b/)
-  if (hit) return hit[1]
-  if (step.type === 'dashed' && logEntry?.status_code) return String(logEntry.status_code)
-  if (step.type === 'dashed') return '200'
-  return '--'
-}
-
-function buildEnrichment(step, logEntry) {
-  const status = inferStatus(step, logEntry)
-  const latency = step.duration_ms != null ? `${step.duration_ms}ms`
-    : logEntry?.duration_ms != null ? `${logEntry.duration_ms}ms` : (step.type === 'dashed' ? '8ms' : '15ms')
-  const typeIcon = inferTypeIcon(step)
-  const stepType = inferStepType(step)
-  const req = truncate(step.requestBody || step.apiRoute || '', 28)
-  const res = truncate(step.responseBody || step.statusMeaning || '', 28)
-  const db  = truncate(step.dbQuery || '', 28)
-  const failure = Number(status) >= 400 ? 'FAILED' : null
-  return { latency, status, typeIcon, stepType, req, res, db, failure }
-}
-
 function stepColor(state) {
   return C[state] || C.idle
 }
@@ -199,49 +85,6 @@ function Defs() {
       ))}
     </defs>
   )
-}
-
-function shortFile(p) {
-  if (!p) return null
-  const parts = p.split('/')
-  return parts.length >= 2 ? parts.slice(-2).join('/') : parts[parts.length - 1]
-}
-
-function sqlStatementType(sqlTextValue) {
-  const match = String(sqlTextValue || '').trim().match(/^([a-zA-Z]+)/)
-  return match ? match[1].toUpperCase() : ''
-}
-
-function parseMethodAndPath(text) {
-  const m = String(text || '').match(/\b(GET|POST|PUT|PATCH|DELETE|JOB|SCHEMA)\s+(\/[A-Za-z0-9_\/:\-?&.=]+)/i)
-  if (!m) return null
-  return { method: m[1].toUpperCase(), path: m[2].split('?')[0] }
-}
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-function highlightSqlHtml(sqlText) {
-  const escaped = escapeHtml(sqlText);
-  return escaped
-    .replace(/\b(SELECT|FROM|WHERE|GROUP BY|ORDER BY|LIMIT|INSERT|INTO|VALUES|UPDATE|SET|JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|ON|AND|OR|AS|COUNT|AVG|MAX|MIN|DESC|ASC)\b/gi, '<span style="color:#1D4ED8;font-weight:700">$1</span>')
-    .replace(/(:[a-zA-Z_][a-zA-Z0-9_]*)/g, '<span style="color:#7C3AED">$1</span>')
-    .replace(/('[^']*')/g, '<span style="color:#047857">$1</span>');
-}
-
-function wrapLabel(text, max) {
-  if (!text || text.length <= max) return text ? [text] : []
-  const words = text.split(' '); const lines = []; let cur = ''
-  for (const w of words) {
-    if ((cur + ' ' + w).trim().length > max) { if (cur) lines.push(cur); cur = w }
-    else cur = (cur + ' ' + w).trim()
-  }
-  if (cur) lines.push(cur)
-  return lines
 }
 
 // ── Single arrow ──────────────────────────────────────────────────────────────
@@ -659,10 +502,10 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
     ;(async () => {
       try {
         const [savedRes, schemaRes, auditRes, graphRes] = await Promise.all([
-          fetch('/api/admin/process-logs/sql/saved', { headers: authHeaders }),
-          fetch('/api/admin/process-logs/sql/schema', { headers: authHeaders }),
-          fetch('/api/admin/process-logs/sql/audit?limit=12', { headers: authHeaders }),
-          fetch('/api/admin/process-logs/sql/graph', { headers: authHeaders }),
+          httpFetch('/api/admin/process-logs/sql/saved', { headers: authHeaders }),
+          httpFetch('/api/admin/process-logs/sql/schema', { headers: authHeaders }),
+          httpFetch('/api/admin/process-logs/sql/audit?limit=12', { headers: authHeaders }),
+          httpFetch('/api/admin/process-logs/sql/graph', { headers: authHeaders }),
         ])
         const savedData = await savedRes.json()
         const schemaData = await schemaRes.json()
@@ -713,7 +556,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
     let cancelled = false
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/admin/process-logs/sql/suggest?q=${encodeURIComponent(q)}`, { headers: authHeaders })
+        const res = await httpFetch(`/api/admin/process-logs/sql/suggest?q=${encodeURIComponent(q)}`, { headers: authHeaders })
         const data = await res.json()
         if (cancelled || !res.ok) return
         const items = []
@@ -756,7 +599,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
 
     setSqlBusy(true)
     try {
-      const res = await fetch('/api/admin/process-logs/sql/execute', {
+      const res = await httpFetch('/api/admin/process-logs/sql/execute', {
         method: 'POST',
         headers: authHeaders || { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -800,7 +643,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
 
   async function refreshSqlAuditLogs() {
     try {
-      const res = await fetch('/api/admin/process-logs/sql/audit?limit=12', { headers: authHeaders || { 'Content-Type': 'application/json' } })
+      const res = await httpFetch('/api/admin/process-logs/sql/audit?limit=12', { headers: authHeaders || { 'Content-Type': 'application/json' } })
       const data = await res.json()
       if (res.ok) {
         setSqlAuditLogs(Array.isArray(data.logs) ? data.logs : [])
@@ -830,7 +673,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
     }
     setFlowMapBusy(true)
     try {
-      const res = await fetch('/api/admin/process-logs/flow-map', {
+      const res = await httpFetch('/api/admin/process-logs/flow-map', {
         method: 'POST',
         headers: authHeaders || { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -850,7 +693,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
 
   async function loadOpsRequests() {
     try {
-      const res = await fetch('/api/admin/process-logs/ops/requests?limit=20', {
+      const res = await httpFetch('/api/admin/process-logs/ops/requests?limit=20', {
         headers: authHeaders || { 'Content-Type': 'application/json' },
       })
       const data = await res.json()
@@ -866,7 +709,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
 
   async function loadOpsMetrics() {
     try {
-      const res = await fetch('/api/admin/process-logs/ops/metrics', {
+      const res = await httpFetch('/api/admin/process-logs/ops/metrics', {
         headers: authHeaders || { 'Content-Type': 'application/json' },
       })
       const data = await res.json()
@@ -878,7 +721,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
 
   async function loadOpsAnalytics() {
     try {
-      const res = await fetch('/api/admin/process-logs/ops/analytics', {
+      const res = await httpFetch('/api/admin/process-logs/ops/analytics', {
         headers: authHeaders || { 'Content-Type': 'application/json' },
       })
       const data = await res.json()
@@ -891,7 +734,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
   async function loadOpsSnapshots() {
     if (!opsSnapshotRequestId) return
     try {
-      const res = await fetch(`/api/admin/process-logs/ops/requests/${opsSnapshotRequestId}/snapshots`, {
+      const res = await httpFetch(`/api/admin/process-logs/ops/requests/${opsSnapshotRequestId}/snapshots`, {
         headers: authHeaders || { 'Content-Type': 'application/json' },
       })
       const data = await res.json()
@@ -922,7 +765,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
     }
     setOpsBusy(true)
     try {
-      const res = await fetch('/api/admin/process-logs/ops/request', {
+      const res = await httpFetch('/api/admin/process-logs/ops/request', {
         method: 'POST',
         headers: authHeaders || { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -964,7 +807,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
     setOpsSuccess('')
     setOpsBusy(true)
     try {
-      const res = await fetch(`/api/admin/process-logs/ops/requests/${id}/approve`, {
+      const res = await httpFetch(`/api/admin/process-logs/ops/requests/${id}/approve`, {
         method: 'POST',
         headers: authHeaders || { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirmation_text: opsConfirmationText }),
@@ -993,7 +836,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
     setOpsBusy(true)
     try {
       const rejectReason = String(opsReason || '').trim() || 'Rejected from Process Explorer UI'
-      const res = await fetch(`/api/admin/process-logs/ops/requests/${id}/reject`, {
+      const res = await httpFetch(`/api/admin/process-logs/ops/requests/${id}/reject`, {
         method: 'POST',
         headers: authHeaders || { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: rejectReason }),
@@ -1018,7 +861,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
     setSqlError('')
     setSqlExplainResult(null)
     try {
-      const res = await fetch('/api/admin/process-logs/sql/explain', {
+      const res = await httpFetch('/api/admin/process-logs/sql/explain', {
         method: 'POST',
         headers: authHeaders || { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sql: sqlEditor }),
@@ -1038,7 +881,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
     setSqlError('')
     setSqlValidationResult(null)
     try {
-      const res = await fetch('/api/admin/process-logs/sql/validate', {
+      const res = await httpFetch('/api/admin/process-logs/sql/validate', {
         method: 'POST',
         headers: authHeaders || { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sql: sqlEditor }),
@@ -1057,7 +900,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
   async function runSqlSuggest() {
     try {
       const q = encodeURIComponent(sqlSuggestText || '')
-      const res = await fetch(`/api/admin/process-logs/sql/suggest?q=${q}`, { headers: authHeaders || { 'Content-Type': 'application/json' } })
+      const res = await httpFetch(`/api/admin/process-logs/sql/suggest?q=${q}`, { headers: authHeaders || { 'Content-Type': 'application/json' } })
       const data = await res.json()
       if (!res.ok) {
         setSqlError(data.error || 'Suggestion fetch failed.')
@@ -1073,7 +916,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
     setSqlError('')
     setSqlNlResult(null)
     try {
-      const res = await fetch('/api/admin/process-logs/sql/nl2sql', {
+      const res = await httpFetch('/api/admin/process-logs/sql/nl2sql', {
         method: 'POST',
         headers: authHeaders || { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: sqlNlPrompt }),
@@ -1097,7 +940,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
       return
     }
     try {
-      const res = await fetch('/api/admin/process-logs/sql/saved', {
+      const res = await httpFetch('/api/admin/process-logs/sql/saved', {
         method: 'POST',
         headers: authHeaders || { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1113,7 +956,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
         setSqlError(data.error || 'Save SQL query failed.')
         return
       }
-      const listRes = await fetch('/api/admin/process-logs/sql/saved', { headers: authHeaders || { 'Content-Type': 'application/json' } })
+      const listRes = await httpFetch('/api/admin/process-logs/sql/saved', { headers: authHeaders || { 'Content-Type': 'application/json' } })
       const listData = await listRes.json()
       if (listRes.ok) {
         const rows = Array.isArray(listData.saved_queries) ? listData.saved_queries : []

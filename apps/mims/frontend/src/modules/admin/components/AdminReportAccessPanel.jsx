@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const REPORT_KEYS = [
   'cases_by_type', 'cases_by_status', 'cases_by_month', 'cases_by_site',
@@ -24,8 +25,8 @@ export default function AdminReportAccessPanel({ H }) {
     setReportAccessLoading(true)
     try {
       const [accessData, requestData] = await Promise.all([
-        fetch('/api/admin/reports/access', { headers: H }).then(r => r.json()).catch(() => ({ access: [] })),
-        fetch('/api/admin/reports/access/requests', { headers: H }).then(r => r.json()).catch(() => ({ requests: [] })),
+        httpFetch('/api/admin/reports/access', { headers: H }).then(r => r.json()).catch(() => ({ access: [] })),
+        httpFetch('/api/admin/reports/access/requests', { headers: H }).then(r => r.json()).catch(() => ({ requests: [] })),
       ])
       setReportAccessList(accessData.access || [])
       setReportAccessRequests(requestData.requests || [])
@@ -38,7 +39,7 @@ export default function AdminReportAccessPanel({ H }) {
     setReportReqSaving(true)
     setReportReqMsg('')
     try {
-      const response = await fetch('/api/admin/reports/access/request', {
+      const response = await httpFetch('/api/admin/reports/access/request', {
         method: 'POST',
         headers: H,
         body: JSON.stringify({
@@ -50,7 +51,7 @@ export default function AdminReportAccessPanel({ H }) {
       if (response.ok) {
         setReportReqMsg('✓ Request submitted - pending SuperAdmin approval.')
         setReportReqForm({ user_id: '', report_key: '' })
-        const updated = await fetch('/api/admin/reports/access/requests', { headers: H }).then(r => r.json()).catch(() => ({ requests: [] }))
+        const updated = await httpFetch('/api/admin/reports/access/requests', { headers: H }).then(r => r.json()).catch(() => ({ requests: [] }))
         setReportAccessRequests(updated.requests || [])
       } else {
         setReportReqMsg(data.error || 'Request failed.')

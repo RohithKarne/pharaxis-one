@@ -2,8 +2,7 @@
 
 const pool = require('../database/db');
 const { getToken } = require('../services/oauth2Service');
-
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
+const { httpFetch } = require('../utils/httpFetch');
 
 function parseConfig(rawConfig) {
   if (!rawConfig) return null;
@@ -102,7 +101,7 @@ async function sendCaseToMir(orgId, caseId) {
     const config = await getMirConfig(orgId);
     const authHeaders = await buildAuthHeaders(orgId, config);
 
-    const response = await fetch(config.endpoint_url, {
+    const response = await httpFetch(config.endpoint_url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -147,13 +146,13 @@ async function testMirConnection(orgId) {
     const config = await getMirConfig(orgId);
     const authHeaders = await buildAuthHeaders(orgId, config);
 
-    let response = await fetch(config.endpoint_url, {
+    let response = await httpFetch(config.endpoint_url, {
       method: 'HEAD',
       headers: authHeaders,
     });
 
     if (!response.ok) {
-      response = await fetch(config.endpoint_url, {
+      response = await httpFetch(config.endpoint_url, {
         method: 'GET',
         headers: authHeaders,
       });

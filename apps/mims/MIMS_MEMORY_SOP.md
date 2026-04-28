@@ -25,6 +25,8 @@
 | 2026-04-22 | Bala | Sprints 16-18 closed. MI Full Approval Workflow (DRAFT→READY→APPROVED→SENT + e-sign), AE multi-row tab CRUD, Transmissions page, Browse Content page, Impact Preview, npm audit fix, MI bypass fix, DB DEFAULT fix. All sections updated. |
 | 2026-04-23 | Bala | Sprint 19 closed. MI email delivery on SENT transition, Response Log page, SLA badge on case list, Dashboard MI KPIs, Inbox→Case context carry, Case Audit Trail diff UI + per-case CSV. Sections 6, 7, 9b, 10, 11, 12, 13 updated. |
 | 2026-04-26 | Bala | Sprint 21 (Sprints A+B+C combined) in progress. Sprint A: shared apiClient.js created, regression tests co-located, Joi validation added. Sprint B: db.js split into 001-015 migrations. Sprint C: ContentPage.jsx 3950→68 lines (14 sub-components extracted to content/components/), CaseFormPage 2856→2273 lines (5 components extracted), AdminMiscSection 1782→23 lines (6 panels extracted to AdminProductsPanel, AdminAuditPanel, AdminEmailAccountsPanel, AdminContactMasterPanel, AdminCaseNumberingPanel + AdminShared.jsx created, duplicates removed from AdminWorkflowSection + AdminAccessSection). Total −6,000+ lines from monoliths, 30+ focused files created. |
+| 2026-04-28 | Bala | Sprint 21 closed (mims). Sprint A complete in app code: frontend raw `fetch()` migrated to shared `httpFetch` wrapper across 83 files (448→1 wrapper-only call), backend integration services (`mirService`, `crmService`, `vaultService`, `oauth2Service`) moved to backend `httpFetch` wrapper. Sprint B close validation complete: new Jest suite `backend/tests/migrationRunner.test.js` covers fresh DB / legacy bootstrap / already-applied paths (3/3 PASS). Sprint C QA regression close: `Sprint21SplitRegression.test.jsx` added for `CaseFormPage` + `ContentPage` split behavior (4/4 PASS), full frontend tests green (10/10), frontend build PASS. Deferred item unchanged: `authRateLimiter` left as-is. |
+| 2026-04-28 | Bala | Sprint 21 final closure. SuperadminPage.jsx (3456 lines) split into 13 files: `superadmin/utils/guardedFetch.js` + 12 view components (`DashboardView`, `OrganisationsView`, `TwoFactorConfigView`, `UsersView`, `AlertsView`, `NotificationsView`, `AuditView`, `LoginAuditView`, `IntegrationsView`, `ReportsAccessView`, `HelpContentView`, `CopyDivisionView`). Shell reduced to 107 lines. Global 401 session-expiry handler wired into `shared/api/httpFetch.js` — all 84 `httpFetch` call sites now auto-logout on 401. `createModuleApp.jsx` registers handler for all non-superadmin modules. `guardedFetch.js` simplified to re-export from shared. Build PASS (246 modules). All code work for Sprint 21 complete. Remaining: QA regression browser pass (human) + MIMS_MEMORY_SOP Sprint 21 docs. |
 
 ---
 
@@ -689,6 +691,20 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 
 ## 11. Current Sprint
 
+**Sprint 21 — ALL CODE COMPLETE (2026-04-28). QA browser pass pending (human).**
+
+| Item | Status | Detail |
+|------|--------|--------|
+| Sprint A: shared `httpFetch` wrapper (83 files) | ✅ DONE | Raw fetch migrated. 401 global session-expiry handler now live in `httpFetch.js`. All modules auto-logout on expired token. |
+| Sprint A: `createModuleApp.jsx` session handler | ✅ DONE | All non-superadmin modules (Admin, Content, DV) register session-expiry handler on mount via `setSessionExpiryHandler`. |
+| Sprint B: `db.js` → migrations 001–015 | ✅ DONE | Migration runner with fresh DB + legacy bootstrap + already-applied path coverage (3/3 tests PASS). |
+| Sprint C: `CaseFormPage.jsx` split + `useCaseForm` hook | ✅ DONE | Shell 2856→2273 lines. 5 tab components extracted. |
+| Sprint C: `ContentPage.jsx` split | ✅ DONE | Shell 3950→68 lines. 14 sub-components in `content/components/`. |
+| Sprint C: `SuperadminPage.jsx` split | ✅ DONE | 3456→107 lines. 12 view components + shared `guardedFetch` utility. Build PASS. |
+| Sprint C: `AdminMiscSection.jsx` split | ✅ DONE | 1782→23 lines. 6 panels extracted. |
+| QA regression browser pass | ⏳ PENDING | Human click-through — CaseForm tabs, Content sections, Superadmin 12 sections. ~1 hr. |
+| `authRateLimiter` review | ⏳ DEFERRED | Left as-is by Rohith decision. |
+
 **Sprints 15-18 — ALL CLOSED (2026-04-22). Gate 1 PASSED.**
 
 **Summary of Sprints 16-18 (one-shot delivery):**
@@ -798,6 +814,8 @@ Non-negotiable. Ignoring causes bugs.
 | Inbox→Case description | `createCaseFromInquiry()` in InboxPage.jsx passes `description` (email body, max 1000 chars) and `internal_notes` (from/subject/received metadata) when creating a case. These fields are COALESCE'd in PUT /cases/:id — safe to pre-populate. |
 | Response Log route | `GET /api/cases/mi-responses/log` must be declared BEFORE `GET /api/cases/:id` in cases.js route order, otherwise Express will try to match "mi-responses" as a case `:id`. Already correct as of Sprint 19. |
 | Audit Trail UI | `AuditAdminPanel` is a standalone component defined in `AdminMiscSection.jsx` (not a separate file). It uses the existing `fmtDateIST` and `H` (auth headers) props passed from the parent. Case field audit calls `GET /api/admin/case-audit-trail/:caseId` (admin/superadmin only). |
+| `httpFetch` 401 handler | `shared/api/httpFetch.js` intercepts all 401 responses and calls the registered `_onSessionExpiry` handler. Auth endpoints (`/api/auth/*`) are excluded to prevent login-page 401s triggering logout. `createModuleApp.jsx` registers the handler for all non-superadmin modules. `SuperadminPage.jsx` registers via `setSessionExpiryHandler` re-exported from `superadmin/utils/guardedFetch.js`. Do NOT add manual 401 checks in individual components — the wrapper handles it globally. |
+| `guardedFetch` (superadmin) | `superadmin/utils/guardedFetch.js` is now a thin re-export layer over `shared/api/httpFetch.js`. `guardedFetch === httpFetch`. `setSessionExpiryHandler` re-exported from shared. Do not add duplicate 401 logic here. |
 
 ---
 

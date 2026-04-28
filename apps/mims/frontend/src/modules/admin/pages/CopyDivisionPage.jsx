@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './CopyDivisionPage.css'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -42,8 +43,8 @@ export default function CopyDivisionPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API}/admin/copy-division/orgs`,       { headers }).then(r => r.json()),
-      fetch(`${API}/admin/copy-division/categories`, { headers }).then(r => r.json()),
+      httpFetch(`${API}/admin/copy-division/orgs`,       { headers }).then(r => r.json()),
+      httpFetch(`${API}/admin/copy-division/categories`, { headers }).then(r => r.json()),
     ]).then(([o, c]) => {
       setOrgs(o.orgs || [])
       const cats = c.categories || []
@@ -61,7 +62,7 @@ export default function CopyDivisionPage() {
   async function handlePreview() {
     setPreviewing(true); setError(null); setPreview(null); setResult(null); setConfirmed(false)
     try {
-      const res  = await fetch(`${API}/admin/copy-division/preview`, {
+      const res  = await httpFetch(`${API}/admin/copy-division/preview`, {
         method: 'POST', headers,
         body: JSON.stringify({ source_org_id: parseInt(sourceOrg), categories: selectedKeys }),
       })
@@ -75,7 +76,7 @@ export default function CopyDivisionPage() {
   async function handleExecute() {
     setExecuting(true); setError(null); setResult(null)
     try {
-      const res  = await fetch(`${API}/admin/copy-division/execute`, {
+      const res  = await httpFetch(`${API}/admin/copy-division/execute`, {
         method: 'POST', headers,
         body: JSON.stringify({
           source_org_id: parseInt(sourceOrg),

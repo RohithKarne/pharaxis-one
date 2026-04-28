@@ -4,6 +4,7 @@ import MIMSLayout from '../../../shared/components/MIMSLayout'
 import FlowDiagram from '../processExplorer/FlowDiagram'
 import { FLOW_TEMPLATES, generateFlow } from '../processExplorer/flowTemplates'
 import { useAuth } from '../../../shared/context/AuthContext'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function toIST(ts) {
   if (!ts) return ''
@@ -136,7 +137,7 @@ export default function ProcessExplorerPage() {
 
   const fetchConfig = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/process-logs/config', { headers })
+      const res = await httpFetch('/api/admin/process-logs/config', { headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load explorer config')
       setSqlPolicy(data?.sql_policy || null)
@@ -153,7 +154,7 @@ export default function ProcessExplorerPage() {
       if (filterStatus !== 'all') params.set('status', filterStatus)
       if (filterEvent !== 'all') params.set('event_type', filterEvent)
       if (search.trim()) params.set('search', search.trim())
-      const res = await fetch(`/api/admin/process-logs?${params.toString()}`, { headers })
+      const res = await httpFetch(`/api/admin/process-logs?${params.toString()}`, { headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load logs')
       setLogs(data.logs || [])
@@ -170,7 +171,7 @@ export default function ProcessExplorerPage() {
 
   const fetchLibrary = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/process-logs/library', { headers })
+      const res = await httpFetch('/api/admin/process-logs/library', { headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load library')
       const rows = Array.isArray(data.flows) ? data.flows : []
@@ -191,7 +192,7 @@ export default function ProcessExplorerPage() {
 
   async function purgeOldLogs() {
     if (!await confirm(`Delete logs older than ${retention} days?`)) return
-    await fetch(`/api/admin/process-logs/purge?days=${retention}`, { method: 'DELETE', headers })
+    await httpFetch(`/api/admin/process-logs/purge?days=${retention}`, { method: 'DELETE', headers })
     if (hasFetched) fetchLogs()
     if (tab === 'library') fetchLibrary()
   }

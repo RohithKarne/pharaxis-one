@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { SectionHeader, StatusPill } from './AdminShared'
 import { confirm } from '../../../shared/utils/confirm'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function AdminSourceTypesPanel({ H, flash }) {
   const [sourceTypes, setSourceTypes] = useState([])
@@ -9,13 +10,13 @@ export default function AdminSourceTypesPanel({ H, flash }) {
   useEffect(() => { loadSourceTypes() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadSourceTypes() {
-    try { const d = await fetch('/api/admin/source-types', { headers: H }).then(r => r.json()); setSourceTypes(d.sources || []) }
+    try { const d = await httpFetch('/api/admin/source-types', { headers: H }).then(r => r.json()); setSourceTypes(d.sources || []) }
     catch { setSourceTypes([]) }
   }
 
   async function createSrc(e) {
     e.preventDefault()
-    const res = await fetch('/api/admin/source-types', { method: 'POST', headers: H, body: JSON.stringify(srcForm) })
+    const res = await httpFetch('/api/admin/source-types', { method: 'POST', headers: H, body: JSON.stringify(srcForm) })
     const d = await res.json()
     if (!res.ok) return flash(d.error, 'error')
     setSourceTypes(prev => [...prev, d])
@@ -25,7 +26,7 @@ export default function AdminSourceTypesPanel({ H, flash }) {
 
   async function toggleSrc(src) {
     if (!await confirm(`${src.is_active ? 'Deactivate' : 'Activate'} source type "${src.name}"?`)) return
-    await fetch(`/api/admin/source-types/${src.id}`, { method: 'PUT', headers: H, body: JSON.stringify({ name: src.name, is_active: !src.is_active }) })
+    await httpFetch(`/api/admin/source-types/${src.id}`, { method: 'PUT', headers: H, body: JSON.stringify({ name: src.name, is_active: !src.is_active }) })
     setSourceTypes(prev => prev.map(s => s.id === src.id ? { ...s, is_active: s.is_active ? 0 : 1 } : s))
     flash('Status updated.')
   }

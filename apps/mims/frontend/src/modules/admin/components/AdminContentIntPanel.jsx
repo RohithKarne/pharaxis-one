@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { LockedIntegration, IntegrationSectionHeader, useIntegrationHelpers } from './AdminIntegrationShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function AdminContentIntPanel({ config, setConfig, status, H }) {
   const [saving, setSaving] = useState(false)
@@ -15,14 +16,14 @@ export default function AdminContentIntPanel({ config, setConfig, status, H }) {
   async function save() {
     setSaving(true)
     try {
-      await fetch('/api/admin/integrations/content/config', { method: 'PUT', headers: H, body: JSON.stringify({ config }) })
+      await httpFetch('/api/admin/integrations/content/config', { method: 'PUT', headers: H, body: JSON.stringify({ config }) })
     } finally { setSaving(false) }
   }
 
   async function testConnection() {
     setTestLoading(true)
     try {
-      const r = await fetch('/api/admin/integrations/vault/test-connection', { method: 'POST', headers: H })
+      const r = await httpFetch('/api/admin/integrations/vault/test-connection', { method: 'POST', headers: H })
       const d = await r.json()
       setTestResult(d.success ? '✓ Vault connection verified' : '✗ ' + (d.error || 'Connection failed'))
     } catch { setTestResult('✗ Connection failed — check credentials and vault domain') }

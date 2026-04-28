@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function SectionHeader({ title, desc }) {
   return (
@@ -105,7 +106,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
 
   async function loadEvidenceRules() {
     try {
-      const res = await fetch('/api/admin/evidence-chain/rules', { headers: H })
+      const res = await httpFetch('/api/admin/evidence-chain/rules', { headers: H })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Failed to load evidence rules.')
       setEvidenceRules(body.rules || [])
@@ -116,7 +117,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
 
   async function loadEvidenceRuns() {
     try {
-      const res = await fetch('/api/admin/evidence-chain/runs?limit=25', { headers: H })
+      const res = await httpFetch('/api/admin/evidence-chain/runs?limit=25', { headers: H })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Failed to load evidence runs.')
       setEvidenceRuns(body.runs || [])
@@ -183,7 +184,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
         : '/api/admin/evidence-chain/rules'
       const method = isEdit ? 'PUT' : 'POST'
 
-      const res = await fetch(endpoint, {
+      const res = await httpFetch(endpoint, {
         method,
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -212,7 +213,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
     setEvidenceLoading(true)
     setEvidenceResult(null)
     try {
-      const res = await fetch('/api/admin/evidence-chain/compile', {
+      const res = await httpFetch('/api/admin/evidence-chain/compile', {
         method: 'POST',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -238,7 +239,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
     e.preventDefault()
     setScanLoading(true)
     try {
-      const res = await fetch('/api/admin/contradiction-radar/scan', {
+      const res = await httpFetch('/api/admin/contradiction-radar/scan', {
         method: 'POST',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -261,7 +262,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
 
   async function loadFindings(status = 'open') {
     try {
-      const res = await fetch(`/api/admin/contradiction-radar/findings?status=${encodeURIComponent(status)}&limit=200`, { headers: H })
+      const res = await httpFetch(`/api/admin/contradiction-radar/findings?status=${encodeURIComponent(status)}&limit=200`, { headers: H })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Failed to load contradiction findings.')
       setFindings(body.findings || [])
@@ -273,7 +274,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
   async function updateFindingStatus(id, status) {
     setFindingStatusSavingId(id)
     try {
-      const res = await fetch(`/api/admin/contradiction-radar/findings/${id}/status`, {
+      const res = await httpFetch(`/api/admin/contradiction-radar/findings/${id}/status`, {
         method: 'PUT',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -303,7 +304,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
 
     setDigitalTwinLoading(true)
     try {
-      const res = await fetch('/api/admin/digital-twin/simulate', {
+      const res = await httpFetch('/api/admin/digital-twin/simulate', {
         method: 'POST',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -326,7 +327,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
 
   async function loadDigitalTwinRuns() {
     try {
-      const res = await fetch('/api/admin/digital-twin/runs?limit=25', { headers: H })
+      const res = await httpFetch('/api/admin/digital-twin/runs?limit=25', { headers: H })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Failed to load digital twin runs.')
       setDigitalTwinRuns(body.runs || [])
@@ -337,7 +338,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
 
   async function loadRiskRules() {
     try {
-      const res = await fetch('/api/admin/adaptive-risk/rules', { headers: H })
+      const res = await httpFetch('/api/admin/adaptive-risk/rules', { headers: H })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Failed to load adaptive risk rules.')
       setRiskRules(body.rules || [])
@@ -348,7 +349,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
 
   async function loadRiskDecisions() {
     try {
-      const res = await fetch('/api/admin/adaptive-risk/decisions?limit=30', { headers: H })
+      const res = await httpFetch('/api/admin/adaptive-risk/decisions?limit=30', { headers: H })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Failed to load adaptive risk decisions.')
       setRiskDecisions(body.decisions || [])
@@ -406,7 +407,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
         : '/api/admin/adaptive-risk/rules'
       const method = isEdit ? 'PUT' : 'POST'
 
-      const res = await fetch(endpoint, {
+      const res = await httpFetch(endpoint, {
         method,
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -428,7 +429,7 @@ export default function AdminContentIntelligenceSection({ contentSection, H, fla
     e.preventDefault()
     setRiskEvalLoading(true)
     try {
-      const res = await fetch('/api/admin/adaptive-risk/evaluate', {
+      const res = await httpFetch('/api/admin/adaptive-risk/evaluate', {
         method: 'POST',
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify({

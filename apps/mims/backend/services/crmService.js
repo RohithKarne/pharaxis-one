@@ -1,8 +1,8 @@
 'use strict';
 
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
 const pool = require('../database/db');
 const { getToken } = require('./oauth2Service');
+const { httpFetch } = require('../utils/httpFetch');
 
 function parseConfig(rawConfig) {
   if (!rawConfig) return null;
@@ -117,7 +117,7 @@ async function syncCaseToCrm(orgId, caseId) {
 
   let responseBody = null;
   try {
-    const response = await fetch(request.url, {
+    const response = await httpFetch(request.url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,

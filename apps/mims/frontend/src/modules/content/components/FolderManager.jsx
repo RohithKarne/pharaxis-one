@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function FolderManager({ show, onClose, token }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -23,9 +24,9 @@ export default function FolderManager({ show, onClose, token }) {
     setLoading(true)
     try {
       const [fRes, pRes, sRes] = await Promise.all([
-        fetch('/api/cm/folders', { headers: authHeaders }),
-        fetch('/api/admin/products-full', { headers: authHeaders }),
-        fetch('/api/admin/sites', { headers: authHeaders }),
+        httpFetch('/api/cm/folders', { headers: authHeaders }),
+        httpFetch('/api/admin/products-full', { headers: authHeaders }),
+        httpFetch('/api/admin/sites', { headers: authHeaders }),
       ])
       if (fRes.ok) setFolders((await fRes.json()).folders || [])
       if (pRes.ok) setProducts((await pRes.json()).products || [])
@@ -38,8 +39,8 @@ export default function FolderManager({ show, onClose, token }) {
     setPermLoading(true)
     try {
       const [permRes, sgRes] = await Promise.all([
-        fetch(`/api/cm/folders/${folderId}/permissions`, { headers: authHeaders }),
-        fetch('/api/admin/security-groups', { headers: authHeaders }),
+        httpFetch(`/api/cm/folders/${folderId}/permissions`, { headers: authHeaders }),
+        httpFetch('/api/admin/security-groups', { headers: authHeaders }),
       ])
       if (permRes.ok) setPermissions((await permRes.json()).permissions || [])
       if (sgRes.ok) setSecGroups((await sgRes.json()).groups || [])
@@ -50,7 +51,7 @@ export default function FolderManager({ show, onClose, token }) {
   async function handleAddPermission() {
     if (!permGroupId) return
     try {
-      const res = await fetch(`/api/cm/folders/${permFolder.id}/permissions`, {
+      const res = await httpFetch(`/api/cm/folders/${permFolder.id}/permissions`, {
         method: 'POST', headers: authHeaders,
         body: JSON.stringify({ group_id: Number(permGroupId), permission_level: permLevel }),
       })
@@ -62,7 +63,7 @@ export default function FolderManager({ show, onClose, token }) {
   async function handleRemovePermission(groupId) {
     if (!confirm('Remove this permission?')) return
     try {
-      const res = await fetch(`/api/cm/folders/${permFolder.id}/permissions/${groupId}`, { method: 'DELETE', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/folders/${permFolder.id}/permissions/${groupId}`, { method: 'DELETE', headers: authHeaders })
       if (res.ok) loadPermissions(permFolder.id)
     } catch { toast.error('Network error.') }
   }
@@ -87,7 +88,7 @@ export default function FolderManager({ show, onClose, token }) {
     try {
       const url = editFolder ? `/api/cm/folders/${editFolder.id}` : '/api/cm/folders'
       const method = editFolder ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: authHeaders, body: JSON.stringify(form) })
+      const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify(form) })
       if (res.ok) { setShowForm(false); load() }
       else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
     } catch { toast.error('Network error.') }

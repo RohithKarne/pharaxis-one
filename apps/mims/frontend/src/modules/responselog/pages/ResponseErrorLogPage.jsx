@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './ResponseErrorLogPage.css'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -98,7 +99,7 @@ export default function ResponseErrorLogPage() {
       if (fromDate)         params.set('from_date', fromDate)
       if (toDate)           params.set('to_date', toDate)
 
-      const res  = await fetch(`${API}/admin/response-error-logs?${params}`, { headers })
+      const res  = await httpFetch(`${API}/admin/response-error-logs?${params}`, { headers })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Failed to load response error log.'); return }
       setEntries(data.entries || [])

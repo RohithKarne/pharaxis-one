@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -21,7 +22,7 @@ export default function CaseCommentsTab({ id, headers, setSavedMsg, onCountChang
     setCommentsLoading(true)
     setCommentsError('')
     try {
-      const res  = await fetch(`${API}/cases/${id}/comments`, { headers })
+      const res  = await httpFetch(`${API}/cases/${id}/comments`, { headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load comments.')
       const list = Array.isArray(data) ? data : []
@@ -41,7 +42,7 @@ export default function CaseCommentsTab({ id, headers, setSavedMsg, onCountChang
     setCommentSaving(true)
     setCommentsError('')
     try {
-      const res  = await fetch(`${API}/cases/${id}/comments`, {
+      const res  = await httpFetch(`${API}/cases/${id}/comments`, {
         method: 'POST', headers, body: JSON.stringify({ comment }),
       })
       const data = await res.json()

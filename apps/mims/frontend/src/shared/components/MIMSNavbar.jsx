@@ -13,6 +13,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { httpFetch } from '../api/httpFetch.js'
 
 const CASE_MGMT_ROUTES = { 'My Cases': '/cases?tab=my', 'Unassigned Cases': '/cases?tab=unassigned', 'Deleted Cases': '/cases?tab=deleted' }
 const CASE_MGMT_ITEMS  = ['My Cases', 'Unassigned Cases', 'Deleted Cases']
@@ -45,7 +46,7 @@ export default function MIMSNavbar() {
       if (!token || !user) return
       if (user.role === 'superadmin') { if (alive) setProcessExplorerEnabled(true); return }
       try {
-        const res = await fetch('/api/admin/process-logs/config', { headers: { Authorization: `Bearer ${token}` } })
+        const res = await httpFetch('/api/admin/process-logs/config', { headers: { Authorization: `Bearer ${token}` } })
         if (!alive) return
         setProcessExplorerEnabled(res.ok ? !!(await res.json()).allowed : false)
       } catch (_) { if (alive) setProcessExplorerEnabled(false) }

@@ -3,6 +3,7 @@ import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 import { CheckInModal } from './ContentModals'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -24,7 +25,7 @@ function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
     try {
       const url = isEdit ? `/api/cm/faqs/${faq.id}` : '/api/cm/faqs'
       const method = isEdit ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: authHeaders, body: JSON.stringify({ ...form, check_in: checkIn }) })
+      const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify({ ...form, check_in: checkIn }) })
       if (res.ok) { onSaved(); onClose() }
       else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
     } catch { toast.error('Network error.') }
@@ -105,8 +106,8 @@ export default function FAQsSection({ token, user }) {
     try {
       const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)))
       const [fRes, folRes] = await Promise.all([
-        fetch(`/api/cm/faqs?${params}`, { headers: authHeaders }),
-        fetch('/api/cm/folders', { headers: authHeaders }),
+        httpFetch(`/api/cm/faqs?${params}`, { headers: authHeaders }),
+        httpFetch('/api/cm/folders', { headers: authHeaders }),
       ])
       if (fRes.ok) setFaqs((await fRes.json()).faqs || [])
       if (folRes.ok) setFolders((await folRes.json()).folders || [])
@@ -118,7 +119,7 @@ export default function FAQsSection({ token, user }) {
 
   async function handleCheckOut(faq) {
     try {
-      const res = await fetch(`/api/cm/faqs/${faq.id}/checkout`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/faqs/${faq.id}/checkout`, { method: 'POST', headers: authHeaders })
       if (res.ok) loadFaqs()
       else { const d = await res.json(); toast.error(d.error || 'Check out failed.') }
     } catch { toast.error('Network error.') }
@@ -127,7 +128,7 @@ export default function FAQsSection({ token, user }) {
   async function handleCheckIn() {
     setCheckInLoading(true)
     try {
-      const res = await fetch(`/api/cm/faqs/${checkInFaq.id}/checkin`, { method: 'POST', headers: authHeaders })
+      const res = await httpFetch(`/api/cm/faqs/${checkInFaq.id}/checkin`, { method: 'POST', headers: authHeaders })
       if (res.ok) { setCheckInFaq(null); loadFaqs() }
       else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
     } catch { toast.error('Network error.') }
@@ -149,7 +150,7 @@ export default function FAQsSection({ token, user }) {
     setFaqEsignLoading(true); setFaqEsignErr('')
     try {
       const endpoint = faqEsign.action === 'approve' ? 'approve' : 'publish'
-      const res = await fetch(`/api/cm/faqs/${faqEsign.faq.id}/${endpoint}`, {
+      const res = await httpFetch(`/api/cm/faqs/${faqEsign.faq.id}/${endpoint}`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ password: faqEsignPw, reason: faqEsignReason }),
@@ -203,7 +204,7 @@ export default function FAQsSection({ token, user }) {
               <button className="cm-btn cm-btn-secondary" onClick={() => { setShowBulkTag(false); setBulkTagInput('') }}>Cancel</button>
               <button className="cm-btn cm-btn-primary" onClick={async () => {
                 const tags = bulkTagInput.split(',').map(t => t.trim()).filter(Boolean)
-                const res = await fetch('/api/cm/faqs/bulk-tags', { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ ids: selectedFaqIds, tags }) })
+                const res = await httpFetch('/api/cm/faqs/bulk-tags', { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ ids: selectedFaqIds, tags }) })
                 if (res.ok) { loadFaqs(); setSelectedFaqIds([]); setShowBulkTag(false); setBulkTagInput('') }
                 else toast.error('Bulk tag failed.')
               }}>Apply Tags</button>
@@ -246,7 +247,7 @@ export default function FAQsSection({ token, user }) {
             {faqs.map((f) => (
               <tr key={f.id}>
                 <td><input type="checkbox" checked={selectedFaqIds.includes(f.id)} onChange={e => setSelectedFaqIds(prev => e.target.checked ? [...new Set([...prev, f.id])] : prev.filter(id => id !== f.id))} /></td>
-                <td style={{ maxWidth: 300 }} onClick={() => fetch(`/api/cm/faqs/${f.id}/view`, { method: 'POST', headers: authHeaders }).catch(() => {})}>
+                <td style={{ maxWidth: 300 }} onClick={() => httpFetch(`/api/cm/faqs/${f.id}/view`, { method: 'POST', headers: authHeaders }).catch(() => {})}>
                   {f.question?.length > 60 ? f.question.slice(0, 60) + '…' : f.question}
                 </td>
                 <td>{f.category || '—'}</td>

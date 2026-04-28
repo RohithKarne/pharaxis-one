@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function TemplateDrawer({ template, token, onClose, onSaved }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -25,7 +26,7 @@ function TemplateDrawer({ template, token, onClose, onSaved }) {
     try {
       const url = isEdit ? `/api/cm/templates/${template.id}` : '/api/cm/templates'
       const method = isEdit ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: authHeaders, body: JSON.stringify(form) })
+      const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify(form) })
       if (res.ok) { onSaved(); onClose() }
       else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
     } catch { toast.error('Network error.') }
@@ -36,7 +37,7 @@ function TemplateDrawer({ template, token, onClose, onSaved }) {
     if (!template?.id) return toast.warn('Save the template first before previewing.')
     setPreviewLoading(true)
     try {
-      const res = await fetch(`/api/cm/templates/${template.id}/render`, {
+      const res = await httpFetch(`/api/cm/templates/${template.id}/render`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ case_id: previewCaseId ? Number(previewCaseId) : null }),
@@ -143,7 +144,7 @@ export default function TemplatesSection({ token }) {
     setLoading(true)
     try {
       const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)))
-      const res = await fetch(`/api/cm/templates?${params}`, { headers: authHeaders })
+      const res = await httpFetch(`/api/cm/templates?${params}`, { headers: authHeaders })
       if (res.ok) setTemplates((await res.json()).templates || [])
     } catch { /* silent */ }
     setLoading(false)
@@ -154,7 +155,7 @@ export default function TemplatesSection({ token }) {
   async function toggleStatus(t) {
     const newStatus = t.status === 'Active' ? 'Inactive' : 'Active'
     try {
-      const res = await fetch(`/api/cm/templates/${t.id}/status`, {
+      const res = await httpFetch(`/api/cm/templates/${t.id}/status`, {
         method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: newStatus })
       })
       if (res.ok) load()

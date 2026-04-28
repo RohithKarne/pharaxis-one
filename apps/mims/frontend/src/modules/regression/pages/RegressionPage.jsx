@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -139,7 +140,7 @@ function ApiCatalogTab({ token }) {
   const [coverageFilter, setCoverageFilter] = useState('ALL')
 
   useEffect(() => {
-    fetch('/api/admin/regression/api-catalog', { headers: { Authorization: `Bearer ${token}` } })
+    httpFetch('/api/admin/regression/api-catalog', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : { routes: [], covered_routes: 0, uncovered_routes: 0, total_tests: 0 })
       .then(d => {
         setCatalog({
@@ -241,7 +242,7 @@ function DbTablesTab({ token }) {
   const [expanded, setExpanded] = useState(null)
 
   useEffect(() => {
-    fetch('/api/admin/regression/db-health', { headers: { Authorization: `Bearer ${token}` } })
+    httpFetch('/api/admin/regression/db-health', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(d => setHealth(d))
       .catch(() => setHealth({ status: 'error', tables: [] }))
@@ -309,7 +310,7 @@ function HistoryTab({ token }) {
   const [detail, setDetail] = useState(null)
 
   useEffect(() => {
-    fetch('/api/admin/regression/history', { headers: { Authorization: `Bearer ${token}` } })
+    httpFetch('/api/admin/regression/history', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : { runs: [] })
       .then(d => setRuns(d.runs || []))
       .catch(() => setRuns([]))
@@ -320,7 +321,7 @@ function HistoryTab({ token }) {
     setSelected(run)
     setDetailLoading(true)
     try {
-      const res = await fetch(`/api/admin/regression/history/${run.id}`, { headers: { Authorization: `Bearer ${token}` } })
+      const res = await httpFetch(`/api/admin/regression/history/${run.id}`, { headers: { Authorization: `Bearer ${token}` } })
       if (res.ok) { const d = await res.json(); setDetail(d.run) }
     } catch { /* silent */ }
     setDetailLoading(false)
@@ -440,7 +441,7 @@ export default function RegressionPage() {
     setError('')
     setActiveTab('overview')
     try {
-      const res = await fetch('/api/admin/regression/run', {
+      const res = await httpFetch('/api/admin/regression/run', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       })

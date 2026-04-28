@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SectionHeader } from './AdminShared'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const MODULES = [
   { key: 'mims_core', label: 'MIMS Core' },
@@ -39,7 +40,7 @@ export default function AdminUserSecurityPanel({ H }) {
   async function loadPermissions() {
     setPermissionsLoading(true)
     try {
-      const data = await fetch('/api/admin/permissions', { headers: H }).then(r => r.json())
+      const data = await httpFetch('/api/admin/permissions', { headers: H }).then(r => r.json())
       setPermissions(data.permissions || [])
     } catch {
       setPermissions([])

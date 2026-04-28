@@ -6,6 +6,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { httpFetch } from '../api/httpFetch.js'
 
 export default function MIMSHeader({ onBellClick, onHelpClick }) {
   const { user, token, orgName, orgId, siteName, allOrgs, switchOrg, refreshOrgAccess, logout, getInitials, hasModuleAccess } = useAuth()
@@ -42,7 +43,7 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
 
   useEffect(() => {
     if (!token) return
-    fetch('/api/auth/org-logo', { headers: { Authorization: `Bearer ${token}` } })
+    httpFetch('/api/auth/org-logo', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.logo_url) setOrgLogoUrl(data.logo_url) })
       .catch(() => {})
@@ -68,7 +69,7 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
     setSavingPassword(true)
     setPasswordMsg({ type: '', text: '' })
     try {
-      const res = await fetch('/api/auth/change-password', {
+      const res = await httpFetch('/api/auth/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

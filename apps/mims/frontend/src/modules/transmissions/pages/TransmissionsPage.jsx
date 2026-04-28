@@ -10,11 +10,12 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../transmissions.css'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
 function logScreenEvent(token, action, context) {
-  fetch(`${API}/admin/transmission-screen-audit`, {
+  httpFetch(`${API}/admin/transmission-screen-audit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ action, context }),
@@ -81,7 +82,7 @@ export default function TransmissionsPage() {
       if (fromDate)           params.set('from_date', fromDate)
       if (toDate)             params.set('to_date', toDate)
 
-      const res  = await fetch(`${API}/admin/transmission-audit-trail?${params}`, { headers })
+      const res  = await httpFetch(`${API}/admin/transmission-audit-trail?${params}`, { headers })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Failed to load transmissions.'); return }
 

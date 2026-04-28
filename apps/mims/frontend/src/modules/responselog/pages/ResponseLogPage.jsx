@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../responselog.css'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -93,7 +94,7 @@ export default function ResponseLogPage() {
       if (toDate)            params.set('to_date', toDate)
       if (search.trim())     params.set('search', search.trim())
 
-      const res  = await fetch(`${API}/cases/mi-responses/log?${params}`, { headers })
+      const res  = await httpFetch(`${API}/cases/mi-responses/log?${params}`, { headers })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Failed to load response log.'); return }
       setResponses(data.responses || [])

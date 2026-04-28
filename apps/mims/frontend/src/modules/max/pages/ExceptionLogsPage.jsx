@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import MIMSLayout from '../../../shared/components/MIMSLayout';
 import { useAuth } from '../../../shared/context/AuthContext';
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function formatDate(value) {
   if (!value) return '—';
@@ -56,7 +57,7 @@ export default function ExceptionLogsPage() {
       for (const [k, v] of [...params.entries()]) {
         if (!v) params.delete(k);
       }
-      const res = await fetch(`/api/admin/observability/exceptions?${params.toString()}`, { headers });
+      const res = await httpFetch(`/api/admin/observability/exceptions?${params.toString()}`, { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load exception logs.');
       setRows(data.data || []);

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function BrowseSection({ token }) {
   const authHeaders = { Authorization: `Bearer ${token}` }
@@ -14,7 +15,7 @@ export default function BrowseSection({ token }) {
 
   async function loadBookmarks() {
     try {
-      const res = await fetch('/api/cm/folders/bookmarks', { headers: authHeaders })
+      const res = await httpFetch('/api/cm/folders/bookmarks', { headers: authHeaders })
       if (res.ok) setBookmarks((await res.json()).bookmarks || [])
     } catch { /* silent */ }
   }
@@ -23,9 +24,9 @@ export default function BrowseSection({ token }) {
     const entityType = contentType === 'documents' ? 'document' : 'faq'
     const existing = bookmarks.find(b => b.entity_type === entityType && b.entity_id === item.id)
     if (existing) {
-      await fetch(`/api/cm/folders/bookmarks/${existing.id}`, { method: 'DELETE', headers: authHeaders }).catch(() => {})
+      await httpFetch(`/api/cm/folders/bookmarks/${existing.id}`, { method: 'DELETE', headers: authHeaders }).catch(() => {})
     } else {
-      await fetch('/api/cm/folders/bookmarks', { method: 'POST', headers: authHeadersJson, body: JSON.stringify({ entity_type: entityType, entity_id: item.id }) }).catch(() => {})
+      await httpFetch('/api/cm/folders/bookmarks', { method: 'POST', headers: authHeadersJson, body: JSON.stringify({ entity_type: entityType, entity_id: item.id }) }).catch(() => {})
     }
     loadBookmarks()
   }
@@ -39,7 +40,7 @@ export default function BrowseSection({ token }) {
     const endpoint = contentType === 'documents'
       ? `/api/cm/documents?status=Published&search=${encodeURIComponent(search)}&limit=50`
       : `/api/cm/faqs?status=Published&search=${encodeURIComponent(search)}&limit=50`
-    fetch(endpoint, { headers: authHeaders })
+    httpFetch(endpoint, { headers: authHeaders })
       .then(r => r.json())
       .then(d => setItems(d.documents || d.faqs || []))
       .catch(() => setItems([]))
@@ -52,7 +53,7 @@ export default function BrowseSection({ token }) {
     const endpoint = contentType === 'documents'
       ? `/api/cm/documents/${item.id}`
       : `/api/cm/faqs/${item.id}`
-    const r = await fetch(endpoint, { headers: authHeaders }).then(x => x.json()).catch(() => item)
+    const r = await httpFetch(endpoint, { headers: authHeaders }).then(x => x.json()).catch(() => item)
     setSelectedItem(r.document || r.faq || r)
     setDetailLoading(false)
   }
@@ -90,7 +91,7 @@ export default function BrowseSection({ token }) {
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 8 }}>[{b.entity_type}]</span>
                   <span style={{ fontWeight: 500 }}>{b.entity_name || `ID ${b.entity_id}`}</span>
                 </div>
-                <button onClick={async () => { await fetch(`/api/cm/folders/bookmarks/${b.id}`, { method: 'DELETE', headers: authHeaders }); loadBookmarks() }}
+                <button onClick={async () => { await httpFetch(`/api/cm/folders/bookmarks/${b.id}`, { method: 'DELETE', headers: authHeaders }); loadBookmarks() }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--warning, #f59e0b)' }}>★</button>
               </div>
             ))

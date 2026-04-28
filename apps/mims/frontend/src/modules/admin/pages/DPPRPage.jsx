@@ -3,6 +3,7 @@ import { confirm } from '../../../shared/utils/confirm'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './DPPRPage.css'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const ACTION_OPTIONS = ['None', 'Anonymize', 'Delete']
 const CONTACT_TYPES  = ['all', 'HCP', 'Patient', 'Other']
@@ -55,7 +56,7 @@ export default function DPPRPage() {
 
   const fetchDomains = useCallback(async () => {
     try {
-      const data = await fetch('/api/admin/dppr/domains', { headers: H }).then(r => r.json())
+      const data = await httpFetch('/api/admin/dppr/domains', { headers: H }).then(r => r.json())
       setDomains(data.domains || [])
     } catch (_) {}
   }, [token])
@@ -63,7 +64,7 @@ export default function DPPRPage() {
   const fetchRules = useCallback(async (p = page) => {
     setLoading(true)
     try {
-      const data = await fetch(`/api/admin/dppr?page=${p}&limit=${LIMIT}`, { headers: H }).then(r => r.json())
+      const data = await httpFetch(`/api/admin/dppr?page=${p}&limit=${LIMIT}`, { headers: H }).then(r => r.json())
       setRules(data.rules || [])
       setTotal(data.total || 0)
     } catch (e) { setError(e.message) }
@@ -72,7 +73,7 @@ export default function DPPRPage() {
 
   const fetchLog = useCallback(async (p = logPage) => {
     try {
-      const data = await fetch(`/api/admin/dppr/execution-log?page=${p}&limit=${LIMIT}`, { headers: H }).then(r => r.json())
+      const data = await httpFetch(`/api/admin/dppr/execution-log?page=${p}&limit=${LIMIT}`, { headers: H }).then(r => r.json())
       setExecLog(data.logs || [])
       setLogTotal(data.total || 0)
     } catch (_) {}
@@ -107,7 +108,7 @@ export default function DPPRPage() {
     try {
       const url    = editing ? `/api/admin/dppr/${editing.id}` : '/api/admin/dppr'
       const method = editing ? 'PUT' : 'POST'
-      const res    = await fetch(url, {
+      const res    = await httpFetch(url, {
         method, headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
@@ -122,21 +123,21 @@ export default function DPPRPage() {
 
   async function toggleRule(rule) {
     try {
-      await fetch(`/api/admin/dppr/${rule.id}/toggle`, { method: 'PATCH', headers: H })
+      await httpFetch(`/api/admin/dppr/${rule.id}/toggle`, { method: 'PATCH', headers: H })
       fetchRules(page)
     } catch (_) {}
   }
 
   async function deleteRule(rule) {
     if (!await confirm(`Deactivate rule "${rule.rule_name}"?`)) return
-    await fetch(`/api/admin/dppr/${rule.id}`, { method: 'DELETE', headers: H })
+    await httpFetch(`/api/admin/dppr/${rule.id}`, { method: 'DELETE', headers: H })
     fetchRules(page)
   }
 
   async function runNow() {
     setRunning(true); setRunResult(null); setError(null)
     try {
-      const res  = await fetch('/api/admin/dppr/run-now', {
+      const res  = await httpFetch('/api/admin/dppr/run-now', {
         method: 'POST', headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })

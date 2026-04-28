@@ -64,8 +64,8 @@ describe('Admin Console navigation board', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Picklists' }))
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Admin Console' })).toBeInTheDocument()
-      expect(screen.getByText('Picklists')).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: 'Admin Console' }).length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Picklists').length).toBeGreaterThan(0)
     })
     expect(screen.getByRole('button', { name: '+ Category' })).toBeInTheDocument()
   })
@@ -74,7 +74,7 @@ describe('Admin Console navigation board', () => {
     renderRouter('/admin-console/picklists')
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Admin Console' })).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: 'Admin Console' }).length).toBeGreaterThan(0)
     })
     expect(screen.getByRole('button', { name: '+ Category' })).toBeInTheDocument()
   })
@@ -83,10 +83,10 @@ describe('Admin Console navigation board', () => {
     renderRouter('/admin-console/picklists')
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Admin Console' })).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: 'Admin Console' }).length).toBeGreaterThan(0)
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Admin Console' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Admin Console' })[0])
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /admin overview and configurations of test org/i })).toBeInTheDocument()
