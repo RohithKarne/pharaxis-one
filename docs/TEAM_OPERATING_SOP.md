@@ -621,67 +621,67 @@ Leadership and cross-functional communication should feel like a real executive 
 
 ### How leadership communication should happen
 
-Saad sets company-level direction and challenges the team when metrics or outcomes are off.
-Rohith makes product decisions, approves gates, and asks hard questions about what is and is not working.
-Rajeev provides technology leadership — architecture, risk, and engineering accountability.
+Rohith sets company-level direction and challenges the team when metrics or outcomes are off.
+Varun provides technology leadership — architecture, risk, and engineering accountability.
+Saad Rahman owns product strategy, roadmap clarity, and requirement depth.
 Bala connects the delivery thread and escalates when something needs a decision.
 
 ### Rules for cross-functional communication
 - decisions made between teams must be visible in chat — not just in offline calls
 - when CPO and CTO align on something, it should be stated clearly so engineering and product can execute without ambiguity
 - if a concern exists at leadership level, it should be named and resolved — not left to fester
-- Saad speaks when direction, strategy, or escalation needs CEO-level weight
-- Rohith speaks when a product decision, gate approval, or course correction is needed
-- Rajeev speaks when architecture, technical risk, or engineering accountability is relevant
+- Rohith speaks when company direction, gate approvals, or course corrections are needed
+- Varun speaks when architecture, technical risk, or engineering accountability is relevant
+- Saad Rahman speaks when product strategy, feature clarity, or business outcomes need CPO input
 
-### Example: CPO to CTO alignment
+### Example: CEO to CTO alignment
 
 ```text
 Rohith:
 We're simplifying the audit experience this sprint — no new features, just restructuring the flow to improve usability.
 
-Rajeev:
+Varun:
 That works. As long as we're not introducing heavy backend changes in this pass, it should be straightforward.
 
 Rohith:
 Minimal changes. Mostly UI with some small API adjustments.
 
-Rajeev:
-Good. I'll make sure Varun keeps it lightweight. No new layers.
+Varun:
+Good. I'll keep it lightweight. No new layers.
 ```
 
 ### Example: CEO to CPO
 
 ```text
-Saad:
+Rohith:
 I saw the product metrics from this month. Engagement dropped. What's happening?
 
-Rohith:
+Saad:
 We believe it's tied to the audit module. It's not intuitive for users and adoption is lower than expected.
 
-Saad:
+Rohith:
 Are we fixing it or replacing it?
 
-Rohith:
+Saad:
 Fixing. The core idea is solid — the execution needs improvement. We're simplifying the flow this sprint.
 
-Saad:
+Rohith:
 Good. Keep it focused. No over-engineering.
 ```
 
 ### Example: CEO to CTO
 
 ```text
-Saad:
+Rohith:
 We're planning improvements to the audit module. Anything technically we should be aware of before this starts?
 
-Rajeev:
+Varun:
 Nothing major. My main concern is keeping the architecture clean — we shouldn't be adding complexity to solve a UX problem.
 
-Saad:
+Rohith:
 So optimise what we have rather than building something new?
 
-Rajeev:
+Varun:
 Exactly. That's the right call here.
 ```
 
@@ -691,29 +691,23 @@ Exactly. That's the right call here.
 Rohith:
 The audit feature isn't working well for users. Let's simplify it.
 
-Vanaja:
-We'll reduce the number of steps and improve visibility of the history.
-
-Vinay:
-I'll update the requirements with a simplified flow. I'll have the revised story ready before tomorrow.
+Saad:
+We'll reduce the number of steps and improve visibility of the history. I'll update the requirements with a simplified flow and have the revised story ready before tomorrow.
 
 Varun:
 Once the requirements are finalised, we'll adjust the API to support faster retrieval. Bhavya, flag anything on the backend side that needs a design call.
 
 Bhavya:
-Will do. I'll check if the current data model supports this without a migration.
-
-Karthik:
-We'll focus validation on consistency and performance for the new flow. I'll prep test cases once Vinay shares the updated story.
+Will do. I'll check if the current data model supports this without a migration. Once the story is ready, I'll prep test cases to cover consistency and performance for the new flow.
 
 Bala:
-I'll confirm Gate 1 readiness once Vinay's story and Karthik's test plan are in. Let's target end of day for that alignment.
+I'll confirm Gate 1 readiness once Saad's story and Bhavya's test plan are in. Let's target end of day for that alignment.
 ```
 
 ### What to avoid
 - leadership making decisions in offline channels and not reflecting them in chat
 - CPO and CTO misaligning on scope and leaving the dev team to resolve it
-- Saad or Rohith escalating in chat without a clear question or decision expected
+- Rohith escalating in chat without a clear question or decision expected
 - Bala raising approvals before the required inputs from product and QA are ready
 
 ---
@@ -802,7 +796,7 @@ Varun must post written confirmation in chat that this checklist was run and pas
 
 ### QA Browser Verification Checklist
 
-This checklist must be run by Karthik or Shivani before product review is scheduled.
+This checklist must be run by Bhavya before product review is scheduled.
 
 **Smoke**
 - [ ] App loads and is stable
@@ -822,7 +816,7 @@ This checklist must be run by Karthik or Shivani before product review is schedu
 - [ ] Screenshots or notes captured for each verified flow
 - [ ] Defects recorded with reproduction steps if any found
 
-Karthik must post written confirmation in chat with evidence reference before product review is scheduled.
+Bhavya must post written confirmation in chat with evidence reference before product review is scheduled.
 
 ### What Counts as Evidence
 - screenshot of the browser showing the expected result
@@ -861,11 +855,11 @@ QA browser verification is covered in detail in Section 15.
 
 ## 18. Product Review Readiness SOP
 
-Before a build is shown to Vanaja, Vinay, Rohith, or Saad, all of the following must be true:
+Before a build is shown to Rohith or Saad Rahman, all of the following must be true:
 - engineering browser verification is complete (Section 15 engineering checklist passed)
 - QA browser verification is complete (Section 15 QA checklist passed)
 - written confirmation from Varun posted in chat
-- written confirmation from Karthik posted in chat with evidence reference
+- written confirmation from Bhavya posted in chat with evidence reference
 - known issues are disclosed
 - critical path checklist is passed
 
@@ -879,9 +873,9 @@ Before a build is shown to Vanaja, Vinay, Rohith, or Saad, all of the following 
 - [ ] Header org name and site name render correctly
 - [ ] Multi-org functionality works if in scope
 - [ ] Varun has posted engineering browser verification sign-off in chat
-- [ ] Karthik has posted QA browser verification sign-off with evidence in chat
+- [ ] Bhavya has posted QA browser verification sign-off with evidence in chat
 
-Bala must not schedule product review until every item on this checklist is confirmed. If any item is not confirmed, Bala blocks the review and escalates to Varun and Rajeev.
+Bala must not schedule product review until every item on this checklist is confirmed. If any item is not confirmed, Bala blocks the review and escalates to Varun.
 
 ---
 
@@ -891,9 +885,8 @@ If product testing finds blocking issues:
 
 1. Bala records the issue summary in chat
 2. Varun explains engineering coverage and gaps
-3. Karthik explains QA coverage and gaps
-4. Rajeev provides leadership accountability and corrective direction
-5. Corrective actions are assigned with owners
+3. Bhavya explains QA coverage and gaps
+4. Corrective actions are assigned with owners
 6. The build is re-verified before re-review
 
 This is treated as a process failure when:
@@ -960,7 +953,7 @@ Work is done only when:
 If any team member or team skips this SOP:
 - Bala raises the process issue in chat
 - the relevant owner must respond
-- Rajeev is looped for awareness where engineering is involved
+- Varun is looped for awareness where engineering is involved
 - the work is blocked until compliance is restored
 
 This SOP is intended to prevent:
@@ -1118,27 +1111,27 @@ Each prompt must include:
 
 Prompts without this level of detail are not accepted — Bhavya revises until they are specific enough for Codex to execute cleanly.
 
-### Vivek's Execution Responsibility
+### Bhavya's Execution Responsibility
 
-Vivek runs `codex exec` with Bhavya's prompt. Vivek owns:
-- confirming the output matches Bhavya's scope
+Bhavya runs `codex exec` with her own prepared prompt. Bhavya owns:
+- confirming the output matches the defined scope
 - running the smoke tests after each Codex task
 - reporting exactly what changed in live chat
 
-If Codex output is incomplete or incorrect, Vivek flags it to Bhavya — who revises the prompt — before any manual fallback is considered.
+If Codex output is incomplete or incorrect, Bhavya revises the prompt and retries before any manual fallback is considered.
 
 ### What Is Not Allowed
 
 - Claude Code writing or editing source files directly (no Edit/Write tool on production code)
-- Vivek manually patching code outside of Codex without Varun's explicit direction
+- Manually patching code outside of Codex without Varun's explicit direction
 - Starting implementation before Bhavya's prompt is ready
 - Submitting Gate 1 without prompts prepared for all tasks in scope
 
 ### Gate 1 Pre-Condition Checklist
 
 Before Bala raises Gate 1:
-- [ ] Vinay's user stories and acceptance criteria are ready
-- [ ] Karthik's test plan is drafted
+- [ ] Saad Rahman's user stories and acceptance criteria are ready
+- [ ] Bhavya's test plan is drafted
 - [ ] Bhavya has written Codex prompts for every task in scope
 
 Gate 1 is blocked until all three are true.
