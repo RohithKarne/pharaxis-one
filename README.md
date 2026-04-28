@@ -1,7 +1,7 @@
 # Pharaxis-One
 
 Pharaxis-One is a multi-application monorepo for medical-affairs and platform products.
-It currently includes MIMS, CP Portal, AI-Agent, Vault, QMS, and Safety with shared operating standards across MySQL and PostgreSQL services.
+It currently includes MIMS, CP Portal, AI-Agent, Vault, and QMS with shared operating standards across MySQL and PostgreSQL services.
 
 ## What This Repository Contains
 
@@ -14,27 +14,21 @@ It currently includes MIMS, CP Portal, AI-Agent, Vault, QMS, and Safety with sha
 
 | App | Path | Purpose | Runtime |
 |---|---|---|---|
-| MIMS | `apps/medical-affairs/mims` | Medical Information Management System for case operations, inbox, admin, reporting | Backend: Node/Express + MySQL, Frontend: React/Vite |
-| CP Portal | `apps/medical-affairs/cp-portal` | Admin + public portal experience for external submissions/content | Backend: Node/Express + MySQL, Frontend: React/Vite |
-| Publications | `apps/medical-affairs/publications` | Publication lifecycle management for concept-to-publication workflows | Backend: Node/Express + MySQL, Frontend: React/Vite |
+| MIMS | `apps/mims` | Medical Information Management System for case operations, inbox, admin, reporting | Backend: Node/Express + MySQL, Frontend: React/Vite |
+| CP Portal | `apps/cp-portal` | Admin + public portal experience for external submissions/content | Backend: Node/Express + MySQL, Frontend: React/Vite |
 | AI-Agent | `apps/ai-agent` | Provider-agnostic AI query service and admin controls | Backend: Node/Express + MySQL, Frontend: React/Vite |
 | Vault | `apps/vault` | Content/document vault foundations with auth + superadmin flows | Backend: Node/Express + MySQL, Frontend: React/Vite |
-| QMS | `apps/qms` | Quality Management System baseline delivered in Sprint 1 (auth/superadmin, document control, CAPA, deviations, audits, validation) | Backend: Node/Express + PostgreSQL, Frontend: Vue/Vite + Tailwind |
-| Safety | `apps/safety` | Safety platform delivered in Sprint 1 + Sprint 2 (auth/admin/config + case management, regulatory workflows, narratives, listedness) | Backend: Node/Express + MySQL, Frontend: React/Vite |
+| QMS | `apps/qms` | Quality Management System baseline (auth/superadmin, document control, CAPA, deviations, audits, validation) | Backend: Node/Express + PostgreSQL, Frontend: Vue/Vite + Tailwind |
 
 ## Repository Structure
 
 ```text
 apps/
+  mims/
+  cp-portal/
   ai-agent/
-  medical-affairs/
-    cp-portal/
-    ieg/
-    mims/
-    publications/
-  qms/
-  safety/
   vault/
+  qms/
 .github/
 docs/
 ```
@@ -54,29 +48,24 @@ docs/
 Install per app:
 
 ```bash
-cd apps/medical-affairs/mims && npm install
-cd apps/medical-affairs/cp-portal/backend && npm install
-cd apps/medical-affairs/cp-portal/frontend && npm install
-cd apps/medical-affairs/publications && npm install
-cd apps/medical-affairs/publications/frontend && npm install
+cd apps/mims && npm install
+cd apps/cp-portal/backend && npm install
+cd apps/cp-portal/frontend && npm install
 cd apps/ai-agent && npm install
 cd apps/vault && npm install
 cd apps/qms/backend && npm install
 cd apps/qms/frontend && npm install
-cd apps/safety && npm install
-cd apps/safety/frontend && npm install
 ```
 
 ### 2) Configure Environment Variables
 
 Copy sample env files where provided:
 
-- `apps/medical-affairs/mims/.env.example`
-- `apps/medical-affairs/cp-portal/backend/.env.example`
+- `apps/mims/.env.example`
+- `apps/cp-portal/backend/.env.example`
 - `apps/ai-agent/.env.example`
 - `apps/vault/.env.example`
 - `apps/qms/backend/.env.example`
-- `apps/safety/.env.example`
 
 ### 3) Create Databases
 
@@ -85,10 +74,8 @@ Default local DBs used by the code:
 MySQL:
 - `pharaxis_mims_dev`
 - `pharaxis_cp_portal_dev`
-- `pharaxis_publications_dev`
 - `pharaxis_ai_agent_dev`
 - `pharaxis_vault_dev`
-- `pharaxis_safety_dev`
 
 PostgreSQL:
 - `qms_dev` (QMS default from `DATABASE_URL`)
@@ -97,17 +84,14 @@ PostgreSQL:
 
 ```bash
 # MIMS
-cd apps/medical-affairs/mims && npm run dev:all
+cd apps/mims && npm run dev:all
 
 # CP Portal
-cd apps/medical-affairs/cp-portal/backend && npm run dev
-cd apps/medical-affairs/cp-portal/frontend && npm run dev
+cd apps/cp-portal/backend && npm run dev
+cd apps/cp-portal/frontend && npm run dev
 
 # AI-Agent
 cd apps/ai-agent && npm run dev:all
-
-# Publications
-cd apps/medical-affairs/publications && npm run dev:all
 
 # Vault
 cd apps/vault && npm run dev:all
@@ -115,39 +99,33 @@ cd apps/vault && npm run dev:all
 # QMS
 cd apps/qms/backend && npm run dev
 cd apps/qms/frontend && npm run dev
-
-# Safety
-cd apps/safety && npm run dev:all
 ```
 
 ## Default Local Ports
 
 - MIMS backend: `3000`
 - CP Portal backend: `4000`
-- Publications backend: `5310`
-- Vault backend: `5000`
+- Vault backend: `5100`
 - AI-Agent backend: `6000`
 - QMS backend: `3145`
-- Safety backend: `5200`
-- CP Portal frontend: `5174` (explicit)
+- CP Portal frontend: `5174`
+- MIMS frontend: `5173`
+- Vault frontend: `5176`
+- AI-Agent frontend: `5175`
 - QMS frontend: `3146`
-- Safety frontend: `5177`
-- Publications frontend: `5179`
-- Other Vite apps: Vite default unless overridden
 
 ## Health Endpoints
 
 - MIMS: `GET /api/health` on port `3000`
 - CP Portal: `GET /api/health` on port `4000`
-- Publications: `GET /api/health` on port `5310`
-- Vault: `GET /api/health` on port `5000`
+- Vault: `GET /api/health` on port `5100`
 - AI-Agent: `GET /api/v1/agent/health` on port `6000`
 - QMS: `GET /api/health` on port `3145`
-- Safety: `GET /api/health` on port `5200`
 
 ## CI/CD and Automation
 
 - CI workflow: `.github/workflows/ci.yml`
+- Deploy workflow: `.github/workflows/deploy.yml`
 - Release workflow: `.github/workflows/release.yml`
 - Dependency updates: `.github/dependabot.yml`
 
@@ -156,15 +134,7 @@ cd apps/safety && npm run dev:all
 - Project overview: [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Database details: [docs/DB_DETAILS.md](docs/DB_DETAILS.md)
-- Team operating SOP: [docs/TEAM_OPERATING_SOP.md](docs/TEAM_OPERATING_SOP.md)
-- Live communication format: [docs/live-communication-use-and-format.md](docs/live-communication-use-and-format.md)
 
 ## Security and Governance
 
 - Security policy: [SECURITY.md](SECURITY.md)
-- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Code ownership: [CODEOWNERS](CODEOWNERS)
-
-## Repository Rename Note
-
-This repository was previously under `MIMS-CP-Portal` and is now maintained as `Pharaxis-One`.

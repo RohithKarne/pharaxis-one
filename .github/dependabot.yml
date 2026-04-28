@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: "npm"
-    directory: "/apps/medical-affairs/mims"
+    directory: "/apps/mims"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -9,7 +9,7 @@ updates:
     labels: ["dependencies", "mims"]
 
   - package-ecosystem: "npm"
-    directory: "/apps/medical-affairs/mims/frontend"
+    directory: "/apps/mims/frontend"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -17,7 +17,7 @@ updates:
     labels: ["dependencies", "mims", "frontend"]
 
   - package-ecosystem: "npm"
-    directory: "/apps/medical-affairs/cp-portal/backend"
+    directory: "/apps/cp-portal/backend"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -25,7 +25,7 @@ updates:
     labels: ["dependencies", "cp-portal", "backend"]
 
   - package-ecosystem: "npm"
-    directory: "/apps/medical-affairs/cp-portal/frontend"
+    directory: "/apps/cp-portal/frontend"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -63,6 +63,22 @@ updates:
       day: "monday"
     open-pull-requests-limit: 5
     labels: ["dependencies", "vault", "frontend"]
+
+  - package-ecosystem: "npm"
+    directory: "/apps/qms/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "qms", "backend"]
+
+  - package-ecosystem: "npm"
+    directory: "/apps/qms/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "qms", "frontend"]
 
   - package-ecosystem: "github-actions"
     directory: "/"

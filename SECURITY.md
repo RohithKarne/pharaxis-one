@@ -4,10 +4,11 @@
 
 Security reports are accepted for all actively maintained services in this repository:
 
-- `apps/medical-affairs/mims`
-- `apps/medical-affairs/cp-portal`
+- `apps/mims`
+- `apps/cp-portal`
 - `apps/ai-agent`
 - `apps/vault`
+- `apps/qms`
 
 ## How To Report a Vulnerability
 

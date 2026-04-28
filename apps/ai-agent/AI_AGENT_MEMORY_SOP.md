@@ -81,8 +81,8 @@ AI is an opt-in feature enabled at contract level.
 | `apps/ai-agent/frontend/src/pages/DashboardPage/index.jsx` | Superadmin dashboard |
 | `apps/ai-agent/frontend/src/pages/OrgsPage/index.jsx` | Org management + enable/disable |
 | `apps/ai-agent/frontend/src/pages/UsagePage/index.jsx` | Platform-wide usage log |
-| `apps/medical-affairs/cp-portal/backend/routes/admin/aiProxy.js` | CP Portal → AI-Agent proxy |
-| `apps/medical-affairs/cp-portal/frontend/src/admin/pages/AIConfigPage.jsx` | CP Portal AI config admin page |
+| `apps/cp-portal/backend/routes/admin/aiProxy.js` | CP Portal → AI-Agent proxy |
+| `apps/cp-portal/frontend/src/admin/pages/AIConfigPage.jsx` | CP Portal AI config admin page |
 
 ---
 

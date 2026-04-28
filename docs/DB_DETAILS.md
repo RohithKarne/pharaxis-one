@@ -4,7 +4,7 @@ This document defines the current database setup used by Pharaxis-One services.
 
 ## Database Engines
 
-- MySQL 8+ for MIMS, CP Portal, Publications, AI-Agent, Vault, and Safety
+- MySQL 8+ for MIMS, CP Portal, AI-Agent, and Vault
 - PostgreSQL 14+ for QMS
 - Pattern: one logical database per service
 
@@ -26,12 +26,10 @@ PostgreSQL services:
 
 | Service | Engine | Database | Config Path |
 |---|---|---|---|
-| MIMS | MySQL | `pharaxis_mims_dev` | `apps/medical-affairs/mims/backend/database/db.js` |
-| CP Portal | MySQL | `pharaxis_cp_portal_dev` | `apps/medical-affairs/cp-portal/backend/database/db.js` |
-| Publications | MySQL | `pharaxis_publications_dev` | `apps/medical-affairs/publications/backend/database/db.js` |
+| MIMS | MySQL | `pharaxis_mims_dev` | `apps/mims/backend/database/db.js` |
+| CP Portal | MySQL | `pharaxis_cp_portal_dev` | `apps/cp-portal/backend/database/db.js` |
 | AI-Agent | MySQL | `pharaxis_ai_agent_dev` | `apps/ai-agent/backend/database/db.js` |
 | Vault | MySQL | `pharaxis_vault_dev` | `apps/vault/backend/database/db.js` |
-| Safety | MySQL | `pharaxis_safety_dev` | `apps/safety/backend/database/db.js` |
 | QMS | PostgreSQL | `qms_dev` (local default via `DATABASE_URL`) | `apps/qms/backend/src/db/pool.js` |
 
 ## Initialization Behavior
@@ -45,8 +43,6 @@ PostgreSQL services:
 
 - MIMS bootstrap account: `superadmin` (initial default password exists in code)
 - CP Portal bootstrap account: `cpadmin` (initial default password exists in code)
-- Publications bootstrap account: `superadmin.publications@pharaxis.one` (default local password in app README/env example)
-- Safety bootstrap account: `safety.superadmin@pharaxis.one` (default local password in app README/env example)
 - QMS JWT-path local login: `admin@pharaxis.local` with org code `PHA_DEV` (see `apps/qms/README.md`)
 
 Important:
@@ -59,10 +55,8 @@ Important:
 2. Create service databases:
    - `pharaxis_mims_dev`
    - `pharaxis_cp_portal_dev`
-   - `pharaxis_publications_dev`
    - `pharaxis_ai_agent_dev`
    - `pharaxis_vault_dev`
-   - `pharaxis_safety_dev`
    - `qms_dev` (or your configured PostgreSQL DB from `DATABASE_URL`)
 3. Copy `.env.example` to `.env` for each service.
 4. Set `MYSQL_*` values for MySQL services and `DATABASE_URL` for QMS.
