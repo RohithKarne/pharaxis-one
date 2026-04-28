@@ -3,7 +3,7 @@
 > Requested by Rohith
 > Purpose: define how the full team operates across structure, protocols, approvals, live communication, and execution discipline.
 > Revision update: 2026-03-30 (communication-quality addendum merged from `TEAM_OPERATING_SOP (Updated).md`)
-> Revision update: 2026-03-31 (Section 25 added — Codex + Claude Code tooling workflow. Tooling protocol added to Section 7. Engineering execution step updated in Section 8.)
+> Revision update: 2026-03-31 (Section 25 added — engineering tooling workflow. Tooling protocol added to Section 7. Engineering execution step updated in Section 8.)
 > Revision update: 2026-04-14 (Team restructured by Rohith. Reduced to 5-person team. Full names added. Roles updated.)
 
 ---
@@ -143,13 +143,11 @@ The team must follow these protocol groups at all times:
 - scope must stay controlled
 - lessons must be captured after corrections
 
-### Tooling Protocol — Codex + Claude Code Split (mandatory from Sprint 10)
-- **Codex CLI writes all code** — every implementation, edit, test generation, and code fix must go through `codex exec`
-- **Claude Code is architecture and coordination only** — analysis, planning, route tracing, code reading, prompt preparation
-- **Pre-written Codex prompts are a Gate 1 pre-condition** — Bhavya prepares a prompt per task before Gate 1 is raised. No Gate 1 without prompts ready.
-- Prompts must include: exact file paths, line numbers, function names, column names, and the full change instruction
-- Claude Code must never write or edit production code files directly using Edit or Write tools
-- If Codex fails on a task, Bhavya investigates the failure, revises the prompt, and retries — not falls back to manual editing
+### Tooling Protocol
+- Bhavya owns implementation — analysis, design, and code execution
+- pre-written task scopes are a Gate 1 pre-condition — Bhavya prepares a detailed scope per task before Gate 1 is raised
+- task scopes must include: exact file paths, function names, field names, and the full change instruction
+- no implementation starts without a clear, reviewed scope
 
 ### QA Protocol
 - QA plans before execution
@@ -175,7 +173,7 @@ Saad Rahman defines the feature with user story, acceptance criteria, edge cases
 Bala Kaviti confirms the work is clear enough to move forward.
 
 3. Technical and QA discussion
-Varun Karne and Bhavya Bobba review scope in chat. Bhavya flags any architecture concerns and prepares the Codex prompt.
+Varun Karne and Bhavya Bobba review scope in chat. Bhavya flags any architecture concerns and prepares the task scope.
 
 4. Test planning
 Bhavya Bobba prepares test cases before development starts.
@@ -186,9 +184,7 @@ Development starts only after approval.
 
 6. Engineering execution
 Varun Karne assigns work explicitly.
-Bhavya Bobba provides analysis and writes the Codex prompt for each task.
-Bhavya runs `codex exec` with the prompt and owns the output.
-All code changes go through Codex CLI — never written manually by Claude Code.
+Bhavya Bobba provides analysis, writes the task scope, and owns the implementation and output.
 
 7. Engineering verification
 Bhavya Bobba verifies the changed behavior and the critical paths around it. Browser verification included.
@@ -295,7 +291,7 @@ The expectation is:
 ### How live communication should happen
 
 Varun should lead like a director driving the discussion, assigning work, asking follow-up questions, and closing direction when needed.
-Bhavya should respond with analysis, findings, risks, or design direction — and owns implementation through Codex execution.
+Bhavya should respond with analysis, findings, risks, or design direction — and owns implementation.
 
 The team should speak naturally in chat, for example:
 
@@ -1072,66 +1068,44 @@ Direction:
 
 ---
 
-## 25. Engineering Tooling SOP — Codex + Claude Code Workflow
+## 25. Engineering Tooling SOP
 
-> Established: 2026-03-31. Mandated by Rohith. Applies from Sprint 10 onward.
+> Established: 2026-03-31. Mandated by Rohith.
 
 ### Principle
 
-Claude Code and Codex CLI serve distinct roles. Neither substitutes for the other.
+Bhavya owns the full implementation cycle — analysis, scoping, execution, verification, and reporting.
 
-| Role | Tool |
-|------|------|
-| Code reading, route tracing, codebase analysis | Claude Code |
-| Architecture decisions, planning, prompt preparation | Claude Code (Bhavya) |
-| Live communication, gate management, coordination | Claude Code |
-| All code writing, editing, test file generation | Codex CLI (`codex exec`) |
-| Code fixes, refactors, file-level changes | Codex CLI |
+### Bhavya's Task Scope Responsibility
 
-### Codex CLI — How to Run
+Before each sprint Gate 1, Bhavya must deliver a written task scope for every task in that sprint.
 
-```bash
-codex exec -c 'sandbox_permissions=["disk-full-read-access", "disk-write-access"]' "your prompt here"
-```
-
-- Run from the project root: `/Users/rohithkarne/Pharaxis-One/`
-- Prompt must be specific enough to execute without ambiguity
-- Non-interactive — must include everything needed in the prompt itself
-
-### Bhavya's Prompt Preparation Responsibility
-
-Before each sprint Gate 1, Bhavya must deliver pre-written Codex prompts for every task in that sprint.
-
-Each prompt must include:
+Each scope must include:
 - what file to edit (full relative path)
 - what function, route, or component to target
 - what exact change to make (column names, field names, logic rules)
 - what to leave unchanged
 - what to verify after the change
 
-Prompts without this level of detail are not accepted — Bhavya revises until they are specific enough for Codex to execute cleanly.
+Scopes without this level of detail are not accepted — Bhavya revises until they are specific enough to execute cleanly.
 
 ### Bhavya's Execution Responsibility
 
-Bhavya runs `codex exec` with her own prepared prompt. Bhavya owns:
-- confirming the output matches the defined scope
-- running the smoke tests after each Codex task
+Bhavya owns:
+- implementing the change per the defined scope
+- running the smoke tests after each task
 - reporting exactly what changed in live chat
-
-If Codex output is incomplete or incorrect, Bhavya revises the prompt and retries before any manual fallback is considered.
 
 ### What Is Not Allowed
 
-- Claude Code writing or editing source files directly (no Edit/Write tool on production code)
-- Manually patching code outside of Codex without Varun's explicit direction
-- Starting implementation before Bhavya's prompt is ready
-- Submitting Gate 1 without prompts prepared for all tasks in scope
+- Starting implementation before the task scope is ready
+- Submitting Gate 1 without task scopes prepared for all tasks in scope
 
 ### Gate 1 Pre-Condition Checklist
 
 Before Bala raises Gate 1:
 - [ ] Saad Rahman's user stories and acceptance criteria are ready
 - [ ] Bhavya's test plan is drafted
-- [ ] Bhavya has written Codex prompts for every task in scope
+- [ ] Bhavya has written task scopes for every task in scope
 
 Gate 1 is blocked until all three are true.
