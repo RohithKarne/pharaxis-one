@@ -10,15 +10,12 @@ jobs:
     name: Detect changed apps
     runs-on: ubuntu-latest
     outputs:
-      mims:         ${{ steps.changes.outputs.mims }}
-      cp_portal:    ${{ steps.changes.outputs.cp_portal }}
-      ieg:          ${{ steps.changes.outputs.ieg }}
-      publications: ${{ steps.changes.outputs.publications }}
-      safety:       ${{ steps.changes.outputs.safety }}
-      vault:        ${{ steps.changes.outputs.vault }}
-      ai_agent:     ${{ steps.changes.outputs.ai_agent }}
-      qms:          ${{ steps.changes.outputs.qms }}
-      backend:      ${{ steps.changes.outputs.backend }}
+      mims:      ${{ steps.changes.outputs.mims }}
+      cp_portal: ${{ steps.changes.outputs.cp_portal }}
+      vault:     ${{ steps.changes.outputs.vault }}
+      ai_agent:  ${{ steps.changes.outputs.ai_agent }}
+      qms:       ${{ steps.changes.outputs.qms }}
+      backend:   ${{ steps.changes.outputs.backend }}
 
     steps:
       - name: Checkout
@@ -34,17 +31,14 @@ jobs:
 
           flag() { echo "$CHANGED" | grep -q "^$1" && echo "true" || echo "false"; }
 
-          echo "mims=$(flag 'apps/medical-affairs/mims')"                   >> $GITHUB_OUTPUT
-          echo "cp_portal=$(flag 'apps/medical-affairs/cp-portal')"         >> $GITHUB_OUTPUT
-          echo "ieg=$(flag 'apps/medical-affairs/ieg')"                     >> $GITHUB_OUTPUT
-          echo "publications=$(flag 'apps/medical-affairs/publications')"   >> $GITHUB_OUTPUT
-          echo "safety=$(flag 'apps/safety')"                               >> $GITHUB_OUTPUT
-          echo "vault=$(flag 'apps/vault')"                                 >> $GITHUB_OUTPUT
-          echo "ai_agent=$(flag 'apps/ai-agent')"                           >> $GITHUB_OUTPUT
-          echo "qms=$(flag 'apps/qms')"                                     >> $GITHUB_OUTPUT
+          echo "mims=$(flag 'apps/mims')"         >> $GITHUB_OUTPUT
+          echo "cp_portal=$(flag 'apps/cp-portal')" >> $GITHUB_OUTPUT
+          echo "vault=$(flag 'apps/vault')"        >> $GITHUB_OUTPUT
+          echo "ai_agent=$(flag 'apps/ai-agent')"  >> $GITHUB_OUTPUT
+          echo "qms=$(flag 'apps/qms')"            >> $GITHUB_OUTPUT
 
           BACKEND=$(echo "$CHANGED" | grep -qE '^apps/.*/backend' && echo "true" || echo "false")
-          echo "backend=$BACKEND"                                            >> $GITHUB_OUTPUT
+          echo "backend=$BACKEND"                  >> $GITHUB_OUTPUT
 
   # ─────────────────────────────────────────────────────────────────────────
   # BUILD PHASE — runs on GitHub runner (7GB RAM, 2 CPU, fast)
@@ -62,15 +56,15 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: apps/medical-affairs/mims/frontend/package-lock.json
+          cache-dependency-path: apps/mims/frontend/package-lock.json
       - run: npm ci
-        working-directory: apps/medical-affairs/mims/frontend
+        working-directory: apps/mims/frontend
       - run: npm run build
-        working-directory: apps/medical-affairs/mims/frontend
+        working-directory: apps/mims/frontend
       - uses: actions/upload-artifact@v4
         with:
           name: dist-mims
-          path: apps/medical-affairs/mims/frontend/dist/
+          path: apps/mims/frontend/dist/
           retention-days: 1
 
   build-cp-portal:
@@ -84,81 +78,15 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: apps/medical-affairs/cp-portal/frontend/package-lock.json
+          cache-dependency-path: apps/cp-portal/frontend/package-lock.json
       - run: npm ci
-        working-directory: apps/medical-affairs/cp-portal/frontend
+        working-directory: apps/cp-portal/frontend
       - run: npm run build
-        working-directory: apps/medical-affairs/cp-portal/frontend
+        working-directory: apps/cp-portal/frontend
       - uses: actions/upload-artifact@v4
         with:
           name: dist-cp-portal
-          path: apps/medical-affairs/cp-portal/frontend/dist/
-          retention-days: 1
-
-  build-ieg:
-    name: Build IEG
-    runs-on: ubuntu-latest
-    needs: detect
-    if: needs.detect.outputs.ieg == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: apps/medical-affairs/ieg/frontend/package-lock.json
-      - run: npm ci
-        working-directory: apps/medical-affairs/ieg/frontend
-      - run: npm run build
-        working-directory: apps/medical-affairs/ieg/frontend
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-ieg
-          path: apps/medical-affairs/ieg/frontend/dist/
-          retention-days: 1
-
-  build-publications:
-    name: Build Publications
-    runs-on: ubuntu-latest
-    needs: detect
-    if: needs.detect.outputs.publications == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: apps/medical-affairs/publications/frontend/package-lock.json
-      - run: npm ci
-        working-directory: apps/medical-affairs/publications/frontend
-      - run: npm run build
-        working-directory: apps/medical-affairs/publications/frontend
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-publications
-          path: apps/medical-affairs/publications/frontend/dist/
-          retention-days: 1
-
-  build-safety:
-    name: Build Safety
-    runs-on: ubuntu-latest
-    needs: detect
-    if: needs.detect.outputs.safety == 'true'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: apps/safety/frontend/package-lock.json
-      - run: npm ci
-        working-directory: apps/safety/frontend
-      - run: npm run build
-        working-directory: apps/safety/frontend
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-safety
-          path: apps/safety/frontend/dist/
+          path: apps/cp-portal/frontend/dist/
           retention-days: 1
 
   build-vault:
@@ -239,9 +167,6 @@ jobs:
       - detect
       - build-mims
       - build-cp-portal
-      - build-ieg
-      - build-publications
-      - build-safety
       - build-vault
       - build-ai-agent
       - build-qms
@@ -286,9 +211,6 @@ jobs:
         run: |
           MIMS="${{ needs.detect.outputs.mims }}"
           CP_PORTAL="${{ needs.detect.outputs.cp_portal }}"
-          IEG="${{ needs.detect.outputs.ieg }}"
-          PUBLICATIONS="${{ needs.detect.outputs.publications }}"
-          SAFETY="${{ needs.detect.outputs.safety }}"
           VAULT="${{ needs.detect.outputs.vault }}"
           AI_AGENT="${{ needs.detect.outputs.ai_agent }}"
           QMS="${{ needs.detect.outputs.qms }}"
@@ -336,7 +258,7 @@ jobs:
           }
 
           # Create staging dirs on EC2 (ubuntu user owns /tmp)
-          retry run_ssh "mkdir -p /tmp/pharaxis-dist/{mims,cp-portal,ieg,publications,safety,vault,ai-agent,qms}"
+          retry run_ssh "mkdir -p /tmp/pharaxis-dist/{mims,cp-portal,vault,ai-agent,qms}"
 
           if [ "$MIMS" = "true" ] && [ -d "artifacts/dist-mims" ]; then
             echo "--- Staging MIMS dist ---"
@@ -346,21 +268,6 @@ jobs:
           if [ "$CP_PORTAL" = "true" ] && [ -d "artifacts/dist-cp-portal" ]; then
             echo "--- Staging CP Portal dist ---"
             retry run_scp artifacts/dist-cp-portal/. "$DEST:/tmp/pharaxis-dist/cp-portal/"
-          fi
-
-          if [ "$IEG" = "true" ] && [ -d "artifacts/dist-ieg" ]; then
-            echo "--- Staging IEG dist ---"
-            retry run_scp artifacts/dist-ieg/. "$DEST:/tmp/pharaxis-dist/ieg/"
-          fi
-
-          if [ "$PUBLICATIONS" = "true" ] && [ -d "artifacts/dist-publications" ]; then
-            echo "--- Staging Publications dist ---"
-            retry run_scp artifacts/dist-publications/. "$DEST:/tmp/pharaxis-dist/publications/"
-          fi
-
-          if [ "$SAFETY" = "true" ] && [ -d "artifacts/dist-safety" ]; then
-            echo "--- Staging Safety dist ---"
-            retry run_scp artifacts/dist-safety/. "$DEST:/tmp/pharaxis-dist/safety/"
           fi
 
           if [ "$VAULT" = "true" ] && [ -d "artifacts/dist-vault" ]; then
@@ -392,13 +299,9 @@ jobs:
 
             MIMS="${{ needs.detect.outputs.mims }}"
             CP_PORTAL="${{ needs.detect.outputs.cp_portal }}"
-            IEG="${{ needs.detect.outputs.ieg }}"
-            PUBLICATIONS="${{ needs.detect.outputs.publications }}"
-            SAFETY="${{ needs.detect.outputs.safety }}"
             VAULT="${{ needs.detect.outputs.vault }}"
             AI_AGENT="${{ needs.detect.outputs.ai_agent }}"
             QMS="${{ needs.detect.outputs.qms }}"
-            BACKEND="${{ needs.detect.outputs.backend }}"
 
             echo "======================================"
             echo " Pharaxis One — Publishing Built Apps"
@@ -412,18 +315,6 @@ jobs:
             if [ "$CP_PORTAL" = "true" ]; then
               sudo cp -r /tmp/pharaxis-dist/cp-portal/. /var/www/pharaxis/cp-portal/
               echo "--- [CP Portal] Published ✅ ---"
-            fi
-            if [ "$IEG" = "true" ]; then
-              sudo cp -r /tmp/pharaxis-dist/ieg/. /var/www/pharaxis/ieg/
-              echo "--- [IEG] Published ✅ ---"
-            fi
-            if [ "$PUBLICATIONS" = "true" ]; then
-              sudo cp -r /tmp/pharaxis-dist/publications/. /var/www/pharaxis/publications/
-              echo "--- [Publications] Published ✅ ---"
-            fi
-            if [ "$SAFETY" = "true" ]; then
-              sudo cp -r /tmp/pharaxis-dist/safety/. /var/www/pharaxis/safety/
-              echo "--- [Safety] Published ✅ ---"
             fi
             if [ "$VAULT" = "true" ]; then
               sudo cp -r /tmp/pharaxis-dist/vault/. /var/www/pharaxis/vault/
@@ -445,17 +336,9 @@ jobs:
             echo "--- Pulling latest code ---"
             git pull origin main
 
-            echo "--- Applying PM2 ecosystem config ---"
-            pm2 start ecosystem.config.js --update-env
-
-            if [ "$BACKEND" = "true" ]; then
-              echo "--- Backend changes detected — restarting PM2 ---"
-              pm2 restart all
-              echo "--- PM2 restarted ✅ ---"
-            else
-              echo "--- No backend changes — PM2 not restarted ---"
-            fi
-
+            echo "--- Applying PM2 ecosystem config (clean restart) ---"
+            pm2 delete all || true
+            pm2 start ecosystem.config.js
             pm2 save
 
             echo ""
