@@ -7,7 +7,7 @@ module.exports = {
     {
       name: 'mims',
       script: 'server.js',
-      cwd: '/home/ubuntu/pharaxis/apps/medical-affairs/mims/backend',
+      cwd: '/home/ubuntu/pharaxis/apps/mims/backend',
       max_memory_restart: '200M',
       restart_delay: 3000,
       env: { NODE_ENV: 'production' }
@@ -15,7 +15,7 @@ module.exports = {
     {
       name: 'cp-portal',
       script: 'server.js',
-      cwd: '/home/ubuntu/pharaxis/apps/medical-affairs/cp-portal/backend',
+      cwd: '/home/ubuntu/pharaxis/apps/cp-portal/backend',
       max_memory_restart: '200M',
       restart_delay: 3000,
       env: { NODE_ENV: 'production' }
