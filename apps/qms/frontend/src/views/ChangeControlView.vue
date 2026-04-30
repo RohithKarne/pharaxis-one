@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { apiRequest } from '../services/api';
+import { useModuleAccess } from '../composables/useModuleAccess';
 
 const loading = ref(false);
 const message = ref('');
@@ -41,6 +42,7 @@ const decisions = ['Approve', 'Reject'];
 const cabDecisions = ['Approve', 'ConditionalApprove', 'Reject'];
 const stepStatuses = ['Planned', 'InProgress', 'Completed', 'Blocked'];
 const effectivenessResults = ['Effective', 'PartiallyEffective', 'NotEffective'];
+const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAccess('changeControl');
 
 function setMessage(text) {
   message.value = text;
@@ -77,6 +79,7 @@ async function loadDetail() {
 }
 
 async function createChangeRequest() {
+  if (!withWriteAccess(setMessage)) return;
   try {
     const me = await apiRequest('/protected/me');
     await apiRequest('/change-control', {
@@ -105,6 +108,7 @@ async function createChangeRequest() {
 
 async function submitImpact() {
   if (!selectedChangeId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     const impactedModules = impactForm.value.impactedModulesCsv
       .split(',')
@@ -131,6 +135,7 @@ async function submitImpact() {
 
 async function submitCabReview() {
   if (!selectedChangeId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/change-control/${selectedChangeId.value}/cab-review`, {
       method: 'POST',
@@ -147,6 +152,7 @@ async function submitCabReview() {
 
 async function submitApproval() {
   if (!selectedChangeId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/change-control/${selectedChangeId.value}/approvals`, {
       method: 'POST',
@@ -163,6 +169,7 @@ async function submitApproval() {
 
 async function addImplementationStep() {
   if (!selectedChangeId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/change-control/${selectedChangeId.value}/implementation`, {
       method: 'POST',
@@ -186,6 +193,7 @@ async function addImplementationStep() {
 
 async function closeChange() {
   if (!selectedChangeId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/change-control/${selectedChangeId.value}/close`, {
       method: 'POST',
@@ -202,6 +210,7 @@ async function closeChange() {
 
 async function reopenChange() {
   if (!selectedChangeId.value || !reopenForm.value.reason) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/change-control/${selectedChangeId.value}/reopen`, {
       method: 'POST',
@@ -224,6 +233,9 @@ onMounted(refreshList);
     <header class="rounded-2xl border border-indigo-100 bg-white p-4">
       <h2 class="text-xl font-bold text-indigo-900">Change Control Workspace</h2>
       <p class="mt-1 text-sm text-slate-600">Run impact, CAB, approval, implementation, effectiveness closure, and controlled reopen for enterprise changes.</p>
+      <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        {{ writeDisabledReason }}
+      </p>
       <p v-if="message" class="mt-2 text-sm text-indigo-700">{{ message }}</p>
     </header>
 
@@ -245,7 +257,7 @@ onMounted(refreshList);
           <input v-model="createForm.plannedEndDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
           <label class="text-xs text-slate-600"><input v-model="createForm.cabRequired" class="mr-1" type="checkbox" />CAB required</label>
         </div>
-        <button class="mt-3 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white" @click="createChangeRequest">Create Request</button>
+        <button class="mt-3 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createChangeRequest">Create Request</button>
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
@@ -279,13 +291,13 @@ onMounted(refreshList);
           <select v-model="impactForm.riskLevel" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="item in riskLevels" :key="`impact-${item}`" :value="item">{{ item }}</option>
           </select>
-          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" @click="submitImpact">Submit Impact</button>
+          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" :disabled="isWriteDisabled" @click="submitImpact">Submit Impact</button>
 
           <select v-model="cabForm.decision" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="item in cabDecisions" :key="item" :value="item">{{ item }}</option>
           </select>
           <textarea v-model="cabForm.comments" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="CAB comments"></textarea>
-          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" @click="submitCabReview">Submit CAB Review</button>
+          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" :disabled="isWriteDisabled" @click="submitCabReview">Submit CAB Review</button>
         </div>
       </article>
 
@@ -296,7 +308,7 @@ onMounted(refreshList);
             <option v-for="item in decisions" :key="item" :value="item">{{ item }}</option>
           </select>
           <textarea v-model="approvalForm.comments" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Approval comments"></textarea>
-          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" @click="submitApproval">Submit Approval</button>
+          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" :disabled="isWriteDisabled" @click="submitApproval">Submit Approval</button>
 
           <input v-model="implementationForm.stepTitle" class="rounded-lg border px-3 py-2 text-sm" placeholder="Step title" />
           <select v-model="implementationForm.stepStatus" class="rounded-lg border px-3 py-2 text-sm">
@@ -304,7 +316,7 @@ onMounted(refreshList);
           </select>
           <input v-model="implementationForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
           <input v-model="implementationForm.evidenceRef" class="rounded-lg border px-3 py-2 text-sm" placeholder="Evidence reference" />
-          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" @click="addImplementationStep">Add Step</button>
+          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" :disabled="isWriteDisabled" @click="addImplementationStep">Add Step</button>
         </div>
       </article>
 
@@ -315,10 +327,10 @@ onMounted(refreshList);
           <select v-model="closeForm.effectivenessResult" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="item in effectivenessResults" :key="item" :value="item">{{ item }}</option>
           </select>
-          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" @click="closeChange">Close Change</button>
+          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" :disabled="isWriteDisabled" @click="closeChange">Close Change</button>
 
           <textarea v-model="reopenForm.reason" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Reopen reason"></textarea>
-          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" @click="reopenChange">Reopen Change</button>
+          <button class="rounded border border-indigo-500 px-3 py-1 text-xs font-semibold text-indigo-700" :disabled="isWriteDisabled" @click="reopenChange">Reopen Change</button>
         </div>
       </article>
     </section>

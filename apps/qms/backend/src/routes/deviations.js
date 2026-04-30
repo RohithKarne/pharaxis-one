@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { appendTraceLink } from '../services/traceabilityService.js';
 import { makeEntityCode, asDateString } from '../utils/codegen.js';
@@ -9,18 +10,6 @@ const validTypes = new Set(['Product', 'Process', 'System', 'Environmental']);
 const validClassifications = new Set(['Critical', 'Major', 'Minor']);
 const validReportability = new Set(['Yes', 'No', 'Under Review']);
 const validImpactLevels = new Set(['Low', 'Medium', 'High', 'Critical']);
-
-function hasAnyRole(roles, roleKeys) {
-  return Array.isArray(roles) && roleKeys.some((role) => roles.includes(role));
-}
-
-function assertRole(req, roleKeys, message = 'Insufficient permissions for this action') {
-  if (!hasAnyRole(req.authContext.roles, roleKeys)) {
-    const error = new Error(message);
-    error.statusCode = 403;
-    throw error;
-  }
-}
 
 async function appendDeviationHistoryEvent(client, {
   orgId,
@@ -420,7 +409,7 @@ deviationsRouter.post('/:deviationId/investigation', async (req, res, next) => {
 
 deviationsRouter.post('/:deviationId/qa-review', async (req, res, next) => {
   try {
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
 
     const { deviationId } = req.params;
     const {
@@ -567,7 +556,7 @@ deviationsRouter.post('/:deviationId/link-capa', async (req, res, next) => {
 
 deviationsRouter.post('/:deviationId/close', async (req, res, next) => {
   try {
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
 
     const { deviationId } = req.params;
     const { reportabilityStatus, reportabilityReason, closureSummary = null } = req.body || {};
@@ -652,7 +641,7 @@ deviationsRouter.post('/:deviationId/close', async (req, res, next) => {
 
 deviationsRouter.post('/:deviationId/reopen', async (req, res, next) => {
   try {
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin']);
 
     const { deviationId } = req.params;
     const { reason } = req.body || {};

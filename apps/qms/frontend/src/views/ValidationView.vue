@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { apiRequest } from '../services/api';
+import { useModuleAccess } from '../composables/useModuleAccess';
 
 const loading = ref(false);
 const message = ref('');
@@ -71,6 +72,7 @@ const gampLevels = ['1', '3', '4', '5'];
 const requirementTypes = ['URS', 'FS', 'DS', 'CS'];
 const traceStatuses = ['Pending', 'InProgress', 'Pass', 'Fail'];
 const outcomes = ['Pass', 'Fail', 'N/A'];
+const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAccess('validation');
 
 function setMessage(text) {
   message.value = text;
@@ -116,6 +118,7 @@ async function loadDetail() {
 }
 
 async function createSystem() {
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest('/validation/systems', {
       method: 'POST',
@@ -135,6 +138,7 @@ async function createSystem() {
 
 async function addRequirement() {
   if (!selectedSystemId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/validation/systems/${selectedSystemId.value}/requirements`, {
       method: 'POST',
@@ -151,6 +155,7 @@ async function addRequirement() {
 
 async function createPlan() {
   if (!selectedSystemId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/validation/systems/${selectedSystemId.value}/plans`, {
       method: 'POST',
@@ -173,6 +178,7 @@ async function createPlan() {
 
 async function addProtocol() {
   if (!protocolForm.value.planId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/validation/plans/${protocolForm.value.planId}/protocols`, {
       method: 'POST',
@@ -190,6 +196,7 @@ async function addProtocol() {
 
 async function addScriptStep() {
   if (!scriptForm.value.protocolId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     const response = await apiRequest(`/validation/protocols/${scriptForm.value.protocolId}/scripts`, {
       method: 'POST',
@@ -210,6 +217,7 @@ async function addScriptStep() {
 
 async function executeStep() {
   if (!executeForm.value.stepId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/validation/steps/${executeForm.value.stepId}/execute`, {
       method: 'PATCH',
@@ -230,6 +238,7 @@ async function executeStep() {
 
 async function addTraceLink() {
   if (!selectedSystemId.value || !traceForm.value.requirementId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/validation/systems/${selectedSystemId.value}/traceability`, {
       method: 'POST',
@@ -250,6 +259,7 @@ async function addTraceLink() {
 
 async function completeValidation() {
   if (!selectedSystemId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/validation/systems/${selectedSystemId.value}/complete`, {
       method: 'POST',
@@ -272,6 +282,9 @@ onMounted(refreshSystems);
     <header class="rounded-2xl border border-violet-100 bg-white p-4">
       <h2 class="text-xl font-bold text-violet-900">Validation Services Workspace</h2>
       <p class="mt-1 text-sm text-slate-600">Manage system inventory, requirement traceability, protocol execution, deviation hooks, and final validation sign-off.</p>
+      <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        {{ writeDisabledReason }}
+      </p>
       <p v-if="message" class="mt-2 text-sm text-indigo-700">{{ message }}</p>
     </header>
 
@@ -291,7 +304,7 @@ onMounted(refreshSystems);
           <textarea v-model="createForm.validationScope" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Validation scope"></textarea>
           <textarea v-model="createForm.complianceImpact" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Compliance impact"></textarea>
         </div>
-        <button class="mt-3 rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white" @click="createSystem">Register System</button>
+        <button class="mt-3 rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createSystem">Register System</button>
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
@@ -327,7 +340,7 @@ onMounted(refreshSystems);
           <select v-model="requirementForm.riskLevel" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="item in riskLevels" :key="item" :value="item">{{ item }}</option>
           </select>
-          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" @click="addRequirement">Add Requirement</button>
+          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" :disabled="isWriteDisabled" @click="addRequirement">Add Requirement</button>
 
           <select v-model="traceForm.requirementId" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="item in requirements" :key="item.id" :value="item.id">{{ item.requirement_code }}</option>
@@ -337,7 +350,7 @@ onMounted(refreshSystems);
             <option v-for="item in traceStatuses" :key="item" :value="item">{{ item }}</option>
           </select>
           <textarea v-model="traceForm.notes" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Trace notes"></textarea>
-          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" @click="addTraceLink">Save Trace Entry</button>
+          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" :disabled="isWriteDisabled" @click="addTraceLink">Save Trace Entry</button>
         </div>
       </article>
 
@@ -347,20 +360,20 @@ onMounted(refreshSystems);
           <textarea v-model="planForm.scope" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Validation plan scope"></textarea>
           <textarea v-model="planForm.approach" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Approach"></textarea>
           <textarea v-model="planForm.responsibilities" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Responsibilities"></textarea>
-          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" @click="createPlan">Create Plan</button>
+          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" :disabled="isWriteDisabled" @click="createPlan">Create Plan</button>
 
           <select v-model="protocolForm.planId" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="item in plans" :key="item.id" :value="item.id">Plan {{ item.id }}</option>
           </select>
           <input v-model="protocolForm.protocolName" class="rounded-lg border px-3 py-2 text-sm" placeholder="Protocol name" />
-          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" @click="addProtocol">Add Protocol</button>
+          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" :disabled="isWriteDisabled" @click="addProtocol">Add Protocol</button>
 
           <select v-model="scriptForm.protocolId" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="item in protocols" :key="item.id" :value="item.id">Protocol {{ item.protocol_name }}</option>
           </select>
           <input v-model="scriptForm.scriptName" class="rounded-lg border px-3 py-2 text-sm" placeholder="Script name" />
           <input v-model="scriptForm.expectedResult" class="rounded-lg border px-3 py-2 text-sm" placeholder="Expected result" />
-          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" @click="addScriptStep">Create Script Step</button>
+          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" :disabled="isWriteDisabled" @click="addScriptStep">Create Script Step</button>
         </div>
       </article>
 
@@ -373,10 +386,10 @@ onMounted(refreshSystems);
             <option v-for="item in outcomes" :key="item" :value="item">{{ item }}</option>
           </select>
           <input v-model="executeForm.evidenceRef" class="rounded-lg border px-3 py-2 text-sm" placeholder="Evidence reference" />
-          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" @click="executeStep">Execute Step</button>
+          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" :disabled="isWriteDisabled" @click="executeStep">Execute Step</button>
 
           <textarea v-model="completeForm.summary" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Validation completion summary"></textarea>
-          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" @click="completeValidation">Mark System Validated</button>
+          <button class="rounded border border-violet-500 px-3 py-1 text-xs font-semibold text-violet-700" :disabled="isWriteDisabled" @click="completeValidation">Mark System Validated</button>
         </div>
       </article>
     </section>

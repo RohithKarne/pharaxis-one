@@ -1,6 +1,16 @@
-const API_BASE = import.meta.env.VITE_QMS_API_BASE || 'http://127.0.0.1:3145/api';
+import { describeRequiredRoles, hasAnyRole, normalizeRoles } from '../config/rbac';
+import { findClientRbacRule } from '../config/apiRbacRules';
+import { FEATURE_FLAGS } from '../config/featureFlags';
+
+const RUNTIME_DEFAULT_API_BASE =
+  typeof window === 'undefined'
+    ? 'http://127.0.0.1:3145/api'
+    : `${window.location.protocol}//${window.location.hostname}:3145/api`;
+const API_BASE = import.meta.env.VITE_QMS_API_BASE || RUNTIME_DEFAULT_API_BASE;
 const AUTH_STORAGE_KEY = 'qms_auth_session';
 const LEGACY_TOKEN_KEY = 'qms_access_token';
+const GET_CACHE_TTL_MS = Number(import.meta.env.VITE_QMS_GET_CACHE_TTL_MS || 15000);
+const getCache = new Map();
 
 function emitAuthChanged() {
   window.dispatchEvent(new CustomEvent('qms-auth-changed'));
@@ -35,6 +45,20 @@ export function getStoredAuth() {
 
 export function getStoredToken() {
   return getStoredAuth()?.token || '';
+}
+
+function assertClientSidePermission(path, method) {
+  const rule = findClientRbacRule(path, method);
+  if (!rule) return;
+
+  const userRoles = normalizeRoles(getStoredAuth()?.roles || []);
+  if (hasAnyRole(userRoles, rule.roles)) return;
+
+  const error = new Error(
+    `You do not have permission for this action. Required role: ${describeRequiredRoles(rule.roles)}.`
+  );
+  error.status = 403;
+  throw error;
 }
 
 export function setStoredAuth(auth) {
@@ -97,6 +121,21 @@ export async function loginSuperadmin(payload) {
 }
 
 export async function apiRequest(path, options = {}) {
+  const method = options.method || 'GET';
+
+  if (!options.skipAuth) {
+    assertClientSidePermission(path, method);
+  }
+
+  const cacheKey = `${method}:${path}:${getStoredToken()}`;
+  const skipCache = options.forceRefresh || options.skipCache || !FEATURE_FLAGS.apiGetCache;
+  if (method === 'GET' && !skipCache) {
+    const cached = getCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.payload;
+    }
+  }
+
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {})
@@ -110,7 +149,7 @@ export async function apiRequest(path, options = {}) {
   }
 
   const response = await fetch(`${API_BASE}${path}`, {
-    method: options.method || 'GET',
+    method,
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined
   });
@@ -129,6 +168,16 @@ export async function apiRequest(path, options = {}) {
     const error = new Error(payload.error || 'API request failed');
     error.status = response.status;
     throw error;
+  }
+
+  if (method === 'GET' && !skipCache) {
+    const ttl = Number(options.cacheTtlMs || GET_CACHE_TTL_MS);
+    getCache.set(cacheKey, {
+      payload,
+      expiresAt: Date.now() + Math.max(1000, ttl)
+    });
+  } else if (method !== 'GET') {
+    getCache.clear();
   }
 
   return payload;

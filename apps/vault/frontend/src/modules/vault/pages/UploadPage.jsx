@@ -155,13 +155,19 @@ export default function UploadPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Upload Center</h1>
-          <p className="brand-subtitle">Create controlled documents with taxonomy and folder mapping</p>
-        </div>
-        <span className="topbar-pill">Feature 5 In Progress</span>
-      </header>
+      <main className="dashboard-grid">
+        <section className="panel span-12 workspace-hero-card">
+          <div>
+            <p className="workspace-hero-kicker">Quality Ops / Upload</p>
+            <h2 className="workspace-hero-title">Upload Center</h2>
+            <p className="panel-note">Create controlled documents with taxonomy and folder mapping.</p>
+          </div>
+          <div className="workspace-hero-right">
+            <span className="workspace-status-pill">Content Creation</span>
+            <span className="workspace-hero-date">Versioned Upload</span>
+          </div>
+        </section>
+      </main>
 
       <main className="dashboard-grid">
         <section className="panel span-8">

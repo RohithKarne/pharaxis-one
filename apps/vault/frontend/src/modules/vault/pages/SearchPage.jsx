@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiJson, authHeaders, getOrgToken, lifecycleBadgeClass } from '../../common/utils/session'
+
+const SAVED_SEARCHES_KEY = 'vault_saved_searches_v1'
 
 function flattenFolders(nodes, level = 0, result = []) {
   nodes.forEach(node => {
@@ -22,6 +24,8 @@ function formatDate(value) {
 export default function SearchPage() {
   const token = getOrgToken()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlQuery = useMemo(() => String(searchParams.get('q') || ''), [searchParams])
   const [types, setTypes] = useState([])
   const [subtypes, setSubtypes] = useState([])
   const [classifications, setClassifications] = useState([])
@@ -33,8 +37,10 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showFilters, setShowFilters] = useState(true)
+  const [savedSearches, setSavedSearches] = useState([])
+  const [saveName, setSaveName] = useState('')
   const [filters, setFilters] = useState({
-    q: '',
+    q: urlQuery,
     type_id: '',
     subtype_id: '',
     classification_id: '',
@@ -50,6 +56,24 @@ export default function SearchPage() {
     expiry_from: '',
     expiry_to: ''
   })
+
+  function loadSavedSearches() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(SAVED_SEARCHES_KEY) || '[]')
+      if (Array.isArray(parsed)) {
+        setSavedSearches(parsed)
+        return
+      }
+      setSavedSearches([])
+    } catch {
+      setSavedSearches([])
+    }
+  }
+
+  function persistSavedSearches(nextSearches) {
+    setSavedSearches(nextSearches)
+    localStorage.setItem(SAVED_SEARCHES_KEY, JSON.stringify(nextSearches))
+  }
 
   async function loadFilterData() {
     const [typeRows, folderTree] = await Promise.all([
@@ -89,7 +113,7 @@ export default function SearchPage() {
     }
   }
 
-  async function runSearch(nextPage = page) {
+  async function runSearch(nextPage = page, activeFilters = filters) {
     if (!token) {
       setError('Session not found. Please log in first.')
       return
@@ -99,7 +123,7 @@ export default function SearchPage() {
       page: String(nextPage),
       limit: String(limit)
     })
-    Object.entries(filters).forEach(([key, value]) => {
+    Object.entries(activeFilters).forEach(([key, value]) => {
       if (value !== '' && value !== null && value !== undefined) query.set(key, value)
     })
 
@@ -127,7 +151,16 @@ export default function SearchPage() {
     loadFilterData()
       .then(() => runSearch(1))
       .catch(requestError => setError(requestError.message))
+    loadSavedSearches()
   }, [])
+
+  useEffect(() => {
+    if (!token) return
+    if (urlQuery === filters.q) return
+    const nextFilters = { ...filters, q: urlQuery }
+    setFilters(nextFilters)
+    runSearch(1, nextFilters)
+  }, [urlQuery, token])
 
   useEffect(() => {
     loadSubtypes(filters.type_id).catch(requestError => setError(requestError.message))
@@ -141,6 +174,13 @@ export default function SearchPage() {
 
   function onSubmit(event) {
     event.preventDefault()
+    const nextParams = new URLSearchParams(searchParams)
+    if (filters.q.trim()) {
+      nextParams.set('q', filters.q.trim())
+    } else {
+      nextParams.delete('q')
+    }
+    setSearchParams(nextParams, { replace: true })
     runSearch(1)
   }
 
@@ -148,17 +188,75 @@ export default function SearchPage() {
     navigate(`/vault/content/${row.id}/viewer`)
   }
 
+  function saveCurrentSearch() {
+    const name = saveName.trim()
+    if (!name) {
+      setError('Provide a name before saving this search.')
+      return
+    }
+    const entry = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      filters,
+      created_at: new Date().toISOString()
+    }
+    persistSavedSearches([entry, ...savedSearches].slice(0, 15))
+    setSaveName('')
+  }
+
+  function applySavedSearch(entry) {
+    const nextFilters = { ...filters, ...(entry?.filters || {}) }
+    setFilters(nextFilters)
+    const nextParams = new URLSearchParams(searchParams)
+    if (nextFilters.q?.trim()) {
+      nextParams.set('q', nextFilters.q.trim())
+    } else {
+      nextParams.delete('q')
+    }
+    setSearchParams(nextParams, { replace: true })
+    runSearch(1, nextFilters)
+  }
+
+  function deleteSavedSearch(id) {
+    persistSavedSearches(savedSearches.filter(entry => entry.id !== id))
+  }
+
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Search Workspace</h1>
-          <p className="brand-subtitle">Full-text and metadata search across organization documents</p>
-        </div>
-        <span className="topbar-pill">Feature 12</span>
-      </header>
-
       <main className="dashboard-grid">
+        <section className="panel span-12 workspace-hero-card">
+          <div>
+            <p className="workspace-hero-kicker">Quality Ops / Search</p>
+            <h2 className="workspace-hero-title">Search Workspace</h2>
+            <p className="panel-note">Full-text and metadata search across organization documents.</p>
+          </div>
+          <div className="workspace-hero-right">
+            <span className="workspace-status-pill">Search Active</span>
+            <span className="workspace-hero-date">{total} matches</span>
+          </div>
+        </section>
+
+        <section className="panel span-12">
+          <div className="config-filter-head">
+            <div>
+              <h3>Quick Search</h3>
+              <p className="panel-note">Type title, doc number, or keyword and run instant lookup.</p>
+            </div>
+            <form
+              onSubmit={onSubmit}
+              className="inline-search-form"
+            >
+              <input
+                className="workspace-module-search"
+                value={filters.q}
+                onChange={event => setFilters({ ...filters, q: event.target.value })}
+                placeholder="Search text"
+              />
+              <button className="btn-secondary" type="submit">Search</button>
+            </form>
+          </div>
+        </section>
+
         <section className="panel span-4">
           <div className="folder-header">
             <h3>Filters</h3>
@@ -310,7 +408,7 @@ export default function SearchPage() {
                   className="btn-secondary"
                   type="button"
                   onClick={() => {
-                    setFilters({
+                    const resetFilters = {
                       q: '',
                       type_id: '',
                       subtype_id: '',
@@ -326,8 +424,10 @@ export default function SearchPage() {
                       effective_to: '',
                       expiry_from: '',
                       expiry_to: ''
-                    })
-                    runSearch(1)
+                    }
+                    setFilters(resetFilters)
+                    setSearchParams(new URLSearchParams(), { replace: true })
+                    runSearch(1, resetFilters)
                   }}
                 >
                   Reset
@@ -335,6 +435,43 @@ export default function SearchPage() {
               </div>
             </form>
           ) : null}
+        </section>
+
+        <section className="panel span-4">
+          <h3>Saved Searches</h3>
+          <p className="panel-note">Store and reuse advanced filter combinations.</p>
+          <div className="form-field">
+            <label htmlFor="search-save-name">Save Current Search As</label>
+            <input
+              id="search-save-name"
+              value={saveName}
+              onChange={event => setSaveName(event.target.value)}
+              placeholder="e.g. Overdue reviewer docs"
+            />
+          </div>
+          <div className="detail-actions">
+            <button className="btn-secondary" type="button" onClick={saveCurrentSearch}>Save</button>
+          </div>
+
+          <ul className="simple-list">
+            {savedSearches.map(entry => (
+              <li key={entry.id}>
+                <div className="config-link-copy">
+                  <strong>{entry.name}</strong>
+                  <span>{new Date(entry.created_at).toLocaleDateString()}</span>
+                </div>
+                <div className="detail-actions">
+                  <button className="btn-secondary" type="button" onClick={() => applySavedSearch(entry)}>
+                    Apply
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => deleteSavedSearch(entry.id)}>
+                    Delete
+                  </button>
+                </div>
+              </li>
+            ))}
+            {!savedSearches.length ? <li>No saved searches yet.</li> : null}
+          </ul>
         </section>
 
         <section className="panel span-8">

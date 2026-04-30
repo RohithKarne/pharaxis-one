@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "smoke:rbac": "node scripts/rbac-smoke.mjs",
+    "smoke:workflow-notifications": "node scripts/workflow-notifications-smoke.mjs",
+    "test:role-matrix": "node scripts/rbac-role-matrix.mjs"
   },
   "dependencies": {
     "vue": "^3.5.13",

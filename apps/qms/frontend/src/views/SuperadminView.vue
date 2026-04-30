@@ -13,6 +13,7 @@ const emailConfig = ref(null);
 const uploadPolicy = ref(null);
 const securityPolicy = ref(null);
 const availableGroups = ref([]);
+const readiness = ref(null);
 
 const selectedOrgId = ref('');
 
@@ -73,6 +74,27 @@ const usersForSelectedOrg = computed(() =>
 );
 
 const selectedOrg = computed(() => orgs.value.find((org) => org.id === selectedOrgId.value) || null);
+const hasSelectedOrg = computed(() => Boolean(selectedOrgId.value));
+const canCreateOrg = computed(() => {
+  const orgCode = createOrgForm.value.orgCode.trim();
+  const orgName = createOrgForm.value.orgName.trim();
+  return Boolean(orgCode && orgName);
+});
+const canCreateUser = computed(() => {
+  const fullName = createUserForm.value.fullName.trim();
+  const email = createUserForm.value.email.trim();
+  const password = createUserForm.value.password;
+  return Boolean(
+    createUserForm.value.orgId &&
+      fullName &&
+      email &&
+      password &&
+      password.length >= 8 &&
+      Array.isArray(createUserForm.value.roleKeys) &&
+      createUserForm.value.roleKeys.length > 0
+  );
+});
+const canReset2fa = computed(() => Boolean(twoFaResetForm.value.userId));
 
 const dashboardCards = computed(() => {
   const activeUsers = users.value.filter((user) => user.is_active).length;
@@ -86,25 +108,33 @@ const dashboardCards = computed(() => {
     { label: 'Organizations', value: orgs.value.length },
     { label: 'Active Users', value: activeUsers },
     { label: 'Inactive Users', value: inactiveUsers },
-    { label: 'Failed Logins (24h)', value: failedLogins24h }
+    { label: 'Failed Logins (24h)', value: failedLogins24h },
+    { label: 'Upload Policy Coverage', value: `${readiness.value?.policies?.uploadPolicyCoverage ?? 0}%` },
+    { label: 'Security Policy Coverage', value: `${readiness.value?.policies?.securityPolicyCoverage ?? 0}%` }
   ];
 });
+
+function setActionError(error, fallbackMessage) {
+  message.value = error?.message || fallbackMessage;
+}
 
 async function refreshCore() {
   loading.value = true;
   message.value = '';
   try {
-    const [orgResponse, userResponse, emailResponse, auditResponse] = await Promise.all([
+    const [orgResponse, userResponse, emailResponse, auditResponse, readinessResponse] = await Promise.all([
       apiRequest('/superadmin/orgs'),
       apiRequest('/superadmin/users'),
       apiRequest('/superadmin/platform/email-config'),
-      apiRequest('/superadmin/reports/login-audit?limit=120')
+      apiRequest('/superadmin/reports/login-audit?limit=120'),
+      apiRequest('/superadmin/platform/readiness')
     ]);
 
     orgs.value = orgResponse.orgs || [];
     users.value = userResponse.users || [];
     loginAudit.value = auditResponse.loginAudit || [];
     emailConfig.value = emailResponse.emailConfig;
+    readiness.value = readinessResponse.readiness || null;
 
     if (!selectedOrgId.value && orgs.value.length > 0) {
       selectedOrgId.value = orgs.value[0].id;
@@ -123,13 +153,18 @@ async function refreshCore() {
       };
     }
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to refresh platform data.');
   } finally {
     loading.value = false;
   }
 }
 
 async function createOrg() {
+  if (!canCreateOrg.value) {
+    message.value = 'Org code and organization name are required.';
+    return;
+  }
+
   try {
     await apiRequest('/superadmin/orgs', {
       method: 'POST',
@@ -139,7 +174,7 @@ async function createOrg() {
     message.value = 'Organization created with default security groups template.';
     await refreshCore();
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to create organization.');
   }
 }
 
@@ -152,11 +187,17 @@ async function toggleOrgStatus(org) {
     message.value = `Organization ${org.is_active ? 'deactivated' : 'activated'} successfully.`;
     await refreshCore();
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to update organization status.');
   }
 }
 
 async function createUser() {
+  if (!canCreateUser.value) {
+    message.value =
+      'Select org, fill full name, email, password (minimum 8 characters), and at least one security group.';
+    return;
+  }
+
   try {
     const body = {
       orgId: createUserForm.value.orgId,
@@ -176,7 +217,7 @@ async function createUser() {
     message.value = 'User created and security groups assigned.';
     await refreshCore();
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to create user.');
   }
 }
 
@@ -189,11 +230,16 @@ async function toggleUserStatus(user) {
     message.value = 'User status updated.';
     await refreshCore();
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to update user status.');
   }
 }
 
 async function saveUserGroups(user) {
+  if (!Array.isArray(user.security_groups) || user.security_groups.length === 0) {
+    message.value = 'At least one security group is required.';
+    return;
+  }
+
   try {
     await apiRequest(`/superadmin/users/${user.id}/security-groups`, {
       method: 'PATCH',
@@ -202,7 +248,7 @@ async function saveUserGroups(user) {
     message.value = 'Security groups updated.';
     await refreshCore();
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to update security groups.');
   }
 }
 
@@ -221,7 +267,7 @@ async function saveEmailConfig() {
     message.value = 'Platform email config saved.';
     await refreshCore();
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to save email config.');
   }
 }
 
@@ -237,7 +283,7 @@ async function loadOrgSecurityGroups() {
       createUserForm.value.orgId = selectedOrgId.value;
     }
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to load org security groups.');
   }
 }
 
@@ -258,7 +304,7 @@ async function loadUploadPolicy() {
       };
     }
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to load upload policy.');
   }
 }
 
@@ -277,12 +323,15 @@ async function loadSecurityPolicy() {
       };
     }
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to load security policy.');
   }
 }
 
 async function saveSecurityPolicy() {
-  if (!selectedOrgId.value) return;
+  if (!selectedOrgId.value) {
+    message.value = 'Select an organization before saving security policy.';
+    return;
+  }
   try {
     await apiRequest(`/superadmin/platform/security-policy/${selectedOrgId.value}`, {
       method: 'PUT',
@@ -294,7 +343,7 @@ async function saveSecurityPolicy() {
     message.value = 'Security policy updated.';
     await loadSecurityPolicy();
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to save security policy.');
   }
 }
 
@@ -311,22 +360,36 @@ async function resetUser2fa() {
     message.value = 'User 2FA reset initiated successfully.';
     twoFaResetForm.value.userId = '';
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to reset user 2FA.');
   }
 }
 
 async function saveUploadPolicy() {
-  if (!selectedOrgId.value) return;
+  if (!selectedOrgId.value) {
+    message.value = 'Select an organization before saving upload policy.';
+    return;
+  }
   try {
     const extensions = uploadPolicyForm.value.allowedExtensionsCsv
       .split(',')
       .map((item) => item.trim().toLowerCase())
       .filter(Boolean);
 
+    if (extensions.length === 0) {
+      message.value = 'At least one allowed extension is required.';
+      return;
+    }
+
+    const maxUploadMb = Number(uploadPolicyForm.value.maxUploadMb || 25);
+    if (!Number.isFinite(maxUploadMb) || maxUploadMb < 1 || maxUploadMb > 500) {
+      message.value = 'maxUploadMb must be between 1 and 500.';
+      return;
+    }
+
     await apiRequest(`/superadmin/platform/upload-policy/${selectedOrgId.value}`, {
       method: 'PUT',
       body: {
-        maxUploadMb: Number(uploadPolicyForm.value.maxUploadMb || 25),
+        maxUploadMb,
         allowedExtensions: extensions,
         viewerDefaultCanDownload: uploadPolicyForm.value.viewerDefaultCanDownload,
         viewerDownloadRequiresWatermark: uploadPolicyForm.value.viewerDownloadRequiresWatermark
@@ -335,7 +398,7 @@ async function saveUploadPolicy() {
     message.value = 'Upload and viewer policy updated.';
     await loadUploadPolicy();
   } catch (error) {
-    message.value = error.message;
+    setActionError(error, 'Unable to save upload policy.');
   }
 }
 
@@ -376,7 +439,11 @@ onMounted(async () => {
               {{ org.org_name }}
             </option>
           </select>
-          <button class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700" @click="refreshCore">
+          <button
+            class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="loading"
+            @click="refreshCore"
+          >
             Refresh Platform Data
           </button>
         </div>
@@ -403,7 +470,7 @@ onMounted(async () => {
 
       <div class="space-y-4">
         <template v-if="activeSection === 'dashboard'">
-          <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <article v-for="card in dashboardCards" :key="card.label" class="rounded-xl border border-slate-200 bg-white p-4">
               <p class="text-xs uppercase tracking-[0.08em] text-slate-500">{{ card.label }}</p>
               <p class="mt-2 text-3xl font-extrabold text-slate-900">{{ card.value }}</p>
@@ -431,6 +498,34 @@ onMounted(async () => {
               </p>
             </article>
           </section>
+
+          <section class="rounded-2xl border border-slate-200 bg-white p-4">
+            <h3 class="text-lg font-semibold text-slate-900">Platform Readiness</h3>
+            <p class="mt-1 text-xs text-slate-500">
+              Snapshot:
+              {{ readiness?.generatedAt ? new Date(readiness.generatedAt).toLocaleString() : 'not available' }}
+            </p>
+            <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <article class="rounded-lg border border-slate-200 p-3">
+                <p class="text-xs uppercase tracking-[0.08em] text-slate-500">Total Orgs</p>
+                <p class="mt-1 text-xl font-bold text-slate-900">{{ readiness?.orgs?.total ?? 0 }}</p>
+              </article>
+              <article class="rounded-lg border border-slate-200 p-3">
+                <p class="text-xs uppercase tracking-[0.08em] text-slate-500">Active Orgs</p>
+                <p class="mt-1 text-xl font-bold text-slate-900">{{ readiness?.orgs?.active ?? 0 }}</p>
+              </article>
+              <article class="rounded-lg border border-slate-200 p-3">
+                <p class="text-xs uppercase tracking-[0.08em] text-slate-500">Email Config</p>
+                <p class="mt-1 text-xl font-bold" :class="readiness?.security?.activePlatformEmailConfig ? 'text-emerald-700' : 'text-rose-700'">
+                  {{ readiness?.security?.activePlatformEmailConfig ? 'Active' : 'Missing' }}
+                </p>
+              </article>
+              <article class="rounded-lg border border-slate-200 p-3">
+                <p class="text-xs uppercase tracking-[0.08em] text-slate-500">Failed Logins (24h)</p>
+                <p class="mt-1 text-xl font-bold text-slate-900">{{ readiness?.security?.failedLoginsLast24h ?? 0 }}</p>
+              </article>
+            </div>
+          </section>
         </template>
 
         <template v-else-if="activeSection === 'orgs'">
@@ -441,7 +536,13 @@ onMounted(async () => {
               <div class="mt-3 grid gap-2">
                 <input v-model="createOrgForm.orgCode" class="rounded-lg border px-3 py-2 text-sm" placeholder="Org code (e.g., NOVA_QMS)" />
                 <input v-model="createOrgForm.orgName" class="rounded-lg border px-3 py-2 text-sm" placeholder="Organization name" />
-                <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" @click="createOrg">Create Org</button>
+                <button
+                  class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="loading || !canCreateOrg"
+                  @click="createOrg"
+                >
+                  Create Org
+                </button>
               </div>
             </article>
 
@@ -454,7 +555,11 @@ onMounted(async () => {
                       <p class="font-semibold text-slate-900">{{ org.org_name }}</p>
                       <p class="text-xs text-slate-500">{{ org.org_code }}</p>
                     </div>
-                    <button class="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700" @click="toggleOrgStatus(org)">
+                    <button
+                      class="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      :disabled="loading"
+                      @click="toggleOrgStatus(org)"
+                    >
                       {{ org.is_active ? 'Deactivate' : 'Activate' }}
                     </button>
                   </div>
@@ -491,7 +596,13 @@ onMounted(async () => {
                   {{ group.role_name }}
                 </button>
               </div>
-              <button class="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" @click="createUser">Create User</button>
+              <button
+                class="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="loading || !canCreateUser"
+                @click="createUser"
+              >
+                Create User
+              </button>
             </article>
 
             <article class="rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
@@ -534,10 +645,18 @@ onMounted(async () => {
                       </td>
                       <td class="py-2">
                         <div class="flex flex-wrap gap-2">
-                          <button class="rounded border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700" @click="saveUserGroups(user)">
+                          <button
+                            class="rounded border border-indigo-300 px-2 py-1 text-xs font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="loading || !(user.security_groups || []).length"
+                            @click="saveUserGroups(user)"
+                          >
                             Save Groups
                           </button>
-                          <button class="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700" @click="toggleUserStatus(user)">
+                          <button
+                            class="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="loading"
+                            @click="toggleUserStatus(user)"
+                          >
                             {{ user.is_active ? 'Deactivate' : 'Activate' }}
                           </button>
                         </div>
@@ -565,7 +684,11 @@ onMounted(async () => {
                   Allow Org Admin to reset user 2FA
                 </label>
               </div>
-              <button class="mt-3 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white" @click="saveSecurityPolicy">
+              <button
+                class="mt-3 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="loading || !hasSelectedOrg"
+                @click="saveSecurityPolicy"
+              >
                 Save Security Policy
               </button>
             </article>
@@ -580,7 +703,11 @@ onMounted(async () => {
                     {{ user.full_name }} ({{ user.email }})
                   </option>
                 </select>
-                <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" @click="resetUser2fa">
+                <button
+                  class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="loading || !canReset2fa"
+                  @click="resetUser2fa"
+                >
                   Reset 2FA
                 </button>
               </div>
@@ -603,7 +730,13 @@ onMounted(async () => {
               <label class="inline-flex items-center gap-2"><input v-model="emailConfigForm.useTls" type="checkbox" /> Use TLS</label>
               <label class="inline-flex items-center gap-2"><input v-model="emailConfigForm.isActive" type="checkbox" /> Active</label>
             </div>
-            <button class="mt-3 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white" @click="saveEmailConfig">Save Email Config</button>
+            <button
+              class="mt-3 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="loading"
+              @click="saveEmailConfig"
+            >
+              Save Email Config
+            </button>
           </article>
         </template>
 
@@ -619,7 +752,13 @@ onMounted(async () => {
               <label class="inline-flex items-center gap-2"><input v-model="uploadPolicyForm.viewerDefaultCanDownload" type="checkbox" /> Viewer can download by default</label>
               <label class="inline-flex items-center gap-2"><input v-model="uploadPolicyForm.viewerDownloadRequiresWatermark" type="checkbox" /> Download requires confidential watermark</label>
             </div>
-            <button class="mt-3 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white" @click="saveUploadPolicy">Save Upload Policy</button>
+            <button
+              class="mt-3 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="loading || !hasSelectedOrg"
+              @click="saveUploadPolicy"
+            >
+              Save Upload Policy
+            </button>
           </article>
         </template>
 

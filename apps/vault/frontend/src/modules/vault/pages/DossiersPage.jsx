@@ -235,13 +235,28 @@ export default function DossiersPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Dossiers</h1>
-          <p className="brand-subtitle">Curated document binders for regulatory and review workflows</p>
-        </div>
-        <span className="topbar-pill">{dossiers.length} dossiers</span>
-      </header>
+      <main className="dashboard-grid">
+        <section className="panel span-12 workspace-hero-card">
+          <div>
+            <p className="workspace-hero-kicker">Compliance / Dossiers</p>
+            <h2 className="workspace-hero-title">Dossier Workspace</h2>
+            <p className="panel-note">Curated document binders for regulatory and review workflows.</p>
+          </div>
+          <div className="workspace-hero-right">
+            <span className="workspace-status-pill">Dossier Ops</span>
+            <span className="workspace-hero-date">{dossiers.length} dossiers</span>
+          </div>
+        </section>
+
+        <section className="panel span-12">
+          <ul className="simple-list">
+            <li>
+              <span>Creation access</span>
+              <strong>{canCreate ? 'Author/Admin can create and edit dossiers' : 'Read-only access'}</strong>
+            </li>
+          </ul>
+        </section>
+      </main>
 
       <main className="dashboard-grid">
         <section className="panel span-4">

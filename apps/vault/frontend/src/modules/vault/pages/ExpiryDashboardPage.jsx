@@ -77,16 +77,28 @@ export default function ExpiryDashboardPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Expiry Intelligence</h1>
-          <p className="brand-subtitle">Documents approaching expiry windows and archived risk view</p>
-        </div>
-        <div className="detail-actions">
-          <button className="btn-secondary" onClick={loadExpiryData}>Refresh</button>
-          <Link className="btn-secondary link-button" to="/vault">Back to Vault</Link>
-        </div>
-      </header>
+      <main className="dashboard-grid">
+        <section className="panel span-12 workspace-hero-card">
+          <div>
+            <p className="workspace-hero-kicker">Risk & Partners / Expiry</p>
+            <h2 className="workspace-hero-title">Expiry Intelligence</h2>
+            <p className="panel-note">Documents approaching expiry windows and archived risk view.</p>
+          </div>
+          <div className="workspace-hero-right">
+            <span className="workspace-status-pill">Monitoring</span>
+            <span className="workspace-hero-date">
+              {(data.expiring_30?.length || 0) + (data.expiring_60?.length || 0) + (data.expiring_90?.length || 0)} active
+            </span>
+          </div>
+        </section>
+
+        <section className="panel span-12">
+          <div className="detail-actions">
+            <button className="btn-secondary" onClick={loadExpiryData}>Refresh</button>
+            <Link className="btn-secondary link-button" to="/vault">Back to Vault</Link>
+          </div>
+        </section>
+      </main>
 
       <main className="dashboard-grid expiry-grid">
         {error ? <div className="auth-error span-12">{error}</div> : null}

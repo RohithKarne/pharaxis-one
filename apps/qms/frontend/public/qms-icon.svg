@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="QMS icon">
+  <defs>
+    <linearGradient id="qms-bg" x1="6" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#58ad58" />
+      <stop offset="0.5" stop-color="#2e7d32" />
+      <stop offset="1" stop-color="#1d5f24" />
+    </linearGradient>
+    <linearGradient id="qms-core" x1="18" y1="18" x2="47" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#eef9ee" />
+      <stop offset="1" stop-color="#c2eac2" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#qms-bg)" />
+  <circle cx="30" cy="30" r="13" fill="none" stroke="url(#qms-core)" stroke-width="5" />
+  <path d="M39.5 39.5L48 48" stroke="#daf2da" stroke-linecap="round" stroke-width="4.5" />
+  <path d="M23 30.5l5 5 9-10" fill="none" stroke="#daf2da" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" />
+</svg>

@@ -9,31 +9,55 @@ import ContentDetailPage from './modules/vault/pages/ContentDetailPage'
 import SearchPage from './modules/vault/pages/SearchPage'
 import DocumentViewerPage from './modules/vault/pages/DocumentViewerPage'
 import AuditPage from './modules/admin/pages/AuditPage'
+import AdminWorkflowQueuePage from './modules/admin/pages/AdminWorkflowQueuePage'
 import LifecycleRulesPage from './modules/admin/pages/LifecycleRulesPage'
 import RetentionPoliciesPage from './modules/admin/pages/RetentionPoliciesPage'
 import ContentChannelsPage from './modules/admin/pages/ContentChannelsPage'
+import AdminIntegrationsPage from './modules/admin/pages/AdminIntegrationsPage'
+import AdminSecurityPage from './modules/admin/pages/AdminSecurityPage'
 import AdminConsolePage from './modules/admin/pages/AdminConsolePage'
+import AdminSetupWizardPage from './modules/admin/pages/AdminSetupWizardPage'
 import SuperadminDashboardPage from './modules/superadmin/pages/SuperadminDashboardPage'
 import SuperadminOrgsPage from './modules/superadmin/pages/SuperadminOrgsPage'
 import SuperadminOrgDetailPage from './modules/superadmin/pages/SuperadminOrgDetailPage'
 import ContentSlotsPage from './modules/vault/pages/ContentSlotsPage'
 import DossiersPage from './modules/vault/pages/DossiersPage'
 import ExpiryDashboardPage from './modules/vault/pages/ExpiryDashboardPage'
+import MyTasksPage from './modules/vault/pages/MyTasksPage'
+import NotificationsPage from './modules/vault/pages/NotificationsPage'
 import {
   OrgAuthGuard,
   OrgRoleGuard,
   SuperadminGuard
 } from './modules/common/components/RouteGuards'
+import WorkspaceShell from './modules/common/components/WorkspaceShell'
+
+function WorkspaceRoute({ children }) {
+  return (
+    <OrgAuthGuard>
+      <WorkspaceShell>{children}</WorkspaceShell>
+    </OrgAuthGuard>
+  )
+}
+
+function AdminWorkspaceRoute({ children }) {
+  return (
+    <OrgRoleGuard roles={['admin']}>
+      <WorkspaceShell>{children}</WorkspaceShell>
+    </OrgRoleGuard>
+  )
+}
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LoginPage />} />
-        <Route path="/superadmin" element={<SuperadminLoginPage />} />
+        <Route path="/control-tower/login" element={<SuperadminLoginPage />} />
+        <Route path="/superadmin" element={<Navigate to="/control-tower/login" replace />} />
 
         <Route
-          path="/superadmin/dashboard"
+          path="/control-tower/dashboard"
           element={
             <SuperadminGuard>
               <SuperadminDashboardPage />
@@ -41,7 +65,7 @@ export default function App() {
           }
         />
         <Route
-          path="/superadmin/orgs"
+          path="/control-tower/orgs"
           element={
             <SuperadminGuard>
               <SuperadminOrgsPage />
@@ -49,7 +73,7 @@ export default function App() {
           }
         />
         <Route
-          path="/superadmin/orgs/:id"
+          path="/control-tower/orgs/:id"
           element={
             <SuperadminGuard>
               <SuperadminOrgDetailPage />
@@ -60,130 +84,178 @@ export default function App() {
         <Route
           path="/vault"
           element={
-            <OrgAuthGuard>
+            <WorkspaceRoute>
               <VaultHomePage />
-            </OrgAuthGuard>
+            </WorkspaceRoute>
           }
         />
         <Route
           path="/vault/upload"
           element={
-            <OrgAuthGuard>
+            <WorkspaceRoute>
               <UploadPage />
-            </OrgAuthGuard>
+            </WorkspaceRoute>
           }
         />
         <Route
           path="/vault/content/:id"
           element={
-            <OrgAuthGuard>
+            <WorkspaceRoute>
               <ContentDetailPage />
-            </OrgAuthGuard>
+            </WorkspaceRoute>
           }
         />
         <Route
           path="/vault/content/:id/viewer"
           element={
-            <OrgAuthGuard>
+            <WorkspaceRoute>
               <DocumentViewerPage />
-            </OrgAuthGuard>
+            </WorkspaceRoute>
           }
         />
         <Route
           path="/vault/content/:id/versions/:versionId/viewer"
           element={
-            <OrgAuthGuard>
+            <WorkspaceRoute>
               <DocumentViewerPage />
-            </OrgAuthGuard>
+            </WorkspaceRoute>
           }
         />
         <Route
           path="/vault/search"
           element={
-            <OrgAuthGuard>
+            <WorkspaceRoute>
               <SearchPage />
-            </OrgAuthGuard>
+            </WorkspaceRoute>
           }
         />
         <Route
           path="/vault/slots"
           element={
-            <OrgAuthGuard>
+            <WorkspaceRoute>
               <ContentSlotsPage />
-            </OrgAuthGuard>
+            </WorkspaceRoute>
           }
         />
         <Route
           path="/vault/dossiers"
           element={
-            <OrgAuthGuard>
+            <WorkspaceRoute>
               <DossiersPage />
-            </OrgAuthGuard>
+            </WorkspaceRoute>
           }
         />
         <Route
           path="/vault/expiry"
           element={
-            <OrgAuthGuard>
+            <WorkspaceRoute>
               <ExpiryDashboardPage />
-            </OrgAuthGuard>
+            </WorkspaceRoute>
+          }
+        />
+        <Route
+          path="/vault/tasks"
+          element={
+            <WorkspaceRoute>
+              <MyTasksPage />
+            </WorkspaceRoute>
+          }
+        />
+        <Route
+          path="/vault/notifications"
+          element={
+            <WorkspaceRoute>
+              <NotificationsPage />
+            </WorkspaceRoute>
           }
         />
 
         <Route
           path="/admin"
           element={
-            <OrgRoleGuard roles={['admin']}>
+            <AdminWorkspaceRoute>
               <AdminConsolePage />
-            </OrgRoleGuard>
+            </AdminWorkspaceRoute>
+          }
+        />
+        <Route
+          path="/admin/wizard"
+          element={
+            <AdminWorkspaceRoute>
+              <AdminSetupWizardPage />
+            </AdminWorkspaceRoute>
           }
         />
         <Route
           path="/admin/users"
           element={
-            <OrgRoleGuard roles={['admin']}>
+            <AdminWorkspaceRoute>
               <UsersPage />
-            </OrgRoleGuard>
+            </AdminWorkspaceRoute>
           }
         />
         <Route
           path="/admin/taxonomy"
           element={
-            <OrgRoleGuard roles={['admin']}>
+            <AdminWorkspaceRoute>
               <TaxonomyPage />
-            </OrgRoleGuard>
+            </AdminWorkspaceRoute>
           }
         />
         <Route
           path="/admin/lifecycle"
           element={
-            <OrgRoleGuard roles={['admin']}>
+            <AdminWorkspaceRoute>
               <LifecycleRulesPage />
-            </OrgRoleGuard>
+            </AdminWorkspaceRoute>
           }
         />
         <Route
           path="/admin/retention"
           element={
-            <OrgRoleGuard roles={['admin']}>
+            <AdminWorkspaceRoute>
               <RetentionPoliciesPage />
-            </OrgRoleGuard>
+            </AdminWorkspaceRoute>
           }
         />
         <Route
           path="/admin/channels"
           element={
-            <OrgRoleGuard roles={['admin']}>
+            <AdminWorkspaceRoute>
               <ContentChannelsPage />
-            </OrgRoleGuard>
+            </AdminWorkspaceRoute>
+          }
+        />
+        <Route
+          path="/admin/integrations"
+          element={
+            <AdminWorkspaceRoute>
+              <AdminIntegrationsPage />
+            </AdminWorkspaceRoute>
+          }
+        />
+        <Route
+          path="/admin/security"
+          element={
+            <AdminWorkspaceRoute>
+              <AdminSecurityPage />
+            </AdminWorkspaceRoute>
           }
         />
         <Route
           path="/admin/audit"
           element={
-            <OrgRoleGuard roles={['admin']}>
+            <AdminWorkspaceRoute>
               <AuditPage />
-            </OrgRoleGuard>
+            </AdminWorkspaceRoute>
+          }
+        />
+        <Route
+          path="/admin/workflows"
+          element={
+            <AdminWorkspaceRoute>
+              <AdminWorkflowQueuePage />
+            </AdminWorkspaceRoute>
           }
         />
 

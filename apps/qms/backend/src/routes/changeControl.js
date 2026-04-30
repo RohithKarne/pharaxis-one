@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { appendTraceLink } from '../services/traceabilityService.js';
 import { makeEntityCode, asDateString } from '../utils/codegen.js';
@@ -11,18 +12,6 @@ const VALID_APPROVAL_DECISIONS = ['Approve', 'Reject'];
 const VALID_CAB_DECISIONS = ['Approve', 'Reject', 'ConditionalApprove'];
 const VALID_STEP_STATUSES = ['Planned', 'InProgress', 'Completed', 'Blocked'];
 const VALID_EFFECTIVENESS_RESULTS = ['Effective', 'PartiallyEffective', 'NotEffective'];
-
-function hasAnyRole(roles, roleKeys) {
-  return Array.isArray(roles) && roleKeys.some((role) => roles.includes(role));
-}
-
-function assertRole(req, roleKeys, message = 'Insufficient permissions for this action') {
-  if (!hasAnyRole(req.authContext.roles, roleKeys)) {
-    const error = new Error(message);
-    error.statusCode = 403;
-    throw error;
-  }
-}
 
 async function appendChangeHistoryEvent(client, {
   orgId,
@@ -247,7 +236,7 @@ changeControlRouter.post('/:changeId/impact-assessment', async (req, res, next) 
 
 changeControlRouter.post('/:changeId/cab-review', async (req, res, next) => {
   try {
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
 
     const { changeId } = req.params;
     const { decision, comments = null } = req.body || {};
@@ -662,7 +651,7 @@ changeControlRouter.post('/:changeId/close', async (req, res, next) => {
 
 changeControlRouter.post('/:changeId/reopen', async (req, res, next) => {
   try {
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin']);
 
     const { changeId } = req.params;
     const { reason } = req.body || {};

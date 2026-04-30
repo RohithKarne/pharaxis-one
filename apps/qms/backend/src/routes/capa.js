@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { createInAppNotification, queueEmailNotification } from '../services/platform/notificationService.js';
 import { makeEntityCode, asDateString } from '../utils/codegen.js';
@@ -40,16 +41,6 @@ function makeError(message, statusCode = 400) {
 
 function hasRole(authRoles, roleKey) {
   return Array.isArray(authRoles) && authRoles.includes(roleKey);
-}
-
-function hasAnyRole(authRoles, roleKeys) {
-  return Array.isArray(authRoles) && roleKeys.some((role) => authRoles.includes(role));
-}
-
-function assertRole(req, roleKeys, errorMessage = 'Insufficient permissions for this action') {
-  if (!hasAnyRole(req.authContext.roles, roleKeys)) {
-    throw makeError(errorMessage, 403);
-  }
 }
 
 function normalizeRiskFactor(value, fallback = null) {
@@ -472,7 +463,7 @@ capaRouter.post('/:capaId/triage', async (req, res, next) => {
     const { capaId } = req.params;
     const { triageSummary = null, ownerUserId = null } = req.body || {};
 
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin']);
 
     const capa = await req.withRlsTransaction(async (client) => {
       const current = await getCapaRecord(client, capaId, { forUpdate: true });
@@ -990,7 +981,7 @@ capaRouter.post('/:capaId/approve', async (req, res, next) => {
       return res.status(400).json({ error: 'decision must be Approve or Reject' });
     }
 
-    assertRole(req, ['approver', 'qa_reviewer', 'admin', 'superadmin']);
+    assertAnyRole(req, ['approver', 'qa_reviewer', 'admin', 'superadmin']);
 
     const payload = await req.withRlsTransaction(async (client) => {
       const capa = await getCapaRecord(client, capaId, { forUpdate: true });
@@ -1321,7 +1312,7 @@ capaRouter.post('/:capaId/reopen', async (req, res, next) => {
       return res.status(400).json({ error: 'reason is required to reopen CAPA' });
     }
 
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin']);
 
     const capa = await req.withRlsTransaction(async (client) => {
       const current = await getCapaRecord(client, capaId, { forUpdate: true });

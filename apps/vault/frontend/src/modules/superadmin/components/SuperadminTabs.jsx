@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom'
 
 const TABS = [
-  { key: 'dashboard', label: 'Dashboard', path: '/superadmin/dashboard' },
-  { key: 'orgs', label: 'Organizations', path: '/superadmin/orgs' }
+  { key: 'dashboard', label: 'Dashboard', path: '/control-tower/dashboard' },
+  { key: 'orgs', label: 'Organizations', path: '/control-tower/orgs' }
 ]
 
 export default function SuperadminTabs({ active }) {

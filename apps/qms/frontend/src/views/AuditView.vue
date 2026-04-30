@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { apiRequest } from '../services/api';
+import { useModuleAccess } from '../composables/useModuleAccess';
 
 const loading = ref(false);
 const message = ref('');
@@ -38,6 +39,7 @@ const timeline = computed(() => detail.value?.timeline || []);
 const auditTypes = ['Internal', 'External', 'RegulatoryInspection'];
 const findingTypes = ['Observation', 'Minor', 'Major', 'Critical'];
 const effectivenessOptions = ['Effective', 'PartiallyEffective', 'NotEffective'];
+const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAccess('audits');
 
 function setMessage(text) {
   message.value = text;
@@ -93,6 +95,7 @@ async function loadDetail() {
 }
 
 async function createAudit() {
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest('/audits', {
       method: 'POST',
@@ -113,6 +116,7 @@ async function createAudit() {
 
 async function startAudit() {
   if (!selectedAuditId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/audits/${selectedAuditId.value}/start`, { method: 'POST' });
     setMessage('Audit moved to InProgress.');
@@ -125,6 +129,7 @@ async function startAudit() {
 
 async function addFinding() {
   if (!selectedAuditId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/audits/${selectedAuditId.value}/findings`, {
       method: 'POST',
@@ -148,6 +153,7 @@ async function addFinding() {
 
 async function respondFinding() {
   if (!selectedAuditId.value || !responseForm.value.findingId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/audits/${selectedAuditId.value}/findings/${responseForm.value.findingId}/respond`, {
       method: 'POST',
@@ -168,6 +174,7 @@ async function respondFinding() {
 
 async function linkFindingToCapa() {
   if (!selectedAuditId.value || !linkForm.value.findingId || !linkForm.value.capaId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/audits/${selectedAuditId.value}/findings/${linkForm.value.findingId}/link-capa`, {
       method: 'POST',
@@ -182,6 +189,7 @@ async function linkFindingToCapa() {
 
 async function closeFinding() {
   if (!selectedAuditId.value || !closeFindingForm.value.findingId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/audits/${selectedAuditId.value}/findings/${closeFindingForm.value.findingId}/close`, {
       method: 'POST',
@@ -201,6 +209,7 @@ async function closeFinding() {
 
 async function closeAudit() {
   if (!selectedAuditId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/audits/${selectedAuditId.value}/close`, {
       method: 'POST',
@@ -216,6 +225,7 @@ async function closeAudit() {
 }
 
 async function generateBinder() {
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest('/audits/binder/generate', { method: 'POST', body: {} });
     setMessage('Inspection binder generated.');
@@ -235,6 +245,9 @@ onMounted(async () => {
     <header class="rounded-2xl border border-sky-100 bg-white p-4">
       <h2 class="text-xl font-bold text-sky-900">Audit Management Workspace</h2>
       <p class="mt-1 text-sm text-slate-600">Run enterprise audits with findings, responses, CAPA linkage, closure evidence, and binder output.</p>
+      <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        {{ writeDisabledReason }}
+      </p>
       <p v-if="message" class="mt-2 text-sm text-indigo-700">{{ message }}</p>
     </header>
 
@@ -250,7 +263,7 @@ onMounted(async () => {
           <label class="text-xs text-slate-600">Planned Date</label>
           <input v-model="createForm.plannedDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
         </div>
-        <button class="mt-3 rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white" @click="createAudit">Create Audit</button>
+        <button class="mt-3 rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createAudit">Create Audit</button>
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
@@ -258,7 +271,7 @@ onMounted(async () => {
           <h3 class="text-lg font-semibold text-slate-900">Audits</h3>
           <div class="flex gap-2">
             <button class="rounded-lg border border-sky-700 px-4 py-2 text-sm font-semibold text-sky-700" @click="refreshList">Refresh</button>
-            <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" @click="generateBinder">Generate Binder</button>
+            <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="generateBinder">Generate Binder</button>
           </div>
         </div>
         <p v-if="loading" class="mt-2 text-sm text-slate-600">Loading audits...</p>
@@ -281,11 +294,11 @@ onMounted(async () => {
       <article class="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 class="text-lg font-semibold text-slate-900">Audit Actions</h3>
         <p class="mt-1 text-xs text-slate-600">Current Status: {{ audit.status }}</p>
-        <button class="mt-3 rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" @click="startAudit">Start Audit</button>
+        <button class="mt-3 rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="startAudit">Start Audit</button>
 
         <h4 class="mt-4 text-sm font-semibold text-slate-900">Close Audit</h4>
         <textarea v-model="closeAuditForm.closureSummary" class="mt-2 w-full rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Closure summary"></textarea>
-        <button class="mt-2 rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" @click="closeAudit">Close Audit</button>
+        <button class="mt-2 rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="closeAudit">Close Audit</button>
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-4">
@@ -299,7 +312,7 @@ onMounted(async () => {
           <input v-model="findingForm.processArea" class="rounded-lg border px-3 py-2 text-sm" placeholder="Process area" />
           <input v-model="findingForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
           <input v-model="findingForm.responseDueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" @click="addFinding">Add Finding</button>
+          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="addFinding">Add Finding</button>
         </div>
 
         <ul class="mt-3 max-h-36 space-y-2 overflow-auto text-xs">
@@ -317,7 +330,7 @@ onMounted(async () => {
           </select>
           <textarea v-model="responseForm.responseText" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Response"></textarea>
           <textarea v-model="responseForm.proposedAction" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Proposed action"></textarea>
-          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" @click="respondFinding">Submit Response</button>
+          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="respondFinding">Submit Response</button>
 
           <select v-model="linkForm.findingId" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="finding in findings" :key="`link-${finding.id}`" :value="finding.id">{{ finding.finding_code || finding.id }}</option>
@@ -326,7 +339,7 @@ onMounted(async () => {
             <option value="">Select CAPA</option>
             <option v-for="capa in capas" :key="capa.id" :value="capa.id">{{ capa.capa_code }} - {{ capa.title }}</option>
           </select>
-          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" @click="linkFindingToCapa">Link CAPA</button>
+          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="linkFindingToCapa">Link CAPA</button>
 
           <select v-model="closeFindingForm.findingId" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="finding in findings" :key="`close-${finding.id}`" :value="finding.id">{{ finding.finding_code || finding.id }}</option>
@@ -335,7 +348,7 @@ onMounted(async () => {
           <select v-model="closeFindingForm.effectivenessResult" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="item in effectivenessOptions" :key="item" :value="item">{{ item }}</option>
           </select>
-          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" @click="closeFinding">Close Finding</button>
+          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="closeFinding">Close Finding</button>
         </div>
       </article>
     </section>

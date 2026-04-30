@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { assertAnyRole } from '../middleware/rbac.js';
 import {
   createInAppNotification,
   queueEmailNotification,
@@ -16,18 +17,6 @@ import { runPeriodicAlerts } from '../services/platform/alertService.js';
 import { readTraceLinks } from '../services/traceabilityService.js';
 
 export const platformRouter = Router();
-
-function hasAnyRole(roles, roleKeys) {
-  return Array.isArray(roles) && roleKeys.some((role) => roles.includes(role));
-}
-
-function assertRole(req, roleKeys, message = 'Insufficient permissions for this action') {
-  if (!hasAnyRole(req.authContext.roles, roleKeys)) {
-    const error = new Error(message);
-    error.statusCode = 403;
-    throw error;
-  }
-}
 
 platformRouter.post('/notifications/in-app', async (req, res, next) => {
   try {
@@ -75,7 +64,7 @@ platformRouter.post('/notifications/email', async (req, res, next) => {
 
 platformRouter.post('/notifications/email/:emailId/retry', async (req, res, next) => {
   try {
-    assertRole(req, ['admin', 'superadmin', 'qa_reviewer']);
+    assertAnyRole(req, ['admin', 'superadmin', 'qa_reviewer']);
 
     const { emailId } = req.params;
     const email = await req.withRlsTransaction((client) => retryEmailNotification(client, emailId));
@@ -90,7 +79,7 @@ platformRouter.post('/notifications/email/:emailId/retry', async (req, res, next
 
 platformRouter.post('/notifications/email/:emailId/fail', async (req, res, next) => {
   try {
-    assertRole(req, ['admin', 'superadmin']);
+    assertAnyRole(req, ['admin', 'superadmin']);
 
     const { emailId } = req.params;
     const { errorMessage } = req.body || {};
@@ -109,7 +98,7 @@ platformRouter.post('/notifications/email/:emailId/fail', async (req, res, next)
 
 platformRouter.post('/notifications/email/:emailId/mark-sent', async (req, res, next) => {
   try {
-    assertRole(req, ['admin', 'superadmin']);
+    assertAnyRole(req, ['admin', 'superadmin']);
 
     const { emailId } = req.params;
     const email = await req.withRlsTransaction((client) => markEmailNotificationSent(client, emailId));
@@ -158,7 +147,7 @@ platformRouter.post('/events/outbox/:eventId/publish', async (req, res, next) =>
 
 platformRouter.post('/events/outbox/:eventId/retry', async (req, res, next) => {
   try {
-    assertRole(req, ['admin', 'superadmin']);
+    assertAnyRole(req, ['admin', 'superadmin']);
 
     const { eventId } = req.params;
     const event = await req.withRlsTransaction((client) => retryOutboxEvent(client, eventId));
@@ -173,7 +162,7 @@ platformRouter.post('/events/outbox/:eventId/retry', async (req, res, next) => {
 
 platformRouter.post('/events/outbox/:eventId/fail', async (req, res, next) => {
   try {
-    assertRole(req, ['admin', 'superadmin']);
+    assertAnyRole(req, ['admin', 'superadmin']);
 
     const { eventId } = req.params;
     const { errorMessage } = req.body || {};
@@ -210,7 +199,7 @@ platformRouter.get('/trace-links', async (req, res, next) => {
 
 platformRouter.post('/training/catalog', async (req, res, next) => {
   try {
-    assertRole(req, ['admin', 'superadmin', 'qa_reviewer']);
+    assertAnyRole(req, ['admin', 'superadmin', 'qa_reviewer']);
 
     const {
       trainingCode,
@@ -263,7 +252,7 @@ platformRouter.post('/training/catalog', async (req, res, next) => {
 
 platformRouter.post('/training/assignments', async (req, res, next) => {
   try {
-    assertRole(req, ['admin', 'superadmin', 'qa_reviewer']);
+    assertAnyRole(req, ['admin', 'superadmin', 'qa_reviewer']);
 
     const { trainingId, assignedUserId = null, assignedRoleKey = null, dueDate = null } = req.body || {};
 
@@ -355,6 +344,38 @@ platformRouter.post('/training/assignments/:assignmentId/complete', async (req, 
   }
 });
 
+platformRouter.get('/training/catalog', async (req, res, next) => {
+  try {
+    const { activeOnly = 'true', limit = 300 } = req.query;
+
+    const trainingCatalog = await req.withRlsTransaction(async (client) => {
+      const clauses = [];
+      const values = [];
+      if (String(activeOnly) !== 'false') {
+        clauses.push('is_active = true');
+      }
+      values.push(Math.min(Number(limit) || 300, 500));
+
+      const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM qms_training_catalog
+          ${whereClause}
+          ORDER BY created_at DESC
+          LIMIT $${values.length}
+        `,
+        values
+      );
+      return rows;
+    });
+
+    return res.json({ trainingCatalog });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 platformRouter.get('/training/assignments', async (req, res, next) => {
   try {
     const { status = null } = req.query;
@@ -423,6 +444,54 @@ platformRouter.get('/notifications', async (req, res, next) => {
     });
 
     return res.json(payload);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+platformRouter.patch('/notifications/:notificationId/read', async (req, res, next) => {
+  try {
+    const { notificationId } = req.params;
+    const payload = await req.withRlsTransaction(async (client) => {
+      const { rows } = await client.query(
+        `
+          UPDATE qms_notifications
+          SET is_read = true
+          WHERE id = $1
+          RETURNING *
+        `,
+        [notificationId]
+      );
+      return rows[0] || null;
+    });
+
+    if (!payload) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    return res.json({ notification: payload });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+platformRouter.patch('/notifications/read-all', async (req, res, next) => {
+  try {
+    const payload = await req.withRlsTransaction(async (client) => {
+      const { rows } = await client.query(
+        `
+          UPDATE qms_notifications
+          SET is_read = true
+          WHERE is_read = false
+            AND (recipient_user_id IS NULL OR recipient_user_id = $1)
+          RETURNING id
+        `,
+        [req.authContext.userId]
+      );
+      return rows.length;
+    });
+
+    return res.json({ updatedCount: payload });
   } catch (error) {
     return next(error);
   }

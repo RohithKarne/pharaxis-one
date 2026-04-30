@@ -179,7 +179,7 @@ export default function SuperadminOrgsPage() {
                       <td>{(Number(org.storage_used_kb || 0) / 1024).toFixed(2)} MB</td>
                       <td>{formatDate(org.created_at)}</td>
                       <td className="detail-actions">
-                        <Link className="btn-secondary link-button" to={`/superadmin/orgs/${org.id}`}>
+                        <Link className="btn-secondary link-button" to={`/control-tower/orgs/${org.id}`}>
                           View Users
                         </Link>
                         <button className="btn-secondary" onClick={() => toggleStatus(org)}>

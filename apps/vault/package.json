@@ -6,7 +6,11 @@
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
     "dev:all": "concurrently -n backend,frontend -c cyan,magenta \"nodemon backend/server.js\" \"cd frontend && npm run dev\"",
+    "seed:phase3": "node backend/tests/seed-phase3.js",
     "test:smoke:sprint1": "node backend/tests/smoke-sprint1.js",
+    "test:smoke:phase3": "node backend/tests/smoke-phase3.js",
+    "test:smoke:phase4": "node backend/tests/smoke-phase4.js",
+    "test:smoke:oneshot": "node backend/tests/smoke-oneshot.js",
     "test:sprint-close:gate1": "node backend/tests/smoke-sprint1.js && npx playwright test --config=playwright.config.js"
   },
   "dependencies": {

@@ -261,6 +261,171 @@ async function initializeDatabase() {
       config_value TEXT,
       UNIQUE KEY uq_org_config (org_id, config_key),
       FOREIGN KEY (org_id) REFERENCES orgs(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS integration_connectors (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      name VARCHAR(150) NOT NULL,
+      connector_type ENUM('veeva_vault','mims','crm','safety','custom') DEFAULT 'custom',
+      base_url VARCHAR(500) NOT NULL,
+      auth_type ENUM('none','api_key','basic','oauth2') DEFAULT 'none',
+      auth_value TEXT,
+      status ENUM('active','inactive') DEFAULT 'active',
+      last_test_status ENUM('unknown','pass','fail') DEFAULT 'unknown',
+      last_test_message VARCHAR(500),
+      last_tested_at DATETIME DEFAULT NULL,
+      created_by INT NOT NULL,
+      updated_by INT DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_integration_connector_org_name (org_id, name),
+      INDEX idx_integration_connector_status (org_id, status),
+      FOREIGN KEY (org_id) REFERENCES orgs(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS auth_mfa_challenges (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT DEFAULT NULL,
+      user_id INT NOT NULL,
+      user_type ENUM('org_user','superadmin') DEFAULT 'org_user',
+      challenge_token VARCHAR(64) NOT NULL UNIQUE,
+      one_time_code VARCHAR(12) NOT NULL,
+      expires_at DATETIME NOT NULL,
+      consumed_at DATETIME DEFAULT NULL,
+      ip_address VARCHAR(45),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_mfa_challenge_lookup (org_id, user_id, user_type, challenge_token),
+      INDEX idx_mfa_challenge_expiry (expires_at),
+      FOREIGN KEY (org_id) REFERENCES orgs(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS workflow_instances (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      content_id INT NOT NULL,
+      status ENUM('active','completed','cancelled') DEFAULT 'active',
+      started_by INT NOT NULL,
+      started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME DEFAULT NULL,
+      INDEX idx_workflow_instances_org_status (org_id, status),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (content_id) REFERENCES vault_content(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS workflow_tasks (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      workflow_instance_id BIGINT NOT NULL,
+      org_id INT NOT NULL,
+      content_id INT NOT NULL,
+      assignee_user_id INT NOT NULL,
+      assigned_by INT NOT NULL,
+      task_type ENUM('review','approval','signature') DEFAULT 'approval',
+      status ENUM('pending','completed','rejected','cancelled') DEFAULT 'pending',
+      due_at DATETIME DEFAULT NULL,
+      completed_at DATETIME DEFAULT NULL,
+      comments TEXT,
+      signature_id BIGINT DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_workflow_tasks_assignee_status (assignee_user_id, status),
+      INDEX idx_workflow_tasks_org_status (org_id, status),
+      FOREIGN KEY (workflow_instance_id) REFERENCES workflow_instances(id),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (content_id) REFERENCES vault_content(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS vault_signatures (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      content_id INT NOT NULL,
+      workflow_task_id BIGINT NOT NULL,
+      signer_user_id INT NOT NULL,
+      signature_meaning ENUM('reviewed','approved','rejected','acknowledged') NOT NULL,
+      signature_comment TEXT,
+      password_reverified TINYINT(1) DEFAULT 1,
+      hash_snapshot CHAR(64) NOT NULL,
+      signed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      ip_address VARCHAR(45),
+      INDEX idx_vault_signatures_org_content (org_id, content_id),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (content_id) REFERENCES vault_content(id),
+      FOREIGN KEY (workflow_task_id) REFERENCES workflow_tasks(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS workflow_templates (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      name VARCHAR(200) NOT NULL,
+      description TEXT,
+      is_active TINYINT(1) DEFAULT 1,
+      created_by INT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_workflow_template_name_org (org_id, name),
+      FOREIGN KEY (org_id) REFERENCES orgs(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS workflow_template_steps (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      template_id BIGINT NOT NULL,
+      org_id INT NOT NULL,
+      step_order INT NOT NULL,
+      task_type ENUM('review','approval','signature') DEFAULT 'approval',
+      assignee_role ENUM('admin','author','reviewer','approver','viewer') NOT NULL,
+      due_in_hours INT DEFAULT NULL,
+      require_signature TINYINT(1) DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_workflow_template_steps_template (template_id, step_order),
+      FOREIGN KEY (template_id) REFERENCES workflow_templates(id),
+      FOREIGN KEY (org_id) REFERENCES orgs(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS workflow_task_comments (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      workflow_task_id BIGINT NOT NULL,
+      content_id INT NOT NULL,
+      user_id INT NOT NULL,
+      comment_text TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_workflow_task_comments_task (workflow_task_id, created_at),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (workflow_task_id) REFERENCES workflow_tasks(id),
+      FOREIGN KEY (content_id) REFERENCES vault_content(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS workflow_task_notifications (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      workflow_task_id BIGINT NOT NULL,
+      content_id INT NOT NULL,
+      assignee_user_id INT NOT NULL,
+      notification_type ENUM('due_soon','overdue') NOT NULL,
+      due_at DATETIME DEFAULT NULL,
+      message VARCHAR(500) NOT NULL,
+      email_delivery_status ENUM('sent','skipped','failed') DEFAULT 'skipped',
+      webhook_delivery_status ENUM('sent','skipped','failed') DEFAULT 'skipped',
+      delivery_error TEXT,
+      delivered_at DATETIME DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_workflow_task_notifications_task (workflow_task_id, created_at),
+      INDEX idx_workflow_task_notifications_org_type (org_id, notification_type, created_at),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (workflow_task_id) REFERENCES workflow_tasks(id),
+      FOREIGN KEY (content_id) REFERENCES vault_content(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS workflow_webhook_retry_queue (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      workflow_task_notification_id BIGINT NOT NULL,
+      content_channel_id INT NOT NULL,
+      channel_name VARCHAR(150),
+      webhook_url VARCHAR(500) NOT NULL,
+      request_body_json JSON NOT NULL,
+      signature_secret VARCHAR(255),
+      attempt_count INT DEFAULT 0,
+      max_attempts INT DEFAULT 5,
+      status ENUM('pending','sent','failed') DEFAULT 'pending',
+      next_attempt_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_error TEXT,
+      last_attempt_at DATETIME DEFAULT NULL,
+      delivered_at DATETIME DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_workflow_webhook_retry_due (status, next_attempt_at),
+      INDEX idx_workflow_webhook_retry_notification (workflow_task_notification_id, status),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (workflow_task_notification_id) REFERENCES workflow_task_notifications(id)
     )`
   ]
 
@@ -280,7 +445,189 @@ async function initializeDatabase() {
     await pool.execute('ALTER TABLE vault_folders ADD COLUMN is_active TINYINT(1) DEFAULT 1 AFTER path')
   }
 
-  console.log('Pharaxis Vault database initialized — all 21 tables ready')
+  const [taskActivationColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_tasks'
+       AND COLUMN_NAME = 'activation_status'`
+  )
+  if (!taskActivationColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_tasks
+       ADD COLUMN activation_status ENUM('ready','waiting') DEFAULT 'ready' AFTER status`
+    )
+  }
+
+  const [taskStepOrderColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_tasks'
+       AND COLUMN_NAME = 'step_order'`
+  )
+  if (!taskStepOrderColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_tasks
+       ADD COLUMN step_order INT DEFAULT 1 AFTER workflow_instance_id`
+    )
+  }
+
+  const [taskEscalatedAtColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_tasks'
+       AND COLUMN_NAME = 'escalated_at'`
+  )
+  if (!taskEscalatedAtColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_tasks
+       ADD COLUMN escalated_at DATETIME DEFAULT NULL AFTER completed_at`
+    )
+  }
+
+  const [taskEscalationLevelColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_tasks'
+       AND COLUMN_NAME = 'escalation_level'`
+  )
+  if (!taskEscalationLevelColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_tasks
+       ADD COLUMN escalation_level INT DEFAULT 0 AFTER escalated_at`
+    )
+  }
+
+  const [taskReassignedFromColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_tasks'
+       AND COLUMN_NAME = 'reassigned_from_user_id'`
+  )
+  if (!taskReassignedFromColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_tasks
+       ADD COLUMN reassigned_from_user_id INT DEFAULT NULL AFTER assignee_user_id`
+    )
+  }
+
+  const [taskReassignedAtColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_tasks'
+       AND COLUMN_NAME = 'reassigned_at'`
+  )
+  if (!taskReassignedAtColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_tasks
+       ADD COLUMN reassigned_at DATETIME DEFAULT NULL AFTER reassigned_from_user_id`
+    )
+  }
+
+  const [taskEscalationOwnerColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_tasks'
+       AND COLUMN_NAME = 'escalation_owner_user_id'`
+  )
+  if (!taskEscalationOwnerColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_tasks
+       ADD COLUMN escalation_owner_user_id INT DEFAULT NULL AFTER escalation_level`
+    )
+  }
+
+  const [taskDelegatedFromColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_tasks'
+       AND COLUMN_NAME = 'delegated_from_user_id'`
+  )
+  if (!taskDelegatedFromColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_tasks
+       ADD COLUMN delegated_from_user_id INT DEFAULT NULL AFTER reassigned_from_user_id`
+    )
+  }
+
+  const [taskDelegatedAtColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_tasks'
+       AND COLUMN_NAME = 'delegated_at'`
+  )
+  if (!taskDelegatedAtColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_tasks
+       ADD COLUMN delegated_at DATETIME DEFAULT NULL AFTER reassigned_at`
+    )
+  }
+
+  const [notificationEmailStatusColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_task_notifications'
+       AND COLUMN_NAME = 'email_delivery_status'`
+  )
+  if (!notificationEmailStatusColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_task_notifications
+       ADD COLUMN email_delivery_status ENUM('sent','skipped','failed') DEFAULT 'skipped' AFTER message`
+    )
+  }
+
+  const [notificationWebhookStatusColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_task_notifications'
+       AND COLUMN_NAME = 'webhook_delivery_status'`
+  )
+  if (!notificationWebhookStatusColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_task_notifications
+       ADD COLUMN webhook_delivery_status ENUM('sent','skipped','failed') DEFAULT 'skipped' AFTER email_delivery_status`
+    )
+  }
+
+  const [notificationDeliveryErrorColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_task_notifications'
+       AND COLUMN_NAME = 'delivery_error'`
+  )
+  if (!notificationDeliveryErrorColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_task_notifications
+       ADD COLUMN delivery_error TEXT AFTER webhook_delivery_status`
+    )
+  }
+
+  const [notificationDeliveredAtColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_task_notifications'
+       AND COLUMN_NAME = 'delivered_at'`
+  )
+  if (!notificationDeliveredAtColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_task_notifications
+       ADD COLUMN delivered_at DATETIME DEFAULT NULL AFTER delivery_error`
+    )
+  }
+
+  console.log('Pharaxis Vault database initialized — workflow and signature tables ready')
 }
 
 module.exports = { pool, initializeDatabase }

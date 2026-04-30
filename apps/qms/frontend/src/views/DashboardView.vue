@@ -1,9 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
+import QualityDataGrid from '../components/QualityDataGrid.vue';
 import { apiRequest, getStoredAuth } from '../services/api';
 
 const loading = ref(false);
 const error = ref('');
+const taskFilter = ref('');
+const lastLoadedAt = ref('');
 const documents = ref([]);
 const capas = ref([]);
 const deviations = ref([]);
@@ -35,6 +38,7 @@ async function load() {
     error.value = err.message;
   } finally {
     loading.value = false;
+    lastLoadedAt.value = new Date().toLocaleTimeString();
   }
 }
 
@@ -64,6 +68,25 @@ const myTasks = computed(() => {
   return tasks.slice(0, 8);
 });
 
+const filteredTasks = computed(() => {
+  const query = taskFilter.value.trim().toLowerCase();
+  if (!query) return myTasks.value;
+  return myTasks.value.filter(
+    (task) =>
+      task.type.toLowerCase().includes(query) ||
+      task.code.toLowerCase().includes(query) ||
+      task.title.toLowerCase().includes(query) ||
+      task.status.toLowerCase().includes(query)
+  );
+});
+
+const taskColumns = [
+  { key: 'type', label: 'Type' },
+  { key: 'code', label: 'Code' },
+  { key: 'title', label: 'Title' },
+  { key: 'status', label: 'Status' }
+];
+
 const complianceAlerts = computed(() => {
   const alerts = [];
   if (pendingApprovals.value > 0) {
@@ -91,6 +114,17 @@ onMounted(load);
       <p class="mt-2 text-sm text-slate-600">
         Real-time view of quality workload, pending approvals, compliance alerts, and active records.
       </p>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          v-model="taskFilter"
+          class="rounded border border-slate-300 px-3 py-1.5 text-xs"
+          placeholder="Filter tasks by type, code, title, or status"
+        />
+        <button class="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700" @click="load">
+          Refresh Dashboard
+        </button>
+        <span class="text-xs text-slate-600">Last sync: {{ lastLoadedAt || 'Not synced yet' }}</span>
+      </div>
     </header>
 
     <section class="grid gap-3 xl:grid-cols-6 md:grid-cols-3 sm:grid-cols-2">
@@ -114,16 +148,20 @@ onMounted(load);
         </div>
         <p v-if="loading" class="mt-3 text-sm text-slate-600">Loading latest records...</p>
         <p v-else-if="myTasks.length === 0" class="mt-3 text-sm text-slate-600">No active tasks right now.</p>
-        <ul v-else class="mt-3 space-y-2">
-          <li
-            v-for="task in myTasks"
-            :key="`${task.type}-${task.code}`"
-            class="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        <p v-else-if="filteredTasks.length === 0" class="mt-3 text-sm text-slate-600">No tasks match the current filter.</p>
+        <div v-else class="mt-3">
+          <QualityDataGrid
+            :columns="taskColumns"
+            :rows="filteredTasks.map((task) => ({ ...task, rowKey: `${task.type}-${task.code}` }))"
+            row-key="rowKey"
+            storage-key="qms_dashboard_task_views"
+            empty-text="No tasks available."
           >
-            <span class="font-semibold">{{ task.type }}</span> • {{ task.code }} — {{ task.title }}
-            <span class="ml-1 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">{{ task.status }}</span>
-          </li>
-        </ul>
+            <template #cell-status="{ value }">
+              <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">{{ value }}</span>
+            </template>
+          </QualityDataGrid>
+        </div>
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-4">

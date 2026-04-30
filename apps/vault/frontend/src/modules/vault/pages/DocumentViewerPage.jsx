@@ -89,24 +89,29 @@ export default function DocumentViewerPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">{content?.title || 'Document Viewer'}</h1>
-          <p className="brand-subtitle">
-            {content?.doc_number || '-'} ·
+      <main className="dashboard-grid">
+        <section className="panel span-12 workspace-hero-card">
+          <div>
+            <p className="workspace-hero-kicker">Overview / Document Viewer</p>
+            <h2 className="workspace-hero-title">{content?.title || 'Document Viewer'}</h2>
+            <p className="panel-note">{content?.doc_number || '-'} · {versionId ? `Version #${versionId}` : 'Current Version'}</p>
+          </div>
+          <div className="workspace-hero-right">
             <span className={lifecycleBadgeClass(content?.lifecycle_state)}>{content?.lifecycle_state || '-'}</span>
-            · {versionId ? `Version #${versionId}` : 'Current Version'}
-          </p>
-        </div>
-        <div className="detail-actions">
-          <Link className="btn-secondary link-button" to={`/vault/content/${id}`}>
-            Back to Detail
-          </Link>
-          <Link className="btn-secondary link-button" to="/vault/search">
-            Back to Search
-          </Link>
-        </div>
-      </header>
+          </div>
+        </section>
+
+        <section className="panel span-12">
+          <div className="detail-actions">
+            <Link className="btn-secondary link-button" to={`/vault/content/${id}`}>
+              Back to Detail
+            </Link>
+            <Link className="btn-secondary link-button" to="/vault/search">
+              Back to Search
+            </Link>
+          </div>
+        </section>
+      </main>
 
       <main className="dashboard-grid">
         <section className="panel span-12">

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { loginSuperadmin } from '../services/api';
 
 const router = useRouter();
+const qmsIconUrl = `${import.meta.env.BASE_URL}qms-icon.svg`;
 
 const form = ref({
   userId: 'Superadmin',
@@ -27,27 +28,44 @@ async function submit() {
 </script>
 
 <template>
-  <main class="auth-screen superadmin-screen">
-    <section class="auth-panel superadmin-panel">
-      <p class="auth-kicker">Pharaxis Platform Control</p>
-      <h1 class="auth-title">Superadmin Login</h1>
-      <p class="auth-subtitle">
-        Dedicated platform console for organizations, users, security groups, email config, and policies.
-      </p>
+  <main class="login-page qms-login-page qms-login-page-superadmin">
+    <section class="login-card qms-login-card qms-login-card-superadmin">
+      <header class="login-card-header qms-login-card-header qms-login-card-header-superadmin">
+        <div class="qms-login-brand">
+          <img :src="qmsIconUrl" alt="QMS" class="qms-login-brand-icon" />
+          <p class="app-name">PHARAXIS QMS</p>
+        </div>
+        <p class="app-tagline">Platform Control</p>
+      </header>
 
-      <form class="auth-form" @submit.prevent="submit">
-        <label class="auth-label" for="sa-user-id">User ID</label>
-        <input id="sa-user-id" v-model="form.userId" class="auth-input" autocomplete="username" />
+      <section class="login-card-body">
+        <h1 class="qms-login-title">Superadmin Sign In</h1>
+        <p class="qms-login-subtitle">
+          Manage organizations, users, security groups, and global platform policies.
+        </p>
 
-        <label class="auth-label" for="sa-password">Password</label>
-        <input id="sa-password" v-model="form.password" class="auth-input" type="password" autocomplete="current-password" />
+        <p v-if="error" class="alert alert-error">{{ error }}</p>
 
-        <button class="auth-button" :disabled="loading">
-          {{ loading ? 'Signing In...' : 'Sign In to Superadmin' }}
-        </button>
-      </form>
+        <form @submit.prevent="submit">
+          <div class="form-group">
+            <label for="sa-user-id">User ID</label>
+            <input id="sa-user-id" v-model="form.userId" class="form-control" autocomplete="username" />
+          </div>
 
-      <p v-if="error" class="auth-error">{{ error }}</p>
+          <div class="form-group">
+            <label for="sa-password">Password</label>
+            <input id="sa-password" v-model="form.password" class="form-control" type="password" autocomplete="current-password" />
+          </div>
+
+          <button class="btn btn-primary btn-block mt-8" :disabled="loading" type="submit">
+            {{ loading ? 'Signing in...' : 'Sign In' }}
+          </button>
+        </form>
+
+        <p class="auth-linkline">
+          Org User? <RouterLink to="/login">Sign in to QMS Workspace</RouterLink>
+        </p>
+      </section>
     </section>
   </main>
 </template>

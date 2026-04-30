@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { apiRequest } from '../services/api';
+import { useModuleAccess } from '../composables/useModuleAccess';
 
 const loading = ref(false);
 const message = ref('');
@@ -65,6 +66,7 @@ const versions = computed(() => detail.value?.versions || []);
 const reviews = computed(() => detail.value?.reviews || []);
 const pendingReviews = computed(() => reviews.value.filter((item) => item.status === 'Pending'));
 const activeVersionId = computed(() => selectedDocument.value?.active_version_id || '');
+const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAccess('documentControl');
 
 function setMessage(text) {
   message.value = text;
@@ -155,6 +157,7 @@ async function loadSelectedDocument() {
 }
 
 async function createDocument() {
+  if (!withWriteAccess(setMessage)) return;
   try {
     const me = await apiRequest('/protected/me');
     await apiRequest('/document-control/documents', {
@@ -190,6 +193,7 @@ async function createDocument() {
 
 async function createRevision() {
   if (!selectedDocumentId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/document-control/documents/${selectedDocumentId.value}/revisions`, {
       method: 'POST',
@@ -210,6 +214,7 @@ async function createRevision() {
 
 async function transitionVersion() {
   if (!selectedDocumentId.value || !transitionForm.value.versionId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(
       `/document-control/documents/${selectedDocumentId.value}/versions/${transitionForm.value.versionId}/transition`,
@@ -234,6 +239,7 @@ async function transitionVersion() {
 
 async function saveAccessPolicies() {
   if (!selectedDocumentId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/document-control/documents/${selectedDocumentId.value}/access-policies`, {
       method: 'PUT',
@@ -249,6 +255,7 @@ async function saveAccessPolicies() {
 
 async function completeReview() {
   if (!selectedDocumentId.value || !reviewForm.value.reviewId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(
       `/document-control/documents/${selectedDocumentId.value}/reviews/${reviewForm.value.reviewId}/complete`,
@@ -271,6 +278,7 @@ async function completeReview() {
 
 async function exportDocumentVersion() {
   if (!selectedDocumentId.value || !exportForm.value.versionId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     const result = await apiRequest(
       `/document-control/documents/${selectedDocumentId.value}/versions/${exportForm.value.versionId}/export`,
@@ -306,6 +314,7 @@ async function loadPreview(versionId) {
 
 async function acknowledgePreview() {
   if (!selectedDocumentId.value || !previewData.value?.versionId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(
       `/document-control/documents/${selectedDocumentId.value}/versions/${previewData.value.versionId}/acknowledge`,
@@ -338,6 +347,9 @@ onMounted(refreshList);
       <h2 class="text-xl font-bold text-teal-900">Document Control Workspace</h2>
       <p class="mt-1 text-sm text-slate-600">
         Create controlled documents, manage revisions, enforce role-based access, run periodic reviews, and track timeline evidence.
+      </p>
+      <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        {{ writeDisabledReason }}
       </p>
       <p v-if="message" class="mt-2 text-sm text-indigo-700">{{ message }}</p>
     </header>
@@ -372,7 +384,7 @@ onMounted(refreshList);
           <textarea v-model="createForm.contentSummary" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Initial content summary"></textarea>
           <textarea v-model="createForm.reasonForChange" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Reason for change (optional)"></textarea>
         </div>
-        <button class="mt-3 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white" @click="createDocument">
+        <button class="mt-3 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createDocument">
           Create Controlled Document
         </button>
       </article>
@@ -419,7 +431,7 @@ onMounted(refreshList);
         <div class="mt-2 grid gap-2">
           <textarea v-model="revisionForm.contentSummary" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Revision summary"></textarea>
           <textarea v-model="revisionForm.reasonForChange" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Reason for revision"></textarea>
-          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" @click="createRevision">
+          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" :disabled="isWriteDisabled" @click="createRevision">
             Add Revision
           </button>
         </div>
@@ -443,7 +455,7 @@ onMounted(refreshList);
           <textarea v-model="transitionForm.notes" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Transition notes"></textarea>
           <input v-model="transitionForm.signatureId" class="rounded-lg border px-3 py-2 text-sm" placeholder="Signature ID (required for Approved/Effective)" />
 
-          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" @click="transitionVersion">
+          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" :disabled="isWriteDisabled" @click="transitionVersion">
             Apply Transition
           </button>
 
@@ -461,7 +473,7 @@ onMounted(refreshList);
             <option>XLSX</option>
           </select>
           <input v-model="exportForm.binderJobReference" class="rounded-lg border px-3 py-2 text-sm" placeholder="Binder reference (optional)" />
-          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" @click="exportDocumentVersion">
+          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" :disabled="isWriteDisabled" @click="exportDocumentVersion">
             Record Export
           </button>
         </div>
@@ -482,7 +494,7 @@ onMounted(refreshList);
             <option>Escalated</option>
           </select>
           <textarea v-model="reviewForm.notes" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Review notes"></textarea>
-          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" @click="completeReview">
+          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" :disabled="isWriteDisabled" @click="completeReview">
             Complete Review
           </button>
         </div>
@@ -499,7 +511,7 @@ onMounted(refreshList);
       <article class="rounded-2xl border border-slate-200 bg-white p-4">
         <div class="flex items-center justify-between">
           <h3 class="text-lg font-semibold text-slate-900">Access Policies</h3>
-          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" @click="saveAccessPolicies">
+          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" :disabled="isWriteDisabled" @click="saveAccessPolicies">
             Save Policies
           </button>
         </div>
@@ -533,7 +545,7 @@ onMounted(refreshList);
               class="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900"
             >
               Acknowledgement required before controlled copy access.
-              <button class="ml-2 rounded border border-amber-500 px-2 py-1 font-semibold" @click="acknowledgePreview">Acknowledge</button>
+              <button class="ml-2 rounded border border-amber-500 px-2 py-1 font-semibold" :disabled="isWriteDisabled" @click="acknowledgePreview">Acknowledge</button>
             </div>
 
             <div v-if="canShowPreviewContent()" class="space-y-2 text-xs text-slate-700">

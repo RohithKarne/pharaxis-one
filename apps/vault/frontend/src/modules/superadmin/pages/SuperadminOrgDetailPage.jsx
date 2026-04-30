@@ -14,8 +14,19 @@ export default function SuperadminOrgDetailPage() {
   const { id } = useParams()
   const token = getSuperadminToken()
   const [payload, setPayload] = useState(null)
+  const [hardening, setHardening] = useState(null)
+  const [hardeningForm, setHardeningForm] = useState({
+    superadmin_policy_pack: 'regulated_enterprise',
+    superadmin_license_tier: 'enterprise',
+    superadmin_seat_limit: '250',
+    superadmin_session_timeout_min: '480',
+    superadmin_enforce_mfa: true,
+    superadmin_release_channel: 'stable'
+  })
   const [loading, setLoading] = useState(true)
+  const [savingHardening, setSavingHardening] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   async function loadOrgUsers() {
     if (!token) {
@@ -27,14 +38,54 @@ export default function SuperadminOrgDetailPage() {
     setLoading(true)
     setError('')
     try {
-      const data = await apiJson(`/api/superadmin/orgs/${id}/users`, {
-        headers: authHeaders(token)
-      })
-      setPayload(data)
+      const [usersPayload, hardeningPayload] = await Promise.all([
+        apiJson(`/api/superadmin/orgs/${id}/users`, {
+          headers: authHeaders(token)
+        }),
+        apiJson(`/api/superadmin/orgs/${id}/hardening`, {
+          headers: authHeaders(token)
+        })
+      ])
+      setPayload(usersPayload)
+      setHardening(hardeningPayload)
+      if (hardeningPayload?.policy) {
+        setHardeningForm({
+          superadmin_policy_pack: hardeningPayload.policy.superadmin_policy_pack || 'regulated_enterprise',
+          superadmin_license_tier: hardeningPayload.policy.superadmin_license_tier || 'enterprise',
+          superadmin_seat_limit: String(hardeningPayload.policy.superadmin_seat_limit || 250),
+          superadmin_session_timeout_min: String(hardeningPayload.policy.superadmin_session_timeout_min || 480),
+          superadmin_enforce_mfa: Boolean(hardeningPayload.policy.superadmin_enforce_mfa),
+          superadmin_release_channel: hardeningPayload.policy.superadmin_release_channel || 'stable'
+        })
+      }
     } catch (requestError) {
       setError(requestError.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function saveHardeningPolicy(event) {
+    event.preventDefault()
+    setSavingHardening(true)
+    setError('')
+    setSuccess('')
+    try {
+      await apiJson(`/api/superadmin/orgs/${id}/hardening`, {
+        method: 'PATCH',
+        headers: authHeaders(token, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          ...hardeningForm,
+          superadmin_seat_limit: Number(hardeningForm.superadmin_seat_limit || 250),
+          superadmin_session_timeout_min: Number(hardeningForm.superadmin_session_timeout_min || 480)
+        })
+      })
+      setSuccess('Hardening policy saved.')
+      await loadOrgUsers()
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setSavingHardening(false)
     }
   }
 
@@ -56,16 +107,90 @@ export default function SuperadminOrgDetailPage() {
         <section className="panel span-12">
           <SuperadminTabs active="orgs" />
           <div className="detail-actions">
-            <Link className="btn-secondary link-button" to="/superadmin/orgs">
+            <Link className="btn-secondary link-button" to="/control-tower/orgs">
               Back to Organizations
             </Link>
           </div>
           {error ? <div className="auth-error">{error}</div> : null}
+          {success ? <div className="upload-success">{success}</div> : null}
           {loading ? <p className="panel-note">Loading organization users...</p> : null}
         </section>
 
+        {!loading && hardening ? (
+          <section className="panel span-4">
+            <h3>Hardening Policy</h3>
+            <p className="panel-note">
+              Active users: {hardening.seats?.active_users || 0} / Seat limit: {hardening.policy?.superadmin_seat_limit || 0}
+            </p>
+            <form className="auth-form users-create-form" onSubmit={saveHardeningPolicy}>
+              <div className="form-field">
+                <label htmlFor="hardening-policy-pack">Policy Pack</label>
+                <input
+                  id="hardening-policy-pack"
+                  value={hardeningForm.superadmin_policy_pack}
+                  onChange={event => setHardeningForm({ ...hardeningForm, superadmin_policy_pack: event.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="hardening-license-tier">License Tier</label>
+                <input
+                  id="hardening-license-tier"
+                  value={hardeningForm.superadmin_license_tier}
+                  onChange={event => setHardeningForm({ ...hardeningForm, superadmin_license_tier: event.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="hardening-seat-limit">Seat Limit</label>
+                <input
+                  id="hardening-seat-limit"
+                  type="number"
+                  min={1}
+                  value={hardeningForm.superadmin_seat_limit}
+                  onChange={event => setHardeningForm({ ...hardeningForm, superadmin_seat_limit: event.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="hardening-session-timeout">Session Timeout (min)</label>
+                <input
+                  id="hardening-session-timeout"
+                  type="number"
+                  min={30}
+                  value={hardeningForm.superadmin_session_timeout_min}
+                  onChange={event => setHardeningForm({ ...hardeningForm, superadmin_session_timeout_min: event.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="hardening-release-channel">Release Channel</label>
+                <select
+                  id="hardening-release-channel"
+                  value={hardeningForm.superadmin_release_channel}
+                  onChange={event => setHardeningForm({ ...hardeningForm, superadmin_release_channel: event.target.value })}
+                >
+                  <option value="stable">Stable</option>
+                  <option value="preview">Preview</option>
+                </select>
+              </div>
+              <label className="status-toggle">
+                <input
+                  type="checkbox"
+                  checked={hardeningForm.superadmin_enforce_mfa}
+                  onChange={event => setHardeningForm({ ...hardeningForm, superadmin_enforce_mfa: event.target.checked })}
+                />
+                <span>Enforce MFA</span>
+              </label>
+              <button className="btn-primary" type="submit" disabled={savingHardening}>
+                {savingHardening ? 'Saving...' : 'Save Hardening'}
+              </button>
+            </form>
+          </section>
+        ) : null}
+
         {!loading && payload ? (
-          <section className="panel span-12">
+          <section className="panel span-8">
             <h3>{payload.org?.name} ({payload.org?.slug})</h3>
             <p className="panel-note">Status: {payload.org?.status}</p>
             <div className="users-table-wrap">

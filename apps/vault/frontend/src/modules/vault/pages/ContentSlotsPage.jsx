@@ -124,13 +124,28 @@ export default function ContentSlotsPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Content Slots</h1>
-          <p className="brand-subtitle">Expected-document placeholders with ownership and due dates</p>
-        </div>
-        <span className="topbar-pill">{pendingCount} pending · {overdueCount} overdue</span>
-      </header>
+      <main className="dashboard-grid">
+        <section className="panel span-12 workspace-hero-card">
+          <div>
+            <p className="workspace-hero-kicker">Compliance / Content Slots</p>
+            <h2 className="workspace-hero-title">Content Slots</h2>
+            <p className="panel-note">Expected-document placeholders with ownership and due dates.</p>
+          </div>
+          <div className="workspace-hero-right">
+            <span className="workspace-status-pill">Slot Tracking</span>
+            <span className="workspace-hero-date">{pendingCount} pending · {overdueCount} overdue</span>
+          </div>
+        </section>
+
+        <section className="panel span-12">
+          <ul className="simple-list">
+            <li>
+              <span>Role access</span>
+              <strong>{canCreate ? 'Admin can create slots' : 'Read access'}</strong>
+            </li>
+          </ul>
+        </section>
+      </main>
 
       <main className="dashboard-grid">
         <section className="panel span-4">

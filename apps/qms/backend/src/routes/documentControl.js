@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import {
   assertRoleAllowedForTransition,
@@ -10,18 +11,6 @@ import { searchDocuments } from '../services/documentSearchService.js';
 
 const validTypes = new Set(['SOP', 'Work Instruction', 'Policy', 'Form', 'Protocol']);
 const validCriticality = new Set(['Low', 'Medium', 'High', 'Critical']);
-
-function hasAnyRole(roles, roleKeys) {
-  return Array.isArray(roles) && roleKeys.some((role) => roles.includes(role));
-}
-
-function assertRole(req, roleKeys, message = 'Insufficient permissions for this action') {
-  if (!hasAnyRole(req.authContext.roles, roleKeys)) {
-    const error = new Error(message);
-    error.statusCode = 403;
-    throw error;
-  }
-}
 
 function makeDocumentCode(title) {
   const seed = String(title || 'doc')
@@ -719,7 +708,7 @@ documentControlRouter.put('/documents/:documentId/access-policies', async (req, 
       return res.status(400).json({ error: 'policies array is required' });
     }
 
-    assertRole(req, ['admin', 'superadmin', 'qa_reviewer']);
+    assertAnyRole(req, ['admin', 'superadmin', 'qa_reviewer']);
 
     const updated = await req.withRlsTransaction(async (client) => {
       const { rows: docs } = await client.query('SELECT id FROM dc_documents WHERE id = $1 LIMIT 1', [
@@ -912,7 +901,7 @@ documentControlRouter.post('/documents/:documentId/reviews/:reviewId/complete', 
     const { documentId, reviewId } = req.params;
     const { notes = null, result = 'Completed' } = req.body || {};
 
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin']);
 
     const payload = await req.withRlsTransaction(async (client) => {
       const { rows: docRows } = await client.query(

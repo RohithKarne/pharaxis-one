@@ -4,6 +4,90 @@ import { logSuperadminAction } from './_adminActions.js';
 
 export const superadminPlatformRouter = Router();
 
+superadminPlatformRouter.get('/readiness', async (req, res, next) => {
+  try {
+    const readiness = await req.withRlsTransaction(async (client) => {
+      const [{ rows: orgRows }, { rows: userRows }, { rows: uploadRows }, { rows: securityRows }, { rows: emailRows }, { rows: failRows }] =
+        await Promise.all([
+          client.query(
+            `
+              SELECT
+                COUNT(*)::int AS total_orgs,
+                COUNT(*) FILTER (WHERE is_active = true)::int AS active_orgs
+              FROM qms_orgs
+            `
+          ),
+          client.query(
+            `
+              SELECT
+                COUNT(*)::int AS total_users,
+                COUNT(*) FILTER (WHERE is_active = true)::int AS active_users
+              FROM qms_users
+            `
+          ),
+          client.query(
+            `
+              SELECT COUNT(*)::int AS total
+              FROM sa_org_upload_policies p
+              JOIN qms_orgs o ON o.id = p.org_id
+            `
+          ),
+          client.query(
+            `
+              SELECT COUNT(*)::int AS total
+              FROM sa_org_security_policies s
+              JOIN qms_orgs o ON o.id = s.org_id
+            `
+          ),
+          client.query(
+            `
+              SELECT COUNT(*)::int AS total
+              FROM sa_platform_email_config
+              WHERE config_key = 'default'
+                AND is_active = true
+            `
+          ),
+          client.query(
+            `
+              SELECT COUNT(*)::int AS total
+              FROM qms_login_audit
+              WHERE outcome = 'Failed'
+                AND occurred_at >= now() - interval '24 hours'
+            `
+          )
+        ]);
+
+      const totalOrgs = Number(orgRows[0]?.total_orgs || 0);
+      const uploadCovered = Number(uploadRows[0]?.total || 0);
+      const securityCovered = Number(securityRows[0]?.total || 0);
+
+      return {
+        generatedAt: new Date().toISOString(),
+        orgs: {
+          total: totalOrgs,
+          active: Number(orgRows[0]?.active_orgs || 0)
+        },
+        users: {
+          total: Number(userRows[0]?.total_users || 0),
+          active: Number(userRows[0]?.active_users || 0)
+        },
+        policies: {
+          uploadPolicyCoverage: totalOrgs === 0 ? 100 : Math.round((uploadCovered / totalOrgs) * 100),
+          securityPolicyCoverage: totalOrgs === 0 ? 100 : Math.round((securityCovered / totalOrgs) * 100)
+        },
+        security: {
+          activePlatformEmailConfig: Number(emailRows[0]?.total || 0) > 0,
+          failedLoginsLast24h: Number(failRows[0]?.total || 0)
+        }
+      };
+    });
+
+    return res.json({ readiness });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 superadminPlatformRouter.get('/email-config', async (req, res, next) => {
   try {
     const emailConfig = await req.withRlsTransaction(async (client) => {

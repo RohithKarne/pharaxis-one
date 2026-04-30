@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { generateInspectionBinder } from '../services/platform/binderService.js';
 import { appendTraceLink } from '../services/traceabilityService.js';
@@ -8,18 +9,6 @@ export const auditsRouter = Router();
 
 const validAuditTypes = new Set(['Internal', 'External', 'RegulatoryInspection']);
 const validFindingTypes = new Set(['Observation', 'Minor', 'Major', 'Critical']);
-
-function hasAnyRole(roles, roleKeys) {
-  return Array.isArray(roles) && roleKeys.some((role) => roles.includes(role));
-}
-
-function assertRole(req, roleKeys, message = 'Insufficient permissions for this action') {
-  if (!hasAnyRole(req.authContext.roles, roleKeys)) {
-    const error = new Error(message);
-    error.statusCode = 403;
-    throw error;
-  }
-}
 
 async function appendAuditHistoryEvent(client, {
   orgId,
@@ -368,7 +357,7 @@ auditsRouter.post('/:auditId/findings/:findingId/respond', respondToFinding);
 
 auditsRouter.post('/:auditId/findings/:findingId/close', async (req, res, next) => {
   try {
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
 
     const { auditId, findingId } = req.params;
     const { closureSummary, effectivenessResult = 'Effective' } = req.body || {};
@@ -421,7 +410,7 @@ auditsRouter.post('/:auditId/findings/:findingId/close', async (req, res, next) 
 
 auditsRouter.post('/:auditId/close', async (req, res, next) => {
   try {
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin', 'approver']);
 
     const { auditId } = req.params;
     const { closureSummary } = req.body || {};

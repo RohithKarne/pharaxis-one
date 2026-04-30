@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { apiRequest, loginUser, verifyUserOtp } from '../services/api';
 
 const router = useRouter();
+const qmsIconUrl = `${import.meta.env.BASE_URL}qms-icon.svg`;
 
 const form = ref({
   userId: 'admin',
@@ -80,60 +81,85 @@ onMounted(loadOrgOptions);
 </script>
 
 <template>
-  <main class="auth-screen">
-    <section class="auth-panel">
-      <p class="auth-kicker">Pharaxis QMS</p>
-      <h1 class="auth-title">User Login</h1>
-      <p class="auth-subtitle">Secure access for org users with role-based module control.</p>
+  <main class="login-page qms-login-page">
+    <section class="login-card qms-login-card">
+      <header class="login-card-header qms-login-card-header">
+        <div class="qms-login-brand">
+          <img :src="qmsIconUrl" alt="QMS" class="qms-login-brand-icon" />
+          <p class="app-name">PHARAXIS QMS</p>
+        </div>
+        <p class="app-tagline">Quality Management System</p>
+      </header>
 
-      <form class="auth-form" @submit.prevent="submit">
-        <template v-if="!otpState.required">
-          <label class="auth-label" for="user-id">User ID</label>
-          <input id="user-id" v-model="form.userId" class="auth-input" autocomplete="username" />
+      <section class="login-card-body">
+        <h1 class="qms-login-title">Sign In</h1>
+        <p class="qms-login-subtitle">
+          Access quality modules, workflows, and audit-ready records.
+        </p>
 
-          <label class="auth-label" for="password">Password</label>
-          <input id="password" v-model="form.password" class="auth-input" type="password" autocomplete="current-password" />
+        <p v-if="error" class="alert alert-error">{{ error }}</p>
 
-          <label class="auth-label" for="org">Organization</label>
-          <select id="org" v-model="form.orgCode" class="auth-input" :disabled="orgsLoading">
-            <option disabled value="">Select organization</option>
-            <option v-for="org in orgOptions" :key="org.orgCode" :value="org.orgCode">
-              {{ org.orgName }}
-            </option>
-          </select>
-          <p v-if="orgsLoading" class="text-xs text-slate-500">Loading organizations...</p>
-          <p v-if="orgLoadError" class="text-xs text-red-600">{{ orgLoadError }}</p>
-        </template>
+        <form @submit.prevent="submit">
+          <template v-if="!otpState.required">
+            <div class="form-group">
+              <label for="user-id">User ID</label>
+              <input id="user-id" v-model="form.userId" class="form-control" autocomplete="username" />
+            </div>
 
-        <template v-else>
-          <label class="auth-label" for="otp">Email OTP</label>
-          <input id="otp" v-model="otpState.otp" class="auth-input" maxlength="6" placeholder="Enter 6-digit OTP" />
-          <p class="text-xs text-slate-600">OTP has been sent to your registered email.</p>
-          <p v-if="otpState.devOtp" class="text-xs text-amber-700">
-            Dev OTP: {{ otpState.devOtp }} (visible only in non-production mode)
-          </p>
-        </template>
+            <div class="form-group">
+              <label for="password">Password</label>
+              <input id="password" v-model="form.password" class="form-control" type="password" autocomplete="current-password" />
+            </div>
 
-        <button class="auth-button" :disabled="loading">
-          {{
-            loading
-              ? 'Processing...'
-              : otpState.required
-                ? 'Verify OTP and Sign In'
-                : 'Sign In to QMS'
-          }}
-        </button>
-        <button
-          v-if="otpState.required"
-          class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
-          type="button"
-          @click="backToCredentials"
-        >
-          Back
-        </button>
-      </form>
+            <div class="form-group">
+              <label for="org">Organization</label>
+              <select id="org" v-model="form.orgCode" class="form-control" :disabled="orgsLoading">
+                <option disabled value="">Select organization</option>
+                <option v-for="org in orgOptions" :key="org.orgCode" :value="org.orgCode">
+                  {{ org.orgName }}
+                </option>
+              </select>
+            </div>
 
-      <p v-if="error" class="auth-error">{{ error }}</p>
+            <p v-if="orgsLoading" class="qms-login-hint">Loading organizations...</p>
+            <p v-if="orgLoadError" class="qms-login-error-inline">{{ orgLoadError }}</p>
+          </template>
+
+          <template v-else>
+            <div class="form-group">
+              <label for="otp">Email OTP</label>
+              <input id="otp" v-model="otpState.otp" class="form-control" maxlength="6" placeholder="Enter 6-digit OTP" />
+            </div>
+            <p class="qms-login-hint">OTP has been sent to your registered email.</p>
+            <p v-if="otpState.devOtp" class="qms-login-otp-dev">
+              Dev OTP: {{ otpState.devOtp }} (visible only in non-production mode)
+            </p>
+          </template>
+
+          <button class="btn btn-primary btn-block mt-8" :disabled="loading" type="submit">
+            {{
+              loading
+                ? 'Processing...'
+                : otpState.required
+                  ? 'Verify OTP and Sign In'
+                  : 'Sign In'
+            }}
+          </button>
+
+          <button
+            v-if="otpState.required"
+            class="btn btn-secondary btn-block mt-8"
+            type="button"
+            @click="backToCredentials"
+          >
+            Back to Credentials
+          </button>
+        </form>
+
+        <p class="auth-linkline">
+          Superadmin? <RouterLink to="/superadmin/login">Sign in to Platform Console</RouterLink>
+        </p>
+      </section>
     </section>
   </main>
 </template>

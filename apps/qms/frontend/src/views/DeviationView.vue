@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { apiRequest } from '../services/api';
+import { useModuleAccess } from '../composables/useModuleAccess';
 
 const loading = ref(false);
 const message = ref('');
@@ -41,6 +42,7 @@ const deviationTypes = ['Product', 'Process', 'System', 'Environmental'];
 const classifications = ['Critical', 'Major', 'Minor'];
 const reportabilityOptions = ['Yes', 'No', 'Under Review'];
 const impactLevels = ['Low', 'Medium', 'High', 'Critical'];
+const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAccess('deviations');
 
 function setMessage(text) {
   message.value = text;
@@ -92,6 +94,7 @@ async function loadDetail() {
 }
 
 async function createDeviation() {
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest('/deviations', {
       method: 'POST',
@@ -114,6 +117,7 @@ async function createDeviation() {
 
 async function runTriage() {
   if (!selectedDeviationId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/deviations/${selectedDeviationId.value}/triage`, {
       method: 'POST',
@@ -134,6 +138,7 @@ async function runTriage() {
 
 async function addContainment() {
   if (!selectedDeviationId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/deviations/${selectedDeviationId.value}/containment`, {
       method: 'POST',
@@ -150,6 +155,7 @@ async function addContainment() {
 
 async function addInvestigation() {
   if (!selectedDeviationId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     const me = await apiRequest('/protected/me');
     await apiRequest(`/deviations/${selectedDeviationId.value}/investigation`, {
@@ -174,6 +180,7 @@ async function addInvestigation() {
 
 async function runQaReview() {
   if (!selectedDeviationId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/deviations/${selectedDeviationId.value}/qa-review`, {
       method: 'POST',
@@ -190,6 +197,7 @@ async function runQaReview() {
 
 async function linkCapa() {
   if (!selectedDeviationId.value || !linkForm.value.capaId) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/deviations/${selectedDeviationId.value}/link-capa`, {
       method: 'POST',
@@ -205,6 +213,7 @@ async function linkCapa() {
 
 async function closeDeviation() {
   if (!selectedDeviationId.value) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/deviations/${selectedDeviationId.value}/close`, {
       method: 'POST',
@@ -220,6 +229,7 @@ async function closeDeviation() {
 
 async function reopenDeviation() {
   if (!selectedDeviationId.value || !reopenForm.value.reason) return;
+  if (!withWriteAccess(setMessage)) return;
   try {
     await apiRequest(`/deviations/${selectedDeviationId.value}/reopen`, {
       method: 'POST',
@@ -244,6 +254,9 @@ onMounted(async () => {
     <header class="rounded-2xl border border-amber-100 bg-white p-4">
       <h2 class="text-xl font-bold text-amber-900">Deviation Management Workspace</h2>
       <p class="mt-1 text-sm text-slate-600">Capture, triage, investigate, link CAPA, QA review, and close enterprise deviations.</p>
+      <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        {{ writeDisabledReason }}
+      </p>
       <p v-if="message" class="mt-2 text-sm text-indigo-700">{{ message }}</p>
     </header>
 
@@ -265,7 +278,7 @@ onMounted(async () => {
           <label class="text-xs text-slate-600">Due Date</label>
           <input v-model="createForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
         </div>
-        <button class="mt-3 rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white" @click="createDeviation">Create Deviation</button>
+        <button class="mt-3 rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createDeviation">Create Deviation</button>
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
@@ -300,13 +313,13 @@ onMounted(async () => {
             <option v-for="level in impactLevels" :key="level" :value="level">{{ level }}</option>
           </select>
           <input v-model="triageForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" @click="runTriage">Run Triage</button>
+          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="runTriage">Run Triage</button>
 
           <textarea v-model="containmentForm.actionText" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Containment action"></textarea>
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" @click="addContainment">Add Containment</button>
+          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="addContainment">Add Containment</button>
 
           <textarea v-model="reopenForm.reason" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Reopen reason"></textarea>
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" @click="reopenDeviation">Reopen</button>
+          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="reopenDeviation">Reopen</button>
         </div>
       </article>
 
@@ -317,13 +330,13 @@ onMounted(async () => {
           <textarea v-model="investigationForm.findings" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Findings"></textarea>
           <textarea v-model="investigationForm.rootCause" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Root cause"></textarea>
           <input v-model="investigationForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" @click="addInvestigation">Save Investigation</button>
+          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="addInvestigation">Save Investigation</button>
 
           <select v-model="linkForm.capaId" class="rounded-lg border px-3 py-2 text-sm">
             <option value="">Link CAPA</option>
             <option v-for="capa in capas" :key="capa.id" :value="capa.id">{{ capa.capa_code }} - {{ capa.title }}</option>
           </select>
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" @click="linkCapa">Link CAPA</button>
+          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="linkCapa">Link CAPA</button>
         </div>
 
         <ul class="mt-3 max-h-24 space-y-2 overflow-auto text-xs">
@@ -342,14 +355,14 @@ onMounted(async () => {
             <option v-for="item in reportabilityOptions" :key="item" :value="item">{{ item }}</option>
           </select>
           <textarea v-model="qaReviewForm.reviewNotes" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="QA review notes"></textarea>
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" @click="runQaReview">Run QA Review</button>
+          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="runQaReview">Run QA Review</button>
 
           <select v-model="closeForm.reportabilityStatus" class="rounded-lg border px-3 py-2 text-sm">
             <option v-for="item in reportabilityOptions" :key="`close-${item}`" :value="item">{{ item }}</option>
           </select>
           <input v-model="closeForm.reportabilityReason" class="rounded-lg border px-3 py-2 text-sm" placeholder="Reportability reason" />
           <textarea v-model="closeForm.closureSummary" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Closure summary"></textarea>
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" @click="closeDeviation">Close Deviation</button>
+          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="closeDeviation">Close Deviation</button>
         </div>
       </article>
     </section>

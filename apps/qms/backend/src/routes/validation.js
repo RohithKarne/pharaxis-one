@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { createInAppNotification } from '../services/platform/notificationService.js';
 import { appendTraceLink } from '../services/traceabilityService.js';
@@ -9,18 +10,6 @@ export const validationRouter = Router();
 const validRiskLevels = new Set(['High', 'Medium', 'Low']);
 const validGamp = new Set(['1', '3', '4', '5']);
 const validTraceStatus = new Set(['Pending', 'InProgress', 'Pass', 'Fail']);
-
-function hasAnyRole(roles, roleKeys) {
-  return Array.isArray(roles) && roleKeys.some((role) => roles.includes(role));
-}
-
-function assertRole(req, roleKeys, message = 'Insufficient permissions for this action') {
-  if (!hasAnyRole(req.authContext.roles, roleKeys)) {
-    const error = new Error(message);
-    error.statusCode = 403;
-    throw error;
-  }
-}
 
 async function appendValidationHistoryEvent(client, {
   orgId,
@@ -631,7 +620,7 @@ validationRouter.post('/systems/:systemId/revalidation-flag', async (req, res, n
 
 validationRouter.post('/systems/:systemId/reviews/:reviewId/complete', async (req, res, next) => {
   try {
-    assertRole(req, ['qa_reviewer', 'admin', 'superadmin']);
+    assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin']);
 
     const { systemId, reviewId } = req.params;
     const { notes = null } = req.body || {};
@@ -709,7 +698,7 @@ validationRouter.post('/systems/:systemId/reviews/:reviewId/complete', async (re
 
 validationRouter.post('/systems/:systemId/complete', async (req, res, next) => {
   try {
-    assertRole(req, ['approver', 'admin', 'superadmin']);
+    assertAnyRole(req, ['approver', 'admin', 'superadmin']);
 
     const { systemId } = req.params;
     const { summary = null } = req.body || {};

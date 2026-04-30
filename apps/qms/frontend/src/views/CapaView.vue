@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { apiRequest } from '../services/api';
+import { useModuleAccess } from '../composables/useModuleAccess';
 
 const loading = ref(false);
 const message = ref('');
@@ -31,6 +32,7 @@ const reopenForm = ref({ reason: '' });
 const selectedCapa = computed(() => detail.value?.capa || null);
 const sourceTypes = ['Manual', 'Deviation', 'AuditFinding', 'Complaint', 'ChangeControl', 'DocumentControl', 'Validation'];
 const classifications = ['Corrective', 'Preventive', 'Both'];
+const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAccess('capa');
 
 async function refreshList() {
   loading.value = true;
@@ -62,6 +64,7 @@ async function loadDetail() {
 }
 
 async function createCapa() {
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   try {
     await apiRequest('/capa', {
       method: 'POST',
@@ -87,6 +90,7 @@ async function createCapa() {
 
 async function submitCapa() {
   if (!selectedCapaId.value) return;
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   try {
     await apiRequest(`/capa/${selectedCapaId.value}/submit`, { method: 'POST' });
     message.value = 'CAPA submitted.';
@@ -99,6 +103,7 @@ async function submitCapa() {
 
 async function triageCapa() {
   if (!selectedCapaId.value) return;
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   try {
     await apiRequest(`/capa/${selectedCapaId.value}/triage`, {
       method: 'POST',
@@ -115,6 +120,7 @@ async function triageCapa() {
 
 async function addFiveWhy() {
   if (!selectedCapaId.value) return;
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   try {
     await apiRequest(`/capa/${selectedCapaId.value}/rca/5why`, {
       method: 'POST',
@@ -130,6 +136,7 @@ async function addFiveWhy() {
 
 async function addFishbone() {
   if (!selectedCapaId.value) return;
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   try {
     await apiRequest(`/capa/${selectedCapaId.value}/rca/fishbone`, {
       method: 'POST',
@@ -145,6 +152,7 @@ async function addFishbone() {
 
 async function addAction() {
   if (!selectedCapaId.value) return;
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   try {
     await apiRequest(`/capa/${selectedCapaId.value}/actions`, {
       method: 'POST',
@@ -162,6 +170,7 @@ async function addAction() {
 
 async function markActionComplete(actionId) {
   if (!selectedCapaId.value) return;
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   try {
     await apiRequest(`/capa/${selectedCapaId.value}/actions/${actionId}`, {
       method: 'PATCH',
@@ -176,6 +185,7 @@ async function markActionComplete(actionId) {
 
 async function approveActionPlan() {
   if (!selectedCapaId.value) return;
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   try {
     await apiRequest(`/capa/${selectedCapaId.value}/approve`, {
       method: 'POST',
@@ -195,6 +205,7 @@ async function approveActionPlan() {
 
 async function recordEffectiveness() {
   if (!selectedCapaId.value) return;
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   try {
     await apiRequest(`/capa/${selectedCapaId.value}/effectiveness`, {
       method: 'POST',
@@ -210,6 +221,7 @@ async function recordEffectiveness() {
 
 async function approveClosure() {
   if (!selectedCapaId.value) return;
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   try {
     await apiRequest(`/capa/${selectedCapaId.value}/approve`, {
       method: 'POST',
@@ -229,6 +241,7 @@ async function approveClosure() {
 
 async function reopenCapa() {
   if (!selectedCapaId.value) return;
+  if (!withWriteAccess((text) => { message.value = text; })) return;
   if (!reopenForm.value.reason) {
     message.value = 'Reopen reason is required.';
     return;
@@ -255,6 +268,9 @@ onMounted(refreshList);
     <header class="rounded-2xl border border-cyan-100 bg-white p-4">
       <h2 class="text-xl font-bold text-cyan-900">CAPA Management Workspace</h2>
       <p class="mt-1 text-sm text-slate-600">Create, triage, investigate, approve, verify effectiveness, and close CAPA records.</p>
+      <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        {{ writeDisabledReason }}
+      </p>
       <p v-if="message" class="mt-2 text-sm text-indigo-700">{{ message }}</p>
     </header>
 
@@ -286,7 +302,7 @@ onMounted(refreshList);
             <input v-model.number="createForm.detectability" class="mt-1 w-full rounded border px-2 py-1 text-sm" type="number" min="1" max="5" />
           </label>
         </div>
-        <button class="mt-3 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white" @click="createCapa">Create CAPA</button>
+        <button class="mt-3 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createCapa">Create CAPA</button>
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
@@ -315,14 +331,14 @@ onMounted(refreshList);
         <h3 class="text-lg font-semibold text-slate-900">Lifecycle Controls</h3>
         <p class="mt-1 text-xs text-slate-500">Current status: {{ selectedCapa.status }}</p>
         <div class="mt-3 flex flex-wrap gap-2">
-          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" @click="submitCapa">Submit</button>
-          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" @click="triageCapa">Triage</button>
-          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" @click="approveActionPlan">Approve Action Plan</button>
-          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" @click="approveClosure">Approve Closure</button>
+          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" :disabled="isWriteDisabled" @click="submitCapa">Submit</button>
+          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" :disabled="isWriteDisabled" @click="triageCapa">Triage</button>
+          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" :disabled="isWriteDisabled" @click="approveActionPlan">Approve Action Plan</button>
+          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" :disabled="isWriteDisabled" @click="approveClosure">Approve Closure</button>
         </div>
         <input v-model="triageForm.triageSummary" class="mt-3 w-full rounded-lg border px-3 py-2 text-sm" placeholder="Triage summary" />
         <input v-model="reopenForm.reason" class="mt-2 w-full rounded-lg border px-3 py-2 text-sm" placeholder="Reopen reason" />
-        <button class="mt-2 rounded border border-amber-400 px-3 py-1 text-xs font-semibold text-amber-700" @click="reopenCapa">Reopen CAPA</button>
+        <button class="mt-2 rounded border border-amber-400 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="reopenCapa">Reopen CAPA</button>
       </article>
 
       <article class="rounded-2xl border border-slate-200 bg-white p-4">
@@ -331,12 +347,12 @@ onMounted(refreshList);
           <label class="text-xs font-semibold text-slate-500">5-Why</label>
           <input v-model.number="fiveWhyForm.whyLevel" class="rounded-lg border px-3 py-2 text-sm" type="number" min="1" max="5" placeholder="Why level" />
           <textarea v-model="fiveWhyForm.answer" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Why answer"></textarea>
-          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" @click="addFiveWhy">Save 5-Why</button>
+          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" :disabled="isWriteDisabled" @click="addFiveWhy">Save 5-Why</button>
 
           <label class="mt-2 text-xs font-semibold text-slate-500">Fishbone</label>
           <input v-model="fishboneForm.category" class="rounded-lg border px-3 py-2 text-sm" placeholder="Category" />
           <textarea v-model="fishboneForm.cause" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Cause"></textarea>
-          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" @click="addFishbone">Save Fishbone</button>
+          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" :disabled="isWriteDisabled" @click="addFishbone">Save Fishbone</button>
         </div>
       </article>
 
@@ -349,7 +365,7 @@ onMounted(refreshList);
             <option>Preventive</option>
           </select>
           <input v-model="actionForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" @click="addAction">Add Action</button>
+          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" :disabled="isWriteDisabled" @click="addAction">Add Action</button>
 
           <textarea v-model="effectivenessForm.criteria" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Effectiveness criteria"></textarea>
           <select v-model="effectivenessForm.result" class="rounded-lg border px-3 py-2 text-sm">
@@ -357,7 +373,7 @@ onMounted(refreshList);
             <option>Fail</option>
           </select>
           <input v-model="effectivenessForm.evidenceRef" class="rounded-lg border px-3 py-2 text-sm" placeholder="Evidence ref" />
-          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" @click="recordEffectiveness">Record Effectiveness</button>
+          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" :disabled="isWriteDisabled" @click="recordEffectiveness">Record Effectiveness</button>
         </div>
       </article>
     </section>
@@ -372,6 +388,7 @@ onMounted(refreshList);
               <button
                 v-if="action.status !== 'Complete'"
                 class="rounded border border-emerald-400 px-2 py-1 text-xs font-semibold text-emerald-700"
+                :disabled="isWriteDisabled"
                 @click="markActionComplete(action.id)"
               >
                 Mark Complete

@@ -29,6 +29,10 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
     where.push('va.user_id = ?')
     params.push(Number(req.query.user_id))
   }
+  if (req.query.entity_id) {
+    where.push('va.entity_id = ?')
+    params.push(Number(req.query.entity_id))
+  }
   if (req.query.date_from) {
     where.push('DATE(va.created_at) >= DATE(?)')
     params.push(req.query.date_from)
