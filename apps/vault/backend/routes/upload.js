@@ -2,6 +2,7 @@ const express = require('express')
 const multer = require('multer')
 const { pool } = require('../database/db')
 const { authenticate } = require('../middleware/auth')
+const { requireValidSingleUpload } = require('../middleware/uploadValidation')
 const auditService = require('../services/auditService')
 const numberingService = require('../services/numberingService')
 const storageService = require('../services/storageService')
@@ -13,23 +14,11 @@ const upload = multer({
 })
 
 const ALLOWED_ROLES = ['admin', 'author']
-const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.png', '.jpg', '.jpeg']
-
 function requireAuthorOrAdmin(req, res, next) {
   if (!ALLOWED_ROLES.includes(req.user.role)) {
     return res.status(403).json({ error: 'Only admin/author can upload' })
   }
   next()
-}
-
-function extOf(fileName) {
-  const dot = String(fileName || '').lastIndexOf('.')
-  return dot === -1 ? '' : String(fileName).slice(dot).toLowerCase()
-}
-
-function isValidUploadFile(file) {
-  if (!file || !file.originalname) return false
-  return ALLOWED_EXTENSIONS.includes(extOf(file.originalname))
 }
 
 async function ensureForeignKeysInOrg(orgId, folderId, typeId, subtypeId, classificationId) {
@@ -86,13 +75,10 @@ function nextMajorVersion(existingVersionRows) {
   return `${maxMajor + 1}.0`
 }
 
-router.post('/', authenticate, requireAuthorOrAdmin, upload.single('file'), async (req, res) => {
+router.post('/', authenticate, requireAuthorOrAdmin, upload.single('file'), requireValidSingleUpload, async (req, res) => {
   const { title, folder_id, content_type_id, content_subtype_id, classification_id } = req.body
   if (!title || !content_type_id || !req.file) {
     return res.status(400).json({ error: 'title, content_type_id and file are required' })
-  }
-  if (!isValidUploadFile(req.file)) {
-    return res.status(400).json({ error: `Invalid file type. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}` })
   }
 
   const orgId = req.user.orgId
@@ -189,15 +175,12 @@ router.post('/', authenticate, requireAuthorOrAdmin, upload.single('file'), asyn
   }
 })
 
-router.post('/:contentId/version', authenticate, requireAuthorOrAdmin, upload.single('file'), async (req, res) => {
+router.post('/:contentId/version', authenticate, requireAuthorOrAdmin, upload.single('file'), requireValidSingleUpload, async (req, res) => {
   const contentId = Number(req.params.contentId)
   if (!Number.isInteger(contentId) || contentId <= 0) {
     return res.status(400).json({ error: 'Invalid content id' })
   }
   if (!req.file) return res.status(400).json({ error: 'file is required' })
-  if (!isValidUploadFile(req.file)) {
-    return res.status(400).json({ error: `Invalid file type. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}` })
-  }
 
   const orgId = req.user.orgId
   let connection

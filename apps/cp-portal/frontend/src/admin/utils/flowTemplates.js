@@ -1231,7 +1231,7 @@ export const FLOW_TEMPLATES = {
         file: 'cp-portal/backend/routes/portal/auth.js', line: 72,
         detail: 'User inserted with email_verified=0 and the verification token + expiry. Login will be blocked until verified.' },
       { from: 2, to: 4, label: 'Send verification email (link with token)', type: 'solid',
-        detail: 'Email contains: /portal/:clientCode/verify-email?token=xxx. Uses client SMTP config.' },
+        detail: 'Email contains: /portal/:clientCode/verify-email#token=xxx. Uses client SMTP config.' },
       { from: 2, to: 1, label: '201 + { pending: true }', type: 'dashed',
         detail: 'Frontend shows "Check your email" screen. Login attempts return 403 until email is verified.' },
     ],
@@ -1245,9 +1245,9 @@ export const FLOW_TEMPLATES = {
     swimlanes: ['User', 'Frontend', 'Backend', 'Database'],
     steps: [
       { from: 0, to: 1, label: 'Click verification link in email', type: 'solid',
-        detail: 'Link: /portal/:clientCode/verify-email?token=xxx. Browser opens the portal.' },
-      { from: 1, to: 2, label: 'GET /api/portal/auth/:clientCode/verify-email?token=xxx', type: 'solid',
-        detail: 'VerifyEmailPage calls this on mount. Token is passed as query parameter.' },
+        detail: 'Link: /portal/:clientCode/verify-email#token=xxx. Browser opens the portal.' },
+      { from: 1, to: 2, label: 'POST /api/portal/auth/verify-email', type: 'solid',
+        detail: 'VerifyEmailPage calls this on mount. Token is passed in the POST body.' },
       { from: 2, to: 3, label: 'SELECT user WHERE verification_token=? AND expires_at > now()', type: 'solid',
         detail: 'Token is looked up. If not found or expired → 400 "Invalid or expired link". User must request a new one.' },
       { from: 3, to: 2, label: 'User row found', type: 'dashed',
@@ -1995,7 +1995,7 @@ function inferApiRoute(step, flow) {
   const title = flow.title.toLowerCase()
   if (/portal user login|portal login/.test(title) || /login/.test(text)) return flow.source === 'portal' ? 'POST /api/portal/auth/:clientCode/login' : 'POST /api/admin/auth/login'
   if (/self-registration|register/.test(title) || /register/.test(text)) return 'POST /api/portal/auth/:clientCode/register'
-  if (/email verification|verify email|verify-email/.test(title) || /verify/.test(text)) return 'GET /api/portal/auth/:clientCode/verify-email?token=...'
+  if (/email verification|verify email|verify-email/.test(title) || /verify/.test(text)) return 'POST /api/portal/auth/verify-email'
   if (/logout/.test(title) || /sign out|logout/.test(text)) return flow.source === 'portal' ? 'POST /api/portal/auth/:clientCode/logout' : 'POST /api/admin/auth/logout'
   if (/feedback/.test(title)) return 'POST /api/portal/feedback/:clientCode'
   if (/faq/.test(title)) return flow.source === 'portal' ? 'GET /api/portal/faq/:clientCode' : 'POST /api/admin/faq/:clientId'

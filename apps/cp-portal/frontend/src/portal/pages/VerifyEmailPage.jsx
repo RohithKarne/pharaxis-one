@@ -1,23 +1,29 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 
 export default function VerifyEmailPage() {
   const { clientCode, login } = usePortal()
   const navigate = useNavigate()
-  const [params] = useSearchParams()
+  const location = useLocation()
   const [status, setStatus] = useState('verifying') // 'verifying' | 'success' | 'error' | 'expired'
   const [message, setMessage] = useState('')
 
   useEffect(() => {
-    const token = params.get('token')
+    const fragmentParams = new URLSearchParams(location.hash.replace(/^#/, ''))
+    const queryParams = new URLSearchParams(location.search)
+    const token = fragmentParams.get('token') || queryParams.get('token')
     if (!token) { setStatus('error'); setMessage('No verification token found.'); return }
     verify(token)
-  }, [])
+  }, [location.hash, location.search])
 
   async function verify(token) {
     try {
-      const res  = await fetch(`/api/portal/auth/verify-email?token=${encodeURIComponent(token)}`)
+      const res  = await fetch('/api/portal/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
       const data = await res.json()
       if (res.ok) {
         login(data.user, data.token)

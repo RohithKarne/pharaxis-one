@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import useHelpKey from '../hooks/useHelpKey'
 import './HelpDrawer.css'
 import { httpFetch } from '../api/httpFetch.js'
@@ -48,7 +49,7 @@ function ArticleItem({ article }) {
       {expanded && (
         <div
           className="hd-article-body"
-          dangerouslySetInnerHTML={{ __html: article.content_html }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content_html || '') }}
         />
       )}
     </div>

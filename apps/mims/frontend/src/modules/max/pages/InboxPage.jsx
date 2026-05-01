@@ -45,6 +45,8 @@ export default function InboxPage() {
   const [inquiries, setInquiries]     = useState([])
   const [inboxSource, setInboxSource] = useState('seed')
   const [loading, setLoading]         = useState(true)
+  const [loadError, setLoadError]     = useState(null)   // L4: surface fetch errors
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false) // H5: proper loading state
   const [fetching, setFetching]       = useState(false)
   const [fetchResult, setFetchResult] = useState(null)
   const [activeTab, setActiveTab]     = useState('Inbox')
@@ -108,10 +110,17 @@ export default function InboxPage() {
   }, [compactMode, DENSITY_KEY])
 
   useEffect(() => {
+    // C3 FIX: single load on mount — serves cache first, then silently refreshes in background
+    // without triggering a second loading spinner
     loadInquiries()
-    setTimeout(() => { loadInquiries({ force: true }) }, 250)
     loadUsers()
     loadTemplates()
+  }, [])
+
+  // C3 FIX: background refresh after cache serve — runs once after mount, no loading spinner
+  useEffect(() => {
+    const timer = setTimeout(() => loadInquiries({ force: true, background: true }), 800)
+    return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
@@ -147,8 +156,12 @@ export default function InboxPage() {
   }
 
   async function loadInquiries(opts = {}) {
-    const { force = false } = opts
-    setLoading(true)
+    const { force = false, background = false } = opts
+    // M3 FIX: guard against writing to 'guest' key before user identity is known
+    if (!user?.id) return
+    // C3 FIX: background refreshes don't show a loading spinner
+    if (!background) setLoading(true)
+    setLoadError(null)
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved && !force) {
       setInquiries(JSON.parse(saved))
@@ -167,8 +180,11 @@ export default function InboxPage() {
           return merged
         })
       }
-    } catch { /* silently fail */ }
-    finally { setLoading(false) }
+    } catch (err) {
+      // L4 FIX: surface load errors rather than silently swallowing them
+      console.error('[Inbox] Failed to load inquiries:', err)
+      setLoadError('Failed to refresh inbox. Showing cached data.')
+    } finally { setLoading(false) }
   }
 
   const USERS_KEY = `mims_inbox_users_${user?.id || 'guest'}`
@@ -199,11 +215,15 @@ export default function InboxPage() {
   }
 
   async function loadAttachments(inquiryId) {
+    // H5 FIX: track loading state separately so "Loading…" doesn't show forever on failure
     setAttachments([])
+    setAttachmentsLoading(true)
     try {
       const res = await httpFetch(`/api/inbox/${inquiryId}/attachments`, { headers: AUTH_H })
       if (res.ok) { const d = await res.json(); setAttachments(d.attachments || []) }
+      else setAttachments([])
     } catch { setAttachments([]) }
+    finally { setAttachmentsLoading(false) }
   }
 
   async function loadNotes(id) {
@@ -271,7 +291,7 @@ export default function InboxPage() {
     setSelected(inq)
     setInsightPanel(null)
     if (inq.attachments_count > 0) loadAttachments(inq.id)
-    else setAttachments([])
+    else { setAttachments([]); setAttachmentsLoading(false) }
     if (!inq.is_read) {
       patchInquiry(inq.id, { is_read: true })
       updateInquiries(prev => prev.map(i => i.id === inq.id ? { ...i, is_read: true } : i))
@@ -306,8 +326,15 @@ export default function InboxPage() {
     })
   }
 
+  // H3 FIX: validate email format on the frontend before sending
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
   async function sendCompose() {
     if (!compose || !selected) return
+    if (!EMAIL_RE.test(compose.to.trim())) {
+      setCompose(c => ({ ...c, error: 'Invalid recipient email address.' }))
+      return
+    }
     setCompose(c => ({ ...c, sending: true, error: null }))
     const endpoint = compose.mode === 'reply' ? 'reply' : 'forward'
     try {
@@ -524,7 +551,9 @@ export default function InboxPage() {
     if (bulkTriageState) payload.triage_state = bulkTriageState
     if (bulkAssignee) payload.assigned_to = bulkAssignee === '__UNASSIGNED__' ? null : bulkAssignee
     if (bulkPriority) payload.priority = bulkPriority
-    if (bulkSnoozeUntil) payload.snoozed_until = `${bulkSnoozeUntil}T18:00:00`
+    // L2 FIX: use 5 PM in the user's local timezone instead of hardcoded 18:00 UTC
+    // new Date('YYYY-MM-DDT17:00:00') is parsed as local time; .toISOString() converts to UTC offset
+    if (bulkSnoozeUntil) payload.snoozed_until = new Date(`${bulkSnoozeUntil}T17:00:00`).toISOString()
 
     if (Object.keys(payload).length <= 1) return
 
@@ -547,13 +576,17 @@ export default function InboxPage() {
 
   function exportCSV() {
     const headers = ['ID', 'From', 'To', 'Subject', 'Received', 'Status', 'Triage State', 'Queue', 'Priority', 'Assigned To', 'Due Date', 'First Touch SLA', 'Response SLA', 'Color', 'Locked By']
-    const esc = v => `"${String(v || '').replace(/"/g, '""')}"`
+    // M1 FIX: escape ALL fields (including headers and non-string columns) to prevent broken CSV when
+    // values contain commas, quotes, or newlines; use CRLF for RFC 4180 compliance
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
     const rows = filtered.map(i => [
-      i.id, esc(i.sender), esc(i.recipient), esc(i.subject),
-      i.received_at, i.status, i.triage_state || '', i.queue_name || '', i.priority || '', i.assigned_to || '',
-      i.due_date || '', i.first_touch_sla_status || '', i.response_sla_status || '', i.color || '', i.locked_by || '',
+      esc(i.id), esc(i.sender), esc(i.recipient), esc(i.subject),
+      esc(i.received_at), esc(i.status), esc(i.triage_state || ''), esc(i.queue_name || ''),
+      esc(i.priority || ''), esc(i.assigned_to || ''), esc(i.due_date || ''),
+      esc(i.first_touch_sla_status || ''), esc(i.response_sla_status || ''),
+      esc(i.color || ''), esc(i.locked_by || ''),
     ])
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+    const csv = [headers.map(esc), ...rows].map(r => r.join(',')).join('\r\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -624,7 +657,8 @@ export default function InboxPage() {
         i.sender?.toLowerCase().includes(q) ||
         i.subject?.toLowerCase().includes(q) ||
         i.body?.toLowerCase().includes(q)
-      const matchFrom = !filterFrom || new Date(i.received_at) >= new Date(filterFrom)
+      // M2 FIX: append T00:00:00 (no Z) so filterFrom is treated as local midnight, not UTC midnight
+      const matchFrom = !filterFrom || new Date(i.received_at) >= new Date(filterFrom + 'T00:00:00')
       const matchTo   = !filterTo   || new Date(i.received_at) <= new Date(filterTo + 'T23:59:59')
       // F8: advanced filters
       const matchColor    = !advFilters.color    || i.color === advFilters.color
@@ -659,8 +693,12 @@ export default function InboxPage() {
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const today   = new Date().toDateString()
+  // L1 FIX: add Yesterday group so users can distinguish today vs yesterday vs older
+  const _yesterday = new Date(); _yesterday.setDate(_yesterday.getDate() - 1)
+  const yesterdayStr = _yesterday.toDateString()
   const grouped = paginated.reduce((acc, inq) => {
-    const group = new Date(inq.received_at).toDateString() === today ? 'Today' : 'Older'
+    const dateStr = new Date(inq.received_at).toDateString()
+    const group = dateStr === today ? 'Today' : dateStr === yesterdayStr ? 'Yesterday' : 'Older'
     if (!acc[group]) acc[group] = []
     acc[group].push(inq)
     return acc
@@ -704,6 +742,13 @@ export default function InboxPage() {
 
   const colorBarClass = { red: 'color-bar-red', yellow: 'color-bar-yellow', green: 'color-bar-green', blue: 'color-bar-blue' }
   const dotClass      = { red: 'dot-red', yellow: 'dot-yellow', green: 'dot-green', blue: 'dot-blue' }
+
+  // H2 FIX: map all SLA statuses to correct badge classes instead of defaulting everything to yellow
+  function slaClass(status) {
+    if (status === 'breached') return 'due-overdue'
+    if (status === 'at_risk')  return 'due-today'
+    return ''
+  }
 
   // ── Render ────────────────────────────────────────────────────
 
@@ -916,7 +961,7 @@ export default function InboxPage() {
                     <div style={{ marginTop: 8 }}>No inquiries in {activeTab}</div>
                   </div>
                 ) : (
-                  ['Today', 'Older'].map(group => grouped[group] && (
+                  ['Today', 'Yesterday', 'Older'].map(group => grouped[group] && (
                     <div key={group}>
                       <div className="inbox-date-group">{group}</div>
                       {grouped[group].map(inq => {
@@ -1121,13 +1166,14 @@ export default function InboxPage() {
 
                     <div className="inbox-sla-actions-row">
                       <div className="inbox-sla-strip">
-                        <span className={`due-badge ${selected.first_touch_sla_status === 'breached' ? 'due-overdue' : 'due-today'}`}>
+                        {/* H2 FIX: use slaClass() so on_track/met don't show yellow due-today badge */}
+                        <span className={`due-badge ${slaClass(selected.first_touch_sla_status)}`}>
                           First Touch: {selected.first_touch_sla_status || 'untracked'}
                         </span>
                         {selected.first_touch_due_at && (
                           <span className="inbox-sla-time">due {formatFullDate(selected.first_touch_due_at)}</span>
                         )}
-                        <span className={`due-badge ${selected.response_sla_status === 'breached' ? 'due-overdue' : 'due-today'}`}>
+                        <span className={`due-badge ${slaClass(selected.response_sla_status)}`}>
                           Response: {selected.response_sla_status || 'untracked'}
                         </span>
                         {selected.response_due_at && (
@@ -1159,8 +1205,11 @@ export default function InboxPage() {
                     {selected.attachments_count > 0 && (
                       <div className="inbox-attachments-row">
                         <span className="meta-label">Attachments</span>
-                        {attachments.length === 0 ? (
+                        {/* H5 FIX: use attachmentsLoading flag — prevents "Loading…" forever on error */}
+                        {attachmentsLoading ? (
                           <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading…</span>
+                        ) : attachments.length === 0 ? (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>No attachments found.</span>
                         ) : (
                           <div className="inbox-attachment-list">
                             {attachments.map(att => (
@@ -1184,6 +1233,7 @@ export default function InboxPage() {
                         )}
                       </div>
                     )}
+
                   </div>
 
                   {/* Action buttons */}

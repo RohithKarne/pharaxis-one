@@ -88,8 +88,7 @@ export function PortalProvider({ children }) {
   }
 
   const portalHeaders = useCallback(() => {
-    const token = localStorage.getItem('cp_portal_token')
-    return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+    return { 'Content-Type': 'application/json' }
   }, [])
 
   function isFeatureEnabled(key) {
@@ -105,8 +104,8 @@ export function PortalProvider({ children }) {
     return true
   }
 
-  function login(userData, token) {
-    localStorage.setItem('cp_portal_token', token)
+  function login(userData, _token) {
+    localStorage.removeItem('cp_portal_token')
     localStorage.setItem('cp_portal_user', JSON.stringify(userData))
     setUser(userData)
     // Hide gate immediately after confirm-type saves (user_type_confirmed becomes 1)
@@ -130,12 +129,11 @@ export function PortalProvider({ children }) {
 
   // AUTH-05: central fetch helper — attaches auth header and auto-logs out on 401
   async function portalFetch(url, options = {}) {
-    const token = localStorage.getItem('cp_portal_token')
     const res = await fetch(url, {
       ...options,
+      credentials: 'same-origin',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
     })
@@ -150,6 +148,7 @@ export function PortalProvider({ children }) {
   // Restore signed-in user from DB on mount/refresh — localStorage alone is not the source of truth
   useEffect(() => {
     if (!clientCode) return
+    localStorage.removeItem('cp_portal_token')
     portalFetch(`/api/portal/auth/me`)
       .then(async res => {
         if (res.status === 200) {

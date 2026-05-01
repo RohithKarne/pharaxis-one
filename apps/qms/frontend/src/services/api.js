@@ -21,7 +21,6 @@ function parseStoredAuth(rawValue) {
   try {
     const parsed = JSON.parse(rawValue);
     if (!parsed || typeof parsed !== 'object') return null;
-    if (!parsed.token || typeof parsed.token !== 'string') return null;
     return parsed;
   } catch {
     return null;
@@ -29,22 +28,11 @@ function parseStoredAuth(rawValue) {
 }
 
 export function getStoredAuth() {
-  const stored = parseStoredAuth(localStorage.getItem(AUTH_STORAGE_KEY));
-  if (stored) return stored;
-
-  const legacyToken = localStorage.getItem(LEGACY_TOKEN_KEY);
-  if (!legacyToken) return null;
-  return {
-    token: legacyToken,
-    surface: 'user',
-    isSuperadmin: false,
-    roles: [],
-    user: null
-  };
+  return parseStoredAuth(localStorage.getItem(AUTH_STORAGE_KEY));
 }
 
 export function getStoredToken() {
-  return getStoredAuth()?.token || '';
+  return '';
 }
 
 function assertClientSidePermission(path, method) {
@@ -62,10 +50,8 @@ function assertClientSidePermission(path, method) {
 }
 
 export function setStoredAuth(auth) {
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
-  if (auth?.token) {
-    localStorage.setItem(LEGACY_TOKEN_KEY, auth.token);
-  }
   emitAuthChanged();
 }
 
@@ -78,7 +64,6 @@ export function clearStoredAuth() {
 function makeAuthSession(payload, surface) {
   const securityGroups = Array.isArray(payload?.user?.securityGroups) ? payload.user.securityGroups : [];
   return {
-    token: payload.accessToken,
     surface,
     isSuperadmin: securityGroups.includes('superadmin') || surface === 'superadmin',
     roles: securityGroups,
@@ -151,6 +136,7 @@ export async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     method,
     headers,
+    credentials: 'include',
     body: options.body ? JSON.stringify(options.body) : undefined
   });
 

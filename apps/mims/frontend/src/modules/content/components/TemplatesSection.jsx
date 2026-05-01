@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
@@ -118,7 +119,7 @@ function TemplateDrawer({ template, token, onClose, onSaved }) {
                 {preview.rendered_subject && (
                   <p style={{ margin: '0 0 8px', fontWeight: 600 }}>Subject: {preview.rendered_subject}</p>
                 )}
-                <div dangerouslySetInnerHTML={{ __html: preview.rendered_body || '' }} />
+                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(preview.rendered_body || '') }} />
               </div>
             )}
           </div>

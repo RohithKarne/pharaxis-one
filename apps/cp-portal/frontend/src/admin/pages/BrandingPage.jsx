@@ -141,7 +141,7 @@ export default function BrandingPage() {
                 <input
                   ref={logoInputRef}
                   type="file"
-                  accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
                   style={{ display: 'none' }}
                   onChange={handleLogoUpload}
                 />

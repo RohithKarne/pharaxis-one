@@ -2,8 +2,13 @@ const express = require('express')
 const router = express.Router({ mergeParams: true })
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth')
 
+const isProductionLike = !['development', 'test'].includes(process.env.NODE_ENV || 'development')
 const AI_AGENT_BASE = (process.env.AI_AGENT_URL || 'http://localhost:6000') + '/api/v1/agent/internal'
-const AI_AGENT_TOKEN = process.env.AI_AGENT_INTERNAL_TOKEN || 'dev-internal-token-change-in-prod'
+const AI_AGENT_TOKEN = process.env.AI_AGENT_INTERNAL_TOKEN || (!isProductionLike ? 'dev-internal-token-change-in-prod' : '')
+
+if (!AI_AGENT_TOKEN) {
+  throw new Error('AI_AGENT_INTERNAL_TOKEN is required outside development/test.')
+}
 
 function agentHeaders(orgId) {
   return {

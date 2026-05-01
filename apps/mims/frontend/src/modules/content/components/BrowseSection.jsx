@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import DOMPurify from 'dompurify'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function BrowseSection({ token }) {
@@ -151,7 +152,7 @@ export default function BrowseSection({ token }) {
                       <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>{selectedItem.description}</div>
                     )}
                     {selectedItem.content && (
-                      <div dangerouslySetInnerHTML={{ __html: selectedItem.content }} style={{ lineHeight: 1.7, fontSize: 14 }} />
+                      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedItem.content || '') }} style={{ lineHeight: 1.7, fontSize: 14 }} />
                     )}
                     {selectedItem.file_path && (
                       <div style={{ marginTop: 20 }}>
@@ -171,7 +172,7 @@ export default function BrowseSection({ token }) {
                     </div>
                     <div>
                       <h4 style={{ margin: '0 0 8px', color: 'var(--text-muted)', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }}>Answer</h4>
-                      <div dangerouslySetInnerHTML={{ __html: selectedItem.answer }} style={{ lineHeight: 1.7, fontSize: 14 }} />
+                      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedItem.answer || '') }} style={{ lineHeight: 1.7, fontSize: 14 }} />
                     </div>
                     {selectedItem.tags && (
                       <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>

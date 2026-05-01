@@ -22,18 +22,11 @@ function providerLabel(provider) {
 }
 
 async function authorizedRequest(path, options = {}) {
-  const token = localStorage.getItem('ai_agent_token')
-  if (!token) {
-    const err = new Error('Missing authentication token')
-    err.status = 401
-    throw err
-  }
-
   const response = await fetch(`${AI_AGENT_BASE}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
       ...(options.headers || {})
     }
   })

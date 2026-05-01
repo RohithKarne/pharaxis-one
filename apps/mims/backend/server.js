@@ -55,6 +55,20 @@ app.set('trust proxy', 1);
 const API_LATEST_VERSION = 'v1';
 const API_SUPPORTED_VERSIONS = ['v1'];
 const API_VERSION_CONTRACT_DATE = '2026-04-07';
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
+  'http://13.205.213.128',
+  'https://13.205.213.128'
+]);
+
+function parseAllowedOrigins(rawOrigins) {
+  const origins = String(rawOrigins || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  return origins.length ? new Set(origins) : DEFAULT_ALLOWED_ORIGINS;
+}
 
 function getApiVersionContract(requestedVersion = API_LATEST_VERSION) {
   return {
@@ -70,8 +84,18 @@ function getApiVersionContract(requestedVersion = API_LATEST_VERSION) {
 // ─── Middleware ─────────────────────────────────────────────────────────────
 
 // CORS — allows the frontend (served from the same origin) to call the API
-// In production, you'd restrict this to specific domains
-app.use(cors());
+const allowAllOrigins = String(process.env.CORS_ALLOW_ALL || '').toLowerCase() === 'true';
+if (allowAllOrigins && process.env.NODE_ENV === 'production') {
+  throw new Error('CORS_ALLOW_ALL cannot be enabled in production.');
+}
+const allowedOrigins = parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowAllOrigins || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error(`CORS origin not allowed: ${origin}`));
+  },
+  credentials: true,
+}));
 app.use(securityHeaders);
 
 // Parse incoming JSON request bodies (needed for login/register POST requests)

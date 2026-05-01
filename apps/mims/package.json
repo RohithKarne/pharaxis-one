@@ -7,6 +7,8 @@
     "start": "node backend/server.js",
     "dev": "nodemon --exec \"node --env-file=.env\" backend/server.js",
     "dev:all": "concurrently -n backend,frontend -c cyan,magenta \"nodemon --exec 'node --env-file=.env' backend/server.js\" \"cd frontend && npm run dev\"",
+    "dev:clean": "bash ./dev-clean.sh",
+    "stop:ports": "bash ./stop-ports.sh",
     "security:scan": "bash ./scripts/security-scan.sh",
     "test": "jest --testPathPatterns=backend/tests",
     "test:process-explorer-guard": "node backend/tests/process-explorer-guard.js",

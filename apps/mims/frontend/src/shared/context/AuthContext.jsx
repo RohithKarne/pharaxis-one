@@ -1,7 +1,7 @@
 'use strict'
 /**
  * AuthContext.jsx — Global Authentication State (Sprint 7: Multi-Org)
- * Stores: user, token, modules, orgId, siteId, orgName, allOrgs
+ * Stores: user, modules, orgId, siteId, orgName, allOrgs
  * Provides: login(), logout(), switchOrg(), refreshOrgAccess(), getInitials(), formatRole(), hasModuleAccess()
  */
 
@@ -16,10 +16,11 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   function loadFromPrefix(prefix) {
     const savedUser = localStorage.getItem(`${prefix}_user`)
+    localStorage.removeItem(`${prefix}_token`)
     if (!savedUser) return null
     return {
       user:    JSON.parse(savedUser),
-      token:   localStorage.getItem(`${prefix}_token`) || null,
+      token:   null,
       modules: JSON.parse(localStorage.getItem(`${prefix}_modules`) || '[]'),
       orgId:   localStorage.getItem(`${prefix}_org_id`) ? Number(localStorage.getItem(`${prefix}_org_id`)) : null,
       siteId:  localStorage.getItem(`${prefix}_site_id`) ? Number(localStorage.getItem(`${prefix}_site_id`)) : null,
@@ -67,7 +68,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     setAllOrgs(all)
     setSessionTimeout(timeout)
     localStorage.setItem(`${KEY}_user`,            JSON.stringify(userData))
-    localStorage.setItem(`${KEY}_token`,           authToken)
+    localStorage.removeItem(`${KEY}_token`)
     localStorage.setItem(`${KEY}_modules`,         JSON.stringify(allowedModules))
     localStorage.setItem(`${KEY}_org_id`,          oid   ?? '')
     localStorage.setItem(`${KEY}_site_id`,         sid   ?? '')
@@ -80,10 +81,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   async function logout() {
     try {
-      const savedToken = localStorage.getItem(`${KEY}_token`)
-      if (savedToken) {
-        await httpFetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${savedToken}` } })
-      }
+      await httpFetch('/api/auth/logout', { method: 'POST' })
     } catch { /* silent */ }
     setUser(null); setToken(null); setModules([]); setOrgId(null); setSiteId(null); setOrgName(null); setSiteName(null); setAllOrgs([]); setSessionTimeout(30)
     ;[`${KEY}_user`,`${KEY}_token`,`${KEY}_modules`,`${KEY}_org_id`,`${KEY}_site_id`,`${KEY}_org_name`,`${KEY}_site_name`,`${KEY}_all_orgs`,`${KEY}_session_timeout`]
@@ -93,15 +91,15 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   // Switch active org — calls API, stores new token + org info, reloads app
   async function switchOrg(newOrgId) {
-    const savedToken = localStorage.getItem(`${KEY}_token`)
     const res  = await httpFetch('/api/auth/switch-org', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${savedToken}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orgId: newOrgId })
     })
     if (!res.ok) return
     const data = await res.json()
-    localStorage.setItem(`${KEY}_token`,           data.token)
+    setToken(data.token || null)
+    localStorage.removeItem(`${KEY}_token`)
     localStorage.setItem(`${KEY}_org_id`,          data.orgId   ?? '')
     localStorage.setItem(`${KEY}_site_id`,         data.siteId  ?? '')
     localStorage.setItem(`${KEY}_org_name`,        data.orgName ?? '')
@@ -113,12 +111,9 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const refreshOrgAccess = useCallback(async () => {
-    const savedToken = localStorage.getItem(`${KEY}_token`)
-    if (!savedToken || user?.role === 'superadmin') return
+    if (user?.role === 'superadmin') return
 
-    const res = await httpFetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${savedToken}` },
-    })
+    const res = await httpFetch('/api/auth/me')
     if (!res.ok) return
     const data = await res.json()
     const nextOrgs = Array.isArray(data.allOrgs) ? data.allOrgs : []
@@ -135,13 +130,13 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${savedToken}`,
       },
       body: JSON.stringify({ orgId: fallbackOrgId })
     })
     if (!switchRes.ok) return
     const switched = await switchRes.json()
-    localStorage.setItem(`${KEY}_token`,           switched.token)
+    setToken(switched.token || null)
+    localStorage.removeItem(`${KEY}_token`)
     localStorage.setItem(`${KEY}_org_id`,          switched.orgId   ?? '')
     localStorage.setItem(`${KEY}_site_id`,         switched.siteId  ?? '')
     localStorage.setItem(`${KEY}_org_name`,        switched.orgName ?? '')

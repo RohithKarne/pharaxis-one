@@ -4,8 +4,11 @@
   "description": "CP Portal — Backend API (Admin Console + Public Portal)",
   "main": "server.js",
   "scripts": {
+    "db:migrate": "node scripts/run-migrations.js",
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:static": "node tests/syntax-check.js",
+    "test:smoke": "node tests/smoke-health.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

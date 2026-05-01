@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { orgApi as api } from '../../common/api/client'
 
 function FolderNode({
   node,
@@ -59,31 +60,11 @@ function FolderNode({
 }
 
 export default function FolderTree({ selectedFolderId, onSelectFolder }) {
-  const token = localStorage.getItem('vault_token')
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  async function api(path, options = {}) {
-    const response = await fetch(path, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...(options.headers || {})
-      }
-    })
-    const payload = await response.json()
-    if (!response.ok) throw new Error(payload.error || 'Request failed')
-    return payload
-  }
-
   async function loadFolders() {
-    if (!token) {
-      setLoading(false)
-      setError('Session not found. Please log in first.')
-      return
-    }
     setLoading(true)
     setError('')
     try {

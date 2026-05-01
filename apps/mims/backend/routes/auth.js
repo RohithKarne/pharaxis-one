@@ -15,9 +15,16 @@ const {
 
 function extractBearerToken(req) {
   const authHeader = req.headers.authorization || '';
-  if (!authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7).trim();
-  return token || null;
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token && token !== 'null' && token !== 'undefined') return token;
+  }
+  const cookieHeader = req.headers.cookie || '';
+  const cookie = cookieHeader
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith('mims_token='));
+  return cookie ? decodeURIComponent(cookie.slice('mims_token='.length)) : null;
 }
 
 function toNumber(value, fallback = 0) {
@@ -180,6 +187,7 @@ router.post('/logout', authenticate, async (req, res) => {
     await pool.execute('DELETE FROM sessions WHERE token = ?', [token]).catch(() => {});
   }
   logger.info({ user_id: req.user?.userId, route: '/api/auth/logout' }, 'User logged out');
+  res.clearCookie('mims_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
   res.json({ message: 'Logged out.' });
 });
 

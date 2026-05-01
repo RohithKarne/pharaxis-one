@@ -298,6 +298,7 @@ async function resolveAssignedUserIds(orgId, assignedTo, fallbackCaseOwnerId = n
 }
 
 async function refreshInboxOperationalAlerts(now = new Date()) {
+  // H1 FIX: exclude snoozed inquiries so SLA alerts are suppressed during the snooze window
   const [rows] = await pool.execute(
     `SELECT
        iq.*,
@@ -308,11 +309,14 @@ async function refreshInboxOperationalAlerts(now = new Date()) {
      LEFT JOIN cases c ON c.id = iq.case_id
      WHERE iq.status <> 'outbox'
        AND iq.org_id IS NOT NULL
+       AND (iq.snoozed_until IS NULL OR iq.snoozed_until <= NOW())
      ORDER BY iq.id ASC`
   );
 
   const hydrated = hydrateInquiryRows(rows, now);
   for (const inquiry of hydrated) {
+    // Belt-and-suspenders: skip if hydrated row is still marked snoozed
+    if (inquiry.is_snoozed) continue;
     if (['linked', 'converted', 'no_action', 'closed'].includes(String(inquiry.triage_state || '').toLowerCase())) {
       continue;
     }

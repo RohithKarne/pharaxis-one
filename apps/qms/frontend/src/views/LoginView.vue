@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { apiRequest, loginUser, verifyUserOtp } from '../services/api';
+import { apiRequest, loginSuperadmin, loginUser, verifyUserOtp } from '../services/api';
 
 const router = useRouter();
 const qmsIconUrl = `${import.meta.env.BASE_URL}qms-icon.svg`;
@@ -10,6 +10,11 @@ const form = ref({
   userId: 'admin',
   password: 'Admin@123',
   orgCode: ''
+});
+const loginMode = ref('user');
+const superadminForm = ref({
+  userId: 'Superadmin',
+  password: 'Manager@123'
 });
 const loading = ref(false);
 const error = ref('');
@@ -67,6 +72,25 @@ async function submit() {
   }
 }
 
+async function submitSuperadmin() {
+  loading.value = true;
+  error.value = '';
+  try {
+    await loginSuperadmin(superadminForm.value);
+    router.push('/superadmin');
+  } catch (err) {
+    error.value = err.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+function switchLoginMode(nextMode) {
+  loginMode.value = nextMode;
+  error.value = '';
+  backToCredentials();
+}
+
 function backToCredentials() {
   otpState.value = {
     required: false,
@@ -81,25 +105,57 @@ onMounted(loadOrgOptions);
 </script>
 
 <template>
-  <main class="login-page qms-login-page">
-    <section class="login-card qms-login-card">
-      <header class="login-card-header qms-login-card-header">
+  <main :class="['login-page', 'qms-login-page', loginMode === 'superadmin' ? 'qms-login-page-superadmin' : '']">
+    <section :class="['login-card', 'qms-login-card', loginMode === 'superadmin' ? 'qms-login-card-superadmin' : '']">
+      <header :class="['login-card-header', 'qms-login-card-header', loginMode === 'superadmin' ? 'qms-login-card-header-superadmin' : '']">
         <div class="qms-login-brand">
           <img :src="qmsIconUrl" alt="QMS" class="qms-login-brand-icon" />
           <p class="app-name">PHARAXIS QMS</p>
+          <button
+            v-if="loginMode === 'user'"
+            class="qms-superadmin-switch"
+            type="button"
+            @click="switchLoginMode('superadmin')"
+          >
+            Superadmin
+          </button>
         </div>
-        <p class="app-tagline">Quality Management System</p>
+        <p class="app-tagline">{{ loginMode === 'superadmin' ? 'Platform Control' : 'Quality Management System' }}</p>
       </header>
 
       <section class="login-card-body">
-        <h1 class="qms-login-title">Sign In</h1>
+        <h1 class="qms-login-title">{{ loginMode === 'superadmin' ? 'Superadmin Sign In' : 'Sign In' }}</h1>
         <p class="qms-login-subtitle">
-          Access quality modules, workflows, and audit-ready records.
+          {{
+            loginMode === 'superadmin'
+              ? 'Manage organizations, users, security groups, and global platform policies.'
+              : 'Access quality modules, workflows, and audit-ready records.'
+          }}
         </p>
 
         <p v-if="error" class="alert alert-error">{{ error }}</p>
 
-        <form @submit.prevent="submit">
+        <form v-if="loginMode === 'superadmin'" @submit.prevent="submitSuperadmin">
+          <div class="form-group">
+            <label for="sa-user-id">User ID</label>
+            <input id="sa-user-id" v-model="superadminForm.userId" class="form-control" autocomplete="username" />
+          </div>
+
+          <div class="form-group">
+            <label for="sa-password">Password</label>
+            <input id="sa-password" v-model="superadminForm.password" class="form-control" type="password" autocomplete="current-password" />
+          </div>
+
+          <button class="btn btn-primary btn-block mt-8" :disabled="loading" type="submit">
+            {{ loading ? 'Signing in...' : 'Sign In' }}
+          </button>
+
+          <button class="btn btn-secondary btn-block mt-8" :disabled="loading" type="button" @click="switchLoginMode('user')">
+            Back to App Login
+          </button>
+        </form>
+
+        <form v-else @submit.prevent="submit">
           <template v-if="!otpState.required">
             <div class="form-group">
               <label for="user-id">User ID</label>
@@ -156,9 +212,6 @@ onMounted(loadOrgOptions);
           </button>
         </form>
 
-        <p class="auth-linkline">
-          Superadmin? <RouterLink to="/superadmin/login">Sign in to Platform Console</RouterLink>
-        </p>
       </section>
     </section>
   </main>

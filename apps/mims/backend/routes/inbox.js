@@ -98,6 +98,14 @@ async function getScopedReplyTemplate(req, templateId, columns = '*') {
   return rows[0] || null;
 }
 
+// H3 FIX: shared email format validator used by reply and forward routes
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function isValidEmail(value) {
+  const raw = String(value || '').trim();
+  const extracted = (raw.match(/<([^>]+)>/) || [null, raw])[1].trim();
+  return EMAIL_RE.test(extracted);
+}
+
 function textContains(haystack, needle) {
   const left = String(haystack || '').trim().toLowerCase();
   const right = String(needle || '').trim().toLowerCase();
@@ -411,7 +419,8 @@ router.post('/templates', authenticate, async (req, res) => {
       `INSERT INTO reply_templates (name, subject, body, created_by) VALUES (?, ?, ?, ?)`,
       [name, subject || null, body, req.user?.userId || null]
     );
-    res.json({ id: result.insertId, message: 'Template created.' });
+    // M5 FIX: resource creation should return 201 Created, not 200 OK
+    res.status(201).json({ id: result.insertId, message: 'Template created.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
@@ -460,6 +469,7 @@ router.post('/fetch', authenticate, requireRole('admin', 'superadmin'), async (r
     );
 
     let totalIngested = 0;
+    let failedCount = 0; // M4 FIX: track per-account failures so caller knows when fetch partially failed
     for (const account of accounts) {
       const runStartedAt = new Date().toISOString();
       try {
@@ -495,6 +505,7 @@ router.post('/fetch', authenticate, requireRole('admin', 'superadmin'), async (r
           },
         });
       } catch (_) {
+        failedCount++;
         const runEndedAt = new Date().toISOString();
         logService({
           source: 'Email Accounts',
@@ -519,7 +530,8 @@ router.post('/fetch', authenticate, requireRole('admin', 'superadmin'), async (r
       }
     }
 
-    res.json({ ingested: totalIngested });
+    // M4 FIX: surface failure count so the caller can detect partial-fetch failures
+    res.json({ ingested: totalIngested, failed: failedCount });
   } catch (err) {
     res.status(500).json({ error: err?.message || 'Fetch failed.' });
   }
@@ -668,16 +680,16 @@ router.put('/routing-rules/:id', authenticate, requireRole('admin', 'superadmin'
   }
 });
 
-// DELETE /api/inbox/routing-rules/:id — remove routing rule
+// DELETE /api/inbox/routing-rules/:id — soft-delete routing rule (C2 FIX: no hard deletes)
 router.delete('/routing-rules/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const [[existing]] = await pool.execute('SELECT id, org_id FROM inbox_routing_rules WHERE id = ?', [id]);
+    const [[existing]] = await pool.execute('SELECT id, org_id, is_active FROM inbox_routing_rules WHERE id = ?', [id]);
     if (!existing) return res.status(404).json({ error: 'Routing rule not found.' });
     if (req.user.role !== 'superadmin' && Number(existing.org_id) !== Number(req.user.orgId)) {
       return res.status(403).json({ error: 'Access denied.' });
     }
-    await pool.execute('DELETE FROM inbox_routing_rules WHERE id = ?', [id]);
+    await pool.execute('UPDATE inbox_routing_rules SET is_active = 0 WHERE id = ?', [id]);
     res.json({ message: 'Routing rule deleted.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
@@ -867,12 +879,13 @@ async function sendViaSmtp(account, { from, to, subject, text }) {
   await transporter.sendMail({ from, to, subject, text });
 }
 
-async function insertSentItem({ from, to, subject, body, sourceTag, originalId, caseId }) {
+// C1 FIX: include org_id in every outbox row to preserve multi-tenant isolation
+async function insertSentItem({ from, to, subject, body, sourceTag, originalId, caseId, orgId }) {
   const sentAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
   await pool.execute(
-    `INSERT INTO inquiries (sender, recipient, subject, body, received_at, status, attachments_count, source_tag, is_locked, locked_by, color, original_inquiry_id, case_id)
-     VALUES (?, ?, ?, ?, ?, 'outbox', 0, ?, 0, null, null, ?, ?)`,
-    [from, to, subject, body, sentAt, sourceTag, originalId || null, caseId || null]
+    `INSERT INTO inquiries (org_id, sender, recipient, subject, body, received_at, status, attachments_count, source_tag, is_locked, locked_by, color, original_inquiry_id, case_id)
+     VALUES (?, ?, ?, ?, ?, ?, 'outbox', 0, ?, 0, null, null, ?, ?)`,
+    [orgId || null, from, to, subject, body, sentAt, sourceTag, originalId || null, caseId || null]
   );
 }
 
@@ -882,6 +895,8 @@ router.post('/:id/reply', authenticate, async (req, res) => {
     const { id } = req.params;
     const { to, subject, body } = req.body;
     if (!to || !subject || !body) return res.status(400).json({ error: 'to, subject, and body are required.' });
+    // H3 FIX: validate recipient email format before attempting SMTP
+    if (!isValidEmail(to)) return res.status(400).json({ error: 'Invalid recipient email address.' });
 
     const inquiry = await getScopedInquiry(req, id, 'id, recipient, case_id, org_id');
     if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
@@ -911,7 +926,7 @@ router.post('/:id/reply', authenticate, async (req, res) => {
        WHERE id = ?`,
       [id]
     );
-    await insertSentItem({ from: fromAddr, to, subject, body, sourceTag: 'Sent Reply', originalId: Number(id), caseId: inquiry.case_id || null });
+    await insertSentItem({ from: fromAddr, to, subject, body, sourceTag: 'Sent Reply', originalId: Number(id), caseId: inquiry.case_id || null, orgId: inquiry.org_id || null });
     audit(req.user?.userId || null, req.user?.email || 'unknown', 'REPLY', 'inquiry', Number(id), { to, subject });
     res.json({ message: 'Reply sent. Inquiry moved to Processed.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
@@ -923,6 +938,8 @@ router.post('/:id/forward', authenticate, async (req, res) => {
     const { id } = req.params;
     const { to, subject, body } = req.body;
     if (!to || !subject || !body) return res.status(400).json({ error: 'to, subject, and body are required.' });
+    // H3 FIX: validate recipient email format before attempting SMTP
+    if (!isValidEmail(to)) return res.status(400).json({ error: 'Invalid recipient email address.' });
 
     const inquiry = await getScopedInquiry(req, id, 'id, recipient, case_id, org_id');
     if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
@@ -946,14 +963,16 @@ router.post('/:id/forward', authenticate, async (req, res) => {
        WHERE id = ?`,
       [id]
     );
-    await insertSentItem({ from: fromAddr, to, subject, body, sourceTag: 'Sent Forward', originalId: Number(id), caseId: inquiry.case_id || null });
+    await insertSentItem({ from: fromAddr, to, subject, body, sourceTag: 'Sent Forward', originalId: Number(id), caseId: inquiry.case_id || null, orgId: inquiry.org_id || null });
     audit(req.user?.userId || null, req.user?.email || 'unknown', 'FORWARD', 'inquiry', Number(id), { to, subject });
     res.json({ message: 'Email forwarded.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // PATCH /api/inbox/:id — update status, lock state, or color (DB-backed inquiries only)
+// H4 FIX: wrapped in a DB transaction with SELECT FOR UPDATE to prevent concurrent-write races
 router.patch('/:id', authenticate, async (req, res) => {
+  const connection = await pool.getConnection();
   try {
     const { id } = req.params;
     const {
@@ -976,15 +995,21 @@ router.patch('/:id', authenticate, async (req, res) => {
       exception_reason,
     } = req.body;
 
-    const [[row]] = await pool.execute(
+    await connection.beginTransaction();
+
+    const [[row]] = await connection.execute(
       `SELECT id, org_id, status, is_locked, locked_by, color, is_read, assigned_to, priority, due_date, case_id,
               triage_state, queue_name, snoozed_until, first_touched_at, first_response_at, closed_at, routing_reason, exception_reason
        FROM inquiries
-       WHERE id = ?`,
+       WHERE id = ? FOR UPDATE`,
       [id]
     );
-    if (!row) return res.status(404).json({ error: 'Inquiry not found.' });
+    if (!row) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Inquiry not found.' });
+    }
     if (req.user.role !== 'superadmin' && Number(row.org_id) !== Number(req.user.orgId)) {
+      await connection.rollback();
       return res.status(403).json({ error: 'Access denied.' });
     }
 
@@ -1009,16 +1034,23 @@ router.patch('/:id', authenticate, async (req, res) => {
     if (exception_reason !== undefined) { updates.push('exception_reason = ?'); params.push(exception_reason || null); }
     if (case_id !== undefined) {
       if (case_id) {
-        const [[caseRow]] = await pool.execute('SELECT id, org_id FROM cases WHERE id = ?', [case_id]);
-        if (!caseRow) return res.status(404).json({ error: 'Case not found.' });
+        const [[caseRow]] = await connection.execute('SELECT id, org_id FROM cases WHERE id = ?', [case_id]);
+        if (!caseRow) {
+          await connection.rollback();
+          return res.status(404).json({ error: 'Case not found.' });
+        }
         if (req.user.role !== 'superadmin' && Number(caseRow.org_id) !== Number(req.user.orgId)) {
+          await connection.rollback();
           return res.status(403).json({ error: 'Cannot link inquiry to a case outside your organisation.' });
         }
       }
       updates.push('case_id = ?'); params.push(case_id || null);
     }
 
-    if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+    if (updates.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Nothing to update.' });
+    }
 
     if (is_read === true && !row.first_touched_at && first_touched_at === undefined) {
       updates.push('first_touched_at = COALESCE(first_touched_at, NOW())');
@@ -1026,7 +1058,9 @@ router.patch('/:id', authenticate, async (req, res) => {
     updates.push('last_action_at = NOW()');
 
     params.push(id);
-    await pool.execute(`UPDATE inquiries SET ${updates.join(', ')} WHERE id = ?`, params);
+    await connection.execute(`UPDATE inquiries SET ${updates.join(', ')} WHERE id = ?`, params);
+    await connection.commit();
+
     const after = {
       status: status !== undefined ? status : row.status,
       is_locked: is_locked !== undefined ? (is_locked ? 1 : 0) : row.is_locked,
@@ -1045,6 +1079,7 @@ router.patch('/:id', authenticate, async (req, res) => {
       routing_reason: routing_reason !== undefined ? (routing_reason || null) : row.routing_reason,
       exception_reason: exception_reason !== undefined ? (exception_reason || null) : row.exception_reason,
     };
+    // audit is best-effort, outside transaction
     audit(req.user?.userId || null, req.user?.email || 'unknown', 'UPDATE', 'inquiry', Number(id), {
       from: {
         status: row.status, is_locked: row.is_locked, locked_by: row.locked_by,
@@ -1056,7 +1091,12 @@ router.patch('/:id', authenticate, async (req, res) => {
       to: after,
     });
     res.json({ message: 'Updated.' });
-  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+  } catch (err) {
+    await connection.rollback().catch(() => {});
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    connection.release();
+  }
 });
 
 // POST /api/inbox/:id/link-case — link inquiry to a case and move to processed

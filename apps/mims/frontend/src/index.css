@@ -723,6 +723,14 @@ a.nav-item { text-decoration: none; color: inherit; }
   background: var(--sidebar-bg);
   padding: 28px 36px 22px;
   text-align: center;
+  position: relative;
+}
+.login-brand-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .app-name {
   font-size: 24px;
@@ -731,6 +739,22 @@ a.nav-item { text-decoration: none; color: inherit; }
   letter-spacing: 1px;
 }
 .app-tagline { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+.superadmin-switch {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 1px solid rgba(255,255,255,0.28);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 3px 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.superadmin-switch:hover { background: rgba(255,255,255,0.2); }
 .login-card-body { padding: 28px 36px; }
 
 .tab-group { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 22px; }

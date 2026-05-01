@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
+import { apiJson } from '../../shared/api/client'
 
 export default function ClientsPage() {
   const [clients, setClients] = useState([])
@@ -17,10 +18,14 @@ export default function ClientsPage() {
 
   async function loadClients() {
     setLoading(true)
-    const res = await fetch('/api/admin/clients', { headers: adminHeaders() })
-    const d   = await res.json()
-    setClients(d.clients || [])
-    setLoading(false)
+    try {
+      const data = await apiJson('/api/admin/clients', { headers: adminHeaders() })
+      setClients(data.clients || [])
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleAdd(e) {
@@ -31,19 +36,26 @@ export default function ClientsPage() {
       return
     }
     setSaving(true)
-    const res  = await fetch('/api/admin/clients', { method: 'POST', headers: adminHeaders(), body: JSON.stringify(form) })
-    const data = await res.json()
-    setSaving(false)
-    if (!res.ok) { setError(data.error || 'Failed to create client.'); return }
-    setShowAdd(false)
-    setForm({ name: '', code: '', description: '', contact_name: '', contact_email: '' })
-    await loadClients()
-    navigate(`/admin/clients/${data.id}`)
+    try {
+      const data = await apiJson('/api/admin/clients', { method: 'POST', headers: adminHeaders(), body: form })
+      setShowAdd(false)
+      setForm({ name: '', code: '', description: '', contact_name: '', contact_email: '' })
+      await loadClients()
+      navigate(`/admin/clients/${data.id}`)
+    } catch (requestError) {
+      setError(requestError.message || 'Failed to create client.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function toggleActive(id, current) {
-    await fetch(`/api/admin/clients/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: !current }) })
-    loadClients()
+    try {
+      await apiJson(`/api/admin/clients/${id}`, { method: 'PATCH', headers: adminHeaders(), body: { is_active: !current } })
+      loadClients()
+    } catch (requestError) {
+      setError(requestError.message)
+    }
   }
 
   return (

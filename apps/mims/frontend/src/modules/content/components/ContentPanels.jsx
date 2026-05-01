@@ -1,5 +1,6 @@
 import toast from '../../../shared/utils/toast'
 import { useState, useEffect, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
@@ -228,7 +229,7 @@ export function VersionDiffPanel({ docId, token }) {
                     {data?.notes && <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px', fontStyle: 'italic' }}>{data.notes}</p>}
                     {data?.content_snapshot ? (
                       <div style={{ maxHeight: 300, overflowY: 'auto', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, padding: 10 }}
-                        dangerouslySetInnerHTML={{ __html: data.content_snapshot }} />
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.content_snapshot || '') }} />
                     ) : (
                       <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No content snapshot stored for this version.</p>
                     )}

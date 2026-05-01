@@ -30,6 +30,10 @@ function makeToken(user, clientId) {
   );
 }
 
+function buildVerifyUrl(origin, clientCode, token) {
+  return `${origin}/portal/${clientCode}/verify-email#token=${encodeURIComponent(token)}`;
+}
+
 // POST /api/portal/auth/register
 router.post('/register', async (req, res) => {
   try {
@@ -76,7 +80,7 @@ router.post('/register', async (req, res) => {
 
     // Send verification email — fire-and-forget, non-fatal
     const origin = req.headers.origin || `http://localhost:5174`;
-    const verifyUrl = `${origin}/portal/${client_code}/verify-email?token=${token}`;
+    const verifyUrl = buildVerifyUrl(origin, client_code, token);
     sendEmail(client.id, {
       to: email,
       subject: 'Verify your email address',
@@ -173,10 +177,10 @@ router.patch('/profile', authenticatePortal, requirePortalAuth, async (req, res)
   }
 });
 
-// GET /api/portal/auth/verify-email?token=xxx — confirm email + auto-login
-router.get('/verify-email', async (req, res) => {
+// POST /api/portal/auth/verify-email - confirm email + auto-login
+router.post('/verify-email', async (req, res) => {
   try {
-    const { token } = req.query;
+    const { token } = req.body;
     if (!token) return res.status(400).json({ error: 'Verification token is required.' });
 
     const [[user]] = await pool.execute(`
@@ -217,7 +221,7 @@ router.post('/resend-verification', async (req, res) => {
     await pool.execute(`UPDATE cp_portal_users SET verification_token=?, verification_token_expires_at=? WHERE id=?`, [token, expires, user.id]);
 
     const origin = req.headers.origin || `http://localhost:5174`;
-    const verifyUrl = `${origin}/portal/${client_code}/verify-email?token=${token}`;
+    const verifyUrl = buildVerifyUrl(origin, client_code, token);
     sendEmail(client.id, {
       to: email,
       subject: 'Verify your email address',

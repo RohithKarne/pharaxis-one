@@ -70,6 +70,38 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function decodeJwtPayload(token) {
+  try {
+    const [, payload] = String(token || '').split('.');
+    if (!payload) return {};
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  } catch (_) {
+    return {};
+  }
+}
+
+async function persistRegressionRun({
+  runByUserId,
+  startedAt,
+  completedAt,
+  totalTests,
+  passed,
+  failed,
+  skipped,
+  healthScore,
+  report,
+}) {
+  try {
+    await pool.execute(
+      `INSERT INTO regression_runs (run_by, started_at, completed_at, total_tests, passed, failed, skipped, health_score, results)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [runByUserId || null, startedAt, completedAt, totalTests, passed, failed, skipped, healthScore, JSON.stringify(report)]
+    );
+  } catch (err) {
+    console.error('[Regression] Failed to store run:', err.message);
+  }
+}
+
 // ── Token acquisition ─────────────────────────────────────────────────────────
 async function ensureRegressionUserOrgAccess() {
   try {
@@ -307,6 +339,91 @@ async function runRegressionSuite({ runByUserId, app } = {}) {
   const startedAt = new Date();
   const token = await getToken();
   const tests = discoverTests();
+  const completedAtOnEarlyExit = new Date();
+
+  if (!token) {
+    const report = {
+      startedAt: startedAt.toISOString(),
+      completedAt: completedAtOnEarlyExit.toISOString(),
+      totalTests: 0,
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      healthScore: 0,
+      infraError: 'Regression auth token unavailable. Configure regression credentials and org access.',
+      coverage: getRegressionCoverage(),
+      modules: [],
+      results: [],
+    };
+    await persistRegressionRun({
+      runByUserId,
+      startedAt,
+      completedAt: completedAtOnEarlyExit,
+      totalTests: 0,
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      healthScore: 0,
+      report,
+    });
+    return report;
+  }
+
+  const tokenPayload = decodeJwtPayload(token);
+  const tokenRole = String(tokenPayload.role || '').toLowerCase();
+  const tokenOrgId = Number(tokenPayload.orgId ?? tokenPayload.org_id ?? 0);
+  if (tokenRole !== 'superadmin' && !tokenOrgId) {
+    const report = {
+      startedAt: startedAt.toISOString(),
+      completedAt: completedAtOnEarlyExit.toISOString(),
+      totalTests: 0,
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      healthScore: 0,
+      infraError: 'Regression token does not carry org scope. Ensure regression user has active org access.',
+      coverage: getRegressionCoverage(),
+      modules: [],
+      results: [],
+    };
+    await persistRegressionRun({
+      runByUserId,
+      startedAt,
+      completedAt: completedAtOnEarlyExit,
+      totalTests: 0,
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      healthScore: 0,
+      report,
+    });
+    return report;
+  }
+
+  const seedToken = token;
+  let activeToken = token;
+  async function makeRequestWithAuthRefresh(method, urlPath, body, suppliedToken) {
+    const hasSuppliedToken = suppliedToken !== undefined;
+    const requestedToken = hasSuppliedToken
+      ? ((suppliedToken === seedToken || suppliedToken === activeToken) ? activeToken : suppliedToken)
+      : activeToken;
+
+    let response = await makeRequest(method, urlPath, body, requestedToken);
+    const isAuthFailure = response.status === 401 || response.status === 403;
+    const canRefresh =
+      isAuthFailure &&
+      requestedToken &&
+      requestedToken === activeToken &&
+      !String(urlPath || '').startsWith('/api/auth/');
+
+    if (!canRefresh) return response;
+
+    const refreshedToken = await getToken();
+    if (!refreshedToken || refreshedToken === activeToken) return response;
+    activeToken = refreshedToken;
+    response = await makeRequest(method, urlPath, body, activeToken);
+    return response;
+  }
 
   const results = [];
   let passed = 0, failed = 0, skipped = 0;
@@ -314,7 +431,7 @@ async function runRegressionSuite({ runByUserId, app } = {}) {
   for (const test of tests) {
     const testStart = Date.now();
     try {
-      const result = await test.run({ makeRequest, token });
+      const result = await test.run({ makeRequest: makeRequestWithAuthRefresh, token: activeToken });
       const durationMs = Date.now() - testStart;
       const passed_ = !!result.pass;
       results.push({
@@ -366,15 +483,17 @@ async function runRegressionSuite({ runByUserId, app } = {}) {
   };
 
   // Store run in DB
-  try {
-    await pool.execute(
-      `INSERT INTO regression_runs (run_by, started_at, completed_at, total_tests, passed, failed, skipped, health_score, results)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [runByUserId || null, startedAt, completedAt, totalTests, passed, failed, skipped, healthScore, JSON.stringify(report)]
-    );
-  } catch (err) {
-    console.error('[Regression] Failed to store run:', err.message);
-  }
+  await persistRegressionRun({
+    runByUserId,
+    startedAt,
+    completedAt,
+    totalTests,
+    passed,
+    failed,
+    skipped,
+    healthScore,
+    report,
+  });
 
   return report;
 }

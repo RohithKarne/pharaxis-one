@@ -51,9 +51,10 @@ async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
-  // Seed default superadmin — only set password on first insert, never overwrite on restart
+  // Seed local superadmin only on first insert; production must provide an explicit bootstrap password.
   const DEFAULT_EMAIL    = 'cpadmin';
-  const DEFAULT_PASSWORD = 'Admin@123';
+  const isProductionLike = !['development', 'test'].includes(process.env.NODE_ENV || 'development');
+  const DEFAULT_PASSWORD = process.env.CP_BOOTSTRAP_SUPERADMIN_PASSWORD || (!isProductionLike ? 'Admin@123' : '');
   const [[existing]] = await pool.execute('SELECT id FROM cp_admin_users WHERE email = ?', [DEFAULT_EMAIL]);
   if (existing) {
     await pool.execute(
@@ -61,6 +62,9 @@ async function initializeDatabase() {
       ['CP Superadmin', existing.id]
     );
   } else {
+    if (!DEFAULT_PASSWORD) {
+      throw new Error('CP_BOOTSTRAP_SUPERADMIN_PASSWORD is required before seeding CP Portal superadmin.');
+    }
     const hash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
     await pool.execute(
       `INSERT INTO cp_admin_users (name, email, password, role) VALUES (?, ?, ?, 'superadmin')`,

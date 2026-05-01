@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const { getClientBundle, listClients } = require('../../services/clientService');
 
 const DEFAULT_FEATURES = [
   { key: 'therapeutic_areas',   label: 'Therapeutic Areas & Research', order: 1 },
@@ -74,58 +75,7 @@ const DEFAULT_FORM_FIELDS = {
 // GET /api/admin/clients
 router.get('/', authenticateAdmin, async (_req, res) => {
   try {
-    const [rows] = await pool.execute(`
-      SELECT c.*,
-        COUNT(DISTINCT CASE WHEN s.status != 'closed' THEN s.id END) as submission_count,
-        b.logo_url, b.portal_name, b.primary_color,
-        COUNT(DISTINCT f.id)  as enabled_feature_count,
-        COUNT(DISTINCT m.id)  as msl_count,
-        MAX(n.publish_at)     as latest_news_at
-      FROM cp_clients c
-      LEFT JOIN cp_submissions s  ON s.client_id = c.id
-      LEFT JOIN cp_branding b     ON b.client_id = c.id
-      LEFT JOIN cp_features f     ON f.client_id = c.id AND f.is_enabled = 1
-      LEFT JOIN cp_msls m         ON m.client_id = c.id AND m.is_active = 1
-      LEFT JOIN cp_news_posts n   ON n.client_id = c.id AND n.status = 'published'
-      WHERE c.is_active = 1
-      GROUP BY c.id
-      ORDER BY c.name ASC
-    `);
-
-    // expired docs count per client (separate query — avoids row explosion with multiple LEFT JOINs)
-    const [expiredDocRows] = await pool.execute(`
-      SELECT client_id, COUNT(*) as cnt
-      FROM cp_documents
-      WHERE is_active = 1 AND status = 'published' AND expires_at IS NOT NULL AND expires_at <= NOW()
-      GROUP BY client_id
-    `);
-    const expiredDocCounts = expiredDocRows.reduce((acc, r) => { acc[r.client_id] = r.cnt; return acc; }, {});
-
-    const now = Date.now();
-    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-
-    const clients = rows.map(c => {
-      let score = 0;
-      if (c.logo_url)                                              score += 20;
-      if (c.portal_name)                                           score += 15;
-      if (c.enabled_feature_count >= 3)                            score += 20;
-      else if (c.enabled_feature_count > 0)                        score += 10;
-      score += 15; // compliance always configured
-      if (c.msl_count > 0)                                         score += 10;
-      if (c.submission_count > 0)                                  score += 10;
-      if (c.primary_color && c.primary_color !== '#2563EB')        score += 10;
-      const readiness_score = Math.min(100, score);
-      const readiness_label = readiness_score >= 90 ? 'Ready'
-                            : readiness_score >= 60 ? 'Almost Ready'
-                            : 'Not Ready';
-
-      // F2-02: Freshness alerts
-      const expired_doc_count   = expiredDocCounts[c.id] || 0;
-      const news_stale          = !!c.latest_news_at && (now - new Date(c.latest_news_at).getTime()) > THIRTY_DAYS_MS;
-      return { ...c, readiness_score, readiness_label, expired_doc_count, news_stale };
-    });
-
-    res.json({ clients });
+    res.json({ clients: await listClients(pool) });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }
@@ -134,11 +84,9 @@ router.get('/', authenticateAdmin, async (_req, res) => {
 // GET /api/admin/clients/:id
 router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
-    const [[client]] = await pool.execute('SELECT * FROM cp_clients WHERE id = ?', [req.params.id]);
-    if (!client) return res.status(404).json({ error: 'Client not found.' });
-    const [[branding]] = await pool.execute('SELECT * FROM cp_branding WHERE client_id = ?', [req.params.id]);
-    const [features] = await pool.execute('SELECT * FROM cp_features WHERE client_id = ? ORDER BY display_order ASC', [req.params.id]);
-    res.json({ client, branding: branding || null, features });
+    const bundle = await getClientBundle(pool, req.params.id);
+    if (!bundle) return res.status(404).json({ error: 'Client not found.' });
+    res.json(bundle);
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

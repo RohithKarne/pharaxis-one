@@ -195,9 +195,33 @@ body { background: var(--cp-bg); }
   width: 100%;
   max-width: 380px;
   box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  position: relative;
 }
 .cp-login-brand { text-align: center; margin-bottom: 28px; }
-.cp-login-icon  { font-size: 48px; display: block; margin-bottom: 8px; }
+.cp-login-brand-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.cp-login-icon  { font-size: 48px; display: block; }
+.cp-superadmin-switch {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: 1px solid #BFDBFE;
+  border-radius: 999px;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 3px 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cp-superadmin-switch:hover { background: #DBEAFE; }
 .cp-login-brand h1 { font-size: 22px; font-weight: 800; color: var(--cp-text); }
 .cp-login-brand p  { font-size: 12px; color: var(--cp-text-muted); margin-top: 2px; }
 .cp-login-form { display: flex; flex-direction: column; gap: 16px; }

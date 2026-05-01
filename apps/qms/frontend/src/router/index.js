@@ -1,25 +1,25 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import DashboardView from '../views/DashboardView.vue';
-import DocumentControlView from '../views/DocumentControlView.vue';
-import CapaView from '../views/CapaView.vue';
-import DeviationView from '../views/DeviationView.vue';
-import AuditView from '../views/AuditView.vue';
-import ValidationView from '../views/ValidationView.vue';
-import ChangeControlView from '../views/ChangeControlView.vue';
-import EventHubView from '../views/EventHubView.vue';
-import WorkflowInboxView from '../views/WorkflowInboxView.vue';
-import NotificationsCenterView from '../views/NotificationsCenterView.vue';
-import ComplaintsView from '../views/ComplaintsView.vue';
-import NonconformanceView from '../views/NonconformanceView.vue';
-import SupplierQualityView from '../views/SupplierQualityView.vue';
-import RiskManagementView from '../views/RiskManagementView.vue';
-import TrainingManagementView from '../views/TrainingManagementView.vue';
-import ManagementReviewView from '../views/ManagementReviewView.vue';
-import QualityInsightsView from '../views/QualityInsightsView.vue';
-import IntegrationsView from '../views/IntegrationsView.vue';
-import SuperadminView from '../views/SuperadminView.vue';
-import LoginView from '../views/LoginView.vue';
-import SuperadminLoginView from '../views/SuperadminLoginView.vue';
+import DashboardView from '../modules/core/pages/DashboardView.vue';
+import DocumentControlView from '../modules/quality/pages/DocumentControlView.vue';
+import CapaView from '../modules/quality/pages/CapaView.vue';
+import DeviationView from '../modules/quality/pages/DeviationView.vue';
+import AuditView from '../modules/quality/pages/AuditView.vue';
+import ValidationView from '../modules/quality/pages/ValidationView.vue';
+import ChangeControlView from '../modules/quality/pages/ChangeControlView.vue';
+import EventHubView from '../modules/platform/pages/EventHubView.vue';
+import WorkflowInboxView from '../modules/platform/pages/WorkflowInboxView.vue';
+import NotificationsCenterView from '../modules/platform/pages/NotificationsCenterView.vue';
+import ComplaintsView from '../modules/quality/pages/ComplaintsView.vue';
+import NonconformanceView from '../modules/quality/pages/NonconformanceView.vue';
+import SupplierQualityView from '../modules/quality/pages/SupplierQualityView.vue';
+import RiskManagementView from '../modules/quality/pages/RiskManagementView.vue';
+import TrainingManagementView from '../modules/quality/pages/TrainingManagementView.vue';
+import ManagementReviewView from '../modules/quality/pages/ManagementReviewView.vue';
+import QualityInsightsView from '../modules/platform/pages/QualityInsightsView.vue';
+import IntegrationsView from '../modules/platform/pages/IntegrationsView.vue';
+import SuperadminView from '../modules/superadmin/pages/SuperadminView.vue';
+import LoginView from '../modules/auth/pages/LoginView.vue';
+import SuperadminLoginView from '../modules/auth/pages/SuperadminLoginView.vue';
 import { clearStoredAuth, getStoredAuth } from '../services/api';
 import { canReadModule, normalizeRoles } from '../config/rbac';
 import { isFeatureEnabled } from '../config/featureFlags';
@@ -57,7 +57,7 @@ function resolveFirstAccessibleUserPath(auth) {
 
 function resolveDefaultPath() {
   const auth = getStoredAuth();
-  if (!auth?.token) return '/login';
+  if (!auth) return '/login';
   if (auth.isSuperadmin) return '/superadmin';
   return resolveFirstAccessibleUserPath(auth);
 }
@@ -186,10 +186,10 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const auth = getStoredAuth();
-  const hasToken = Boolean(auth?.token);
+  const hasSession = Boolean(auth);
   const userRoles = normalizeRoles(auth?.roles || []);
 
-  if (to.meta.guestOnly && hasToken) {
+  if (to.meta.guestOnly && hasSession) {
     if (to.meta.surface === 'superadmin') {
       if (!auth.isSuperadmin) {
         clearStoredAuth();
@@ -200,7 +200,7 @@ router.beforeEach((to) => {
     return auth.isSuperadmin ? '/superadmin' : resolveFirstAccessibleUserPath(auth);
   }
 
-  if (to.meta.requiresAuth && !hasToken) {
+  if (to.meta.requiresAuth && !hasSession) {
     return to.meta.requiresSuperadmin ? '/superadmin/login' : '/login';
   }
 
@@ -212,11 +212,11 @@ router.beforeEach((to) => {
     return '/superadmin';
   }
 
-  if (to.meta.layout === 'superadmin' && hasToken && !auth?.isSuperadmin) {
+  if (to.meta.layout === 'superadmin' && hasSession && !auth?.isSuperadmin) {
     return resolveFirstAccessibleUserPath(auth);
   }
 
-  if (to.meta.layout === 'user' && hasToken && !auth?.isSuperadmin) {
+  if (to.meta.layout === 'user' && hasSession && !auth?.isSuperadmin) {
     const featureFlag = to.meta?.featureFlag;
     if (featureFlag && !isFeatureEnabled(featureFlag)) {
       return resolveFirstAccessibleUserPath(auth);

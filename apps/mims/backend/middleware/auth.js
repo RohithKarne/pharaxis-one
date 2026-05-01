@@ -4,14 +4,29 @@ const pool = require('../database/db');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = require('../utils/jwtSecret');
 
+function readCookie(req, name) {
+  const cookieHeader = req.headers.cookie || '';
+  const cookie = cookieHeader
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith(`${name}=`));
+  return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : null;
+}
+
+function readBearer(req) {
+  const authHeader = req.headers['authorization'] || '';
+  if (!authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7).trim();
+  return token && token !== 'null' && token !== 'undefined' ? token : null;
+}
+
 /**
  * authenticate — verifies JWT and injects req.user
  * req.user = { userId, email, role, orgId, siteId, token }
  * Superadmin: orgId = null, siteId = null
  */
 async function authenticate(req, res, next) {
-  const authHeader = req.headers['authorization'] || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  const token = readCookie(req, 'mims_token') || readBearer(req);
   if (!token) return res.status(401).json({ error: 'Access denied. No token provided.' });
 
   try {

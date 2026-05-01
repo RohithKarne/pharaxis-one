@@ -83,6 +83,16 @@ function issueToken(payload, expiresIn = '8h') {
   return jwt.sign(payload, JWT_SECRET, { expiresIn });
 }
 
+function attachAuthCookie(res, token, maxAgeMs = 8 * 60 * 60 * 1000) {
+  res.cookie('mims_token', token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: maxAgeMs,
+  });
+  return token;
+}
+
 function issueTwoFactorToken(payload) {
   return issueToken({ ...payload, twoFactorPending: true }, '10m');
 }
@@ -333,6 +343,7 @@ async function finalizeRegularLogin({ res, req, user, context, trustedDeviceToke
     siteId: context.siteId,
   });
   await trackSessionToken(user.id, token);
+  attachAuthCookie(res, token, Number(context.sessionTimeout || 30) * 60 * 1000);
 
   await logLoginAudit({
     userId: user.id,
@@ -712,6 +723,7 @@ const authController = {
 
       if (user.password_reset_required) {
         const resetToken = issueToken({ userId: user.id, email: user.email, role: user.role, passwordResetRequired: true });
+        attachAuthCookie(res, resetToken, 10 * 60 * 1000);
         return res.status(200).json({
           passwordResetRequired: true,
           token: resetToken,
@@ -725,6 +737,7 @@ const authController = {
         const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
         const config = await getSystemConfig();
         const sessionTimeout = parseInt(config.superadmin_session_timeout_minutes || '60', 10);
+        attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
         await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'success', authEvent: 'login_success', req });
         return res.status(200).json({
           message: 'Login successful.',
@@ -1039,6 +1052,7 @@ const authController = {
         siteId: pending.siteId,
       });
       await trackSessionToken(pending.userId, token);
+      attachAuthCookie(res, token, Number(pending.sessionTimeout || 30) * 60 * 1000);
       await logLoginAudit({
         userId: pending.userId,
         userName: pending.email,
@@ -1136,6 +1150,7 @@ const authController = {
         siteId,
       });
       await trackSessionToken(req.user.userId, token);
+      attachAuthCookie(res, token, Number(access.session_timeout_minutes || 30) * 60 * 1000);
 
       await logLoginAudit({
         userId: req.user.userId,

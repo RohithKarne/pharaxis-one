@@ -5,6 +5,7 @@ export default defineConfig({
   base: '/qms/',
   plugins: [vue()],
   server: {
-    port: 3146
+    port: 3146,
+    strictPort: true
   }
 });

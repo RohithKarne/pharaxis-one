@@ -9,6 +9,8 @@
     "db:migrate": "node src/db/migrate.js",
     "db:seed:dev": "node src/db/seedDev.js",
     "db:seed:uat:volume": "node tests/seed-uat-volume.mjs",
+    "test:static": "node tests/syntax-check.mjs",
+    "test:smoke": "node tests/smoke-health.mjs",
     "smoke:postdeploy": "node tests/postdeploy-smoke.mjs",
     "smoke:rbac": "node tests/rbac-smoke.mjs",
     "smoke:workflow-notifications": "node tests/workflow-notifications-smoke.mjs",

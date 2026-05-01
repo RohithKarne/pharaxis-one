@@ -12,6 +12,8 @@ const {
   verifyMfaChallenge
 } = require('../services/authPolicyService')
 
+const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' }
+
 // POST /api/auth/login
 const authLoginLimiter = createRateLimiter({
   windowMs: 10 * 60 * 1000,
@@ -96,7 +98,7 @@ router.post('/login', authLoginLimiter, async (req, res) => {
       { expiresIn: `${authPolicy.session_hours || 8}h` }
     )
 
-    res.json({
+    res.cookie('vault_token', token, { ...COOKIE_OPTS, maxAge: Number(authPolicy.session_hours || 8) * 60 * 60 * 1000 }).json({
       token,
       user: { id: user.id, name: user.name, email: user.email, role: user.role, orgId: user.org_id },
       auth_context: {
@@ -147,7 +149,7 @@ router.post('/logout', authenticate, async (req, res) => {
       'INSERT INTO login_audit (org_id, user_id, action, ip_address, user_type) VALUES (?, ?, ?, ?, ?)',
       [req.user.orgId, req.user.userId, 'logout', req.ip, 'org_user']
     )
-    res.json({ message: 'Logged out' })
+    res.clearCookie('vault_token', COOKIE_OPTS).json({ message: 'Logged out' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }

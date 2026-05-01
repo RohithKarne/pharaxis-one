@@ -294,6 +294,7 @@ a {
   padding: 26px 34px 20px;
   text-align: center;
   background: linear-gradient(145deg, #8a5a00 0%, #b37505 62%, #d69613 100%);
+  position: relative;
 }
 
 .vault-login-brand {
@@ -301,6 +302,27 @@ a {
   align-items: center;
   justify-content: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vault-superadmin-switch {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 1px solid rgba(255, 247, 214, 0.6);
+  border-radius: 999px;
+  background: rgba(255, 250, 235, 0.16);
+  color: #fff9e8;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 3px 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vault-superadmin-switch:hover {
+  background: rgba(255, 250, 235, 0.28);
 }
 
 .vault-app-icon {

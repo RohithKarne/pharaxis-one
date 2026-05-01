@@ -8,6 +8,7 @@ const { createRateLimiter } = require('../middleware/rateLimit')
 const { createMfaChallenge, verifyMfaChallenge } = require('../services/authPolicyService')
 
 const router = express.Router()
+const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' }
 const ORG_HARDENING_KEYS = [
   'superadmin_policy_pack',
   'superadmin_license_tier',
@@ -98,7 +99,7 @@ router.post('/login', superadminLoginLimiter, async (req, res) => {
     )
 
     const token = jwt.sign({ superadminId: user.id }, process.env.SUPERADMIN_JWT_SECRET, { expiresIn: '8h' })
-    res.json({
+    res.cookie('vault_superadmin_token', token, { ...COOKIE_OPTS, maxAge: 8 * 60 * 60 * 1000 }).json({
       token,
       superadmin: { id: user.id, name: user.name, email: user.email },
       auth_context: {

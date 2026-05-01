@@ -11,8 +11,20 @@ const OTP_VALIDITY_SECONDS = 600;
 
 export const authRouter = Router();
 
+const AUTH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: env.NODE_ENV === 'production',
+  maxAge: 8 * 60 * 60 * 1000
+};
+
 function makeToken(payload) {
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN });
+}
+
+function sendAuthResponse(res, payload) {
+  res.cookie('qms_access_token', payload.accessToken, AUTH_COOKIE_OPTIONS);
+  return res.json(payload);
 }
 
 function hashOtp(value) {
@@ -295,7 +307,7 @@ authRouter.post('/login', async (req, res, next) => {
       userAgent
     });
 
-    return res.json(makeUserAuthResponse(user, securityContext.securityGroups, token));
+    return sendAuthResponse(res, makeUserAuthResponse(user, securityContext.securityGroups, token));
   } catch (error) {
     return next(error);
   } finally {
@@ -444,7 +456,7 @@ authRouter.post('/login/verify-otp', async (req, res, next) => {
       userAgent
     });
 
-    return res.json({
+    return sendAuthResponse(res, {
       otpVerified: true,
       ...makeUserAuthResponse(user, securityContext.securityGroups, token)
     });
@@ -577,7 +589,7 @@ authRouter.post('/superadmin/login', async (req, res, next) => {
       userAgent
     });
 
-    return res.json(makeUserAuthResponse(user, securityGroups, token));
+    return sendAuthResponse(res, makeUserAuthResponse(user, securityGroups, token));
   } catch (error) {
     return next(error);
   } finally {

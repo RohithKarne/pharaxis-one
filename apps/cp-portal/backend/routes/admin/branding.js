@@ -28,7 +28,7 @@ const uploadLogo = multer({
   storage: logoStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'];
+    const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
     cb(null, allowed.includes(file.mimetype));
   },
 });
@@ -47,7 +47,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 // POST /api/admin/branding/:clientId/upload-logo — logo file upload
 router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, uploadLogo.single('logo'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No valid image file provided. Allowed: PNG, JPG, GIF, WebP, SVG (max 5 MB).' });
+    if (!req.file) return res.status(400).json({ error: 'No valid image file provided. Allowed: PNG, JPG, GIF, WebP (max 5 MB).' });
     const logoUrl = `/uploads/logos/${req.file.filename}`;
     await pool.execute(`UPDATE cp_branding SET logo_url = ?, updated_at = NOW() WHERE client_id = ?`, [logoUrl, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'UPLOAD', 'branding', req.params.clientId, { logo_url: logoUrl });

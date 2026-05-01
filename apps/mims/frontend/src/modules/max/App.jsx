@@ -35,6 +35,7 @@ import DPPRPage from '../admin/pages/DPPRPage'
 import NoAccessPage from '../../pages/NoAccessPage'
 import ResetPasswordPage from '../../pages/ResetPasswordPage'
 import ExceptionToast from '../../shared/components/ExceptionToast'
+import SuperadminPage from '../superadmin/pages/SuperadminPage'
 
 function AppRoutes() {
   const { user, sessionTimeout, logout } = useAuth()
@@ -75,6 +76,11 @@ function AppRoutes() {
               <ModuleAccessGuard moduleKey="mims_core">
                 <DashboardPage />
               </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/superadmin" element={
+            <ProtectedRoute>
+              <SuperadminPage />
             </ProtectedRoute>
           } />
           <Route path="/inbox" element={

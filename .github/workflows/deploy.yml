@@ -21,12 +21,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Detect which apps changed
         id: changes
         run: |
-          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA="${{ github.sha }}"
+
+          if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            CHANGED=$(git ls-tree -r --name-only "$AFTER_SHA")
+          elif git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            CHANGED=$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA")
+          else
+            CHANGED=$(git ls-tree -r --name-only "$AFTER_SHA")
+          fi
+
           echo "$CHANGED"
 
           flag() { echo "$CHANGED" | grep -q "^$1" && echo "true" || echo "false"; }
@@ -171,13 +181,25 @@ jobs:
       - build-ai-agent
       - build-qms
     # Run deploy even if some build jobs were skipped (app unchanged)
-    if: always() && !cancelled() && !failure()
+    if: >
+      always() &&
+      !cancelled() &&
+      !failure() &&
+      (
+        needs.detect.outputs.mims == 'true' ||
+        needs.detect.outputs.cp_portal == 'true' ||
+        needs.detect.outputs.vault == 'true' ||
+        needs.detect.outputs.ai_agent == 'true' ||
+        needs.detect.outputs.qms == 'true'
+      )
     timeout-minutes: 15
 
     steps:
       - name: Download all dist artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: dist-*
+          merge-multiple: false
           path: artifacts/
 
       - name: Setup SSH key
@@ -336,10 +358,20 @@ jobs:
             echo "--- Pulling latest code ---"
             git pull origin main
 
-            echo "--- Applying PM2 ecosystem config (clean restart) ---"
-            pm2 delete all || true
-            pm2 start ecosystem.config.js
+            echo "--- Applying PM2 ecosystem config (zero-downtime reload) ---"
+            pm2 startOrReload ecosystem.config.js --update-env
             pm2 save
+
+            CHANGED_APPS=""
+            [ "$MIMS" = "true" ] && CHANGED_APPS="${CHANGED_APPS},mims"
+            [ "$CP_PORTAL" = "true" ] && CHANGED_APPS="${CHANGED_APPS},cp-portal"
+            [ "$VAULT" = "true" ] && CHANGED_APPS="${CHANGED_APPS},vault"
+            [ "$AI_AGENT" = "true" ] && CHANGED_APPS="${CHANGED_APPS},ai-agent"
+            [ "$QMS" = "true" ] && CHANGED_APPS="${CHANGED_APPS},qms"
+            CHANGED_APPS="${CHANGED_APPS#,}"
+
+            echo "--- Running postdeploy smoke ---"
+            PUBLIC_BASE_URL="http://127.0.0.1" CHANGED_APPS="$CHANGED_APPS" node scripts/postdeploy-smoke.mjs
 
             echo ""
             echo "======================================"

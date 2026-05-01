@@ -17,27 +17,37 @@ const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { runRegressionSuite, getDbHealth, getApiCatalog, getRegressionCoverage, discoverTests } = require('../../services/regressionRunner');
 
-// Rate limit: track last run time per user in memory
-const lastRunAt = {};
-const RATE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes
+const REGRESSION_RUN_LOCK_NAME = 'mims:regression:run:lock';
+const REGRESSION_RUN_LOCK_TIMEOUT_SECONDS = 0;
 
 // ── POST /api/admin/regression/run ────────────────────────────────────────────
 router.post('/regression/run', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  let lockConn = null;
+  let lockAcquired = false;
   try {
-    const userId = req.user.userId;
-    const now = Date.now();
-    if (lastRunAt[userId] && (now - lastRunAt[userId]) < RATE_LIMIT_MS) {
-      const waitSecs = Math.ceil((RATE_LIMIT_MS - (now - lastRunAt[userId])) / 1000);
-      return res.status(429).json({ error: `Rate limited. Wait ${waitSecs}s before running again.` });
+    lockConn = await pool.getConnection();
+    const [[lockRow]] = await lockConn.query(
+      'SELECT GET_LOCK(?, ?) AS acquired',
+      [REGRESSION_RUN_LOCK_NAME, REGRESSION_RUN_LOCK_TIMEOUT_SECONDS]
+    );
+    lockAcquired = Number(lockRow?.acquired || 0) === 1;
+    if (!lockAcquired) {
+      return res.status(409).json({ error: 'Regression suite is already running. Try again shortly.' });
     }
-    lastRunAt[userId] = now;
 
     // Get app reference from req.app for API catalog
-    const report = await runRegressionSuite({ runByUserId: userId, app: req.app });
+    const report = await runRegressionSuite({ runByUserId: req.user.userId, app: req.app });
     res.json(report);
   } catch (err) {
     console.error('[Regression] Run error:', err);
     res.status(500).json({ error: err.message });
+  } finally {
+    if (lockConn) {
+      if (lockAcquired) {
+        await lockConn.query('DO RELEASE_LOCK(?)', [REGRESSION_RUN_LOCK_NAME]).catch(() => {});
+      }
+      lockConn.release();
+    }
   }
 });
 

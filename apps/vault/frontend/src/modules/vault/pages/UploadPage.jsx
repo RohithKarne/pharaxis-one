@@ -12,7 +12,7 @@ function flattenFolders(nodes, level = 0, result = []) {
 }
 
 export default function UploadPage() {
-  const token = localStorage.getItem('vault_token')
+  const token = ''
   const navigate = useNavigate()
   const [types, setTypes] = useState([])
   const [subtypes, setSubtypes] = useState([])
@@ -55,15 +55,11 @@ export default function UploadPage() {
   }
 
   useEffect(() => {
-    if (!token) {
-      setError('Session not found. Please log in.')
-      return
-    }
     loadInitialData()
   }, [])
 
   useEffect(() => {
-    if (!form.content_type_id || !token) {
+    if (!form.content_type_id) {
       setSubtypes([])
       setClassifications([])
       return
@@ -87,7 +83,7 @@ export default function UploadPage() {
   }, [form.content_type_id])
 
   useEffect(() => {
-    if (!form.content_subtype_id || !token) {
+    if (!form.content_subtype_id) {
       setClassifications([])
       return
     }

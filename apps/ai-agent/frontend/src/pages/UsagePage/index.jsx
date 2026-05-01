@@ -75,11 +75,10 @@ export default function UsagePage() {
       if (appliedFilters.from_date) params.set('from_date', `${appliedFilters.from_date} 00:00:00`)
       if (appliedFilters.to_date) params.set('to_date', `${appliedFilters.to_date} 23:59:59`)
 
-      const token = localStorage.getItem('ai_agent_token')
-      const headers = token ? { Authorization: `Bearer ${token}` } : {}
-
       try {
-        const response = await fetch(`${API_BASE}/api/v1/agent/admin/usage?${params.toString()}`, { headers })
+        const response = await fetch(`${API_BASE}/api/v1/agent/admin/usage?${params.toString()}`, {
+          credentials: 'include'
+        })
         const payload = await response.json()
 
         if (!response.ok) {

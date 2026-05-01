@@ -4,8 +4,13 @@ import { keycloakAuth } from './keycloakAuth.js';
 
 function getBearerToken(req) {
   const header = req.headers.authorization || '';
-  if (!header.startsWith('Bearer ')) return null;
-  return header.slice(7).trim();
+  if (header.startsWith('Bearer ')) return header.slice(7).trim();
+  const cookieHeader = req.headers.cookie || '';
+  const cookie = cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('qms_access_token='));
+  return cookie ? decodeURIComponent(cookie.slice('qms_access_token='.length)) : null;
 }
 
 function readJwtPayloadUnsafe(token) {

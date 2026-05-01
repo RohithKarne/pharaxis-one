@@ -12,6 +12,8 @@ export default defineConfig({
   },
   plugins: [react()],
   server: {
+    port: 5173,
+    strictPort: true,
     // Proxy API + static backend assets to Express on port 3000 during local dev.
     proxy: {
       '/api': 'http://127.0.0.1:3000',

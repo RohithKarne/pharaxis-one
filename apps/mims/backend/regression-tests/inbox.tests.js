@@ -69,7 +69,7 @@ module.exports = [
       if (createdId > 0) {
         await makeRequest('DELETE', `/api/inbox/templates/${createdId}`, null, token);
       }
-      return { pass: res.status === 200 && createdId > 0, details: `Status: ${res.status}, id: ${createdId || 'n/a'}` };
+      return { pass: res.status === 201 && createdId > 0, details: `Status: ${res.status}, id: ${createdId || 'n/a'}` };
     },
   },
   {
@@ -83,7 +83,7 @@ module.exports = [
         body: 'Before body',
       }, token);
       const createdId = Number(create.body?.id || 0);
-      if (create.status !== 200 || !createdId) {
+      if (create.status !== 201 || !createdId) {
         return { pass: false, details: `create status: ${create.status}` };
       }
       const patch = await makeRequest('PATCH', `/api/inbox/templates/${createdId}`, {
@@ -105,7 +105,7 @@ module.exports = [
         body: 'Delete body',
       }, token);
       const createdId = Number(create.body?.id || 0);
-      if (create.status !== 200 || !createdId) {
+      if (create.status !== 201 || !createdId) {
         return { pass: false, details: `create status: ${create.status}` };
       }
       const del = await makeRequest('DELETE', `/api/inbox/templates/${createdId}`, null, token);

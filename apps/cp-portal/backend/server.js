@@ -13,9 +13,32 @@ const path         = require('path');
 const rateLimit    = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const { pool, initializeDatabase } = require('./database/db');
+const { attachRequestContext } = require('./middleware/requestContext');
+const { inputSecurity } = require('./middleware/inputSecurity');
+const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandler');
+const { captureProcessLog } = require('./services/processLogService');
 
 const app  = express();
 const PORT = process.env.CP_PORT || 4000;
+let server = null;
+let schedulerHandle = null;
+
+function applySecurityHeaders(req, res, next) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+
+  const isSecure = req.secure || String(req.headers['x-forwarded-proto'] || '').toLowerCase() === 'https';
+  if (isSecure) {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+
+  next();
+}
+
+app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
 // ── Rate limiters ─────────────────────────────────────────────
@@ -36,11 +59,21 @@ const submitLimiter = rateLimit({
   message: { error: 'Submission limit reached. Please try again later.' },
 });
 
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Number(process.env.CP_API_RATE_LIMIT || 600),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded. Please retry shortly.' },
+  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
+});
+
 // ── Middleware ────────────────────────────────────────────────
 const ALLOWED_ORIGINS = process.env.CP_CORS_ORIGINS
   ? process.env.CP_CORS_ORIGINS.split(',').map(o => o.trim())
   : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000',
-     'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:3000'];
+     'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:3000',
+     'http://13.205.213.128', 'https://13.205.213.128'];
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -50,60 +83,16 @@ app.use(cors({
   },
   credentials: true,
 }));
+app.use(applySecurityHeaders);
 app.use(express.json({ limit: '200kb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '200kb', parameterLimit: 1000 }));
 app.use(cookieParser());
+app.use(attachRequestContext);
+app.use('/api', apiLimiter);
+app.use('/api', inputSecurity);
 
 // ── Process Explorer: capture every API call ──────────────────
-app.use('/api/', (req, res, next) => {
-  if (req.path.includes('/process-logs')) return next();
-  const start = Date.now();
-
-  let capturedErrorMsg = null;
-  const origJson = res.json.bind(res);
-  res.json = function (body) {
-    if (res.statusCode >= 400 && body) {
-      capturedErrorMsg = (body.error || body.message || JSON.stringify(body)).toString().slice(0, 200);
-    }
-    return origJson(body);
-  };
-
-  res.on('finish', () => {
-    (async () => {
-      try {
-        const duration = Date.now() - start;
-        const fullPath  = req.originalUrl.split('?')[0];
-        const source    = fullPath.startsWith('/api/portal') ? 'portal' : 'admin';
-        const pathPat   = fullPath.replace(/\/\d+/g, '/:id');
-        const m = fullPath.match(/\/(\d+)/);
-        const clientId = m ? parseInt(m[1]) : null;
-
-        let payload = null;
-        if (req.body && typeof req.body === 'object' && Object.keys(req.body).length) {
-          const safe = { ...req.body };
-          delete safe.password; delete safe.token;
-          delete safe.smtp_password; delete safe.verification_token;
-          payload = JSON.stringify(safe).slice(0, 300);
-        }
-
-        await pool.execute(
-          `INSERT INTO cp_process_logs
-             (source, method, path, path_pattern, status_code, duration_ms,
-              admin_id, portal_user_id, client_id, payload_summary, error_message)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            source, req.method, fullPath, pathPat, res.statusCode, duration,
-            req.admin?.id       ?? null,
-            req.portalUser?.id  ?? null,
-            clientId, payload,
-            res.statusCode >= 400 ? capturedErrorMsg : null,
-          ]
-        );
-      } catch { /* never break the response */ }
-    })();
-  });
-  next();
-});
+app.use('/api/', captureProcessLog(pool));
 
 // Static uploads
 app.use('/uploads', (req, res, next) => {
@@ -190,7 +179,7 @@ function startContentScheduler() {
   }
 
   tick();
-  setInterval(tick, 60 * 1000);
+  return setInterval(tick, 60 * 1000);
 }
 
 // ── Health check ──────────────────────────────────────────────
@@ -212,17 +201,33 @@ app.get('/api/health', async (_req, res) => {
 });
 
 // ── 404 ───────────────────────────────────────────────────────
-app.use((_req, res) => res.status(404).json({ error: 'Route not found.' }));
+app.use(notFoundHandler);
+app.use(globalErrorHandler);
 
 // ── Start: init DB then listen ────────────────────────────────
 initializeDatabase()
   .then(() => {
-    app.listen(PORT, () => {
+    server = app.listen(PORT, () => {
       console.log(`✅ CP Portal backend running on http://localhost:${PORT}`);
     });
-    startContentScheduler();
+    schedulerHandle = startContentScheduler();
   })
   .catch(err => {
     console.error('❌ Failed to initialize CP Portal database:', err);
     process.exit(1);
   });
+
+function shutdown(signal) {
+  console.log(`CP Portal shutdown signal received: ${signal}`);
+  if (schedulerHandle) clearInterval(schedulerHandle);
+  if (!server) return process.exit(0);
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 1500).unref();
+}
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGUSR2', () => {
+  shutdown('SIGUSR2');
+  setTimeout(() => process.kill(process.pid, 'SIGUSR2'), 1600).unref();
+});

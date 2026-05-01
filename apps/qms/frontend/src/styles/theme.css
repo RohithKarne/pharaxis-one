@@ -614,6 +614,7 @@ h4 {
   background: var(--primary);
   padding: 26px 32px 20px;
   text-align: center;
+  position: relative;
 }
 
 .qms-login-card-header {
@@ -636,6 +637,27 @@ h4 {
   align-items: center;
   justify-content: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.qms-superadmin-switch {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 3px 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.qms-superadmin-switch:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .qms-login-brand-icon {

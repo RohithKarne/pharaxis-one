@@ -17,9 +17,15 @@ const {
 } = require('../../services/cmModuleLifecycleService');
 
 const multer = require('multer');
+function safeStoredFilename(originalname) {
+  const base = path.basename(String(originalname || 'upload'))
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .slice(0, 180) || 'upload';
+  return `${Date.now()}_${base}`;
+}
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../../storage/cm_documents')),
-  filename: (req, file, cb) => cb(null, Date.now() + '_' + file.originalname),
+  filename: (req, file, cb) => cb(null, safeStoredFilename(file.originalname)),
 });
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 

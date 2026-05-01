@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { orgApi as api } from '../../common/api/client'
 import AdminTabs from '../components/AdminTabs'
 
 export default function TaxonomyPage() {
-  const token = localStorage.getItem('vault_token')
   const [types, setTypes] = useState([])
   const [subtypes, setSubtypes] = useState([])
   const [classifications, setClassifications] = useState([])
@@ -13,21 +13,6 @@ export default function TaxonomyPage() {
   const [typeForm, setTypeForm] = useState({ name: '', code: '' })
   const [subtypeName, setSubtypeName] = useState('')
   const [classificationName, setClassificationName] = useState('')
-
-  async function api(path, options = {}) {
-    if (!token) throw new Error('Session not found. Please log in first.')
-    const response = await fetch(path, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...(options.headers || {})
-      }
-    })
-    const payload = await response.json()
-    if (!response.ok) throw new Error(payload.error || 'Request failed')
-    return payload
-  }
 
   async function loadTypes(nextSelectedTypeId) {
     const rows = await api('/api/taxonomy/types', { method: 'GET' })

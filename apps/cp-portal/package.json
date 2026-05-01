@@ -1,4 +1,20 @@
 {
+  "scripts": {
+    "start": "cd backend && npm run start",
+    "dev": "cd backend && npm run dev",
+    "dev:all": "(cd backend && npm run dev) & (cd frontend && npm run dev) & wait",
+    "dev:clean": "bash ./dev-clean.sh",
+    "stop:ports": "bash ./stop-ports.sh",
+    "build": "cd frontend && npm run build",
+    "db:migrate": "cd backend && npm run db:migrate",
+    "security:scan": "bash ./scripts/security-scan.sh",
+    "test": "npm run test:static",
+    "test:static": "cd backend && npm run test:static",
+    "test:smoke": "cd backend && npm run test:smoke",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:sprint-close:gate1": "npm run test:static && npm run build && npm run security:scan && npm run test:smoke && npm run test:e2e"
+  },
   "devDependencies": {
     "@playwright/test": "^1.58.2"
   }

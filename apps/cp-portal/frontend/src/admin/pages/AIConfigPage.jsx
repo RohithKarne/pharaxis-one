@@ -140,8 +140,7 @@ const styles = {
 }
 
 function getAuthHeaders(includeJson = false) {
-  const token = localStorage.getItem('cp_admin_token') || ''
-  const headers = { Authorization: `Bearer ${token}` }
+  const headers = {}
   if (includeJson) headers['Content-Type'] = 'application/json'
   return headers
 }

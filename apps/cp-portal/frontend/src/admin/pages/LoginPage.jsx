@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 
+const SUPERADMIN_CREDENTIALS = {
+  email: 'cpadmin',
+  password: 'Admin@123',
+}
+
 export default function LoginPage() {
   const { login, admin } = useAdminAuth()
   const navigate = useNavigate()
@@ -15,6 +20,14 @@ export default function LoginPage() {
   const [error, setError]         = useState('')
   const [loading, setLoading]     = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [mode, setMode] = useState('admin')
+
+  function switchMode(nextMode) {
+    setMode(nextMode)
+    setError('')
+    setEmail(nextMode === 'superadmin' ? SUPERADMIN_CREDENTIALS.email : '')
+    setPassword(nextMode === 'superadmin' ? SUPERADMIN_CREDENTIALS.password : '')
+  }
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -26,7 +39,16 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Login failed.'); setPassword(''); return }
+      if (!res.ok) {
+        setError(data.error || 'Login failed.')
+        setPassword(mode === 'superadmin' ? SUPERADMIN_CREDENTIALS.password : '')
+        return
+      }
+      if (mode === 'superadmin' && data.admin?.role !== 'superadmin') {
+        setError('Superadmin access required.')
+        setPassword(SUPERADMIN_CREDENTIALS.password)
+        return
+      }
       login(data.token, data.admin)
       navigate('/admin')
     } catch {
@@ -40,9 +62,16 @@ export default function LoginPage() {
     <div className="cp-login-page">
       <div className="cp-login-card">
         <div className="cp-login-brand">
-          <span className="cp-login-icon">&#9877;</span>
+          <div className="cp-login-brand-row">
+            <span className="cp-login-icon">&#9877;</span>
+            {mode === 'admin' ? (
+              <button className="cp-superadmin-switch" type="button" onClick={() => switchMode('superadmin')}>
+                Superadmin
+              </button>
+            ) : null}
+          </div>
           <h1>CP Portal</h1>
-          <p>Admin Console</p>
+          <p>{mode === 'superadmin' ? 'Superadmin Console' : 'Admin Console'}</p>
         </div>
         <form onSubmit={handleLogin} className="cp-login-form">
           <div className="cp-field">
@@ -70,6 +99,11 @@ export default function LoginPage() {
           <button type="submit" className="cp-btn cp-btn-primary" disabled={loading}>
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
+          {mode === 'superadmin' ? (
+            <button type="button" className="cp-btn cp-btn-secondary" onClick={() => switchMode('admin')} disabled={loading}>
+              Back to App Login
+            </button>
+          ) : null}
         </form>
       </div>
     </div>

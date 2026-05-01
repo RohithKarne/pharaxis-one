@@ -9,11 +9,17 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
+const SUPERADMIN_CREDENTIALS = {
+  email: 'superadmin',
+  password: 'Manager@123',
+}
+
 export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState('login')
+  const [mode, setMode] = useState('app')
   const [alert, setAlert] = useState({ show: false, type: 'error', msg: '' })
   const [loading, setLoading] = useState(false)
   const [backendOnline, setBackendOnline] = useState(null)
@@ -38,6 +44,15 @@ export default function LoginPage() {
 
   function showAlert(msg, type = 'error') {
     setAlert({ show: true, type, msg })
+  }
+
+  function switchMode(nextMode) {
+    setMode(nextMode)
+    setActiveTab('login')
+    setAlert({ show: false, type: 'error', msg: '' })
+    setLoginForm(nextMode === 'superadmin' ? SUPERADMIN_CREDENTIALS : { email: '', password: '' })
+    resetTwoFactorState()
+    resetForgotPasswordState()
   }
 
   function resetTwoFactorState() {
@@ -70,7 +85,7 @@ export default function LoginPage() {
       allOrgs: data.allOrgs || [],
       sessionTimeout: data.sessionTimeout ?? 30,
     })
-    navigate('/dashboard')
+    navigate(data.user?.role === 'superadmin' && mode === 'superadmin' ? '/superadmin' : '/dashboard')
   }
 
   useEffect(() => {
@@ -113,6 +128,10 @@ export default function LoginPage() {
 
       if (data.noOrgAccess) {
         return showAlert('No organisation assigned to your account. Contact your administrator.')
+      }
+
+      if (mode === 'superadmin' && data.user?.role !== 'superadmin') {
+        return showAlert('Superadmin access required.')
       }
 
       if (data.passwordResetRequired) {
@@ -331,8 +350,15 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-card-header">
-          <div className="app-name">MIMS</div>
-          <div className="app-tagline">Medical Information Management System</div>
+          <div className="login-brand-row">
+            <div className="app-name">MIMS</div>
+            {mode === 'app' ? (
+              <button className="superadmin-switch" type="button" onClick={() => switchMode('superadmin')}>
+                Superadmin
+              </button>
+            ) : null}
+          </div>
+          <div className="app-tagline">{mode === 'superadmin' ? 'Superadmin Console' : 'Medical Information Management System'}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
             <span>{today}</span>
             <span style={{ display: 'flex', alignItems: 'center' }}>
@@ -347,6 +373,34 @@ export default function LoginPage() {
         </div>
 
         <div className="login-card-body">
+          {mode === 'superadmin' ? (
+            <>
+              {alert.show && (
+                <div className={`alert alert-${alert.type}`}>{alert.msg}</div>
+              )}
+              <form onSubmit={handleLogin}>
+                <div className="form-group">
+                  <label>Email / Username</label>
+                  <input className="form-control" type="text" placeholder="superadmin" required
+                    value={loginForm.email}
+                    onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Password</label>
+                  <input className="form-control" type="password" placeholder="Enter your password" required
+                    value={loginForm.password}
+                    onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))} />
+                </div>
+                <button className="btn btn-primary btn-block mt-8" type="submit" disabled={loading}>
+                  {loading ? 'Signing in...' : 'Sign In'}
+                </button>
+                <button className="btn btn-secondary btn-block mt-8" type="button" onClick={() => switchMode('app')} disabled={loading}>
+                  Back to App Login
+                </button>
+              </form>
+            </>
+          ) : (
+          <>
           <div className="tab-group">
             <button className={`tab-btn ${activeTab === 'login' ? 'active' : ''}`} onClick={() => setActiveTab('login')}>
               Sign In
@@ -629,6 +683,8 @@ export default function LoginPage() {
                 Back to Sign In
               </button>
             </div>
+          )}
+          </>
           )}
         </div>
       </div>

@@ -1,4 +1,9 @@
-const INTERNAL_TOKEN = process.env.AI_AGENT_INTERNAL_TOKEN || 'dev-internal-token-change-in-prod'
+const isProductionLike = !['development', 'test'].includes(process.env.NODE_ENV || 'development')
+const INTERNAL_TOKEN = process.env.AI_AGENT_INTERNAL_TOKEN || (!isProductionLike ? 'dev-internal-token-change-in-prod' : '')
+
+if (!INTERNAL_TOKEN) {
+  throw new Error('AI_AGENT_INTERNAL_TOKEN is required outside development/test.')
+}
 
 function internalAuth(req, res, next) {
   const header = req.headers.authorization

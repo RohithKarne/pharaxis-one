@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+const SUPERADMIN_CREDENTIALS = {
+  email: 'superadmin@pharaxis.local',
+  password: 'Super@123',
+}
+
 export default function SuperadminLoginPage() {
   const appIconUrl = `${import.meta.env.BASE_URL}vault-icon.svg`
-  const [form, setForm] = useState({ email: '', password: '', mfaCode: '' })
+  const [form, setForm] = useState({ ...SUPERADMIN_CREDENTIALS, mfaCode: '' })
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
@@ -56,7 +61,7 @@ export default function SuperadminLoginPage() {
         return
       }
       if (!res.ok) { setError(data.error || 'Login failed'); setLoading(false); return }
-      localStorage.setItem('vault_superadmin_token', data.token)
+      localStorage.removeItem('vault_superadmin_token')
       localStorage.setItem('vault_superadmin', JSON.stringify(data.superadmin))
       navigate('/control-tower/dashboard')
     } catch {
