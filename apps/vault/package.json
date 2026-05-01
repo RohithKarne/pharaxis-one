@@ -24,7 +24,7 @@
     "test:sprint-close:gate1": "npm run test:static && npm run build && npm run security:scan && npm run test:smoke && npm run test:e2e -- --grep \"Vault smoke\""
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1039.0",
+    "@aws-sdk/client-s3": "^3.1040.0",
     "@aws-sdk/s3-request-presigner": "^3.1039.0",
     "bcrypt": "^6.0.0",
     "concurrently": "^8.2.2",
