@@ -1,6 +1,6 @@
 /**
  * LoginPage.jsx
- * Handles Sign In and Register tabs.
+ * Handles sign-in flows for app and superadmin access.
  * Calls the Express backend API and uses AuthContext to store the session.
  */
 
@@ -18,7 +18,6 @@ export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
 
-  const [activeTab, setActiveTab] = useState('login')
   const [mode, setMode] = useState('app')
   const [alert, setAlert] = useState({ show: false, type: 'error', msg: '' })
   const [loading, setLoading] = useState(false)
@@ -35,12 +34,11 @@ export default function LoginPage() {
   const [forgotStep, setForgotStep] = useState('email')
   const [forgotForm, setForgotForm] = useState({ email: '', code: '', newPassword: '', confirm: '' })
   const [forgotMeta, setForgotMeta] = useState({ maskedEmail: '', resetToken: '' })
+  const [loginStage, setLoginStage] = useState('email')
+  const [ssoChoices, setSsoChoices] = useState([])
 
   // Login form state
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
-
-  // Register form state
-  const [regForm, setRegForm] = useState({ name: '', email: '', password: '', role: 'agent' })
 
   function showAlert(msg, type = 'error') {
     setAlert({ show: true, type, msg })
@@ -48,9 +46,10 @@ export default function LoginPage() {
 
   function switchMode(nextMode) {
     setMode(nextMode)
-    setActiveTab('login')
     setAlert({ show: false, type: 'error', msg: '' })
     setLoginForm(nextMode === 'superadmin' ? SUPERADMIN_CREDENTIALS : { email: '', password: '' })
+    setLoginStage('email')
+    setSsoChoices([])
     resetTwoFactorState()
     resetForgotPasswordState()
   }
@@ -108,12 +107,61 @@ export default function LoginPage() {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   })
 
+  function resetAppLoginToEmail() {
+    setLoginStage('email')
+    setSsoChoices([])
+    setLoginForm(f => ({ ...f, password: '' }))
+    setAlert({ show: false, type: 'error', msg: '' })
+    resetTwoFactorState()
+    resetForgotPasswordState()
+  }
+
+  function redirectToSso(url) {
+    if (!url) {
+      showAlert('SSO is not configured for this account. Contact your administrator.')
+      return
+    }
+    window.location.href = url
+  }
+
   async function handleLogin(e) {
     e.preventDefault()
     setLoading(true)
     setAlert({ show: false })
 
     try {
+      if (mode === 'app' && loginStage === 'email') {
+        const email = loginForm.email.trim()
+        if (!email) return showAlert('Email is required.')
+
+        const res = await httpFetch('/api/auth/login/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            return_to: `${window.location.origin}/mims/auth/sso-complete`,
+          })
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) return showAlert(data.error || 'Could not start sign in.')
+
+        if (data.outcome === 'sso_redirect') {
+          redirectToSso(data.redirect_url)
+          return
+        }
+        if (data.outcome === 'choice_required') {
+          setSsoChoices(Array.isArray(data.options) ? data.options : [])
+          setLoginStage('choice')
+          return
+        }
+        if (data.outcome === 'local_password') {
+          setLoginStage('password')
+          setLoginForm(f => ({ ...f, email, password: '' }))
+          return
+        }
+        return showAlert(data.error || 'Unable to start sign in. Contact your administrator.')
+      }
+
       const res = await httpFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -254,31 +302,6 @@ export default function LoginPage() {
     }
   }
 
-  async function handleRegister(e) {
-    e.preventDefault()
-    setLoading(true)
-    setAlert({ show: false })
-
-    try {
-      const res = await httpFetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(regForm)
-      })
-      const data = await res.json()
-
-      if (!res.ok) return showAlert(data.error || 'Registration failed.')
-
-      showAlert(data.message || 'Account created! Please sign in.', 'success')
-      setActiveTab('login')
-      setLoginForm(f => ({ ...f, email: regForm.email }))
-    } catch {
-      showAlert('Cannot connect to server.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function sendForgotPasswordCode() {
     if (!forgotForm.email.trim()) return showAlert('Enter your email first.')
     setLoading(true)
@@ -401,48 +424,92 @@ export default function LoginPage() {
             </>
           ) : (
           <>
-          <div className="tab-group">
-            <button className={`tab-btn ${activeTab === 'login' ? 'active' : ''}`} onClick={() => setActiveTab('login')}>
-              Sign In
-            </button>
-            <button className={`tab-btn ${activeTab === 'register' ? 'active' : ''}`} onClick={() => setActiveTab('register')}>
-              Register
-            </button>
-          </div>
-
           {alert.show && (
             <div className={`alert alert-${alert.type}`}>{alert.msg}</div>
           )}
 
-          {activeTab === 'login' ? (
+          <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-muted)' }}>
+            Access is provisioned by administrator approval only.
+          </div>
+
             <form onSubmit={handleLogin}>
               <div className="form-group">
                 <label>Email / Username</label>
-                <input className="form-control" type="text" placeholder="you@company.com" required
+                <input
+                  className="form-control"
+                  type="text"
+                  placeholder="you@company.com"
+                  required
                   value={loginForm.email}
-                  onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label>Password</label>
-                <input className="form-control" type="password" placeholder="Enter your password" required
-                  value={loginForm.password}
-                  onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))} />
-                <div style={{ marginTop: 8, textAlign: 'right' }}>
-                  <button
-                    type="button"
-                    className="btn btn-link"
-                    style={{ padding: 0, fontSize: 12 }}
-                    onClick={() => {
+                  onChange={e => {
+                    setLoginForm(f => ({ ...f, email: e.target.value }))
+                    if (loginStage !== 'email') {
+                      setLoginStage('email')
+                      setSsoChoices([])
+                      setForgotOpen(false)
                       resetTwoFactorState()
-                      setForgotOpen(true)
-                      setForgotStep('email')
-                      setForgotForm(f => ({ ...f, email: loginForm.email }))
-                    }}
-                  >
-                    Forgot Password?
+                    }
+                  }}
+                />
+              </div>
+
+              {loginStage === 'password' && !twoFactor && (
+                <div className="form-group">
+                  <label>Password</label>
+                  <input
+                    className="form-control"
+                    type="password"
+                    placeholder="Enter your password"
+                    required
+                    value={loginForm.password}
+                    onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))}
+                  />
+                  <div style={{ marginTop: 8, textAlign: 'right' }}>
+                    <button
+                      type="button"
+                      className="btn btn-link"
+                      style={{ padding: 0, fontSize: 12 }}
+                      onClick={() => {
+                        resetTwoFactorState()
+                        setForgotOpen(true)
+                        setForgotStep('email')
+                        setForgotForm(f => ({ ...f, email: loginForm.email }))
+                      }}
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {loginStage === 'choice' && (
+                <div style={{ marginTop: 12, padding: 14, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)' }}>
+                  <div style={{ fontWeight: 700, marginBottom: 8 }}>Choose SSO Provider</div>
+                  {ssoChoices.length > 0 ? (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {ssoChoices.map((choice) => (
+                        <button
+                          key={`${choice.org_id || choice.org?.id || 'org'}-${choice.provider?.key || choice.provider_key}`}
+                          type="button"
+                          className="btn btn-secondary btn-block"
+                          disabled={loading}
+                          onClick={() => redirectToSso(choice.redirect_url)}
+                        >
+                          Continue with {choice.provider?.label || choice.provider_label || 'SSO'}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                      SSO is not fully configured for this account. Contact your administrator.
+                    </div>
+                  )}
+                  <button className="btn btn-outline btn-block mt-8" type="button" onClick={resetAppLoginToEmail} disabled={loading}>
+                    Back
                   </button>
                 </div>
-              </div>
+              )}
+
               {twoFactor && (
                 <div style={{ marginTop: 16, padding: 16, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)' }}>
                   <div style={{ fontWeight: 700, marginBottom: 6 }}>
@@ -570,44 +637,18 @@ export default function LoginPage() {
                   )}
                 </div>
               )}
-              <button className="btn btn-primary btn-block mt-8" type="submit" disabled={loading}>
-                {loading ? 'Signing in...' : 'Sign In'}
-              </button>
+
+              {!twoFactor && loginStage !== 'choice' && (
+                <button className="btn btn-primary btn-block mt-8" type="submit" disabled={loading}>
+                  {loading ? (loginStage === 'email' ? 'Checking...' : 'Signing in...') : (loginStage === 'email' ? 'Submit' : 'Sign In')}
+                </button>
+              )}
+              {!twoFactor && loginStage === 'password' && (
+                <button className="btn btn-outline btn-block mt-8" type="button" onClick={resetAppLoginToEmail} disabled={loading}>
+                  Back
+                </button>
+              )}
             </form>
-          ) : (
-            <form onSubmit={handleRegister}>
-              <div className="form-group">
-                <label>Full Name</label>
-                <input className="form-control" type="text" placeholder="Your full name" required
-                  value={regForm.name}
-                  onChange={e => setRegForm(f => ({ ...f, name: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label>Email Address</label>
-                <input className="form-control" type="email" placeholder="you@company.com" required
-                  value={regForm.email}
-                  onChange={e => setRegForm(f => ({ ...f, email: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label>Password <span className="text-muted">(min 8 characters)</span></label>
-                <input className="form-control" type="password" minLength={8} required
-                  value={regForm.password}
-                  onChange={e => setRegForm(f => ({ ...f, password: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label>Role</label>
-                <select className="form-control" value={regForm.role}
-                  onChange={e => setRegForm(f => ({ ...f, role: e.target.value }))}>
-                  <option value="agent">Agent</option>
-                  <option value="reviewer">Reviewer</option>
-                  <option value="content_manager">Content Manager</option>
-                </select>
-              </div>
-              <button className="btn btn-accent btn-block mt-8" type="submit" disabled={loading}>
-                {loading ? 'Creating account...' : 'Create Account'}
-              </button>
-            </form>
-          )}
 
           {forgotOpen && (
             <div style={{ marginTop: 16, padding: 16, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)' }}>

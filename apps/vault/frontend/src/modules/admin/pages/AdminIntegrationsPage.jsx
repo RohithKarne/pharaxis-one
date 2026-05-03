@@ -20,6 +20,21 @@ export default function AdminIntegrationsPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  const connectorSummary = connectors.reduce((summary, connector) => {
+    summary.total += 1
+    if (connector.status === 'active') summary.active += 1
+    if (String(connector.last_test_status || '').toLowerCase() === 'pass') summary.healthy += 1
+    if (String(connector.last_test_status || '').toLowerCase() === 'fail') summary.failing += 1
+    if (!connector.last_test_status || connector.status !== 'active') summary.needs_attention += 1
+    return summary
+  }, {
+    total: 0,
+    active: 0,
+    healthy: 0,
+    failing: 0,
+    needs_attention: 0
+  })
+
   async function loadConnectors() {
     if (!token) {
       setError('Session not found. Please sign in first.')
@@ -184,6 +199,36 @@ export default function AdminIntegrationsPage() {
           {error ? <div className="auth-error">{error}</div> : null}
           {success ? <div className="upload-success">{success}</div> : null}
           {loading ? <p className="panel-note">Loading connectors...</p> : null}
+
+          <div className="stats-mini-grid">
+            <article className="stat-card-mini"><span>Total</span><strong>{connectorSummary.total}</strong></article>
+            <article className="stat-card-mini"><span>Active</span><strong>{connectorSummary.active}</strong></article>
+            <article className="stat-card-mini"><span>Healthy</span><strong>{connectorSummary.healthy}</strong></article>
+            <article className="stat-card-mini"><span>Failing</span><strong>{connectorSummary.failing}</strong></article>
+            <article className="stat-card-mini"><span>Needs Attention</span><strong>{connectorSummary.needs_attention}</strong></article>
+          </div>
+
+          {!loading && connectors.length ? (
+            <ul className="simple-list">
+              {connectors
+                .filter(connector => connector.status !== 'active' || String(connector.last_test_status || '').toLowerCase() !== 'pass')
+                .slice(0, 4)
+                .map(connector => (
+                  <li key={`attention-${connector.id}`}>
+                    <span>
+                      {connector.name} needs attention
+                    </span>
+                    <strong>{connector.status === 'active' ? connector.last_test_status || 'untested' : 'inactive'}</strong>
+                  </li>
+                ))}
+              {!connectors.filter(connector => connector.status !== 'active' || String(connector.last_test_status || '').toLowerCase() !== 'pass').length ? (
+                <li>
+                  <span>All active connectors are currently passing their latest test.</span>
+                  <strong>Healthy</strong>
+                </li>
+              ) : null}
+            </ul>
+          ) : null}
 
           {!loading ? (
             <div className="users-table-wrap">

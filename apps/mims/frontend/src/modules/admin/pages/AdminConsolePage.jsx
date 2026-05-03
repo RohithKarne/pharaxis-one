@@ -460,6 +460,15 @@ export default function AdminConsolePage() {
       : rawSection === 'contact-master' || activeSection === 'case-contacts' || activeSection === 'company-reps'
         ? 'contact-master'
         : activeSection
+  const usesDocumentScroll = [
+    'auth-policy',
+    'user-security',
+    'user-config',
+    'user-security-groups',
+    'report-access-requests',
+    'change-approvals',
+    'security-groups',
+  ].includes(contentSection)
 
   // Data
   const [orgs, setOrgs] = useState([])
@@ -725,6 +734,8 @@ export default function AdminConsolePage() {
       case 'case-numbering':
         return <AdminMiscSection contentSection={contentSection} H={H} flash={flash} />
 
+      case 'auth-policy':
+        return <AdminAccessSection contentSection={contentSection} H={H} flash={flash} />
       case 'user-security':
         return <AdminAccessSection contentSection={contentSection} H={H} flash={flash} />
       case 'user-config':
@@ -774,8 +785,8 @@ export default function AdminConsolePage() {
   }
 
   return (
-    <MIMSLayout showStatStrip={false} bodyClassName="no-scroll admin-page-body">
-      <div className="ac-detail-page">
+    <MIMSLayout showStatStrip={false} bodyClassName={usesDocumentScroll ? 'admin-page-body' : 'no-scroll admin-page-body'}>
+      <div className={`ac-detail-page${usesDocumentScroll ? ' ac-detail-page-scroll' : ''}`}>
         <div className="ac-detail-breadcrumb" aria-label="Admin detail breadcrumb">
           <button
             type="button"
@@ -787,7 +798,7 @@ export default function AdminConsolePage() {
           <span className="ac-detail-breadcrumb-sep">&gt;</span>
           <span className="ac-detail-breadcrumb-current">{sectionLabel}</span>
         </div>
-        <div className="ac-detail-stage">
+        <div className={`ac-detail-stage${usesDocumentScroll ? ' ac-detail-stage-scroll' : ''}`}>
           {contentSection === 'service-log' ? (
             <ServiceLogTab
               logs={svcLogs}
@@ -833,7 +844,7 @@ export default function AdminConsolePage() {
               onViewDetails={setSelectedException}
             />
           ) : (
-            <div className="page-content" style={{ padding: 0, flex: 1, overflow: 'auto' }}>
+            <div className="page-content" style={{ padding: 0, flex: usesDocumentScroll ? 'unset' : 1, overflow: usesDocumentScroll ? 'visible' : 'auto' }}>
               {renderContent()}
             </div>
           )}

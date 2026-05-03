@@ -84,11 +84,13 @@ export default function InboxPage() {
   const [newNote, setNewNote]               = useState('')
   const [notesLoading, setNotesLoading]     = useState(false)
   const [savingNote, setSavingNote]         = useState(false)
-  const [insightPanel, setInsightPanel] = useState(null) // notes | history | recommendations | null
+  const [insightPanel, setInsightPanel] = useState(null) // notes | history | recommendations | receipts | null
   const [historyLoading, setHistoryLoading] = useState(false)
   const [recommendationsLoading, setRecommendationsLoading] = useState(false)
+  const [readReceiptsLoading, setReadReceiptsLoading] = useState(false)
   const [senderHistory, setSenderHistory] = useState({ previous_inquiries: [], linked_cases: [], previous_inquiry_count: 0, linked_case_count: 0 })
   const [recommendations, setRecommendations] = useState([])
+  const [readReceipts, setReadReceipts] = useState([])
   const [caseFlow, setCaseFlow] = useState({
     open: false,
     mode: 'create', // create | append
@@ -149,7 +151,7 @@ export default function InboxPage() {
       return {
         ...s,
         is_locked: l.is_locked, locked_by: l.locked_by,
-        color: l.color, is_read: l.is_read,
+        color: l.color,
         assigned_to: l.assigned_to, priority: l.priority, due_date: l.due_date,
       }
     })
@@ -269,6 +271,23 @@ export default function InboxPage() {
     }
   }
 
+  async function loadReadReceipts(id) {
+    setReadReceiptsLoading(true)
+    try {
+      const res = await httpFetch(`/api/inbox/${id}/read-receipts`, { headers: AUTH_H })
+      if (res.ok) {
+        const data = await res.json()
+        setReadReceipts(Array.isArray(data.receipts) ? data.receipts : [])
+      } else {
+        setReadReceipts([])
+      }
+    } catch {
+      setReadReceipts([])
+    } finally {
+      setReadReceiptsLoading(false)
+    }
+  }
+
   useEffect(() => {
     const selectInquiryId = Number(location.state?.selectInquiryId || 0)
     if (!selectInquiryId || inquiries.length === 0) return
@@ -292,16 +311,34 @@ export default function InboxPage() {
     setInsightPanel(null)
     if (inq.attachments_count > 0) loadAttachments(inq.id)
     else { setAttachments([]); setAttachmentsLoading(false) }
-    if (!inq.is_read) {
+    if (!inq.read_at) {
+      const nowIso = new Date().toISOString()
       patchInquiry(inq.id, { is_read: true })
-      updateInquiries(prev => prev.map(i => i.id === inq.id ? { ...i, is_read: true } : i))
+      updateInquiries(prev => prev.map(i => i.id === inq.id ? {
+        ...i,
+        is_read: true,
+        read_at: i.read_at || nowIso,
+        read_receipt_count: Math.max(1, Number(i.read_receipt_count || 0) + 1),
+        last_read_at: nowIso,
+        last_read_by_name: user?.name || user?.email || 'You',
+      } : i))
+      setSelected(prev => prev ? ({
+        ...prev,
+        is_read: true,
+        read_at: prev.read_at || nowIso,
+        read_receipt_count: Math.max(1, Number(prev.read_receipt_count || 0) + 1),
+        last_read_at: nowIso,
+        last_read_by_name: user?.name || user?.email || 'You',
+      }) : prev)
     }
     setNotes([]); setNewNote('')
     setSenderHistory({ previous_inquiries: [], linked_cases: [], previous_inquiry_count: 0, linked_case_count: 0 })
     setRecommendations([])
+    setReadReceipts([])
     loadNotes(inq.id)
     loadHistory(inq.id)
     loadRecommendations(inq.id)
+    loadReadReceipts(inq.id)
   }
 
   function openReply() {
@@ -716,6 +753,15 @@ export default function InboxPage() {
     return new Date(dateStr).toLocaleString('en-US', {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
     })
+  }
+
+  function formatReadReceiptSummary(inquiry) {
+    if (!inquiry?.is_read) return 'Unread'
+    if (inquiry.read_receipt_count > 0 && inquiry.last_read_at) {
+      const reader = inquiry.last_read_by_name || 'Team member'
+      return `${reader} · ${formatFullDate(inquiry.last_read_at)}`
+    }
+    return 'Previously marked read'
   }
 
   function dueDateStatus(dueDateStr) {
@@ -1162,6 +1208,18 @@ export default function InboxPage() {
                           ))}
                         </div>
                       </div>
+
+                      <div className="inbox-control-item">
+                        <span className="meta-label">Read Receipt</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <span className="meta-value">{formatReadReceiptSummary(selected)}</span>
+                          <span className="meta-label" style={{ textTransform: 'none' }}>
+                            {selected.read_receipt_count > 0
+                              ? `${selected.read_receipt_count} team member${selected.read_receipt_count === 1 ? '' : 's'} recorded`
+                              : (selected.is_read ? 'Legacy read state only' : 'No receipt yet')}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="inbox-sla-actions-row">
@@ -1198,6 +1256,12 @@ export default function InboxPage() {
                           onClick={() => setInsightPanel(p => p === 'recommendations' ? null : 'recommendations')}
                         >
                           🔎 Inbox-to-Case Recos ({recommendations.length})
+                        </button>
+                        <button
+                          className={`inbox-insight-btn ${insightPanel === 'receipts' ? 'active' : ''}`}
+                          onClick={() => setInsightPanel(p => p === 'receipts' ? null : 'receipts')}
+                        >
+                          👁 Read Receipts ({selected.read_receipt_count || 0})
                         </button>
                       </div>
                     </div>
@@ -1286,6 +1350,7 @@ export default function InboxPage() {
                         {insightPanel === 'notes' && '📝 Internal Notes'}
                         {insightPanel === 'history' && '📇 Sender and Case History'}
                         {insightPanel === 'recommendations' && `🔎 Inbox-to-Case Recommendations (${recommendations.length})`}
+                        {insightPanel === 'receipts' && `👁 Read Receipts (${readReceipts.length})`}
                       </span>
                       <button className="compose-close" onClick={() => setInsightPanel(null)}>✕</button>
                     </div>
@@ -1375,6 +1440,27 @@ export default function InboxPage() {
                             </div>
                           ))}
                         </div>
+                      )}
+
+                      {insightPanel === 'receipts' && (
+                        <>
+                          {readReceiptsLoading && <div className="notes-loading">Loading read receipts…</div>}
+                          {!readReceiptsLoading && readReceipts.length === 0 && (
+                            <div className="notes-empty">
+                              {selected.is_read ? 'No per-user receipts recorded yet. This item may predate the new receipt model.' : 'No one has opened this inquiry yet.'}
+                            </div>
+                          )}
+                          {!readReceiptsLoading && readReceipts.map((receipt) => (
+                            <div key={`${receipt.user_id}-${receipt.read_at || receipt.last_viewed_at || 'na'}`} className="note-item">
+                              <div className="note-meta">
+                                {receipt.user_name || receipt.email || `User #${receipt.user_id}`} · first read {formatFullDate(receipt.read_at || receipt.last_viewed_at)}
+                              </div>
+                              <div className="note-body">
+                                Last viewed {formatFullDate(receipt.last_viewed_at || receipt.read_at)}
+                              </div>
+                            </div>
+                          ))}
+                        </>
                       )}
                     </div>
                   </aside>

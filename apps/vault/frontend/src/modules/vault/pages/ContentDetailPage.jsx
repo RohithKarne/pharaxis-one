@@ -41,6 +41,7 @@ export default function ContentDetailPage() {
   const [metadata, setMetadata] = useState(null)
   const [versions, setVersions] = useState([])
   const [auditEntries, setAuditEntries] = useState([])
+  const [workflowTimeline, setWorkflowTimeline] = useState([])
   const [compareLeftId, setCompareLeftId] = useState('')
   const [compareRightId, setCompareRightId] = useState('')
   const [startingWorkflow, setStartingWorkflow] = useState(false)
@@ -86,10 +87,11 @@ export default function ContentDetailPage() {
       setLockInfo(lockPayload)
       await loadTransitions(detailPayload)
 
-      const [metadataResult, versionsResult, auditResult] = await Promise.allSettled([
+      const [metadataResult, versionsResult, auditResult, timelineResult] = await Promise.allSettled([
         apiJson(`/api/content/${id}/metadata`, { headers: authHeaders(token) }),
         apiJson(`/api/content/${id}/versions`, { headers: authHeaders(token) }),
-        apiJson(`/api/audit?entity_type=vault_content&entity_id=${id}&limit=20`, { headers: authHeaders(token) })
+        apiJson(`/api/audit?entity_type=vault_content&entity_id=${id}&limit=20`, { headers: authHeaders(token) }),
+        apiJson(`/api/workflows/content/${id}/timeline`, { headers: authHeaders(token) })
       ])
 
       if (metadataResult.status === 'fulfilled') {
@@ -110,6 +112,11 @@ export default function ContentDetailPage() {
         setAuditEntries(auditResult.value?.results || [])
       } else {
         setAuditEntries([])
+      }
+      if (timelineResult.status === 'fulfilled') {
+        setWorkflowTimeline(Array.isArray(timelineResult.value) ? timelineResult.value : [])
+      } else {
+        setWorkflowTimeline([])
       }
     } catch (requestError) {
       setError(requestError.message)
@@ -424,7 +431,8 @@ export default function ContentDetailPage() {
           {canStartWorkflow ? (
             <>
               <form className="auth-form upload-version-form" onSubmit={startWorkflow}>
-                <h3>Start Workflow Task</h3>
+                <h3>Launch Ad Hoc Workflow</h3>
+                <p className="panel-note">Use this when you want to send the current document directly into review, approval, or signature.</p>
                 <div className="upload-grid">
                   <div className="form-field">
                     <label htmlFor="workflow-assignee">Assignee</label>
@@ -466,16 +474,17 @@ export default function ContentDetailPage() {
                 </div>
                 <div className="detail-actions">
                   <button className="btn-primary" type="submit" disabled={startingWorkflow || !workflowUsers.length}>
-                    {startingWorkflow ? 'Starting...' : 'Start Workflow'}
+                    {startingWorkflow ? 'Starting...' : 'Launch Workflow'}
                   </button>
                   <Link className="btn-secondary link-button" to="/vault/tasks">
-                    Open My Tasks
+                    Open Task Inbox
                   </Link>
                 </div>
               </form>
 
               <form className="auth-form upload-version-form" onSubmit={startFromTemplate}>
-                <h3>Start from Template</h3>
+                <h3>Launch Template Workflow</h3>
+                <p className="panel-note">Use a predefined workflow when the document should follow your standard approval chain.</p>
                 <div className="form-field">
                   <label htmlFor="workflow-template">Template</label>
                   <select
@@ -498,12 +507,16 @@ export default function ContentDetailPage() {
                     type="submit"
                     disabled={startingTemplateWorkflow || !workflowTemplates.length}
                   >
-                    {startingTemplateWorkflow ? 'Starting...' : 'Start Template Workflow'}
+                    {startingTemplateWorkflow ? 'Starting...' : 'Launch Template Workflow'}
                   </button>
                 </div>
               </form>
             </>
-          ) : null}
+          ) : (
+            <div className="panel-note-card">
+              Only admins and authors can launch workflows from this document. Reviewers and approvers should use the task inbox.
+            </div>
+          )}
 
           {error ? <div className="auth-error taxonomy-error">{error}</div> : null}
         </section>
@@ -596,6 +609,35 @@ export default function ContentDetailPage() {
                 </tr>
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section className="panel span-6">
+          <h3>Workflow Timeline</h3>
+          <p className="panel-note">One place to follow task launches, comments, signatures, and reminder events for this document.</p>
+          <div className="timeline-list">
+            {workflowTimeline.map(entry => (
+              <article className="timeline-entry" key={`${entry.type}-${entry.id}`}>
+                <div className="timeline-meta">
+                  <strong>{entry.title}</strong>
+                  <span>{formatDateTime(entry.happened_at)}</span>
+                </div>
+                <p>{entry.summary}</p>
+                <div className="detail-actions">
+                  <span className={entry.status === 'read' || entry.status === 'completed' ? 'status-chip success' : 'status-chip info'}>
+                    {entry.type}
+                  </span>
+                  {entry.status ? (
+                    <span className={entry.status === 'unread' || entry.status === 'pending' ? 'status-chip pending' : 'status-chip success'}>
+                      {entry.status}
+                    </span>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+            {!workflowTimeline.length ? (
+              <p className="panel-note">No workflow activity recorded for this document yet.</p>
+            ) : null}
           </div>
         </section>
 

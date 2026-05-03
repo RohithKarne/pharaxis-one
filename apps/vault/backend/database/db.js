@@ -393,6 +393,8 @@ async function initializeDatabase() {
       notification_type ENUM('due_soon','overdue') NOT NULL,
       due_at DATETIME DEFAULT NULL,
       message VARCHAR(500) NOT NULL,
+      read_at DATETIME DEFAULT NULL,
+      acknowledged_at DATETIME DEFAULT NULL,
       email_delivery_status ENUM('sent','skipped','failed') DEFAULT 'skipped',
       webhook_delivery_status ENUM('sent','skipped','failed') DEFAULT 'skipped',
       delivery_error TEXT,
@@ -403,6 +405,20 @@ async function initializeDatabase() {
       FOREIGN KEY (org_id) REFERENCES orgs(id),
       FOREIGN KEY (workflow_task_id) REFERENCES workflow_tasks(id),
       FOREIGN KEY (content_id) REFERENCES vault_content(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS vault_saved_searches (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      user_id INT NOT NULL,
+      name VARCHAR(180) NOT NULL,
+      filters_json JSON NOT NULL,
+      is_shared TINYINT(1) DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_vault_saved_searches_owner (org_id, user_id, created_at),
+      INDEX idx_vault_saved_searches_shared (org_id, is_shared, created_at),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
     )`,
     `CREATE TABLE IF NOT EXISTS workflow_webhook_retry_queue (
       id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -624,6 +640,34 @@ async function initializeDatabase() {
     await pool.execute(
       `ALTER TABLE workflow_task_notifications
        ADD COLUMN delivered_at DATETIME DEFAULT NULL AFTER delivery_error`
+    )
+  }
+
+  const [notificationReadAtColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_task_notifications'
+       AND COLUMN_NAME = 'read_at'`
+  )
+  if (!notificationReadAtColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_task_notifications
+       ADD COLUMN read_at DATETIME DEFAULT NULL AFTER message`
+    )
+  }
+
+  const [notificationAcknowledgedAtColumn] = await pool.execute(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'workflow_task_notifications'
+       AND COLUMN_NAME = 'acknowledged_at'`
+  )
+  if (!notificationAcknowledgedAtColumn[0].total) {
+    await pool.execute(
+      `ALTER TABLE workflow_task_notifications
+       ADD COLUMN acknowledged_at DATETIME DEFAULT NULL AFTER read_at`
     )
   }
 

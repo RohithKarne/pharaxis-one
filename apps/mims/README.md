@@ -54,6 +54,26 @@ Copy and configure:
 
 - `.env.example` -> `.env`
 
+## SSO And Microsoft 365 Authoring
+
+- Google and Microsoft SSO are now configured per organisation in `Admin Console -> Access Configurations -> Auth Policy`.
+- MIMS keeps internal users, org access, and roles as the source of authorization. SSO only authenticates and links external identities.
+- Each organisation can choose its own login mode:
+  - `Local login only`
+  - `SSO only`
+  - `Local + SSO`
+- The login page is organisation-aware. Users select their organisation first, then MIMS shows the correct password and SSO options for that organisation.
+- Microsoft 365 online authoring in this phase is a linked-authoring workflow:
+  - create or store the editable document in OneDrive or SharePoint
+  - save the Microsoft 365 edit URL in CM Documents
+  - continue approvals, metadata, and content governance inside MIMS
+- Required platform env vars:
+  - `MIMS_FRONTEND_BASE_URL`
+  - `MIMS_BACKEND_BASE_URL`
+  - `MIMS_ALLOWED_FRONTEND_ORIGINS`
+  - `SSO_CONFIG_ENCRYPTION_KEY`
+- Provider secrets are stored encrypted per organisation in the database. The admin UI shows `Configured` or `Missing`, but never returns the raw client secret.
+
 ## Notes
 
 This app contains significant domain modules and integration routes.

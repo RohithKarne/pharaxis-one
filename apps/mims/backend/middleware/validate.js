@@ -223,9 +223,14 @@ const schemas = {
 
   // ── Admin — Products ─────────────────────────────────────────────────────
   createProduct: Joi.object({
-    trade_name: str().required(),
-    org_id:     id().optional(),
-    is_active:  bool().optional(),
+    trade_name:             str().required(),
+    mah:                    str().optional().allow('', null),
+    org_id:                 id().optional(),
+    family_id:              id().optional().allow(null),
+    dosage:                 str().optional().allow('', null),
+    atc_code:               str(100).optional().allow('', null),
+    authorization_country:  str(100).optional().allow('', null),
+    is_active:              bool().optional(),
   }),
 
   // ── Admin — DPPR ──────────────────────────────────────────────────────────

@@ -149,6 +149,16 @@ function registerDefaultJobs() {
     },
   })
 
+  registerJob({
+    name: 'novartis-daily-simulation',
+    cronExpression: '15 1 * * *',
+    description: 'Maintains Novartis high-volume simulation data and archives aged generated cases',
+    handler: async () => {
+      const { runNovartisSimulation } = require('./novartisSimulationService')
+      await runNovartisSimulation({ orgId: 1, useScheduledConfig: true })
+    },
+  })
+
   // AC-T4: Login audit auto-archive — runs daily at 02:00 UTC
   registerJob({
     name: 'login-audit-archive',

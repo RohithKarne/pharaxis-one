@@ -1,0 +1,371 @@
+.mims-rtc-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 18px;
+  min-height: 0;
+}
+
+.mims-rtc-main,
+.mims-rtc-side {
+  min-height: 0;
+}
+
+.mims-rtc-card {
+  border: 1px solid #d7e0ed;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  box-shadow: 0 10px 30px rgba(20, 35, 65, 0.06);
+}
+
+.mims-rtc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.mims-rtc-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #16304d;
+}
+
+.mims-rtc-subtitle {
+  margin-top: 4px;
+  color: #61718a;
+  font-size: 13px;
+}
+
+.mims-rtc-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #1c5b9b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mims-rtc-status.live {
+  background: #eaf8f1;
+  color: #0f7a4f;
+}
+
+.mims-rtc-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.mims-rtc-participant-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(17, 24, 39, 0.06);
+}
+
+.mims-rtc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: #f5f8fc;
+  border: 1px solid #d7e0ed;
+}
+
+.mims-rtc-chip-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #1d3557;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mims-rtc-chip-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mims-rtc-chip-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #16304d;
+}
+
+.mims-rtc-chip-state {
+  font-size: 11px;
+  color: #61718a;
+}
+
+.mims-rtc-online {
+  color: #0f7a4f;
+  font-weight: 700;
+}
+
+.mims-rtc-offline {
+  color: #8a97aa;
+}
+
+.mims-rtc-feed {
+  min-height: 360px;
+  max-height: 58vh;
+  overflow: auto;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(29,53,87,0.05), transparent 36%),
+    linear-gradient(180deg, #f8fbff 0%, #f4f7fb 100%);
+}
+
+.mims-rtc-msg {
+  max-width: 78%;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid rgba(17,24,39,0.06);
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.05);
+}
+
+.mims-rtc-msg.own {
+  align-self: flex-end;
+  background: linear-gradient(180deg, #e7f8f0 0%, #dbf3e8 100%);
+  border-color: rgba(0,122,90,0.14);
+}
+
+.mims-rtc-msg-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.mims-rtc-msg-author {
+  font-size: 12px;
+  font-weight: 800;
+  color: #16304d;
+}
+
+.mims-rtc-msg-time {
+  font-size: 11px;
+  color: #7f8aa0;
+}
+
+.mims-rtc-msg-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #1f2937;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.mims-rtc-legacy {
+  display: inline-flex;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff3d9;
+  color: #8a5b00;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mims-rtc-compose {
+  padding: 16px 18px 18px;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.mims-rtc-compose textarea,
+.mims-rtc-side input {
+  width: 100%;
+  border: 1px solid #d7e0ed;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font: inherit;
+  background: #fff;
+}
+
+.mims-rtc-compose-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.mims-rtc-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mims-rtc-btn,
+.mims-rtc-side button {
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mims-rtc-btn.primary,
+.mims-rtc-side button.primary {
+  background: #1d3557;
+  color: #fff;
+}
+
+.mims-rtc-btn.secondary,
+.mims-rtc-side button.secondary {
+  background: #eef2f7;
+  color: #243b57;
+}
+
+.mims-rtc-btn:disabled,
+.mims-rtc-side button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mims-rtc-mention-box {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mims-rtc-mention-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mims-rtc-suggest {
+  margin-top: 10px;
+  border: 1px solid #d7e0ed;
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.mims-rtc-suggest-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mims-rtc-suggest-item:hover {
+  background: #f5f8fc;
+}
+
+.mims-rtc-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mims-rtc-side-card {
+  padding: 16px;
+}
+
+.mims-rtc-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.mims-rtc-side-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #16304d;
+}
+
+.mims-rtc-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.mims-rtc-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f7f9fc;
+  border: 1px solid #e6edf6;
+}
+
+.mims-rtc-user-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mims-rtc-user-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #16304d;
+}
+
+.mims-rtc-user-sub {
+  font-size: 11px;
+  color: #7b879a;
+}
+
+.mims-rtc-empty,
+.mims-rtc-error {
+  padding: 24px;
+  text-align: center;
+  color: #61718a;
+}
+
+.mims-rtc-error {
+  color: #d11a2a;
+}
+
+@media (max-width: 1180px) {
+  .mims-rtc-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .mims-rtc-feed {
+    max-height: none;
+  }
+
+  .mims-rtc-msg {
+    max-width: 100%;
+  }
+}

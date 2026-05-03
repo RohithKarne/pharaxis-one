@@ -12,6 +12,7 @@ const SECTION_LABELS = {
   schedules: 'Schedulers',
   history: 'Run History',
   configuration: 'Configuration',
+  governance: 'Governance',
 }
 
 const BLANK_REPORT_FORM = {
@@ -142,6 +143,17 @@ export default function ReportsPage() {
   const [schedules, setSchedules] = useState([])
   const [historyRuns, setHistoryRuns] = useState([])
   const [moduleConfig, setModuleConfig] = useState(BLANK_CONFIG_FORM)
+  const [favorites, setFavorites] = useState([])
+  const [dashboardTemplates, setDashboardTemplates] = useState([])
+  const [dashboardShares, setDashboardShares] = useState([])
+  const [roleDefaults, setRoleDefaults] = useState([])
+  const [validationResult, setValidationResult] = useState({ issues: [] })
+  const [usageAnalytics, setUsageAnalytics] = useState([])
+  const [recommendations, setRecommendations] = useState([])
+  const [anomalyFlags, setAnomalyFlags] = useState([])
+  const [deliveryRules, setDeliveryRules] = useState([])
+  const [entityVersions, setEntityVersions] = useState([])
+  const [runDetail, setRunDetail] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -212,13 +224,39 @@ export default function ReportsPage() {
         apiJson('/api/reports/module/dashboards'),
         apiJson('/api/reports/module/schedules'),
         apiJson('/api/reports/module/history?limit=20'),
+        apiJson('/api/reports/module/favorites'),
+        apiJson('/api/reports/module/dashboard-templates'),
       ]
       if (isManager) {
         requests.push(apiJson('/api/reports/module/config'))
+        requests.push(apiJson('/api/reports/module/config/validate'))
+        requests.push(apiJson('/api/reports/module/dashboard-shares'))
+        requests.push(apiJson('/api/reports/module/role-default-dashboards'))
+        requests.push(apiJson('/api/reports/module/usage-analytics'))
+        requests.push(apiJson('/api/reports/module/recommendations'))
+        requests.push(apiJson('/api/reports/module/anomalies'))
+        requests.push(apiJson('/api/reports/module/delivery-rules'))
       }
 
       const results = await Promise.all(requests)
-      const [summaryPayload, datasetsPayload, definitionsPayload, dashboardsPayload, schedulesPayload, historyPayload, configPayload] = results
+      const [
+        summaryPayload,
+        datasetsPayload,
+        definitionsPayload,
+        dashboardsPayload,
+        schedulesPayload,
+        historyPayload,
+        favoritesPayload,
+        templatesPayload,
+        configPayload,
+        validationPayload,
+        sharesPayload,
+        roleDefaultsPayload,
+        analyticsPayload,
+        recommendationsPayload,
+        anomalyPayload,
+        deliveryRulesPayload,
+      ] = results
       setSummary(summaryPayload)
       setDatasets(Array.isArray(datasetsPayload.datasets) ? datasetsPayload.datasets : [])
       const nextDefinitions = Array.isArray(definitionsPayload.definitions) ? definitionsPayload.definitions : []
@@ -227,6 +265,15 @@ export default function ReportsPage() {
       const nextSchedules = Array.isArray(schedulesPayload.schedules) ? schedulesPayload.schedules : []
       setSchedules(nextSchedules)
       setHistoryRuns(Array.isArray(historyPayload.runs) ? historyPayload.runs : [])
+      setFavorites(Array.isArray(favoritesPayload?.favorites) ? favoritesPayload.favorites : [])
+      setDashboardTemplates(Array.isArray(templatesPayload?.templates) ? templatesPayload.templates : [])
+      setValidationResult(validationPayload || { issues: [] })
+      setDashboardShares(Array.isArray(sharesPayload?.shares) ? sharesPayload.shares : [])
+      setRoleDefaults(Array.isArray(roleDefaultsPayload?.defaults) ? roleDefaultsPayload.defaults : [])
+      setUsageAnalytics(Array.isArray(analyticsPayload?.analytics) ? analyticsPayload.analytics : [])
+      setRecommendations(Array.isArray(recommendationsPayload?.recommendations) ? recommendationsPayload.recommendations : [])
+      setAnomalyFlags(Array.isArray(anomalyPayload?.flags) ? anomalyPayload.flags : [])
+      setDeliveryRules(Array.isArray(deliveryRulesPayload?.rules) ? deliveryRulesPayload.rules : [])
 
       if (isManager && configPayload) {
         const normalizedConfig = {
@@ -291,7 +338,7 @@ export default function ReportsPage() {
   }, [location.search])
 
   useEffect(() => {
-    if (!isManager && (section === 'schedules' || section === 'configuration')) {
+    if (!isManager && (section === 'schedules' || section === 'configuration' || section === 'governance')) {
       pushSection('overview')
     }
   }, [isManager, section])
@@ -384,6 +431,133 @@ export default function ReportsPage() {
 
   const selectedReport = definitions.find((item) => Number(item.id) === Number(selectedReportId)) || null
   const selectedDashboard = dashboards.find((item) => Number(item.id) === Number(selectedDashboardId)) || null
+
+  function isFavorite(targetType, targetId) {
+    return favorites.some((item) => item.target_type === targetType && Number(item.target_id) === Number(targetId))
+  }
+
+  async function toggleFavorite(targetType, targetId) {
+    try {
+      const favorite = isFavorite(targetType, targetId)
+      const payload = await apiJson('/api/reports/module/favorites', {
+        method: favorite ? 'DELETE' : 'POST',
+        body: JSON.stringify({ target_type: targetType, target_id: targetId }),
+      })
+      setFavorites(Array.isArray(payload.favorites) ? payload.favorites : [])
+    } catch (err) {
+      setError(err.message || 'Failed to update favorite.')
+    }
+  }
+
+  async function duplicateReport(definitionId = selectedReportId) {
+    if (!definitionId) return
+    try {
+      const payload = await apiJson(`/api/reports/module/definitions/${definitionId}/duplicate`, { method: 'POST' })
+      await loadModuleData()
+      setSelectedReportId(payload.id)
+      pushSection('reports', { reportKey: payload.report_key })
+    } catch (err) {
+      setError(err.message || 'Failed to duplicate report.')
+    }
+  }
+
+  async function publishReport(definitionId = selectedReportId) {
+    if (!definitionId) return
+    try {
+      const payload = await apiJson(`/api/reports/module/definitions/${definitionId}/publish`, { method: 'POST' })
+      await loadModuleData()
+      setSelectedReportId(payload.id)
+    } catch (err) {
+      setError(err.message || 'Failed to publish report.')
+    }
+  }
+
+  async function certifyReport(definitionId = selectedReportId) {
+    if (!definitionId) return
+    try {
+      const payload = await apiJson(`/api/reports/module/definitions/${definitionId}/certify`, {
+        method: 'POST',
+        body: JSON.stringify({ sensitivity_level: 'restricted' }),
+      })
+      await loadModuleData()
+      setSelectedReportId(payload.id)
+    } catch (err) {
+      setError(err.message || 'Failed to certify report.')
+    }
+  }
+
+  async function loadVersions(targetType, targetId) {
+    try {
+      const base = targetType === 'dashboard' ? 'dashboards' : 'definitions'
+      const payload = await apiJson(`/api/reports/module/${base}/${targetId}/versions`)
+      setEntityVersions(Array.isArray(payload.versions) ? payload.versions : [])
+    } catch (err) {
+      setError(err.message || 'Failed to load versions.')
+    }
+  }
+
+  async function duplicateDashboard(dashboardId = selectedDashboardId) {
+    if (!dashboardId) return
+    try {
+      const payload = await apiJson(`/api/reports/module/dashboards/${dashboardId}/duplicate`, { method: 'POST' })
+      await loadModuleData()
+      setSelectedDashboardId(payload.id)
+      pushSection('dashboards', { dashboardKey: payload.dashboard_key })
+    } catch (err) {
+      setError(err.message || 'Failed to duplicate dashboard.')
+    }
+  }
+
+  async function publishDashboard(dashboardId = selectedDashboardId) {
+    if (!dashboardId) return
+    try {
+      const payload = await apiJson(`/api/reports/module/dashboards/${dashboardId}/publish`, { method: 'POST' })
+      await loadModuleData()
+      setSelectedDashboardId(payload.id)
+    } catch (err) {
+      setError(err.message || 'Failed to publish dashboard.')
+    }
+  }
+
+  async function saveDashboardTemplate(dashboardId = selectedDashboardId) {
+    if (!dashboardId) return
+    try {
+      await apiJson(`/api/reports/module/dashboards/${dashboardId}/templates`, { method: 'POST' })
+      await loadModuleData()
+      pushSection('governance')
+    } catch (err) {
+      setError(err.message || 'Failed to create dashboard template.')
+    }
+  }
+
+  async function toggleSchedule(schedule) {
+    try {
+      const action = Number(schedule.is_active) ? 'pause' : 'resume'
+      await apiJson(`/api/reports/module/schedules/${schedule.id}/${action}`, { method: 'POST' })
+      await loadModuleData()
+    } catch (err) {
+      setError(err.message || 'Failed to update schedule state.')
+    }
+  }
+
+  async function openRunDetail(runId) {
+    try {
+      const payload = await apiJson(`/api/reports/module/history/${runId}`)
+      setRunDetail(payload)
+    } catch (err) {
+      setError(err.message || 'Failed to load run detail.')
+    }
+  }
+
+  async function retryRun(runId) {
+    try {
+      await apiJson(`/api/reports/module/history/${runId}/retry`, { method: 'POST' })
+      await loadHistory()
+      await loadModuleData()
+    } catch (err) {
+      setError(err.message || 'Failed to retry run.')
+    }
+  }
 
   async function previewBuilderDataset() {
     if (!reportForm.dataset_key) return
@@ -800,10 +974,18 @@ export default function ReportsPage() {
                     <span>Dataset: {selectedReport.dataset_key}</span>
                     <span>Group: {selectedReport.group_label}</span>
                     <span>Scope: {selectedReport.visibility_scope}</span>
+                    <span>Status: {selectedReport.lifecycle_status || 'published'}</span>
+                    <span>Sensitivity: {selectedReport.sensitivity_level || 'standard'}</span>
+                    {selectedReport.certified_at && <span>Certified: {formatDateTime(selectedReport.certified_at)}</span>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(true)}>Run Report</button>
+                  <button onClick={() => toggleFavorite('report', selectedReport.id)} style={pillButtonStyle(false)}>{isFavorite('report', selectedReport.id) ? 'Unfavorite' : 'Favorite'}</button>
+                  <button onClick={() => loadVersions('report', selectedReport.id)} style={pillButtonStyle(false)}>Versions</button>
+                  {isManager && <button onClick={() => duplicateReport(selectedReport.id)} style={pillButtonStyle(false)}>Duplicate</button>}
+                  {isManager && selectedReport.lifecycle_status === 'draft' && <button onClick={() => publishReport(selectedReport.id)} style={pillButtonStyle(false)}>Publish</button>}
+                  {isManager && !selectedReport.is_system && <button onClick={() => certifyReport(selectedReport.id)} style={pillButtonStyle(false)}>Certify</button>}
                   {isManager && !selectedReport.is_system && <button onClick={() => openReportEditor(selectedReport)} style={pillButtonStyle(false)}>Edit</button>}
                   {isManager && !selectedReport.is_system && <button onClick={deleteSelectedReport} style={pillButtonStyle(false)}>Delete</button>}
                 </div>
@@ -821,6 +1003,27 @@ export default function ReportsPage() {
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Last Updated</div>
                   <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700 }}>{formatDateTime(selectedReport.updated_at)}</div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {entityVersions.length > 0 && selectedReport && (
+            <div style={cardStyle()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800 }}>Version History</div>
+                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Most recent saved versions for this report.</div>
+                </div>
+                <button onClick={() => setEntityVersions([])} style={pillButtonStyle(false)}>Close</button>
+              </div>
+              <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+                {entityVersions.slice(0, 8).map((version) => (
+                  <div key={version.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+                    <strong>Version {version.version_number}</strong>
+                    <span style={{ marginLeft: 10, color: 'var(--text-muted)', fontSize: 12 }}>{version.change_summary || 'Change recorded'}</span>
+                    <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 12 }}>{formatDateTime(version.created_at)}</div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -1040,14 +1243,42 @@ export default function ReportsPage() {
                   <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
                     <span>Widgets: {selectedDashboard.widgets?.length || 0}</span>
                     <span>Scope: {selectedDashboard.visibility_scope}</span>
+                    <span>Status: {selectedDashboard.lifecycle_status || 'published'}</span>
+                    <span>Sensitivity: {selectedDashboard.sensitivity_level || 'standard'}</span>
                     <span>Last Updated: {formatDateTime(selectedDashboard.updated_at)}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button onClick={() => runSelectedDashboard(selectedDashboard.id)} style={pillButtonStyle(true)}>Run Dashboard</button>
+                  <button onClick={() => toggleFavorite('dashboard', selectedDashboard.id)} style={pillButtonStyle(false)}>{isFavorite('dashboard', selectedDashboard.id) ? 'Unfavorite' : 'Favorite'}</button>
+                  <button onClick={() => loadVersions('dashboard', selectedDashboard.id)} style={pillButtonStyle(false)}>Versions</button>
+                  {isManager && <button onClick={() => duplicateDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Duplicate</button>}
+                  {isManager && selectedDashboard.lifecycle_status === 'draft' && <button onClick={() => publishDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Publish</button>}
+                  {isManager && !selectedDashboard.is_system && <button onClick={() => saveDashboardTemplate(selectedDashboard.id)} style={pillButtonStyle(false)}>Save Template</button>}
                   {isManager && !selectedDashboard.is_system && <button onClick={() => openDashboardEditor(selectedDashboard)} style={pillButtonStyle(false)}>Edit</button>}
                   {isManager && !selectedDashboard.is_system && <button onClick={deleteSelectedDashboard} style={pillButtonStyle(false)}>Delete</button>}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {entityVersions.length > 0 && selectedDashboard && (
+            <div style={cardStyle()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800 }}>Version History</div>
+                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Most recent saved versions for this dashboard.</div>
+                </div>
+                <button onClick={() => setEntityVersions([])} style={pillButtonStyle(false)}>Close</button>
+              </div>
+              <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+                {entityVersions.slice(0, 8).map((version) => (
+                  <div key={version.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+                    <strong>Version {version.version_number}</strong>
+                    <span style={{ marginLeft: 10, color: 'var(--text-muted)', fontSize: 12 }}>{version.change_summary || 'Change recorded'}</span>
+                    <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 12 }}>{formatDateTime(version.created_at)}</div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -1242,6 +1473,7 @@ export default function ReportsPage() {
                     <td style={{ padding: '10px 12px' }}>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <button onClick={() => editSchedule(schedule)} style={pillButtonStyle(false)}>Edit</button>
+                        <button onClick={() => toggleSchedule(schedule)} style={pillButtonStyle(false)}>{Number(schedule.is_active) ? 'Pause' : 'Resume'}</button>
                         <button onClick={() => removeSchedule(schedule.id)} style={pillButtonStyle(false)}>Delete</button>
                       </div>
                     </td>
@@ -1413,7 +1645,7 @@ export default function ReportsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
-                {['Name', 'Target', 'Mode', 'Rows', 'Delivery', 'Status', 'When', 'Error'].map((title) => (
+                {['Name', 'Target', 'Mode', 'Rows', 'Delivery', 'Status', 'When', 'Error', 'Actions'].map((title) => (
                   <th key={title} style={{ textAlign: 'left', padding: '10px 12px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.7, color: 'var(--text-muted)' }}>{title}</th>
                 ))}
               </tr>
@@ -1433,16 +1665,40 @@ export default function ReportsPage() {
                   </td>
                   <td style={{ padding: '10px 12px' }}>{formatDateTime(run.created_at)}</td>
                   <td style={{ padding: '10px 12px', color: run.error_message ? '#b91c1c' : 'var(--text-muted)' }}>{run.error_message || '—'}</td>
+                  <td style={{ padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button onClick={() => openRunDetail(run.id)} style={pillButtonStyle(false)}>Detail</button>
+                      {isManager && run.status === 'failed' && <button onClick={() => retryRun(run.id)} style={pillButtonStyle(false)}>Retry</button>}
+                    </div>
+                  </td>
                 </tr>
               ))}
               {!historyRuns.length && (
                 <tr>
-                  <td colSpan={8} style={{ padding: '16px 12px', color: 'var(--text-muted)' }}>No run history matched the current filters.</td>
+                  <td colSpan={9} style={{ padding: '16px 12px', color: 'var(--text-muted)' }}>No run history matched the current filters.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        {runDetail && (
+          <div style={{ marginTop: 16, border: '1px solid var(--border)', borderRadius: 14, padding: 16, background: '#fff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800 }}>Run Detail</div>
+                <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>{runDetail.report_name} • {formatDateTime(runDetail.created_at)}</div>
+              </div>
+              <button onClick={() => setRunDetail(null)} style={pillButtonStyle(false)}>Close</button>
+            </div>
+            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+              <div><strong>Target</strong><div>{runDetail.target_type} #{runDetail.target_id || '-'}</div></div>
+              <div><strong>Triggered By</strong><div>{runDetail.triggered_by_name || runDetail.triggered_by || '-'}</div></div>
+              <div><strong>Duration</strong><div>{runDetail.duration_ms == null ? '-' : `${runDetail.duration_ms}ms`}</div></div>
+              <div><strong>Retry Of</strong><div>{runDetail.retry_of_run_id || '-'}</div></div>
+            </div>
+            <pre style={{ marginTop: 12, whiteSpace: 'pre-wrap', background: '#f8fafc', borderRadius: 10, padding: 12, fontSize: 12 }}>{JSON.stringify({ filters: runDetail.filters || {}, diagnostics: runDetail.diagnostics || {}, error: runDetail.error_message || null }, null, 2)}</pre>
+          </div>
+        )}
       </div>
     )
   }
@@ -1521,6 +1777,116 @@ export default function ReportsPage() {
     )
   }
 
+  function renderGovernanceSection() {
+    return (
+      <div style={{ display: 'grid', gap: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Config Validation</div>
+            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{validationResult.issues?.length || 0}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Open validation issue{validationResult.issues?.length === 1 ? '' : 's'}</div>
+          </div>
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Templates</div>
+            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{dashboardTemplates.length}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Reusable dashboard templates</div>
+          </div>
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Shares</div>
+            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{dashboardShares.length}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Role/org/user share rules</div>
+          </div>
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Role Defaults</div>
+            <div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{roleDefaults.length}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Mapped default dashboards</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 18 }}>
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Validation Issues</div>
+            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+              {(validationResult.issues || []).map((issue, index) => (
+                <div key={`${issue.type}-${index}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: issue.severity === 'critical' ? '#fef2f2' : '#fff7ed' }}>
+                  <strong>{issue.type}</strong>
+                  <div style={{ marginTop: 4, fontSize: 13 }}>{issue.message}</div>
+                </div>
+              ))}
+              {!validationResult.issues?.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No report configuration issues found.</div>}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Anomaly Flags</div>
+            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+              {anomalyFlags.slice(0, 10).map((flag) => (
+                <div key={flag.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12, background: flag.severity === 'critical' ? '#fef2f2' : '#fff7ed' }}>
+                  <strong>{flag.anomaly_type}</strong>
+                  <div style={{ marginTop: 4, fontSize: 13 }}>{flag.message}</div>
+                  <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>{formatDateTime(flag.created_at)}</div>
+                </div>
+              ))}
+              {!anomalyFlags.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No anomalies flagged yet.</div>}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Recommendations</div>
+            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+              {recommendations.map((item, index) => (
+                <div key={`${item.type}-${index}`} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
+                  <strong>{item.type}</strong>
+                  <div style={{ marginTop: 4, fontSize: 13 }}>{item.message}</div>
+                </div>
+              ))}
+              {!recommendations.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Recommendations will appear after more report usage data is collected.</div>}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Usage Analytics</div>
+            <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+              {usageAnalytics.slice(0, 12).map((item, index) => (
+                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+                  <span>{item.event_type} / {item.target_type} #{item.target_id || '-'}</span>
+                  <strong>{item.count}</strong>
+                </div>
+              ))}
+              {!usageAnalytics.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No usage events captured yet.</div>}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Templates</div>
+            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+              {dashboardTemplates.map((template) => (
+                <div key={template.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
+                  <strong>{template.name}</strong>
+                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>{template.description || 'No description'}</div>
+                </div>
+              ))}
+              {!dashboardTemplates.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No dashboard templates saved yet.</div>}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Enterprise Delivery Rules</div>
+            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+              {deliveryRules.map((rule) => (
+                <div key={rule.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 12 }}>
+                  <strong>{rule.rule_name}</strong>
+                  <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Sensitivity: {rule.sensitivity_level} • Active: {Number(rule.is_active) ? 'Yes' : 'No'}</div>
+                </div>
+              ))}
+              {!deliveryRules.length && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No enterprise delivery rules configured yet.</div>}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <MIMSLayout>
@@ -1546,6 +1912,7 @@ export default function ReportsPage() {
               <button onClick={() => pushSection('dashboards')} style={pillButtonStyle(section === 'dashboards')}>Dashboards</button>
               {isManager && <button onClick={() => pushSection('schedules')} style={pillButtonStyle(section === 'schedules')}>Schedulers</button>}
               <button onClick={() => pushSection('history')} style={pillButtonStyle(section === 'history')}>Run History</button>
+              {isManager && <button onClick={() => pushSection('governance')} style={pillButtonStyle(section === 'governance')}>Governance</button>}
               {isManager && <button onClick={() => pushSection('configuration')} style={pillButtonStyle(section === 'configuration')}>Configuration</button>}
             </div>
           </div>
@@ -1563,6 +1930,7 @@ export default function ReportsPage() {
           {section === 'dashboards' && renderDashboardsSection()}
           {section === 'schedules' && isManager && renderSchedulesSection()}
           {section === 'history' && renderHistorySection()}
+          {section === 'governance' && isManager && renderGovernanceSection()}
           {section === 'configuration' && isManager && renderConfigurationSection()}
         </div>
       </div>

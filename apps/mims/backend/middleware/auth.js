@@ -20,6 +20,55 @@ function readBearer(req) {
   return token && token !== 'null' && token !== 'undefined' ? token : null;
 }
 
+async function validateAccessToken(token) {
+  if (!token) throw new Error('Access denied. No token provided.');
+
+  const decoded = jwt.verify(token, JWT_SECRET);
+
+  let sessionFound = false;
+  let requireTrackedSession = false;
+
+  try {
+    const [[sessionRow]] = await pool.execute(
+      'SELECT id, expires_at FROM sessions WHERE token = ? LIMIT 1',
+      [token]
+    );
+
+    if (sessionRow) {
+      sessionFound = true;
+      const expiresAt = sessionRow.expires_at ? new Date(sessionRow.expires_at).getTime() : null;
+      if (expiresAt && !Number.isNaN(expiresAt) && expiresAt < Date.now()) {
+        await pool.execute('DELETE FROM sessions WHERE id = ?', [sessionRow.id]).catch(() => {});
+        throw new Error('Session expired. Please log in again.');
+      }
+    } else {
+      const [[countRow]] = await pool.execute(
+        'SELECT COUNT(*) AS cnt FROM sessions WHERE user_id = ?',
+        [decoded.userId]
+      );
+      requireTrackedSession = Number(countRow?.cnt || 0) > 0;
+    }
+  } catch (err) {
+    if (String(err?.message || '').includes('Session expired')) throw err;
+    sessionFound = true;
+    requireTrackedSession = false;
+  }
+
+  if (requireTrackedSession && !sessionFound) {
+    throw new Error('Session revoked or invalid. Please log in again.');
+  }
+
+  return {
+    userId: decoded.userId,
+    email: decoded.email,
+    role: decoded.role,
+    orgId: decoded.orgId ?? null,
+    siteId: decoded.siteId ?? null,
+    token,
+    passwordResetRequired: decoded.passwordResetRequired ?? false
+  };
+}
+
 /**
  * authenticate — verifies JWT and injects req.user
  * req.user = { userId, email, role, orgId, siteId, token }
@@ -30,56 +79,11 @@ async function authenticate(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Access denied. No token provided.' });
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    // Session tracking enforcement (Sprint 14 G11):
-    // - If a token row exists, validate expiry and allow.
-    // - If token row is missing but user has tracked sessions, treat token as revoked.
-    // - If no tracked sessions exist yet, allow for backward compatibility.
-    let sessionFound = false;
-    let requireTrackedSession = false;
-
-    try {
-      const [[sessionRow]] = await pool.execute(
-        'SELECT id, expires_at FROM sessions WHERE token = ? LIMIT 1',
-        [token]
-      );
-
-      if (sessionRow) {
-        sessionFound = true;
-        const expiresAt = sessionRow.expires_at ? new Date(sessionRow.expires_at).getTime() : null;
-        if (expiresAt && !Number.isNaN(expiresAt) && expiresAt < Date.now()) {
-          await pool.execute('DELETE FROM sessions WHERE id = ?', [sessionRow.id]).catch(() => {});
-          return res.status(401).json({ error: 'Session expired. Please log in again.' });
-        }
-      } else {
-        const [[countRow]] = await pool.execute(
-          'SELECT COUNT(*) AS cnt FROM sessions WHERE user_id = ?',
-          [decoded.userId]
-        );
-        requireTrackedSession = Number(countRow?.cnt || 0) > 0;
-      }
-    } catch (_) {
-      // Fail-open for DB issues to avoid locking out all users on transient DB faults.
-      sessionFound = true;
-      requireTrackedSession = false;
-    }
-
-    if (requireTrackedSession && !sessionFound) {
-      return res.status(401).json({ error: 'Session revoked or invalid. Please log in again.' });
-    }
-
-    req.user = {
-      userId: decoded.userId,
-      email: decoded.email,
-      role: decoded.role,
-      orgId: decoded.orgId ?? null,
-      siteId: decoded.siteId ?? null,
-      token,
-      passwordResetRequired: decoded.passwordResetRequired ?? false
-    };
+    req.user = await validateAccessToken(token);
     next();
   } catch (err) {
+    const message = String(err?.message || '');
+    if (message) return res.status(401).json({ error: message });
     return res.status(401).json({ error: 'Invalid or expired token. Please log in again.' });
   }
 }
@@ -125,4 +129,4 @@ async function requireAccessNotExpired(req, res, next) {
   }
 }
 
-module.exports = { authenticate, requireRole, requireOrg, requireAccessNotExpired };
+module.exports = { authenticate, requireRole, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken };

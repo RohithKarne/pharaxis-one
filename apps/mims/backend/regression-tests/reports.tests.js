@@ -61,12 +61,23 @@ async function getFirstDashboard(makeRequest, token) {
 
 async function cleanupReportDefinition(id) {
   if (!id) return;
+  await pool.execute("DELETE FROM report_entity_versions WHERE entity_type = 'report' AND entity_id = ?", [id]).catch(() => {});
+  await pool.execute("DELETE FROM report_favorites WHERE target_type = 'report' AND target_id = ?", [id]).catch(() => {});
   await pool.execute('DELETE FROM report_definitions WHERE id = ?', [id]).catch(() => {});
 }
 
 async function cleanupDashboard(id) {
   if (!id) return;
+  await pool.execute("DELETE FROM report_entity_versions WHERE entity_type = 'dashboard' AND entity_id = ?", [id]).catch(() => {});
+  await pool.execute("DELETE FROM report_favorites WHERE target_type = 'dashboard' AND target_id = ?", [id]).catch(() => {});
+  await pool.execute('DELETE FROM report_dashboard_shares WHERE dashboard_id = ?', [id]).catch(() => {});
+  await pool.execute('DELETE FROM report_role_default_dashboards WHERE dashboard_id = ?', [id]).catch(() => {});
   await pool.execute('DELETE FROM report_dashboards WHERE id = ?', [id]).catch(() => {});
+}
+
+async function cleanupDashboardTemplate(id) {
+  if (!id) return;
+  await pool.execute('DELETE FROM report_dashboard_templates WHERE id = ?', [id]).catch(() => {});
 }
 
 async function cleanupSchedule(id) {
@@ -611,6 +622,211 @@ module.exports = [
           details: `create=${create.status}, update=${update.status}, delete=${del.status}`,
         };
       } finally {
+        await cleanupSchedule(createdId);
+      }
+    },
+  },
+  {
+    name: 'Report roadmap operations cover duplicate favorites versions publish certify and run detail',
+    module: 'Reports',
+    covers: [
+      'POST /api/reports/module/definitions/:id/duplicate',
+      'GET/POST/DELETE /api/reports/module/favorites',
+      'GET /api/reports/module/definitions/:id/versions',
+      'POST /api/reports/module/definitions/:id/publish',
+      'POST /api/reports/module/definitions/:id/certify',
+      'GET /api/reports/module/history/:id',
+      'POST /api/reports/module/history/:id/retry',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let createdId = null;
+      let duplicateId = null;
+      try {
+        const create = await makeRequest('POST', '/api/reports/module/definitions', {
+          dataset_key: 'daily-case-summary',
+          name: uniqueName('Regression Roadmap Report'),
+          description: 'Regression roadmap report',
+          default_filters: {},
+          selected_columns: [],
+          formula_fields: [{ key: 'double_total', expression: 'total_cases * 2' }],
+          visibility_scope: 'shared',
+          sensitivity_level: 'standard',
+          is_active: true,
+        }, token);
+        createdId = Number(create.body?.id || 0);
+        if (create.status !== 201 || !createdId) return { pass: false, details: `create=${create.status}` };
+
+        const duplicate = await makeRequest('POST', `/api/reports/module/definitions/${createdId}/duplicate`, {}, token);
+        duplicateId = Number(duplicate.body?.id || 0);
+        const addFavorite = await makeRequest('POST', '/api/reports/module/favorites', { target_type: 'report', target_id: createdId }, token);
+        const listFavorites = await makeRequest('GET', '/api/reports/module/favorites', null, token);
+        const versions = await makeRequest('GET', `/api/reports/module/definitions/${createdId}/versions`, null, token);
+        const publish = await makeRequest('POST', `/api/reports/module/definitions/${createdId}/publish`, {}, token);
+        const certify = await makeRequest('POST', `/api/reports/module/definitions/${createdId}/certify`, { sensitivity_level: 'restricted' }, token);
+        const run = await makeRequest('POST', `/api/reports/module/definitions/${createdId}/run`, { filters: {}, timezone_name: 'UTC' }, token);
+        const history = await makeRequest('GET', '/api/reports/module/history?target_type=report&limit=10', null, token);
+        const runId = Number((history.body?.runs || []).find((item) => Number(item.target_id) === createdId)?.id || 0);
+        const detail = runId ? await makeRequest('GET', `/api/reports/module/history/${runId}`, null, token) : { status: 0 };
+        const retry = runId ? await makeRequest('POST', `/api/reports/module/history/${runId}/retry`, {}, token) : { status: 0 };
+        const removeFavorite = await makeRequest('DELETE', '/api/reports/module/favorites', { target_type: 'report', target_id: createdId }, token);
+
+        return {
+          pass: duplicate.status === 201 &&
+            !!duplicateId &&
+            addFavorite.status === 201 &&
+            listFavorites.status === 200 &&
+            versions.status === 200 &&
+            publish.status === 200 &&
+            certify.status === 200 &&
+            run.status === 200 &&
+            detail.status === 200 &&
+            retry.status === 200 &&
+            removeFavorite.status === 200,
+          details: `duplicate=${duplicate.status}, favorite=${addFavorite.status}/${removeFavorite.status}, versions=${versions.status}, publish=${publish.status}, certify=${certify.status}, run=${run.status}, detail=${detail.status}, retry=${retry.status}`,
+        };
+      } finally {
+        await cleanupReportDefinition(duplicateId);
+        await cleanupReportDefinition(createdId);
+      }
+    },
+  },
+  {
+    name: 'Dashboard roadmap operations cover duplicate shares templates defaults and versions',
+    module: 'Reports',
+    covers: [
+      'POST /api/reports/module/dashboards/:id/duplicate',
+      'GET /api/reports/module/dashboards/:id/versions',
+      'POST /api/reports/module/dashboards/:id/publish',
+      'POST /api/reports/module/dashboards/:id/templates',
+      'GET /api/reports/module/dashboard-templates',
+      'POST /api/reports/module/dashboard-templates/:id/create-dashboard',
+      'GET/POST/DELETE /api/reports/module/dashboard-shares',
+      'GET/POST /api/reports/module/role-default-dashboards',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let dashboardId = null;
+      let duplicateId = null;
+      let fromTemplateId = null;
+      let templateId = null;
+      let shareId = null;
+      try {
+        const firstDefinition = await getFirstDefinition(makeRequest, token);
+        if (!firstDefinition?.report_key) return { pass: false, details: 'no report definition available' };
+        const create = await makeRequest('POST', '/api/reports/module/dashboards', {
+          name: uniqueName('Regression Roadmap Dashboard'),
+          description: 'Regression roadmap dashboard',
+          layout: [],
+          widgets: [{ id: 'w1', title: 'Cases', report_key: firstDefinition.report_key, display_mode: 'table', limit: 3 }],
+          visibility_scope: 'shared',
+          is_active: true,
+        }, token);
+        dashboardId = Number(create.body?.id || 0);
+        if (create.status !== 201 || !dashboardId) return { pass: false, details: `create=${create.status}` };
+
+        const duplicate = await makeRequest('POST', `/api/reports/module/dashboards/${dashboardId}/duplicate`, {}, token);
+        duplicateId = Number(duplicate.body?.id || 0);
+        const versions = await makeRequest('GET', `/api/reports/module/dashboards/${dashboardId}/versions`, null, token);
+        const publish = await makeRequest('POST', `/api/reports/module/dashboards/${dashboardId}/publish`, {}, token);
+        const template = await makeRequest('POST', `/api/reports/module/dashboards/${dashboardId}/templates`, {}, token);
+        templateId = Number(template.body?.id || 0);
+        const listTemplates = await makeRequest('GET', '/api/reports/module/dashboard-templates', null, token);
+        const fromTemplate = templateId ? await makeRequest('POST', `/api/reports/module/dashboard-templates/${templateId}/create-dashboard`, { name: uniqueName('Regression Dashboard From Template') }, token) : { status: 0 };
+        fromTemplateId = Number(fromTemplate.body?.id || 0);
+        const share = await makeRequest('POST', '/api/reports/module/dashboard-shares', { dashboard_id: dashboardId, share_type: 'role', share_value: 'admin' }, token);
+        shareId = Number(share.body?.shares?.[0]?.id || 0);
+        const shares = await makeRequest('GET', `/api/reports/module/dashboard-shares?dashboard_id=${dashboardId}`, null, token);
+        const defaults = await makeRequest('POST', '/api/reports/module/role-default-dashboards', { role_key: 'admin', dashboard_id: dashboardId }, token);
+        const listDefaults = await makeRequest('GET', '/api/reports/module/role-default-dashboards', null, token);
+        const deleteShare = shareId ? await makeRequest('DELETE', `/api/reports/module/dashboard-shares/${shareId}`, null, token) : { status: 0 };
+
+        return {
+          pass: duplicate.status === 201 &&
+            !!duplicateId &&
+            versions.status === 200 &&
+            publish.status === 200 &&
+            template.status === 201 &&
+            !!templateId &&
+            listTemplates.status === 200 &&
+            fromTemplate.status === 201 &&
+            !!fromTemplateId &&
+            share.status === 201 &&
+            shares.status === 200 &&
+            defaults.status === 201 &&
+            listDefaults.status === 200 &&
+            deleteShare.status === 200,
+          details: `duplicate=${duplicate.status}, versions=${versions.status}, publish=${publish.status}, template=${template.status}, fromTemplate=${fromTemplate.status}, share=${share.status}/${deleteShare.status}, defaults=${defaults.status}/${listDefaults.status}`,
+        };
+      } finally {
+        await cleanupDashboard(fromTemplateId);
+        await cleanupDashboard(duplicateId);
+        await cleanupDashboard(dashboardId);
+        await cleanupDashboardTemplate(templateId);
+      }
+    },
+  },
+  {
+    name: 'Report scheduler operations and governance endpoints cover pause resume validation analytics recommendations',
+    module: 'Reports',
+    covers: [
+      'POST /api/reports/module/schedules/:id/pause',
+      'POST /api/reports/module/schedules/:id/resume',
+      'GET /api/reports/module/config/validate',
+      'GET /api/reports/module/usage-analytics',
+      'GET /api/reports/module/recommendations',
+      'GET /api/reports/module/anomalies',
+      'GET/POST/DELETE /api/reports/module/delivery-rules',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let createdId = null;
+      let ruleId = null;
+      try {
+        const firstDefinition = await getFirstDefinition(makeRequest, token);
+        if (!firstDefinition?.id) return { pass: false, details: 'no report definition available' };
+        const create = await makeRequest('POST', '/api/reports/module/schedules', {
+          export_name: uniqueName('Regression Roadmap Schedule'),
+          target_type: 'report',
+          target_id: firstDefinition.id,
+          report_key: firstDefinition.report_key,
+          schedule_frequency: 'daily',
+          schedule_time_local: '08:00',
+          timezone_name: 'UTC',
+          delivery_method: 'in_app',
+          delivery_target: '',
+          filters: {},
+        }, token);
+        createdId = Number(create.body?.id || 0);
+        if (create.status !== 201 || !createdId) return { pass: false, details: `create=${create.status}` };
+
+        const pause = await makeRequest('POST', `/api/reports/module/schedules/${createdId}/pause`, {}, token);
+        const resume = await makeRequest('POST', `/api/reports/module/schedules/${createdId}/resume`, {}, token);
+        const validation = await makeRequest('GET', '/api/reports/module/config/validate', null, token);
+        const analytics = await makeRequest('GET', '/api/reports/module/usage-analytics', null, token);
+        const recommendations = await makeRequest('GET', '/api/reports/module/recommendations', null, token);
+        const anomalies = await makeRequest('GET', '/api/reports/module/anomalies', null, token);
+        const createRule = await makeRequest('POST', '/api/reports/module/delivery-rules', {
+          rule_name: uniqueName('Regression Delivery Rule'),
+          sensitivity_level: 'sensitive',
+          blocked_domains: ['example.net'],
+          max_frequency: 'daily',
+          is_active: true,
+        }, token);
+        ruleId = Number(createRule.body?.id || 0);
+        const rules = await makeRequest('GET', '/api/reports/module/delivery-rules', null, token);
+        const deleteRule = ruleId ? await makeRequest('DELETE', `/api/reports/module/delivery-rules/${ruleId}`, null, token) : { status: 0 };
+        return {
+          pass: pause.status === 200 &&
+            resume.status === 200 &&
+            validation.status === 200 &&
+            analytics.status === 200 &&
+            recommendations.status === 200 &&
+            anomalies.status === 200 &&
+            createRule.status === 201 &&
+            rules.status === 200 &&
+            deleteRule.status === 200,
+          details: `pause=${pause.status}, resume=${resume.status}, validation=${validation.status}, analytics=${analytics.status}, recommendations=${recommendations.status}, anomalies=${anomalies.status}, rules=${createRule.status}/${rules.status}/${deleteRule.status}`,
+        };
+      } finally {
+        if (ruleId) await pool.execute('DELETE FROM report_delivery_rules WHERE id = ?', [ruleId]).catch(() => {});
         await cleanupSchedule(createdId);
       }
     },

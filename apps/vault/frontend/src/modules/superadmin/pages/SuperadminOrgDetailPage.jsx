@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import SuperadminTabs from '../components/SuperadminTabs'
+import SuperadminTopbar from '../components/SuperadminTopbar'
 import { apiJson, authHeaders, getSuperadminToken } from '../../common/utils/session'
 
 function formatDate(value) {
@@ -95,13 +96,10 @@ export default function SuperadminOrgDetailPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Organization Users</h1>
-          <p className="brand-subtitle">Role and status drill-down for selected tenant</p>
-        </div>
-        <span className="topbar-pill">Pharaxis Internal</span>
-      </header>
+      <SuperadminTopbar
+        title="Organization Users"
+        subtitle="Role and status drill-down for selected tenant"
+      />
 
       <main className="dashboard-grid">
         <section className="panel span-12">

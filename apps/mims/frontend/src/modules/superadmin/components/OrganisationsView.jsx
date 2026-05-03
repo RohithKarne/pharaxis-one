@@ -19,6 +19,7 @@ export default function OrganisationsView({ H, flash }) {
   const [siteEditForm, setSiteEditForm] = useState({ name: '', country: '' })
   const [orgLogos, setOrgLogos] = useState({})
   const logoInputRefs = useRef({})
+  const [pendingOrgAction, setPendingOrgAction] = useState(null)
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -195,6 +196,24 @@ export default function OrganisationsView({ H, flash }) {
     load()
   }
 
+  async function runOrgAction(orgId, action, successMessage) {
+    setPendingOrgAction(`${action}-${orgId}`)
+    try {
+      const res = await guardedFetch(`/api/superadmin/orgs/${orgId}/${action}`, {
+        method: 'POST',
+        headers: H,
+      })
+      const data = await res.json()
+      if (!res.ok) return flash(data.error || `Failed to ${action}.`, 'error')
+      flash(successMessage || data.message || 'Completed.')
+      load()
+    } catch {
+      flash(`Failed to ${action}.`, 'error')
+    } finally {
+      setPendingOrgAction(null)
+    }
+  }
+
   return (
     <>
       <div className="card" style={{ marginBottom: 12 }}>
@@ -230,6 +249,11 @@ export default function OrganisationsView({ H, flash }) {
       {loading && <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>}
       {!loading && orgs.map(org => (
         <div key={org.id} className="card" style={{ marginBottom: 8 }}>
+          {(() => {
+            const readiness = org.readiness || {}
+            const ready = !!readiness.ready
+            const score = readiness.score || 0
+            return (
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
             onClick={() => setExpanded(e => e === org.id ? null : org.id)}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -262,6 +286,14 @@ export default function OrganisationsView({ H, flash }) {
               <strong style={{ fontSize: 14 }}>{org.name}</strong>
               <span style={{ fontSize: 11, marginLeft: 10, color: 'var(--text-muted)' }}>
                 {(org.sites || []).length} site{(org.sites || []).length !== 1 ? 's' : ''}
+              </span>
+              <span style={{
+                fontSize: 11, marginLeft: 8, padding: '1px 7px', borderRadius: 10,
+                background: ready ? '#d4edda' : '#fff3cd',
+                color: ready ? '#155724' : '#7a4f01',
+              }}>{ready ? 'Ready' : 'Needs Setup'}</span>
+              <span style={{ fontSize: 11, marginLeft: 8, color: ready ? '#155724' : '#7a4f01' }}>
+                {score}% readiness
               </span>
               <span style={{
                 fontSize: 11, marginLeft: 8, padding: '1px 7px', borderRadius: 10,
@@ -320,8 +352,84 @@ export default function OrganisationsView({ H, flash }) {
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{expanded === org.id ? '▲' : '▼'}</span>
             </div>
           </div>
+            )
+          })()}
           {expanded === org.id && (
             <div className="card-body" style={{ paddingTop: 8 }}>
+              <div style={{
+                marginBottom: 12,
+                border: '1px solid var(--border)',
+                borderRadius: 10,
+                padding: 12,
+                background: '#fff',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Readiness Score</div>
+                    <div style={{ fontSize: 24, fontWeight: 700 }}>{org.readiness?.score || 0}%</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      className="btn btn-outline"
+                      style={{ fontSize: 12 }}
+                      disabled={pendingOrgAction === `bootstrap-${org.id}`}
+                      onClick={() => runOrgAction(org.id, 'bootstrap', `Bootstrap completed for ${org.name}.`)}
+                    >
+                      {pendingOrgAction === `bootstrap-${org.id}` ? 'Bootstrapping…' : 'Run Bootstrap'}
+                    </button>
+                    <button
+                      className="btn btn-outline"
+                      style={{ fontSize: 12 }}
+                      disabled={pendingOrgAction === `repair-${org.id}`}
+                      onClick={() => runOrgAction(org.id, 'repair', `Repair completed for ${org.name}.`)}
+                    >
+                      {pendingOrgAction === `repair-${org.id}` ? 'Repairing…' : 'Repair Data'}
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginTop: 12 }}>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Workflow</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>{org.readiness?.counts?.workflowStates || 0}</div>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Help Coverage</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>{org.readiness?.counts?.helpCoverage || 0}/{org.readiness?.counts?.helpTotal || 0}</div>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Content Pack</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>{org.readiness?.counts?.folders || 0}/{org.readiness?.counts?.modules || 0}/{org.readiness?.counts?.documents || 0}</div>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Data Quality</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>{org.readiness?.counts?.missingCaseNumbers || 0}/{org.readiness?.counts?.missingStatusLinks || 0}</div>
+                  </div>
+                </div>
+                {!!org.readiness?.blockers?.length && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#7a1f1f', marginBottom: 6 }}>Blockers</div>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {org.readiness.blockers.map((item) => (
+                        <div key={item} style={{ fontSize: 12, color: '#7a1f1f', background: '#fff5f5', border: '1px solid #f5c2c7', borderRadius: 8, padding: '8px 10px' }}>
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {!!org.readiness?.warnings?.length && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#7a4f01', marginBottom: 6 }}>Warnings</div>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {org.readiness.warnings.map((item) => (
+                        <div key={item} style={{ fontSize: 12, color: '#7a4f01', background: '#fffaf0', border: '1px solid #ffe69c', borderRadius: 8, padding: '8px 10px' }}>
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <table className="admin-table" style={{ marginBottom: 8 }}>
                 <thead>
                   <tr><th>Site</th><th>Country</th><th>Primary</th><th>Status</th><th>Action</th></tr>

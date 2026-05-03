@@ -30,6 +30,7 @@
     "imap": "^0.8.17",
     "imapflow": "^1.2.13",
     "joi": "^18.1.2",
+    "jose": "^6.2.3",
     "jsonwebtoken": "^9.0.2",
     "mailparser": "^3.9.4",
     "multer": "^2.1.1",

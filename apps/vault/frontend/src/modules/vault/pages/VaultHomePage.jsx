@@ -35,10 +35,10 @@ const CONFIG_STUDIO_GROUPS = [
 
 const CREATION_ACTIONS = [
   { label: 'Upload New Document', path: '/vault/upload', type: 'Create' },
-  { label: 'Start Workflow', path: '/vault/tasks', type: 'Process' },
+  { label: 'Open Task Inbox', path: '/vault/tasks', type: 'Action' },
+  { label: 'Find a Document to Launch Workflow', path: '/vault/search', type: 'Workflow' },
   { label: 'Create Content Slot', path: '/vault/slots', type: 'Planning' },
   { label: 'Build Dossier', path: '/vault/dossiers', type: 'Submission' },
-  { label: 'Search Existing Content', path: '/vault/search', type: 'Find' },
   { label: 'Expiry Dashboard', path: '/vault/expiry', type: 'Risk' }
 ]
 
@@ -215,6 +215,54 @@ export default function VaultHomePage() {
     workflowStats.escalated
   ])
 
+  const nextBestActions = useMemo(() => {
+    if (isAdmin) {
+      if (!stats.total) {
+        return [
+          { title: 'Complete setup first', detail: 'Run the configuration wizard before uploading documents.', path: '/admin/wizard' },
+          { title: 'Add users and roles', detail: 'Provision the first admin, author, reviewer, and approver accounts.', path: '/admin/users' },
+          { title: 'Create your taxonomy', detail: 'Define type, subtype, and classification before content creation.', path: '/admin/taxonomy' }
+        ]
+      }
+
+      return [
+        { title: 'Review pending workflow work', detail: `${workflowStats.pending_ready} ready tasks need action across the org.`, path: '/admin/workflows' },
+        { title: 'Launch workflow on new content', detail: 'Open a document and trigger its review/approval flow.', path: '/vault/search' },
+        { title: 'Check platform risk', detail: 'Review expiry and escalated queue signals before users get blocked.', path: '/vault/expiry' }
+      ]
+    }
+
+    if (String(currentUser?.role || '') === 'author') {
+      return [
+        { title: 'Upload or update draft content', detail: `${stats.draft} drafts are currently in progress.`, path: '/vault/upload' },
+        { title: 'Launch workflow from a document', detail: 'Find the document and start its review or approval flow.', path: '/vault/search' },
+        { title: 'Clear your task inbox', detail: `${workflowStats.pending_ready + workflowStats.pending_waiting} tasks are assigned or waiting on you.`, path: '/vault/tasks' }
+      ]
+    }
+
+    if (['reviewer', 'approver'].includes(String(currentUser?.role || ''))) {
+      return [
+        { title: 'Open task inbox first', detail: `${workflowStats.pending_ready} tasks are ready for your decision.`, path: '/vault/tasks' },
+        { title: 'Review the notification feed', detail: 'Use notifications to identify overdue and due-soon actions quickly.', path: '/vault/notifications' },
+        { title: 'Open governed content', detail: 'Check the document context before completing workflow decisions.', path: '/vault/search' }
+      ]
+    }
+
+    return [
+      { title: 'Search published content', detail: 'Use search to find governed documents without changing configuration.', path: '/vault/search' },
+      { title: 'Open task inbox', detail: 'Check whether any workflow work has been assigned to you.', path: '/vault/tasks' },
+      { title: 'Need more access?', detail: 'Ask your admin to complete setup or update your role permissions.', path: '/vault/notifications' }
+    ]
+  }, [
+    currentUser?.role,
+    isAdmin,
+    stats.total,
+    stats.draft,
+    workflowStats.pending_ready,
+    workflowStats.pending_waiting,
+    workflowStats.escalated
+  ])
+
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
@@ -273,6 +321,22 @@ export default function VaultHomePage() {
         </section>
 
         <section className="panel span-12">
+          <h3>Next Best Actions</h3>
+          <p className="panel-note">This keeps the workspace understandable by showing the most sensible next move for your current role.</p>
+          <div className="signal-grid">
+            {nextBestActions.map(action => (
+              <article className="config-group-card" key={action.title}>
+                <h4>{action.title}</h4>
+                <p className="panel-note">{action.detail}</p>
+                <div className="detail-actions">
+                  <Link className="btn-secondary link-button" to={action.path}>Open</Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel span-12">
           <h3>Role Intelligence</h3>
           <p className="panel-note">Role-based live signals to prioritize your next actions.</p>
           <ul className="simple-list">
@@ -325,7 +389,7 @@ export default function VaultHomePage() {
           <section className="panel span-12">
             <h3>Configuration Access</h3>
             <p className="panel-note">
-              This workspace is configuration-driven. Ask your admin to complete Taxonomy, Lifecycle, Security, and Workflow policy setup first.
+              This workspace is configuration-driven. If something feels blocked or confusing, ask your admin to finish Taxonomy, Lifecycle, Security, and Workflow setup before expecting approvals to run cleanly.
             </p>
           </section>
         )}
@@ -451,9 +515,16 @@ export default function VaultHomePage() {
                       <td>{row.version_number || '-'}</td>
                       <td>{row.locked_by_name || '-'}</td>
                       <td>
-                        <Link className="btn-secondary link-button" to={`/vault/content/${row.id}`}>
-                          Open
-                        </Link>
+                        <div className="detail-actions">
+                          <Link className="btn-secondary link-button" to={`/vault/content/${row.id}`}>
+                            Open
+                          </Link>
+                          {['admin', 'author'].includes(String(currentUser?.role || '')) ? (
+                            <Link className="btn-secondary link-button" to={`/vault/content/${row.id}`}>
+                              Launch Workflow
+                            </Link>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))}

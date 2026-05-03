@@ -23,7 +23,9 @@ const { validate, schemas } = require('../middleware/validate');
 const { checkTransitionAllowed } = require('../services/workflowEngine');
 const { logger } = require('../services/logger');
 const { createNotification } = require('../services/notificationCenterService');
+const { emitDataSync } = require('../services/appRealtimeService');
 const { fireIntegrationEvent } = require('../services/integrationEngine');
+const { resolveDefaultWorkflowStateId } = require('../services/orgBootstrapService');
 const {
   calculateAeDueDate,
   calculatePcDueDate,
@@ -31,6 +33,37 @@ const {
   findDuplicateCandidates,
   getCaseDuplicateCandidates,
 } = require('../services/caseGovernanceService');
+const { resolveProductGroups } = require('../services/productGroupService');
+
+function parseJsonSafe(value, fallback = null) {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value !== 'string') return value;
+  try { return JSON.parse(value); } catch (_) { return fallback; }
+}
+
+function uniquePositiveInts(values) {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))];
+}
+
+function stripHtml(html) {
+  return String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function applyMergeFields(text, mergeData) {
+  return String(text || '').replace(/\{\{(\w+)\}\}/g, (_, key) => (
+    mergeData[key] !== undefined && mergeData[key] !== null ? String(mergeData[key]) : `{{${key}}}`
+  ));
+}
 
 async function logResponseError(orgId, caseId, errorType, errorMessage, details) {
   try {
@@ -428,6 +461,12 @@ function applySensitiveMask(configMap, role, sectionName, fieldName, value) {
 
 async function emitOutboundEvent(orgId, eventType, payload, entityType = null, entityId = null) {
   if (!orgId || !eventType) return;
+  emitDataSync({
+    orgIds: [Number(orgId)],
+    domains: ['cases', 'dashboard', 'alerts'],
+    reason: eventType,
+    payload,
+  });
   let logId = null;
   try {
     const [inserted] = await pool.execute(
@@ -554,7 +593,16 @@ async function getMiResponseRow(caseId, responseId) {
        r.id,
        r.case_id,
        r.mi_tab_id,
+       r.recipient_contact_id,
+       r.recipient_name,
+       r.recipient_email,
+       r.product_id,
+       r.template_id,
+       r.template_name,
        r.response_text,
+       r.response_body_html,
+       r.rendered_preview_html,
+       r.response_subject,
        r.response_channel AS channel,
        r.response_date AS responded_at,
        r.follow_up_required,
@@ -563,8 +611,14 @@ async function getMiResponseRow(caseId, responseId) {
        r.approved_by,
        approver.name AS approved_by_name,
        r.approved_at,
+       r.sent_at,
        r.cm_document_id,
        r.cm_document_name,
+       r.selected_documents,
+       r.selected_modules,
+       r.language,
+       r.is_customized,
+       r.customization_notes,
        r.author_id,
        r.author_name AS responded_by_name,
        r.created_at
@@ -596,6 +650,49 @@ async function getPcTransmissionRow(caseId, transmissionId) {
     [caseId, transmissionId]
   );
   return row || null;
+}
+
+async function getCasePrimaryProductContext(caseId) {
+  const [[row]] = await pool.execute(
+    `SELECT
+       c.product_id AS case_product_id,
+       c.org_id,
+       mi.product_id AS mi_product_id,
+       ae.product_id AS ae_product_id,
+       pc.product_id AS pc_product_id
+     FROM cases c
+     LEFT JOIN case_mi mi ON mi.case_id = c.id
+     LEFT JOIN case_ae_product_info ae ON ae.version_id = (
+       SELECT id FROM case_ae_versions WHERE case_id = c.id ORDER BY version_number DESC, id DESC LIMIT 1
+     )
+     LEFT JOIN case_pc_product_info pc ON pc.version_id = (
+       SELECT id FROM case_pc_versions WHERE case_id = c.id ORDER BY version_number DESC, id DESC LIMIT 1
+     )
+     WHERE c.id = ?
+     LIMIT 1`,
+    [caseId]
+  );
+  if (!row) return { productId: null, orgId: null };
+  return {
+    productId: row.case_product_id || row.mi_product_id || row.ae_product_id || row.pc_product_id || null,
+    orgId: row.org_id || null,
+  };
+}
+
+async function resolveTransmissionGroupSnapshot(caseId) {
+  const context = await getCasePrimaryProductContext(caseId);
+  if (!context.productId) return { product_group_id: null, product_group_snapshot: null };
+  const groups = await resolveProductGroups({
+    orgId: context.orgId,
+    groupType: 'transmissions',
+    targetType: 'transmission_rule',
+    productId: context.productId,
+  }).catch(() => []);
+  const primary = groups[0] || null;
+  return {
+    product_group_id: primary?.id || null,
+    product_group_snapshot: primary ? JSON.stringify({ product_id: context.productId, groups }) : null,
+  };
 }
 
 // ─── SPRINT 17: SAVED CASE VIEWS ────────────────────────────────────────────
@@ -1245,6 +1342,12 @@ router.post('/cases/:id/comments', authenticate, async (req, res) => {
         metadata: { case_id: Number(req.params.id) },
       });
     }
+    emitDataSync({
+      orgIds: [Number(owned.org_id || 0)],
+      domains: ['cases', 'dashboard'],
+      reason: 'case.comment.created',
+      payload: { caseId: Number(req.params.id) },
+    });
     return res.status(201).json(saved);
   } catch (err) {
     logger.error({ err, route: '/api/cases/:id/comments', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to create case comment');
@@ -1391,6 +1494,7 @@ router.post('/cases', authenticate, requireOrg, validate(schemas.createCase), as
     }
     const dateReceived = toDateOnlyOrNull(date_received);
     const validationDate = dateReceived || toDateOnlyOrNull(new Date());
+    const defaultStatusId = await resolveDefaultWorkflowStateId(conn, org_id);
 
     // Sprint 17 governance: strict controlled vocab and taxonomy validation
     let reporterTypeValue = reporter?.reporter_type || 'HCP';
@@ -1436,16 +1540,16 @@ router.post('/cases', authenticate, requireOrg, validate(schemas.createCase), as
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, case_number, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [org_id, site_id, case_type ?? null, intake_channel, dateReceived, case_number ?? null, req.user.userId]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, case_number, status_id, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [org_id, site_id, case_type ?? null, intake_channel, dateReceived, case_number ?? null, defaultStatusId, req.user.userId]
       );
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY' && String(err.message || '').includes('case_number')) {
         [result] = await conn.execute(
-          `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, case_number, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [org_id, site_id, case_type ?? null, intake_channel, dateReceived, `${case_number}-${Date.now()}`, req.user.userId]
+          `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, case_number, status_id, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [org_id, site_id, case_type ?? null, intake_channel, dateReceived, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId]
         );
       } else { throw err; }
     }
@@ -2051,6 +2155,378 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
 
 // ─── CF-E6/E7: MI RESPONSES ──────────────────────────────────────────────────
 
+async function getResponseBuilderCase(req, caseId) {
+  const [rows] = await pool.execute(
+    req.user.role === 'superadmin'
+      ? `SELECT c.id, c.case_number, c.case_type, c.org_id, c.site_id, c.description, o.name AS org_name
+           FROM cases c
+           LEFT JOIN organisations o ON o.id = c.org_id
+          WHERE c.id = ?`
+      : `SELECT c.id, c.case_number, c.case_type, c.org_id, c.site_id, c.description, o.name AS org_name
+           FROM cases c
+           LEFT JOIN organisations o ON o.id = c.org_id
+          WHERE c.id = ? AND c.org_id = ?`,
+    req.user.role === 'superadmin' ? [caseId] : [caseId, req.user.orgId]
+  );
+  return rows[0] || null;
+}
+
+async function getResponseBuilderMiTab(caseId, miTabId = null) {
+  const [rows] = await pool.execute(
+    `SELECT mi.*, p.trade_name AS product_name, p.family_id, p.authorization_country,
+            pf.name AS family_name
+       FROM case_mi mi
+       LEFT JOIN products p ON p.id = mi.product_id
+       LEFT JOIN product_families pf ON pf.id = p.family_id
+      WHERE mi.case_id = ? ${miTabId ? 'AND mi.id = ?' : ''}
+      ORDER BY mi.tab_index ASC, mi.id ASC
+      LIMIT 1`,
+    miTabId ? [caseId, miTabId] : [caseId]
+  );
+  return rows[0] || null;
+}
+
+async function getResponseBuilderRecipient(caseId, recipientContactId = null, fallbackEmail = null, fallbackName = null) {
+  const params = [caseId];
+  let extra = '';
+  if (recipientContactId) {
+    extra = 'AND cc.id = ?';
+    params.push(Number(recipientContactId));
+  }
+  const [rows] = await pool.execute(
+    `SELECT cc.id AS case_contact_id, cc.contact_id,
+            COALESCE(cc.first_name, ct.first_name, '') AS first_name,
+            COALESCE(cc.last_name, ct.last_name, '') AS last_name,
+            COALESCE(cc.email, ct.email, '') AS email,
+            COALESCE(cc.institution, ct.institution, '') AS institution,
+            cc.role_in_case,
+            cc.is_primary
+       FROM case_contacts cc
+       LEFT JOIN contacts ct ON ct.id = cc.contact_id
+      WHERE cc.case_id = ? ${extra}
+      ORDER BY cc.is_primary DESC, cc.id ASC
+      LIMIT 1`,
+    params
+  );
+  const row = rows[0] || {};
+  const fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim();
+  return {
+    case_contact_id: row.case_contact_id || recipientContactId || null,
+    name: fullName || fallbackName || fallbackEmail || '',
+    email: row.email || fallbackEmail || '',
+    institution: row.institution || '',
+    role_in_case: row.role_in_case || '',
+    is_primary: row.is_primary ? 1 : 0,
+  };
+}
+
+async function listResponseBuilderRecipients(caseId) {
+  const [rows] = await pool.execute(
+    `SELECT cc.id AS case_contact_id, cc.contact_id,
+            COALESCE(cc.first_name, ct.first_name, '') AS first_name,
+            COALESCE(cc.last_name, ct.last_name, '') AS last_name,
+            COALESCE(cc.email, ct.email, '') AS email,
+            COALESCE(cc.institution, ct.institution, '') AS institution,
+            cc.role_in_case,
+            cc.is_primary
+       FROM case_contacts cc
+       LEFT JOIN contacts ct ON ct.id = cc.contact_id
+      WHERE cc.case_id = ?
+      ORDER BY cc.is_primary DESC, cc.id ASC`,
+    [caseId]
+  );
+  return rows.map((row) => ({
+    ...row,
+    name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || row.email || `Contact #${row.case_contact_id}`,
+  }));
+}
+
+async function buildResponsePackage(req, caseId, payload = {}) {
+  const scopedCase = await getResponseBuilderCase(req, caseId);
+  if (!scopedCase) {
+    const error = new Error('Case not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const miTab = await getResponseBuilderMiTab(caseId, payload.mi_tab_id || null);
+  const productId = Number(payload.product_id || miTab?.product_id || 0) || null;
+  let product = null;
+  if (productId) {
+    const [[row]] = await pool.execute(
+      `SELECT p.*, pf.name AS family_name
+         FROM products p
+         LEFT JOIN product_families pf ON pf.id = p.family_id
+        WHERE p.id = ?`,
+      [productId]
+    );
+    product = row || null;
+  }
+
+  const recipient = await getResponseBuilderRecipient(
+    caseId,
+    payload.recipient_contact_id || null,
+    payload.recipient_email || null,
+    payload.recipient_name || null
+  );
+
+  let template = null;
+  if (payload.template_id) {
+    const [templateRows] = await pool.execute(
+      `SELECT t.*
+         FROM cm_templates t
+         LEFT JOIN users u ON u.id = t.created_by
+        WHERE t.id = ?
+          AND t.status = 'Active'
+          AND (? = 1 OR u.org_id = ? OR EXISTS (
+            SELECT 1 FROM user_org_access uoa
+             WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1
+          ))
+        LIMIT 1`,
+      [payload.template_id, req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id, scopedCase.org_id]
+    );
+    template = templateRows[0] || null;
+    if (!template) {
+      const error = new Error('Template not found for this organisation.');
+      error.statusCode = 404;
+      throw error;
+    }
+  }
+
+  const selectedDocumentIds = uniquePositiveInts(payload.selected_document_ids || payload.document_ids || []);
+  const selectedModuleIds = uniquePositiveInts(payload.selected_module_ids || payload.module_ids || []);
+
+  let selectedDocuments = [];
+  if (selectedDocumentIds.length) {
+    const placeholders = selectedDocumentIds.map(() => '?').join(',');
+    const [rows] = await pool.execute(
+      `SELECT d.id, d.doc_id, d.name, d.doc_type, d.response_doc_type, d.content_html,
+              d.standard_response_text, d.file_path, d.file_name, d.file_mime, d.language,
+              d.send_as_pdf, d.selected_modules
+         FROM cm_documents d
+         INNER JOIN cm_folders f ON f.id = d.folder_id
+        WHERE d.id IN (${placeholders})
+          AND (? = 1 OR f.org_id = ?)`,
+      [...selectedDocumentIds, req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id]
+    );
+    selectedDocuments = rows;
+  }
+
+  let moduleIdsFromDocuments = [];
+  selectedDocuments.forEach((doc) => {
+    moduleIdsFromDocuments = moduleIdsFromDocuments.concat(parseJsonSafe(doc.selected_modules, []));
+  });
+  const allModuleIds = uniquePositiveInts([...selectedModuleIds, ...moduleIdsFromDocuments]);
+  let selectedModules = [];
+  if (allModuleIds.length) {
+    const placeholders = allModuleIds.map(() => '?').join(',');
+    const [rows] = await pool.execute(
+      `SELECT m.id, m.module_id, m.name, m.module_type, m.content_html, m.standard_response_text,
+              m.language, m.send_as_pdf
+         FROM cm_modules m
+         INNER JOIN cm_folders f ON f.id = m.folder_id
+        WHERE m.id IN (${placeholders})
+          AND (? = 1 OR f.org_id = ?)`,
+      [...allModuleIds, req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id]
+    );
+    selectedModules = rows;
+  }
+
+  const contentBlocks = [];
+  selectedModules.forEach((mod) => {
+    contentBlocks.push(`<section data-response-module-id="${mod.id}"><h3>${mod.name}</h3>${mod.standard_response_text || mod.content_html || ''}</section>`);
+  });
+  selectedDocuments.forEach((doc) => {
+    const docBody = doc.standard_response_text || doc.content_html || '';
+    if (docBody) contentBlocks.push(`<section data-response-document-id="${doc.id}"><h3>${doc.name}</h3>${docBody}</section>`);
+  });
+  const selectedContent = contentBlocks.join('\n');
+
+  const mergeData = {
+    date: new Date().toLocaleDateString('en-US', { dateStyle: 'long' }),
+    agent_name: req.user.name || req.user.email || '',
+    case_number: scopedCase.case_number || '',
+    case_type: scopedCase.case_type || '',
+    org_name: scopedCase.org_name || '',
+    recipient_name: recipient.name || recipient.email || 'Requestor',
+    recipient_email: recipient.email || '',
+    patient_name: recipient.name || '',
+    patient_email: recipient.email || '',
+    product_name: product?.trade_name || miTab?.product_name || '',
+    product_family: product?.family_name || miTab?.family_name || '',
+    mi_question: miTab?.question_summary || miTab?.detailed_question || '',
+    selected_content: selectedContent,
+    smpc_link: payload.smpc_link || '',
+    qr_code: payload.qr_code || '',
+  };
+
+  const templateSubject = payload.subject !== undefined
+    ? payload.subject
+    : (template?.subject || `Medical Information Response - Case ${scopedCase.case_number || caseId}`);
+  const templateBody = payload.body_html !== undefined
+    ? payload.body_html
+    : (template?.body_html || payload.response_text || '');
+  const customText = String(payload.custom_text || '').trim();
+  const bodyWithCustomText = customText
+    ? `${templateBody || ''}<section data-custom-response-text="true"><h3>Additional Response Text</h3><p>${customText.replace(/\n/g, '<br/>')}</p></section>`
+    : templateBody;
+
+  const renderedSubject = applyMergeFields(templateSubject, mergeData);
+  const renderedBody = applyMergeFields(bodyWithCustomText || '{{selected_content}}', mergeData);
+  const previewHtml = `<article class="mi-response-preview"><h2>${renderedSubject}</h2>${renderedBody}</article>`;
+
+  return {
+    case: scopedCase,
+    mi_tab: miTab,
+    product,
+    recipient,
+    template,
+    rendered_subject: renderedSubject,
+    rendered_body_html: renderedBody,
+    rendered_text: stripHtml(renderedBody),
+    rendered_preview_html: previewHtml,
+    selected_documents: selectedDocuments.map((doc) => ({
+      id: doc.id,
+      doc_id: doc.doc_id,
+      name: doc.name,
+      doc_type: doc.doc_type,
+      response_doc_type: doc.response_doc_type,
+      file_name: doc.file_name,
+      file_mime: doc.file_mime,
+      language: doc.language,
+      send_as_pdf: doc.send_as_pdf ? 1 : 0,
+    })),
+    selected_modules: selectedModules.map((mod) => ({
+      id: mod.id,
+      module_id: mod.module_id,
+      name: mod.name,
+      module_type: mod.module_type,
+      language: mod.language,
+      send_as_pdf: mod.send_as_pdf ? 1 : 0,
+    })),
+    source_template_snapshot: template ? {
+      id: template.id,
+      name: template.name,
+      type: template.type,
+      subject: template.subject,
+      body_html: template.body_html,
+      version: `${template.version_major || 1}.${template.version_minor || 0}`,
+    } : null,
+    source_document_snapshot: selectedDocuments.map((doc) => ({
+      id: doc.id,
+      doc_id: doc.doc_id,
+      name: doc.name,
+      doc_type: doc.doc_type,
+      version: `${doc.version_major || 1}.${doc.version_minor || 0}`,
+    })),
+    merge_data: mergeData,
+    language: payload.language || template?.language || selectedDocuments[0]?.language || 'en',
+    is_customized: payload.is_customized !== undefined
+      ? !!payload.is_customized
+      : !!(payload.body_html !== undefined || payload.subject !== undefined || customText),
+  };
+}
+
+// GET /api/cases/:id/mi-response-builder/context — template/document context for MI response builder
+router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, res) => {
+  try {
+    const scopedCase = await getResponseBuilderCase(req, req.params.id);
+    if (!scopedCase) return res.status(404).json({ error: 'Case not found.' });
+    const miTab = await getResponseBuilderMiTab(req.params.id, req.query.mi_tab_id || null);
+    const recipients = await listResponseBuilderRecipients(req.params.id);
+    const productId = Number(req.query.product_id || miTab?.product_id || 0) || null;
+    let responseGroups = [];
+    if (productId) {
+      responseGroups = await resolveProductGroups({
+        orgId: scopedCase.org_id,
+        groupType: 'response',
+        targetType: 'cm_template',
+        productId,
+        country: miTab?.authorization_country || null,
+      }).catch(() => []);
+    }
+    const responseGroupIds = responseGroups.map((group) => Number(group.id)).filter(Boolean);
+    const groupSelect = responseGroupIds.length
+      ? `EXISTS (SELECT 1 FROM product_group_assignments pga WHERE pga.target_type = 'cm_template' AND pga.target_id = t.id AND pga.group_id IN (${responseGroupIds.map(() => '?').join(',')}))`
+      : '0';
+    const [templates] = await pool.execute(
+      `SELECT t.id, t.type, t.name, t.subject, t.body_html, t.status,
+              t.version_major, t.version_minor,
+              ${groupSelect} AS product_group_match
+         FROM cm_templates t
+         LEFT JOIN users u ON u.id = t.created_by
+        WHERE t.status = 'Active'
+          AND t.type IN ('Response','Email','Acknowledgment','Correspondence')
+          AND (? = 1 OR u.org_id = ? OR EXISTS (
+            SELECT 1 FROM user_org_access uoa
+             WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1
+          ))
+        ORDER BY product_group_match DESC, FIELD(t.type, 'Response','Email','Acknowledgment','Correspondence'), t.name ASC`,
+      [...responseGroupIds, req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id, scopedCase.org_id]
+    );
+    const [documents] = await pool.execute(
+      `SELECT d.id, d.doc_id, d.name, d.doc_type, d.response_doc_type, d.status,
+              d.language, d.document_category, d.standard_response_text, d.content_html,
+              d.send_as_pdf, d.selected_modules
+         FROM cm_documents d
+         INNER JOIN cm_folders f ON f.id = d.folder_id
+        WHERE d.status IN ('Published','Approved')
+          AND (? = 1 OR f.org_id = ?)
+          AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())
+        ORDER BY CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
+        LIMIT 200`,
+      [req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id]
+    );
+    const [modules] = await pool.execute(
+      `SELECT m.id, m.module_id, m.name, m.module_type, m.status,
+              m.language, m.document_category, m.standard_response_text, m.content_html, m.send_as_pdf
+         FROM cm_modules m
+         INNER JOIN cm_folders f ON f.id = m.folder_id
+        WHERE m.status IN ('Published','Approved')
+          AND (? = 1 OR f.org_id = ?)
+          AND (m.expiry_date IS NULL OR m.expiry_date >= CURDATE())
+        ORDER BY CASE WHEN m.document_category = 'Response Builder' THEN 0 ELSE 1 END, m.name ASC
+        LIMIT 200`,
+      [req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id]
+    );
+    const [bundles] = await pool.execute(
+      `SELECT * FROM response_template_bundles
+        WHERE org_id = ? AND is_active = 1
+        ORDER BY language ASC, name ASC`,
+      [scopedCase.org_id]
+    ).catch(() => [[]]);
+
+    res.json({
+      case: scopedCase,
+      mi_tab: miTab,
+      recipients,
+      response_product_groups: responseGroups,
+      templates,
+      documents: documents.map((doc) => ({ ...doc, selected_modules: parseJsonSafe(doc.selected_modules, []) })),
+      modules,
+      bundles: bundles.map((bundle) => ({
+        ...bundle,
+        document_ids: parseJsonSafe(bundle.document_ids, []),
+        module_ids: parseJsonSafe(bundle.module_ids, []),
+      })),
+    });
+  } catch (err) {
+    logger.error({ err }, 'GET /cases/:id/mi-response-builder/context error');
+    res.status(500).json({ error: err.message || 'Server error.' });
+  }
+});
+
+// POST /api/cases/:id/mi-response-builder/preview — render composed response without saving
+router.post('/cases/:id/mi-response-builder/preview', authenticate, async (req, res) => {
+  try {
+    const pkg = await buildResponsePackage(req, req.params.id, req.body || {});
+    res.json(pkg);
+  } catch (err) {
+    logger.error({ err }, 'POST /cases/:id/mi-response-builder/preview error');
+    res.status(err.statusCode || 500).json({ error: err.message || 'Server error.' });
+  }
+});
+
 // GET /api/cases/:id/mi-responses — list response history for a case
 router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
   try {
@@ -2060,7 +2536,16 @@ router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
          r.id,
          r.case_id,
          r.mi_tab_id,
+         r.recipient_contact_id,
+         r.recipient_name,
+         r.recipient_email,
+         r.product_id,
+         r.template_id,
+         r.template_name,
          r.response_text,
+         r.response_body_html,
+         r.rendered_preview_html,
+         r.response_subject,
          r.response_channel AS channel,
          r.response_date AS responded_at,
          r.follow_up_required,
@@ -2071,6 +2556,12 @@ router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
          r.approved_at,
          r.cm_document_id,
          COALESCE(r.cm_document_name, d.name) AS cm_document_name,
+         r.selected_documents,
+         r.selected_modules,
+         r.language,
+         r.is_customized,
+         r.customization_notes,
+         r.sent_at,
          r.author_id,
          r.author_name AS responded_by_name,
          r.created_at
@@ -2096,7 +2587,18 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
     if (!validStatuses.includes(responseStatus)) {
       return res.status(400).json({ error: `response_status must be one of: ${validStatuses.join(', ')}` });
     }
-    if (!response_text && !cm_document_id) return res.status(400).json({ error: 'response_text or cm_document_id is required.' });
+    let responsePackage = null;
+    const hasBuilderPayload = req.body?.template_id || req.body?.response_body_html || req.body?.body_html || req.body?.selected_document_ids || req.body?.selected_documents;
+    if (hasBuilderPayload) {
+      responsePackage = await buildResponsePackage(req, req.params.id, {
+        ...req.body,
+        body_html: req.body.response_body_html !== undefined ? req.body.response_body_html : req.body.body_html,
+      });
+    }
+    const finalResponseText = responsePackage?.rendered_text || response_text || null;
+    const finalResponseHtml = responsePackage?.rendered_body_html || req.body?.response_body_html || null;
+    const finalSubject = responsePackage?.rendered_subject || req.body?.response_subject || null;
+    if (!finalResponseText && !finalResponseHtml && !cm_document_id) return res.status(400).json({ error: 'response_text, response_body_html, template, or cm_document_id is required.' });
 
     // Fetch CM doc name if provided
     let cm_document_name = null;
@@ -2107,12 +2609,27 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
 
     const [result] = await pool.execute(
       `INSERT INTO case_mi_responses
-         (case_id, mi_tab_id, response_text, response_channel, response_date, follow_up_required, response_status, draft_saved_at, approved_by, approved_at, cm_document_id, cm_document_name, author_id, author_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (case_id, mi_tab_id, recipient_contact_id, recipient_name, recipient_email,
+          product_id, template_id, template_name,
+          response_text, response_body_html, rendered_preview_html, response_subject,
+          response_channel, response_date, follow_up_required, response_status, draft_saved_at,
+          approved_by, approved_at, cm_document_id, cm_document_name,
+          selected_documents, selected_modules, source_template_snapshot, source_document_snapshot,
+          language, is_customized, customization_notes, author_id, author_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.params.id,
-        mi_tab_id || null,
-        response_text || null,
+        mi_tab_id || responsePackage?.mi_tab?.id || null,
+        responsePackage?.recipient?.case_contact_id || req.body?.recipient_contact_id || null,
+        responsePackage?.recipient?.name || req.body?.recipient_name || null,
+        responsePackage?.recipient?.email || req.body?.recipient_email || null,
+        responsePackage?.product?.id || req.body?.product_id || null,
+        responsePackage?.template?.id || req.body?.template_id || null,
+        responsePackage?.template?.name || req.body?.template_name || null,
+        finalResponseText,
+        finalResponseHtml,
+        responsePackage?.rendered_preview_html || req.body?.rendered_preview_html || null,
+        finalSubject,
         channel,
         responseDate,
         follow_up_required ? 1 : 0,
@@ -2122,6 +2639,13 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
         responseStatus === 'APPROVED' || responseStatus === 'SENT' ? new Date() : null,
         cm_document_id || null,
         cm_document_name,
+        responsePackage ? JSON.stringify(responsePackage.selected_documents || []) : JSON.stringify(req.body?.selected_documents || []),
+        responsePackage ? JSON.stringify(responsePackage.selected_modules || []) : JSON.stringify(req.body?.selected_modules || []),
+        responsePackage?.source_template_snapshot ? JSON.stringify(responsePackage.source_template_snapshot) : null,
+        responsePackage?.source_document_snapshot ? JSON.stringify(responsePackage.source_document_snapshot) : null,
+        responsePackage?.language || req.body?.language || 'en',
+        responsePackage?.is_customized || req.body?.is_customized ? 1 : 0,
+        req.body?.customization_notes || null,
         req.user.userId,
         req.user.name || req.user.email,
       ]
@@ -2200,9 +2724,10 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
            is_finalized = CASE WHEN ? != 'DRAFT' THEN 1 ELSE is_finalized END,
            draft_saved_at = CASE WHEN ? = 'DRAFT' THEN NOW() ELSE draft_saved_at END,
            approved_by = CASE WHEN ? IN ('APPROVED', 'SENT') THEN ? ELSE approved_by END,
-           approved_at = CASE WHEN ? IN ('APPROVED', 'SENT') THEN NOW() ELSE approved_at END
+           approved_at = CASE WHEN ? IN ('APPROVED', 'SENT') THEN NOW() ELSE approved_at END,
+           sent_at = CASE WHEN ? = 'SENT' THEN NOW() ELSE sent_at END
        WHERE id = ? AND case_id = ?`,
-      [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, req.params.responseId, req.params.id]
+      [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id]
     );
     await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_STATUS', 'mi_response_status', existing.response_status, responseStatus);
     await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
@@ -2240,23 +2765,32 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
       try {
         const nodemailer = require('nodemailer');
 
-        // 1. Fetch response text
+        // 1. Fetch composed response package
         const [[respRow]] = await pool.execute(
-          `SELECT response_text FROM case_mi_responses WHERE id = ?`,
+          `SELECT response_text, response_body_html, response_subject,
+                  recipient_email, recipient_name, selected_documents
+             FROM case_mi_responses WHERE id = ?`,
           [req.params.responseId]
         );
 
-        // 2. Fetch primary contact email for this case
-        const [[contactRow]] = await pool.execute(
-          `SELECT COALESCE(cc.email, ct.email) AS recipient_email,
-                  CONCAT(COALESCE(cc.first_name, ct.first_name, ''), ' ', COALESCE(cc.last_name, ct.last_name, '')) AS recipient_name
-           FROM case_contacts cc
-           LEFT JOIN contacts ct ON ct.id = cc.contact_id
-           WHERE cc.case_id = ? AND cc.email IS NOT NULL AND cc.email != ''
-           ORDER BY cc.is_primary DESC, cc.id ASC
-           LIMIT 1`,
-          [req.params.id]
-        );
+        // 2. Use selected recipient first, then primary contact fallback.
+        let contactRow = {
+          recipient_email: respRow?.recipient_email || '',
+          recipient_name: respRow?.recipient_name || '',
+        };
+        if (!contactRow.recipient_email) {
+          const [[fallbackContact]] = await pool.execute(
+            `SELECT COALESCE(cc.email, ct.email) AS recipient_email,
+                    CONCAT(COALESCE(cc.first_name, ct.first_name, ''), ' ', COALESCE(cc.last_name, ct.last_name, '')) AS recipient_name
+             FROM case_contacts cc
+             LEFT JOIN contacts ct ON ct.id = cc.contact_id
+             WHERE cc.case_id = ? AND cc.email IS NOT NULL AND cc.email != ''
+             ORDER BY cc.is_primary DESC, cc.id ASC
+             LIMIT 1`,
+            [req.params.id]
+          );
+          contactRow = fallbackContact || contactRow;
+        }
 
         // 3. Fetch outbound SMTP account for the case's site
         const [[siteRow]] = await pool.execute(
@@ -2285,7 +2819,7 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
           smtpAccount = fallback || null;
         }
 
-        if (smtpAccount && contactRow?.recipient_email && respRow?.response_text) {
+        if (smtpAccount && contactRow?.recipient_email && (respRow?.response_text || respRow?.response_body_html)) {
           const secure = smtpAccount.smtp_encryption === 'SSL/TLS';
           const requireTLS = smtpAccount.smtp_encryption === 'STARTTLS';
           const transporter = nodemailer.createTransport({
@@ -2300,14 +2834,42 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
 
           const fromLabel = smtpAccount.display_name || smtpAccount.account_name || 'Medical Information';
           const fromAddr  = smtpAccount.from_email || smtpAccount.smtp_username;
-          const subject   = `Medical Information Response — Case ${caseRow?.case_number || req.params.id}`;
+          const subject   = respRow.response_subject || `Medical Information Response — Case ${caseRow?.case_number || req.params.id}`;
+          const selectedDocs = parseJsonSafe(respRow.selected_documents, []);
+          const docIds = uniquePositiveInts(selectedDocs.map((doc) => doc.id));
+          let attachments = [];
+          if (docIds.length) {
+            const placeholders = docIds.map(() => '?').join(',');
+            const [docs] = await pool.execute(
+              `SELECT id, name, file_path, file_name, file_mime
+                 FROM cm_documents
+                WHERE id IN (${placeholders})
+                  AND file_path IS NOT NULL
+                  AND file_name IS NOT NULL`,
+              docIds
+            );
+            attachments = docs.map((doc) => ({
+              filename: doc.file_name || doc.name,
+              path: doc.file_path,
+              contentType: doc.file_mime || undefined,
+            }));
+          }
 
           await transporter.sendMail({
             from: `"${fromLabel}" <${fromAddr}>`,
             to:   contactRow.recipient_email,
             subject,
-            text: respRow.response_text,
+            text: respRow.response_text || stripHtml(respRow.response_body_html),
+            html: respRow.response_body_html || undefined,
+            attachments,
           });
+
+          await pool.execute(
+            `UPDATE case_mi_responses
+                SET delivery_metadata = ?
+              WHERE id = ?`,
+            [JSON.stringify({ to: contactRow.recipient_email, subject, attachment_count: attachments.length, sent_at: new Date().toISOString() }), req.params.responseId]
+          );
 
           // Log to transmission_audit_trail
           await pool.execute(
@@ -2407,11 +2969,12 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
     // Auto-calculate due_date if not provided (7-day = 7d, 15-day = 15d, standard = 30d)
     const dueDate = calculateAeDueDate(priority, due_date || null);
     const slaStatus = computeTransmissionSlaStatus(dueDate, 'Pending');
+    const productGroup = await resolveTransmissionGroupSnapshot(req.params.id);
 
     const [result] = await pool.execute(
-      `INSERT INTO case_ae_transmissions (case_id, assigned_to, assigned_name, priority, due_date, narrative, status, sla_status, created_by, created_by_name)
-       VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)`,
-      [req.params.id, assignedTo, assignee.name, priority, dueDate, narrative || null, slaStatus,
+      `INSERT INTO case_ae_transmissions (case_id, product_group_id, product_group_snapshot, assigned_to, assigned_name, priority, due_date, narrative, status, sla_status, created_by, created_by_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)`,
+      [req.params.id, productGroup.product_group_id, productGroup.product_group_snapshot, assignedTo, assignee.name, priority, dueDate, narrative || null, slaStatus,
        req.user.userId, req.user.name || req.user.email]
     );
     // Notify assigned user
@@ -2422,7 +2985,7 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
       title: `AE Case Routed to You — ${c?.case_number || req.params.id}`,
       message: `${req.user.name || 'A user'} routed AE case ${c?.case_number || req.params.id} to you for PV review. Due: ${dueDate}.`,
       linkUrl: `/cases/${req.params.id}?section=ae`,
-      metadata: { case_id: req.params.id, transmission_id: result.insertId, priority, due_date: dueDate, sla_status: slaStatus },
+      metadata: { case_id: req.params.id, transmission_id: result.insertId, priority, due_date: dueDate, sla_status: slaStatus, product_group_id: productGroup.product_group_id },
       eventKey: 'ae-transmission-created',
     }).catch(() => {});
     emitOutboundEvent(req.user.orgId, 'case.ae_transmission.created', {
@@ -2431,6 +2994,7 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
       assigned_to: assignedTo,
       due_date: dueDate,
       priority,
+      product_group_id: productGroup.product_group_id,
     }, 'ae_transmission', String(result.insertId)).catch(() => {});
     const row = await getAeTransmissionRow(req.params.id, result.insertId);
     res.status(201).json(row);
@@ -2517,11 +3081,12 @@ router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
 
     const dueDate = calculatePcDueDate(priority, due_date || null);
     const slaStatus = computeTransmissionSlaStatus(dueDate, 'Pending');
+    const productGroup = await resolveTransmissionGroupSnapshot(req.params.id);
 
     const [result] = await pool.execute(
-      `INSERT INTO case_pc_transmissions (case_id, assigned_to, assigned_name, priority, due_date, resolution_notes, status, sla_status, created_by, created_by_name)
-       VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)`,
-      [req.params.id, assignedTo, assignee.name, priority, dueDate, resolution_notes || null, slaStatus,
+      `INSERT INTO case_pc_transmissions (case_id, product_group_id, product_group_snapshot, assigned_to, assigned_name, priority, due_date, resolution_notes, status, sla_status, created_by, created_by_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)`,
+      [req.params.id, productGroup.product_group_id, productGroup.product_group_snapshot, assignedTo, assignee.name, priority, dueDate, resolution_notes || null, slaStatus,
        req.user.userId, req.user.name || req.user.email]
     );
     const [[c]] = await pool.execute('SELECT case_number FROM cases WHERE id = ?', [req.params.id]);
@@ -2531,7 +3096,7 @@ router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
       title: `PC Complaint Routed to You — ${c?.case_number || req.params.id}`,
       message: `${req.user.name || 'A user'} routed PC complaint ${c?.case_number || req.params.id} to you for quality investigation. Due: ${dueDate}.`,
       linkUrl: `/cases/${req.params.id}?section=pc`,
-      metadata: { case_id: req.params.id, transmission_id: result.insertId, priority, due_date: dueDate, sla_status: slaStatus },
+      metadata: { case_id: req.params.id, transmission_id: result.insertId, priority, due_date: dueDate, sla_status: slaStatus, product_group_id: productGroup.product_group_id },
       eventKey: 'pc-transmission-created',
     }).catch(() => {});
     emitOutboundEvent(req.user.orgId, 'case.pc_transmission.created', {
@@ -2540,6 +3105,7 @@ router.post('/cases/:id/pc-transmissions', authenticate, async (req, res) => {
       assigned_to: assignedTo,
       due_date: dueDate,
       priority,
+      product_group_id: productGroup.product_group_id,
     }, 'pc_transmission', String(result.insertId)).catch(() => {});
     const row = await getPcTransmissionRow(req.params.id, result.insertId);
     res.status(201).json(row);

@@ -112,6 +112,19 @@ router.post('/login', superadminLoginLimiter, async (req, res) => {
   }
 })
 
+router.post('/logout', authenticateSuperadmin, async (req, res) => {
+  try {
+    await pool.execute(
+      'INSERT INTO login_audit (org_id, user_id, action, ip_address, user_type) VALUES (?, ?, ?, ?, ?)',
+      [null, req.superadmin.superadminId, 'logout', req.ip, 'superadmin']
+    )
+    res.clearCookie('vault_superadmin_token', COOKIE_OPTS).json({ message: 'Logged out' })
+  } catch (err) {
+    console.error('Superadmin logout error:', err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.get('/orgs', authenticateSuperadmin, async (_req, res) => {
   try {
     const [orgs] = await pool.execute(

@@ -16,11 +16,10 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   function loadFromPrefix(prefix) {
     const savedUser = localStorage.getItem(`${prefix}_user`)
-    localStorage.removeItem(`${prefix}_token`)
     if (!savedUser) return null
     return {
       user:    JSON.parse(savedUser),
-      token:   null,
+      token:   localStorage.getItem(`${prefix}_token`) || null,
       modules: JSON.parse(localStorage.getItem(`${prefix}_modules`) || '[]'),
       orgId:   localStorage.getItem(`${prefix}_org_id`) ? Number(localStorage.getItem(`${prefix}_org_id`)) : null,
       siteId:  localStorage.getItem(`${prefix}_site_id`) ? Number(localStorage.getItem(`${prefix}_site_id`)) : null,
@@ -68,7 +67,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     setAllOrgs(all)
     setSessionTimeout(timeout)
     localStorage.setItem(`${KEY}_user`,            JSON.stringify(userData))
-    localStorage.removeItem(`${KEY}_token`)
+    localStorage.setItem(`${KEY}_token`,           authToken ?? '')
     localStorage.setItem(`${KEY}_modules`,         JSON.stringify(allowedModules))
     localStorage.setItem(`${KEY}_org_id`,          oid   ?? '')
     localStorage.setItem(`${KEY}_site_id`,         sid   ?? '')
@@ -99,7 +98,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     if (!res.ok) return
     const data = await res.json()
     setToken(data.token || null)
-    localStorage.removeItem(`${KEY}_token`)
+    localStorage.setItem(`${KEY}_token`,           data.token || '')
     localStorage.setItem(`${KEY}_org_id`,          data.orgId   ?? '')
     localStorage.setItem(`${KEY}_site_id`,         data.siteId  ?? '')
     localStorage.setItem(`${KEY}_org_name`,        data.orgName ?? '')
@@ -136,7 +135,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     if (!switchRes.ok) return
     const switched = await switchRes.json()
     setToken(switched.token || null)
-    localStorage.removeItem(`${KEY}_token`)
+    localStorage.setItem(`${KEY}_token`,           switched.token || '')
     localStorage.setItem(`${KEY}_org_id`,          switched.orgId   ?? '')
     localStorage.setItem(`${KEY}_site_id`,         switched.siteId  ?? '')
     localStorage.setItem(`${KEY}_org_name`,        switched.orgName ?? '')

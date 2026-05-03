@@ -44,6 +44,9 @@ const { startSchemaTracker, stopSchemaTracker } = require('./services/schemaTrac
 const { startScheduler, stopScheduler } = require('./services/scheduler');
 const { startDpprScheduler }           = require('./services/dpprScheduler');
 const { apiRateLimiter, authRateLimiter } = require('./middleware/rateLimiters');
+const { attachChatRealtime } = require('./services/chatRealtimeService');
+const { attachAppRealtime } = require('./services/appRealtimeService');
+const { ensureMobilePushSchema } = require('./services/mobilePushService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,6 +61,8 @@ const API_VERSION_CONTRACT_DATE = '2026-04-07';
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   'http://127.0.0.1:5173',
   'http://localhost:5173',
+  'http://127.0.0.1:8081',
+  'http://localhost:8081',
   'http://13.205.213.128',
   'https://13.205.213.128'
 ]);
@@ -171,6 +176,7 @@ app.use('/api/admin', require('./routes/admin/picklists'));
 app.use('/api/admin', require('./routes/admin/miCategories'));
 app.use('/api/admin', require('./routes/admin/fieldSetup'));
 app.use('/api/admin', require('./routes/admin/securityGroups'));
+app.use('/api/admin', require('./routes/admin/accessConfigurations'));
 app.use('/api/admin', require('./routes/admin/contacts'));
 app.use('/api/admin', require('./routes/admin/siteConfig'));
 app.use('/api/admin', require('./routes/admin/productDictionary'));
@@ -192,6 +198,7 @@ app.use('/api', require('./routes/caseAE'));         // F-17
 app.use('/api', require('./routes/casePC'));         // F-18
 app.use('/api', require('./routes/caseQA'));         // Sprint 15 — AI QA Engine
 app.use('/api', require('./routes/notifications'));  // G10 notifications feed
+app.use('/api', require('./routes/chat'));           // Sprint 20 — internal chat
 
 // ─── Content Management Routes ───────────────────────────────────────────────
 app.use('/api/cm', require('./routes/cm/picklists'));
@@ -218,6 +225,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // ─── API Routes ──────────────────────────────────────────────────────────────
 app.use('/api/auth', authRateLimiter, require('./routes/auth'));
 app.use('/api/inbox', require('./routes/inbox'));
+app.use('/api/mobile-sync', require('./routes/mobileSync'));
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() })
 });
@@ -320,6 +328,7 @@ apiV1Router.use('/admin', require('./routes/admin/picklists'));
 apiV1Router.use('/admin', require('./routes/admin/miCategories'));
 apiV1Router.use('/admin', require('./routes/admin/fieldSetup'));
 apiV1Router.use('/admin', require('./routes/admin/securityGroups'));
+apiV1Router.use('/admin', require('./routes/admin/accessConfigurations'));
 apiV1Router.use('/admin', require('./routes/admin/contacts'));
 apiV1Router.use('/admin', require('./routes/admin/siteConfig'));
 apiV1Router.use('/admin', require('./routes/admin/productDictionary'));
@@ -356,6 +365,7 @@ apiV1Router.use('/', require('./routes/caseMI'));
 apiV1Router.use('/', require('./routes/caseAE'));
 apiV1Router.use('/', require('./routes/casePC'));
 apiV1Router.use('/', require('./routes/notifications'));
+apiV1Router.use('/', require('./routes/chat'));
 apiV1Router.use('/', require('./routes/reportModule'));
 apiV1Router.use('/', require('./routes/reports'));
 
@@ -403,6 +413,7 @@ let server;
 const isTestEnv = process.env.NODE_ENV === 'test' || !!process.env.JEST_WORKER_ID;
 if (!isTestEnv) {
   initPromise.then(() => {
+    ensureMobilePushSchema().catch(() => {});
     startPoller();
     startScheduler();
     startDpprScheduler();
@@ -411,6 +422,8 @@ if (!isTestEnv) {
       logger.info({ host: HOST, port: PORT }, 'MIMS server started');
       logger.info({ static_path: path.join(__dirname, '../frontend') }, 'Frontend static path mounted');
     });
+    attachChatRealtime(server);
+    attachAppRealtime(server);
     server.on('error', (err) => {
       if (err?.code === 'EADDRINUSE') {
         logger.error({ host: HOST, port: PORT }, 'Port already in use');

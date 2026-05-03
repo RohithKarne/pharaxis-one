@@ -3,6 +3,57 @@ import AdminTabs from '../components/AdminTabs'
 import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
 
 const ROLE_OPTIONS = ['admin', 'author', 'reviewer', 'approver', 'viewer']
+const PRESET_OPTIONS = [
+  {
+    key: 'strict',
+    label: 'Strict',
+    description: 'Admin-led governance with minimal non-admin write permissions.'
+  },
+  {
+    key: 'balanced',
+    label: 'Balanced',
+    description: 'Recommended default for controlled review and approval teams.'
+  },
+  {
+    key: 'fast_review',
+    label: 'Fast Review',
+    description: 'Higher delegation flexibility for teams optimizing turnaround time.'
+  }
+]
+
+function uniqueRoles(roles) {
+  return Array.from(new Set(roles.filter(Boolean)))
+}
+
+function rolesForAction(action, preset) {
+  const normalized = String(action || '').toLowerCase()
+  const isStrict = preset === 'strict'
+  const isFast = preset === 'fast_review'
+
+  if (normalized.includes('view')) return ROLE_OPTIONS
+  if (normalized.includes('template')) return isStrict ? ['admin'] : ['admin', 'author']
+  if (normalized.includes('start')) return ['admin', 'author']
+  if (normalized.includes('approve') || normalized.includes('signature')) {
+    return isFast ? ['admin', 'approver', 'reviewer'] : ['admin', 'approver']
+  }
+  if (normalized.includes('review')) return isStrict ? ['admin', 'reviewer'] : ['admin', 'reviewer', 'approver']
+  if (normalized.includes('comment')) return isStrict ? ['admin', 'author', 'reviewer', 'approver'] : ['admin', 'author', 'reviewer', 'approver', 'viewer']
+  if (normalized.includes('delegate') || normalized.includes('reassign')) {
+    return isFast ? ['admin', 'author', 'reviewer', 'approver'] : ['admin', 'author']
+  }
+  if (normalized.includes('complete') || normalized.includes('decision')) {
+    return isFast ? ['admin', 'author', 'reviewer', 'approver'] : ['admin', 'reviewer', 'approver']
+  }
+  if (normalized.includes('admin')) return ['admin']
+  return isStrict ? ['admin'] : isFast ? ['admin', 'author'] : ['admin', 'author']
+}
+
+function buildPresetMatrix(actionKeys, preset) {
+  return actionKeys.reduce((acc, action) => {
+    acc[action] = uniqueRoles(rolesForAction(action, preset))
+    return acc
+  }, {})
+}
 
 export default function AdminSecurityPage() {
   const token = getOrgToken()
@@ -85,6 +136,16 @@ export default function AdminSecurityPage() {
         [action]: nextRoles
       }
     })
+  }
+
+  function applyPreset(preset) {
+    const actionKeys = Object.keys(rbacPolicy.action_role_matrix || {})
+    setRbacPolicy(prev => ({
+      ...prev,
+      action_role_matrix: buildPresetMatrix(actionKeys, preset)
+    }))
+    setSuccess(`Preset applied: ${PRESET_OPTIONS.find(option => option.key === preset)?.label || preset}. Review and save to publish it.`)
+    setError('')
   }
 
   async function saveRbacPolicy() {
@@ -201,6 +262,20 @@ export default function AdminSecurityPage() {
           {error ? <div className="auth-error">{error}</div> : null}
           {success ? <div className="upload-success">{success}</div> : null}
           {loading ? <p className="panel-note">Loading security policy...</p> : null}
+
+          <div className="signal-grid">
+            {PRESET_OPTIONS.map(option => (
+              <article className="config-group-card" key={option.key}>
+                <h4>{option.label}</h4>
+                <p className="panel-note">{option.description}</p>
+                <div className="detail-actions">
+                  <button className="btn-secondary" type="button" onClick={() => applyPreset(option.key)} disabled={loading}>
+                    Apply Preset
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
 
           {!loading ? (
             <div className="users-table-wrap">

@@ -15,11 +15,26 @@ export default function NotificationsPage() {
     total: 0,
     overdue: 0,
     due_soon: 0,
-    pending_tasks: 0
+    pending_tasks: 0,
+    unread: 0
   })
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [updatingId, setUpdatingId] = useState(null)
+  const [markingAll, setMarkingAll] = useState(false)
+
+  function summarize(notificationRows, payloadSummary = null) {
+    return {
+      total: Number(payloadSummary?.total ?? notificationRows.length),
+      overdue: Number(payloadSummary?.overdue ?? notificationRows.filter(row => row.notification_type === 'overdue').length),
+      due_soon: Number(payloadSummary?.due_soon ?? notificationRows.filter(row => row.notification_type === 'due_soon').length),
+      pending_tasks: Number(
+        payloadSummary?.pending_tasks ?? notificationRows.filter(row => row.task_status === 'pending').length
+      ),
+      unread: notificationRows.filter(row => !row.read_at).length
+    }
+  }
 
   async function loadNotifications() {
     if (!token) {
@@ -34,12 +49,54 @@ export default function NotificationsPage() {
       const payload = await apiJson('/api/workflows/notifications/my?limit=100', {
         headers: authHeaders(token)
       })
-      setSummary(payload.summary || { total: 0, overdue: 0, due_soon: 0, pending_tasks: 0 })
-      setRows(payload.results || [])
+      const nextRows = payload.results || []
+      setRows(nextRows)
+      setSummary(summarize(nextRows, payload.summary))
     } catch (requestError) {
       setError(requestError.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function markNotificationRead(id) {
+    setUpdatingId(id)
+    setError('')
+    try {
+      await apiJson(`/api/workflows/notifications/${id}/read`, {
+        method: 'PATCH',
+        headers: authHeaders(token)
+      })
+      const nextRows = rows.map(row => (
+        Number(row.id) === Number(id) && !row.read_at
+          ? { ...row, read_at: new Date().toISOString() }
+          : row
+      ))
+      setRows(nextRows)
+      setSummary(summarize(nextRows, summary))
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  async function markAllRead() {
+    setMarkingAll(true)
+    setError('')
+    try {
+      await apiJson('/api/workflows/notifications/read-all', {
+        method: 'PATCH',
+        headers: authHeaders(token)
+      })
+      const timestamp = new Date().toISOString()
+      const nextRows = rows.map(row => (row.read_at ? row : { ...row, read_at: timestamp }))
+      setRows(nextRows)
+      setSummary(summarize(nextRows, summary))
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setMarkingAll(false)
     }
   }
 
@@ -68,9 +125,13 @@ export default function NotificationsPage() {
             <article className="stat-card-mini"><span>Overdue</span><strong>{summary.overdue}</strong></article>
             <article className="stat-card-mini"><span>Due Soon</span><strong>{summary.due_soon}</strong></article>
             <article className="stat-card-mini"><span>Pending Tasks</span><strong>{summary.pending_tasks}</strong></article>
+            <article className="stat-card-mini"><span>Unread</span><strong>{summary.unread || 0}</strong></article>
           </div>
           <div className="detail-actions">
             <button className="btn-secondary" type="button" onClick={loadNotifications}>Refresh</button>
+            <button className="btn-secondary" type="button" onClick={markAllRead} disabled={markingAll || !rows.length}>
+              {markingAll ? 'Marking...' : 'Mark All Read'}
+            </button>
             <Link className="btn-secondary link-button" to="/vault/tasks">Open My Tasks</Link>
           </div>
         </section>
@@ -90,6 +151,7 @@ export default function NotificationsPage() {
                     <th>Document</th>
                     <th>Due At</th>
                     <th>Task Status</th>
+                    <th>Read State</th>
                     <th>Message</th>
                     <th>Action</th>
                   </tr>
@@ -106,17 +168,37 @@ export default function NotificationsPage() {
                       </td>
                       <td>{formatDateTime(item.due_at)}</td>
                       <td>{item.task_status || '-'}</td>
+                      <td>
+                        <span className={item.read_at ? 'status-chip success' : 'status-chip pending'}>
+                          {item.read_at ? 'Read' : 'Unread'}
+                        </span>
+                      </td>
                       <td>{item.message}</td>
                       <td>
-                        <Link className="btn-secondary link-button" to={`/vault/content/${item.content_id}`}>
-                          Open
-                        </Link>
+                        <div className="detail-actions">
+                          {!item.read_at ? (
+                            <button
+                              className="btn-secondary"
+                              type="button"
+                              onClick={() => markNotificationRead(item.id)}
+                              disabled={updatingId === item.id}
+                            >
+                              {updatingId === item.id ? 'Updating...' : 'Mark Read'}
+                            </button>
+                          ) : null}
+                          <Link className="btn-secondary link-button" to="/vault/tasks">
+                            Open Task Inbox
+                          </Link>
+                          <Link className="btn-secondary link-button" to={`/vault/content/${item.content_id}`}>
+                            Open Document
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
                   {!rows.length ? (
                     <tr>
-                      <td colSpan={8} className="users-empty">No notifications found.</td>
+                      <td colSpan={9} className="users-empty">No notifications found.</td>
                     </tr>
                   ) : null}
                 </tbody>

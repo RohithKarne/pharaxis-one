@@ -992,6 +992,36 @@ a {
   font-size: 14px;
 }
 
+.signal-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.inline-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #41516c;
+}
+
+.inline-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.panel-note-card {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #d8e7fb;
+  background: #f5faff;
+  display: grid;
+  gap: 8px;
+}
+
 .status-chip {
   border-radius: 999px;
   padding: 5px 9px;
@@ -1288,6 +1318,25 @@ a {
   cursor: pointer;
 }
 
+.folder-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 19, 32, 0.48);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 60;
+}
+
+.folder-dialog-card {
+  width: min(520px, 100%);
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid #d7e3f4;
+  padding: 24px;
+  box-shadow: 0 24px 60px rgba(7, 13, 24, 0.24);
+}
+
 .upload-form {
   margin-top: 12px;
 }
@@ -1326,6 +1375,38 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.timeline-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.timeline-entry {
+  border: 1px solid #dde8f7;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.timeline-entry p {
+  color: #43526d;
+  line-height: 1.5;
+}
+
+.timeline-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.timeline-meta span {
+  color: #60718d;
+  font-size: 13px;
 }
 
 .upload-version-form {

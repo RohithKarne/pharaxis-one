@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { seedNewOrg } = require('../../services/seedService');
+const { bootstrapOrg, getOrgReadiness } = require('../../services/orgBootstrapService');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { logAudit } = require('../../utils/auditLog');
 
@@ -30,9 +30,9 @@ router.post('/', authenticate, requireRole('superadmin'), async (req, res) => {
   try {
     const [result] = await pool.execute('INSERT INTO organisations (name) VALUES (?)', [name.trim()]);
     await logAudit(req.user.userId, req.user.email, 'CREATE', 'organisation', result.insertId, { name });
-    await seedNewOrg(result.insertId, req.user.userId);
+    const readiness = await bootstrapOrg(result.insertId, req.user.userId);
     const [[row]] = await pool.execute('SELECT created_at FROM organisations WHERE id = ?', [result.insertId]);
-    res.status(201).json({ id: result.insertId, name, is_active: 1, created_at: row.created_at });
+    res.status(201).json({ id: result.insertId, name, is_active: 1, created_at: row.created_at, readiness });
   } catch (e) {
     res.status(409).json({ error: 'Organisation name already exists.' });
   }
@@ -43,6 +43,13 @@ router.put('/:id', authenticate, requireRole('superadmin'), async (req, res) => 
   try {
     const { name, is_active } = req.body;
     const [[current]] = await pool.execute('SELECT name, is_active FROM organisations WHERE id = ?', [req.params.id]);
+    if (!current) return res.status(404).json({ error: 'Organisation not found.' });
+    if (!current.is_active && is_active === 1) {
+      const readiness = await getOrgReadiness(Number(req.params.id));
+      if (!readiness.ready) {
+        return res.status(409).json({ error: 'Organisation is not ready for activation.', readiness });
+      }
+    }
     await pool.execute(
       'UPDATE organisations SET name = ?, is_active = ?, updated_at = NOW() WHERE id = ?',
       [name ?? null, is_active ? 1 : 0, req.params.id]

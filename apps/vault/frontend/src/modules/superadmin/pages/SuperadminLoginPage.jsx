@@ -61,7 +61,7 @@ export default function SuperadminLoginPage() {
         return
       }
       if (!res.ok) { setError(data.error || 'Login failed'); setLoading(false); return }
-      localStorage.removeItem('vault_superadmin_token')
+      localStorage.setItem('vault_superadmin_token', data.token)
       localStorage.setItem('vault_superadmin', JSON.stringify(data.superadmin))
       navigate('/control-tower/dashboard')
     } catch {

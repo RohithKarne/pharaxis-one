@@ -15,6 +15,12 @@ const { validate, schemas } = require('../middleware/validate');
 const { accountCreationRateLimiter } = require('../middleware/rateLimiters');
 const { validateUpload } = require('../middleware/uploadValidation');
 const { emitSuperadminAlert, getSystemConfig, parseJson } = require('../services/alertService');
+const {
+  bootstrapOrg,
+  getOrgReadiness,
+  getPlatformReadinessSummary,
+  repairOrgData,
+} = require('../services/orgBootstrapService');
 
 const ALLOWED_MODULES = ['mims_core', 'admin_console', 'content_mgmt', 'data_visualization', 'reports'];
 const ASSIGNABLE_ROLES = ['admin', 'agent', 'reviewer', 'content_manager'];
@@ -126,6 +132,7 @@ async function getDashboardSummary() {
   ]);
 
   const systemConfig = await getSystemConfig();
+  const readiness = await getPlatformReadinessSummary();
   return {
     kpis: {
       organisations: orgTotals || { total: 0, active: 0, inactive: 0 },
@@ -135,6 +142,13 @@ async function getDashboardSummary() {
       unreadNotifications: unreadNotifications?.count || 0,
       alertEvents24h: alertEvents?.count || 0,
       smtpStatus: smtpStatus?.last_status || (systemConfig.smtp_host ? 'configured' : 'not configured'),
+    },
+    readiness: {
+      totalOrgs: readiness.total_orgs,
+      readyOrgs: readiness.ready_orgs,
+      attentionOrgs: readiness.attention_orgs,
+      averageScore: readiness.average_score,
+      totalBlockers: readiness.total_blockers,
     },
     recentAudit: recentAudit || [],
     recentLogins: recentLogins || [],
@@ -216,7 +230,12 @@ router.get('/orgs', authenticate, requireRole('superadmin'), async (_req, res) =
     const [orgs] = await pool.execute('SELECT * FROM organisations ORDER BY name');
     const [sites] = await pool.execute('SELECT * FROM sites ORDER BY name');
     const byOrg = sites.reduce((acc, s) => { (acc[s.org_id] = acc[s.org_id] || []).push(s); return acc; }, {});
-    res.json({ orgs: orgs.map(o => ({ ...o, sites: byOrg[o.id] || [] })) });
+    const readiness = await Promise.all(orgs.map((org) => getOrgReadiness(org.id)));
+    const readinessByOrg = readiness.reduce((acc, item) => {
+      acc[item.org_id] = item;
+      return acc;
+    }, {});
+    res.json({ orgs: orgs.map(o => ({ ...o, sites: byOrg[o.id] || [], readiness: readinessByOrg[o.id] || null })) });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
@@ -226,8 +245,9 @@ router.post('/orgs', authenticate, requireRole('superadmin'), validate(schemas.c
   if (!name) return res.status(400).json({ error: 'Organisation name is required.' });
   try {
     const [result] = await pool.execute('INSERT INTO organisations (name) VALUES (?)', [name.trim()]);
+    const readiness = await bootstrapOrg(result.insertId, req.user.userId);
     await audit(req.user.userId, req.user.email, 'CREATE', 'organisation', result.insertId, { name });
-    res.status(201).json({ id: result.insertId, name, is_active: 1 });
+    res.status(201).json({ id: result.insertId, name, is_active: 1, readiness });
   } catch { res.status(409).json({ error: 'Organisation name already exists.' }); }
 });
 
@@ -254,6 +274,15 @@ router.put('/orgs/:id', authenticate, requireRole('superadmin'), async (req, res
       const days = parseInt(two_factor_remember_days);
       if (isNaN(days) || days < 1)
         return res.status(400).json({ error: 'Remember-device duration must be at least 1 day.' });
+    }
+    if (!existing.is_active && is_active === 1) {
+      const readiness = await getOrgReadiness(Number(req.params.id));
+      if (!readiness.ready) {
+        return res.status(409).json({
+          error: 'Organisation is not ready for activation.',
+          readiness,
+        });
+      }
     }
     await pool.execute(
       `UPDATE organisations
@@ -290,6 +319,44 @@ router.put('/orgs/:id', authenticate, requireRole('superadmin'), async (req, res
     }
     res.json({ message: 'Updated.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+router.get('/orgs/:id/readiness', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const readiness = await getOrgReadiness(Number(req.params.id));
+    res.json({ readiness });
+  } catch (err) {
+    if (String(err.message || '').includes('Organisation not found')) {
+      return res.status(404).json({ error: 'Organisation not found.' });
+    }
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+router.post('/orgs/:id/bootstrap', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const readiness = await bootstrapOrg(Number(req.params.id), req.user.userId);
+    await audit(req.user.userId, req.user.email, 'BOOTSTRAP', 'organisation', Number(req.params.id), { source: 'superadmin' });
+    res.json({ message: 'Organisation bootstrap completed.', readiness });
+  } catch (err) {
+    if (String(err.message || '').includes('Organisation not found')) {
+      return res.status(404).json({ error: 'Organisation not found.' });
+    }
+    return res.status(500).json({ error: err.message || 'Server error.' });
+  }
+});
+
+router.post('/orgs/:id/repair', authenticate, requireRole('superadmin'), async (req, res) => {
+  try {
+    const readiness = await repairOrgData(Number(req.params.id));
+    await audit(req.user.userId, req.user.email, 'REPAIR', 'organisation', Number(req.params.id), { source: 'superadmin' });
+    res.json({ message: 'Organisation data repair completed.', readiness });
+  } catch (err) {
+    if (String(err.message || '').includes('Organisation not found')) {
+      return res.status(404).json({ error: 'Organisation not found.' });
+    }
+    return res.status(500).json({ error: err.message || 'Server error.' });
+  }
 });
 
 // GET /api/superadmin/config — get system config (e.g. superadmin timeout)

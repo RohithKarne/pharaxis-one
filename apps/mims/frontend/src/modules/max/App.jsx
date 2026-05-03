@@ -9,9 +9,11 @@ import SessionTimeoutModal from '../../shared/components/SessionTimeoutModal'
 import ToastContainer from '../../shared/components/ToastContainer'
 import ConfirmModal from '../../shared/components/ConfirmModal'
 import LoginPage from './pages/LoginPage'
+import SsoCompletePage from './pages/SsoCompletePage'
 import DashboardPage from './pages/DashboardPage'
 import SessionManagementPage from './pages/SessionManagementPage'
 import InboxPage from './pages/InboxPage'
+import ChatPage from './pages/ChatPage'
 import AdminConsoleRouter from '../admin/AdminConsoleRouter'
 import ContentPage from '../content/pages/ContentPage'
 import AnalyticsPage from '../dv/pages/AnalyticsPage'
@@ -71,6 +73,7 @@ function AppRoutes() {
       <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/auth/sso-complete" element={<SsoCompletePage />} />
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
@@ -87,6 +90,13 @@ function AppRoutes() {
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
                 <InboxPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/chat" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="mims_core">
+                <ChatPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />

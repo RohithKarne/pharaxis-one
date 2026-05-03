@@ -5,6 +5,13 @@ import { normalizeSelectedModules } from './ContentUtils'
 import { AssociatedDocsPanel, VersionDiffPanel, VersionAlertsPanel } from './ContentPanels'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
+function deriveContentMode(document) {
+  if (document?.response_doc_type === 'Module') return 'module'
+  if (document?.authoring_source === 'microsoft365' || document?.external_document_url || document?.external_share_url) return 'm365'
+  if (document?.authoring_source === 'internal' || document?.content_html) return 'online'
+  return 'upload'
+}
+
 export default function DocumentCreationScreen({ doc, token, onClose, onSaved }) {
   const isEdit = !!doc?.id
   const fileInputRef = useRef(null)
@@ -35,10 +42,18 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     is_product_specific: doc?.is_product_specific ? true : false,
     is_site_specific: doc?.is_site_specific ? true : false,
     usage_instructions: doc?.usage_instructions || '',
+    authoring_source: doc?.authoring_source || 'upload',
+    external_provider: doc?.external_provider || 'microsoft',
+    external_document_url: doc?.external_document_url || '',
+    external_share_url: doc?.external_share_url || '',
+    external_document_id: doc?.external_document_id || '',
+    external_drive_id: doc?.external_drive_id || '',
+    external_account_email: doc?.external_account_email || '',
+    external_api_endpoint: doc?.external_api_endpoint || '',
   })
 
   const [activeTab, setActiveTab] = useState('general')
-  const [contentMode, setContentMode] = useState('upload')
+  const [contentMode, setContentMode] = useState(() => deriveContentMode(doc))
   const [file, setFile] = useState(null)
   const [sourceAttachments, setSourceAttachments] = useState([])
   const [saving, setSaving] = useState(false)
@@ -48,6 +63,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
   const [folders, setFolders] = useState([])
   const [miCategories, setMiCategories] = useState([])
   const [docCategories, setDocCategories] = useState([])
+  const [microsoftProvider, setMicrosoftProvider] = useState(null)
 
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
@@ -64,6 +80,13 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
       .then(r => r.ok ? r.json() : { picklists: [] })
       .then(d => setDocCategories(d.picklists || []))
       .catch(() => setDocCategories([]))
+    httpFetch('/api/auth/sso/providers', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : { providers: [] })
+      .then(d => {
+        const provider = (d.providers || []).find((item) => item.key === 'microsoft') || null
+        setMicrosoftProvider(provider)
+      })
+      .catch(() => setMicrosoftProvider(null))
   }, [token])
 
   useEffect(() => {
@@ -82,6 +105,16 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
   function handleFile(e) {
     const f = e.target.files[0]
     if (f) setFile(f)
+  }
+
+  function setFileMode(nextMode) {
+    setContentMode(nextMode)
+    setForm(prev => ({
+      ...prev,
+      authoring_source: nextMode === 'm365' ? 'microsoft365' : nextMode === 'online' ? 'internal' : 'upload',
+      external_provider: nextMode === 'm365' ? 'microsoft' : prev.external_provider,
+    }))
+    if (nextMode !== 'upload') setFile(null)
   }
 
   function handleAttachments(e) {
@@ -128,6 +161,17 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
   async function handleSave(checkIn = false) {
     if (!form.folder_id) return toast.warn('Folder is required.')
     if (!form.name.trim()) return toast.warn('Document name is required.')
+    const effectiveAuthoringSource = form.response_doc_type === 'Module'
+      ? 'module'
+      : contentMode === 'm365'
+        ? 'microsoft365'
+        : contentMode === 'online'
+          ? 'internal'
+          : 'upload'
+
+    if (effectiveAuthoringSource === 'microsoft365' && !form.external_document_url.trim() && !form.external_share_url.trim()) {
+      return toast.warn('Microsoft 365 authoring requires an edit URL or a share URL.')
+    }
     setSaving(true)
     try {
       const fd = new FormData()
@@ -135,6 +179,17 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
         if (k === 'selected_modules') fd.append(k, JSON.stringify(v))
         else if (v !== null && v !== undefined) fd.append(k, v)
       })
+      fd.set('authoring_source', effectiveAuthoringSource)
+      fd.set('external_provider', effectiveAuthoringSource === 'microsoft365' ? 'microsoft' : '')
+      if (effectiveAuthoringSource !== 'internal') fd.set('content_html', '')
+      if (effectiveAuthoringSource !== 'microsoft365') {
+        fd.set('external_document_url', '')
+        fd.set('external_share_url', '')
+        fd.set('external_document_id', '')
+        fd.set('external_drive_id', '')
+        fd.set('external_account_email', '')
+        fd.set('external_api_endpoint', '')
+      }
       if (file) fd.append('file', file)
       sourceAttachments.forEach(f => fd.append('source_attachments', f))
       if (checkIn) fd.append('check_in', '1')
@@ -160,6 +215,12 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
       else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
     } catch { toast.error('Network error.') }
     setSaving(false)
+  }
+
+  function openMicrosoftLink() {
+    const targetUrl = form.external_document_url || form.external_share_url
+    if (!targetUrl) return
+    window.open(targetUrl, '_blank', 'noopener,noreferrer')
   }
 
   const TABS = [
@@ -252,7 +313,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
               {form.response_doc_type === 'File' && (
                 <div style={{ display: 'flex', gap: 6, paddingTop: 20 }}>
                   <div
-                    onClick={() => { setContentMode('upload'); fileInputRef.current?.click() }}
+                    onClick={() => { setFileMode('upload'); fileInputRef.current?.click() }}
                     title="Upload File"
                     style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -265,8 +326,8 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                     <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Upload</span>
                   </div>
                   <div
-                    onClick={() => setContentMode('online')}
-                    title="Author Online"
+                    onClick={() => setFileMode('online')}
+                    title="Author Inside MIMS"
                     style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                       width: 54, height: 50, border: `2px dashed ${contentMode === 'online' ? 'var(--primary)' : 'var(--border)'}`,
@@ -275,7 +336,20 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                     }}
                   >
                     <span style={{ fontSize: 16 }}>✏️</span>
-                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Author</span>
+                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>Internal</span>
+                  </div>
+                  <div
+                    onClick={() => setFileMode('m365')}
+                    title="Author with Microsoft 365"
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      width: 64, height: 50, border: `2px dashed ${contentMode === 'm365' ? 'var(--primary)' : 'var(--border)'}`,
+                      borderRadius: 6, cursor: 'pointer', background: contentMode === 'm365' ? 'var(--primary-light, #eef2ff)' : 'var(--bg)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>Ⓜ</span>
+                    <span style={{ fontSize: 9, marginTop: 2, color: 'var(--text-secondary)', fontWeight: 500 }}>M365</span>
                   </div>
                   <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{ display: 'none' }} onChange={handleFile} />
                 </div>
@@ -316,6 +390,107 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
             {form.response_doc_type === 'File' && contentMode === 'online' && (
               <div style={{ marginBottom: 16 }}>
                 <RichTextEditor value={form.content_html} onChange={v => setForm(p => ({ ...p, content_html: v }))} placeholder="Write document content here…" />
+              </div>
+            )}
+
+            {form.response_doc_type === 'File' && contentMode === 'm365' && (
+              <div style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 10, padding: 16, background: 'var(--bg-subtle, #f8fafc)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Microsoft 365 Linked Authoring</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 620 }}>
+                      Keep the editable source document in OneDrive or SharePoint, and store the authoring link here.
+                      MIMS will preserve workflow, approvals, metadata, and audit context around that Microsoft document.
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <a
+                      href="https://www.office.com/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="cm-btn cm-btn-secondary"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      Open Office 365
+                    </a>
+                    <button
+                      type="button"
+                      className="cm-btn cm-btn-primary"
+                      onClick={openMicrosoftLink}
+                      disabled={!form.external_document_url && !form.external_share_url}
+                    >
+                      Open Linked Document
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 12 }}>
+                  <div className="cm-form-group" style={{ margin: 0 }}>
+                    <label className="cm-form-label">Microsoft 365 Edit URL <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input
+                      className="cm-form-input"
+                      value={form.external_document_url}
+                      onChange={e => setForm(p => ({ ...p, external_document_url: e.target.value }))}
+                      placeholder="https://tenant.sharepoint.com/... or https://1drv.ms/..."
+                    />
+                  </div>
+                  <div className="cm-form-group" style={{ margin: 0 }}>
+                    <label className="cm-form-label">Share / View URL</label>
+                    <input
+                      className="cm-form-input"
+                      value={form.external_share_url}
+                      onChange={e => setForm(p => ({ ...p, external_share_url: e.target.value }))}
+                      placeholder="Optional read-only or shared view link"
+                    />
+                  </div>
+                  <div className="cm-form-group" style={{ margin: 0 }}>
+                    <label className="cm-form-label">Document ID</label>
+                    <input
+                      className="cm-form-input"
+                      value={form.external_document_id}
+                      onChange={e => setForm(p => ({ ...p, external_document_id: e.target.value }))}
+                      placeholder="Optional Microsoft document identifier"
+                    />
+                  </div>
+                  <div className="cm-form-group" style={{ margin: 0 }}>
+                    <label className="cm-form-label">Drive / Library ID</label>
+                    <input
+                      className="cm-form-input"
+                      value={form.external_drive_id}
+                      onChange={e => setForm(p => ({ ...p, external_drive_id: e.target.value }))}
+                      placeholder="Optional OneDrive or SharePoint drive id"
+                    />
+                  </div>
+                  <div className="cm-form-group" style={{ margin: 0 }}>
+                    <label className="cm-form-label">Linked Microsoft Account Email</label>
+                    <input
+                      className="cm-form-input"
+                      value={form.external_account_email}
+                      onChange={e => setForm(p => ({ ...p, external_account_email: e.target.value }))}
+                      placeholder="name@company.com"
+                    />
+                  </div>
+                  <div className="cm-form-group" style={{ margin: 0 }}>
+                    <label className="cm-form-label">Microsoft API Endpoint</label>
+                    <input
+                      className="cm-form-input"
+                      value={form.external_api_endpoint}
+                      onChange={e => setForm(p => ({ ...p, external_api_endpoint: e.target.value }))}
+                      placeholder="Optional Graph endpoint or SharePoint item API URL"
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {microsoftProvider
+                      ? 'Microsoft SSO is configured in this environment. Users should link or sign in with Microsoft before working on these documents.'
+                      : 'Microsoft SSO is not configured in this environment yet. You can still save links now and enable SSO later.'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Source: {form.external_provider || 'microsoft'}
+                  </div>
+                </div>
               </div>
             )}
 

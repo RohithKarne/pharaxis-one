@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../database/db');
 const { authenticate } = require('../middleware/auth');
+const { emitDataSync } = require('../services/appRealtimeService');
 const { markNotificationDelivered, retryFailedNotifications } = require('../services/notificationCenterService');
 
 function parseIntSafe(value, fallback) {
@@ -124,6 +125,12 @@ router.post('/notifications/:id/read', authenticate, async (req, res) => {
       [req.params.id, req.user.userId]
     );
     if (!result.affectedRows) return res.status(404).json({ error: 'Notification not found.' });
+    emitDataSync({
+      userIds: [req.user.userId],
+      domains: ['alerts', 'dashboard'],
+      reason: 'notification.read',
+      payload: { notificationId: Number(req.params.id) },
+    });
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Server error.' });
@@ -140,6 +147,12 @@ router.post('/notifications/:id/acknowledge', authenticate, async (req, res) => 
       [req.user.userId, req.params.id, req.user.userId]
     );
     if (!result.affectedRows) return res.status(404).json({ error: 'Acknowledgement target not found.' });
+    emitDataSync({
+      userIds: [req.user.userId],
+      domains: ['alerts', 'dashboard'],
+      reason: 'notification.acknowledged',
+      payload: { notificationId: Number(req.params.id) },
+    });
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Server error.' });
@@ -155,6 +168,12 @@ router.post('/notifications/read-all', authenticate, async (req, res) => {
        WHERE user_id = ? AND is_read = 0`,
       [req.user.userId]
     );
+    emitDataSync({
+      userIds: [req.user.userId],
+      domains: ['alerts', 'dashboard'],
+      reason: 'notification.read_all',
+      payload: { updated: Number(result.affectedRows || 0) },
+    });
     return res.json({ success: true, updated: result.affectedRows || 0 });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Server error.' });
@@ -175,6 +194,12 @@ router.post('/notifications/:id/retry', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Retry is allowed only for failed notifications.' });
     }
     await markNotificationDelivered(row.id);
+    emitDataSync({
+      userIds: [req.user.userId],
+      domains: ['alerts'],
+      reason: 'notification.retry',
+      payload: { notificationId: Number(row.id) },
+    });
     return res.json({ success: true, retried_id: row.id });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Server error.' });
@@ -186,6 +211,12 @@ router.post('/notifications/retry-failed', authenticate, async (req, res) => {
   try {
     const retried = await retryFailedNotifications(Number(req.body?.limit || 100), {
       userId: req.user.userId,
+    });
+    emitDataSync({
+      userIds: [req.user.userId],
+      domains: ['alerts'],
+      reason: 'notification.retry_failed',
+      payload: { retried: Number(retried || 0) },
     });
     return res.json({ success: true, retried });
   } catch (err) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -21,6 +21,7 @@ function minutesToLabel(minutes) {
 
 export default function SessionManagementPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { token, logout } = useAuth()
   const headers = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
@@ -38,6 +39,9 @@ export default function SessionManagementPage() {
   const [busySessionId, setBusySessionId] = useState(null)
   const [revokingOthers, setRevokingOthers] = useState(false)
   const [error, setError] = useState('')
+  const [providers, setProviders] = useState([])
+  const [linkedAccounts, setLinkedAccounts] = useState([])
+  const [busyProviderKey, setBusyProviderKey] = useState('')
 
   const loadSessions = useCallback(async () => {
     if (token == null) return
@@ -64,6 +68,33 @@ export default function SessionManagementPage() {
   useEffect(() => {
     loadSessions()
   }, [loadSessions])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadSsoData() {
+      try {
+        const [providersRes, linkedRes] = await Promise.all([
+          httpFetch(`${API}/auth/sso/providers`, { headers }),
+          httpFetch(`${API}/auth/sso/linked-accounts`, { headers }),
+        ])
+        const providersPayload = await providersRes.json().catch(() => ({}))
+        const linkedPayload = await linkedRes.json().catch(() => ({}))
+        if (!cancelled) {
+          setProviders(Array.isArray(providersPayload.providers) ? providersPayload.providers : [])
+          setLinkedAccounts(Array.isArray(linkedPayload.linkedAccounts) ? linkedPayload.linkedAccounts : [])
+        }
+      } catch {
+        if (!cancelled) {
+          setProviders([])
+          setLinkedAccounts([])
+        }
+      }
+    }
+
+    if (token != null) loadSsoData()
+    return () => { cancelled = true }
+  }, [headers, token])
 
   async function revokeOthers() {
     setRevokingOthers(true)
@@ -103,6 +134,33 @@ export default function SessionManagementPage() {
     }
   }
 
+  function startLink(provider) {
+    const returnTo = `${window.location.origin}/mims/session-management`
+    window.location.href = `${provider.linkPath}?return_to=${encodeURIComponent(returnTo)}`
+  }
+
+  async function unlinkProvider(providerKey) {
+    setBusyProviderKey(providerKey)
+    setError('')
+    try {
+      const res = await httpFetch(`${API}/auth/sso/linked-accounts/${providerKey}`, {
+        method: 'DELETE',
+        headers,
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload.error || 'Failed to unlink account.')
+      const linkedRes = await httpFetch(`${API}/auth/sso/linked-accounts`, { headers })
+      const linkedPayload = await linkedRes.json().catch(() => ({}))
+      setLinkedAccounts(Array.isArray(linkedPayload.linkedAccounts) ? linkedPayload.linkedAccounts : [])
+    } catch (err) {
+      setError(err.message || 'Failed to unlink external account.')
+    } finally {
+      setBusyProviderKey('')
+    }
+  }
+
+  const linkSuccess = new URLSearchParams(location.search).get('sso') === 'linked'
+
   return (
     <MIMSLayout showStatStrip={false} bodyClassName="mims-session-page-body">
       <div className="mims-session-wrap">
@@ -119,6 +177,7 @@ export default function SessionManagementPage() {
           </div>
         </div>
 
+        {linkSuccess && <div className="alert alert-success">External SSO account linked successfully.</div>}
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="mims-session-summary-grid">
@@ -135,6 +194,53 @@ export default function SessionManagementPage() {
             <strong>{formatDateTime(data.currentSession?.expires_at)}</strong>
           </article>
         </div>
+
+        <section className="card" style={{ marginTop: 14 }}>
+          <div className="card-header">
+            <h3>Linked SSO Accounts</h3>
+          </div>
+          <div className="card-body">
+            {providers.length === 0 ? (
+              <div className="mims-session-empty">No external SSO providers are configured in this environment yet.</div>
+            ) : (
+              <div className="mims-session-table-wrap">
+                <table className="mims-session-table">
+                  <thead>
+                    <tr>
+                      <th>Provider</th>
+                      <th>Linked Account</th>
+                      <th>Linked At</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {providers.map((provider) => {
+                      const linked = linkedAccounts.find((item) => item.provider_key === provider.key) || null
+                      return (
+                        <tr key={provider.key}>
+                          <td>{provider.label}</td>
+                          <td>{linked ? (linked.provider_email || linked.provider_name || 'Linked') : 'Not linked'}</td>
+                          <td>{linked ? formatDateTime(linked.created_at) : '—'}</td>
+                          <td>
+                            {linked ? (
+                              <button className="mims-session-revoke-btn" onClick={() => unlinkProvider(provider.key)} disabled={busyProviderKey === provider.key}>
+                                {busyProviderKey === provider.key ? 'Updating…' : 'Unlink'}
+                              </button>
+                            ) : (
+                              <button className="mims-session-revoke-btn" onClick={() => startLink(provider)} disabled={!!busyProviderKey}>
+                                Link Account
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
 
         <section className="card" style={{ marginTop: 14 }}>
           <div className="card-header">

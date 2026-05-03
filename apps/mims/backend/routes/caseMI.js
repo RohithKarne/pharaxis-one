@@ -9,6 +9,7 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../database/db');
 const { authenticate } = require('../middleware/auth');
+const { summarizeResolvedProductGroups } = require('../services/productGroupService');
 
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
@@ -166,11 +167,30 @@ router.get('/cases/mi/products', authenticate, async (req, res) => {
   try {
     const [rows] = await pool.execute(
       req.user.role === 'superadmin'
-        ? `SELECT id, trade_name FROM products ORDER BY trade_name`
-        : `SELECT id, trade_name FROM products WHERE org_id = ? ORDER BY trade_name`,
+        ? `SELECT p.id, p.trade_name, p.mah, p.org_id, p.family_id, p.dosage, p.atc_code, p.authorization_country, pf.name AS family_name
+             FROM products p
+             LEFT JOIN product_families pf ON pf.id = p.family_id
+            WHERE p.is_active = 1
+            ORDER BY p.trade_name`
+        : `SELECT p.id, p.trade_name, p.mah, p.org_id, p.family_id, p.dosage, p.atc_code, p.authorization_country, pf.name AS family_name
+             FROM products p
+             LEFT JOIN product_families pf ON pf.id = p.family_id
+            WHERE p.org_id = ? AND p.is_active = 1
+            ORDER BY p.trade_name`,
       req.user.role === 'superadmin' ? [] : [req.user.orgId]
     );
-    res.json(rows);
+    const enriched = [];
+    for (const row of rows) {
+      enriched.push({
+        ...row,
+        product_groups: await summarizeResolvedProductGroups({
+          orgId: req.user.orgId || row.org_id || null,
+          productId: row.id,
+          country: row.authorization_country || null,
+        }),
+      });
+    }
+    res.json(enriched);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

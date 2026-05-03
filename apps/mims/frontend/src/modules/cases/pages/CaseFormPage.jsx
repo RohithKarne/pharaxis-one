@@ -19,7 +19,7 @@ export default function CaseFormPage() {
   const { id }    = useParams()
   const navigate  = useNavigate()
   const location  = useLocation()
-  const { token } = useAuth()
+  const { token, user } = useAuth()
 
   const {
     caseData, loading, saving, savedMsg, setSavedMsg,
@@ -55,7 +55,7 @@ export default function CaseFormPage() {
 
   const TABS = [
     { key: 'info',           label: 'Case Information' },
-    { key: 'comments',       label: 'Comments / Notes',  badge: countFor('comments') },
+    { key: 'comments',       label: 'Chat / Notes',      badge: countFor('comments') },
     { key: 'contacts',       label: 'Contacts',          badge: countFor('contacts') },
     { key: 'correspondence', label: 'Correspondence',    badge: countFor('correspondence') },
     { key: 'mi',             label: 'MI Component',      badge: countFor('mi') },
@@ -113,7 +113,7 @@ export default function CaseFormPage() {
         )}
         {activeTab === 'comments' && (
           <CaseCommentsTab
-            id={id} headers={headers} setSavedMsg={setSavedMsg}
+            id={id} headers={headers} token={token} currentUserId={user?.id || user?.userId || null}
             onCountChange={n => setTabCounts(p => ({ ...p, comments: n }))}
           />
         )}

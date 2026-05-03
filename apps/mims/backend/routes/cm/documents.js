@@ -112,6 +112,35 @@ function parseSelectedModules(value) {
   return [...new Set(normalized)];
 }
 
+function normalizeAuthoringSource(value, responseDocType = 'File') {
+  const normalizedResponseType = String(responseDocType || 'File').trim();
+  if (normalizedResponseType === 'Module') return 'module';
+
+  const key = String(value || '').trim().toLowerCase();
+  if (['m365', 'microsoft', 'microsoft365', 'office365'].includes(key)) return 'microsoft365';
+  if (['internal', 'online', 'richtext', 'editor'].includes(key)) return 'internal';
+  return 'upload';
+}
+
+function normalizeOptionalString(value, maxLength = null) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  return maxLength ? trimmed.slice(0, maxLength) : trimmed;
+}
+
+function normalizeOptionalUrl(value) {
+  const trimmed = normalizeOptionalString(value);
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    return parsed.toString();
+  } catch (_) {
+    return null;
+  }
+}
+
 async function getScopedFolder(req, folderId) {
   const [rows] = await pool.execute(
     isSuperadmin(req)
@@ -265,6 +294,8 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
       language, is_product_specific, is_site_specific, search_tags, usage_instructions, attributes,
       response_doc_type, publish_as_pdf, send_as_pdf, selected_modules,
       mi_category_id, document_category, standard_response_text,
+      authoring_source, external_provider, external_document_url, external_share_url,
+      external_document_id, external_drive_id, external_account_email, external_api_endpoint,
     } = req.body;
     const parsedSelectedModules = parseSelectedModules(selected_modules);
 
@@ -280,10 +311,36 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
     }
 
     const primaryFile = req.files && req.files['file'] ? req.files['file'][0] : null;
-    const filePath = primaryFile ? primaryFile.path : null;
-    const fileName = primaryFile ? primaryFile.originalname : null;
-    const fileSize = primaryFile ? primaryFile.size : null;
-    const fileMime = primaryFile ? primaryFile.mimetype : null;
+    const normalizedResponseDocType = response_doc_type || 'File';
+    const normalizedAuthoringSource = normalizeAuthoringSource(authoring_source, normalizedResponseDocType);
+    const normalizedExternalDocumentUrl = normalizeOptionalUrl(external_document_url);
+    const normalizedExternalShareUrl = normalizeOptionalUrl(external_share_url);
+
+    if (normalizedAuthoringSource === 'microsoft365' && !normalizedExternalDocumentUrl && !normalizedExternalShareUrl) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Microsoft 365 authoring requires an edit URL or share URL.' });
+    }
+
+    const filePath = normalizedAuthoringSource === 'upload' && primaryFile ? primaryFile.path : null;
+    const fileName = normalizedAuthoringSource === 'upload' && primaryFile ? primaryFile.originalname : null;
+    const fileSize = normalizedAuthoringSource === 'upload' && primaryFile ? primaryFile.size : null;
+    const fileMime = normalizedAuthoringSource === 'upload' && primaryFile ? primaryFile.mimetype : null;
+    const effectiveContentHtml = normalizedAuthoringSource === 'internal' ? (content_html || null) : null;
+    const normalizedExternalProvider = normalizedAuthoringSource === 'microsoft365'
+      ? normalizeOptionalString(external_provider, 30) || 'microsoft'
+      : null;
+    const normalizedExternalDocumentId = normalizedAuthoringSource === 'microsoft365'
+      ? normalizeOptionalString(external_document_id, 255)
+      : null;
+    const normalizedExternalDriveId = normalizedAuthoringSource === 'microsoft365'
+      ? normalizeOptionalString(external_drive_id, 255)
+      : null;
+    const normalizedExternalAccountEmail = normalizedAuthoringSource === 'microsoft365'
+      ? normalizeOptionalString(external_account_email, 255)
+      : null;
+    const normalizedExternalApiEndpoint = normalizedAuthoringSource === 'microsoft365'
+      ? normalizeOptionalString(external_api_endpoint, 500)
+      : null;
 
     const [result] = await conn.execute(
       `INSERT INTO cm_documents
@@ -291,10 +348,12 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
           status, version_major, version_minor, expiry_date, activation_date, language,
           is_product_specific, is_site_specific, search_tags, usage_instructions,
           publish_as_pdf, send_as_pdf, selected_modules, attributes,
-          mi_category_id, document_category, standard_response_text, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          mi_category_id, document_category, standard_response_text, authoring_source,
+          external_provider, external_document_url, external_share_url, external_document_id,
+          external_drive_id, external_account_email, external_api_endpoint, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        docId, folder_id, doc_type || 'SRD', response_doc_type || 'File', name.trim(), content_html || null,
+        docId, folder_id, doc_type || 'SRD', normalizedResponseDocType, name.trim(), effectiveContentHtml,
         filePath, fileName, fileSize, fileMime,
         expiry_date || null, activation_date || null, language || 'en',
         is_product_specific ? 1 : 0, is_site_specific ? 1 : 0,
@@ -303,6 +362,9 @@ router.post('/documents', authenticate, uploadFields, validateUpload(['doc']), a
         parsedSelectedModules.length ? JSON.stringify(parsedSelectedModules) : null,
         attributes ? JSON.stringify(attributes) : null,
         mi_category_id || null, document_category || null, standard_response_text || null,
+        normalizedAuthoringSource,
+        normalizedExternalProvider, normalizedExternalDocumentUrl, normalizedExternalShareUrl,
+        normalizedExternalDocumentId, normalizedExternalDriveId, normalizedExternalAccountEmail, normalizedExternalApiEndpoint,
         req.user.userId,
       ]
     );
@@ -436,16 +498,61 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
       language, is_product_specific, is_site_specific, search_tags, usage_instructions, attributes,
       response_doc_type, publish_as_pdf, send_as_pdf, selected_modules,
       mi_category_id, document_category, standard_response_text,
+      authoring_source, external_provider, external_document_url, external_share_url,
+      external_document_id, external_drive_id, external_account_email, external_api_endpoint,
     } = req.body;
     const parsedSelectedModules = selected_modules !== undefined
       ? parseSelectedModules(selected_modules)
       : null;
 
     const primaryFile = req.files && req.files['file'] ? req.files['file'][0] : null;
-    const filePath = primaryFile ? primaryFile.path : doc.file_path;
-    const fileName = primaryFile ? primaryFile.originalname : doc.file_name;
-    const fileSize = primaryFile ? primaryFile.size : doc.file_size;
-    const fileMime = primaryFile ? primaryFile.mimetype : doc.file_mime;
+    const normalizedResponseDocType = response_doc_type || doc.response_doc_type || 'File';
+    const normalizedAuthoringSource = normalizeAuthoringSource(
+      authoring_source !== undefined ? authoring_source : doc.authoring_source,
+      normalizedResponseDocType
+    );
+    const normalizedExternalDocumentUrl = normalizeOptionalUrl(
+      external_document_url !== undefined ? external_document_url : doc.external_document_url
+    );
+    const normalizedExternalShareUrl = normalizeOptionalUrl(
+      external_share_url !== undefined ? external_share_url : doc.external_share_url
+    );
+
+    if (normalizedAuthoringSource === 'microsoft365' && !normalizedExternalDocumentUrl && !normalizedExternalShareUrl) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Microsoft 365 authoring requires an edit URL or share URL.' });
+    }
+
+    const filePath = normalizedAuthoringSource === 'upload'
+      ? (primaryFile ? primaryFile.path : doc.file_path)
+      : null;
+    const fileName = normalizedAuthoringSource === 'upload'
+      ? (primaryFile ? primaryFile.originalname : doc.file_name)
+      : null;
+    const fileSize = normalizedAuthoringSource === 'upload'
+      ? (primaryFile ? primaryFile.size : doc.file_size)
+      : null;
+    const fileMime = normalizedAuthoringSource === 'upload'
+      ? (primaryFile ? primaryFile.mimetype : doc.file_mime)
+      : null;
+    const effectiveContentHtml = normalizedAuthoringSource === 'internal'
+      ? (content_html !== undefined ? content_html : doc.content_html)
+      : null;
+    const normalizedExternalProvider = normalizedAuthoringSource === 'microsoft365'
+      ? normalizeOptionalString(external_provider !== undefined ? external_provider : doc.external_provider, 30) || 'microsoft'
+      : null;
+    const normalizedExternalDocumentId = normalizedAuthoringSource === 'microsoft365'
+      ? normalizeOptionalString(external_document_id !== undefined ? external_document_id : doc.external_document_id, 255)
+      : null;
+    const normalizedExternalDriveId = normalizedAuthoringSource === 'microsoft365'
+      ? normalizeOptionalString(external_drive_id !== undefined ? external_drive_id : doc.external_drive_id, 255)
+      : null;
+    const normalizedExternalAccountEmail = normalizedAuthoringSource === 'microsoft365'
+      ? normalizeOptionalString(external_account_email !== undefined ? external_account_email : doc.external_account_email, 255)
+      : null;
+    const normalizedExternalApiEndpoint = normalizedAuthoringSource === 'microsoft365'
+      ? normalizeOptionalString(external_api_endpoint !== undefined ? external_api_endpoint : doc.external_api_endpoint, 500)
+      : null;
 
     await conn.execute(
       `UPDATE cm_documents SET
@@ -456,11 +563,14 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
          search_tags = ?, usage_instructions = ?, attributes = ?,
          response_doc_type = ?, publish_as_pdf = ?, send_as_pdf = ?,
          selected_modules = ?, mi_category_id = ?, document_category = ?,
-         standard_response_text = ?, updated_by = ?, updated_at = NOW()
+         standard_response_text = ?, authoring_source = ?, external_provider = ?,
+         external_document_url = ?, external_share_url = ?, external_document_id = ?,
+         external_drive_id = ?, external_account_email = ?, external_api_endpoint = ?,
+         updated_by = ?, updated_at = NOW()
        WHERE id = ?`,
       [
         folder_id || doc.folder_id, doc_type || doc.doc_type, name || doc.name,
-        content_html !== undefined ? content_html : doc.content_html,
+        effectiveContentHtml,
         filePath, fileName, fileSize, fileMime,
         expiry_date || doc.expiry_date || null, activation_date || doc.activation_date || null,
         language || doc.language,
@@ -478,6 +588,9 @@ router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc'])
         mi_category_id !== undefined ? (mi_category_id || null) : doc.mi_category_id,
         document_category !== undefined ? (document_category || null) : doc.document_category,
         standard_response_text !== undefined ? (standard_response_text || null) : doc.standard_response_text,
+        normalizedAuthoringSource, normalizedExternalProvider,
+        normalizedExternalDocumentUrl, normalizedExternalShareUrl, normalizedExternalDocumentId,
+        normalizedExternalDriveId, normalizedExternalAccountEmail, normalizedExternalApiEndpoint,
         req.user.userId, id,
       ]
     );

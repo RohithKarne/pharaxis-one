@@ -22,6 +22,17 @@ const {
   sendEmailOtp,
 } = require('../services/twoFactorService');
 const { emitSuperadminAlert } = require('../services/alertService');
+const {
+  buildAuthorizationUrl,
+  exchangeCodeForTokens,
+  getPublicLoginOptions,
+  getPublicLoginOrgs,
+  issueSsoState,
+  listEnabledProviders,
+  parseSsoState,
+  sanitizeReturnTo,
+  verifyIdToken,
+} = require('../services/ssoService');
 const geoip = require('geoip-lite');
 
 const SALT_ROUNDS = Math.max(10, parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10) || 12);
@@ -86,6 +97,7 @@ function issueToken(payload, expiresIn = '8h') {
 function attachAuthCookie(res, token, maxAgeMs = 8 * 60 * 60 * 1000) {
   res.cookie('mims_token', token, {
     httpOnly: true,
+    path: '/',
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     maxAge: maxAgeMs,
@@ -267,12 +279,44 @@ async function getActiveOrgRowsForUser(userId) {
   return orgRows;
 }
 
-async function resolveRegularLoginContext(user) {
+function parsePositiveInt(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function extractOptionalAuthToken(req) {
+  const authHeader = req?.headers?.authorization || '';
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token && token !== 'null' && token !== 'undefined') return token;
+  }
+  const cookieHeader = req?.headers?.cookie || '';
+  const cookie = cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('mims_token='));
+  return cookie ? decodeURIComponent(cookie.slice('mims_token='.length)) : null;
+}
+
+function decodeOptionalAuthToken(req) {
+  const token = extractOptionalAuthToken(req);
+  if (!token) return null;
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function resolveRegularLoginContext(user, requestedOrgId = null) {
   const orgRows = await getActiveOrgRowsForUser(user.id);
 
   if (orgRows.length === 0) return { noOrgAccess: true };
 
-  const selected = orgRows[0];
+  const selected = requestedOrgId
+    ? orgRows.find((row) => Number(row.org_id) === Number(requestedOrgId)) || null
+    : orgRows[0];
+  if (!selected) return { noOrgAccess: true };
   await pool.execute(
     'UPDATE user_org_access SET last_accessed_at = NOW() WHERE user_id = ? AND org_id = ?',
     [user.id, selected.org_id]
@@ -333,7 +377,166 @@ function makeTwoFactorPayload(user, context, mode) {
   };
 }
 
-async function finalizeRegularLogin({ res, req, user, context, trustedDeviceToken = null, authEvent = 'login_success' }) {
+async function findExternalIdentity(providerKey, providerSubject) {
+  const [[row]] = await pool.execute(
+    `SELECT * FROM user_external_identities
+     WHERE provider_key = ? AND provider_subject = ?
+     LIMIT 1`,
+    [providerKey, providerSubject]
+  );
+  return row || null;
+}
+
+async function listExternalIdentitiesForUser(userId) {
+  const [rows] = await pool.execute(
+    `SELECT id, provider_key, provider_email, provider_name, provider_tenant_id, created_at, updated_at
+     FROM user_external_identities
+     WHERE user_id = ?
+     ORDER BY provider_key ASC`,
+    [userId]
+  );
+  return rows;
+}
+
+async function upsertExternalIdentity({ userId, claims, linkedBy = null }) {
+  const existing = await findExternalIdentity(claims.providerKey, claims.subject);
+  if (existing && Number(existing.user_id) !== Number(userId)) {
+    throw new Error(`This ${claims.providerLabel} account is already linked to another user.`);
+  }
+
+  const [[existingForUserProvider]] = await pool.execute(
+    `SELECT id
+       FROM user_external_identities
+      WHERE user_id = ? AND provider_key = ?
+      LIMIT 1`,
+    [userId, claims.providerKey]
+  );
+
+  if (existingForUserProvider) {
+    await pool.execute(
+      `UPDATE user_external_identities
+          SET provider_subject = ?,
+              provider_tenant_id = ?,
+              provider_email = ?,
+              provider_name = ?,
+              profile_json = ?,
+              linked_by = ?,
+              updated_at = NOW()
+        WHERE id = ?`,
+      [
+        claims.subject,
+        claims.tenantId || null,
+        claims.email || null,
+        claims.name || null,
+        JSON.stringify(claims.profile || {}),
+        linkedBy || userId || null,
+        existingForUserProvider.id,
+      ]
+    );
+    return;
+  }
+
+  await pool.execute(
+    `INSERT INTO user_external_identities
+       (user_id, provider_key, provider_subject, provider_tenant_id, provider_email, provider_name, profile_json, linked_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       user_id = VALUES(user_id),
+       provider_tenant_id = VALUES(provider_tenant_id),
+       provider_email = VALUES(provider_email),
+       provider_name = VALUES(provider_name),
+       profile_json = VALUES(profile_json),
+       linked_by = VALUES(linked_by),
+       updated_at = NOW()`,
+    [
+      userId,
+      claims.providerKey,
+      claims.subject,
+      claims.tenantId || null,
+      claims.email || null,
+      claims.name || null,
+      JSON.stringify(claims.profile || {}),
+      linkedBy || userId || null,
+    ]
+  );
+}
+
+function buildSsoErrorRedirect(returnTo, providerKey, reason) {
+  const target = new URL(sanitizeReturnTo(returnTo));
+  target.searchParams.set('sso_error', reason);
+  target.searchParams.set('provider', providerKey);
+  return target.toString();
+}
+
+function hashLoginIdentifier(value) {
+  return crypto
+    .createHash('sha256')
+    .update(String(value || '').trim().toLowerCase())
+    .digest('hex');
+}
+
+function extractEmailDomain(value) {
+  const email = String(value || '').trim().toLowerCase();
+  if (!email.includes('@')) return '';
+  return email.split('@').pop() || '';
+}
+
+function providerAllowsEmail(provider, email) {
+  const allowedDomains = Array.isArray(provider?.allowed_domains) ? provider.allowed_domains : [];
+  if (allowedDomains.length === 0) return true;
+  const domain = extractEmailDomain(email);
+  if (!domain) return false;
+  return allowedDomains.map((item) => String(item || '').toLowerCase()).includes(domain);
+}
+
+function selectProviderForEmail(providers, email) {
+  const list = Array.isArray(providers)
+    ? providers.filter((provider) => providerAllowsEmail(provider, email))
+    : [];
+  if (list.length === 0) return null;
+
+  const domain = extractEmailDomain(email);
+  if (domain) {
+    const domainMatch = list.find((provider) => {
+      const allowedDomains = Array.isArray(provider.allowed_domains) ? provider.allowed_domains : [];
+      return allowedDomains.map((item) => String(item || '').toLowerCase()).includes(domain);
+    });
+    if (domainMatch) return domainMatch;
+  }
+
+  return list[0];
+}
+
+async function getLoginProfilesForUser(user) {
+  const orgRows = await getActiveOrgRowsForUser(user.id);
+  const profiles = [];
+  for (const row of orgRows) {
+    const options = await getPublicLoginOptions(row.org_id).catch(() => null);
+    if (options) profiles.push({ row, options });
+  }
+  return profiles;
+}
+
+async function resolvePasswordOrgIdForUser(user, requestedOrgId = null) {
+  if (requestedOrgId) return requestedOrgId;
+  const profiles = await getLoginProfilesForUser(user);
+  const localProfile = profiles.find((profile) => profile.options?.local_login_allowed);
+  return localProfile?.row?.org_id || profiles[0]?.row?.org_id || null;
+}
+
+async function buildLoginStartSsoRedirect({ orgId, providerKey, returnTo }) {
+  const state = issueSsoState({
+    orgId,
+    provider: providerKey,
+    intent: 'login',
+    returnTo,
+    nonce: crypto.randomBytes(16).toString('hex'),
+  });
+  const { url } = await buildAuthorizationUrl(orgId, providerKey, state, returnTo);
+  return url;
+}
+
+async function establishRegularSession({ res, req, user, context, trustedDeviceToken = null, authEvent = 'login_success' }) {
   const roleForOrg = context.selected?.role_at_org || user.role;
   const token = issueToken({
     userId: user.id,
@@ -363,7 +566,7 @@ async function finalizeRegularLogin({ res, req, user, context, trustedDeviceToke
     roleAtOrg: o.role_at_org || user.role,
   }));
 
-  return res.status(200).json(buildLoginResponse({
+  return buildLoginResponse({
     user,
     token,
     modules: context.modules,
@@ -375,7 +578,12 @@ async function finalizeRegularLogin({ res, req, user, context, trustedDeviceToke
     sessionTimeout: context.sessionTimeout,
     roleForOrg,
     extra: trustedDeviceToken ? { rememberedDeviceToken: trustedDeviceToken } : {},
-  }));
+  });
+}
+
+async function finalizeRegularLogin({ res, req, user, context, trustedDeviceToken = null, authEvent = 'login_success' }) {
+  const payload = await establishRegularSession({ res, req, user, context, trustedDeviceToken, authEvent });
+  return res.status(200).json(payload);
 }
 
 async function getUser2faSettings(userId, orgId) {
@@ -585,41 +793,350 @@ async function ensureUser2faRow(userId, orgId, preferredMethod, totpSecret = nul
 }
 
 const authController = {
+  async listSsoProviders(_req, res) {
+    try {
+      const authUser = decodeOptionalAuthToken(_req);
+      const requestedOrgId = parsePositiveInt(_req.query.org_id) || parsePositiveInt(authUser?.orgId);
+      if (!requestedOrgId) return res.status(200).json({ providers: [] });
+      const providers = await listEnabledProviders(requestedOrgId);
+      return res.status(200).json({ providers });
+    } catch (err) {
+      return res.status(500).json({ error: err.message || 'Failed to load SSO providers.' });
+    }
+  },
+
+  async listLoginOrgs(_req, res) {
+    try {
+      const orgs = await getPublicLoginOrgs();
+      return res.status(200).json({ orgs });
+    } catch (err) {
+      return res.status(500).json({ error: err.message || 'Failed to load organisations.' });
+    }
+  },
+
+  async getLoginOptions(req, res) {
+    try {
+      const orgId = parsePositiveInt(req.query.org_id);
+      if (!orgId) return res.status(400).json({ error: 'org_id is required.' });
+      const options = await getPublicLoginOptions(orgId);
+      if (!options) return res.status(404).json({ error: 'Organisation not found or inactive.' });
+      return res.status(200).json(options);
+    } catch (err) {
+      return res.status(500).json({ error: err.message || 'Failed to load login options.' });
+    }
+  },
+
+  async startLogin(req, res) {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const returnTo = sanitizeReturnTo(req.body?.return_to, '/auth/sso-complete');
+    const genericError = 'Unable to start sign in. Contact your administrator.';
+    const auditMeta = { emailHash: hashLoginIdentifier(email) };
+
+    try {
+      if (!email) {
+        return res.status(400).json({ outcome: 'denied', error: 'Email is required.' });
+      }
+
+      const user = await findUserByLoginIdentifier(email);
+      if (!user || !user.is_active) {
+        await logLoginAudit({
+          status: 'failed',
+          failReason: 'Email-first login denied.',
+          authEvent: 'login_start_denied',
+          metadata: { ...auditMeta, reason: 'not_found_or_inactive' },
+          req,
+        });
+        return res.status(200).json({ outcome: 'denied', error: genericError });
+      }
+
+      if (user.role === 'superadmin') {
+        await logLoginAudit({
+          userId: user.id,
+          role: user.role,
+          status: 'failed',
+          failReason: 'Superadmin attempted app login start.',
+          authEvent: 'login_start_denied',
+          metadata: { ...auditMeta, reason: 'superadmin_uses_dedicated_login' },
+          req,
+        });
+        return res.status(200).json({ outcome: 'denied', error: genericError });
+      }
+
+      const profiles = await getLoginProfilesForUser(user);
+      if (profiles.length === 0) {
+        await logLoginAudit({
+          userId: user.id,
+          role: user.role,
+          status: 'failed',
+          failReason: 'No active organisation access.',
+          authEvent: 'login_start_denied',
+          metadata: { ...auditMeta, reason: 'no_org_access' },
+          req,
+        });
+        return res.status(200).json({ outcome: 'denied', error: genericError });
+      }
+
+      const ssoProfiles = profiles
+        .map((profile) => ({
+          ...profile,
+          eligibleProviders: Array.isArray(profile.options?.providers)
+            ? profile.options.providers.filter((provider) => providerAllowsEmail(provider, email))
+            : [],
+        }))
+        .filter((profile) => profile.options?.sso_login_allowed && profile.eligibleProviders.length > 0);
+
+      if (ssoProfiles.length > 0) {
+        const selected = ssoProfiles[0];
+        const provider = selectProviderForEmail(selected.eligibleProviders, email);
+        if (!provider?.key) {
+          return res.status(200).json({ outcome: 'choice_required', options: [] });
+        }
+
+        const redirectUrl = await buildLoginStartSsoRedirect({
+          orgId: selected.row.org_id,
+          providerKey: provider.key,
+          returnTo,
+        });
+        await logLoginAudit({
+          userId: user.id,
+          role: user.role,
+          status: 'pending',
+          authEvent: 'login_start_sso_redirect',
+          metadata: {
+            ...auditMeta,
+            orgId: selected.row.org_id,
+            provider: provider.key,
+          },
+          req,
+        });
+        return res.status(200).json({
+          outcome: 'sso_redirect',
+          redirect_url: redirectUrl,
+          org: {
+            id: selected.row.org_id,
+            name: selected.row.org_name,
+          },
+          provider: {
+            key: provider.key,
+            label: provider.label,
+          },
+        });
+      }
+
+      const localProfile = profiles.find((profile) => profile.options?.local_login_allowed);
+      if (localProfile) {
+        await logLoginAudit({
+          userId: user.id,
+          role: user.role,
+          status: 'pending',
+          authEvent: 'login_start_local_password',
+          metadata: { ...auditMeta, orgId: localProfile.row.org_id },
+          req,
+        });
+        return res.status(200).json({ outcome: 'local_password' });
+      }
+
+      await logLoginAudit({
+        userId: user.id,
+        role: user.role,
+        status: 'failed',
+        failReason: 'No login method configured.',
+        authEvent: 'login_start_denied',
+        metadata: { ...auditMeta, reason: 'no_login_method' },
+        req,
+      });
+      return res.status(200).json({ outcome: 'denied', error: genericError });
+    } catch (err) {
+      console.error('Login start error:', err);
+      await logLoginAudit({
+        status: 'failed',
+        failReason: 'Login start failed.',
+        authEvent: 'login_start_failed',
+        metadata: auditMeta,
+        req,
+      }).catch(() => {});
+      return res.status(500).json({ outcome: 'denied', error: 'Server error. Please try again.' });
+    }
+  },
+
+  async startSso(req, res) {
+    const providerKey = String(req.params.provider || '').trim().toLowerCase();
+    const returnTo = sanitizeReturnTo(req.query.return_to, '/auth/sso-complete');
+    try {
+      const orgId = parsePositiveInt(req.query.org_id);
+      if (!orgId) {
+        return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'org_required'));
+      }
+      const options = await getPublicLoginOptions(orgId);
+      if (!options?.sso_login_allowed) {
+        return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'sso_not_allowed'));
+      }
+      const state = issueSsoState({
+        orgId,
+        provider: providerKey,
+        intent: 'login',
+        returnTo,
+        nonce: crypto.randomBytes(16).toString('hex'),
+      });
+      const { url } = await buildAuthorizationUrl(orgId, providerKey, state, returnTo);
+      return res.redirect(url);
+    } catch (err) {
+      return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'provider_not_configured'));
+    }
+  },
+
+  async startSsoLink(req, res) {
+    const providerKey = String(req.params.provider || '').trim().toLowerCase();
+    const returnTo = sanitizeReturnTo(req.query.return_to, '/session-management');
+    try {
+      const orgId = parsePositiveInt(req.user?.orgId);
+      if (!orgId) {
+        return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'org_required'));
+      }
+      const state = issueSsoState({
+        orgId,
+        provider: providerKey,
+        intent: 'link',
+        userId: req.user.userId,
+        returnTo,
+        nonce: crypto.randomBytes(16).toString('hex'),
+      });
+      const { url } = await buildAuthorizationUrl(orgId, providerKey, state, returnTo);
+      return res.redirect(url);
+    } catch (_) {
+      return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'provider_not_configured'));
+    }
+  },
+
+  async ssoCallback(req, res) {
+    const providerKey = String(req.params.provider || '').trim().toLowerCase();
+    let state = null;
+    let returnTo = sanitizeReturnTo(null, '/auth/sso-complete');
+
+    try {
+      state = parseSsoState(req.query.state);
+      returnTo = sanitizeReturnTo(state.returnTo, state.intent === 'link' ? '/session-management' : '/auth/sso-complete');
+    } catch (_) {
+      return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'invalid_state'));
+    }
+
+    if (state.provider !== providerKey) {
+      return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'invalid_state'));
+    }
+
+    if (req.query.error) {
+      return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'provider_declined'));
+    }
+
+    try {
+      const orgId = parsePositiveInt(state.orgId);
+      if (!orgId) {
+        return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'org_required'));
+      }
+      const tokens = await exchangeCodeForTokens(orgId, providerKey, req.query.code);
+      const claims = await verifyIdToken(orgId, providerKey, tokens.id_token, state.nonce);
+
+      if (state.intent === 'link') {
+        const currentUser = await userModel.findById(state.userId);
+        if (!currentUser) {
+          return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'user_not_found'));
+        }
+        await upsertExternalIdentity({ userId: currentUser.id, claims, linkedBy: currentUser.id });
+        const target = new URL(returnTo);
+        target.searchParams.set('sso', 'linked');
+        target.searchParams.set('provider', providerKey);
+        return res.redirect(target.toString());
+      }
+
+      const existingIdentity = await findExternalIdentity(providerKey, claims.subject);
+      const user = existingIdentity
+        ? await userModel.findById(existingIdentity.user_id)
+        : await findUserByLoginIdentifier(claims.email);
+
+      if (!user) {
+        return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'no_account'));
+      }
+      if (!user.is_active) {
+        return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'inactive_account'));
+      }
+
+      await upsertExternalIdentity({ userId: user.id, claims, linkedBy: user.id });
+      if (claims.emailVerified) {
+        await pool.execute(
+          'UPDATE users SET email_verified = 1, email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW() WHERE id = ?',
+          [user.id]
+        ).catch(() => {});
+      }
+
+      if (user.role === 'superadmin') {
+        const token = issueToken({ userId: user.id, email: user.email, role: user.role, orgId: null, siteId: null });
+        await trackSessionToken(user.id, token);
+        const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
+        const config = await getSystemConfig();
+        const sessionTimeout = parseInt(config.superadmin_session_timeout_minutes || '60', 10);
+        attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
+        await logLoginAudit({
+          userId: user.id,
+          userName: user.email,
+          role: user.role,
+          status: 'success',
+          authEvent: `sso_${providerKey}_login_success`,
+          req,
+        });
+        return res.redirect(returnTo);
+      }
+
+      const context = await resolveRegularLoginContext(user, orgId);
+      if (context.noOrgAccess) {
+        return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'no_org_access'));
+      }
+
+      await establishRegularSession({
+        res,
+        req,
+        user,
+        context,
+        authEvent: `sso_${providerKey}_login_success`,
+      });
+      return res.redirect(returnTo);
+    } catch (err) {
+      console.error('SSO callback error:', {
+        provider: providerKey,
+        intent: state.intent,
+        orgId: state.orgId,
+        message: err.message,
+        code: err.code || null,
+      });
+      return res.redirect(buildSsoErrorRedirect(returnTo, providerKey, 'sso_failed'));
+    }
+  },
+
+  async linkedSsoAccounts(req, res) {
+    try {
+      const linkedAccounts = await listExternalIdentitiesForUser(req.user.userId);
+      return res.status(200).json({ linkedAccounts });
+    } catch (err) {
+      return res.status(500).json({ error: err.message || 'Failed to load linked accounts.' });
+    }
+  },
+
+  async unlinkSsoAccount(req, res) {
+    try {
+      const providerKey = String(req.params.provider || '').trim().toLowerCase();
+      await pool.execute(
+        'DELETE FROM user_external_identities WHERE user_id = ? AND provider_key = ?',
+        [req.user.userId, providerKey]
+      );
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message || 'Failed to unlink external account.' });
+    }
+  },
+
   async register(req, res) {
     try {
-      const { name, email, password, role } = req.body;
-      if (!name || !email || !password) {
-        return res.status(400).json({ error: 'Name, email, and password are required.' });
-      }
-      if (password.length < 8) {
-        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-      }
-
-      // Public self-registration cannot escalate privileged roles.
-      const selfRegisterRoles = ['agent', 'reviewer', 'content_manager'];
-      const userRole = role && selfRegisterRoles.includes(role) ? role : 'agent';
-
-      if (await userModel.emailExists(email)) {
-        return res.status(409).json({ error: 'An account with this email already exists.' });
-      }
-
-      const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-      const newUser = await userModel.create({
-        name,
-        email: email.toLowerCase().trim(),
-        password: hashedPassword,
-        role: userRole,
-        email_verified: 0,
-      });
-
-      const challenge = await createEmailVerificationChallenge(newUser).catch(() => null);
-
-      return res.status(201).json({
-        message: 'Account created. Verify your email before signing in.',
-        emailVerificationRequired: true,
-        verificationCodeSent: !!challenge,
-        maskedEmail: challenge?.maskedEmail || maskEmail(newUser.email),
-        user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role },
+      return res.status(403).json({
+        error: 'Self-registration is disabled. Contact your administrator for account access.',
       });
     } catch (err) {
       console.error('Register error:', err);
@@ -660,6 +1177,23 @@ const authController = {
       if (!user.is_active) {
         await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Account deactivated', authEvent: 'password_login_failed', req });
         return res.status(403).json({ error: 'Your account has been deactivated. Contact your administrator.' });
+      }
+
+      let requestedOrgId = null;
+      let loginOptions = null;
+      if (user.role !== 'superadmin') {
+        requestedOrgId = await resolvePasswordOrgIdForUser(user, parsePositiveInt(req.body?.org_id));
+        if (!requestedOrgId) {
+          await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'No org assigned', authEvent: 'password_login_failed', req });
+          return res.status(200).json({ noOrgAccess: true });
+        }
+        loginOptions = await getPublicLoginOptions(requestedOrgId);
+        if (!loginOptions) {
+          return res.status(403).json({ error: 'Selected organisation is inactive or unavailable.' });
+        }
+        if (!loginOptions.local_login_allowed) {
+          return res.status(403).json({ error: 'This organisation requires SSO sign-in. Use Google or Microsoft sign-in instead.' });
+        }
       }
 
       const passwordMatch = await bcrypt.compare(password, user.password);
@@ -750,7 +1284,7 @@ const authController = {
         });
       }
 
-      const context = await resolveRegularLoginContext(user);
+      const context = await resolveRegularLoginContext(user, requestedOrgId);
       if (context.noOrgAccess) {
         await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'No org assigned', authEvent: 'password_login_failed', req });
         return res.status(200).json({ noOrgAccess: true });
@@ -1084,10 +1618,23 @@ const authController = {
   },
 
   async me(req, res) {
+    res.set('Cache-Control', 'no-store');
     const user = await userModel.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
     if (user.role === 'superadmin') {
-      return res.status(200).json({ user, allOrgs: [], orgId: null, siteId: null, orgName: null, siteName: null });
+      const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
+      const config = await getSystemConfig();
+      return res.status(200).json({
+        user,
+        token: req.user.token,
+        modules: distRows.map((row) => row.module),
+        allOrgs: [],
+        orgId: null,
+        siteId: null,
+        orgName: null,
+        siteName: null,
+        sessionTimeout: parseInt(config.superadmin_session_timeout_minutes || '60', 10),
+      });
     }
 
     const orgRows = await getActiveOrgRowsForUser(user.id);
@@ -1096,15 +1643,20 @@ const authController = {
       orgName: o.org_name,
       siteId: o.primary_site_id,
       siteName: o.site_name,
+      roleAtOrg: o.role_at_org || user.role,
     }));
+    const modules = await getUserModules(user.id);
     const current = allOrgs.find(o => Number(o.orgId) === Number(req.user.orgId)) || allOrgs[0] || null;
     return res.status(200).json({
       user,
+      token: req.user.token,
+      modules,
       allOrgs,
       orgId: current?.orgId ?? null,
       siteId: current?.siteId ?? null,
       orgName: current?.orgName ?? null,
       siteName: current?.siteName ?? null,
+      sessionTimeout: (orgRows.find((row) => Number(row.org_id) === Number(current?.orgId))?.session_timeout_minutes) ?? 30,
       currentOrgActive: !!current && Number(current.orgId) === Number(req.user.orgId),
     });
   },

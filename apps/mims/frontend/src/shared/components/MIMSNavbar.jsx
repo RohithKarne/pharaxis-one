@@ -89,6 +89,9 @@ export default function MIMSNavbar() {
       {/* Inbox */}
       {navItem('mims_core', '/inbox', 'Inbox')}
 
+      {/* Chat */}
+      {navItem('mims_core', '/chat', 'Chat')}
+
       {/* Case Management — dropdown */}
       <div className="mims-nav-dropdown-wrap" ref={caseMgmtRef}>
         <button

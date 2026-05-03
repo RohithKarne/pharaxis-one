@@ -1,18 +1,22 @@
 import { Navigate } from 'react-router-dom'
 import {
+  getOrgToken,
   getOrgUser,
+  getSuperadminToken,
   getSuperadminUser
 } from '../utils/session'
 
 export function OrgAuthGuard({ children }) {
+  const token = getOrgToken()
   const user = getOrgUser()
-  if (!user?.id && !user?.email) return <Navigate to="/" replace />
+  if (!token || (!user?.id && !user?.email)) return <Navigate to="/" replace />
   return children
 }
 
 export function OrgRoleGuard({ roles, children }) {
+  const token = getOrgToken()
   const user = getOrgUser()
-  if (!user?.id && !user?.email) return <Navigate to="/" replace />
+  if (!token || (!user?.id && !user?.email)) return <Navigate to="/" replace />
   if (!roles.includes(String(user.role || ''))) {
     return <Navigate to="/vault" replace />
   }
@@ -20,7 +24,8 @@ export function OrgRoleGuard({ roles, children }) {
 }
 
 export function SuperadminGuard({ children }) {
+  const token = getSuperadminToken()
   const user = getSuperadminUser()
-  if (!user?.id && !user?.email && !user?.superadminId) return <Navigate to="/control-tower/login" replace />
+  if (!token || (!user?.id && !user?.email && !user?.superadminId)) return <Navigate to="/control-tower/login" replace />
   return children
 }

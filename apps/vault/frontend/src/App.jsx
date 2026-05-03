@@ -20,6 +20,7 @@ import AdminSetupWizardPage from './modules/admin/pages/AdminSetupWizardPage'
 import SuperadminDashboardPage from './modules/superadmin/pages/SuperadminDashboardPage'
 import SuperadminOrgsPage from './modules/superadmin/pages/SuperadminOrgsPage'
 import SuperadminOrgDetailPage from './modules/superadmin/pages/SuperadminOrgDetailPage'
+import SuperadminAuditPage from './modules/superadmin/pages/SuperadminAuditPage'
 import ContentSlotsPage from './modules/vault/pages/ContentSlotsPage'
 import DossiersPage from './modules/vault/pages/DossiersPage'
 import ExpiryDashboardPage from './modules/vault/pages/ExpiryDashboardPage'
@@ -77,6 +78,14 @@ export default function App() {
           element={
             <SuperadminGuard>
               <SuperadminOrgDetailPage />
+            </SuperadminGuard>
+          }
+        />
+        <Route
+          path="/control-tower/audit"
+          element={
+            <SuperadminGuard>
+              <SuperadminAuditPage />
             </SuperadminGuard>
           }
         />

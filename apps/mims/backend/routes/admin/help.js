@@ -214,7 +214,7 @@ router.get('/help/stale', authenticate, adminOnly, async (req, res) => {
 // ── GET /api/admin/help/coverage ──────────────────────────────────────────────
 router.get('/help/coverage', authenticate, adminOnly, async (req, res) => {
   try {
-    const scope = helpScope(req, 'ha', { includeGlobal: false });
+    const scope = helpScope(req, 'ha', { includeGlobal: true });
     const [rows] = await pool.execute(
       `SELECT feature_key, COUNT(*) AS article_count
        FROM help_articles ha WHERE ha.is_active = 1

@@ -1,6 +1,6 @@
 'use strict';
 
-const { uniqueName } = require('./helpers');
+const { uniqueName, getFirstInquiry } = require('./helpers');
 
 module.exports = [
   {
@@ -149,6 +149,22 @@ module.exports = [
     },
   },
   {
+    name: 'GET /api/inbox/:id/read-receipts returns payload for a real inquiry when available',
+    module: 'Inbox',
+    covers: ['GET /api/inbox/:id/read-receipts'],
+    run: async ({ makeRequest, token }) => {
+      const inquiry = await getFirstInquiry(makeRequest, token);
+      if (!inquiry?.id) {
+        return { pass: true, details: 'Skipped: no inquiry available in inbox.' };
+      }
+      const res = await makeRequest('GET', `/api/inbox/${inquiry.id}/read-receipts`, null, token);
+      return {
+        pass: res.status === 200 && Array.isArray(res.body?.receipts) && typeof res.body?.total === 'number',
+        details: `Status: ${res.status}, total: ${res.body?.total ?? 'n/a'}`,
+      };
+    },
+  },
+  {
     name: 'GET /api/inbox/:id/notes returns 404 for missing inquiry',
     module: 'Inbox',
     covers: ['GET /api/inbox/:id/notes'],
@@ -194,6 +210,23 @@ module.exports = [
         color: null,
       }, token);
       return { pass: res.status === 404, details: `Status: ${res.status}` };
+    },
+  },
+  {
+    name: 'PATCH /api/inbox/:id marks an inquiry as read and persists the receipt when available',
+    module: 'Inbox',
+    covers: ['PATCH /api/inbox/:id', 'GET /api/inbox/:id/read-receipts'],
+    run: async ({ makeRequest, token }) => {
+      const inquiry = await getFirstInquiry(makeRequest, token);
+      if (!inquiry?.id) {
+        return { pass: true, details: 'Skipped: no inquiry available in inbox.' };
+      }
+      const patch = await makeRequest('PATCH', `/api/inbox/${inquiry.id}`, { is_read: true }, token);
+      const receipts = await makeRequest('GET', `/api/inbox/${inquiry.id}/read-receipts`, null, token);
+      return {
+        pass: patch.status === 200 && receipts.status === 200 && Array.isArray(receipts.body?.receipts) && receipts.body.receipts.length >= 1,
+        details: `patch=${patch.status}, receipts=${receipts.status}, total=${receipts.body?.total ?? 'n/a'}`,
+      };
     },
   },
   {

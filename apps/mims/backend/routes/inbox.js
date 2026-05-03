@@ -8,6 +8,7 @@ const fs = require('fs');
 const router = express.Router();
 const { authenticate, requireRole } = require('../middleware/auth');
 const pool = require('../database/db');
+const { emitDataSync } = require('../services/appRealtimeService');
 const {
   hydrateInquiryRows,
   getInquiryHistory,
@@ -50,6 +51,49 @@ async function getScopedInquiry(req, inquiryId, columns = '*') {
       : [inquiryId, req.user.orgId]
   );
   return rows[0] || null;
+}
+
+async function upsertReadReceipt(connection, inquiryId, orgId, userId) {
+  if (!userId) return Boolean(orgId);
+  await connection.execute(
+    `INSERT INTO inquiry_read_receipts (inquiry_id, org_id, user_id, read_at, last_viewed_at)
+     VALUES (?, ?, ?, NOW(), NOW())
+     ON DUPLICATE KEY UPDATE
+       read_at = COALESCE(read_at, NOW()),
+       last_viewed_at = NOW(),
+       updated_at = NOW()`,
+    [inquiryId, orgId, userId]
+  );
+  await connection.execute(
+    `UPDATE inquiries
+     SET is_read = 1
+     WHERE id = ?`,
+    [inquiryId]
+  );
+  return true;
+}
+
+async function clearReadReceipt(connection, inquiryId, userId) {
+  if (!userId) return false;
+  await connection.execute(
+    `DELETE FROM inquiry_read_receipts
+     WHERE inquiry_id = ? AND user_id = ?`,
+    [inquiryId, userId]
+  );
+  const [[counts]] = await connection.execute(
+    `SELECT COUNT(*) AS receipt_count
+     FROM inquiry_read_receipts
+     WHERE inquiry_id = ?`,
+    [inquiryId]
+  );
+  const isGloballyRead = Number(counts?.receipt_count || 0) > 0;
+  await connection.execute(
+    `UPDATE inquiries
+     SET is_read = ?
+     WHERE id = ?`,
+    [isGloballyRead ? 1 : 0, inquiryId]
+  );
+  return isGloballyRead;
 }
 
 async function getScopedAttachment(req, attachmentId) {
@@ -208,6 +252,7 @@ async function applyRoutingRules(req, rows) {
 
 async function loadInboxRows(req, limit = 500) {
   const { where, params } = buildInboxOrgScope(req, 'i');
+  const queryParams = [req.user?.userId || 0, ...params];
   const [rows] = await pool.execute(`
     SELECT
       i.id,
@@ -223,7 +268,21 @@ async function loadInboxRows(req, limit = 500) {
       i.color,
       i.attachments_count,
       i.source_tag,
-      i.is_read,
+      CASE
+        WHEN irr_user.read_at IS NOT NULL OR i.is_read = 1 THEN 1
+        ELSE 0
+      END AS is_read,
+      irr_user.read_at AS read_at,
+      COALESCE(irr_stats.read_receipt_count, 0) AS read_receipt_count,
+      irr_stats.last_read_at,
+      (
+        SELECT u.name
+        FROM inquiry_read_receipts irr_last
+        LEFT JOIN users u ON u.id = irr_last.user_id
+        WHERE irr_last.inquiry_id = i.id
+        ORDER BY irr_last.read_at DESC, irr_last.id DESC
+        LIMIT 1
+      ) AS last_read_by_name,
       i.assigned_to,
       i.priority,
       i.due_date,
@@ -243,16 +302,28 @@ async function loadInboxRows(req, limit = 500) {
       i.exception_reason
     FROM inquiries i
     LEFT JOIN email_accounts ea ON ea.id = i.email_account_id
+    LEFT JOIN inquiry_read_receipts irr_user
+      ON irr_user.inquiry_id = i.id
+     AND irr_user.user_id = ?
+    LEFT JOIN (
+      SELECT inquiry_id, COUNT(*) AS read_receipt_count, MAX(read_at) AS last_read_at
+      FROM inquiry_read_receipts
+      GROUP BY inquiry_id
+    ) irr_stats ON irr_stats.inquiry_id = i.id
     ${where}
     ORDER BY COALESCE(STR_TO_DATE(i.received_at, '%Y-%m-%d %H:%i:%s'), i.created_at) DESC, i.created_at DESC
     LIMIT ${Number(limit) || 500}
-  `, params);
+  `, queryParams);
 
   const routed = await applyRoutingRules(req, rows || []);
   return hydrateInquiryRows(routed || []).map((row) => ({
     ...row,
     is_locked: !!row.is_locked,
     is_read: !!row.is_read,
+    read_at: row.read_at || null,
+    read_receipt_count: Number(row.read_receipt_count || 0),
+    last_read_at: row.last_read_at || null,
+    last_read_by_name: row.last_read_by_name || null,
     attachments_count: Number(row.attachments_count || 0),
     source_tag: row.source_tag || 'Email',
     assigned_to: row.assigned_to || null,
@@ -720,6 +791,29 @@ router.get('/:id/recommendations', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/inbox/:id/read-receipts — list per-user read receipts for an inquiry
+router.get('/:id/read-receipts', authenticate, async (req, res) => {
+  try {
+    const inquiry = await getScopedInquiry(req, req.params.id, 'id');
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
+    const [rows] = await pool.execute(
+      `SELECT irr.user_id,
+              COALESCE(u.name, u.email, CONCAT('User #', irr.user_id)) AS user_name,
+              u.email,
+              irr.read_at,
+              irr.last_viewed_at
+       FROM inquiry_read_receipts irr
+       LEFT JOIN users u ON u.id = irr.user_id
+       WHERE irr.inquiry_id = ?
+       ORDER BY irr.read_at DESC, irr.id DESC`,
+      [req.params.id]
+    );
+    res.json({ receipts: rows || [], total: (rows || []).length });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // GET /api/inbox/:id/notes — list internal notes for an inquiry (F5)
 router.get('/:id/notes', authenticate, async (req, res) => {
   try {
@@ -753,6 +847,12 @@ router.post('/:id/notes', authenticate, async (req, res) => {
       [id, req.user?.userId || null, authorName, note.trim(), createdAt]
     );
     audit(req.user?.userId || null, req.user?.email || 'unknown', 'NOTE', 'inquiry', Number(id), { note: note.trim() });
+    emitDataSync({
+      orgIds: [req.user?.orgId || 0],
+      domains: ['inbox'],
+      reason: 'inbox.note.created',
+      payload: { inquiryId: Number(id) },
+    });
     res.json({ message: 'Note added.', note: { user_name: authorName, note: note.trim(), created_at: createdAt } });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
@@ -994,6 +1094,7 @@ router.patch('/:id', authenticate, async (req, res) => {
       routing_reason,
       exception_reason,
     } = req.body;
+    const hasExplicitReadStateChange = is_read !== undefined;
 
     await connection.beginTransaction();
 
@@ -1020,7 +1121,6 @@ router.patch('/:id', authenticate, async (req, res) => {
     if (is_locked !== undefined)   { updates.push('is_locked = ?');   params.push(is_locked ? 1 : 0); }
     if (locked_by !== undefined)   { updates.push('locked_by = ?');   params.push(locked_by || null); }
     if (color !== undefined)       { updates.push('color = ?');       params.push(color || null); }
-    if (is_read !== undefined)     { updates.push('is_read = ?');     params.push(is_read ? 1 : 0); }
     if (assigned_to !== undefined) { updates.push('assigned_to = ?'); params.push(assigned_to || null); }
     if (priority !== undefined)    { updates.push('priority = ?');    params.push(priority || null); }
     if (due_date !== undefined)    { updates.push('due_date = ?');    params.push(due_date || null); }
@@ -1047,7 +1147,7 @@ router.patch('/:id', authenticate, async (req, res) => {
       updates.push('case_id = ?'); params.push(case_id || null);
     }
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && !hasExplicitReadStateChange) {
       await connection.rollback();
       return res.status(400).json({ error: 'Nothing to update.' });
     }
@@ -1057,8 +1157,17 @@ router.patch('/:id', authenticate, async (req, res) => {
     }
     updates.push('last_action_at = NOW()');
 
-    params.push(id);
-    await connection.execute(`UPDATE inquiries SET ${updates.join(', ')} WHERE id = ?`, params);
+    if (updates.length > 0) {
+      params.push(id);
+      await connection.execute(`UPDATE inquiries SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
+
+    let nextGlobalReadState = !!row.is_read;
+    if (hasExplicitReadStateChange) {
+      nextGlobalReadState = is_read
+        ? await upsertReadReceipt(connection, Number(id), Number(row.org_id || 0), req.user?.userId || null)
+        : await clearReadReceipt(connection, Number(id), req.user?.userId || null);
+    }
     await connection.commit();
 
     const after = {
@@ -1066,6 +1175,7 @@ router.patch('/:id', authenticate, async (req, res) => {
       is_locked: is_locked !== undefined ? (is_locked ? 1 : 0) : row.is_locked,
       locked_by: locked_by !== undefined ? (locked_by || null) : row.locked_by,
       color: color !== undefined ? (color || null) : row.color,
+      is_read: nextGlobalReadState,
       assigned_to: assigned_to !== undefined ? (assigned_to || null) : row.assigned_to,
       priority: priority !== undefined ? (priority || null) : row.priority,
       due_date: due_date !== undefined ? (due_date || null) : row.due_date,
@@ -1083,12 +1193,34 @@ router.patch('/:id', authenticate, async (req, res) => {
     audit(req.user?.userId || null, req.user?.email || 'unknown', 'UPDATE', 'inquiry', Number(id), {
       from: {
         status: row.status, is_locked: row.is_locked, locked_by: row.locked_by,
-        color: row.color, assigned_to: row.assigned_to, priority: row.priority, due_date: row.due_date, case_id: row.case_id,
+        color: row.color, is_read: row.is_read, assigned_to: row.assigned_to, priority: row.priority, due_date: row.due_date, case_id: row.case_id,
         triage_state: row.triage_state, queue_name: row.queue_name, snoozed_until: row.snoozed_until,
         first_touched_at: row.first_touched_at, first_response_at: row.first_response_at, closed_at: row.closed_at,
         routing_reason: row.routing_reason, exception_reason: row.exception_reason,
       },
       to: after,
+    });
+    const syncDomains = ['inbox'];
+    if (
+      status !== undefined ||
+      assigned_to !== undefined ||
+      priority !== undefined ||
+      triage_state !== undefined ||
+      queue_name !== undefined ||
+      is_read !== undefined ||
+      first_touched_at !== undefined ||
+      first_response_at !== undefined
+    ) {
+      syncDomains.push('dashboard');
+    }
+    if (case_id !== undefined) {
+      syncDomains.push('cases');
+    }
+    emitDataSync({
+      orgIds: [Number(row.org_id || 0)],
+      domains: [...new Set(syncDomains)],
+      reason: 'inbox.updated',
+      payload: { inquiryId: Number(id) },
     });
     res.json({ message: 'Updated.' });
   } catch (err) {
@@ -1141,6 +1273,12 @@ router.post('/:id/link-case', authenticate, async (req, res) => {
       from: { status: inquiry.status, case_id: inquiry.case_id || null },
       to: { status: 'processed', case_id: caseId, triage_state: linkMode },
       linked_case: { id: caseRow.id, case_number: caseRow.case_number || null, case_type: caseRow.case_type || null },
+    });
+    emitDataSync({
+      orgIds: [Number(inquiry.org_id || 0)],
+      domains: ['inbox', 'cases', 'dashboard'],
+      reason: 'inbox.case_linked',
+      payload: { inquiryId, caseId, linkMode },
     });
 
     res.json({

@@ -1,24 +1,21 @@
-import AdminUserSecurityPanel from './AdminUserSecurityPanel'
-import AdminUserConfigPanel from './AdminUserConfigPanel'
-import AdminUserSecurityGroupsPanel from './AdminUserSecurityGroupsPanel'
-import AdminReportAccessPanel from './AdminReportAccessPanel'
-import AdminChangeApprovalsPanel from './AdminChangeApprovalsPanel'
-import AdminSecurityGroupsPanel from './AdminSecurityGroupsPanel'
+import AdminAccessConfigurationsPanel from './AdminAccessConfigurationsPanel'
 
 export default function AdminAccessSection({ contentSection, H, flash }) {
   switch (contentSection) {
+    case 'auth-policy':
+      return <AdminAccessConfigurationsPanel contentSection={contentSection} H={H} flash={flash} />
     case 'user-security':
-      return <AdminUserSecurityPanel H={H} />
+      return <AdminAccessConfigurationsPanel contentSection={contentSection} H={H} flash={flash} />
     case 'user-config':
-      return <AdminUserConfigPanel H={H} flash={flash} />
+      return <AdminAccessConfigurationsPanel contentSection={contentSection} H={H} flash={flash} />
     case 'user-security-groups':
-      return <AdminUserSecurityGroupsPanel H={H} flash={flash} />
+      return <AdminAccessConfigurationsPanel contentSection={contentSection} H={H} flash={flash} />
     case 'report-access-requests':
-      return <AdminReportAccessPanel H={H} />
+      return <AdminAccessConfigurationsPanel contentSection={contentSection} H={H} flash={flash} />
     case 'change-approvals':
-      return <AdminChangeApprovalsPanel H={H} />
+      return <AdminAccessConfigurationsPanel contentSection={contentSection} H={H} flash={flash} />
     case 'security-groups':
-      return <AdminSecurityGroupsPanel H={H} flash={flash} />
+      return <AdminAccessConfigurationsPanel contentSection={contentSection} H={H} flash={flash} />
     default:
       return null
   }

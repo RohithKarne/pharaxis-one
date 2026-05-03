@@ -2480,6 +2480,10 @@ a.nav-item { text-decoration: none; color: inherit; }
   padding: 14px 24px 20px;
 }
 
+.ac-detail-page-scroll {
+  overflow: visible;
+}
+
 .ac-detail-breadcrumb {
   display: inline-flex;
   align-items: center;
@@ -2538,6 +2542,12 @@ a.nav-item { text-decoration: none; color: inherit; }
   overflow: hidden;
   border: 1px solid #cfd6e4;
   background: #fff;
+}
+
+.ac-detail-stage-scroll {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
 }
 
 /* Picklists dedicated prototype page */

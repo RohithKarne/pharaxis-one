@@ -1570,6 +1570,8 @@ router.get('/notifications/my', authenticate, async (req, res) => {
          n.notification_type,
          n.due_at,
          n.message,
+         n.read_at,
+         n.acknowledged_at,
          n.email_delivery_status,
          n.webhook_delivery_status,
          n.delivery_error,
@@ -1603,6 +1605,170 @@ router.get('/notifications/my', authenticate, async (req, res) => {
     res.json({ summary, results: rows })
   } catch (error) {
     console.error('Workflow user notification feed error:', error)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.patch('/notifications/:id/read', authenticate, async (req, res) => {
+  const notificationId = Number(req.params.id)
+  if (!Number.isInteger(notificationId) || notificationId <= 0) {
+    return res.status(400).json({ error: 'Invalid notification id' })
+  }
+
+  try {
+    const [result] = await pool.execute(
+      `UPDATE workflow_task_notifications
+       SET read_at = COALESCE(read_at, NOW())
+       WHERE id = ? AND org_id = ? AND assignee_user_id = ?`,
+      [notificationId, req.user.orgId, req.user.userId]
+    )
+    if (!result.affectedRows) return res.status(404).json({ error: 'Notification not found' })
+    res.json({ message: 'Notification marked as read', id: notificationId })
+  } catch (error) {
+    console.error('Mark notification read error:', error)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.patch('/notifications/read-all', authenticate, async (req, res) => {
+  try {
+    await pool.execute(
+      `UPDATE workflow_task_notifications
+       SET read_at = COALESCE(read_at, NOW())
+       WHERE org_id = ?
+         AND assignee_user_id = ?
+         AND read_at IS NULL`,
+      [req.user.orgId, req.user.userId]
+    )
+    res.json({ message: 'Notifications marked as read' })
+  } catch (error) {
+    console.error('Mark all notifications read error:', error)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.get('/content/:id/timeline', authenticate, async (req, res) => {
+  const contentId = Number(req.params.id)
+  if (!Number.isInteger(contentId) || contentId <= 0) {
+    return res.status(400).json({ error: 'Invalid content id' })
+  }
+
+  try {
+    const [taskRows] = await pool.execute(
+      `SELECT
+         wt.id,
+         wt.step_order,
+         wt.task_type,
+         wt.status,
+         wt.activation_status,
+         wt.created_at AS happened_at,
+         wt.completed_at,
+         assignee.name AS assignee_name,
+         assigner.name AS assigned_by_name
+       FROM workflow_tasks wt
+       LEFT JOIN users assignee
+         ON assignee.id = wt.assignee_user_id
+        AND assignee.org_id = wt.org_id
+       LEFT JOIN users assigner
+         ON assigner.id = wt.assigned_by
+        AND assigner.org_id = wt.org_id
+       WHERE wt.org_id = ?
+         AND wt.content_id = ?
+       ORDER BY wt.created_at DESC, wt.id DESC`,
+      [req.user.orgId, contentId]
+    )
+
+    const [commentRows] = await pool.execute(
+      `SELECT
+         c.id,
+         c.comment_text,
+         c.created_at AS happened_at,
+         u.name AS user_name,
+         u.role AS user_role
+       FROM workflow_task_comments c
+       LEFT JOIN users u
+         ON u.id = c.user_id
+        AND u.org_id = c.org_id
+       WHERE c.org_id = ?
+         AND c.content_id = ?
+       ORDER BY c.created_at DESC, c.id DESC`,
+      [req.user.orgId, contentId]
+    )
+
+    const [notificationRows] = await pool.execute(
+      `SELECT
+         n.id,
+         n.notification_type,
+         n.message,
+         n.created_at AS happened_at,
+         n.read_at,
+         u.name AS assignee_name
+       FROM workflow_task_notifications n
+       LEFT JOIN users u
+         ON u.id = n.assignee_user_id
+        AND u.org_id = n.org_id
+       WHERE n.org_id = ?
+         AND n.content_id = ?
+       ORDER BY n.created_at DESC, n.id DESC`,
+      [req.user.orgId, contentId]
+    )
+
+    const [signatureRows] = await pool.execute(
+      `SELECT
+         vs.id,
+         vs.signature_meaning,
+         vs.signature_comment,
+         vs.signed_at AS happened_at,
+         signer.name AS signer_name
+       FROM vault_signatures vs
+       LEFT JOIN users signer
+         ON signer.id = vs.signer_user_id
+        AND signer.org_id = vs.org_id
+       WHERE vs.org_id = ?
+         AND vs.content_id = ?
+       ORDER BY vs.signed_at DESC, vs.id DESC`,
+      [req.user.orgId, contentId]
+    )
+
+    const entries = [
+      ...taskRows.map(row => ({
+        type: 'task',
+        id: row.id,
+        happened_at: row.completed_at || row.happened_at,
+        title: `Workflow task ${row.status}`,
+        summary: `Step ${row.step_order} ${row.task_type} assigned to ${row.assignee_name || '-'} by ${row.assigned_by_name || '-'}`,
+        status: row.status,
+        activation_status: row.activation_status
+      })),
+      ...commentRows.map(row => ({
+        type: 'comment',
+        id: row.id,
+        happened_at: row.happened_at,
+        title: 'Workflow comment added',
+        summary: `${row.user_name || 'User'} (${row.user_role || '-'}) commented: ${row.comment_text}`,
+        status: null
+      })),
+      ...notificationRows.map(row => ({
+        type: 'notification',
+        id: row.id,
+        happened_at: row.happened_at,
+        title: `${row.notification_type} notification`,
+        summary: `${row.assignee_name || 'Assignee'}: ${row.message}`,
+        status: row.read_at ? 'read' : 'unread'
+      })),
+      ...signatureRows.map(row => ({
+        type: 'signature',
+        id: row.id,
+        happened_at: row.happened_at,
+        title: `Signature ${row.signature_meaning}`,
+        summary: `${row.signer_name || 'Signer'} recorded an electronic signature${row.signature_comment ? `: ${row.signature_comment}` : ''}`,
+        status: row.signature_meaning
+      }))
+    ].sort((a, b) => new Date(b.happened_at || 0).getTime() - new Date(a.happened_at || 0).getTime())
+
+    res.json(entries)
+  } catch (error) {
+    console.error('Workflow content timeline error:', error)
     res.status(500).json({ error: 'Server error' })
   }
 })

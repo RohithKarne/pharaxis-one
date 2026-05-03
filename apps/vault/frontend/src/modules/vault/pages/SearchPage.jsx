@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { apiJson, authHeaders, getOrgToken, lifecycleBadgeClass } from '../../common/utils/session'
-
-const SAVED_SEARCHES_KEY = 'vault_saved_searches_v1'
+import {
+  apiJson,
+  authHeaders,
+  getOrgToken,
+  getOrgUser,
+  lifecycleBadgeClass
+} from '../../common/utils/session'
 
 function flattenFolders(nodes, level = 0, result = []) {
   nodes.forEach(node => {
@@ -23,6 +27,8 @@ function formatDate(value) {
 
 export default function SearchPage() {
   const token = getOrgToken()
+  const currentUser = getOrgUser()
+  const isAdmin = String(currentUser?.role || '') === 'admin'
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const urlQuery = useMemo(() => String(searchParams.get('q') || ''), [searchParams])
@@ -39,6 +45,8 @@ export default function SearchPage() {
   const [showFilters, setShowFilters] = useState(true)
   const [savedSearches, setSavedSearches] = useState([])
   const [saveName, setSaveName] = useState('')
+  const [saveShared, setSaveShared] = useState(false)
+  const [savedLoading, setSavedLoading] = useState(false)
   const [filters, setFilters] = useState({
     q: urlQuery,
     type_id: '',
@@ -57,24 +65,6 @@ export default function SearchPage() {
     expiry_to: ''
   })
 
-  function loadSavedSearches() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(SAVED_SEARCHES_KEY) || '[]')
-      if (Array.isArray(parsed)) {
-        setSavedSearches(parsed)
-        return
-      }
-      setSavedSearches([])
-    } catch {
-      setSavedSearches([])
-    }
-  }
-
-  function persistSavedSearches(nextSearches) {
-    setSavedSearches(nextSearches)
-    localStorage.setItem(SAVED_SEARCHES_KEY, JSON.stringify(nextSearches))
-  }
-
   async function loadFilterData() {
     const [typeRows, folderTree] = await Promise.all([
       apiJson('/api/taxonomy/types', { headers: authHeaders(token) }),
@@ -82,6 +72,19 @@ export default function SearchPage() {
     ])
     setTypes(typeRows)
     setFolders(flattenFolders(folderTree))
+  }
+
+  async function loadSavedSearches() {
+    if (!token) return
+    setSavedLoading(true)
+    try {
+      const rows = await apiJson('/api/search/saved', {
+        headers: authHeaders(token)
+      })
+      setSavedSearches(Array.isArray(rows) ? rows : [])
+    } finally {
+      setSavedLoading(false)
+    }
   }
 
   async function loadSubtypes(typeId) {
@@ -149,9 +152,8 @@ export default function SearchPage() {
       return
     }
     loadFilterData()
-      .then(() => runSearch(1))
+      .then(() => Promise.all([runSearch(1), loadSavedSearches()]))
       .catch(requestError => setError(requestError.message))
-    loadSavedSearches()
   }, [])
 
   useEffect(() => {
@@ -188,20 +190,30 @@ export default function SearchPage() {
     navigate(`/vault/content/${row.id}/viewer`)
   }
 
-  function saveCurrentSearch() {
+  async function saveCurrentSearch() {
     const name = saveName.trim()
     if (!name) {
       setError('Provide a name before saving this search.')
       return
     }
-    const entry = {
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      name,
-      filters,
-      created_at: new Date().toISOString()
+
+    setError('')
+    try {
+      await apiJson('/api/search/saved', {
+        method: 'POST',
+        headers: authHeaders(token, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          name,
+          filters,
+          is_shared: isAdmin ? saveShared : false
+        })
+      })
+      setSaveName('')
+      setSaveShared(false)
+      await loadSavedSearches()
+    } catch (requestError) {
+      setError(requestError.message)
     }
-    persistSavedSearches([entry, ...savedSearches].slice(0, 15))
-    setSaveName('')
   }
 
   function applySavedSearch(entry) {
@@ -217,8 +229,17 @@ export default function SearchPage() {
     runSearch(1, nextFilters)
   }
 
-  function deleteSavedSearch(id) {
-    persistSavedSearches(savedSearches.filter(entry => entry.id !== id))
+  async function deleteSavedSearch(id) {
+    setError('')
+    try {
+      await apiJson(`/api/search/saved/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(token)
+      })
+      await loadSavedSearches()
+    } catch (requestError) {
+      setError(requestError.message)
+    }
   }
 
   return (
@@ -439,7 +460,7 @@ export default function SearchPage() {
 
         <section className="panel span-4">
           <h3>Saved Searches</h3>
-          <p className="panel-note">Store and reuse advanced filter combinations.</p>
+          <p className="panel-note">Store reusable searches for yourself, or publish them for the whole org if you are an admin.</p>
           <div className="form-field">
             <label htmlFor="search-save-name">Save Current Search As</label>
             <input
@@ -449,6 +470,16 @@ export default function SearchPage() {
               placeholder="e.g. Overdue reviewer docs"
             />
           </div>
+          {isAdmin ? (
+            <label className="inline-toggle">
+              <input
+                type="checkbox"
+                checked={saveShared}
+                onChange={event => setSaveShared(event.target.checked)}
+              />
+              <span>Make this a shared team search</span>
+            </label>
+          ) : null}
           <div className="detail-actions">
             <button className="btn-secondary" type="button" onClick={saveCurrentSearch}>Save</button>
           </div>
@@ -458,19 +489,23 @@ export default function SearchPage() {
               <li key={entry.id}>
                 <div className="config-link-copy">
                   <strong>{entry.name}</strong>
-                  <span>{new Date(entry.created_at).toLocaleDateString()}</span>
+                  <span>
+                    {entry.is_shared ? 'Shared' : 'Private'} · {new Date(entry.updated_at || entry.created_at).toLocaleDateString()}
+                  </span>
                 </div>
                 <div className="detail-actions">
                   <button className="btn-secondary" type="button" onClick={() => applySavedSearch(entry)}>
                     Apply
                   </button>
-                  <button className="btn-secondary" type="button" onClick={() => deleteSavedSearch(entry.id)}>
-                    Delete
-                  </button>
+                  {entry.owned_by_current_user ? (
+                    <button className="btn-secondary" type="button" onClick={() => deleteSavedSearch(entry.id)}>
+                      Delete
+                    </button>
+                  ) : null}
                 </div>
               </li>
             ))}
-            {!savedSearches.length ? <li>No saved searches yet.</li> : null}
+            {!savedSearches.length && !savedLoading ? <li>No saved searches yet.</li> : null}
           </ul>
         </section>
 

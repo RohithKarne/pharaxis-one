@@ -19,6 +19,7 @@ export default function DashboardView({ H, setActivePage }) {
   useEffect(() => { load() }, [load])
 
   const kpis = summary?.kpis || {}
+  const readiness = summary?.readiness || {}
   const cards = [
     { label: 'Organisations', value: kpis.organisations?.total || 0, note: `${kpis.organisations?.active || 0} active`, page: 'organizations' },
     { label: 'Users', value: kpis.users?.total || 0, note: `${kpis.users?.active || 0} active`, page: 'users' },
@@ -26,6 +27,8 @@ export default function DashboardView({ H, setActivePage }) {
     { label: 'Locked 2FA Users', value: kpis.lockedUsers || 0, note: 'Needs review', page: 'users' },
     { label: 'Unread Notifications', value: kpis.unreadNotifications || 0, note: 'In-app queue', page: 'notifications' },
     { label: 'Alert Events 24h', value: kpis.alertEvents24h || 0, note: `SMTP: ${kpis.smtpStatus || 'unknown'}`, page: 'alerts' },
+    { label: 'Ready Orgs', value: readiness.readyOrgs || 0, note: `${readiness.attentionOrgs || 0} need attention`, page: 'organizations' },
+    { label: 'Average Readiness', value: `${readiness.averageScore || 0}%`, note: `${readiness.totalBlockers || 0} active blockers`, page: 'organizations' },
   ]
 
   return (
@@ -59,6 +62,38 @@ export default function DashboardView({ H, setActivePage }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+        <div className="card">
+          <div className="card-header"><h3>Org Readiness</h3></div>
+          <div className="card-body">
+            {loading && <div style={{ color: 'var(--text-muted)' }}>Loading…</div>}
+            {!loading && (
+              <div style={{ display: 'grid', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Ready organisations</div>
+                    <div style={{ fontSize: 24, fontWeight: 700 }}>{readiness.readyOrgs || 0}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Needs attention</div>
+                    <div style={{ fontSize: 24, fontWeight: 700 }}>{readiness.attentionOrgs || 0}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Average score</div>
+                    <div style={{ fontSize: 24, fontWeight: 700 }}>{readiness.averageScore || 0}%</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  Org activation now depends on workflow, help, content, numbering, sites, and case data quality readiness.
+                </div>
+                <div>
+                  <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={() => setActivePage('organizations')}>
+                    Review Organisations
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
         <div className="card">
           <div className="card-header"><h3>Recent Audit Activity</h3></div>
           <div className="card-body">

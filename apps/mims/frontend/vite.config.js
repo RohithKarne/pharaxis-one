@@ -16,7 +16,10 @@ export default defineConfig({
     strictPort: true,
     // Proxy API + static backend assets to Express on port 3000 during local dev.
     proxy: {
-      '/api': 'http://127.0.0.1:3000',
+      '/api': {
+        target: 'http://127.0.0.1:3000',
+        ws: true,
+      },
       '/storage': 'http://127.0.0.1:3000',
       '/uploads': 'http://127.0.0.1:3000',
     }

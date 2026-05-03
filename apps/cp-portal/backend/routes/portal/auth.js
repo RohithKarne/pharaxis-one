@@ -37,58 +37,9 @@ function buildVerifyUrl(origin, clientCode, token) {
 // POST /api/portal/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { client_code, first_name, last_name, email, password, user_type, specialty, country, phone } = req.body;
-    if (!client_code || !first_name || !last_name || !email || !password) {
-      return res.status(400).json({ error: 'client_code, first_name, last_name, email and password are required.' });
-    }
-
-    // API-07: Input length validation
-    if (email.length      > 254) return res.status(400).json({ error: 'Input exceeds maximum length.' });
-    if (password.length   > 128) return res.status(400).json({ error: 'Input exceeds maximum length.' });
-    if (first_name.length > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
-    if (last_name.length  > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
-    if (country   && country.length   > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
-    if (specialty && specialty.length > 100) return res.status(400).json({ error: 'Input exceeds maximum length.' });
-    if (req.body.phone && String(req.body.phone).length > 100) {
-      return res.status(400).json({ error: 'Phone number exceeds maximum length.' });
-    }
-
-    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
-    if (!client) return res.status(404).json({ error: 'Portal not found.' });
-
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-    }
-    if (!/[A-Z]/.test(password)) {
-      return res.status(400).json({ error: 'Password must contain at least one uppercase letter.' });
-    }
-    if (!/[0-9]/.test(password)) {
-      return res.status(400).json({ error: 'Password must contain at least one number.' });
-    }
-
-    const [[existing]] = await pool.execute('SELECT id FROM cp_portal_users WHERE client_id = ? AND email = ?', [client.id, email]);
-    if (existing) return res.status(409).json({ error: 'Email already registered.' });
-
-    const hash  = bcrypt.hashSync(password, 10);
-    const token = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
-
-    await pool.execute(`
-      INSERT INTO cp_portal_users (client_id, first_name, last_name, email, password, user_type, specialty, country, phone, email_verified, verification_token, verification_token_expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-    `, [client.id, first_name, last_name, email, hash, user_type || 'other', specialty ?? null, country ?? null, phone ?? null, token, expires]);
-
-    // Send verification email — fire-and-forget, non-fatal
-    const origin = req.headers.origin || `http://localhost:5174`;
-    const verifyUrl = buildVerifyUrl(origin, client_code, token);
-    sendEmail(client.id, {
-      to: email,
-      subject: 'Verify your email address',
-      html: `<p>Hi ${first_name},</p><p>Thank you for registering. Please verify your email address by clicking the link below:</p><p><a href="${verifyUrl}" style="background:#6B3FA0;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Verify Email</a></p><p>This link expires in 24 hours.</p><p>If you did not register, please ignore this email.</p>`,
-      text: `Hi ${first_name}, verify your email: ${verifyUrl}`,
-    }).catch(() => {});
-
-    res.status(201).json({ pending: true, message: 'Registration successful. Please check your email to verify your account.' });
+    return res.status(403).json({
+      error: 'Self-registration is disabled. Contact your administrator for account access.',
+    });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

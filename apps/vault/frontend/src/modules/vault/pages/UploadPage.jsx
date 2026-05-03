@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { authHeaders, getOrgToken } from '../../common/utils/session'
 
 function flattenFolders(nodes, level = 0, result = []) {
   nodes.forEach(node => {
@@ -12,7 +13,7 @@ function flattenFolders(nodes, level = 0, result = []) {
 }
 
 export default function UploadPage() {
-  const token = ''
+  const token = getOrgToken()
   const navigate = useNavigate()
   const [types, setTypes] = useState([])
   const [subtypes, setSubtypes] = useState([])
@@ -22,6 +23,7 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [lastUploaded, setLastUploaded] = useState(null)
   const [form, setForm] = useState({
     title: '',
     content_type_id: '',
@@ -38,6 +40,10 @@ export default function UploadPage() {
   }
 
   async function loadInitialData() {
+    if (!token) {
+      setError('Session not found. Please sign in first.')
+      return
+    }
     setError('')
     try {
       const [typeRows, folderTree] = await Promise.all([
@@ -66,7 +72,7 @@ export default function UploadPage() {
     }
 
     fetch(`/api/taxonomy/types/${form.content_type_id}/subtypes`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: authHeaders(token)
     })
       .then(async response => {
         const payload = await response.json()
@@ -88,7 +94,7 @@ export default function UploadPage() {
       return
     }
     fetch(`/api/taxonomy/subtypes/${form.content_subtype_id}/classifications`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: authHeaders(token)
     })
       .then(async response => {
         const payload = await response.json()
@@ -123,6 +129,7 @@ export default function UploadPage() {
     setUploading(true)
     setError('')
     setSuccess('')
+    setLastUploaded(null)
     try {
       const body = new FormData()
       body.append('title', form.title)
@@ -134,14 +141,20 @@ export default function UploadPage() {
 
       const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(token),
         body
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Upload failed')
 
       setSuccess(`Uploaded successfully. Document number: ${payload.doc_number}`)
-      setTimeout(() => navigate(`/vault/content/${payload.content_id}`), 900)
+      setLastUploaded({
+        contentId: payload.content_id,
+        docNumber: payload.doc_number,
+        title: form.title
+      })
+      setSelectedFile(null)
+      setForm(prev => ({ ...prev, title: '' }))
     } catch (requestError) {
       setError(requestError.message)
     } finally {
@@ -259,6 +272,23 @@ export default function UploadPage() {
 
             {error ? <div className="auth-error">{error}</div> : null}
             {success ? <div className="upload-success">{success}</div> : null}
+            {lastUploaded ? (
+              <div className="panel-note-card">
+                <strong>{lastUploaded.docNumber}</strong>
+                <p>Next step: open this document and launch its workflow when it is ready for review or approval.</p>
+                <div className="detail-actions">
+                  <button className="btn-secondary" type="button" onClick={() => navigate(`/vault/content/${lastUploaded.contentId}`)}>
+                    Open Document
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => navigate('/vault/search')}>
+                    Search More Content
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => navigate('/vault/tasks')}>
+                    Open Task Inbox
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <button className="btn-primary" type="submit" disabled={uploading}>
               {uploading ? 'Uploading...' : 'Upload Document'}

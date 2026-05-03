@@ -307,13 +307,17 @@ async function seedCaseFormDefinition(conn, orgId, _userId) {
   }
 }
 
+async function seedNewOrgWithConnection(conn, orgId, userId) {
+  await seedFieldSetup(conn, orgId, userId);
+  await seedPicklists(conn, orgId, userId);
+  await seedCaseFormDefinition(conn, orgId, userId);
+}
+
 async function seedNewOrg(orgId, userId) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    await seedFieldSetup(conn, orgId, userId);
-    await seedPicklists(conn, orgId, userId);
-    await seedCaseFormDefinition(conn, orgId, userId);
+    await seedNewOrgWithConnection(conn, orgId, userId);
     await conn.commit();
   } catch (error) {
     await conn.rollback();
@@ -323,4 +327,4 @@ async function seedNewOrg(orgId, userId) {
   }
 }
 
-module.exports = { seedNewOrg };
+module.exports = { seedNewOrg, seedNewOrgWithConnection };

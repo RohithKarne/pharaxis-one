@@ -376,6 +376,19 @@ async function createExportConfig(orgId, userId, data) {
   const reportDefinition = targetType === 'report' && targetId
     ? await getReportDefinitionById(orgId, targetId)
     : null;
+  const dashboardDefinition = targetType === 'dashboard' && targetId
+    ? await getDashboardById(orgId, targetId)
+    : null;
+  if (targetType === 'report' && !reportDefinition) {
+    const err = new Error('A valid report target is required');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (targetType === 'dashboard' && !dashboardDefinition) {
+    const err = new Error('A valid dashboard target is required');
+    err.statusCode = 400;
+    throw err;
+  }
 
   const payload = {
     export_name: exportName,
@@ -452,6 +465,17 @@ async function updateExportConfig(id, orgId, data) {
   };
   nextConfig.report_key = data.report_key || existing.report_key || (nextConfig.target_type === 'dashboard' ? `dashboard-${nextConfig.target_id || 'bundle'}` : 'case-summary');
 
+  if (nextConfig.target_type === 'report' && nextConfig.target_id && !await getReportDefinitionById(orgId, nextConfig.target_id)) {
+    const err = new Error('A valid report target is required');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (nextConfig.target_type === 'dashboard' && nextConfig.target_id && !await getDashboardById(orgId, nextConfig.target_id)) {
+    const err = new Error('A valid dashboard target is required');
+    err.statusCode = 400;
+    throw err;
+  }
+
   if (Object.prototype.hasOwnProperty.call(data, 'delivery_method') && nextConfig.delivery_method === 'email' && !String(nextConfig.delivery_target || '').trim()) {
     const err = new Error('delivery_target is required for email delivery');
     err.statusCode = 400;
@@ -496,6 +520,39 @@ async function updateExportConfig(id, orgId, data) {
   );
 }
 
+async function pauseExportConfig(id, orgId, userId) {
+  const [result] = await pool.query(
+    `UPDATE scheduled_export_configs
+     SET is_active = 0, paused_at = NOW(), paused_by = ?, updated_at = NOW()
+     WHERE id = ? AND org_id = ?`,
+    [userId || null, id, orgId]
+  );
+  if (!result.affectedRows) {
+    const err = new Error('Config not found');
+    err.statusCode = 404;
+    throw err;
+  }
+}
+
+async function resumeExportConfig(id, orgId) {
+  const [rows] = await pool.query(
+    'SELECT * FROM scheduled_export_configs WHERE id = ? AND org_id = ? LIMIT 1',
+    [id, orgId]
+  );
+  if (!rows.length) {
+    const err = new Error('Config not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  const nextRunAtUtc = computeNextRunAtUtc(rows[0]);
+  await pool.query(
+    `UPDATE scheduled_export_configs
+     SET is_active = 1, paused_at = NULL, paused_by = NULL, next_run_at_utc = ?, updated_at = NOW()
+     WHERE id = ? AND org_id = ?`,
+    [nextRunAtUtc, id, orgId]
+  );
+}
+
 async function deleteExportConfig(id, orgId) {
   const [result] = await pool.query(
     'DELETE FROM scheduled_export_configs WHERE id = ? AND org_id = ?',
@@ -514,6 +571,8 @@ module.exports = {
   getExportConfigs,
   createExportConfig,
   updateExportConfig,
+  pauseExportConfig,
+  resumeExportConfig,
   deleteExportConfig,
   computeNextRunAtUtc,
   validateTimezone,

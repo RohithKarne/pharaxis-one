@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react'
 import DOMPurify from 'dompurify'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
+function authoringSourceLabel(item) {
+  if (item.response_doc_type === 'Module') return 'Module'
+  if (item.authoring_source === 'microsoft365') return 'Microsoft 365'
+  if (item.authoring_source === 'internal') return 'Internal'
+  return 'Uploaded'
+}
+
 export default function BrowseSection({ token }) {
   const authHeaders = { Authorization: `Bearer ${token}` }
   const [contentType, setContentType] = useState('documents')
@@ -102,12 +109,13 @@ export default function BrowseSection({ token }) {
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No published {contentType} found.</div>
           ) : (
             items.map(item => (
-              <div key={item.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 8, background: selectedItem && selectedItem.id === item.id ? 'var(--primary-light, #f0f4ff)' : 'transparent' }}>
+                <div key={item.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 8, background: selectedItem && selectedItem.id === item.id ? 'var(--primary-light, #f0f4ff)' : 'transparent' }}>
                 <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => openItem(item)}>
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>{item.title || item.question || '(Untitled)'}</div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>{item.name || item.title || item.question || '(Untitled)'}</div>
                 {contentType === 'documents' && (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                     {item.doc_type && <span style={{ marginRight: 8 }}>{item.doc_type}</span>}
+                    <span style={{ marginRight: 8 }}>{authoringSourceLabel(item)}</span>
                     {item.folder_name && <span>📁 {item.folder_name}</span>}
                   </div>
                 )}
@@ -132,7 +140,7 @@ export default function BrowseSection({ token }) {
       {selectedItem && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)' }}>
-            <h3 style={{ margin: 0, fontSize: 16 }}>{selectedItem.title || selectedItem.question || '(Untitled)'}</h3>
+            <h3 style={{ margin: 0, fontSize: 16 }}>{selectedItem.name || selectedItem.title || selectedItem.question || '(Untitled)'}</h3>
             <button onClick={() => setSelectedItem(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-muted)' }}>✕</button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
@@ -144,15 +152,43 @@ export default function BrowseSection({ token }) {
                   <>
                     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16, fontSize: 13, color: 'var(--text-muted)' }}>
                       {selectedItem.doc_type && <span><strong>Type:</strong> {selectedItem.doc_type}</span>}
+                      <span><strong>Authoring:</strong> {authoringSourceLabel(selectedItem)}</span>
                       {selectedItem.status && <span><strong>Status:</strong> {selectedItem.status}</span>}
                       {selectedItem.version_major != null && <span><strong>Version:</strong> v{selectedItem.version_major}.{selectedItem.version_minor ?? 0}</span>}
                       {selectedItem.expiry_date && <span><strong>Expires:</strong> {new Date(selectedItem.expiry_date).toLocaleDateString()}</span>}
                     </div>
-                    {selectedItem.description && (
-                      <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>{selectedItem.description}</div>
+                    {selectedItem.standard_response_text && (
+                      <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>{selectedItem.standard_response_text}</div>
                     )}
-                    {selectedItem.content && (
-                      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedItem.content || '') }} style={{ lineHeight: 1.7, fontSize: 14 }} />
+                    {(selectedItem.assembled_html || selectedItem.content_html) && (
+                      <div
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedItem.assembled_html || selectedItem.content_html || '') }}
+                        style={{ lineHeight: 1.7, fontSize: 14 }}
+                      />
+                    )}
+                    {selectedItem.authoring_source === 'microsoft365' && (
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 20 }}>
+                        {selectedItem.external_document_url && (
+                          <a
+                            href={selectedItem.external_document_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--primary)', color: '#fff', borderRadius: 6, textDecoration: 'none', fontSize: 13, fontWeight: 600 }}
+                          >
+                            Open in Microsoft 365
+                          </a>
+                        )}
+                        {selectedItem.external_share_url && (
+                          <a
+                            href={selectedItem.external_share_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--surface)', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 6, textDecoration: 'none', fontSize: 13, fontWeight: 600 }}
+                          >
+                            Open Shared View
+                          </a>
+                        )}
+                      </div>
                     )}
                     {selectedItem.file_path && (
                       <div style={{ marginTop: 20 }}>

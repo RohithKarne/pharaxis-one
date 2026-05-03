@@ -8,7 +8,7 @@ export function parseJson(value, fallback = null) {
 }
 
 export function getOrgToken() {
-  return ''
+  return localStorage.getItem('vault_token') || ''
 }
 
 export function getOrgUser() {
@@ -16,7 +16,7 @@ export function getOrgUser() {
 }
 
 export function getSuperadminToken() {
-  return ''
+  return localStorage.getItem('vault_superadmin_token') || ''
 }
 
 export function getSuperadminUser() {

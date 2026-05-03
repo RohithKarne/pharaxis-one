@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { clearOrgSession, getOrgUser } from '../utils/session'
+import {
+  authHeaders,
+  clearOrgSession,
+  getOrgToken,
+  getOrgUser
+} from '../utils/session'
 
 const PRIMARY_SECTIONS = [
   {
@@ -121,9 +126,17 @@ export default function WorkspaceShell({ children }) {
     return allowed.filter(entry => entry.label.toLowerCase().includes(query))
   }, [activePrimary.moduleKey, isAdmin, moduleSearch])
 
-  function logout() {
-    clearOrgSession()
-    navigate('/')
+  async function logout() {
+    const token = getOrgToken()
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: authHeaders(token)
+      })
+    } finally {
+      clearOrgSession()
+      navigate('/')
+    }
   }
 
   function submitGlobalSearch(event) {

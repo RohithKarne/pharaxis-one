@@ -42,6 +42,7 @@ export const ADMIN_NAV_GROUPS = [
     key: 'access-configurations',
     title: 'Access Configurations',
     items: [
+      { key: 'auth-policy', label: 'Auth Policy', active: true },
       { key: 'security-groups', label: 'Security Groups', active: true },
       { key: 'user-security', label: 'User Security Groups', active: true },
       { key: 'user-config', label: 'User Configuration', active: true },

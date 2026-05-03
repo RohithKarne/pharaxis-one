@@ -53,6 +53,13 @@ function ReviewRowWithMode({ r, authHeaders, onOpen }) {
   )
 }
 
+function getAuthoringSourceLabel(doc) {
+  if (doc.response_doc_type === 'Module') return 'Module'
+  if (doc.authoring_source === 'microsoft365') return 'Microsoft 365'
+  if (doc.authoring_source === 'internal') return 'Internal'
+  return 'Uploaded'
+}
+
 export default function DocumentsSection({ token, user }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   const [subTab, setSubTab] = useState('all')
@@ -179,6 +186,19 @@ export default function DocumentsSection({ token, user }) {
   function getDocActions(doc) {
     const btns = []
     const s = doc.status
+    if (doc.authoring_source === 'microsoft365' && (doc.external_document_url || doc.external_share_url)) {
+      btns.push(
+        <a
+          key="m365"
+          className="cm-btn cm-btn-secondary cm-btn-sm"
+          href={doc.external_document_url || doc.external_share_url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Open M365
+        </a>
+      )
+    }
     if (s === 'Draft') {
       btns.push(<button key="edit" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>Edit</button>)
       btns.push(<button key="ci" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setCheckInDoc(doc)}>Check In</button>)
@@ -354,7 +374,12 @@ export default function DocumentsSection({ token, user }) {
                       </td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{d.doc_id || '—'}</td>
                       <td style={{ fontWeight: 500, maxWidth: 200 }}>{d.name}</td>
-                      <td>{d.doc_type}</td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span>{d.doc_type}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{getAuthoringSourceLabel(d)}</span>
+                        </div>
+                      </td>
                       <td>{d.folder_name || '—'}</td>
                       <td style={{ textAlign: 'center' }}>{d.version || '1.0'}</td>
                       <td><StatusBadge status={d.status} /></td>

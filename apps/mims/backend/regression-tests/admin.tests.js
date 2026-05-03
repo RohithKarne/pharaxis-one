@@ -1870,6 +1870,124 @@ module.exports = [
     }
   },
   {
+    name: 'Product groups cover CRUD members assignments and resolve',
+    module: 'Admin — Products',
+    covers: [
+      'GET /api/admin/product-group-types',
+      'GET /api/admin/product-groups',
+      'POST /api/admin/product-groups',
+      'PUT /api/admin/product-groups/:id',
+      'GET /api/admin/product-groups/:id/members',
+      'POST /api/admin/product-groups/:id/members',
+      'DELETE /api/admin/product-groups/:id/members/:memberId',
+      'GET /api/admin/product-groups/:id/assignments',
+      'POST /api/admin/product-groups/:id/assignments',
+      'DELETE /api/admin/product-groups/:id/assignments/:assignmentId',
+      'GET /api/admin/product-groups/resolve',
+    ],
+    run: async ({ makeRequest, token }) => {
+      let familyId = null
+      let productId = null
+      let countryAuthId = null
+      let groupId = null
+      let memberId = null
+      let assignmentId = null
+      try {
+        const typeRes = await makeRequest('GET', '/api/admin/product-group-types', null, token)
+        const createFamily = await makeRequest('POST', '/api/admin/product-families', {
+          name: uniqueName('Regression Group Family'),
+          ingredients: ['group-api'],
+          is_active: true,
+        }, token)
+        familyId = Number(createFamily.body?.id || createFamily.body?.family?.id || 0)
+        const createProduct = await makeRequest('POST', '/api/admin/products-full', {
+          trade_name: uniqueName('Regression Group Product'),
+          family_id: familyId,
+          mah: 'Regression MAH',
+          dosage: '50mg',
+          atc_code: 'RG001',
+          authorization_country: 'India',
+          is_active: true,
+        }, token)
+        productId = Number(createProduct.body?.id || createProduct.body?.product?.id || 0)
+        const createCountryAuth = await makeRequest('POST', `/api/admin/products/${productId}/country-authorizations`, {
+          country: 'India',
+          auth_number: uniqueName('RGAUTH'),
+          auth_date: '2026-05-01',
+          status: 'Active',
+        }, token)
+        countryAuthId = Number(createCountryAuth.body?.authorization?.id || 0)
+        const createGroup = await makeRequest('POST', '/api/admin/product-groups', {
+          name: uniqueName('Regression Transmission Group'),
+          group_type: 'transmissions',
+          description: 'Regression transmission product group',
+          is_active: true,
+        }, token)
+        groupId = Number(createGroup.body?.id || createGroup.body?.group?.id || 0)
+
+        if (typeRes.status !== 200 || createFamily.status !== 201 || !familyId || createProduct.status !== 201 || !productId || createCountryAuth.status !== 201 || !countryAuthId || createGroup.status !== 201 || !groupId) {
+          return { pass: false, details: `types=${typeRes.status}, family=${createFamily.status}, product=${createProduct.status}, countryAuth=${createCountryAuth.status}, group=${createGroup.status}` }
+        }
+
+        const listGroups = await makeRequest('GET', '/api/admin/product-groups?group_type=transmissions', null, token)
+        const updateGroup = await makeRequest('PUT', `/api/admin/product-groups/${groupId}`, {
+          name: createGroup.body?.group?.name || createGroup.body?.name || uniqueName('Regression Transmission Group Updated'),
+          group_type: 'transmissions',
+          description: 'Regression transmission product group updated',
+          is_active: true,
+        }, token)
+        const addFamilyMember = await makeRequest('POST', `/api/admin/product-groups/${groupId}/members`, {
+          member_type: 'product_family',
+          member_id: familyId,
+        }, token)
+        const addProductMember = await makeRequest('POST', `/api/admin/product-groups/${groupId}/members`, {
+          member_type: 'product',
+          member_id: productId,
+        }, token)
+        memberId = Number(addProductMember.body?.id || 0)
+        const addAuthMember = await makeRequest('POST', `/api/admin/product-groups/${groupId}/members`, {
+          member_type: 'country_authorization',
+          member_id: countryAuthId,
+        }, token)
+        const membersRes = await makeRequest('GET', `/api/admin/product-groups/${groupId}/members`, null, token)
+        const addAssignment = await makeRequest('POST', `/api/admin/product-groups/${groupId}/assignments`, {
+          target_type: 'transmission_rule',
+          metadata: { label: 'Regression transmission selector' },
+        }, token)
+        assignmentId = Number(addAssignment.body?.id || 0)
+        const assignmentsRes = await makeRequest('GET', `/api/admin/product-groups/${groupId}/assignments`, null, token)
+        const resolveRes = await makeRequest('GET', `/api/admin/product-groups/resolve?group_type=transmissions&target_type=transmission_rule&product_id=${productId}&country=India`, null, token)
+        const deleteMember = await makeRequest('DELETE', `/api/admin/product-groups/${groupId}/members/${memberId}`, null, token)
+        const deleteAssignment = await makeRequest('DELETE', `/api/admin/product-groups/${groupId}/assignments/${assignmentId}`, null, token)
+
+        return {
+          pass: listGroups.status === 200 &&
+            updateGroup.status === 200 &&
+            addFamilyMember.status === 201 &&
+            addProductMember.status === 201 &&
+            addAuthMember.status === 201 &&
+            membersRes.status === 200 &&
+            addAssignment.status === 201 &&
+            assignmentsRes.status === 200 &&
+            Array.isArray(resolveRes.body?.groups) &&
+            resolveRes.body.groups.some(group => Number(group.id) === groupId) &&
+            deleteMember.status === 200 &&
+            deleteAssignment.status === 200,
+          details: `list=${listGroups.status}, update=${updateGroup.status}, members=${addFamilyMember.status}/${addProductMember.status}/${addAuthMember.status}, membersList=${membersRes.status}, assignment=${addAssignment.status}, assignmentsList=${assignmentsRes.status}, resolve=${resolveRes.status}, deleteMember=${deleteMember.status}, deleteAssignment=${deleteAssignment.status}`,
+        }
+      } finally {
+        if (groupId) await pool.execute('DELETE FROM product_group_assignments WHERE group_id = ?', [groupId]).catch(() => {})
+        if (groupId) await pool.execute('DELETE FROM product_group_members WHERE group_id = ?', [groupId]).catch(() => {})
+        if (groupId) await pool.execute('DELETE FROM product_groups WHERE id = ?', [groupId]).catch(() => {})
+        if (countryAuthId) await pool.execute('DELETE FROM product_country_authorizations WHERE id = ?', [countryAuthId]).catch(() => {})
+        if (productId) await pool.execute('DELETE FROM product_country_authorizations WHERE product_id = ?', [productId]).catch(() => {})
+        if (productId) await pool.execute('DELETE FROM product_approvals WHERE product_id = ?', [productId]).catch(() => {})
+        if (productId) await pool.execute('DELETE FROM products WHERE id = ?', [productId]).catch(() => {})
+        if (familyId) await pool.execute('DELETE FROM product_families WHERE id = ?', [familyId]).catch(() => {})
+      }
+    }
+  },
+  {
     name: 'Product approvals and country authorizations cover full lifecycle',
     module: 'Admin — Products',
     covers: [

@@ -203,6 +203,8 @@ export default function NotificationOverlay({ open, onClose }) {
               <option value="">All categories</option>
               <option value="case_status">Case Status</option>
               <option value="case_reassignment">Case Assignment</option>
+              <option value="chat_message">Chat Message</option>
+              <option value="chat_mention">Chat Mention</option>
               <option value="dedup_assist">Duplicate Assist</option>
               <option value="mi_response">MI Response</option>
               <option value="ae_transmission">AE Transmission</option>

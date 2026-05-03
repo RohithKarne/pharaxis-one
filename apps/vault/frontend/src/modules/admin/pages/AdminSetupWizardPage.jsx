@@ -91,6 +91,11 @@ export default function AdminSetupWizardPage() {
     return { total, completed, pending: total - completed }
   }, [status])
 
+  const nextPendingStep = useMemo(
+    () => STEP_BLUEPRINT.find(step => !status[step.key]?.done) || null,
+    [status]
+  )
+
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
@@ -112,6 +117,25 @@ export default function AdminSetupWizardPage() {
             <article className="stat-card-mini"><span>Total Steps</span><strong>{summary.total}</strong></article>
             <article className="stat-card-mini"><span>Completed</span><strong>{summary.completed}</strong></article>
             <article className="stat-card-mini"><span>Pending</span><strong>{summary.pending}</strong></article>
+          </div>
+          <div className="signal-grid">
+            <article className="config-group-card">
+              <h4>Recommended Next Step</h4>
+              <p className="panel-note">
+                {nextPendingStep
+                  ? `${nextPendingStep.label} should be completed next so users do not enter a half-configured workflow.`
+                  : 'Core setup is complete. You can now move into content creation and operational review.'}
+              </p>
+              {nextPendingStep ? (
+                <div className="detail-actions">
+                  <Link className="btn-secondary link-button" to={nextPendingStep.path}>Open Next Step</Link>
+                </div>
+              ) : null}
+            </article>
+            <article className="config-group-card">
+              <h4>User Clarity Rule</h4>
+              <p className="panel-note">Finish Users, Taxonomy, and Lifecycle before asking authors or reviewers to work in Vault.</p>
+            </article>
           </div>
           <div className="detail-actions">
             <button className="btn-secondary" type="button" onClick={loadWizardStatus}>Refresh Status</button>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import SuperadminTabs from '../components/SuperadminTabs'
+import SuperadminTopbar from '../components/SuperadminTopbar'
 import { apiJson, authHeaders, getSuperadminToken } from '../../common/utils/session'
 
 function formatDateTime(value) {
@@ -14,6 +16,13 @@ export default function SuperadminDashboardPage() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const loginSummary = (stats?.recent_logins || []).reduce((summary, row) => {
+    if (row.action === 'login_success') summary.success += 1
+    if (row.action === 'login_fail') summary.fail += 1
+    if (row.action === 'logout') summary.logout += 1
+    return summary
+  }, { success: 0, fail: 0, logout: 0 })
 
   async function loadDashboard() {
     if (!token) {
@@ -42,13 +51,10 @@ export default function SuperadminDashboardPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">SuperAdmin Dashboard</h1>
-          <p className="brand-subtitle">Cross-org operational visibility and governance</p>
-        </div>
-        <span className="topbar-pill">Pharaxis Internal</span>
-      </header>
+      <SuperadminTopbar
+        title="SuperAdmin Dashboard"
+        subtitle="Cross-org operational visibility and governance"
+      />
 
       <main className="dashboard-grid">
         <section className="panel span-12">
@@ -74,6 +80,30 @@ export default function SuperadminDashboardPage() {
             <section className="stat-card">
               <div className="stat-label">Documents</div>
               <h2 className="stat-value">{stats.documents?.total || 0}</h2>
+            </section>
+            <section className="stat-card">
+              <div className="stat-label">Login Failures</div>
+              <h2 className="stat-value">{loginSummary.fail}</h2>
+            </section>
+            <section className="stat-card">
+              <div className="stat-label">Platform Attention</div>
+              <h2 className="stat-value">
+                {stats.orgs?.inactive || loginSummary.fail ? 'Required' : 'Stable'}
+              </h2>
+            </section>
+
+            <section className="panel span-4">
+              <h3>Platform Health</h3>
+              <ul className="simple-list detail-list">
+                <li><span>Successful Logins</span><strong>{loginSummary.success}</strong></li>
+                <li><span>Failed Logins</span><strong>{loginSummary.fail}</strong></li>
+                <li><span>Recent Logouts</span><strong>{loginSummary.logout}</strong></li>
+                <li><span>Inactive Orgs</span><strong>{stats.orgs?.inactive || 0}</strong></li>
+              </ul>
+              <div className="detail-actions">
+                <Link className="btn-secondary link-button" to="/control-tower/audit">Open Audit</Link>
+                <Link className="btn-secondary link-button" to="/control-tower/orgs">Open Organizations</Link>
+              </div>
             </section>
 
             <section className="panel span-8">

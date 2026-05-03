@@ -55,15 +55,27 @@ const CASE_TYPE_SECTIONS = {
 // GET /api/admin/case-form-definition — get config for org + case_type
 router.get('/case-form-definition', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
-    const { org_id = null, case_type } = req.query;
+    const { org_id = null, case_type, product_group_id } = req.query;
     if (!case_type) return res.status(400).json({ error: 'case_type is required.' });
 
     const masterSections = CASE_TYPE_SECTIONS[case_type] || [];
 
     // Load saved overrides
+    const params = [org_id || null, case_type];
+    let assignmentFilter = '';
+    if (product_group_id) {
+      assignmentFilter = ` AND EXISTS (
+        SELECT 1
+          FROM product_group_assignments pga
+         WHERE pga.target_type = 'case_form_definition'
+           AND pga.target_id = case_form_definition.id
+           AND pga.group_id = ?
+      )`;
+      params.push(Number(product_group_id));
+    }
     const [rows] = await pool.execute(
-      'SELECT * FROM case_form_definition WHERE org_id <=> ? AND case_type = ?',
-      [org_id || null, case_type]
+      `SELECT * FROM case_form_definition WHERE org_id <=> ? AND case_type = ?${assignmentFilter}`,
+      params
     );
     const savedMap = {};
     rows.forEach(r => { savedMap[r.section_name] = r; });

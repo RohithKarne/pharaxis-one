@@ -63,6 +63,12 @@ export default function FolderTree({ selectedFolderId, onSelectFolder }) {
   const [tree, setTree] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [dialog, setDialog] = useState({
+    mode: '',
+    folder: null,
+    name: '',
+    saving: false
+  })
 
   async function loadFolders() {
     setLoading(true)
@@ -82,92 +88,158 @@ export default function FolderTree({ selectedFolderId, onSelectFolder }) {
     loadFolders()
   }, [])
 
-  async function createRootFolder() {
-    const name = window.prompt('New root folder name')
-    if (!name) return
-    try {
-      await api('/api/folders', {
-        method: 'POST',
-        body: JSON.stringify({ name })
-      })
-      await loadFolders()
-    } catch (requestError) {
-      setError(requestError.message)
-    }
+  function closeDialog() {
+    setDialog({ mode: '', folder: null, name: '', saving: false })
   }
 
-  async function createChildFolder(parent) {
-    const name = window.prompt(`New sub-folder under "${parent.name}"`)
-    if (!name) return
-    try {
-      await api('/api/folders', {
-        method: 'POST',
-        body: JSON.stringify({ name, parent_id: parent.id })
-      })
-      await loadFolders()
-    } catch (requestError) {
-      setError(requestError.message)
-    }
+  function openCreateRootDialog() {
+    setDialog({ mode: 'create-root', folder: null, name: '', saving: false })
   }
 
-  async function renameFolder(folder) {
-    const name = window.prompt('Rename folder', folder.name)
-    if (!name) return
-    try {
-      await api(`/api/folders/${folder.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ name })
-      })
-      await loadFolders()
-    } catch (requestError) {
-      setError(requestError.message)
-    }
+  function openCreateChildDialog(parent) {
+    setDialog({ mode: 'create-child', folder: parent, name: '', saving: false })
   }
 
-  async function deactivateFolder(folder) {
-    if (!window.confirm(`Deactivate "${folder.name}"?`)) return
+  function openRenameDialog(folder) {
+    setDialog({ mode: 'rename', folder, name: folder.name, saving: false })
+  }
+
+  function openDeactivateDialog(folder) {
+    setDialog({ mode: 'deactivate', folder, name: folder.name, saving: false })
+  }
+
+  async function submitDialog(event) {
+    event.preventDefault()
+    const trimmedName = dialog.name.trim()
+
+    if (dialog.mode !== 'deactivate' && !trimmedName) {
+      setError('Folder name is required.')
+      return
+    }
+
+    setDialog(prev => ({ ...prev, saving: true }))
     try {
-      await api(`/api/folders/${folder.id}`, {
-        method: 'DELETE'
-      })
-      if (Number(selectedFolderId) === Number(folder.id) && onSelectFolder) {
-        onSelectFolder(null)
+      if (dialog.mode === 'create-root') {
+        await api('/api/folders', {
+          method: 'POST',
+          body: { name: trimmedName }
+        })
+      } else if (dialog.mode === 'create-child') {
+        await api('/api/folders', {
+          method: 'POST',
+          body: { name: trimmedName, parent_id: dialog.folder.id }
+        })
+      } else if (dialog.mode === 'rename') {
+        await api(`/api/folders/${dialog.folder.id}`, {
+          method: 'PATCH',
+          body: { name: trimmedName }
+        })
+      } else if (dialog.mode === 'deactivate') {
+        await api(`/api/folders/${dialog.folder.id}`, {
+          method: 'DELETE'
+        })
+        if (Number(selectedFolderId) === Number(dialog.folder.id) && onSelectFolder) {
+          onSelectFolder(null)
+        }
       }
       await loadFolders()
+      closeDialog()
     } catch (requestError) {
       setError(requestError.message)
+      setDialog(prev => ({ ...prev, saving: false }))
     }
   }
 
+  function confirmDeactivate() {
+    submitDialog({ preventDefault() {} })
+  }
+
+  const dialogTitle =
+    dialog.mode === 'create-root'
+      ? 'Create Root Folder'
+      : dialog.mode === 'create-child'
+        ? `Create Sub-Folder${dialog.folder ? ` in ${dialog.folder.name}` : ''}`
+        : dialog.mode === 'rename'
+          ? 'Rename Folder'
+          : 'Deactivate Folder'
+
   return (
-    <section className="panel folder-panel">
-      <div className="folder-header">
-        <div>
-          <h3>Folder Tree</h3>
-          <p className="panel-note">Organization-scoped hierarchy for content grouping</p>
+    <>
+      <section className="panel folder-panel">
+        <div className="folder-header">
+          <div>
+            <h3>Folder Tree</h3>
+            <p className="panel-note">Organization-scoped hierarchy for content grouping</p>
+          </div>
+          <button className="btn-secondary" type="button" onClick={openCreateRootDialog}>
+            + Root Folder
+          </button>
         </div>
-        <button className="btn-secondary" type="button" onClick={createRootFolder}>
-          + Root Folder
-        </button>
-      </div>
 
-      {error ? <div className="auth-error taxonomy-error">{error}</div> : null}
-      {loading ? <p className="panel-note">Loading folders...</p> : null}
+        {error ? <div className="auth-error taxonomy-error">{error}</div> : null}
+        {loading ? <p className="panel-note">Loading folders...</p> : null}
 
-      <ul className="folder-tree">
-        {tree.map(node => (
-          <FolderNode
-            key={node.id}
-            node={node}
-            level={0}
-            selectedFolderId={selectedFolderId}
-            onSelectFolder={folder => onSelectFolder && onSelectFolder(folder)}
-            onCreateChild={createChildFolder}
-            onRenameFolder={renameFolder}
-            onDeactivateFolder={deactivateFolder}
-          />
-        ))}
-      </ul>
-    </section>
+        <ul className="folder-tree">
+          {tree.map(node => (
+            <FolderNode
+              key={node.id}
+              node={node}
+              level={0}
+              selectedFolderId={selectedFolderId}
+              onSelectFolder={folder => onSelectFolder && onSelectFolder(folder)}
+              onCreateChild={openCreateChildDialog}
+              onRenameFolder={openRenameDialog}
+              onDeactivateFolder={openDeactivateDialog}
+            />
+          ))}
+        </ul>
+      </section>
+
+      {dialog.mode ? (
+        <div className="folder-dialog-backdrop" role="presentation" onClick={closeDialog}>
+          <div className="folder-dialog-card" role="dialog" aria-modal="true" onClick={event => event.stopPropagation()}>
+            <h3>{dialogTitle}</h3>
+            {dialog.mode === 'deactivate' ? (
+              <>
+                <p className="panel-note">
+                  Deactivate <strong>{dialog.folder?.name}</strong> if it should no longer accept new content. Existing records remain in audit history.
+                </p>
+                <div className="detail-actions">
+                  <button className="btn-secondary" type="button" onClick={closeDialog}>Cancel</button>
+                  <button className="btn-primary" type="button" onClick={confirmDeactivate} disabled={dialog.saving}>
+                    {dialog.saving ? 'Deactivating...' : 'Confirm Deactivate'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <form className="auth-form" onSubmit={submitDialog}>
+                <div className="form-field">
+                  <label htmlFor="folder-name-input">Folder Name</label>
+                  <input
+                    id="folder-name-input"
+                    value={dialog.name}
+                    onChange={event => setDialog(prev => ({ ...prev, name: event.target.value }))}
+                    placeholder="Enter folder name"
+                    autoFocus
+                  />
+                </div>
+                <div className="detail-actions">
+                  <button className="btn-secondary" type="button" onClick={closeDialog}>Cancel</button>
+                  <button className="btn-primary" type="submit" disabled={dialog.saving}>
+                    {dialog.saving
+                      ? dialog.mode === 'rename'
+                        ? 'Saving...'
+                        : 'Creating...'
+                      : dialog.mode === 'rename'
+                        ? 'Save Folder'
+                        : 'Create Folder'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }

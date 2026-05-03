@@ -61,7 +61,13 @@ function isExpired(expiresAt) {
 
 // Public
 router.post('/register', accountCreationRateLimiter, authController.register);
+router.post('/login/start', loginRateLimiter, authController.startLogin);
 router.post('/login', loginRateLimiter, authController.login);
+router.get('/login/orgs', authController.listLoginOrgs);
+router.get('/login/options', authController.getLoginOptions);
+router.get('/sso/providers', authController.listSsoProviders);
+router.get('/sso/:provider/start', authController.startSso);
+router.get('/sso/:provider/callback', authController.ssoCallback);
 router.post('/email-verification/send-code', verificationRateLimiter, authController.sendEmailVerificationCode);
 router.post('/email-verification/verify-code', verificationRateLimiter, authController.verifyEmailCode);
 router.post('/forgot-password/send-code', recoveryRateLimiter, authController.sendForgotPasswordCode);
@@ -74,6 +80,9 @@ router.post('/2fa/skip-setup', verificationRateLimiter, authController.skipTwoFa
 
 // Protected
 router.get('/me',              authenticate, authController.me);
+router.get('/sso/linked-accounts', authenticate, authController.linkedSsoAccounts);
+router.get('/sso/:provider/link/start', authenticate, authController.startSsoLink);
+router.delete('/sso/linked-accounts/:provider', authenticate, authController.unlinkSsoAccount);
 router.post('/switch-org',     authenticate, authController.switchOrg);
 router.post('/reset-password', authenticate, authController.resetPassword);
 router.post('/change-password', authenticate, authController.changePassword);
@@ -187,7 +196,7 @@ router.post('/logout', authenticate, async (req, res) => {
     await pool.execute('DELETE FROM sessions WHERE token = ?', [token]).catch(() => {});
   }
   logger.info({ user_id: req.user?.userId, route: '/api/auth/logout' }, 'User logged out');
-  res.clearCookie('mims_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
+  res.clearCookie('mims_token', { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
   res.json({ message: 'Logged out.' });
 });
 

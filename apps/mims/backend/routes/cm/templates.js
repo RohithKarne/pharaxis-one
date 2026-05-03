@@ -73,7 +73,7 @@ async function getScopedCase(req, caseId) {
 // GET /api/cm/templates — list with filters
 router.get('/templates', authenticate, async (req, res) => {
   try {
-    const { type, status, search, page = 1, limit = 50 } = req.query;
+    const { type, status, search, product_group_id, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let query = `
@@ -96,6 +96,16 @@ router.get('/templates', authenticate, async (req, res) => {
     if (search) {
       query += ' AND (t.name LIKE ? OR t.subject LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
+    }
+    if (product_group_id) {
+      query += ` AND EXISTS (
+        SELECT 1
+          FROM product_group_assignments pga
+         WHERE pga.target_type = 'cm_template'
+           AND pga.target_id = t.id
+           AND pga.group_id = ?
+      )`;
+      params.push(Number(product_group_id));
     }
 
     const countQuery = query.replace('SELECT t.*, u.name AS created_by_name', 'SELECT COUNT(*) AS total');

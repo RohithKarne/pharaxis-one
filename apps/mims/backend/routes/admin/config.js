@@ -34,7 +34,7 @@ router.get('/workflow-states', authenticate, requireRole('admin', 'superadmin'),
     const [states] = await pool.execute(
       isSuperadmin(req)
         ? 'SELECT * FROM workflow_states ORDER BY name'
-        : 'SELECT * FROM workflow_states WHERE org_id = ? ORDER BY name',
+        : 'SELECT * FROM workflow_states WHERE org_id = ? OR org_id IS NULL ORDER BY org_id IS NULL DESC, name',
       isSuperadmin(req) ? [] : [req.user.orgId]
     );
     res.json({ states });
@@ -121,11 +121,15 @@ router.get('/products', authenticate, requireRole('admin', 'superadmin'), requir
   try {
     const [products] = await pool.execute(
       isSuperadmin(req)
-        ? `SELECT p.*, o.name as org_name
-           FROM products p LEFT JOIN organisations o ON p.org_id = o.id
+        ? `SELECT p.*, o.name as org_name, pf.name AS family_name
+           FROM products p
+           LEFT JOIN organisations o ON p.org_id = o.id
+           LEFT JOIN product_families pf ON pf.id = p.family_id
            ORDER BY p.trade_name`
-        : `SELECT p.*, o.name as org_name
-           FROM products p LEFT JOIN organisations o ON p.org_id = o.id
+        : `SELECT p.*, o.name as org_name, pf.name AS family_name
+           FROM products p
+           LEFT JOIN organisations o ON p.org_id = o.id
+           LEFT JOIN product_families pf ON pf.id = p.family_id
            WHERE p.org_id = ?
            ORDER BY p.trade_name`,
       isSuperadmin(req) ? [] : [req.user.orgId]
@@ -136,22 +140,22 @@ router.get('/products', authenticate, requireRole('admin', 'superadmin'), requir
 
 router.post('/products', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createProduct), async (req, res) => {
   try {
-    const { trade_name } = req.body;
+    const { trade_name, mah, family_id, dosage, atc_code, authorization_country } = req.body;
     if (!trade_name) return res.status(400).json({ error: 'Trade name is required.' });
     const orgId = getScopedOrgId(req, req.body.org_id);
     const [result] = await pool.execute(
-      'INSERT INTO products (trade_name, org_id) VALUES (?, ?)',
-      [trade_name.trim(), orgId]
+      'INSERT INTO products (trade_name, mah, org_id, family_id, dosage, atc_code, authorization_country) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [trade_name.trim(), mah || null, orgId, family_id || null, dosage || null, atc_code || null, authorization_country || null]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'product', result.insertId, { trade_name });
     const [[row]] = await pool.execute('SELECT created_at FROM products WHERE id = ?', [result.insertId]);
-    res.status(201).json({ id: result.insertId, trade_name, is_active: 1, created_at: row.created_at });
+    res.status(201).json({ id: result.insertId, trade_name, mah: mah || null, family_id: family_id || null, dosage: dosage || null, atc_code: atc_code || null, authorization_country: authorization_country || null, is_active: 1, created_at: row.created_at });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 router.put('/products/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
-    const { trade_name, is_active } = req.body;
+    const { trade_name, mah, family_id, dosage, atc_code, authorization_country, is_active } = req.body;
     const [[existing]] = await pool.execute(
       isSuperadmin(req)
         ? 'SELECT id FROM products WHERE id = ?'
@@ -161,8 +165,8 @@ router.put('/products/:id', authenticate, requireRole('admin', 'superadmin'), re
     if (!existing) return res.status(404).json({ error: 'Product not found.' });
     const orgId = getScopedOrgId(req, req.body.org_id);
     await pool.execute(
-      'UPDATE products SET trade_name = ?, org_id = ?, is_active = ? WHERE id = ?',
-      [trade_name ?? null, orgId, is_active ? 1 : 0, req.params.id]
+      'UPDATE products SET trade_name = ?, mah = ?, org_id = ?, family_id = ?, dosage = ?, atc_code = ?, authorization_country = ?, is_active = ? WHERE id = ?',
+      [trade_name ?? null, mah || null, orgId, family_id || null, dosage || null, atc_code || null, authorization_country || null, is_active ? 1 : 0, req.params.id]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'product', req.params.id, req.body);
     res.json({ message: 'Updated.' });
