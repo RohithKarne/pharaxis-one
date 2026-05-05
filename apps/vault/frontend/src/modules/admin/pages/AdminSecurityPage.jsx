@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import AdminTabs from '../components/AdminTabs'
 import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
+import VaultPageHeader from '../../vault/components/VaultPageHeader'
 
 const ROLE_OPTIONS = ['admin', 'author', 'reviewer', 'approver', 'viewer']
 const PRESET_OPTIONS = [
@@ -176,15 +177,13 @@ export default function AdminSecurityPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Security</h1>
-          <p className="brand-subtitle">SSO/MFA readiness and workflow permission governance</p>
-        </div>
-        <span className="topbar-pill">Admin Console</span>
-      </header>
-
       <main className="dashboard-grid">
+        <VaultPageHeader
+          kicker="Administration / Security"
+          title="Security"
+          note="SSO/MFA readiness and workflow permission governance."
+          statusLabel="Admin Console"
+        />
         <section className="panel span-4">
           <AdminTabs active="security" />
           <h3>Authentication Policy</h3>

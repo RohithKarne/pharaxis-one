@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AdminTabs from '../components/AdminTabs'
 import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
+import VaultPageHeader from '../../vault/components/VaultPageHeader'
 
 const DEFAULT_TEMPLATE_STEPS = [
   { task_type: 'review', assignee_role: 'reviewer', due_in_hours: '24' },
@@ -293,15 +294,13 @@ export default function AdminWorkflowQueuePage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Workflow Queue</h1>
-          <p className="brand-subtitle">Monitor pending, waiting, completed, escalated, and reassigned workflow tasks</p>
-        </div>
-        <span className="topbar-pill">Admin Console</span>
-      </header>
-
       <main className="dashboard-grid">
+        <VaultPageHeader
+          kicker="Administration / Workflows"
+          title="Workflow Queue"
+          note="Monitor pending, waiting, completed, escalated, and reassigned workflow tasks."
+          statusLabel="Admin Console"
+        />
         <section className="panel span-12">
           <AdminTabs active="workflows" />
 

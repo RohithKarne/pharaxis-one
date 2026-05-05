@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { authHeaders, getOrgToken } from '../../common/utils/session'
+import VaultPageHeader from '../components/VaultPageHeader'
 
 function flattenFolders(nodes, level = 0, result = []) {
   nodes.forEach(node => {
@@ -165,17 +166,13 @@ export default function UploadPage() {
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
-        <section className="panel span-12 workspace-hero-card">
-          <div>
-            <p className="workspace-hero-kicker">Quality Ops / Upload</p>
-            <h2 className="workspace-hero-title">Upload Center</h2>
-            <p className="panel-note">Create controlled documents with taxonomy and folder mapping.</p>
-          </div>
-          <div className="workspace-hero-right">
-            <span className="workspace-status-pill">Content Creation</span>
-            <span className="workspace-hero-date">Versioned Upload</span>
-          </div>
-        </section>
+        <VaultPageHeader
+          kicker="Quality Ops / Upload"
+          title="Upload Center"
+          note="Create controlled documents with taxonomy and folder mapping."
+          statusLabel="Content Creation"
+          dateLabel="Versioned Upload"
+        />
       </main>
 
       <main className="dashboard-grid">

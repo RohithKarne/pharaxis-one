@@ -1,14 +1,16 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { apiRequest } from '../services/api';
 import { useModuleAccess } from '../composables/useModuleAccess';
 
+const router = useRouter();
 const loading = ref(false);
+const error = ref('');
 const message = ref('');
 const list = ref([]);
-const selectedDeviationId = ref('');
-const detail = ref(null);
-const capas = ref([]);
+const showCreate = ref(false);
+const creating = ref(false);
 
 const createForm = ref({
   title: '',
@@ -20,81 +22,29 @@ const createForm = ref({
   dueDate: ''
 });
 
-const triageForm = ref({
-  triageSummary: '',
-  impactLevel: 'Medium',
-  dueDate: ''
-});
-
-const containmentForm = ref({ actionText: '' });
-const investigationForm = ref({ investigatorUserId: '', findings: '', rootCause: '', dueDate: '' });
-const qaReviewForm = ref({ decision: 'Approve', reviewNotes: '', reportabilityStatus: 'Under Review' });
-const closeForm = ref({ reportabilityStatus: 'No', reportabilityReason: '', closureSummary: '' });
-const reopenForm = ref({ reason: '' });
-const linkForm = ref({ capaId: '' });
-
-const deviation = computed(() => detail.value?.deviation || null);
-const timeline = computed(() => detail.value?.history || []);
-const investigations = computed(() => detail.value?.investigations || []);
-const capaLinks = computed(() => detail.value?.capaLinks || []);
-
-const deviationTypes = ['Product', 'Process', 'System', 'Environmental'];
-const classifications = ['Critical', 'Major', 'Minor'];
-const reportabilityOptions = ['Yes', 'No', 'Under Review'];
-const impactLevels = ['Low', 'Medium', 'High', 'Critical'];
 const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAccess('deviations');
 
-function setMessage(text) {
-  message.value = text;
+function formatDate(val) {
+  if (!val) return '—';
+  return new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-async function refreshList() {
+async function load() {
   loading.value = true;
+  error.value = '';
   try {
     const data = await apiRequest('/deviations');
     list.value = data.deviations || [];
-
-    if (!selectedDeviationId.value && list.value.length > 0) {
-      selectedDeviationId.value = list.value[0].id;
-      await loadDetail();
-    }
-  } catch (error) {
-    setMessage(error.message);
+  } catch (err) {
+    error.value = err.message;
   } finally {
     loading.value = false;
   }
 }
 
-async function loadCapas() {
-  try {
-    const data = await apiRequest('/capa');
-    capas.value = data.capas || [];
-  } catch {
-    capas.value = [];
-  }
-}
-
-async function loadDetail() {
-  if (!selectedDeviationId.value) {
-    detail.value = null;
-    return;
-  }
-
-  try {
-    const data = await apiRequest(`/deviations/${selectedDeviationId.value}`);
-    detail.value = data;
-
-    const selectedInvestigator = investigations.value[0]?.investigator_user_id || '';
-    if (selectedInvestigator && !investigationForm.value.investigatorUserId) {
-      investigationForm.value.investigatorUserId = selectedInvestigator;
-    }
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
 async function createDeviation() {
-  if (!withWriteAccess(setMessage)) return;
+  if (!withWriteAccess((t) => { message.value = t; })) return;
+  creating.value = true;
   try {
     await apiRequest('/deviations', {
       method: 'POST',
@@ -104,277 +54,179 @@ async function createDeviation() {
         dueDate: createForm.value.dueDate || null
       }
     });
-    setMessage('Deviation created successfully.');
+    message.value = 'Deviation created.';
     createForm.value.title = '';
     createForm.value.description = '';
     createForm.value.dateOfOccurrence = '';
     createForm.value.dueDate = '';
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
+    showCreate.value = false;
+    await load();
+  } catch (err) {
+    error.value = err.message;
+  } finally {
+    creating.value = false;
   }
 }
 
-async function runTriage() {
-  if (!selectedDeviationId.value) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/deviations/${selectedDeviationId.value}/triage`, {
-      method: 'POST',
-      body: {
-        triageSummary: triageForm.value.triageSummary,
-        impactLevel: triageForm.value.impactLevel,
-        dueDate: triageForm.value.dueDate || null
-      }
-    });
-    setMessage('Deviation triaged.');
-    triageForm.value.triageSummary = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
+const STATUS_COLORS = {
+  Open: 'bg-blue-50 text-blue-700 border-blue-200',
+  Investigation: 'bg-amber-50 text-amber-700 border-amber-200',
+  QaReview: 'bg-purple-50 text-purple-700 border-purple-200',
+  CapaLinked: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  Closed: 'bg-green-50 text-green-700 border-green-200'
+};
 
-async function addContainment() {
-  if (!selectedDeviationId.value) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/deviations/${selectedDeviationId.value}/containment`, {
-      method: 'POST',
-      body: containmentForm.value
-    });
-    setMessage('Containment action recorded.');
-    containmentForm.value.actionText = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
+const CLASS_COLORS = {
+  Critical: 'bg-red-100 text-red-800',
+  Major: 'bg-orange-100 text-orange-800',
+  Minor: 'bg-amber-100 text-amber-800',
+  Observation: 'bg-green-100 text-green-800'
+};
 
-async function addInvestigation() {
-  if (!selectedDeviationId.value) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    const me = await apiRequest('/protected/me');
-    await apiRequest(`/deviations/${selectedDeviationId.value}/investigation`, {
-      method: 'POST',
-      body: {
-        investigatorUserId: investigationForm.value.investigatorUserId || me.auth.userId,
-        findings: investigationForm.value.findings || null,
-        rootCause: investigationForm.value.rootCause || null,
-        dueDate: investigationForm.value.dueDate || null
-      }
-    });
-    setMessage('Investigation details saved.');
-    investigationForm.value.findings = '';
-    investigationForm.value.rootCause = '';
-    investigationForm.value.dueDate = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function runQaReview() {
-  if (!selectedDeviationId.value) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/deviations/${selectedDeviationId.value}/qa-review`, {
-      method: 'POST',
-      body: qaReviewForm.value
-    });
-    setMessage('QA review decision recorded.');
-    qaReviewForm.value.reviewNotes = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function linkCapa() {
-  if (!selectedDeviationId.value || !linkForm.value.capaId) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/deviations/${selectedDeviationId.value}/link-capa`, {
-      method: 'POST',
-      body: { capaId: linkForm.value.capaId }
-    });
-    setMessage('Deviation linked to CAPA.');
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function closeDeviation() {
-  if (!selectedDeviationId.value) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/deviations/${selectedDeviationId.value}/close`, {
-      method: 'POST',
-      body: closeForm.value
-    });
-    setMessage('Deviation closed successfully.');
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function reopenDeviation() {
-  if (!selectedDeviationId.value || !reopenForm.value.reason) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/deviations/${selectedDeviationId.value}/reopen`, {
-      method: 'POST',
-      body: reopenForm.value
-    });
-    setMessage('Deviation reopened.');
-    reopenForm.value.reason = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-onMounted(async () => {
-  await Promise.all([refreshList(), loadCapas()]);
-});
+onMounted(load);
 </script>
 
 <template>
-  <section class="space-y-4">
-    <header class="rounded-2xl border border-amber-100 bg-white p-4">
-      <h2 class="text-xl font-bold text-amber-900">Deviation Management Workspace</h2>
-      <p class="mt-1 text-sm text-slate-600">Capture, triage, investigate, link CAPA, QA review, and close enterprise deviations.</p>
-      <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-        {{ writeDisabledReason }}
-      </p>
-      <p v-if="message" class="mt-2 text-sm text-indigo-700">{{ message }}</p>
-    </header>
+  <div class="flex h-full flex-col">
 
-    <section class="grid gap-4 xl:grid-cols-3">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Create Deviation</h3>
-        <div class="mt-3 grid gap-2">
-          <input v-model="createForm.title" class="rounded-lg border px-3 py-2 text-sm" placeholder="Deviation title" />
-          <textarea v-model="createForm.description" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Description"></textarea>
-          <select v-model="createForm.deviationType" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="item in deviationTypes" :key="item" :value="item">{{ item }}</option>
-          </select>
-          <select v-model="createForm.classification" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="item in classifications" :key="item" :value="item">{{ item }}</option>
-          </select>
-          <input v-model="createForm.department" class="rounded-lg border px-3 py-2 text-sm" placeholder="Department" />
-          <label class="text-xs text-slate-600">Date of Occurrence</label>
-          <input v-model="createForm.dateOfOccurrence" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-          <label class="text-xs text-slate-600">Due Date</label>
-          <input v-model="createForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-        </div>
-        <button class="mt-3 rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createDeviation">Create Deviation</button>
-      </article>
+    <div class="flex items-start justify-between rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Quality Management</p>
+        <h1 class="mt-0.5 text-2xl font-bold text-slate-900">Deviations</h1>
+        <p class="mt-1 text-sm text-slate-500">Capture and investigate process and product deviations with full lifecycle traceability.</p>
+      </div>
+      <button
+        class="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+        :disabled="isWriteDisabled"
+        @click="showCreate = true"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"/></svg>
+        New Deviation
+      </button>
+    </div>
 
-      <article class="rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
-        <div class="flex items-center justify-between">
-          <h3 class="text-lg font-semibold text-slate-900">Deviation Records</h3>
-          <button class="rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-700" @click="refreshList">Refresh</button>
-        </div>
-        <p v-if="loading" class="mt-2 text-sm text-slate-600">Loading deviations...</p>
-        <ul class="mt-3 max-h-64 space-y-2 overflow-auto text-sm">
-          <li
+    <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">{{ writeDisabledReason }}</p>
+
+    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div class="border-b border-slate-100 bg-slate-50 px-4 py-3">
+        <p class="text-sm font-semibold text-slate-700">
+          {{ loading ? 'Loading…' : `${list.length} record${list.length !== 1 ? 's' : ''}` }}
+        </p>
+      </div>
+
+      <div v-if="loading" class="flex items-center justify-center py-16">
+        <svg class="h-5 w-5 animate-spin text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="10" stroke-width="2" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <div v-else-if="!list.length" class="py-16 text-center text-sm text-slate-400">
+        No deviations found. Click <strong>New Deviation</strong> to get started.
+      </div>
+
+      <table v-else class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <th class="px-4 py-3">Code</th>
+            <th class="px-4 py-3">Title</th>
+            <th class="px-4 py-3">Type</th>
+            <th class="px-4 py-3">Classification</th>
+            <th class="px-4 py-3">Department</th>
+            <th class="px-4 py-3">Due Date</th>
+            <th class="px-4 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
             v-for="item in list"
             :key="item.id"
-            class="cursor-pointer rounded-lg border px-3 py-2"
-            :class="selectedDeviationId === item.id ? 'border-amber-500 bg-amber-50' : 'border-slate-200'"
-            @click="selectedDeviationId = item.id; loadDetail()"
+            class="cursor-pointer border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50"
+            @click="router.push('/deviations/' + item.id)"
           >
-            <p class="font-semibold">{{ item.deviation_code }} - {{ item.title }}</p>
-            <p class="text-xs text-slate-600">{{ item.status }} • {{ item.classification }} • Due: {{ item.due_date || 'N/A' }}</p>
-          </li>
-        </ul>
-      </article>
-    </section>
+            <td class="px-4 py-3 font-mono text-xs font-semibold text-indigo-600">{{ item.deviation_code }}</td>
+            <td class="max-w-xs px-4 py-3 font-medium text-slate-800"><span class="line-clamp-1">{{ item.title }}</span></td>
+            <td class="px-4 py-3 text-slate-600">{{ item.deviation_type }}</td>
+            <td class="px-4 py-3">
+              <span v-if="item.classification" class="rounded-full px-2 py-0.5 text-xs font-medium" :class="CLASS_COLORS[item.classification] || 'bg-slate-100 text-slate-600'">{{ item.classification }}</span>
+              <span v-else class="text-slate-400">—</span>
+            </td>
+            <td class="px-4 py-3 text-slate-600">{{ item.department || '—' }}</td>
+            <td class="px-4 py-3 text-slate-600">{{ formatDate(item.due_date) }}</td>
+            <td class="px-4 py-3">
+              <span class="rounded-full border px-2 py-0.5 text-xs font-medium" :class="STATUS_COLORS[item.status] || 'bg-slate-50 text-slate-600 border-slate-200'">{{ item.status }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-    <section v-if="deviation" class="grid gap-4 xl:grid-cols-3">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Lifecycle Controls</h3>
-        <p class="mt-1 text-xs text-slate-600">Current Status: {{ deviation.status }}</p>
+    <p v-if="message" class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{{ message }}</p>
+    <p v-if="error" class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{{ error }}</p>
 
-        <div class="mt-3 grid gap-2">
-          <textarea v-model="triageForm.triageSummary" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Triage summary"></textarea>
-          <select v-model="triageForm.impactLevel" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="level in impactLevels" :key="level" :value="level">{{ level }}</option>
-          </select>
-          <input v-model="triageForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="runTriage">Run Triage</button>
+    <Transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-200" leave-to-class="opacity-0">
+      <div v-if="showCreate" class="fixed inset-0 z-40 bg-black/30" @click="showCreate = false" />
+    </Transition>
 
-          <textarea v-model="containmentForm.actionText" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Containment action"></textarea>
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="addContainment">Add Containment</button>
-
-          <textarea v-model="reopenForm.reason" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Reopen reason"></textarea>
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="reopenDeviation">Reopen</button>
+    <Transition enter-active-class="transition-transform duration-300" enter-from-class="translate-x-full" leave-active-class="transition-transform duration-300" leave-to-class="translate-x-full">
+      <div v-if="showCreate" class="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 class="text-lg font-semibold text-slate-900">New Deviation</h2>
+          <button class="rounded-lg p-2 text-slate-400 hover:bg-slate-100" @click="showCreate = false">
+            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/></svg>
+          </button>
         </div>
-      </article>
-
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Investigation & CAPA</h3>
-        <div class="mt-3 grid gap-2">
-          <input v-model="investigationForm.investigatorUserId" class="rounded-lg border px-3 py-2 text-sm" placeholder="Investigator user ID" />
-          <textarea v-model="investigationForm.findings" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Findings"></textarea>
-          <textarea v-model="investigationForm.rootCause" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Root cause"></textarea>
-          <input v-model="investigationForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="addInvestigation">Save Investigation</button>
-
-          <select v-model="linkForm.capaId" class="rounded-lg border px-3 py-2 text-sm">
-            <option value="">Link CAPA</option>
-            <option v-for="capa in capas" :key="capa.id" :value="capa.id">{{ capa.capa_code }} - {{ capa.title }}</option>
-          </select>
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="linkCapa">Link CAPA</button>
+        <div class="flex-1 overflow-y-auto px-6 py-5">
+          <fieldset :disabled="isWriteDisabled" class="grid gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Title <span class="text-red-500">*</span></label>
+              <input v-model="createForm.title" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="Deviation title" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Description</label>
+              <textarea v-model="createForm.description" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" rows="3" placeholder="Description" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Type</label>
+                <select v-model="createForm.deviationType" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none">
+                  <option>Process</option><option>Product</option><option>Equipment</option><option>Analytical</option><option>Environmental</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Classification</label>
+                <select v-model="createForm.classification" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none">
+                  <option>Observation</option><option>Minor</option><option>Major</option><option>Critical</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Department</label>
+                <input v-model="createForm.department" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="Department" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Date of Occurrence</label>
+                <input v-model="createForm.dateOfOccurrence" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" />
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Due Date</label>
+              <input v-model="createForm.dueDate" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" />
+            </div>
+          </fieldset>
         </div>
-
-        <ul class="mt-3 max-h-24 space-y-2 overflow-auto text-xs">
-          <li v-for="link in capaLinks" :key="link.id" class="rounded border border-slate-200 px-2 py-1">CAPA Link: {{ link.capa_id }}</li>
-        </ul>
-      </article>
-
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">QA Review & Close</h3>
-        <div class="mt-3 grid gap-2">
-          <select v-model="qaReviewForm.decision" class="rounded-lg border px-3 py-2 text-sm">
-            <option>Approve</option>
-            <option>Reject</option>
-          </select>
-          <select v-model="qaReviewForm.reportabilityStatus" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="item in reportabilityOptions" :key="item" :value="item">{{ item }}</option>
-          </select>
-          <textarea v-model="qaReviewForm.reviewNotes" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="QA review notes"></textarea>
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="runQaReview">Run QA Review</button>
-
-          <select v-model="closeForm.reportabilityStatus" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="item in reportabilityOptions" :key="`close-${item}`" :value="item">{{ item }}</option>
-          </select>
-          <input v-model="closeForm.reportabilityReason" class="rounded-lg border px-3 py-2 text-sm" placeholder="Reportability reason" />
-          <textarea v-model="closeForm.closureSummary" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Closure summary"></textarea>
-          <button class="rounded border border-amber-500 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="closeDeviation">Close Deviation</button>
+        <div class="border-t border-slate-200 px-6 py-4 flex gap-3">
+          <button
+            class="flex-1 rounded-lg bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            :disabled="!createForm.title || creating || isWriteDisabled"
+            @click="createDeviation"
+          >
+            {{ creating ? 'Creating…' : 'Create Deviation' }}
+          </button>
+          <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50" @click="showCreate = false">Cancel</button>
         </div>
-      </article>
-    </section>
-
-    <article v-if="deviation" class="rounded-2xl border border-slate-200 bg-white p-4">
-      <h3 class="text-lg font-semibold text-slate-900">Deviation Timeline</h3>
-      <ul class="mt-3 max-h-72 space-y-2 overflow-auto text-sm">
-        <li v-for="item in timeline" :key="item.id" class="rounded border border-slate-200 px-3 py-2">
-          <p class="font-semibold">{{ item.action_key }}</p>
-          <p class="text-xs text-slate-600">{{ item.occurred_at }}</p>
-        </li>
-      </ul>
-    </article>
-  </section>
+      </div>
+    </Transition>
+  </div>
 </template>

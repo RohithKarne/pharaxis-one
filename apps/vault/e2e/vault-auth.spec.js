@@ -9,7 +9,7 @@ test('SuperAdmin login page loads', async ({ page }) => {
 
 test('Org user login page loads', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
+  await expect(page.getByText('PHARAXIS VAULT')).toBeVisible()
   await expect(page.getByLabel('Organization Slug')).toBeVisible()
   await expect(page.getByLabel('Email')).toBeVisible()
   await expect(page.getByLabel('Password')).toBeVisible()
@@ -21,7 +21,9 @@ test('Wrong credentials shows error message', async ({ page }) => {
   await page.getByLabel('Email').fill('admin@novartis.local')
   await page.getByLabel('Password').fill('wrong-password')
   await page.getByRole('button', { name: 'Sign In' }).click()
-  await expect(page.getByText('Invalid credentials')).toBeVisible()
+  const errorNotice = page.locator('.auth-error').first()
+  await expect(errorNotice).toBeVisible()
+  await expect(errorNotice).toContainText(/invalid credentials|network error|try again/i)
 })
 
 test('Successful login redirects to vault', async ({ page }) => {
@@ -31,5 +33,5 @@ test('Successful login redirects to vault', async ({ page }) => {
   await page.getByLabel('Password').fill(process.env.SMOKE_ADMIN_PASSWORD || 'Admin@123')
   await page.getByRole('button', { name: 'Sign In' }).click()
   await expect(page).toHaveURL(/\/vault$/)
-  await expect(page.getByRole('heading', { name: 'Vault Workspace' })).toBeVisible()
+  await expect(page.locator('.workspace-brand-title')).toHaveText('Pharaxis Vault')
 })

@@ -1,7 +1,10 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { apiRequest } from '../services/api';
 import { useModuleAccess } from '../composables/useModuleAccess';
+
+const router = useRouter();
 
 const loading = ref(false);
 const message = ref('');
@@ -321,7 +324,10 @@ onMounted(refreshSystems);
             :class="selectedSystemId === item.id ? 'border-violet-500 bg-violet-50' : 'border-slate-200'"
             @click="selectedSystemId = item.id; loadDetail()"
           >
-            <p class="font-semibold">{{ item.system_name }} (GAMP {{ item.gamp_category }})</p>
+            <div class="flex items-center justify-between">
+              <p class="font-semibold">{{ item.system_name }} (GAMP {{ item.gamp_category }})</p>
+              <button class="ml-3 shrink-0 rounded border border-violet-400 px-2 py-0.5 text-xs font-medium text-violet-700 hover:bg-violet-50" @click.stop="router.push(`/validation/${item.id}`)">View</button>
+            </div>
             <p class="text-xs text-slate-600">{{ item.validation_status }} • Risk: {{ item.risk_level }} • Next review: {{ item.next_review_due_date || 'N/A' }}</p>
           </li>
         </ul>

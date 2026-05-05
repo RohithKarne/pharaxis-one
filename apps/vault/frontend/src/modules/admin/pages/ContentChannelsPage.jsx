@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import AdminTabs from '../components/AdminTabs'
 import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
+import VaultPageHeader from '../../vault/components/VaultPageHeader'
 
 export default function ContentChannelsPage() {
   const token = getOrgToken()
@@ -73,15 +74,13 @@ export default function ContentChannelsPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Content Channels</h1>
-          <p className="brand-subtitle">Downstream app integrations and API key issuance</p>
-        </div>
-        <span className="topbar-pill">Admin Console</span>
-      </header>
-
       <main className="dashboard-grid">
+        <VaultPageHeader
+          kicker="Administration / Channels"
+          title="Content Channels"
+          note="Downstream app integrations and API key issuance."
+          statusLabel="Admin Console"
+        />
         <section className="panel span-4">
           <AdminTabs active="channels" />
           <h3>Create Channel</h3>

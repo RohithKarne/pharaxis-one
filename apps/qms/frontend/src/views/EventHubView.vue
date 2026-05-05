@@ -25,11 +25,11 @@ function totalFor(moduleRows) {
 }
 
 const moduleTotals = computed(() => [
-  { key: 'deviations', label: 'Deviations', total: totalFor(summary.value?.deviations) },
-  { key: 'capas', label: 'CAPAs', total: totalFor(summary.value?.capas) },
-  { key: 'complaints', label: 'Complaints', total: totalFor(summary.value?.complaints) },
-  { key: 'nonconformances', label: 'Nonconformances', total: totalFor(summary.value?.nonconformances) },
-  { key: 'risks', label: 'Risks', total: totalFor(summary.value?.risks) }
+  { key: 'deviations', label: 'Deviations', total: totalFor(summary.value?.deviations), color: 'text-amber-600' },
+  { key: 'capas', label: 'CAPAs', total: totalFor(summary.value?.capas), color: 'text-cyan-600' },
+  { key: 'complaints', label: 'Complaints', total: totalFor(summary.value?.complaints), color: 'text-rose-600' },
+  { key: 'nonconformances', label: 'Nonconformances', total: totalFor(summary.value?.nonconformances), color: 'text-purple-600' },
+  { key: 'risks', label: 'Risks', total: totalFor(summary.value?.risks), color: 'text-red-600' }
 ]);
 
 const activeMixRows = computed(() => summary.value?.[selectedMix.value] || []);
@@ -41,85 +41,106 @@ function statusPercent(rowTotal) {
   return Math.round((Number(rowTotal || 0) / activeMixTotal.value) * 100);
 }
 
+const STATUS_BAR_COLORS = [
+  'bg-indigo-500', 'bg-amber-500', 'bg-green-500', 'bg-rose-500', 'bg-cyan-500',
+  'bg-purple-500', 'bg-slate-500', 'bg-orange-500'
+];
+
 onMounted(loadSummary);
 </script>
 
 <template>
-  <section class="space-y-4">
-    <header class="rounded-2xl border border-slate-200 bg-white p-5">
-      <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Phase 1</p>
-      <h2 class="mt-1 text-2xl font-bold text-slate-900">Quality Events Hub</h2>
-      <p class="mt-2 text-sm text-slate-600">Unified operational pulse across deviation, CAPA, complaints, nonconformance, changes, audits, and risks.</p>
-      <div class="mt-3 flex flex-wrap items-center gap-2">
-        <select v-model="selectedMix" class="rounded border border-slate-300 px-2 py-1 text-xs">
-          <option v-for="item in moduleTotals" :key="item.key" :value="item.key">{{ item.label }} mix</option>
-        </select>
-        <button class="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700" @click="loadSummary">Refresh</button>
+  <div class="space-y-4">
+
+    <!-- Header -->
+    <div class="flex items-start justify-between rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Platform Intelligence</p>
+        <h1 class="mt-0.5 text-2xl font-bold text-slate-900">Quality Events Hub</h1>
+        <p class="mt-1 text-sm text-slate-500">Unified operational pulse across all QMS modules — deviations, CAPAs, complaints, and more.</p>
       </div>
-    </header>
-
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-xs uppercase tracking-[0.08em] text-slate-500">Deviations</p>
-        <p class="mt-2 text-3xl font-extrabold text-slate-900">{{ totalFor(summary?.deviations) }}</p>
-      </article>
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-xs uppercase tracking-[0.08em] text-slate-500">CAPAs</p>
-        <p class="mt-2 text-3xl font-extrabold text-slate-900">{{ totalFor(summary?.capas) }}</p>
-      </article>
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-xs uppercase tracking-[0.08em] text-slate-500">Complaints</p>
-        <p class="mt-2 text-3xl font-extrabold text-slate-900">{{ totalFor(summary?.complaints) }}</p>
-      </article>
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-xs uppercase tracking-[0.08em] text-slate-500">Nonconformances</p>
-        <p class="mt-2 text-3xl font-extrabold text-slate-900">{{ totalFor(summary?.nonconformances) }}</p>
-      </article>
+      <button
+        class="flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        :disabled="loading"
+        @click="loadSummary"
+      >
+        <svg class="h-4 w-4" :class="loading ? 'animate-spin' : ''" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clip-rule="evenodd"/>
+        </svg>
+        Refresh
+      </button>
     </div>
 
-    <section class="grid gap-4 xl:grid-cols-3">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">{{ activeMixLabel }} Distribution</h3>
-        <ul class="mt-3 space-y-2 text-sm">
-          <li
-            v-for="row in activeMixRows"
-            :key="`active-${row.status}`"
-            class="rounded border border-slate-200 px-3 py-2"
-          >
-            <div class="flex items-center justify-between">
-              <span>{{ row.status }}</span>
-              <span class="font-semibold">{{ row.total }}</span>
-            </div>
-            <div class="mt-2 h-2 overflow-hidden rounded bg-slate-100">
-              <div class="h-full bg-emerald-600" :style="{ width: `${statusPercent(row.total)}%` }"></div>
-            </div>
-            <p class="mt-1 text-[11px] text-slate-600">{{ statusPercent(row.total) }}% of {{ activeMixLabel }}</p>
-          </li>
-        </ul>
-      </article>
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">CAPA Status Mix</h3>
-        <ul class="mt-3 space-y-2 text-sm">
-          <li v-for="row in summary?.capas || []" :key="`ca-${row.status}`" class="rounded border border-slate-200 px-3 py-2">
-            {{ row.status }}: <span class="font-semibold">{{ row.total }}</span>
-          </li>
-        </ul>
-      </article>
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Risk Status Mix</h3>
-        <ul class="mt-3 space-y-2 text-sm">
-          <li v-for="row in summary?.risks || []" :key="`rk-${row.status}`" class="rounded border border-slate-200 px-3 py-2">
-            {{ row.status }}: <span class="font-semibold">{{ row.total }}</span>
-          </li>
-        </ul>
-      </article>
-    </section>
-
-    <div class="flex items-center gap-3">
-      <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700" @click="loadSummary">Refresh</button>
-      <p class="text-sm text-slate-600">Selected mix total: {{ activeMixTotal }}</p>
-      <p v-if="loading" class="text-sm text-slate-600">Refreshing event hub...</p>
-      <p v-if="error" class="text-sm text-red-700">{{ error }}</p>
+    <!-- Stat tiles -->
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <button
+        v-for="mod in moduleTotals"
+        :key="mod.key"
+        class="rounded-xl border bg-white px-5 py-4 text-left shadow-sm transition-colors hover:bg-slate-50"
+        :class="selectedMix === mod.key ? 'border-indigo-400 ring-1 ring-indigo-300' : 'border-slate-200'"
+        @click="selectedMix = mod.key"
+      >
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">{{ mod.label }}</p>
+        <p class="mt-2 text-3xl font-extrabold" :class="mod.color">{{ mod.total }}</p>
+        <p class="mt-1 text-xs text-slate-400">total records</p>
+      </button>
     </div>
-  </section>
+
+    <!-- Status mix -->
+    <div class="grid gap-4 xl:grid-cols-3">
+      <div class="xl:col-span-2 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <h2 class="text-base font-semibold text-slate-800">{{ activeMixLabel }} — Status Distribution</h2>
+          <span class="text-sm text-slate-400">Total: {{ activeMixTotal }}</span>
+        </div>
+        <div v-if="loading" class="mt-6 flex items-center justify-center py-8">
+          <svg class="h-5 w-5 animate-spin text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="10" stroke-width="2" stroke-opacity="0.25"/>
+            <path d="M12 2a10 10 0 0 1 10 10" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div v-else-if="!activeMixRows.length" class="mt-6 text-center text-sm text-slate-400 py-8">No data available.</div>
+        <ul v-else class="mt-4 space-y-3">
+          <li v-for="(row, idx) in activeMixRows" :key="`active-${row.status}`">
+            <div class="flex items-center justify-between text-sm">
+              <span class="font-medium text-slate-700">{{ row.status }}</span>
+              <span class="text-slate-500">{{ row.total }} <span class="text-slate-400">({{ statusPercent(row.total) }}%)</span></span>
+            </div>
+            <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div
+                class="h-full rounded-full transition-all duration-500"
+                :class="STATUS_BAR_COLORS[idx % STATUS_BAR_COLORS.length]"
+                :style="{ width: `${statusPercent(row.total)}%` }"
+              />
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="space-y-4">
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 class="text-base font-semibold text-slate-800">CAPA Status Mix</h2>
+          <ul class="mt-3 space-y-2 text-sm">
+            <li v-for="row in summary?.capas || []" :key="`ca-${row.status}`" class="flex items-center justify-between">
+              <span class="text-slate-600">{{ row.status }}</span>
+              <span class="font-semibold text-slate-800">{{ row.total }}</span>
+            </li>
+            <li v-if="!(summary?.capas?.length)" class="text-slate-400">No data.</li>
+          </ul>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 class="text-base font-semibold text-slate-800">Risk Status Mix</h2>
+          <ul class="mt-3 space-y-2 text-sm">
+            <li v-for="row in summary?.risks || []" :key="`rk-${row.status}`" class="flex items-center justify-between">
+              <span class="text-slate-600">{{ row.status }}</span>
+              <span class="font-semibold text-slate-800">{{ row.total }}</span>
+            </li>
+            <li v-if="!(summary?.risks?.length)" class="text-slate-400">No data.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <p v-if="error" class="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{{ error }}</p>
+  </div>
 </template>

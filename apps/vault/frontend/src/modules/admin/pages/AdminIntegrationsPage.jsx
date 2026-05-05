@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import AdminTabs from '../components/AdminTabs'
 import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
+import VaultPageHeader from '../../vault/components/VaultPageHeader'
 
 const DEFAULT_FORM = {
   name: '',
@@ -119,15 +120,13 @@ export default function AdminIntegrationsPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Integrations</h1>
-          <p className="brand-subtitle">Connector registry for Veeva Vault-style downstream integrations and health checks</p>
-        </div>
-        <span className="topbar-pill">Admin Console</span>
-      </header>
-
       <main className="dashboard-grid">
+        <VaultPageHeader
+          kicker="Administration / Integrations"
+          title="Integrations"
+          note="Connector registry for Veeva Vault-style downstream integrations and health checks."
+          statusLabel="Admin Console"
+        />
         <section className="panel span-4">
           <AdminTabs active="integrations" />
           <h3>Create Connector</h3>

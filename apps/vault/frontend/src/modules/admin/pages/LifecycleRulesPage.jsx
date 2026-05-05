@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import AdminTabs from '../components/AdminTabs'
 import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
+import VaultPageHeader from '../../vault/components/VaultPageHeader'
 
 export default function LifecycleRulesPage() {
   const token = getOrgToken()
@@ -108,15 +109,13 @@ export default function LifecycleRulesPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Lifecycle Rules</h1>
-          <p className="brand-subtitle">Configure lifecycle states and role-based transitions</p>
-        </div>
-        <span className="topbar-pill">Admin Console</span>
-      </header>
-
       <main className="dashboard-grid">
+        <VaultPageHeader
+          kicker="Administration / Lifecycle"
+          title="Lifecycle Rules"
+          note="Configure lifecycle states and role-based transitions."
+          statusLabel="Admin Console"
+        />
         <section className="panel span-12">
           <AdminTabs active="lifecycle" />
 

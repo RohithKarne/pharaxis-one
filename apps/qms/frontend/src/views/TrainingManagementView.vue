@@ -9,11 +9,13 @@ const message = ref('');
 
 const trainingCatalog = ref([]);
 const assignments = ref([]);
+const documents = ref([]);
 
 const catalogForm = ref({
   trainingCode: '',
   title: '',
-  description: ''
+  description: '',
+  linkedDocumentId: ''
 });
 
 const assignmentForm = ref({
@@ -39,12 +41,14 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const [catalogData, assignmentData] = await Promise.all([
+    const [catalogData, assignmentData, docData] = await Promise.all([
       apiRequest('/platform/training/catalog'),
-      apiRequest('/platform/training/assignments')
+      apiRequest('/platform/training/assignments'),
+      apiRequest('/document-control/documents').catch(() => ({ documents: [] }))
     ]);
     trainingCatalog.value = catalogData.trainingCatalog || [];
     assignments.value = assignmentData.assignments || [];
+    documents.value = docData.documents || [];
   } catch (err) {
     error.value = err.message;
   } finally {
@@ -55,11 +59,22 @@ async function load() {
 async function createCatalogItem() {
   if (!withWriteAccess(setMessage)) return;
   try {
-    await apiRequest('/platform/training/catalog', { method: 'POST', body: catalogForm.value });
+    const body = {
+      trainingCode: catalogForm.value.trainingCode,
+      title: catalogForm.value.title,
+      description: catalogForm.value.description || null
+    };
+    if (catalogForm.value.linkedDocumentId) {
+      body.sourceModule = 'documentControl';
+      body.sourceTable = 'dc_documents';
+      body.sourceId = catalogForm.value.linkedDocumentId;
+    }
+    await apiRequest('/platform/training/catalog', { method: 'POST', body });
     setMessage('Training catalog item created.');
     catalogForm.value.trainingCode = '';
     catalogForm.value.title = '';
     catalogForm.value.description = '';
+    catalogForm.value.linkedDocumentId = '';
     await load();
   } catch (err) {
     error.value = err.message;
@@ -114,6 +129,13 @@ onMounted(load);
           <input v-model="catalogForm.trainingCode" class="rounded-lg border px-3 py-2 text-sm" placeholder="Training code" />
           <input v-model="catalogForm.title" class="rounded-lg border px-3 py-2 text-sm" placeholder="Title" />
           <textarea v-model="catalogForm.description" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Description"></textarea>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-slate-500">Link to Controlled Document (optional)</label>
+            <select v-model="catalogForm.linkedDocumentId" class="w-full rounded-lg border px-3 py-2 text-sm">
+              <option value="">— None —</option>
+              <option v-for="doc in documents" :key="doc.id" :value="doc.id">{{ doc.document_code }} — {{ doc.title }}</option>
+            </select>
+          </div>
         </div>
         <button class="mt-3 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createCatalogItem">Create Item</button>
       </article>

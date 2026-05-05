@@ -1,15 +1,16 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { apiRequest } from '../services/api';
 import { useModuleAccess } from '../composables/useModuleAccess';
 
+const router = useRouter();
 const loading = ref(false);
+const error = ref('');
 const message = ref('');
 const audits = ref([]);
-const binderJobs = ref([]);
-const selectedAuditId = ref('');
-const detail = ref(null);
-const capas = ref([]);
+const showCreate = ref(false);
+const creating = ref(false);
 
 const createForm = ref({
   auditTitle: '',
@@ -18,84 +19,29 @@ const createForm = ref({
   plannedDate: ''
 });
 
-const findingForm = ref({
-  description: '',
-  findingType: 'Major',
-  department: 'Quality',
-  processArea: '',
-  dueDate: '',
-  responseDueDate: ''
-});
-
-const responseForm = ref({ findingId: '', responseText: '', proposedAction: '' });
-const closeFindingForm = ref({ findingId: '', closureSummary: '', effectivenessResult: 'Effective' });
-const closeAuditForm = ref({ closureSummary: '' });
-const linkForm = ref({ findingId: '', capaId: '' });
-
-const audit = computed(() => detail.value?.audit || null);
-const findings = computed(() => detail.value?.findings || []);
-const timeline = computed(() => detail.value?.timeline || []);
-
-const auditTypes = ['Internal', 'External', 'RegulatoryInspection'];
-const findingTypes = ['Observation', 'Minor', 'Major', 'Critical'];
-const effectivenessOptions = ['Effective', 'PartiallyEffective', 'NotEffective'];
 const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAccess('audits');
 
-function setMessage(text) {
-  message.value = text;
+function formatDate(val) {
+  if (!val) return '—';
+  return new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function hydrateFindingSelectors() {
-  const firstFindingId = findings.value[0]?.id || '';
-  responseForm.value.findingId = firstFindingId;
-  closeFindingForm.value.findingId = firstFindingId;
-  linkForm.value.findingId = firstFindingId;
-}
-
-async function refreshList() {
+async function load() {
   loading.value = true;
+  error.value = '';
   try {
-    const [auditData, jobData] = await Promise.all([apiRequest('/audits'), apiRequest('/audits/binder/jobs')]);
-    audits.value = auditData.audits || [];
-    binderJobs.value = jobData.jobs || [];
-
-    if (!selectedAuditId.value && audits.value.length > 0) {
-      selectedAuditId.value = audits.value[0].id;
-      await loadDetail();
-    }
-  } catch (error) {
-    setMessage(error.message);
+    const data = await apiRequest('/audits');
+    audits.value = data.audits || [];
+  } catch (err) {
+    error.value = err.message;
   } finally {
     loading.value = false;
   }
 }
 
-async function loadCapas() {
-  try {
-    const data = await apiRequest('/capa');
-    capas.value = data.capas || [];
-  } catch {
-    capas.value = [];
-  }
-}
-
-async function loadDetail() {
-  if (!selectedAuditId.value) {
-    detail.value = null;
-    return;
-  }
-
-  try {
-    const data = await apiRequest(`/audits/${selectedAuditId.value}`);
-    detail.value = data;
-    hydrateFindingSelectors();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
 async function createAudit() {
-  if (!withWriteAccess(setMessage)) return;
+  if (!withWriteAccess((t) => { message.value = t; })) return;
+  creating.value = true;
   try {
     await apiRequest('/audits', {
       method: 'POST',
@@ -104,274 +50,148 @@ async function createAudit() {
         plannedDate: createForm.value.plannedDate || new Date().toISOString().slice(0, 10)
       }
     });
-    setMessage('Audit created successfully.');
+    message.value = 'Audit created successfully.';
     createForm.value.auditTitle = '';
     createForm.value.scope = '';
     createForm.value.plannedDate = '';
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
+    showCreate.value = false;
+    await load();
+  } catch (err) {
+    error.value = err.message;
+  } finally {
+    creating.value = false;
   }
 }
 
-async function startAudit() {
-  if (!selectedAuditId.value) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/audits/${selectedAuditId.value}/start`, { method: 'POST' });
-    setMessage('Audit moved to InProgress.');
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
+const STATUS_COLORS = {
+  Planned: 'bg-slate-50 text-slate-600 border-slate-200',
+  InProgress: 'bg-blue-50 text-blue-700 border-blue-200',
+  FindingsCaptured: 'bg-amber-50 text-amber-700 border-amber-200',
+  ResponseInProgress: 'bg-purple-50 text-purple-700 border-purple-200',
+  Closed: 'bg-green-50 text-green-700 border-green-200'
+};
 
-async function addFinding() {
-  if (!selectedAuditId.value) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/audits/${selectedAuditId.value}/findings`, {
-      method: 'POST',
-      body: {
-        ...findingForm.value,
-        dueDate: findingForm.value.dueDate || null,
-        responseDueDate: findingForm.value.responseDueDate || null
-      }
-    });
-    setMessage('Finding created.');
-    findingForm.value.description = '';
-    findingForm.value.processArea = '';
-    findingForm.value.dueDate = '';
-    findingForm.value.responseDueDate = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function respondFinding() {
-  if (!selectedAuditId.value || !responseForm.value.findingId) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/audits/${selectedAuditId.value}/findings/${responseForm.value.findingId}/respond`, {
-      method: 'POST',
-      body: {
-        responseText: responseForm.value.responseText,
-        proposedAction: responseForm.value.proposedAction || null
-      }
-    });
-    setMessage('Finding response recorded.');
-    responseForm.value.responseText = '';
-    responseForm.value.proposedAction = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function linkFindingToCapa() {
-  if (!selectedAuditId.value || !linkForm.value.findingId || !linkForm.value.capaId) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/audits/${selectedAuditId.value}/findings/${linkForm.value.findingId}/link-capa`, {
-      method: 'POST',
-      body: { capaId: linkForm.value.capaId }
-    });
-    setMessage('Finding linked to CAPA.');
-    await loadDetail();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function closeFinding() {
-  if (!selectedAuditId.value || !closeFindingForm.value.findingId) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/audits/${selectedAuditId.value}/findings/${closeFindingForm.value.findingId}/close`, {
-      method: 'POST',
-      body: {
-        closureSummary: closeFindingForm.value.closureSummary,
-        effectivenessResult: closeFindingForm.value.effectivenessResult
-      }
-    });
-    setMessage('Finding closed.');
-    closeFindingForm.value.closureSummary = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function closeAudit() {
-  if (!selectedAuditId.value) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/audits/${selectedAuditId.value}/close`, {
-      method: 'POST',
-      body: closeAuditForm.value
-    });
-    setMessage('Audit closed successfully.');
-    closeAuditForm.value.closureSummary = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function generateBinder() {
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest('/audits/binder/generate', { method: 'POST', body: {} });
-    setMessage('Inspection binder generated.');
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-onMounted(async () => {
-  await Promise.all([refreshList(), loadCapas()]);
-});
+onMounted(load);
 </script>
 
 <template>
-  <section class="space-y-4">
-    <header class="rounded-2xl border border-sky-100 bg-white p-4">
-      <h2 class="text-xl font-bold text-sky-900">Audit Management Workspace</h2>
-      <p class="mt-1 text-sm text-slate-600">Run enterprise audits with findings, responses, CAPA linkage, closure evidence, and binder output.</p>
-      <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-        {{ writeDisabledReason }}
-      </p>
-      <p v-if="message" class="mt-2 text-sm text-indigo-700">{{ message }}</p>
-    </header>
+  <div class="flex h-full flex-col">
 
-    <section class="grid gap-4 xl:grid-cols-3">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Create Audit</h3>
-        <div class="mt-3 grid gap-2">
-          <input v-model="createForm.auditTitle" class="rounded-lg border px-3 py-2 text-sm" placeholder="Audit title" />
-          <select v-model="createForm.auditType" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="item in auditTypes" :key="item" :value="item">{{ item }}</option>
-          </select>
-          <textarea v-model="createForm.scope" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Scope"></textarea>
-          <label class="text-xs text-slate-600">Planned Date</label>
-          <input v-model="createForm.plannedDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-        </div>
-        <button class="mt-3 rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createAudit">Create Audit</button>
-      </article>
+    <div class="flex items-start justify-between rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Quality Management</p>
+        <h1 class="mt-0.5 text-2xl font-bold text-slate-900">Audits</h1>
+        <p class="mt-1 text-sm text-slate-500">Plan and run internal, external, and regulatory audits with findings and closure evidence.</p>
+      </div>
+      <button
+        class="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+        :disabled="isWriteDisabled"
+        @click="showCreate = true"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"/></svg>
+        New Audit
+      </button>
+    </div>
 
-      <article class="rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 class="text-lg font-semibold text-slate-900">Audits</h3>
-          <div class="flex gap-2">
-            <button class="rounded-lg border border-sky-700 px-4 py-2 text-sm font-semibold text-sky-700" @click="refreshList">Refresh</button>
-            <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="generateBinder">Generate Binder</button>
-          </div>
-        </div>
-        <p v-if="loading" class="mt-2 text-sm text-slate-600">Loading audits...</p>
-        <ul class="mt-3 max-h-64 space-y-2 overflow-auto text-sm">
-          <li
+    <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">{{ writeDisabledReason }}</p>
+
+    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div class="border-b border-slate-100 bg-slate-50 px-4 py-3">
+        <p class="text-sm font-semibold text-slate-700">
+          {{ loading ? 'Loading…' : `${audits.length} record${audits.length !== 1 ? 's' : ''}` }}
+        </p>
+      </div>
+
+      <div v-if="loading" class="flex items-center justify-center py-16">
+        <svg class="h-5 w-5 animate-spin text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="10" stroke-width="2" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <div v-else-if="!audits.length" class="py-16 text-center text-sm text-slate-400">
+        No audits found. Click <strong>New Audit</strong> to get started.
+      </div>
+
+      <table v-else class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <th class="px-4 py-3">Code</th>
+            <th class="px-4 py-3">Title</th>
+            <th class="px-4 py-3">Type</th>
+            <th class="px-4 py-3">Planned Date</th>
+            <th class="px-4 py-3">Findings</th>
+            <th class="px-4 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
             v-for="item in audits"
             :key="item.id"
-            class="cursor-pointer rounded-lg border px-3 py-2"
-            :class="selectedAuditId === item.id ? 'border-sky-500 bg-sky-50' : 'border-slate-200'"
-            @click="selectedAuditId = item.id; loadDetail()"
+            class="cursor-pointer border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50"
+            @click="router.push('/audits/' + item.id)"
           >
-            <p class="font-semibold">{{ item.audit_code }} - {{ item.audit_title }}</p>
-            <p class="text-xs text-slate-600">{{ item.status }} • Findings: {{ item.closed_findings || 0 }}/{{ item.total_findings || 0 }}</p>
-          </li>
-        </ul>
-      </article>
-    </section>
+            <td class="px-4 py-3 font-mono text-xs font-semibold text-indigo-600">{{ item.audit_code }}</td>
+            <td class="max-w-xs px-4 py-3 font-medium text-slate-800"><span class="line-clamp-1">{{ item.audit_title }}</span></td>
+            <td class="px-4 py-3 text-slate-600">{{ item.audit_type }}</td>
+            <td class="px-4 py-3 text-slate-600">{{ formatDate(item.planned_date) }}</td>
+            <td class="px-4 py-3 text-slate-600">{{ item.closed_findings || 0 }} / {{ item.total_findings || 0 }}</td>
+            <td class="px-4 py-3">
+              <span class="rounded-full border px-2 py-0.5 text-xs font-medium" :class="STATUS_COLORS[item.status] || 'bg-slate-50 text-slate-600 border-slate-200'">{{ item.status }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-    <section v-if="audit" class="grid gap-4 xl:grid-cols-3">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Audit Actions</h3>
-        <p class="mt-1 text-xs text-slate-600">Current Status: {{ audit.status }}</p>
-        <button class="mt-3 rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="startAudit">Start Audit</button>
+    <p v-if="message" class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{{ message }}</p>
+    <p v-if="error" class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{{ error }}</p>
 
-        <h4 class="mt-4 text-sm font-semibold text-slate-900">Close Audit</h4>
-        <textarea v-model="closeAuditForm.closureSummary" class="mt-2 w-full rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Closure summary"></textarea>
-        <button class="mt-2 rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="closeAudit">Close Audit</button>
-      </article>
+    <Transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-200" leave-to-class="opacity-0">
+      <div v-if="showCreate" class="fixed inset-0 z-40 bg-black/30" @click="showCreate = false" />
+    </Transition>
 
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Findings</h3>
-        <div class="mt-3 grid gap-2">
-          <textarea v-model="findingForm.description" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Finding description"></textarea>
-          <select v-model="findingForm.findingType" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="item in findingTypes" :key="item" :value="item">{{ item }}</option>
-          </select>
-          <input v-model="findingForm.department" class="rounded-lg border px-3 py-2 text-sm" placeholder="Department" />
-          <input v-model="findingForm.processArea" class="rounded-lg border px-3 py-2 text-sm" placeholder="Process area" />
-          <input v-model="findingForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-          <input v-model="findingForm.responseDueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="addFinding">Add Finding</button>
+    <Transition enter-active-class="transition-transform duration-300" enter-from-class="translate-x-full" leave-active-class="transition-transform duration-300" leave-to-class="translate-x-full">
+      <div v-if="showCreate" class="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 class="text-lg font-semibold text-slate-900">New Audit</h2>
+          <button class="rounded-lg p-2 text-slate-400 hover:bg-slate-100" @click="showCreate = false">
+            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/></svg>
+          </button>
         </div>
-
-        <ul class="mt-3 max-h-36 space-y-2 overflow-auto text-xs">
-          <li v-for="finding in findings" :key="finding.id" class="rounded border border-slate-200 px-2 py-1">
-            {{ finding.finding_code || finding.id }} • {{ finding.finding_type }} • {{ finding.status }}
-          </li>
-        </ul>
-      </article>
-
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Responses & Closure</h3>
-        <div class="mt-3 grid gap-2">
-          <select v-model="responseForm.findingId" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="finding in findings" :key="`resp-${finding.id}`" :value="finding.id">{{ finding.finding_code || finding.id }}</option>
-          </select>
-          <textarea v-model="responseForm.responseText" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Response"></textarea>
-          <textarea v-model="responseForm.proposedAction" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Proposed action"></textarea>
-          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="respondFinding">Submit Response</button>
-
-          <select v-model="linkForm.findingId" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="finding in findings" :key="`link-${finding.id}`" :value="finding.id">{{ finding.finding_code || finding.id }}</option>
-          </select>
-          <select v-model="linkForm.capaId" class="rounded-lg border px-3 py-2 text-sm">
-            <option value="">Select CAPA</option>
-            <option v-for="capa in capas" :key="capa.id" :value="capa.id">{{ capa.capa_code }} - {{ capa.title }}</option>
-          </select>
-          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="linkFindingToCapa">Link CAPA</button>
-
-          <select v-model="closeFindingForm.findingId" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="finding in findings" :key="`close-${finding.id}`" :value="finding.id">{{ finding.finding_code || finding.id }}</option>
-          </select>
-          <textarea v-model="closeFindingForm.closureSummary" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Closure summary"></textarea>
-          <select v-model="closeFindingForm.effectivenessResult" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="item in effectivenessOptions" :key="item" :value="item">{{ item }}</option>
-          </select>
-          <button class="rounded border border-sky-500 px-3 py-1 text-xs font-semibold text-sky-700" :disabled="isWriteDisabled" @click="closeFinding">Close Finding</button>
+        <div class="flex-1 overflow-y-auto px-6 py-5">
+          <fieldset :disabled="isWriteDisabled" class="grid gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Audit Title <span class="text-red-500">*</span></label>
+              <input v-model="createForm.auditTitle" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="Audit title" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Audit Type</label>
+              <select v-model="createForm.auditType" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none">
+                <option>Internal</option><option>External</option><option>RegulatoryInspection</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Scope</label>
+              <textarea v-model="createForm.scope" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" rows="3" placeholder="Audit scope" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Planned Date</label>
+              <input v-model="createForm.plannedDate" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" />
+            </div>
+          </fieldset>
         </div>
-      </article>
-    </section>
-
-    <section class="grid gap-4 xl:grid-cols-2">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Audit Timeline</h3>
-        <ul class="mt-3 max-h-60 space-y-2 overflow-auto text-sm">
-          <li v-for="item in timeline" :key="item.id" class="rounded border border-slate-200 px-3 py-2">
-            <p class="font-semibold">{{ item.action_key }}</p>
-            <p class="text-xs text-slate-600">{{ item.occurred_at }}</p>
-          </li>
-        </ul>
-      </article>
-
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Binder Jobs</h3>
-        <ul class="mt-3 max-h-60 space-y-2 overflow-auto text-sm">
-          <li v-for="job in binderJobs" :key="job.id" class="rounded border border-slate-200 px-3 py-2">
-            {{ job.job_status }} • records {{ job.total_records }} • duration {{ job.duration_ms || 0 }}ms
-          </li>
-        </ul>
-      </article>
-    </section>
-  </section>
+        <div class="border-t border-slate-200 px-6 py-4 flex gap-3">
+          <button
+            class="flex-1 rounded-lg bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            :disabled="!createForm.auditTitle || creating || isWriteDisabled"
+            @click="createAudit"
+          >
+            {{ creating ? 'Creating…' : 'Create Audit' }}
+          </button>
+          <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50" @click="showCreate = false">Cancel</button>
+        </div>
+      </div>
+    </Transition>
+  </div>
 </template>

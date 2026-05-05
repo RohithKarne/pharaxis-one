@@ -341,6 +341,35 @@ supplierQualityRouter.patch('/scars/:scarId', async (req, res, next) => {
   }
 });
 
+supplierQualityRouter.get('/suppliers/:supplierId', async (req, res, next) => {
+  try {
+    const { supplierId } = req.params;
+    const data = await req.withRlsTransaction(async (client) => {
+      const { rows: supplierRows } = await client.query(
+        `SELECT * FROM sq_suppliers WHERE id = $1 LIMIT 1`,
+        [supplierId]
+      );
+      if (!supplierRows[0]) {
+        const error = new Error('Supplier not found');
+        error.statusCode = 404;
+        throw error;
+      }
+      const { rows: auditRows } = await client.query(
+        `SELECT * FROM sq_supplier_audits WHERE supplier_id = $1 ORDER BY updated_at DESC`,
+        [supplierId]
+      );
+      const { rows: scarRows } = await client.query(
+        `SELECT * FROM sq_scar_records WHERE supplier_id = $1 ORDER BY updated_at DESC`,
+        [supplierId]
+      );
+      return { supplier: supplierRows[0], supplierAudits: auditRows, scars: scarRows };
+    });
+    return res.json(data);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 supplierQualityRouter.get('/', async (req, res, next) => {
   try {
     const snapshot = await req.withRlsTransaction(async (client) => {

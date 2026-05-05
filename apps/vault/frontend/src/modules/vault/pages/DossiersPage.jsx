@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiJson, authHeaders, getOrgToken, getOrgUser } from '../../common/utils/session'
+import VaultPageHeader from '../components/VaultPageHeader'
 
 function formatDate(value) {
   if (!value) return '-'
@@ -236,17 +237,13 @@ export default function DossiersPage() {
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
-        <section className="panel span-12 workspace-hero-card">
-          <div>
-            <p className="workspace-hero-kicker">Compliance / Dossiers</p>
-            <h2 className="workspace-hero-title">Dossier Workspace</h2>
-            <p className="panel-note">Curated document binders for regulatory and review workflows.</p>
-          </div>
-          <div className="workspace-hero-right">
-            <span className="workspace-status-pill">Dossier Ops</span>
-            <span className="workspace-hero-date">{dossiers.length} dossiers</span>
-          </div>
-        </section>
+        <VaultPageHeader
+          kicker="Compliance / Dossiers"
+          title="Dossier Workspace"
+          note="Curated document binders for regulatory and review workflows."
+          statusLabel="Dossier Ops"
+          dateLabel={`${dossiers.length} dossiers`}
+        />
 
         <section className="panel span-12">
           <ul className="simple-list">

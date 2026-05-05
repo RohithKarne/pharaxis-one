@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import FolderTree from '../components/FolderTree'
+import VaultPageHeader from '../components/VaultPageHeader'
 import { apiJson, authHeaders, getOrgToken, getOrgUser } from '../../common/utils/session'
 
 const CONFIG_STUDIO_GROUPS = [
@@ -72,6 +73,12 @@ export default function VaultHomePage() {
     rejected: 0,
     escalated: 0
   })
+  const [intelligenceSummary, setIntelligenceSummary] = useState({
+    stale_count: 0,
+    at_risk_count: 0,
+    expiry_30d_count: 0,
+    total_governed: 0
+  })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -134,7 +141,10 @@ export default function VaultHomePage() {
     try {
       const [contentPayload] = await Promise.all([
         loadContent(),
-        loadWorkflowInsights()
+        loadWorkflowInsights(),
+        apiJson('/api/intelligence/summary', { headers: authHeaders(token) })
+          .then(data => setIntelligenceSummary(data))
+          .catch(() => {})
       ])
       setContentRows(Array.isArray(contentPayload) ? contentPayload : [])
     } catch (requestError) {
@@ -266,19 +276,13 @@ export default function VaultHomePage() {
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
-        <section className="panel span-12 workspace-hero-card">
-          <div>
-            <p className="workspace-hero-kicker">Workspace / Vault</p>
-            <h2 className="workspace-hero-title">Vault Command Center</h2>
-            <p className="panel-note">
-              Create content, run approvals, and complete lifecycle operations from one workspace.
-            </p>
-          </div>
-          <div className="workspace-hero-right">
-            <span className="workspace-status-pill">Lifecycle Active</span>
-            <span className="workspace-hero-date">{new Date().toLocaleDateString()}</span>
-          </div>
-        </section>
+        <VaultPageHeader
+          kicker="Regulated Vault / Command Center"
+          title="Pharaxis Vault Control Console"
+          note="Govern content, approvals, relationships, external sharing, and compliance evidence from one validated workspace."
+          statusLabel="Lifecycle Active"
+          dateLabel={new Date().toLocaleDateString()}
+        />
 
         <section className="panel span-4">
           <h3>Create Workspace Items</h3>
@@ -550,6 +554,20 @@ export default function VaultHomePage() {
             ))}
           </ul>
           <p className="panel-note">User: {currentUser?.name || '-'} ({currentUser?.role || '-'})</p>
+        </section>
+
+        <section className="panel span-8">
+          <h3>Content Intelligence</h3>
+          <p className="panel-note">Stale, at-risk, and expiring content signals across the organization.</p>
+          <ul className="simple-list detail-list">
+            <li><span>Stale Documents</span><strong>{intelligenceSummary.stale_count}</strong></li>
+            <li><span>At Risk</span><strong>{intelligenceSummary.at_risk_count}</strong></li>
+            <li><span>Expiring in 30 Days</span><strong>{intelligenceSummary.expiry_30d_count}</strong></li>
+            <li><span>Total Governed</span><strong>{intelligenceSummary.total_governed}</strong></li>
+          </ul>
+          <div className="detail-actions">
+            <Link className="btn-secondary link-button" to="/vault/intelligence">View Intelligence Report</Link>
+          </div>
         </section>
 
         <section className="span-8">

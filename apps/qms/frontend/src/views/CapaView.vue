@@ -1,13 +1,16 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { apiRequest } from '../services/api';
 import { useModuleAccess } from '../composables/useModuleAccess';
 
+const router = useRouter();
 const loading = ref(false);
+const error = ref('');
 const message = ref('');
 const list = ref([]);
-const selectedCapaId = ref('');
-const detail = ref(null);
+const showCreate = ref(false);
+const creating = ref(false);
 
 const createForm = ref({
   title: '',
@@ -16,55 +19,34 @@ const createForm = ref({
   dueDate: '',
   department: '',
   productName: '',
-  batchLotNo: '',
   severity: 3,
   occurrence: 3,
   detectability: 3
 });
 
-const fiveWhyForm = ref({ whyLevel: 1, answer: '' });
-const fishboneForm = ref({ category: 'Method', cause: '' });
-const actionForm = ref({ description: '', actionType: 'Corrective', dueDate: '' });
-const effectivenessForm = ref({ criteria: '', result: 'Pass', evidenceRef: '' });
-const triageForm = ref({ triageSummary: '' });
-const reopenForm = ref({ reason: '' });
-
-const selectedCapa = computed(() => detail.value?.capa || null);
-const sourceTypes = ['Manual', 'Deviation', 'AuditFinding', 'Complaint', 'ChangeControl', 'DocumentControl', 'Validation'];
-const classifications = ['Corrective', 'Preventive', 'Both'];
 const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAccess('capa');
 
-async function refreshList() {
+function formatDate(val) {
+  if (!val) return '—';
+  return new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+async function load() {
   loading.value = true;
+  error.value = '';
   try {
     const data = await apiRequest('/capa');
     list.value = data.capas || [];
-    if (!selectedCapaId.value && list.value.length > 0) {
-      selectedCapaId.value = list.value[0].id;
-      await loadDetail();
-    }
-  } catch (error) {
-    message.value = error.message;
+  } catch (err) {
+    error.value = err.message;
   } finally {
     loading.value = false;
   }
 }
 
-async function loadDetail() {
-  if (!selectedCapaId.value) {
-    detail.value = null;
-    return;
-  }
-  try {
-    const data = await apiRequest(`/capa/${selectedCapaId.value}`);
-    detail.value = data;
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
 async function createCapa() {
-  if (!withWriteAccess((text) => { message.value = text; })) return;
+  if (!withWriteAccess((t) => { message.value = t; })) return;
+  creating.value = true;
   try {
     await apiRequest('/capa', {
       method: 'POST',
@@ -72,342 +54,199 @@ async function createCapa() {
         ...createForm.value,
         dueDate: createForm.value.dueDate || null,
         department: createForm.value.department || null,
-        productName: createForm.value.productName || null,
-        batchLotNo: createForm.value.batchLotNo || null
+        productName: createForm.value.productName || null
       }
     });
     message.value = 'CAPA created successfully.';
     createForm.value.title = '';
     createForm.value.department = '';
     createForm.value.productName = '';
-    createForm.value.batchLotNo = '';
     createForm.value.dueDate = '';
-    await refreshList();
-  } catch (error) {
-    message.value = error.message;
+    showCreate.value = false;
+    await load();
+  } catch (err) {
+    error.value = err.message;
+  } finally {
+    creating.value = false;
   }
 }
 
-async function submitCapa() {
-  if (!selectedCapaId.value) return;
-  if (!withWriteAccess((text) => { message.value = text; })) return;
-  try {
-    await apiRequest(`/capa/${selectedCapaId.value}/submit`, { method: 'POST' });
-    message.value = 'CAPA submitted.';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
+const STATUS_COLORS = {
+  Draft: 'bg-slate-50 text-slate-600 border-slate-200',
+  Submitted: 'bg-blue-50 text-blue-700 border-blue-200',
+  Investigation: 'bg-amber-50 text-amber-700 border-amber-200',
+  ActionPlanApproval: 'bg-purple-50 text-purple-700 border-purple-200',
+  InExecution: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  EffectivenessPending: 'bg-orange-50 text-orange-700 border-orange-200',
+  Closed: 'bg-green-50 text-green-700 border-green-200'
+};
 
-async function triageCapa() {
-  if (!selectedCapaId.value) return;
-  if (!withWriteAccess((text) => { message.value = text; })) return;
-  try {
-    await apiRequest(`/capa/${selectedCapaId.value}/triage`, {
-      method: 'POST',
-      body: triageForm.value
-    });
-    message.value = 'CAPA triaged and moved to Investigation.';
-    triageForm.value.triageSummary = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
+const RISK_COLORS = {
+  Critical: 'bg-red-100 text-red-800',
+  High: 'bg-orange-100 text-orange-800',
+  Medium: 'bg-amber-100 text-amber-800',
+  Low: 'bg-green-100 text-green-800'
+};
 
-async function addFiveWhy() {
-  if (!selectedCapaId.value) return;
-  if (!withWriteAccess((text) => { message.value = text; })) return;
-  try {
-    await apiRequest(`/capa/${selectedCapaId.value}/rca/5why`, {
-      method: 'POST',
-      body: fiveWhyForm.value
-    });
-    message.value = '5-Why entry saved.';
-    fiveWhyForm.value.answer = '';
-    await loadDetail();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
-async function addFishbone() {
-  if (!selectedCapaId.value) return;
-  if (!withWriteAccess((text) => { message.value = text; })) return;
-  try {
-    await apiRequest(`/capa/${selectedCapaId.value}/rca/fishbone`, {
-      method: 'POST',
-      body: fishboneForm.value
-    });
-    message.value = 'Fishbone cause saved.';
-    fishboneForm.value.cause = '';
-    await loadDetail();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
-async function addAction() {
-  if (!selectedCapaId.value) return;
-  if (!withWriteAccess((text) => { message.value = text; })) return;
-  try {
-    await apiRequest(`/capa/${selectedCapaId.value}/actions`, {
-      method: 'POST',
-      body: actionForm.value
-    });
-    message.value = 'Action item created.';
-    actionForm.value.description = '';
-    actionForm.value.dueDate = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
-async function markActionComplete(actionId) {
-  if (!selectedCapaId.value) return;
-  if (!withWriteAccess((text) => { message.value = text; })) return;
-  try {
-    await apiRequest(`/capa/${selectedCapaId.value}/actions/${actionId}`, {
-      method: 'PATCH',
-      body: { status: 'Complete' }
-    });
-    message.value = 'Action marked complete.';
-    await loadDetail();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
-async function approveActionPlan() {
-  if (!selectedCapaId.value) return;
-  if (!withWriteAccess((text) => { message.value = text; })) return;
-  try {
-    await apiRequest(`/capa/${selectedCapaId.value}/approve`, {
-      method: 'POST',
-      body: {
-        stage: 'ActionPlan',
-        decision: 'Approve',
-        comments: 'Action plan approved from CAPA workspace'
-      }
-    });
-    message.value = 'Action plan approved.';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
-async function recordEffectiveness() {
-  if (!selectedCapaId.value) return;
-  if (!withWriteAccess((text) => { message.value = text; })) return;
-  try {
-    await apiRequest(`/capa/${selectedCapaId.value}/effectiveness`, {
-      method: 'POST',
-      body: effectivenessForm.value
-    });
-    message.value = 'Effectiveness recorded.';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
-async function approveClosure() {
-  if (!selectedCapaId.value) return;
-  if (!withWriteAccess((text) => { message.value = text; })) return;
-  try {
-    await apiRequest(`/capa/${selectedCapaId.value}/approve`, {
-      method: 'POST',
-      body: {
-        stage: 'Closure',
-        decision: 'Approve',
-        comments: 'Closure approved from CAPA workspace'
-      }
-    });
-    message.value = 'CAPA closure approved.';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
-async function reopenCapa() {
-  if (!selectedCapaId.value) return;
-  if (!withWriteAccess((text) => { message.value = text; })) return;
-  if (!reopenForm.value.reason) {
-    message.value = 'Reopen reason is required.';
-    return;
-  }
-  try {
-    await apiRequest(`/capa/${selectedCapaId.value}/reopen`, {
-      method: 'POST',
-      body: reopenForm.value
-    });
-    message.value = 'CAPA reopened successfully.';
-    reopenForm.value.reason = '';
-    await loadDetail();
-    await refreshList();
-  } catch (error) {
-    message.value = error.message;
-  }
-}
-
-onMounted(refreshList);
+onMounted(load);
 </script>
 
 <template>
-  <section class="space-y-4">
-    <header class="rounded-2xl border border-cyan-100 bg-white p-4">
-      <h2 class="text-xl font-bold text-cyan-900">CAPA Management Workspace</h2>
-      <p class="mt-1 text-sm text-slate-600">Create, triage, investigate, approve, verify effectiveness, and close CAPA records.</p>
-      <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-        {{ writeDisabledReason }}
-      </p>
-      <p v-if="message" class="mt-2 text-sm text-indigo-700">{{ message }}</p>
-    </header>
+  <div class="flex h-full flex-col">
 
-    <section class="grid gap-4 xl:grid-cols-3">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Create CAPA</h3>
-        <div class="mt-3 grid gap-2">
-          <input v-model="createForm.title" class="rounded-lg border px-3 py-2 text-sm" placeholder="CAPA title" />
-          <select v-model="createForm.sourceType" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="type in sourceTypes" :key="type" :value="type">{{ type }}</option>
-          </select>
-          <select v-model="createForm.classification" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="classification in classifications" :key="classification" :value="classification">{{ classification }}</option>
-          </select>
-          <input v-model="createForm.department" class="rounded-lg border px-3 py-2 text-sm" placeholder="Department" />
-          <input v-model="createForm.productName" class="rounded-lg border px-3 py-2 text-sm" placeholder="Product" />
-          <input v-model="createForm.batchLotNo" class="rounded-lg border px-3 py-2 text-sm" placeholder="Batch/Lot" />
-          <label class="text-xs font-semibold text-slate-500">Due Date</label>
-          <input v-model="createForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-        </div>
-        <div class="mt-3 grid grid-cols-3 gap-2 text-xs">
-          <label class="font-semibold text-slate-600">Severity
-            <input v-model.number="createForm.severity" class="mt-1 w-full rounded border px-2 py-1 text-sm" type="number" min="1" max="5" />
-          </label>
-          <label class="font-semibold text-slate-600">Occurrence
-            <input v-model.number="createForm.occurrence" class="mt-1 w-full rounded border px-2 py-1 text-sm" type="number" min="1" max="5" />
-          </label>
-          <label class="font-semibold text-slate-600">Detectability
-            <input v-model.number="createForm.detectability" class="mt-1 w-full rounded border px-2 py-1 text-sm" type="number" min="1" max="5" />
-          </label>
-        </div>
-        <button class="mt-3 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createCapa">Create CAPA</button>
-      </article>
+    <div class="flex items-start justify-between rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Quality Management</p>
+        <h1 class="mt-0.5 text-2xl font-bold text-slate-900">CAPA</h1>
+        <p class="mt-1 text-sm text-slate-500">Corrective and Preventive Actions — investigate root causes and drive closure.</p>
+      </div>
+      <button
+        class="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+        :disabled="isWriteDisabled"
+        @click="showCreate = true"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"/></svg>
+        New CAPA
+      </button>
+    </div>
 
-      <article class="rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 class="text-lg font-semibold text-slate-900">CAPA Records</h3>
-          <button class="rounded-lg border border-cyan-700 px-4 py-2 text-sm font-semibold text-cyan-700" @click="refreshList">Refresh</button>
-        </div>
-        <p v-if="loading" class="mt-2 text-sm text-slate-600">Loading CAPA records...</p>
-        <ul class="mt-3 max-h-72 space-y-2 overflow-auto text-sm">
-          <li
+    <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">{{ writeDisabledReason }}</p>
+
+    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div class="border-b border-slate-100 bg-slate-50 px-4 py-3">
+        <p class="text-sm font-semibold text-slate-700">
+          {{ loading ? 'Loading…' : `${list.length} record${list.length !== 1 ? 's' : ''}` }}
+        </p>
+      </div>
+
+      <div v-if="loading" class="flex items-center justify-center py-16">
+        <svg class="h-5 w-5 animate-spin text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="10" stroke-width="2" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <div v-else-if="!list.length" class="py-16 text-center text-sm text-slate-400">
+        No CAPA records found. Click <strong>New CAPA</strong> to get started.
+      </div>
+
+      <table v-else class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <th class="px-4 py-3">Code</th>
+            <th class="px-4 py-3">Title</th>
+            <th class="px-4 py-3">Source</th>
+            <th class="px-4 py-3">Classification</th>
+            <th class="px-4 py-3">Risk Band</th>
+            <th class="px-4 py-3">Department</th>
+            <th class="px-4 py-3">Due Date</th>
+            <th class="px-4 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
             v-for="capa in list"
             :key="capa.id"
-            class="cursor-pointer rounded-lg border px-3 py-2"
-            :class="selectedCapaId === capa.id ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200'"
-            @click="selectedCapaId = capa.id; loadDetail()"
+            class="cursor-pointer border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50"
+            @click="router.push('/capa/' + capa.id)"
           >
-            <p class="font-semibold text-slate-900">{{ capa.capa_code }} - {{ capa.title }}</p>
-            <p class="text-xs text-slate-600">Status: {{ capa.status }} • Risk: {{ capa.risk_band || 'N/A' }} • Due: {{ capa.due_date || 'N/A' }}</p>
-          </li>
-        </ul>
-      </article>
-    </section>
+            <td class="px-4 py-3 font-mono text-xs font-semibold text-indigo-600">{{ capa.capa_code }}</td>
+            <td class="max-w-xs px-4 py-3 font-medium text-slate-800"><span class="line-clamp-1">{{ capa.title }}</span></td>
+            <td class="px-4 py-3 text-slate-600">{{ capa.source_type }}</td>
+            <td class="px-4 py-3 text-slate-600">{{ capa.classification }}</td>
+            <td class="px-4 py-3">
+              <span v-if="capa.risk_band" class="rounded-full px-2 py-0.5 text-xs font-medium" :class="RISK_COLORS[capa.risk_band] || 'bg-slate-100 text-slate-600'">{{ capa.risk_band }}</span>
+              <span v-else class="text-slate-400">—</span>
+            </td>
+            <td class="px-4 py-3 text-slate-600">{{ capa.department || '—' }}</td>
+            <td class="px-4 py-3 text-slate-600">{{ formatDate(capa.due_date) }}</td>
+            <td class="px-4 py-3">
+              <span class="rounded-full border px-2 py-0.5 text-xs font-medium" :class="STATUS_COLORS[capa.status] || 'bg-slate-50 text-slate-600 border-slate-200'">{{ capa.status }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-    <section v-if="selectedCapa" class="grid gap-4 xl:grid-cols-3">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Lifecycle Controls</h3>
-        <p class="mt-1 text-xs text-slate-500">Current status: {{ selectedCapa.status }}</p>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" :disabled="isWriteDisabled" @click="submitCapa">Submit</button>
-          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" :disabled="isWriteDisabled" @click="triageCapa">Triage</button>
-          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" :disabled="isWriteDisabled" @click="approveActionPlan">Approve Action Plan</button>
-          <button class="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700" :disabled="isWriteDisabled" @click="approveClosure">Approve Closure</button>
+    <p v-if="message" class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{{ message }}</p>
+    <p v-if="error" class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{{ error }}</p>
+
+    <Transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-200" leave-to-class="opacity-0">
+      <div v-if="showCreate" class="fixed inset-0 z-40 bg-black/30" @click="showCreate = false" />
+    </Transition>
+
+    <Transition enter-active-class="transition-transform duration-300" enter-from-class="translate-x-full" leave-active-class="transition-transform duration-300" leave-to-class="translate-x-full">
+      <div v-if="showCreate" class="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 class="text-lg font-semibold text-slate-900">New CAPA</h2>
+          <button class="rounded-lg p-2 text-slate-400 hover:bg-slate-100" @click="showCreate = false">
+            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/></svg>
+          </button>
         </div>
-        <input v-model="triageForm.triageSummary" class="mt-3 w-full rounded-lg border px-3 py-2 text-sm" placeholder="Triage summary" />
-        <input v-model="reopenForm.reason" class="mt-2 w-full rounded-lg border px-3 py-2 text-sm" placeholder="Reopen reason" />
-        <button class="mt-2 rounded border border-amber-400 px-3 py-1 text-xs font-semibold text-amber-700" :disabled="isWriteDisabled" @click="reopenCapa">Reopen CAPA</button>
-      </article>
-
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">RCA (5-Why + Fishbone)</h3>
-        <div class="mt-3 grid gap-2">
-          <label class="text-xs font-semibold text-slate-500">5-Why</label>
-          <input v-model.number="fiveWhyForm.whyLevel" class="rounded-lg border px-3 py-2 text-sm" type="number" min="1" max="5" placeholder="Why level" />
-          <textarea v-model="fiveWhyForm.answer" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Why answer"></textarea>
-          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" :disabled="isWriteDisabled" @click="addFiveWhy">Save 5-Why</button>
-
-          <label class="mt-2 text-xs font-semibold text-slate-500">Fishbone</label>
-          <input v-model="fishboneForm.category" class="rounded-lg border px-3 py-2 text-sm" placeholder="Category" />
-          <textarea v-model="fishboneForm.cause" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Cause"></textarea>
-          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" :disabled="isWriteDisabled" @click="addFishbone">Save Fishbone</button>
-        </div>
-      </article>
-
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Actions + Effectiveness</h3>
-        <div class="mt-3 grid gap-2">
-          <input v-model="actionForm.description" class="rounded-lg border px-3 py-2 text-sm" placeholder="Action description" />
-          <select v-model="actionForm.actionType" class="rounded-lg border px-3 py-2 text-sm">
-            <option>Corrective</option>
-            <option>Preventive</option>
-          </select>
-          <input v-model="actionForm.dueDate" class="rounded-lg border px-3 py-2 text-sm" type="date" />
-          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" :disabled="isWriteDisabled" @click="addAction">Add Action</button>
-
-          <textarea v-model="effectivenessForm.criteria" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Effectiveness criteria"></textarea>
-          <select v-model="effectivenessForm.result" class="rounded-lg border px-3 py-2 text-sm">
-            <option>Pass</option>
-            <option>Fail</option>
-          </select>
-          <input v-model="effectivenessForm.evidenceRef" class="rounded-lg border px-3 py-2 text-sm" placeholder="Evidence ref" />
-          <button class="rounded border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-700" :disabled="isWriteDisabled" @click="recordEffectiveness">Record Effectiveness</button>
-        </div>
-      </article>
-    </section>
-
-    <section v-if="detail" class="grid gap-4 xl:grid-cols-2">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Action Items</h3>
-        <ul class="mt-3 space-y-2 text-sm">
-          <li v-for="action in detail.actionItems || []" :key="action.id" class="rounded-lg border border-slate-200 px-3 py-2">
-            <div class="flex items-center justify-between gap-2">
-              <p class="font-semibold text-slate-900">{{ action.action_type }} - {{ action.description }}</p>
-              <button
-                v-if="action.status !== 'Complete'"
-                class="rounded border border-emerald-400 px-2 py-1 text-xs font-semibold text-emerald-700"
-                :disabled="isWriteDisabled"
-                @click="markActionComplete(action.id)"
-              >
-                Mark Complete
-              </button>
+        <div class="flex-1 overflow-y-auto px-6 py-5">
+          <fieldset :disabled="isWriteDisabled" class="grid gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Title <span class="text-red-500">*</span></label>
+              <input v-model="createForm.title" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="CAPA title" />
             </div>
-            <p class="text-xs text-slate-500">{{ action.status }} • Due: {{ action.due_date }}</p>
-          </li>
-        </ul>
-      </article>
-
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Timeline</h3>
-        <ul class="mt-3 max-h-64 space-y-2 overflow-auto text-sm">
-          <li v-for="item in detail.timeline || []" :key="item.id" class="rounded-lg border border-slate-200 px-3 py-2">
-            <p class="font-semibold text-slate-900">{{ item.action_key }}</p>
-            <p class="text-xs text-slate-500">{{ item.actor_name || item.actor_email || 'system' }} • {{ new Date(item.occurred_at).toLocaleString() }}</p>
-          </li>
-        </ul>
-      </article>
-    </section>
-  </section>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Source Type</label>
+                <select v-model="createForm.sourceType" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none">
+                  <option>Manual</option><option>Deviation</option><option>AuditFinding</option><option>Complaint</option><option>ChangeControl</option><option>DocumentControl</option><option>Validation</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Classification</label>
+                <select v-model="createForm.classification" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none">
+                  <option>Corrective</option><option>Preventive</option><option>Both</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Department</label>
+                <input v-model="createForm.department" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="Department" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Product</label>
+                <input v-model="createForm.productName" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="Product" />
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Due Date</label>
+              <input v-model="createForm.dueDate" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Risk Scores (1–5)</label>
+              <div class="mt-1 grid grid-cols-3 gap-2">
+                <div>
+                  <label class="text-xs text-slate-400">Severity</label>
+                  <input v-model.number="createForm.severity" type="number" min="1" max="5" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" />
+                </div>
+                <div>
+                  <label class="text-xs text-slate-400">Occurrence</label>
+                  <input v-model.number="createForm.occurrence" type="number" min="1" max="5" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" />
+                </div>
+                <div>
+                  <label class="text-xs text-slate-400">Detectability</label>
+                  <input v-model.number="createForm.detectability" type="number" min="1" max="5" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" />
+                </div>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+        <div class="border-t border-slate-200 px-6 py-4 flex gap-3">
+          <button
+            class="flex-1 rounded-lg bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            :disabled="!createForm.title || creating || isWriteDisabled"
+            @click="createCapa"
+          >
+            {{ creating ? 'Creating…' : 'Create CAPA' }}
+          </button>
+          <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50" @click="showCreate = false">Cancel</button>
+        </div>
+      </div>
+    </Transition>
+  </div>
 </template>

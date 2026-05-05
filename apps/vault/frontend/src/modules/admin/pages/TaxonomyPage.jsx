@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { orgApi as api } from '../../common/api/client'
 import AdminTabs from '../components/AdminTabs'
+import VaultPageHeader from '../../vault/components/VaultPageHeader'
 
 export default function TaxonomyPage() {
   const [types, setTypes] = useState([])
@@ -223,15 +224,13 @@ export default function TaxonomyPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Taxonomy Management</h1>
-          <p className="brand-subtitle">Types, subtypes, and classifications for structured content governance</p>
-        </div>
-        <span className="topbar-pill">Admin Console</span>
-      </header>
-
       <main className="dashboard-grid">
+        <VaultPageHeader
+          kicker="Administration / Taxonomy"
+          title="Taxonomy Management"
+          note="Types, subtypes, and classifications for structured content governance."
+          statusLabel="Admin Console"
+        />
         <section className="panel span-12">
           <AdminTabs active="taxonomy" />
           {error ? <div className="auth-error taxonomy-error">{error}</div> : null}

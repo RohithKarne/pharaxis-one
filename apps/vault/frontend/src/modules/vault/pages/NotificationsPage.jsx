@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
+import VaultPageHeader from '../components/VaultPageHeader'
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -107,17 +108,13 @@ export default function NotificationsPage() {
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
-        <section className="panel span-12 workspace-hero-card">
-          <div>
-            <p className="workspace-hero-kicker">Workforce / Notifications</p>
-            <h2 className="workspace-hero-title">Notification Center</h2>
-            <p className="panel-note">Track due-soon and overdue reminders mapped to your assigned tasks.</p>
-          </div>
-          <div className="workspace-hero-right">
-            <span className="workspace-status-pill">Live Feed</span>
-            <span className="workspace-hero-date">{summary.total} alerts</span>
-          </div>
-        </section>
+        <VaultPageHeader
+          kicker="Workforce / Notifications"
+          title="Notification Center"
+          note="Track due-soon and overdue reminders mapped to your assigned tasks."
+          statusLabel="Live Feed"
+          dateLabel={`${summary.total} alerts`}
+        />
 
         <section className="panel span-12">
           <div className="stats-mini-grid">

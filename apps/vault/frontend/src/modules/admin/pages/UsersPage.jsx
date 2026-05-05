@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AdminTabs from '../components/AdminTabs'
 import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
+import VaultPageHeader from '../../vault/components/VaultPageHeader'
 
 const ROLE_OPTIONS = ['admin', 'author', 'reviewer', 'approver', 'viewer']
 
@@ -110,15 +111,13 @@ export default function UsersPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">User Management</h1>
-          <p className="brand-subtitle">Admin workspace for organization user access control</p>
-        </div>
-        <span className="topbar-pill">Admin Console</span>
-      </header>
-
       <main className="dashboard-grid">
+        <VaultPageHeader
+          kicker="Administration / Access"
+          title="User Management"
+          note="Admin workspace for organization user access control."
+          statusLabel="Admin Console"
+        />
         <section className="panel span-4">
           <AdminTabs active="users" />
           <h3>Create User</h3>

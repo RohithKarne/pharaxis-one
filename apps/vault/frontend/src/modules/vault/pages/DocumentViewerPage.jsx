@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { apiJson, authHeaders, getOrgToken, lifecycleBadgeClass } from '../../common/utils/session'
+import { useParams } from 'react-router-dom'
+import VaultRecordHeader from '../components/VaultRecordHeader'
+import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
 
 const WATERMARK_HINT = {
   draft: 'DRAFT - Not for Distribution',
@@ -46,6 +47,12 @@ export default function DocumentViewerPage() {
       ])
       setContent(detail)
 
+      apiJson('/api/reach', {
+        method: 'POST',
+        headers: authHeaders(token, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ content_id: Number(id), view_type: 'view' })
+      }).catch(() => {})
+
       const response = await fetch(viewPath, { headers: authHeaders(token) })
       if (!response.ok) {
         let message = 'Failed to load document viewer'
@@ -90,31 +97,24 @@ export default function DocumentViewerPage() {
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
-        <section className="panel span-12 workspace-hero-card">
-          <div>
-            <p className="workspace-hero-kicker">Overview / Document Viewer</p>
-            <h2 className="workspace-hero-title">{content?.title || 'Document Viewer'}</h2>
-            <p className="panel-note">{content?.doc_number || '-'} · {versionId ? `Version #${versionId}` : 'Current Version'}</p>
-          </div>
-          <div className="workspace-hero-right">
-            <span className={lifecycleBadgeClass(content?.lifecycle_state)}>{content?.lifecycle_state || '-'}</span>
-          </div>
-        </section>
+        <VaultRecordHeader
+          eyebrow="Library / Controlled Preview"
+          title={content?.title || 'Document Viewer'}
+          subtitle={`${content?.doc_number || '-'} · ${versionId ? `Version #${versionId}` : 'Current Version'}`}
+          lifecycleState={content?.lifecycle_state}
+          metadata={[
+            { label: 'Preview Mode', value: viewPayload?.mode || 'Loading' },
+            { label: 'Watermark', value: watermarkText || 'None' },
+            { label: 'Version', value: versionId || 'Current' },
+            { label: 'Policy', value: 'Controlled Access' }
+          ]}
+          actions={[
+            { label: 'Back to Detail', icon: 'back', to: `/vault/content/${id}` },
+            { label: 'Search Library', icon: 'view', to: '/vault/search' }
+          ]}
+        />
 
-        <section className="panel span-12">
-          <div className="detail-actions">
-            <Link className="btn-secondary link-button" to={`/vault/content/${id}`}>
-              Back to Detail
-            </Link>
-            <Link className="btn-secondary link-button" to="/vault/search">
-              Back to Search
-            </Link>
-          </div>
-        </section>
-      </main>
-
-      <main className="dashboard-grid">
-        <section className="panel span-12">
+        <section className="panel span-12 vault-viewer-panel">
           {error ? <div className="auth-error">{error}</div> : null}
           {loading ? <p className="panel-note">Opening document viewer...</p> : null}
 

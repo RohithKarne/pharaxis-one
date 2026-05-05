@@ -2,16 +2,25 @@ import { createRouter, createWebHistory } from 'vue-router';
 import DashboardView from '../modules/core/pages/DashboardView.vue';
 import DocumentControlView from '../modules/quality/pages/DocumentControlView.vue';
 import CapaView from '../modules/quality/pages/CapaView.vue';
+import CapaDetailView from '../modules/quality/pages/CapaDetailView.vue';
 import DeviationView from '../modules/quality/pages/DeviationView.vue';
+import DeviationDetailView from '../modules/quality/pages/DeviationDetailView.vue';
 import AuditView from '../modules/quality/pages/AuditView.vue';
+import AuditDetailView from '../modules/quality/pages/AuditDetailView.vue';
 import ValidationView from '../modules/quality/pages/ValidationView.vue';
+import ValidationDetailView from '../modules/quality/pages/ValidationDetailView.vue';
 import ChangeControlView from '../modules/quality/pages/ChangeControlView.vue';
+import ChangeControlDetailView from '../modules/quality/pages/ChangeControlDetailView.vue';
 import EventHubView from '../modules/platform/pages/EventHubView.vue';
 import WorkflowInboxView from '../modules/platform/pages/WorkflowInboxView.vue';
 import NotificationsCenterView from '../modules/platform/pages/NotificationsCenterView.vue';
 import ComplaintsView from '../modules/quality/pages/ComplaintsView.vue';
+import ComplaintsDetailView from '../modules/quality/pages/ComplaintsDetailView.vue';
 import NonconformanceView from '../modules/quality/pages/NonconformanceView.vue';
+import NonconformanceDetailView from '../modules/quality/pages/NonconformanceDetailView.vue';
 import SupplierQualityView from '../modules/quality/pages/SupplierQualityView.vue';
+import SupplierQualityDetailView from '../modules/quality/pages/SupplierQualityDetailView.vue';
+import DocumentControlDetailView from '../modules/quality/pages/DocumentControlDetailView.vue';
 import RiskManagementView from '../modules/quality/pages/RiskManagementView.vue';
 import TrainingManagementView from '../modules/quality/pages/TrainingManagementView.vue';
 import ManagementReviewView from '../modules/quality/pages/ManagementReviewView.vue';
@@ -89,8 +98,18 @@ const routes = [
     meta: { requiresAuth: true, layout: 'user', moduleKey: 'documentControl' }
   },
   {
+    path: '/document-control/:id',
+    component: DocumentControlDetailView,
+    meta: { requiresAuth: true, layout: 'user', moduleKey: 'documentControl' }
+  },
+  {
     path: '/capa',
     component: CapaView,
+    meta: { requiresAuth: true, layout: 'user', moduleKey: 'capa' }
+  },
+  {
+    path: '/capa/:id',
+    component: CapaDetailView,
     meta: { requiresAuth: true, layout: 'user', moduleKey: 'capa' }
   },
   {
@@ -99,8 +118,18 @@ const routes = [
     meta: { requiresAuth: true, layout: 'user', moduleKey: 'deviations' }
   },
   {
+    path: '/deviations/:id',
+    component: DeviationDetailView,
+    meta: { requiresAuth: true, layout: 'user', moduleKey: 'deviations' }
+  },
+  {
     path: '/audits',
     component: AuditView,
+    meta: { requiresAuth: true, layout: 'user', moduleKey: 'audits' }
+  },
+  {
+    path: '/audits/:id',
+    component: AuditDetailView,
     meta: { requiresAuth: true, layout: 'user', moduleKey: 'audits' }
   },
   {
@@ -109,8 +138,18 @@ const routes = [
     meta: { requiresAuth: true, layout: 'user', moduleKey: 'validation' }
   },
   {
+    path: '/validation/:id',
+    component: ValidationDetailView,
+    meta: { requiresAuth: true, layout: 'user', moduleKey: 'validation' }
+  },
+  {
     path: '/change-control',
     component: ChangeControlView,
+    meta: { requiresAuth: true, layout: 'user', moduleKey: 'changeControl' }
+  },
+  {
+    path: '/change-control/:id',
+    component: ChangeControlDetailView,
     meta: { requiresAuth: true, layout: 'user', moduleKey: 'changeControl' }
   },
   {
@@ -134,13 +173,28 @@ const routes = [
     meta: { requiresAuth: true, layout: 'user', moduleKey: 'complaints' }
   },
   {
+    path: '/complaints/:id',
+    component: ComplaintsDetailView,
+    meta: { requiresAuth: true, layout: 'user', moduleKey: 'complaints' }
+  },
+  {
     path: '/nonconformance',
     component: NonconformanceView,
     meta: { requiresAuth: true, layout: 'user', moduleKey: 'nonconformance' }
   },
   {
+    path: '/nonconformance/:id',
+    component: NonconformanceDetailView,
+    meta: { requiresAuth: true, layout: 'user', moduleKey: 'nonconformance' }
+  },
+  {
     path: '/supplier-quality',
     component: SupplierQualityView,
+    meta: { requiresAuth: true, layout: 'user', moduleKey: 'supplierQuality' }
+  },
+  {
+    path: '/supplier-quality/:id',
+    component: SupplierQualityDetailView,
     meta: { requiresAuth: true, layout: 'user', moduleKey: 'supplierQuality' }
   },
   {

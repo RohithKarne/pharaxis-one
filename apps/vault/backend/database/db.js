@@ -254,6 +254,136 @@ async function initializeDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (org_id) REFERENCES orgs(id)
     )`,
+    `CREATE TABLE IF NOT EXISTS vault_document_relationships (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      source_content_id INT NOT NULL,
+      target_content_id INT NOT NULL,
+      relationship_type ENUM('supersedes','superseded_by','related_to','parent','child','supporting') NOT NULL,
+      notes TEXT,
+      created_by INT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_vault_relationship (org_id, source_content_id, target_content_id, relationship_type),
+      INDEX idx_vault_relationship_source (org_id, source_content_id, created_at),
+      INDEX idx_vault_relationship_target (org_id, target_content_id, created_at),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (source_content_id) REFERENCES vault_content(id),
+      FOREIGN KEY (target_content_id) REFERENCES vault_content(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS content_distribution_events (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      content_id INT NOT NULL,
+      content_channel_id INT NOT NULL,
+      action ENUM('push','retry','withdraw') NOT NULL,
+      status ENUM('pending','sent','failed','withdrawn') DEFAULT 'pending',
+      message VARCHAR(500),
+      error_message TEXT,
+      created_by INT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME DEFAULT NULL,
+      INDEX idx_distribution_content (org_id, content_id, created_at),
+      INDEX idx_distribution_channel (org_id, content_channel_id, created_at),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (content_id) REFERENCES vault_content(id),
+      FOREIGN KEY (content_channel_id) REFERENCES content_channels(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS content_distribution_retry_queue (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      content_distribution_event_id BIGINT NOT NULL,
+      attempt_count INT DEFAULT 0,
+      max_attempts INT DEFAULT 5,
+      status ENUM('pending','sent','failed') DEFAULT 'pending',
+      next_attempt_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_error TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_distribution_retry_due (status, next_attempt_at),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (content_distribution_event_id) REFERENCES content_distribution_events(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS bulk_operation_jobs (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      job_type ENUM('lifecycle','metadata','folder','archive') NOT NULL,
+      status ENUM('completed','failed','partial') DEFAULT 'completed',
+      requested_by INT NOT NULL,
+      requested_count INT DEFAULT 0,
+      success_count INT DEFAULT 0,
+      failure_count INT DEFAULT 0,
+      payload_json JSON,
+      result_json JSON,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_bulk_jobs_org_created (org_id, created_at),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (requested_by) REFERENCES users(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS external_share_links (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      content_id INT NOT NULL,
+      token_hash CHAR(64) NOT NULL UNIQUE,
+      recipient_name VARCHAR(150),
+      recipient_email VARCHAR(150),
+      purpose VARCHAR(300),
+      passcode_hash CHAR(64) DEFAULT NULL,
+      email_delivery_status ENUM('pending','sent','failed','skipped') DEFAULT 'skipped',
+      email_delivery_error TEXT,
+      last_email_sent_at DATETIME DEFAULT NULL,
+      status ENUM('active','revoked','expired') DEFAULT 'active',
+      expires_at DATETIME NOT NULL,
+      opened_count INT DEFAULT 0,
+      download_count INT DEFAULT 0,
+      last_opened_at DATETIME DEFAULT NULL,
+      last_downloaded_at DATETIME DEFAULT NULL,
+      created_by INT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_external_share_content (org_id, content_id, created_at),
+      INDEX idx_external_share_expiry (status, expires_at),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (content_id) REFERENCES vault_content(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS read_understood_assignments (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      content_id INT NOT NULL,
+      assignee_user_id INT NOT NULL,
+      assigned_by INT NOT NULL,
+      status ENUM('pending','completed','cancelled') DEFAULT 'pending',
+      due_at DATETIME DEFAULT NULL,
+      completed_at DATETIME DEFAULT NULL,
+      acknowledgement_text VARCHAR(500),
+      reminder_count INT DEFAULT 0,
+      last_reminded_at DATETIME DEFAULT NULL,
+      completion_hash CHAR(64) DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_training_assignment (org_id, content_id, assignee_user_id, status),
+      INDEX idx_training_assignee_status (org_id, assignee_user_id, status),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (content_id) REFERENCES vault_content(id),
+      FOREIGN KEY (assignee_user_id) REFERENCES users(id),
+      FOREIGN KEY (assigned_by) REFERENCES users(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS report_presets (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL,
+      user_id INT NOT NULL,
+      name VARCHAR(180) NOT NULL,
+      report_key VARCHAR(80) NOT NULL,
+      filters_json JSON,
+      schedule_frequency ENUM('none','weekly','monthly') DEFAULT 'none',
+      schedule_recipients TEXT,
+      is_active TINYINT(1) DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_report_presets_org_user (org_id, user_id, report_key),
+      FOREIGN KEY (org_id) REFERENCES orgs(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`,
     `CREATE TABLE IF NOT EXISTS org_config (
       id INT AUTO_INCREMENT PRIMARY KEY,
       org_id INT NOT NULL,
@@ -670,6 +800,52 @@ async function initializeDatabase() {
        ADD COLUMN acknowledged_at DATETIME DEFAULT NULL AFTER read_at`
     )
   }
+
+  const [contentViewsTable] = await pool.execute(
+    `SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vault_content_views'`
+  )
+  if (!contentViewsTable[0].total) {
+    await pool.execute(`
+      CREATE TABLE vault_content_views (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        org_id INT NOT NULL,
+        content_id INT NOT NULL,
+        viewer_user_id INT NOT NULL,
+        view_type ENUM('view','download') DEFAULT 'view',
+        channel_id INT DEFAULT NULL,
+        viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_content_views_org_content (org_id, content_id, viewed_at),
+        INDEX idx_content_views_viewer (viewer_user_id, viewed_at),
+        FOREIGN KEY (org_id) REFERENCES orgs(id),
+        FOREIGN KEY (content_id) REFERENCES vault_content(id)
+      )
+    `)
+  }
+
+  async function ensureColumn(tableName, columnName, definition) {
+    const [rows] = await pool.execute(
+      `SELECT COUNT(*) AS total
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = ?
+         AND COLUMN_NAME = ?`,
+      [tableName, columnName]
+    )
+    if (!rows[0].total) {
+      await pool.execute(`ALTER TABLE ${tableName} ADD COLUMN ${definition}`)
+    }
+  }
+
+  await ensureColumn('external_share_links', 'passcode_hash', 'passcode_hash CHAR(64) DEFAULT NULL AFTER purpose')
+  await ensureColumn('external_share_links', 'email_delivery_status', "email_delivery_status ENUM('pending','sent','failed','skipped') DEFAULT 'skipped' AFTER passcode_hash")
+  await ensureColumn('external_share_links', 'email_delivery_error', 'email_delivery_error TEXT AFTER email_delivery_status')
+  await ensureColumn('external_share_links', 'last_email_sent_at', 'last_email_sent_at DATETIME DEFAULT NULL AFTER email_delivery_error')
+  await ensureColumn('external_share_links', 'download_count', 'download_count INT DEFAULT 0 AFTER opened_count')
+  await ensureColumn('external_share_links', 'last_downloaded_at', 'last_downloaded_at DATETIME DEFAULT NULL AFTER last_opened_at')
+  await ensureColumn('read_understood_assignments', 'reminder_count', 'reminder_count INT DEFAULT 0 AFTER acknowledgement_text')
+  await ensureColumn('read_understood_assignments', 'last_reminded_at', 'last_reminded_at DATETIME DEFAULT NULL AFTER reminder_count')
+  await ensureColumn('read_understood_assignments', 'completion_hash', 'completion_hash CHAR(64) DEFAULT NULL AFTER last_reminded_at')
 
   console.log('Pharaxis Vault database initialized — workflow and signature tables ready')
 }

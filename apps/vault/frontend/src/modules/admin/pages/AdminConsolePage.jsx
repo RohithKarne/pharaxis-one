@@ -94,6 +94,19 @@ const SETUP_FLOW = [
   }
 ]
 
+const MANAGEMENT_MATRIX = [
+  { area: 'Users & Roles', owner: 'Client Admin', module: 'Users', route: '/admin/users' },
+  { area: 'Content Taxonomy', owner: 'Client Admin', module: 'Taxonomy', route: '/admin/taxonomy' },
+  { area: 'Metadata Rules', owner: 'Client Admin', module: 'Taxonomy', route: '/admin/taxonomy' },
+  { area: 'Lifecycle States', owner: 'Client Admin', module: 'Lifecycle', route: '/admin/lifecycle' },
+  { area: 'Workflow Templates', owner: 'Client Admin', module: 'Workflow Queue', route: '/admin/workflows' },
+  { area: 'Retention & Review Cycles', owner: 'Client Admin', module: 'Retention', route: '/admin/retention' },
+  { area: 'Security Policy', owner: 'Client Admin', module: 'Security', route: '/admin/security' },
+  { area: 'External Channels', owner: 'Client Admin', module: 'Channels', route: '/admin/channels' },
+  { area: 'Integrations', owner: 'Client Admin', module: 'Integrations', route: '/admin/integrations' },
+  { area: 'Audit Evidence', owner: 'Client Admin', module: 'Audit Trail', route: '/admin/audit' }
+]
+
 export default function AdminConsolePage() {
   const [query, setQuery] = useState('')
   const normalizedQuery = query.trim().toLowerCase()
@@ -169,6 +182,44 @@ export default function AdminConsolePage() {
                 <Link className="btn-primary link-button" to={item.path}>Open {item.module}</Link>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="panel span-12">
+          <div className="config-studio-head">
+            <div>
+              <h3>Client Admin Coverage</h3>
+              <p className="panel-note">
+                Operational map of all Vault details a client admin can manage without developer support.
+              </p>
+            </div>
+            <span className="status-chip success">Client Configurable</span>
+          </div>
+          <div className="users-table-wrap">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>Configuration Area</th>
+                  <th>Managed By</th>
+                  <th>Module</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {MANAGEMENT_MATRIX.map(item => (
+                  <tr key={item.area}>
+                    <td>{item.area}</td>
+                    <td>{item.owner}</td>
+                    <td>{item.module}</td>
+                    <td>
+                      <Link className="btn-secondary link-button" to={item.route}>
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
 

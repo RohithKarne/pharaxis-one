@@ -26,6 +26,13 @@ import DossiersPage from './modules/vault/pages/DossiersPage'
 import ExpiryDashboardPage from './modules/vault/pages/ExpiryDashboardPage'
 import MyTasksPage from './modules/vault/pages/MyTasksPage'
 import NotificationsPage from './modules/vault/pages/NotificationsPage'
+import ReachScorePage from './modules/vault/pages/ReachScorePage'
+import SignOffCertificatePage from './modules/vault/pages/SignOffCertificatePage'
+import ContentIntelligencePage from './modules/vault/pages/ContentIntelligencePage'
+import BulkOperationsPage from './modules/vault/pages/BulkOperationsPage'
+import ReportsPage from './modules/vault/pages/ReportsPage'
+import TrainingAssignmentsPage from './modules/vault/pages/TrainingAssignmentsPage'
+import ExternalSharePage from './modules/vault/pages/ExternalSharePage'
 import {
   OrgAuthGuard,
   OrgRoleGuard,
@@ -54,6 +61,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LoginPage />} />
+        <Route path="/external/vault-share/:token" element={<ExternalSharePage />} />
         <Route path="/control-tower/login" element={<SuperadminLoginPage />} />
         <Route path="/superadmin" element={<Navigate to="/control-tower/login" replace />} />
 
@@ -178,6 +186,14 @@ export default function App() {
             </WorkspaceRoute>
           }
         />
+        <Route
+          path="/vault/training"
+          element={
+            <WorkspaceRoute>
+              <TrainingAssignmentsPage />
+            </WorkspaceRoute>
+          }
+        />
 
         <Route
           path="/admin"
@@ -264,6 +280,47 @@ export default function App() {
           element={
             <AdminWorkspaceRoute>
               <AdminWorkflowQueuePage />
+            </AdminWorkspaceRoute>
+          }
+        />
+
+        <Route
+          path="/vault/reach"
+          element={
+            <WorkspaceRoute>
+              <ReachScorePage />
+            </WorkspaceRoute>
+          }
+        />
+        <Route
+          path="/vault/content/:id/signoff"
+          element={
+            <WorkspaceRoute>
+              <SignOffCertificatePage />
+            </WorkspaceRoute>
+          }
+        />
+        <Route
+          path="/vault/intelligence"
+          element={
+            <WorkspaceRoute>
+              <ContentIntelligencePage />
+            </WorkspaceRoute>
+          }
+        />
+        <Route
+          path="/vault/bulk"
+          element={
+            <AdminWorkspaceRoute>
+              <BulkOperationsPage />
+            </AdminWorkspaceRoute>
+          }
+        />
+        <Route
+          path="/vault/reports"
+          element={
+            <AdminWorkspaceRoute>
+              <ReportsPage />
             </AdminWorkspaceRoute>
           }
         />

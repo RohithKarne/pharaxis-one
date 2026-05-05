@@ -1,16 +1,16 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { apiRequest } from '../services/api';
 import { useModuleAccess } from '../composables/useModuleAccess';
 
+const router = useRouter();
 const loading = ref(false);
+const error = ref('');
 const message = ref('');
 const list = ref([]);
-const selectedDocumentId = ref('');
-const detail = ref(null);
-const timeline = ref([]);
-const previewData = ref(null);
-const previewAcknowledged = ref(false);
+const showCreate = ref(false);
+const creating = ref(false);
 
 const createForm = ref({
   title: '',
@@ -26,138 +26,29 @@ const createForm = ref({
   reasonForChange: ''
 });
 
-const revisionForm = ref({
-  contentSummary: '',
-  reasonForChange: ''
-});
-
-const transitionForm = ref({
-  versionId: '',
-  toStatus: 'Review',
-  notes: '',
-  signatureId: ''
-});
-
-const reviewForm = ref({
-  reviewId: '',
-  result: 'Completed',
-  notes: ''
-});
-
-const exportForm = ref({
-  versionId: '',
-  exportFormat: 'PDF',
-  binderJobReference: ''
-});
-
-const policyRows = ref([
-  { roleKey: 'admin', canView: true, canDownload: true, canPrint: true },
-  { roleKey: 'author', canView: true, canDownload: false, canPrint: false },
-  { roleKey: 'qa_reviewer', canView: true, canDownload: false, canPrint: false },
-  { roleKey: 'approver', canView: true, canDownload: false, canPrint: false },
-  { roleKey: 'viewer', canView: true, canDownload: false, canPrint: false }
-]);
-
-const docTypes = ['SOP', 'Work Instruction', 'Policy', 'Form', 'Protocol'];
-const criticalityLevels = ['Low', 'Medium', 'High', 'Critical'];
-const transitionTargets = ['Review', 'Approved', 'Effective', 'Retired'];
-const selectedDocument = computed(() => detail.value?.document || null);
-const versions = computed(() => detail.value?.versions || []);
-const reviews = computed(() => detail.value?.reviews || []);
-const pendingReviews = computed(() => reviews.value.filter((item) => item.status === 'Pending'));
-const activeVersionId = computed(() => selectedDocument.value?.active_version_id || '');
 const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAccess('documentControl');
 
-function setMessage(text) {
-  message.value = text;
+function formatDate(val) {
+  if (!val) return '—';
+  return new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function hydratePolicyRowsFromDetail() {
-  const incoming = detail.value?.policies || [];
-  if (!incoming.length) return;
-
-  const roleMap = new Map();
-  for (const row of incoming) {
-    roleMap.set(row.role_key, {
-      roleKey: row.role_key,
-      canView: Boolean(row.can_view),
-      canDownload: Boolean(row.can_download),
-      canPrint: Boolean(row.can_print)
-    });
-  }
-
-  const orderedKeys = ['admin', 'author', 'qa_reviewer', 'approver', 'viewer', 'superadmin'];
-  const rows = [];
-  for (const key of orderedKeys) {
-    if (roleMap.has(key)) rows.push(roleMap.get(key));
-  }
-  for (const [key, value] of roleMap.entries()) {
-    if (!orderedKeys.includes(key)) rows.push(value);
-  }
-
-  if (rows.length) {
-    policyRows.value = rows;
-  }
-}
-
-function setDefaultVersionSelections() {
-  const latest = versions.value[0];
-  const active = activeVersionId.value || latest?.id || '';
-
-  transitionForm.value.versionId = latest?.id || '';
-  exportForm.value.versionId = active;
-  reviewForm.value.reviewId = pendingReviews.value[0]?.id || '';
-}
-
-async function refreshList() {
+async function load() {
   loading.value = true;
+  error.value = '';
   try {
     const data = await apiRequest('/document-control/documents');
     list.value = data.documents || [];
-
-    if (!selectedDocumentId.value && list.value.length > 0) {
-      selectedDocumentId.value = list.value[0].id;
-      await loadSelectedDocument();
-    }
-  } catch (error) {
-    setMessage(error.message);
+  } catch (err) {
+    error.value = err.message;
   } finally {
     loading.value = false;
   }
 }
 
-async function loadSelectedDocument() {
-  if (!selectedDocumentId.value) {
-    detail.value = null;
-    timeline.value = [];
-    previewData.value = null;
-    previewAcknowledged.value = false;
-    return;
-  }
-
-  try {
-    const [docDetail, docTimeline] = await Promise.all([
-      apiRequest(`/document-control/documents/${selectedDocumentId.value}`),
-      apiRequest(`/document-control/documents/${selectedDocumentId.value}/timeline`)
-    ]);
-
-    detail.value = docDetail;
-    timeline.value = docTimeline.timeline || [];
-    hydratePolicyRowsFromDetail();
-    setDefaultVersionSelections();
-
-    if (activeVersionId.value) {
-      await loadPreview(activeVersionId.value);
-    } else {
-      previewData.value = null;
-    }
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
 async function createDocument() {
-  if (!withWriteAccess(setMessage)) return;
+  if (!withWriteAccess((t) => { message.value = t; })) return;
+  creating.value = true;
   try {
     const me = await apiRequest('/protected/me');
     await apiRequest('/document-control/documents', {
@@ -177,412 +68,202 @@ async function createDocument() {
         controlledCopyRequired: Boolean(createForm.value.controlledCopyRequired)
       }
     });
-
+    message.value = 'Document created successfully.';
     createForm.value.title = '';
     createForm.value.documentSubtype = '';
     createForm.value.siteCode = '';
     createForm.value.contentSummary = '';
     createForm.value.reasonForChange = '';
-    setMessage('Document created successfully.');
-
-    await refreshList();
-  } catch (error) {
-    setMessage(error.message);
+    showCreate.value = false;
+    await load();
+  } catch (err) {
+    error.value = err.message;
+  } finally {
+    creating.value = false;
   }
 }
 
-async function createRevision() {
-  if (!selectedDocumentId.value) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/document-control/documents/${selectedDocumentId.value}/revisions`, {
-      method: 'POST',
-      body: {
-        contentSummary: revisionForm.value.contentSummary || null,
-        reasonForChange: revisionForm.value.reasonForChange || null
-      }
-    });
+const STATUS_COLORS = {
+  Draft: 'bg-slate-50 text-slate-600 border-slate-200',
+  Review: 'bg-blue-50 text-blue-700 border-blue-200',
+  Approved: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  Effective: 'bg-green-50 text-green-700 border-green-200',
+  Retired: 'bg-slate-100 text-slate-500 border-slate-300'
+};
 
-    revisionForm.value.contentSummary = '';
-    revisionForm.value.reasonForChange = '';
-    setMessage('Revision created in Draft state.');
-    await loadSelectedDocument();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
+const CRIT_COLORS = {
+  Critical: 'bg-red-100 text-red-800',
+  High: 'bg-orange-100 text-orange-800',
+  Medium: 'bg-amber-100 text-amber-800',
+  Low: 'bg-green-100 text-green-800'
+};
 
-async function transitionVersion() {
-  if (!selectedDocumentId.value || !transitionForm.value.versionId) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(
-      `/document-control/documents/${selectedDocumentId.value}/versions/${transitionForm.value.versionId}/transition`,
-      {
-        method: 'POST',
-        body: {
-          toStatus: transitionForm.value.toStatus,
-          notes: transitionForm.value.notes || null,
-          signatureId: transitionForm.value.signatureId || null
-        }
-      }
-    );
-
-    transitionForm.value.notes = '';
-    transitionForm.value.signatureId = '';
-    setMessage(`Version transitioned to ${transitionForm.value.toStatus}.`);
-    await loadSelectedDocument();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function saveAccessPolicies() {
-  if (!selectedDocumentId.value) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(`/document-control/documents/${selectedDocumentId.value}/access-policies`, {
-      method: 'PUT',
-      body: { policies: policyRows.value }
-    });
-
-    setMessage('Document access policies updated.');
-    await loadSelectedDocument();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function completeReview() {
-  if (!selectedDocumentId.value || !reviewForm.value.reviewId) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(
-      `/document-control/documents/${selectedDocumentId.value}/reviews/${reviewForm.value.reviewId}/complete`,
-      {
-        method: 'POST',
-        body: {
-          result: reviewForm.value.result,
-          notes: reviewForm.value.notes || null
-        }
-      }
-    );
-
-    reviewForm.value.notes = '';
-    setMessage('Periodic review completed and next review scheduled.');
-    await loadSelectedDocument();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function exportDocumentVersion() {
-  if (!selectedDocumentId.value || !exportForm.value.versionId) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    const result = await apiRequest(
-      `/document-control/documents/${selectedDocumentId.value}/versions/${exportForm.value.versionId}/export`,
-      {
-        method: 'POST',
-        body: {
-          exportFormat: exportForm.value.exportFormat,
-          binderJobReference: exportForm.value.binderJobReference || null
-        }
-      }
-    );
-
-    setMessage(`Export recorded with watermark: ${result.document?.watermarkLabel || 'CONTROLLED COPY'}`);
-    await loadSelectedDocument();
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-async function loadPreview(versionId) {
-  if (!selectedDocumentId.value || !versionId) return;
-  previewAcknowledged.value = false;
-  try {
-    const result = await apiRequest(
-      `/document-control/documents/${selectedDocumentId.value}/versions/${versionId}/controlled-preview`
-    );
-    previewData.value = result;
-  } catch (error) {
-    previewData.value = null;
-    setMessage(error.message);
-  }
-}
-
-async function acknowledgePreview() {
-  if (!selectedDocumentId.value || !previewData.value?.versionId) return;
-  if (!withWriteAccess(setMessage)) return;
-  try {
-    await apiRequest(
-      `/document-control/documents/${selectedDocumentId.value}/versions/${previewData.value.versionId}/acknowledge`,
-      { method: 'POST' }
-    );
-    previewAcknowledged.value = true;
-    await loadPreview(previewData.value.versionId);
-  } catch (error) {
-    setMessage(error.message);
-  }
-}
-
-function canShowPreviewContent() {
-  const policy = previewData.value?.policy;
-  if (!policy) return false;
-  if (!policy.mustAcknowledgeForCompliance) return true;
-  return Boolean(policy.alreadyAcknowledged || previewAcknowledged.value);
-}
-
-function printControlledCopy() {
-  window.print();
-}
-
-onMounted(refreshList);
+onMounted(load);
 </script>
 
 <template>
-  <section class="space-y-4">
-    <header class="rounded-2xl border border-teal-100 bg-white p-4">
-      <h2 class="text-xl font-bold text-teal-900">Document Control Workspace</h2>
-      <p class="mt-1 text-sm text-slate-600">
-        Create controlled documents, manage revisions, enforce role-based access, run periodic reviews, and track timeline evidence.
-      </p>
-      <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-        {{ writeDisabledReason }}
-      </p>
-      <p v-if="message" class="mt-2 text-sm text-indigo-700">{{ message }}</p>
-    </header>
+  <div class="flex h-full flex-col">
 
-    <section class="grid gap-4 xl:grid-cols-3">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Create Document</h3>
-        <div class="mt-3 grid gap-2">
-          <input v-model="createForm.title" class="rounded-lg border px-3 py-2 text-sm" placeholder="Document title" />
-          <select v-model="createForm.documentType" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="docType in docTypes" :key="docType" :value="docType">{{ docType }}</option>
-          </select>
-          <input v-model="createForm.documentSubtype" class="rounded-lg border px-3 py-2 text-sm" placeholder="Subtype (optional)" />
-          <input v-model="createForm.department" class="rounded-lg border px-3 py-2 text-sm" placeholder="Department" />
-          <input v-model="createForm.siteCode" class="rounded-lg border px-3 py-2 text-sm" placeholder="Site code (optional)" />
-          <select v-model="createForm.criticality" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="level in criticalityLevels" :key="level" :value="level">{{ level }}</option>
-          </select>
-          <input
-            v-model.number="createForm.reviewIntervalDays"
-            class="rounded-lg border px-3 py-2 text-sm"
-            min="30"
-            type="number"
-            placeholder="Review interval days"
-          />
-          <label class="text-xs text-slate-600">
-            <input v-model="createForm.trainingRequired" class="mr-1" type="checkbox" /> Training required
-          </label>
-          <label class="text-xs text-slate-600">
-            <input v-model="createForm.controlledCopyRequired" class="mr-1" type="checkbox" /> Confidential watermark required
-          </label>
-          <textarea v-model="createForm.contentSummary" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Initial content summary"></textarea>
-          <textarea v-model="createForm.reasonForChange" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Reason for change (optional)"></textarea>
-        </div>
-        <button class="mt-3 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white" :disabled="isWriteDisabled" @click="createDocument">
-          Create Controlled Document
-        </button>
-      </article>
+    <div class="flex items-start justify-between rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Quality Management</p>
+        <h1 class="mt-0.5 text-2xl font-bold text-slate-900">Document Control</h1>
+        <p class="mt-1 text-sm text-slate-500">Manage controlled documents through version control, review, approval, and distribution.</p>
+      </div>
+      <button
+        class="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+        :disabled="isWriteDisabled"
+        @click="showCreate = true"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"/></svg>
+        New Document
+      </button>
+    </div>
 
-      <article class="rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 class="text-lg font-semibold text-slate-900">Documents</h3>
-          <button class="rounded-lg border border-teal-700 px-4 py-2 text-sm font-semibold text-teal-700" @click="refreshList">
-            Refresh
-          </button>
-        </div>
-        <p v-if="loading" class="mt-2 text-sm text-slate-600">Loading documents...</p>
-        <ul class="mt-3 max-h-72 space-y-2 overflow-auto text-sm">
-          <li
+    <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">{{ writeDisabledReason }}</p>
+
+    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div class="border-b border-slate-100 bg-slate-50 px-4 py-3">
+        <p class="text-sm font-semibold text-slate-700">
+          {{ loading ? 'Loading…' : `${list.length} document${list.length !== 1 ? 's' : ''}` }}
+        </p>
+      </div>
+
+      <div v-if="loading" class="flex items-center justify-center py-16">
+        <svg class="h-5 w-5 animate-spin text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="10" stroke-width="2" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <div v-else-if="!list.length" class="py-16 text-center text-sm text-slate-400">
+        No documents found. Click <strong>New Document</strong> to get started.
+      </div>
+
+      <table v-else class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <th class="px-4 py-3">Code</th>
+            <th class="px-4 py-3">Title</th>
+            <th class="px-4 py-3">Type</th>
+            <th class="px-4 py-3">Department</th>
+            <th class="px-4 py-3">Criticality</th>
+            <th class="px-4 py-3">Version</th>
+            <th class="px-4 py-3">Next Review</th>
+            <th class="px-4 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
             v-for="doc in list"
             :key="doc.id"
-            class="cursor-pointer rounded-lg border px-3 py-2"
-            :class="selectedDocumentId === doc.id ? 'border-teal-500 bg-teal-50' : 'border-slate-200'"
-            @click="selectedDocumentId = doc.id; loadSelectedDocument()"
+            class="cursor-pointer border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50"
+            @click="router.push('/document-control/' + doc.id)"
           >
-            <p class="font-semibold text-slate-900">{{ doc.document_code }} - {{ doc.title }}</p>
-            <p class="text-xs text-slate-600">
-              {{ doc.document_type }} • {{ doc.department }} • v{{ doc.version_no || '-' }} • {{ doc.status || 'No active version' }}
-            </p>
-          </li>
-        </ul>
-      </article>
-    </section>
+            <td class="px-4 py-3 font-mono text-xs font-semibold text-indigo-600">{{ doc.document_code }}</td>
+            <td class="max-w-xs px-4 py-3 font-medium text-slate-800"><span class="line-clamp-1">{{ doc.title }}</span></td>
+            <td class="px-4 py-3 text-slate-600">{{ doc.document_type }}</td>
+            <td class="px-4 py-3 text-slate-600">{{ doc.department }}</td>
+            <td class="px-4 py-3">
+              <span v-if="doc.criticality" class="rounded-full px-2 py-0.5 text-xs font-medium" :class="CRIT_COLORS[doc.criticality] || 'bg-slate-100 text-slate-600'">{{ doc.criticality }}</span>
+              <span v-else class="text-slate-400">—</span>
+            </td>
+            <td class="px-4 py-3 text-slate-600">{{ doc.version_no ? `v${doc.version_no}` : '—' }}</td>
+            <td class="px-4 py-3 text-slate-600">{{ formatDate(doc.next_review_due_date) }}</td>
+            <td class="px-4 py-3">
+              <span class="rounded-full border px-2 py-0.5 text-xs font-medium" :class="STATUS_COLORS[doc.status] || 'bg-slate-50 text-slate-600 border-slate-200'">{{ doc.status || 'Draft' }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-    <section v-if="selectedDocument" class="grid gap-4 xl:grid-cols-3">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Document Overview</h3>
-        <div class="mt-3 space-y-1 text-sm text-slate-700">
-          <p><span class="font-semibold">Code:</span> {{ selectedDocument.document_code }}</p>
-          <p><span class="font-semibold">Title:</span> {{ selectedDocument.title }}</p>
-          <p><span class="font-semibold">Type:</span> {{ selectedDocument.document_type }}</p>
-          <p><span class="font-semibold">Criticality:</span> {{ selectedDocument.criticality }}</p>
-          <p><span class="font-semibold">Active Version:</span> {{ selectedDocument.active_version_no || 'N/A' }}</p>
-          <p><span class="font-semibold">Status:</span> {{ selectedDocument.active_status || 'N/A' }}</p>
-          <p><span class="font-semibold">Next Review:</span> {{ selectedDocument.next_review_due_date || 'N/A' }}</p>
-        </div>
+    <p v-if="message" class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{{ message }}</p>
+    <p v-if="error" class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{{ error }}</p>
 
-        <h4 class="mt-4 text-sm font-semibold text-slate-900">Create Revision</h4>
-        <div class="mt-2 grid gap-2">
-          <textarea v-model="revisionForm.contentSummary" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Revision summary"></textarea>
-          <textarea v-model="revisionForm.reasonForChange" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Reason for revision"></textarea>
-          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" :disabled="isWriteDisabled" @click="createRevision">
-            Add Revision
+    <Transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-200" leave-to-class="opacity-0">
+      <div v-if="showCreate" class="fixed inset-0 z-40 bg-black/30" @click="showCreate = false" />
+    </Transition>
+
+    <Transition enter-active-class="transition-transform duration-300" enter-from-class="translate-x-full" leave-active-class="transition-transform duration-300" leave-to-class="translate-x-full">
+      <div v-if="showCreate" class="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 class="text-lg font-semibold text-slate-900">New Document</h2>
+          <button class="rounded-lg p-2 text-slate-400 hover:bg-slate-100" @click="showCreate = false">
+            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/></svg>
           </button>
         </div>
-      </article>
-
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Lifecycle & Export</h3>
-        <div class="mt-3 grid gap-2">
-          <label class="text-xs font-semibold text-slate-600">Version</label>
-          <select v-model="transitionForm.versionId" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="version in versions" :key="version.id" :value="version.id">
-              v{{ version.version_no }} - {{ version.status }}
-            </option>
-          </select>
-
-          <label class="text-xs font-semibold text-slate-600">Transition</label>
-          <select v-model="transitionForm.toStatus" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="status in transitionTargets" :key="status" :value="status">{{ status }}</option>
-          </select>
-
-          <textarea v-model="transitionForm.notes" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Transition notes"></textarea>
-          <input v-model="transitionForm.signatureId" class="rounded-lg border px-3 py-2 text-sm" placeholder="Signature ID (required for Approved/Effective)" />
-
-          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" :disabled="isWriteDisabled" @click="transitionVersion">
-            Apply Transition
-          </button>
-
-          <hr class="my-1 border-slate-200" />
-
-          <label class="text-xs font-semibold text-slate-600">Export Version</label>
-          <select v-model="exportForm.versionId" class="rounded-lg border px-3 py-2 text-sm">
-            <option v-for="version in versions" :key="`export-${version.id}`" :value="version.id">
-              v{{ version.version_no }} - {{ version.status }}
-            </option>
-          </select>
-          <select v-model="exportForm.exportFormat" class="rounded-lg border px-3 py-2 text-sm">
-            <option>PDF</option>
-            <option>DOCX</option>
-            <option>XLSX</option>
-          </select>
-          <input v-model="exportForm.binderJobReference" class="rounded-lg border px-3 py-2 text-sm" placeholder="Binder reference (optional)" />
-          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" :disabled="isWriteDisabled" @click="exportDocumentVersion">
-            Record Export
-          </button>
-        </div>
-      </article>
-
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Periodic Reviews</h3>
-        <div class="mt-3 grid gap-2">
-          <select v-model="reviewForm.reviewId" class="rounded-lg border px-3 py-2 text-sm">
-            <option value="">Select pending review</option>
-            <option v-for="review in pendingReviews" :key="review.id" :value="review.id">
-              Due {{ review.due_date }}
-            </option>
-          </select>
-          <select v-model="reviewForm.result" class="rounded-lg border px-3 py-2 text-sm">
-            <option>Completed</option>
-            <option>Deferred</option>
-            <option>Escalated</option>
-          </select>
-          <textarea v-model="reviewForm.notes" class="rounded-lg border px-3 py-2 text-sm" rows="2" placeholder="Review notes"></textarea>
-          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" :disabled="isWriteDisabled" @click="completeReview">
-            Complete Review
-          </button>
-        </div>
-
-        <ul class="mt-3 max-h-44 space-y-2 overflow-auto text-xs">
-          <li v-for="review in reviews" :key="`history-${review.id}`" class="rounded border border-slate-200 px-2 py-1">
-            {{ review.due_date }} • {{ review.status }}
-          </li>
-        </ul>
-      </article>
-    </section>
-
-    <section v-if="selectedDocument" class="grid gap-4 xl:grid-cols-2">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <div class="flex items-center justify-between">
-          <h3 class="text-lg font-semibold text-slate-900">Access Policies</h3>
-          <button class="rounded border border-teal-500 px-3 py-1 text-xs font-semibold text-teal-700" :disabled="isWriteDisabled" @click="saveAccessPolicies">
-            Save Policies
-          </button>
-        </div>
-
-        <div class="mt-3 space-y-2">
-          <div v-for="row in policyRows" :key="row.roleKey" class="grid grid-cols-4 items-center gap-2 rounded border border-slate-200 px-2 py-2 text-xs">
-            <p class="font-semibold text-slate-700">{{ row.roleKey }}</p>
-            <label class="text-slate-600"><input v-model="row.canView" class="mr-1" type="checkbox" />View</label>
-            <label class="text-slate-600"><input v-model="row.canDownload" class="mr-1" type="checkbox" />Download</label>
-            <label class="text-slate-600"><input v-model="row.canPrint" class="mr-1" type="checkbox" />Print</label>
-          </div>
-        </div>
-      </article>
-
-      <article class="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Controlled Preview</h3>
-        <div class="mt-3 grid gap-2">
-          <select class="rounded-lg border px-3 py-2 text-sm" :value="previewData?.versionId || activeVersionId" @change="loadPreview($event.target.value)">
-            <option v-for="version in versions" :key="`preview-${version.id}`" :value="version.id">
-              v{{ version.version_no }} - {{ version.status }}
-            </option>
-          </select>
-
-          <div v-if="previewData?.policy" class="space-y-2">
-            <div class="rounded bg-red-600 px-3 py-2 text-center text-xs font-bold text-white">
-              {{ previewData.policy.watermarkLabel }}
+        <div class="flex-1 overflow-y-auto px-6 py-5">
+          <fieldset :disabled="isWriteDisabled" class="grid gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Title <span class="text-red-500">*</span></label>
+              <input v-model="createForm.title" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="Document title" />
             </div>
-
-            <div
-              v-if="previewData.policy.mustAcknowledgeForCompliance && !previewData.policy.alreadyAcknowledged && !previewAcknowledged"
-              class="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900"
-            >
-              Acknowledgement required before controlled copy access.
-              <button class="ml-2 rounded border border-amber-500 px-2 py-1 font-semibold" :disabled="isWriteDisabled" @click="acknowledgePreview">Acknowledge</button>
-            </div>
-
-            <div v-if="canShowPreviewContent()" class="space-y-2 text-xs text-slate-700">
-              <p>Preview: {{ previewData.policy.previewAllowed ? 'Allowed' : 'Blocked' }}</p>
-              <p>Download: {{ previewData.policy.downloadAllowed ? 'Allowed' : 'Blocked' }}</p>
-              <p>Print: {{ previewData.policy.printAllowed ? 'Allowed' : 'Blocked' }}</p>
-              <div class="flex gap-2">
-                <button
-                  class="rounded border border-teal-500 px-3 py-1 font-semibold text-teal-700"
-                  :disabled="!previewData.policy.downloadAllowed"
-                >
-                  Download
-                </button>
-                <button
-                  class="rounded border border-teal-500 px-3 py-1 font-semibold text-teal-700"
-                  :disabled="!previewData.policy.printAllowed"
-                  @click="printControlledCopy"
-                >
-                  Print
-                </button>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Document Type</label>
+                <select v-model="createForm.documentType" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none">
+                  <option>SOP</option><option>Work Instruction</option><option>Policy</option><option>Form</option><option>Protocol</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Subtype</label>
+                <input v-model="createForm.documentSubtype" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="Optional" />
               </div>
             </div>
-          </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Department</label>
+                <input v-model="createForm.department" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="Department" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Criticality</label>
+                <select v-model="createForm.criticality" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none">
+                  <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Review Interval (days)</label>
+                <input v-model.number="createForm.reviewIntervalDays" type="number" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Site Code</label>
+                <input v-model="createForm.siteCode" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="Optional" />
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Content Summary</label>
+              <textarea v-model="createForm.contentSummary" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" rows="2" placeholder="Brief summary" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500">Reason for Change</label>
+              <input v-model="createForm.reasonForChange" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" placeholder="Initial creation" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="flex items-center gap-2 text-sm text-slate-600">
+                <input v-model="createForm.trainingRequired" type="checkbox" class="h-4 w-4 rounded border-slate-300" />
+                Training required
+              </label>
+              <label class="flex items-center gap-2 text-sm text-slate-600">
+                <input v-model="createForm.controlledCopyRequired" type="checkbox" class="h-4 w-4 rounded border-slate-300" />
+                Controlled copy required
+              </label>
+            </div>
+          </fieldset>
         </div>
-      </article>
-    </section>
-
-    <article v-if="selectedDocument" class="rounded-2xl border border-slate-200 bg-white p-4">
-      <h3 class="text-lg font-semibold text-slate-900">Timeline</h3>
-      <p v-if="timeline.length === 0" class="mt-2 text-sm text-slate-600">No timeline events yet.</p>
-      <ul v-else class="mt-3 max-h-72 space-y-2 overflow-auto text-sm">
-        <li v-for="event in timeline" :key="`${event.event_type}-${event.id}`" class="rounded border border-slate-200 px-3 py-2">
-          <p class="font-semibold text-slate-900">{{ event.event_type }} • {{ event.to_status || 'N/A' }}</p>
-          <p class="text-xs text-slate-600">{{ event.event_at }} • {{ event.actor_name || event.actor_email || 'System' }}</p>
-          <p v-if="event.notes" class="text-xs text-slate-700">{{ event.notes }}</p>
-        </li>
-      </ul>
-    </article>
-  </section>
+        <div class="border-t border-slate-200 px-6 py-4 flex gap-3">
+          <button
+            class="flex-1 rounded-lg bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            :disabled="!createForm.title || creating || isWriteDisabled"
+            @click="createDocument"
+          >
+            {{ creating ? 'Creating…' : 'Create Document' }}
+          </button>
+          <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50" @click="showCreate = false">Cancel</button>
+        </div>
+      </div>
+    </Transition>
+  </div>
 </template>

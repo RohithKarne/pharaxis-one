@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiJson, authHeaders, getOrgToken, getOrgUser } from '../../common/utils/session'
+import VaultPageHeader from '../components/VaultPageHeader'
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -256,17 +257,13 @@ export default function MyTasksPage() {
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
-        <section className="panel span-12 workspace-hero-card">
-          <div>
-            <p className="workspace-hero-kicker">Workforce / Tasks</p>
-            <h2 className="workspace-hero-title">My Workflow Tasks</h2>
-            <p className="panel-note">Review, reassign, comment, and sign tasks with full traceability.</p>
-          </div>
-          <div className="workspace-hero-right">
-            <span className="workspace-status-pill">Task Center</span>
-            <span className="workspace-hero-date">{tasks.length} tasks</span>
-          </div>
-        </section>
+        <VaultPageHeader
+          kicker="Workforce / Tasks"
+          title="My Workflow Tasks"
+          note="Review, reassign, comment, and sign tasks with full traceability."
+          statusLabel="Task Center"
+          dateLabel={`${tasks.length} tasks`}
+        />
 
         <section className="panel span-12">
           <ul className="simple-list">

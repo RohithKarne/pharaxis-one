@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiJson, authHeaders, getOrgToken, getOrgUser } from '../../common/utils/session'
+import VaultPageHeader from '../components/VaultPageHeader'
 
 export default function ContentSlotsPage() {
   const token = getOrgToken()
@@ -125,17 +126,13 @@ export default function ContentSlotsPage() {
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
-        <section className="panel span-12 workspace-hero-card">
-          <div>
-            <p className="workspace-hero-kicker">Compliance / Content Slots</p>
-            <h2 className="workspace-hero-title">Content Slots</h2>
-            <p className="panel-note">Expected-document placeholders with ownership and due dates.</p>
-          </div>
-          <div className="workspace-hero-right">
-            <span className="workspace-status-pill">Slot Tracking</span>
-            <span className="workspace-hero-date">{pendingCount} pending · {overdueCount} overdue</span>
-          </div>
-        </section>
+        <VaultPageHeader
+          kicker="Compliance / Content Slots"
+          title="Content Slots"
+          note="Expected-document placeholders with ownership and due dates."
+          statusLabel="Slot Tracking"
+          dateLabel={`${pendingCount} pending · ${overdueCount} overdue`}
+        />
 
         <section className="panel span-12">
           <ul className="simple-list">
@@ -218,7 +215,7 @@ export default function ContentSlotsPage() {
                   onChange={event => setSlotForm({ ...slotForm, due_date: event.target.value })}
                 />
               </div>
-              <button className="btn-primary" type="submit" disabled={creating}>
+              <button className="btn-primary" type="submit" disabled={creating || !slotForm.title.trim()}>
                 {creating ? 'Creating...' : 'Create Slot'}
               </button>
             </form>

@@ -281,6 +281,10 @@ authRouter.post('/login', async (req, res, next) => {
         userAgent
       });
 
+      if (env.NODE_ENV !== 'production') {
+        console.log(`\n[DEV OTP] ✉  ${user.email}  →  ${challenge.otp}  (challengeId: ${challenge.challengeId})\n`);
+      }
+
       return res.status(202).json({
         otpRequired: true,
         challengeId: challenge.challengeId,

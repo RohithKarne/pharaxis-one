@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { apiJson, authHeaders, getOrgToken, lifecycleBadgeClass } from '../../common/utils/session'
+import VaultPageHeader from '../components/VaultPageHeader'
 
 function ExpiryColumn({ title, items }) {
   return (
@@ -78,19 +79,13 @@ export default function ExpiryDashboardPage() {
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
-        <section className="panel span-12 workspace-hero-card">
-          <div>
-            <p className="workspace-hero-kicker">Risk & Partners / Expiry</p>
-            <h2 className="workspace-hero-title">Expiry Intelligence</h2>
-            <p className="panel-note">Documents approaching expiry windows and archived risk view.</p>
-          </div>
-          <div className="workspace-hero-right">
-            <span className="workspace-status-pill">Monitoring</span>
-            <span className="workspace-hero-date">
-              {(data.expiring_30?.length || 0) + (data.expiring_60?.length || 0) + (data.expiring_90?.length || 0)} active
-            </span>
-          </div>
-        </section>
+        <VaultPageHeader
+          kicker="Risk & Partners / Expiry"
+          title="Expiry Intelligence"
+          note="Documents approaching expiry windows and archived risk view."
+          statusLabel="Monitoring"
+          dateLabel={`${(data.expiring_30?.length || 0) + (data.expiring_60?.length || 0) + (data.expiring_90?.length || 0)} active`}
+        />
 
         <section className="panel span-12">
           <div className="detail-actions">

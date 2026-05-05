@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AdminTabs from '../components/AdminTabs'
 import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
+import VaultPageHeader from '../../vault/components/VaultPageHeader'
 
 export default function RetentionPoliciesPage() {
   const token = getOrgToken()
@@ -87,15 +88,13 @@ export default function RetentionPoliciesPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Retention Policies</h1>
-          <p className="brand-subtitle">Default review cycle per content type</p>
-        </div>
-        <span className="topbar-pill">Admin Console</span>
-      </header>
-
       <main className="dashboard-grid">
+        <VaultPageHeader
+          kicker="Administration / Retention"
+          title="Retention Policies"
+          note="Default review cycle per content type."
+          statusLabel="Admin Console"
+        />
         <section className="panel span-12">
           <AdminTabs active="retention" />
           <p className="panel-note">

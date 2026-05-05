@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AdminTabs from '../components/AdminTabs'
 import { apiJson, authHeaders, getOrgToken } from '../../common/utils/session'
+import VaultPageHeader from '../../vault/components/VaultPageHeader'
 
 function formatDateTime(value) {
   if (!value) return ''
@@ -69,15 +70,13 @@ export default function AuditPage() {
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
-        <div className="brand-block">
-          <h1 className="brand-title">Audit Trail</h1>
-          <p className="brand-subtitle">Read-only activity stream across your organization</p>
-        </div>
-        <span className="topbar-pill">Admin Console</span>
-      </header>
-
       <main className="dashboard-grid">
+        <VaultPageHeader
+          kicker="Administration / Audit"
+          title="Audit Trail"
+          note="Read-only activity stream across your organization."
+          statusLabel="Admin Console"
+        />
         <section className="panel span-12">
           <AdminTabs active="audit" />
           <form className="audit-filters" onSubmit={applyFilters}>

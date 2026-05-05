@@ -7,6 +7,7 @@ import {
   getOrgUser,
   lifecycleBadgeClass
 } from '../../common/utils/session'
+import VaultPageHeader from '../components/VaultPageHeader'
 
 function flattenFolders(nodes, level = 0, result = []) {
   nodes.forEach(node => {
@@ -245,17 +246,13 @@ export default function SearchPage() {
   return (
     <div className="app-shell">
       <main className="dashboard-grid">
-        <section className="panel span-12 workspace-hero-card">
-          <div>
-            <p className="workspace-hero-kicker">Quality Ops / Search</p>
-            <h2 className="workspace-hero-title">Search Workspace</h2>
-            <p className="panel-note">Full-text and metadata search across organization documents.</p>
-          </div>
-          <div className="workspace-hero-right">
-            <span className="workspace-status-pill">Search Active</span>
-            <span className="workspace-hero-date">{total} matches</span>
-          </div>
-        </section>
+        <VaultPageHeader
+          kicker="Quality Ops / Search"
+          title="Search Workspace"
+          note="Full-text and metadata search across organization documents."
+          statusLabel="Search Active"
+          dateLabel={`${total} matches`}
+        />
 
         <section className="panel span-12">
           <div className="config-filter-head">
