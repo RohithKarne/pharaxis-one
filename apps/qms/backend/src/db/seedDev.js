@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import pg from 'pg';
+import { randomBytes } from 'crypto';
 
 dotenv.config();
 
@@ -24,12 +25,20 @@ function makeEmail(localPart, overrideEnvValue) {
   return `${localPart}@${DEFAULT_EMAIL_DOMAIN}`.toLowerCase();
 }
 
+function fallbackSeedPassword(envName) {
+  const supplied = String(process.env[envName] || '').trim();
+  if (supplied) return supplied;
+  const generated = randomBytes(12).toString('base64url');
+  console.warn(`[qms-seed] ${envName} not set. Using generated one-time password for this run.`);
+  return generated;
+}
+
 const DEV_USERS = [
   {
     key: 'superadmin',
     fullName: process.env.QMS_SEED_SUPERADMIN_NAME || 'QMS Platform Superadmin',
     email: makeEmail('superadmin', process.env.QMS_SEED_SUPERADMIN_EMAIL || 'Superadmin'),
-    password: process.env.QMS_SEED_SUPERADMIN_PASSWORD || 'Manager@123',
+    password: fallbackSeedPassword('QMS_SEED_SUPERADMIN_PASSWORD'),
     roleKeys: ['superadmin'],
     primaryRole: 'superadmin',
     otpEnabled: false
@@ -38,7 +47,7 @@ const DEV_USERS = [
     key: 'admin',
     fullName: process.env.QMS_SEED_ADMIN_NAME || 'QMS Admin',
     email: makeEmail('admin', process.env.QMS_SEED_ADMIN_EMAIL),
-    password: process.env.QMS_SEED_ADMIN_PASSWORD || 'Admin@123',
+    password: fallbackSeedPassword('QMS_SEED_ADMIN_PASSWORD'),
     roleKeys: ['admin', 'qa_reviewer'],
     primaryRole: 'admin',
     otpEnabled: true
@@ -47,7 +56,7 @@ const DEV_USERS = [
     key: 'author',
     fullName: process.env.QMS_SEED_AUTHOR_NAME || 'QMS Author',
     email: makeEmail('author', process.env.QMS_SEED_AUTHOR_EMAIL),
-    password: process.env.QMS_SEED_AUTHOR_PASSWORD || 'Author@123',
+    password: fallbackSeedPassword('QMS_SEED_AUTHOR_PASSWORD'),
     roleKeys: ['author'],
     primaryRole: 'author',
     otpEnabled: true
@@ -56,7 +65,7 @@ const DEV_USERS = [
     key: 'qa_reviewer',
     fullName: process.env.QMS_SEED_QA_REVIEWER_NAME || 'QMS QA Reviewer',
     email: makeEmail('qareviewer', process.env.QMS_SEED_QA_REVIEWER_EMAIL),
-    password: process.env.QMS_SEED_QA_REVIEWER_PASSWORD || 'QaReviewer@123',
+    password: fallbackSeedPassword('QMS_SEED_QA_REVIEWER_PASSWORD'),
     roleKeys: ['qa_reviewer'],
     primaryRole: 'qa_reviewer',
     otpEnabled: true
@@ -65,7 +74,7 @@ const DEV_USERS = [
     key: 'approver',
     fullName: process.env.QMS_SEED_APPROVER_NAME || 'QMS Approver',
     email: makeEmail('approver', process.env.QMS_SEED_APPROVER_EMAIL),
-    password: process.env.QMS_SEED_APPROVER_PASSWORD || 'Approver@123',
+    password: fallbackSeedPassword('QMS_SEED_APPROVER_PASSWORD'),
     roleKeys: ['approver'],
     primaryRole: 'approver',
     otpEnabled: true
@@ -74,7 +83,7 @@ const DEV_USERS = [
     key: 'viewer',
     fullName: process.env.QMS_SEED_VIEWER_NAME || 'QMS Viewer',
     email: makeEmail('viewer', process.env.QMS_SEED_VIEWER_EMAIL),
-    password: process.env.QMS_SEED_VIEWER_PASSWORD || 'Viewer@123',
+    password: fallbackSeedPassword('QMS_SEED_VIEWER_PASSWORD'),
     roleKeys: ['viewer'],
     primaryRole: 'viewer',
     otpEnabled: true

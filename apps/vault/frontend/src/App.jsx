@@ -1,6 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import LoginPage from './modules/auth/pages/LoginPage'
-import SuperadminLoginPage from './modules/superadmin/pages/SuperadminLoginPage'
 import VaultHomePage from './modules/vault/pages/VaultHomePage'
 import UsersPage from './modules/admin/pages/UsersPage'
 import TaxonomyPage from './modules/admin/pages/TaxonomyPage'
@@ -17,10 +16,6 @@ import AdminIntegrationsPage from './modules/admin/pages/AdminIntegrationsPage'
 import AdminSecurityPage from './modules/admin/pages/AdminSecurityPage'
 import AdminConsolePage from './modules/admin/pages/AdminConsolePage'
 import AdminSetupWizardPage from './modules/admin/pages/AdminSetupWizardPage'
-import SuperadminDashboardPage from './modules/superadmin/pages/SuperadminDashboardPage'
-import SuperadminOrgsPage from './modules/superadmin/pages/SuperadminOrgsPage'
-import SuperadminOrgDetailPage from './modules/superadmin/pages/SuperadminOrgDetailPage'
-import SuperadminAuditPage from './modules/superadmin/pages/SuperadminAuditPage'
 import ContentSlotsPage from './modules/vault/pages/ContentSlotsPage'
 import DossiersPage from './modules/vault/pages/DossiersPage'
 import ExpiryDashboardPage from './modules/vault/pages/ExpiryDashboardPage'
@@ -35,8 +30,7 @@ import TrainingAssignmentsPage from './modules/vault/pages/TrainingAssignmentsPa
 import ExternalSharePage from './modules/vault/pages/ExternalSharePage'
 import {
   OrgAuthGuard,
-  OrgRoleGuard,
-  SuperadminGuard
+  OrgRoleGuard
 } from './modules/common/components/RouteGuards'
 import WorkspaceShell from './modules/common/components/WorkspaceShell'
 
@@ -62,41 +56,6 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LoginPage />} />
         <Route path="/external/vault-share/:token" element={<ExternalSharePage />} />
-        <Route path="/control-tower/login" element={<SuperadminLoginPage />} />
-        <Route path="/superadmin" element={<Navigate to="/control-tower/login" replace />} />
-
-        <Route
-          path="/control-tower/dashboard"
-          element={
-            <SuperadminGuard>
-              <SuperadminDashboardPage />
-            </SuperadminGuard>
-          }
-        />
-        <Route
-          path="/control-tower/orgs"
-          element={
-            <SuperadminGuard>
-              <SuperadminOrgsPage />
-            </SuperadminGuard>
-          }
-        />
-        <Route
-          path="/control-tower/orgs/:id"
-          element={
-            <SuperadminGuard>
-              <SuperadminOrgDetailPage />
-            </SuperadminGuard>
-          }
-        />
-        <Route
-          path="/control-tower/audit"
-          element={
-            <SuperadminGuard>
-              <SuperadminAuditPage />
-            </SuperadminGuard>
-          }
-        />
 
         <Route
           path="/vault"

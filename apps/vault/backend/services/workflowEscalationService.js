@@ -1,6 +1,7 @@
 const cron = require('node-cron')
 const { pool } = require('../database/db')
 const auditService = require('./auditService')
+const { runWithDbLock } = require('./distributedLock')
 
 async function runWorkflowEscalationJob() {
   const [rows] = await pool.execute(
@@ -104,7 +105,9 @@ function registerWorkflowEscalationCron() {
     '*/30 * * * *',
     async () => {
       try {
-        const result = await runWorkflowEscalationJob()
+        const lockRun = await runWithDbLock('vault:cron:workflow-escalation', 1, runWorkflowEscalationJob)
+        if (lockRun.skipped) return
+        const result = lockRun.result
         if (result.escalatedCount > 0) {
           console.log(`Workflow escalation job complete: escalated ${result.escalatedCount} task(s)`) // eslint-disable-line no-console
         }

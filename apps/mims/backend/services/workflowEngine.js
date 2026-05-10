@@ -1,32 +1,48 @@
 'use strict';
-const pool = require('../database/db');
+const pool  = require('../database/db');
+const redis = require('./redisClient');
 
-// ── AC-T3: In-process workflow rules cache ────────────────────────────────────
-// Two-tier cache: orgRuleCount (org-level rule existence) + transition results
-// TTL: 5 minutes. Invalidated by calling invalidateWorkflowRulesCache().
-const _wfCache = new Map();
-const WF_CACHE_TTL_MS = 5 * 60 * 1000;
+// ── AC-T3: Workflow rules cache — Redis-backed, cross-process safe ────────────
+// Redis is the primary cache (shared across all processes).
+// In-process Map is a fallback for when Redis is not yet connected at startup.
+// TTL: 5 minutes (WORKFLOW_CACHE_TTL from redisClient, default 300s).
+// Invalidated cross-process by calling invalidateWorkflowRulesCache().
 
-function _wfGet(key) {
-  const e = _wfCache.get(key);
+const _local       = new Map();
+const LOCAL_TTL_MS = 5 * 60 * 1000;
+
+function _localGet(key) {
+  const e = _local.get(key);
   if (!e) return undefined;
-  if (Date.now() > e.expiresAt) { _wfCache.delete(key); return undefined; }
+  if (Date.now() > e.expiresAt) { _local.delete(key); return undefined; }
   return e.value;
 }
 
-function _wfSet(key, value) {
-  _wfCache.set(key, { value, expiresAt: Date.now() + WF_CACHE_TTL_MS });
+function _localSet(key, value) {
+  _local.set(key, { value, expiresAt: Date.now() + LOCAL_TTL_MS });
+}
+
+async function _wfGet(key) {
+  const fromRedis = await redis.workflowCacheGet(key); // null on miss or Redis down
+  if (fromRedis !== null) return fromRedis;
+  const fromLocal = _localGet(key);
+  return fromLocal !== undefined ? fromLocal : undefined;
+}
+
+async function _wfSet(key, value) {
+  await redis.workflowCacheSet(key, value); // cross-process
+  _localSet(key, value);                    // local fallback
 }
 
 /** Called by siteConfig.js after any workflow_rules write to flush stale entries. */
-function invalidateWorkflowRulesCache(orgId) {
+async function invalidateWorkflowRulesCache(orgId) {
+  await redis.workflowCacheInvalidate(orgId); // clears Redis keys across all processes
   if (orgId) {
-    // Remove all keys prefixed with this org
-    for (const k of _wfCache.keys()) {
-      if (k.startsWith(`${orgId}:`)) _wfCache.delete(k);
+    for (const k of _local.keys()) {
+      if (k.startsWith(`${orgId}:`)) _local.delete(k);
     }
   } else {
-    _wfCache.clear();
+    _local.clear();
   }
 }
 
@@ -40,12 +56,12 @@ async function checkTransitionAllowed(orgId, fromStateId, toStateId) {
   if (!fromStateId) return { allowed: true };
 
   const transKey = `${orgId}:${fromStateId}:${toStateId}`;
-  const cached = _wfGet(transKey);
+  const cached = await _wfGet(transKey);
   if (cached !== undefined) return cached;
 
   // Check if any active rules apply to this org (via site scoping or global)
   const orgCountKey = `${orgId}:__count__`;
-  let cnt = _wfGet(orgCountKey);
+  let cnt = await _wfGet(orgCountKey);
   if (cnt === undefined) {
     const [[row]] = await pool.query(
       `SELECT COUNT(*) AS cnt FROM workflow_rules wr
@@ -54,11 +70,11 @@ async function checkTransitionAllowed(orgId, fromStateId, toStateId) {
       [orgId]
     );
     cnt = row.cnt;
-    _wfSet(orgCountKey, cnt);
+    await _wfSet(orgCountKey, cnt);
   }
 
   if (!cnt) {
-    _wfSet(transKey, { allowed: true });
+    await _wfSet(transKey, { allowed: true });
     return { allowed: true }; // No rules = open system
   }
 
@@ -74,18 +90,18 @@ async function checkTransitionAllowed(orgId, fromStateId, toStateId) {
   );
 
   if (rules.length > 0) {
-    _wfSet(transKey, { allowed: true });
+    await _wfSet(transKey, { allowed: true });
     return { allowed: true };
   }
 
   // Get state names for error message
   const [[fromState]] = await pool.query('SELECT name FROM workflow_states WHERE id = ? LIMIT 1', [fromStateId]);
-  const [[toState]] = await pool.query('SELECT name FROM workflow_states WHERE id = ? LIMIT 1', [toStateId]);
+  const [[toState]]   = await pool.query('SELECT name FROM workflow_states WHERE id = ? LIMIT 1', [toStateId]);
   const from = fromState?.name || `State ${fromStateId}`;
-  const to = toState?.name || `State ${toStateId}`;
+  const to   = toState?.name   || `State ${toStateId}`;
 
   const result = { allowed: false, reason: `Transition from "${from}" to "${to}" is not permitted by workflow rules.` };
-  _wfSet(transKey, result);
+  await _wfSet(transKey, result);
   return result;
 }
 

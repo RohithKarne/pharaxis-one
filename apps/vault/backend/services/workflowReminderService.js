@@ -2,6 +2,7 @@ const cron = require('node-cron')
 const { pool } = require('../database/db')
 const auditService = require('./auditService')
 const { deliverWorkflowReminder } = require('./workflowNotificationDeliveryService')
+const { runWithDbLock } = require('./distributedLock')
 
 const DEDUPE_WINDOW_HOURS = 6
 
@@ -149,7 +150,9 @@ function registerWorkflowReminderCron() {
     '0 * * * *',
     async () => {
       try {
-        const result = await runWorkflowReminderJob()
+        const lockRun = await runWithDbLock('vault:cron:workflow-reminder', 1, runWorkflowReminderJob)
+        if (lockRun.skipped) return
+        const result = lockRun.result
         if (result.emittedCount > 0) {
           // eslint-disable-next-line no-console
           console.log(`Workflow reminder job complete: emitted ${result.emittedCount} notification(s)`)

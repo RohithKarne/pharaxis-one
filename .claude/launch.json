@@ -70,6 +70,13 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "apps/ai-agent/frontend",
       "port": 5175
+    },
+    {
+      "name": "Vault Superadmin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:superadmin"],
+      "cwd": "apps/vault/frontend",
+      "port": 5177
     }
   ]
 }

@@ -88,10 +88,18 @@ router.post('/query', authenticate, resolveKey, async (req, res) => {
   const startTime = Date.now()
   const requestBody = req.body || {}
   const { org_id, app_source, query_type, payload } = requestBody
+  const authenticatedOrgId = Number(req.user?.orgId)
+
+  if (!Number.isInteger(authenticatedOrgId) || authenticatedOrgId <= 0) {
+    return res.status(401).json(formatError('Invalid authentication context', 401))
+  }
+  if (org_id !== undefined && Number(org_id) !== authenticatedOrgId) {
+    return res.status(403).json(formatError('org_id does not match authenticated organisation', 403))
+  }
 
   const writeFailure = async ({ httpStatus, message, code, status = 'failed' }) => {
     await logUsage({
-      org_id: org_id || req.user?.orgId,
+      org_id: authenticatedOrgId,
       app_source,
       query_type,
       tokensIn: 0,
@@ -145,7 +153,7 @@ router.post('/query', authenticate, resolveKey, async (req, res) => {
     const tokensOut = Number(result?.tokens_used?.out) || 0
 
     await logUsage({
-      org_id,
+      org_id: authenticatedOrgId,
       app_source,
       query_type,
       tokensIn,

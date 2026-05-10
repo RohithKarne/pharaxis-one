@@ -1,6 +1,7 @@
 const cron = require('node-cron')
 const crypto = require('crypto')
 const { pool } = require('../database/db')
+const { runWithDbLock } = require('./distributedLock')
 
 const DEFAULT_MAX_ATTEMPTS = Math.max(1, Number(process.env.WORKFLOW_WEBHOOK_MAX_ATTEMPTS || 5))
 const BASE_DELAY_MINUTES = Math.max(1, Number(process.env.WORKFLOW_WEBHOOK_BASE_DELAY_MINUTES || 5))
@@ -294,7 +295,13 @@ function registerWorkflowWebhookRetryCron() {
     '*/5 * * * *',
     async () => {
       try {
-        const result = await processDueWebhookRetries(100)
+        const lockRun = await runWithDbLock(
+          'vault:cron:workflow-webhook-retry',
+          1,
+          () => processDueWebhookRetries(100)
+        )
+        if (lockRun.skipped) return
+        const result = lockRun.result
         if (result.processed > 0) {
           // eslint-disable-next-line no-console
           console.log(`Workflow webhook retry job: processed=${result.processed} sent=${result.sent} failed=${result.failed} pending=${result.pending}`)

@@ -2,7 +2,7 @@
 
 This folder is the forward migration home for CP Portal schema changes.
 
-Current app startup still bootstraps the legacy schema from `backend/database/db.js`. New structural/schema changes should be added here as numbered SQL migrations and applied with:
+App startup now runs SQL migrations first, then keeps the legacy bootstrap as a compatibility fallback for environments created before migration-first rollout. New structural/schema changes should be added here as numbered SQL migrations and applied with:
 
 ```bash
 npm run db:migrate

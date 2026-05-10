@@ -26,6 +26,6 @@ export function OrgRoleGuard({ roles, children }) {
 export function SuperadminGuard({ children }) {
   const token = getSuperadminToken()
   const user = getSuperadminUser()
-  if (!token || (!user?.id && !user?.email && !user?.superadminId)) return <Navigate to="/control-tower/login" replace />
+  if (!token || (!user?.id && !user?.email && !user?.superadminId)) return <Navigate to="/login" replace />
   return children
 }

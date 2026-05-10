@@ -30,8 +30,9 @@ const pool = mysql.createPool({
   password:           MYSQL_PASSWORD,
   database:           MYSQL_DATABASE,
   waitForConnections: true,
-  connectionLimit:    10,
+  connectionLimit:    parseInt(process.env.MYSQL_POOL_SIZE || '20', 10),
   queueLimit:         0,
+  connectTimeout:     parseInt(process.env.MYSQL_CONNECT_TIMEOUT_MS || '10000', 10),
   charset:            'utf8mb4',
   timezone:           '+00:00',
 });

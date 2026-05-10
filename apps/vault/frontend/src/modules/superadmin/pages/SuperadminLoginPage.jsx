@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const SUPERADMIN_CREDENTIALS = {
-  email: 'superadmin@pharaxis.local',
-  password: 'Super@123',
-}
-
 export default function SuperadminLoginPage() {
   const appIconUrl = `${import.meta.env.BASE_URL}vault-icon.svg`
-  const [form, setForm] = useState({ ...SUPERADMIN_CREDENTIALS, mfaCode: '' })
+  const [form, setForm] = useState({ email: '', password: '', mfaCode: '' })
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
@@ -63,7 +58,7 @@ export default function SuperadminLoginPage() {
       if (!res.ok) { setError(data.error || 'Login failed'); setLoading(false); return }
       localStorage.setItem('vault_superadmin_token', data.token)
       localStorage.setItem('vault_superadmin', JSON.stringify(data.superadmin))
-      navigate('/control-tower/dashboard')
+      navigate('/dashboard')
     } catch {
       setError('Network error. Please try again.')
       setLoading(false)
@@ -71,14 +66,14 @@ export default function SuperadminLoginPage() {
   }
 
   return (
-    <div className="vault-login-page">
-      <div className="vault-login-card">
-        <div className="vault-login-card-header">
+    <div className="vault-login-page" style={{ background: 'linear-gradient(135deg, #1a1f2e 0%, #2d3548 100%)' }}>
+      <div className="vault-login-card" style={{ borderTop: '4px solid #e8a020' }}>
+        <div className="vault-login-card-header" style={{ background: 'linear-gradient(135deg, #1a1f2e 0%, #2d3548 100%)' }}>
           <div className="vault-login-brand">
-            <img className="vault-app-icon" src={appIconUrl} alt="Vault" />
-            <div className="vault-app-name">PHARAXIS VAULT</div>
+            <img className="vault-app-icon" src={appIconUrl} alt="Admin" />
+            <div className="vault-app-name" style={{ color: '#e8a020', letterSpacing: '0.12em' }}>PHARAXIS ADMIN</div>
           </div>
-          <div className="vault-app-tagline">Global SuperAdmin Control Console</div>
+          <div className="vault-app-tagline" style={{ color: 'rgba(255,255,255,0.6)' }}>Internal Control Tower — Restricted Access</div>
           <div className="vault-login-health">
             <span className="vault-health-pill">Frontend: On</span>
             <span className="vault-health-pill">
@@ -89,18 +84,20 @@ export default function SuperadminLoginPage() {
 
         <div className="vault-login-card-body">
           <form className="vault-login-form" onSubmit={handleSubmit}>
-            <div className="panel-note">Dedicated SuperAdmin access portal</div>
+            <div className="panel-note" style={{ background: '#fff8ed', border: '1px solid #e8a020', color: '#7a4f00', borderRadius: '6px', padding: '0.5rem 0.75rem', marginBottom: '1rem' }}>
+              Pharaxis internal use only. Unauthorised access is prohibited.
+            </div>
             <div className="vault-form-group">
-              <label htmlFor="email">Email Address</label>
+              <label htmlFor="email">Username</label>
               <input
                 id="email"
                 name="email"
-                type="email"
+                type="text"
                 value={form.email}
                 onChange={handleChange}
                 required
-                autoComplete="email"
-                placeholder="superadmin@pharaxis.local"
+                autoComplete="username"
+                placeholder="Enter superadmin email"
               />
             </div>
 
@@ -133,8 +130,13 @@ export default function SuperadminLoginPage() {
 
             {error ? <div className="auth-error">{error}</div> : null}
             {info ? <div className="upload-success">{info}</div> : null}
-            <button className="btn-primary vault-login-btn" type="submit" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
+            <button
+              className="btn-primary vault-login-btn"
+              type="submit"
+              disabled={loading}
+              style={{ background: loading ? '#9b6e1a' : '#e8a020', borderColor: '#e8a020' }}
+            >
+              {loading ? 'Signing in...' : 'Sign In to Admin'}
             </button>
           </form>
         </div>

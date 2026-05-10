@@ -676,7 +676,7 @@ export default function ContentDetailPage() {
           ]}
         />
 
-        <section className="span-3">
+        <section className="span-2">
           <VaultSectionNav sections={sectionGroups} />
         </section>
 
@@ -860,13 +860,62 @@ export default function ContentDetailPage() {
           {error ? <div className="auth-error taxonomy-error">{error}</div> : null}
         </section>
 
-        <section className="span-3" id="versions">
-          <VersionHistoryPanel contentId={id} token={token} refreshTrigger={refreshTrigger} />
-        </section>
+        {/* Right Info Panel — metadata, versions, governance, timeline */}
+        <div className="span-4 content-right-panel">
+          <div id="metadata">
+            <MetadataPanel contentId={id} userRole={user.role} />
+          </div>
 
-        <section className="span-12" id="metadata">
-          <MetadataPanel contentId={id} userRole={user.role} />
-        </section>
+          <div id="versions">
+            <VersionHistoryPanel contentId={id} token={token} refreshTrigger={refreshTrigger} />
+          </div>
+
+          <section className="panel" id="governance">
+            <h3>Governance Checks</h3>
+            <div className="stats-mini-grid">
+              <article className="stat-card-mini"><span>Versions</span><strong>{versions.length}</strong></article>
+              <article className="stat-card-mini"><span>Audit Events</span><strong>{auditEntries.length}</strong></article>
+              <article className="stat-card-mini"><span>Missing</span><strong>{missingGovernanceCount}</strong></article>
+            </div>
+            <ul className="simple-list">
+              {governanceChecks.map(check => (
+                <li key={check.key}>
+                  <span>{check.label}</span>
+                  <strong style={{ color: check.ok ? '#16a34a' : '#dc2626' }}>{check.ok ? '✓' : '✗ Missing'}</strong>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="panel" id="timeline">
+            <h3>Workflow Timeline</h3>
+            <p className="panel-note">Task launches, comments, signatures and reminders.</p>
+            <div className="timeline-list">
+              {workflowTimeline.slice(0, 8).map(entry => (
+                <article className="timeline-entry" key={`${entry.type}-${entry.id}`}>
+                  <div className="timeline-meta">
+                    <strong>{entry.title}</strong>
+                    <span>{formatDateTime(entry.happened_at)}</span>
+                  </div>
+                  <p>{entry.summary}</p>
+                  <div className="detail-actions">
+                    <span className={entry.status === 'read' || entry.status === 'completed' ? 'status-chip success' : 'status-chip info'}>
+                      {entry.type}
+                    </span>
+                    {entry.status ? (
+                      <span className={entry.status === 'unread' || entry.status === 'pending' ? 'status-chip pending' : 'status-chip success'}>
+                        {entry.status}
+                      </span>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+              {!workflowTimeline.length ? (
+                <p className="panel-note">No workflow activity yet.</p>
+              ) : null}
+            </div>
+          </section>
+        </div>
 
         <section className="panel span-6" id="relationships">
           <h3>Document Relationships</h3>
@@ -1199,23 +1248,6 @@ export default function ContentDetailPage() {
           </div>
         </section>
 
-        <section className="panel span-12" id="governance">
-          <h3>Governance Checks</h3>
-          <p className="panel-note">Mandatory metadata and review readiness checks before final lifecycle transitions.</p>
-          <div className="stats-mini-grid">
-            <article className="stat-card-mini"><span>Versions</span><strong>{versions.length}</strong></article>
-            <article className="stat-card-mini"><span>Audit Events</span><strong>{auditEntries.length}</strong></article>
-            <article className="stat-card-mini"><span>Missing Checks</span><strong>{missingGovernanceCount}</strong></article>
-          </div>
-          <ul className="simple-list">
-            {governanceChecks.map(check => (
-              <li key={check.key}>
-                <span>{check.label}</span>
-                <strong>{check.ok ? 'Complete' : 'Missing'}</strong>
-              </li>
-            ))}
-          </ul>
-        </section>
 
         <section className="panel span-6" id="compare">
           <h3>Version Compare</h3>
@@ -1315,34 +1347,6 @@ export default function ContentDetailPage() {
           ) : null}
         </section>
 
-        <section className="panel span-6" id="timeline">
-          <h3>Workflow Timeline</h3>
-          <p className="panel-note">One place to follow task launches, comments, signatures, and reminder events for this document.</p>
-          <div className="timeline-list">
-            {workflowTimeline.map(entry => (
-              <article className="timeline-entry" key={`${entry.type}-${entry.id}`}>
-                <div className="timeline-meta">
-                  <strong>{entry.title}</strong>
-                  <span>{formatDateTime(entry.happened_at)}</span>
-                </div>
-                <p>{entry.summary}</p>
-                <div className="detail-actions">
-                  <span className={entry.status === 'read' || entry.status === 'completed' ? 'status-chip success' : 'status-chip info'}>
-                    {entry.type}
-                  </span>
-                  {entry.status ? (
-                    <span className={entry.status === 'unread' || entry.status === 'pending' ? 'status-chip pending' : 'status-chip success'}>
-                      {entry.status}
-                    </span>
-                  ) : null}
-                </div>
-              </article>
-            ))}
-            {!workflowTimeline.length ? (
-              <p className="panel-note">No workflow activity recorded for this document yet.</p>
-            ) : null}
-          </div>
-        </section>
 
         <section className="panel span-6" id="audit">
           <h3>Compliance Timeline</h3>

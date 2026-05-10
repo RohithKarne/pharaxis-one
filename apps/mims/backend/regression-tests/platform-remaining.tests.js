@@ -142,7 +142,7 @@ module.exports = [
         );
 
         const documents = await makeRequest('GET', '/api/admin/vault/documents', null, token);
-        const search = await makeRequest('GET', '/api/admin/vault/search?q=select%201', null, token);
+        const search = await makeRequest('GET', '/api/admin/vault/search?query_key=approved_documents', null, token);
         const pull = await makeRequest('POST', '/api/admin/vault/pull', {
           vault_doc_id: 'REGRESSION-DOC-1',
           case_id: caseId,

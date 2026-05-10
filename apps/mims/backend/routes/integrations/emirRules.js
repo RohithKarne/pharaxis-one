@@ -2,10 +2,10 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
 const pool = require('../../database/db');
 
-router.get('/admin/emir/sender-rules', authenticate, async (req, res) => {
+router.get('/admin/emir/sender-rules', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const [rows] = await pool.query(
       'SELECT * FROM emir_sender_rules WHERE org_id = ? ORDER BY sender_email ASC',
@@ -17,7 +17,7 @@ router.get('/admin/emir/sender-rules', authenticate, async (req, res) => {
   }
 });
 
-router.post('/admin/emir/sender-rules', authenticate, async (req, res) => {
+router.post('/admin/emir/sender-rules', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { sender_email, sender_name, is_trusted, notes } = req.body;
     const [result] = await pool.query(
@@ -31,7 +31,7 @@ router.post('/admin/emir/sender-rules', authenticate, async (req, res) => {
   }
 });
 
-router.put('/admin/emir/sender-rules/:id', authenticate, async (req, res) => {
+router.put('/admin/emir/sender-rules/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { sender_email, sender_name, is_trusted, notes } = req.body;
@@ -57,7 +57,7 @@ router.put('/admin/emir/sender-rules/:id', authenticate, async (req, res) => {
   }
 });
 
-router.delete('/admin/emir/sender-rules/:id', authenticate, async (req, res) => {
+router.delete('/admin/emir/sender-rules/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { id } = req.params;
     const [rows] = await pool.query(
@@ -75,7 +75,7 @@ router.delete('/admin/emir/sender-rules/:id', authenticate, async (req, res) => 
   }
 });
 
-router.get('/admin/emir/routing-rules', authenticate, async (req, res) => {
+router.get('/admin/emir/routing-rules', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const [rows] = await pool.query(
       'SELECT * FROM emir_routing_rules WHERE org_id = ? ORDER BY priority ASC',
@@ -87,7 +87,7 @@ router.get('/admin/emir/routing-rules', authenticate, async (req, res) => {
   }
 });
 
-router.post('/admin/emir/routing-rules', authenticate, async (req, res) => {
+router.post('/admin/emir/routing-rules', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const {
       rule_name,
@@ -121,7 +121,7 @@ router.post('/admin/emir/routing-rules', authenticate, async (req, res) => {
   }
 });
 
-router.put('/admin/emir/routing-rules/:id', authenticate, async (req, res) => {
+router.put('/admin/emir/routing-rules/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -171,7 +171,7 @@ router.put('/admin/emir/routing-rules/:id', authenticate, async (req, res) => {
   }
 });
 
-router.delete('/admin/emir/routing-rules/:id', authenticate, async (req, res) => {
+router.delete('/admin/emir/routing-rules/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { id } = req.params;
     const [rows] = await pool.query(

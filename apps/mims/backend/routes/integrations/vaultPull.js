@@ -6,6 +6,12 @@ const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const { getVaultSession, runVQL } = require('../../services/vaultService');
 
+function normalizeVaultDocId(rawValue) {
+  const value = String(rawValue || '').trim();
+  if (!/^[A-Za-z0-9._-]{1,128}$/.test(value)) return null;
+  return value;
+}
+
 router.get('/admin/vault/documents', authenticate, async (req, res) => {
   try {
     let orgId = req.user.orgId;
@@ -25,15 +31,18 @@ router.get('/admin/vault/documents', authenticate, async (req, res) => {
 
 router.post('/admin/vault/pull', authenticate, async (req, res) => {
   try {
-    const { vault_doc_id, case_id } = req.body;
+    const { case_id } = req.body;
+    const vaultDocId = normalizeVaultDocId(req.body?.vault_doc_id);
+    if (!vaultDocId) {
+      return res.status(400).json({ error: 'Invalid vault_doc_id format.' });
+    }
     const orgId = req.user.orgId;
 
     const session = await getVaultSession(orgId);
+    const vql = `SELECT id, name__v, type__v, subtype__v, status__v, expiration_date__v, effective_date__v FROM documents WHERE id = '${vaultDocId}'`;
     const data = await runVQL(
       session,
-      "SELECT id, name__v, type__v, subtype__v, status__v, expiration_date__v, effective_date__v FROM documents WHERE id = '" +
-        req.body.vault_doc_id +
-        "'"
+      vql
     );
 
     if (!data || !Array.isArray(data) || data.length === 0) {

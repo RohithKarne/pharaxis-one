@@ -23,9 +23,18 @@ export function getSuperadminUser() {
   return parseJson(localStorage.getItem('vault_superadmin'), {}) || {}
 }
 
+export function getOrgSlug() {
+  return localStorage.getItem('vault_org_slug') || ''
+}
+
+export function saveOrgSlug(slug) {
+  if (slug) localStorage.setItem('vault_org_slug', slug)
+}
+
 export function clearOrgSession() {
   localStorage.removeItem('vault_token')
   localStorage.removeItem('vault_user')
+  // vault_org_slug is intentionally preserved for post-logout redirect
 }
 
 export function clearSuperadminSession() {
@@ -40,7 +49,10 @@ export function authHeaders(token, extra = {}) {
 }
 
 export async function apiJson(path, options = {}) {
-  const response = await fetch(path, options)
+  const response = await fetch(path, {
+    credentials: 'include',
+    ...options
+  })
   const contentType = response.headers.get('content-type') || ''
   const payload = contentType.includes('application/json')
     ? await response.json()

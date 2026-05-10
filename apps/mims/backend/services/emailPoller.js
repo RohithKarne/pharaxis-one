@@ -54,6 +54,9 @@ function hashFallback({ sender, subject, receivedAt, body }) {
 async function ingestAccount(account, sinceDt) {
   const { ImapFlow } = require('imapflow')
 
+  const IMAP_CONNECT_TIMEOUT_MS = parseInt(process.env.IMAP_CONNECT_TIMEOUT_MS || '10000', 10);
+  const IMAP_SOCKET_TIMEOUT_MS  = parseInt(process.env.IMAP_SOCKET_TIMEOUT_MS  || '30000', 10);
+
   const client = new ImapFlow({
     host: account.imap_host,
     port: account.imap_port,
@@ -64,6 +67,9 @@ async function ingestAccount(account, sinceDt) {
     },
     tls: { rejectUnauthorized: false },
     logger: false,
+    // Explicit timeouts — prevents IMAP hangs from silently stalling the poller
+    connectionTimeout: IMAP_CONNECT_TIMEOUT_MS, // max time to establish TCP+TLS
+    socketTimeout:     IMAP_SOCKET_TIMEOUT_MS,  // max idle time on open socket
   })
 
   let inserted = 0
@@ -183,6 +189,34 @@ async function ingestAccount(account, sinceDt) {
 
 let task = null
 
+/**
+ * Per-account IMAP failure backoff.
+ * Tracks consecutive failure counts; skips the account for an exponentially
+ * increasing window before retrying. Resets to 0 on first success.
+ * Map<accountId, { failures: number, retryAfter: Date }>
+ */
+const _accountBackoff = new Map()
+const BACKOFF_BASE_MS  = 60_000   // 1 min
+const BACKOFF_MAX_MS   = 1_800_000 // 30 min cap
+
+function _accountCanRetry(accountId) {
+  const state = _accountBackoff.get(accountId)
+  if (!state) return true
+  return Date.now() >= state.retryAfter.getTime()
+}
+
+function _recordAccountFailure(accountId) {
+  const state   = _accountBackoff.get(accountId) || { failures: 0 }
+  const failures = state.failures + 1
+  const backoffMs = Math.min(BACKOFF_BASE_MS * Math.pow(2, failures - 1), BACKOFF_MAX_MS)
+  _accountBackoff.set(accountId, { failures, retryAfter: new Date(Date.now() + backoffMs) })
+  return backoffMs
+}
+
+function _recordAccountSuccess(accountId) {
+  _accountBackoff.delete(accountId)
+}
+
 function startPoller() {
   if (task) return task
   // Master tick: runs every 1 minute, checks which accounts are due based on their interval
@@ -211,12 +245,20 @@ function startPoller() {
           const isDue = !lastRun || (now - lastRun) >= intervalMs
           if (!isDue) continue
 
+          // Skip accounts that are in a backoff window due to repeated IMAP failures
+          if (!_accountCanRetry(account.id)) {
+            const state = _accountBackoff.get(account.id)
+            logger.info({ account_id: account.id, retry_after: state.retryAfter.toISOString() }, 'Email poller: account in backoff — skipping')
+            continue
+          }
+
           const sinceDt = lastRun || new Date(now.getTime() - (account.initial_fetch_days || 7) * 24 * 60 * 60 * 1000)
           const runStartedAt = new Date().toISOString()
           logger.info({ account_id: account.id, account_name: account.account_name, since: sinceDt.toISOString() }, 'Email ingest started');
 
           try {
             const n = await ingestAccount(account, sinceDt)
+            _recordAccountSuccess(account.id) // clear any failure backoff on success
             const runEndedAt = new Date().toISOString()
             const runEndedAtDb = toMySqlDateTime(runEndedAt)
             await pool.execute(
@@ -257,8 +299,9 @@ function startPoller() {
               payload: { account_id: account.id, account_name: account.account_name, inserted: n },
             })
           } catch (err) {
+            const backoffMs = _recordAccountFailure(account.id) // exponential backoff on repeated failure
             const runEndedAt = new Date().toISOString()
-            logger.error({ account_id: account.id, account_name: account.account_name, error: safeText(err?.message || err, 200) }, 'Email ingest failed');
+            logger.error({ account_id: account.id, account_name: account.account_name, backoff_ms: backoffMs, error: safeText(err?.message || err, 200) }, 'Email ingest failed');
             logService({
               source: 'Email Accounts',
               service_type: 'IMAP',

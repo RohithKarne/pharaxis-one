@@ -6,7 +6,9 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
-const { authenticateAdmin } = require('../../middleware/auth');
+const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+
+router.use('/:clientId', authenticateAdmin, requireClientAccess);
 const { audit } = require('../../utils/audit');
 
 router.get('/:clientId', authenticateAdmin, async (req, res) => {

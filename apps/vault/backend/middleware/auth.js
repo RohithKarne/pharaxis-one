@@ -23,6 +23,9 @@ function authenticate(req, res, next) {
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    if (req.org?.id && Number(req.org.id) !== Number(decoded.orgId)) {
+      return res.status(403).json({ error: 'Tenant context mismatch' })
+    }
     req.user = { userId: decoded.userId, orgId: decoded.orgId, role: decoded.role }
     next()
   } catch {

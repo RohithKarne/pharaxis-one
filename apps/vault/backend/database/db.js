@@ -11,7 +11,51 @@ const pool = mysql.createPool({
   connectionLimit: 10
 })
 
-async function initializeDatabase() {
+const REQUIRED_TABLES = [
+  'superadmin_users',
+  'orgs',
+  'users',
+  'vault_content',
+  'vault_versions',
+  'vault_metadata',
+  'workflow_instances',
+  'workflow_tasks',
+  'vault_signatures',
+  'custom_domains'
+]
+
+async function validateExistingSchema() {
+  const placeholders = REQUIRED_TABLES.map(() => '?').join(', ')
+  const [rows] = await pool.execute(
+    `SELECT TABLE_NAME
+     FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME IN (${placeholders})`,
+    REQUIRED_TABLES
+  )
+  const existing = new Set(rows.map(row => row.TABLE_NAME))
+  const missing = REQUIRED_TABLES.filter(tableName => !existing.has(tableName))
+  if (missing.length) {
+    throw new Error(
+      `Missing required tables in validate mode: ${missing.join(', ')}. Run migration/bootstrap in controlled deployment workflow.`
+    )
+  }
+}
+
+function resolveSchemaMode(options = {}) {
+  const explicitMode = String(options.mode || process.env.DB_SCHEMA_MODE || '').trim().toLowerCase()
+  if (explicitMode === 'migrate' || explicitMode === 'validate') return explicitMode
+  return process.env.NODE_ENV === 'production' ? 'validate' : 'migrate'
+}
+
+async function initializeDatabase(options = {}) {
+  const schemaMode = resolveSchemaMode(options)
+  if (schemaMode === 'validate') {
+    await validateExistingSchema()
+    console.log('Pharaxis Vault schema validation completed')
+    return
+  }
+
   const queries = [
     `CREATE TABLE IF NOT EXISTS superadmin_users (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -572,6 +616,21 @@ async function initializeDatabase() {
       INDEX idx_workflow_webhook_retry_notification (workflow_task_notification_id, status),
       FOREIGN KEY (org_id) REFERENCES orgs(id),
       FOREIGN KEY (workflow_task_notification_id) REFERENCES workflow_task_notifications(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS custom_domains (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      org_id INT NOT NULL UNIQUE,
+      domain VARCHAR(300) NOT NULL UNIQUE,
+      cname_verified TINYINT(1) DEFAULT 0,
+      ssl_provisioned TINYINT(1) DEFAULT 0,
+      onboarding_status ENUM('domain_added','cname_pending','cname_verified','ssl_provisioning','active') DEFAULT 'domain_added',
+      cname_verified_at DATETIME DEFAULT NULL,
+      ssl_provisioned_at DATETIME DEFAULT NULL,
+      activated_at DATETIME DEFAULT NULL,
+      welcome_sent TINYINT(1) DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_custom_domains_status (onboarding_status),
+      FOREIGN KEY (org_id) REFERENCES orgs(id)
     )`
   ]
 

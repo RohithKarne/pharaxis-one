@@ -3,6 +3,7 @@
 const pool = require('../database/db');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = require('../utils/jwtSecret');
+const { sessionCacheGet, sessionCacheSet, sessionCacheInvalidate } = require('../services/redisClient');
 
 function readCookie(req, name) {
   const cookieHeader = req.headers.cookie || '';
@@ -22,6 +23,15 @@ function readBearer(req) {
 
 async function validateAccessToken(token) {
   if (!token) throw new Error('Access denied. No token provided.');
+
+  // ── Redis session cache (60s TTL) — eliminates DB hit on every request ──────
+  // Cache miss / Redis down → falls through to DB check transparently.
+  const cached = await sessionCacheGet(token);
+  if (cached) {
+    // Re-verify JWT signature even on cache hit (catches key rotation edge cases)
+    jwt.verify(token, JWT_SECRET);
+    return { ...cached, token };
+  }
 
   const decoded = jwt.verify(token, JWT_SECRET);
 
@@ -50,23 +60,26 @@ async function validateAccessToken(token) {
     }
   } catch (err) {
     if (String(err?.message || '').includes('Session expired')) throw err;
-    sessionFound = true;
-    requireTrackedSession = false;
+    throw new Error('Authentication service unavailable. Please log in again.');
   }
 
   if (requireTrackedSession && !sessionFound) {
     throw new Error('Session revoked or invalid. Please log in again.');
   }
 
-  return {
-    userId: decoded.userId,
-    email: decoded.email,
-    role: decoded.role,
-    orgId: decoded.orgId ?? null,
-    siteId: decoded.siteId ?? null,
+  const result = {
+    userId:               decoded.userId,
+    email:                decoded.email,
+    role:                 decoded.role,
+    orgId:                decoded.orgId ?? null,
+    siteId:               decoded.siteId ?? null,
     token,
-    passwordResetRequired: decoded.passwordResetRequired ?? false
+    passwordResetRequired: decoded.passwordResetRequired ?? false,
   };
+
+  // Populate cache for subsequent requests
+  await sessionCacheSet(token, result);
+  return result;
 }
 
 /**
@@ -129,4 +142,4 @@ async function requireAccessNotExpired(req, res, next) {
   }
 }
 
-module.exports = { authenticate, requireRole, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken };
+module.exports = { authenticate, requireRole, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate };

@@ -105,13 +105,19 @@ router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
       'SELECT * FROM case_ae_versions WHERE case_id = ? ORDER BY version_number DESC LIMIT 1 FOR UPDATE',
       [req.params.id]
     );
-    const nextNum = existing.length > 0 ? existing[0].version_number + 1 : 1;
+    const latest = existing[0] || null;
+    const latestStatus = String(latest?.status || '').trim().toLowerCase();
+    if (latest && latestStatus !== 'closed') {
+      await conn.rollback();
+      return res.status(409).json({ error: 'Close the current AE version before creating a new version.' });
+    }
+    const nextNum = latest ? latest.version_number + 1 : 1;
 
     // Lock the previous version if it exists and isn't already locked
-    if (existing.length > 0 && !existing[0].is_locked) {
+    if (latest && !latest.is_locked) {
       await conn.execute(
         'UPDATE case_ae_versions SET is_locked = 1, locked_at = NOW() WHERE id = ?',
-        [existing[0].id]
+        [latest.id]
       );
     }
 

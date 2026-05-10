@@ -217,6 +217,49 @@ router.get('/orgs/:id/users', authenticateSuperadmin, async (req, res) => {
   }
 })
 
+router.post('/orgs/:id/users', authenticateSuperadmin, async (req, res) => {
+  const orgId = Number(req.params.id)
+  if (!Number.isInteger(orgId) || orgId <= 0) return res.status(400).json({ error: 'Invalid org id' })
+
+  const { name, email, password, role } = req.body
+  if (!name || !email || !password || !role) {
+    return res.status(400).json({ error: 'name, email, password and role are required' })
+  }
+  const validRoles = ['admin', 'author', 'reviewer', 'approver', 'viewer']
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` })
+  }
+
+  try {
+    const [[org]] = await pool.execute('SELECT id FROM orgs WHERE id = ? AND status = ?', [orgId, 'active'])
+    if (!org) return res.status(404).json({ error: 'Organisation not found or inactive' })
+
+    const [[existing]] = await pool.execute(
+      'SELECT id FROM users WHERE email = ? AND org_id = ?',
+      [email.toLowerCase(), orgId]
+    )
+    if (existing) return res.status(409).json({ error: 'A user with this email already exists in this organisation' })
+
+    const passwordHash = await bcrypt.hash(password, 12)
+    const [result] = await pool.execute(
+      'INSERT INTO users (org_id, name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, 1)',
+      [orgId, name, email.toLowerCase(), passwordHash, role]
+    )
+
+    res.status(201).json({
+      id: result.insertId,
+      org_id: orgId,
+      name,
+      email: email.toLowerCase(),
+      role,
+      is_active: 1
+    })
+  } catch (err) {
+    console.error('Create org user error:', err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.get('/orgs/:id/hardening', authenticateSuperadmin, async (req, res) => {
   const orgId = Number(req.params.id)
   if (!Number.isInteger(orgId) || orgId <= 0) return res.status(400).json({ error: 'Invalid org id' })

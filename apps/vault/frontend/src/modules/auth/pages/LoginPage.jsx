@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom'
 
 export default function LoginPage() {
   const appIconUrl = `${import.meta.env.BASE_URL}vault-icon.svg`
-  const [form, setForm] = useState({ email: '', password: '', orgSlug: '', mfaCode: '' })
+  const orgSlug = new URLSearchParams(window.location.search).get('org') || ''
+  const orgHeaders = orgSlug ? { 'X-Org-Slug': orgSlug } : {}
+  const [form, setForm] = useState({ email: '', password: '', mfaCode: '' })
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
   const [backendOnline, setBackendOnline] = useState(null)
   const [mfaChallengeToken, setMfaChallengeToken] = useState('')
-  const [ssoDiscovery, setSsoDiscovery] = useState(null)
+  const [orgContext, setOrgContext] = useState(null)
   const navigate = useNavigate()
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
@@ -33,6 +35,13 @@ export default function LoginPage() {
     }
   }, [])
 
+  useEffect(() => {
+    fetch('/api/auth/org-context', { headers: orgHeaders })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setOrgContext(data) })
+      .catch(() => {})
+  }, [orgSlug])
+
   const handleSubmit = async e => {
     e.preventDefault()
     setError('')
@@ -41,11 +50,10 @@ export default function LoginPage() {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...orgHeaders },
         body: JSON.stringify({
           email: form.email,
           password: form.password,
-          orgSlug: form.orgSlug,
           mfa_code: form.mfaCode || undefined,
           mfa_challenge_token: mfaChallengeToken || undefined
         })
@@ -61,29 +69,11 @@ export default function LoginPage() {
       if (!res.ok) { setError(data.error || 'Login failed'); setLoading(false); return }
       localStorage.setItem('vault_token', data.token)
       localStorage.setItem('vault_user', JSON.stringify(data.user))
+      if (orgSlug) localStorage.setItem('vault_org_slug', orgSlug)
       navigate('/vault')
     } catch {
       setError('Network error. Please try again.')
       setLoading(false)
-    }
-  }
-
-  async function discoverSso(orgSlug) {
-    const trimmed = String(orgSlug || '').trim()
-    if (!trimmed) {
-      setSsoDiscovery(null)
-      return
-    }
-    try {
-      const res = await fetch(`/api/auth/sso/discovery/${encodeURIComponent(trimmed)}`)
-      if (!res.ok) {
-        setSsoDiscovery(null)
-        return
-      }
-      const payload = await res.json()
-      setSsoDiscovery(payload)
-    } catch {
-      setSsoDiscovery(null)
     }
   }
 
@@ -92,8 +82,11 @@ export default function LoginPage() {
       <div className="vault-login-card">
         <div className="vault-login-card-header">
           <div className="vault-login-brand">
-            <img className="vault-app-icon" src={appIconUrl} alt="Vault" />
-            <div className="vault-app-name">PHARAXIS VAULT</div>
+            {orgContext?.logo_url
+              ? <img className="vault-app-icon" src={orgContext.logo_url} alt={orgContext.name} />
+              : <img className="vault-app-icon" src={appIconUrl} alt="Vault" />
+            }
+            <div className="vault-app-name">{orgContext?.name || 'PHARAXIS VAULT'}</div>
           </div>
           <div className="vault-app-tagline">Regulated Content Management Platform</div>
           <div className="vault-login-health">
@@ -106,21 +99,6 @@ export default function LoginPage() {
 
         <div className="vault-login-card-body">
           <form className="vault-login-form" onSubmit={handleSubmit}>
-            <div className="vault-form-group">
-              <label htmlFor="orgSlug">Organization Slug</label>
-              <input
-                id="orgSlug"
-                name="orgSlug"
-                value={form.orgSlug}
-                onChange={event => {
-                  handleChange(event)
-                  discoverSso(event.target.value)
-                }}
-                required
-                placeholder="e.g. novartis"
-              />
-            </div>
-
             <div className="vault-form-group">
               <label htmlFor="email">Email Address</label>
               <input
@@ -162,23 +140,10 @@ export default function LoginPage() {
               </div>
             ) : null}
 
-            {ssoDiscovery?.sso_enabled ? (
-              <div className="panel-note">
-                SSO available: {ssoDiscovery.sso_provider || 'Configured'} ({ssoDiscovery.org_name})
-              </div>
-            ) : null}
-
             {error ? <div className="auth-error">{error}</div> : null}
             {info ? <div className="upload-success">{info}</div> : null}
             <button className="btn-primary vault-login-btn" type="submit" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-            <button
-              className="btn-secondary vault-login-btn"
-              type="button"
-              onClick={() => navigate('/control-tower/login')}
-            >
-              Pharaxis Internal? Open Control Tower
             </button>
           </form>
         </div>

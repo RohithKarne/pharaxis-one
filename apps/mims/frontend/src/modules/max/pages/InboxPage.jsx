@@ -23,7 +23,7 @@ const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 export default function InboxPage() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, siteId } = useAuth()
+  const { user, siteId, orgId, allOrgs } = useAuth()
 
   const STORAGE_KEY = `mims_inbox_${user?.id || 'guest'}`
   const VIEWS_KEY   = `mims_inbox_views_${user?.id || 'guest'}`
@@ -58,6 +58,7 @@ export default function InboxPage() {
   const [compose, setCompose]         = useState(null)
   const [filterFrom, setFilterFrom]   = useState('')
   const [filterTo, setFilterTo]       = useState('')
+  const [tenantFilterOrgId, setTenantFilterOrgId] = useState('')
   const [bulkSelected, setBulkSelected] = useState(new Set())
   const [bulkTriageState, setBulkTriageState] = useState('')
   const [bulkAssignee, setBulkAssignee] = useState('')
@@ -165,13 +166,14 @@ export default function InboxPage() {
     if (!background) setLoading(true)
     setLoadError(null)
     const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved && !force) {
+    if (saved && !force && !tenantFilterOrgId) {
       setInquiries(JSON.parse(saved))
       setLoading(false)
       return
     }
     try {
-      const res = await httpFetch('/api/inbox', { headers: AUTH_H })
+      const query = tenantFilterOrgId ? `?org_id=${encodeURIComponent(tenantFilterOrgId)}` : ''
+      const res = await httpFetch(`/api/inbox${query}`, { headers: AUTH_H })
       if (res.ok) {
         const data = await res.json()
         const inquiryList = data.inquiries || []
@@ -199,7 +201,8 @@ export default function InboxPage() {
     }
     // Always refresh from API in background
     try {
-      const res = await httpFetch('/api/inbox/users', { headers: AUTH_H })
+      const query = tenantFilterOrgId ? `?org_id=${encodeURIComponent(tenantFilterOrgId)}` : ''
+      const res = await httpFetch(`/api/inbox/users${query}`, { headers: AUTH_H })
       if (res.ok) {
         const d = await res.json()
         const list = d.users || []
@@ -294,6 +297,14 @@ export default function InboxPage() {
     const target = inquiries.find(item => Number(item.id) === selectInquiryId)
     if (target) selectInquiry(target)
   }, [location.state, inquiries])
+
+  useEffect(() => {
+    setPage(1)
+    setSelected(null)
+    setBulkSelected(new Set())
+    loadUsers()
+    loadInquiries({ force: true, background: true })
+  }, [tenantFilterOrgId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Actions ───────────────────────────────────────────────────
 
@@ -657,7 +668,7 @@ export default function InboxPage() {
 
   function saveCurrentView(name) {
     if (!name.trim()) return
-    const view = { name: name.trim(), search, filterFrom, filterTo, advFilters }
+    const view = { name: name.trim(), search, filterFrom, filterTo, tenantFilterOrgId, advFilters }
     const next = [...savedViews.filter(v => v.name !== name.trim()), view].slice(-5)
     setSavedViews(next)
     localStorage.setItem(VIEWS_KEY, JSON.stringify(next))
@@ -667,6 +678,7 @@ export default function InboxPage() {
     setSearch(view.search || '')
     setFilterFrom(view.filterFrom || '')
     setFilterTo(view.filterTo || '')
+    setTenantFilterOrgId(view.tenantFilterOrgId || '')
     setAdvFilters(view.advFilters || { color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '' })
     setPage(1)
   }
@@ -725,6 +737,23 @@ export default function InboxPage() {
     () => [...new Set(inquiries.map(inquiry => inquiry.queue_name).filter(Boolean))].sort(),
     [inquiries]
   )
+
+  const tenantOptions = useMemo(() => {
+    const options = Array.isArray(allOrgs)
+      ? allOrgs
+        .map((org) => ({
+          id: Number(org?.orgId || 0),
+          name: String(org?.orgName || '').trim(),
+        }))
+        .filter((org) => org.id > 0 && org.name)
+      : []
+    const dedup = new Map()
+    for (const org of options) dedup.set(org.id, org)
+    if (orgId && !dedup.has(Number(orgId))) {
+      dedup.set(Number(orgId), { id: Number(orgId), name: `Org ${orgId}` })
+    }
+    return [...dedup.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [allOrgs, orgId])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -854,6 +883,21 @@ export default function InboxPage() {
 
               {/* Date range filter (F7) */}
               <div className="inbox-date-filter">
+                {tenantOptions.length > 0 && (
+                  <>
+                    <span className="date-filter-label">Tenant</span>
+                    <select
+                      value={tenantFilterOrgId}
+                      onChange={e => { setTenantFilterOrgId(e.target.value); setPage(1) }}
+                      className="inbox-tenant-select"
+                    >
+                      <option value="">All Assigned Tenants</option>
+                      {tenantOptions.map(org => (
+                        <option key={org.id} value={String(org.id)}>{org.name}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
                 <span className="date-filter-label">From</span>
                 <input type="date" value={filterFrom}
                   onChange={e => { setFilterFrom(e.target.value); setPage(1) }} />

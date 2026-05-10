@@ -446,8 +446,15 @@ a {
 .workspace-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   background: #f4f6f9;
+}
+
+.workspace-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #ffffff;
 }
 
 .workspace-utility-strip {
@@ -530,9 +537,6 @@ a {
 }
 
 .workspace-header-bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
   display: grid;
   grid-template-columns: minmax(220px, auto) minmax(0, 1fr) minmax(180px, auto);
   align-items: center;
@@ -966,8 +970,28 @@ a {
   font-size: 12px;
 }
 
+.span-2 {
+  grid-column: span 2;
+}
+
+.span-3 {
+  grid-column: span 3;
+}
+
+.span-5 {
+  grid-column: span 5;
+}
+
+.span-7 {
+  grid-column: span 7;
+}
+
 .span-8 {
   grid-column: span 8;
+}
+
+.span-9 {
+  grid-column: span 9;
 }
 
 .span-4 {
@@ -976,6 +1000,18 @@ a {
 
 .span-6 {
   grid-column: span 6;
+}
+
+.content-right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.content-right-panel > .panel,
+.content-right-panel > div > .panel {
+  margin: 0;
 }
 
 .span-12 {

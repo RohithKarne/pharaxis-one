@@ -29,10 +29,14 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
   const [aeTxDrawer,      setAeTxDrawer]      = useState(false)
   const [aeTxForm,        setAeTxForm]        = useState({ assigned_to_id: '', priority: 'routine', narrative: '' })
   const [aeTxSaving,      setAeTxSaving]      = useState(false)
+  const [aeClosingVersion, setAeClosingVersion] = useState(false)
 
   useEffect(() => { loadAEVersions(); loadAeTransmissions() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isLocked = (ver) => ver && ver.is_locked === 1
+  const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
+  const latestAeVersion = aeVersions.length > 0 ? aeVersions[aeVersions.length - 1] : null
+  const canCreateAeVersion = !latestAeVersion || isClosed(latestAeVersion)
 
   async function loadAEVersions() {
     try {
@@ -61,6 +65,10 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
   }
 
   async function createAEVersion() {
+    if (!canCreateAeVersion) {
+      toast.error('Close the current AE version before creating a new version.')
+      return
+    }
     try {
       const res  = await httpFetch(`${API}/cases/${id}/ae/versions`, { method: 'POST', headers })
       const data = await res.json()
@@ -72,6 +80,27 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
       setActiveAeTab('general')
       loadAETab(data.id, 'general')
     } catch (err) { toast.error(err.message) }
+  }
+
+  async function closeAEVersion() {
+    if (!activeAeVer || isLocked(activeAeVer) || isClosed(activeAeVer) || aeClosingVersion) return
+    setAeClosingVersion(true)
+    try {
+      const res = await httpFetch(`${API}/cases/ae/versions/${activeAeVer.id}/status`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ status: 'Closed' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to close version')
+      setAeVersions(prev => prev.map(v => v.id === activeAeVer.id ? { ...v, status: data.status || 'Closed' } : v))
+      setActiveAeVer(prev => (prev ? { ...prev, status: data.status || 'Closed' } : prev))
+      setSavedMsg('AE version closed'); setTimeout(() => setSavedMsg(''), 2000)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setAeClosingVersion(false)
+    }
   }
 
   async function saveAETab() {
@@ -123,11 +152,23 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
   return (
     <div className="cf-tab-pane">
       <div className="cf-section-header-row">
-        <button className="cf-add-btn" onClick={createAEVersion}>+ New Version</button>
+        <button className="cf-add-btn" onClick={createAEVersion} disabled={!canCreateAeVersion}>
+          + New Version
+        </button>
+        <button
+          className="cf-cancel-btn"
+          onClick={closeAEVersion}
+          disabled={!activeAeVer || isLocked(activeAeVer) || isClosed(activeAeVer) || aeClosingVersion}
+        >
+          {aeClosingVersion ? 'Closing…' : 'Close Version'}
+        </button>
         <button className="cf-tx-trigger-btn" onClick={() => setAeTxDrawer(p => !p)}>
           🔬 {aeTxDrawer ? 'Cancel Transmission' : 'Transmit to PV'}
         </button>
       </div>
+      {!canCreateAeVersion && (
+        <div className="cf-inline-note">Close the current AE version before creating a new version.</div>
+      )}
 
       {aeVersions.length === 0 ? (
         <div className="cf-empty-msg">No AE versions yet. Click "+ New Version" to start.</div>
@@ -140,9 +181,9 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
                 className={`cf-version-btn ${activeAeVer?.id === v.id ? 'active' : ''} ${v.is_locked ? 'locked' : ''}`}
                 onClick={() => { setActiveAeVer(v); loadAETab(v.id, activeAeTab) }}
               >
-                V{v.version_number}
+                <span className="cf-version-label">Version #{v.version_number}</span>
                 {v.is_locked && <span className="cf-lock-icon">🔒</span>}
-                <span className={`cf-ver-status ${v.status.toLowerCase()}`}>{v.status}</span>
+                <span className={`cf-ver-status ${v.status.toLowerCase()}`}>Status: {v.status}</span>
               </button>
             ))}
           </div>

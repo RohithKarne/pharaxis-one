@@ -89,6 +89,10 @@ export function createAppServer() {
     'https://13.205.213.128'
   ]);
   const envOrigins = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
+  const isProductionLike = !['development', 'test'].includes(String(env.NODE_ENV || '').toLowerCase());
+  if (isProductionLike && !env.CORS_ALLOW_ALL && envOrigins.size === 0) {
+    throw new Error('CORS_ALLOWED_ORIGINS must be set in production-like environments.');
+  }
   const allowedOrigins =
     env.CORS_ALLOW_ALL || envOrigins.size === 0 ? defaultOrigins : envOrigins;
 
@@ -127,8 +131,17 @@ export function createAppServer() {
     res.json({ ok: true, app: 'qms', version: 'v1', timestamp: new Date().toISOString() });
   });
 
-  mountApiRoutes(app, '/api/v1');
-  mountApiRoutes(app, '/api');
+  const apiRouter = express.Router();
+  mountApiRoutes(apiRouter, '');
+  app.use('/api/v1', apiRouter);
+
+  // Legacy compatibility mount. Keep behavior while steering clients to /api/v1.
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/health') return next();
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Sunset', 'Wed, 31 Dec 2026 23:59:59 GMT');
+    return apiRouter(req, res, next);
+  });
 
   app.use((err, req, res, _next) => {
     const status = err.statusCode || 500;

@@ -17,13 +17,19 @@ if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
 }
 const ADMIN_SECRET  = process.env.CP_ADMIN_JWT_SECRET  || 'cp-admin-insecure-dev-only';
 const PORTAL_SECRET = process.env.CP_PORTAL_JWT_SECRET || 'cp-portal-insecure-dev-only';
+const isDevLike = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+const ADMIN_RUNTIME_SECRET = process.env.CP_ADMIN_JWT_SECRET || (isDevLike ? 'cp-admin-local-dev-only-change-me' : ADMIN_SECRET);
+const PORTAL_RUNTIME_SECRET = process.env.CP_PORTAL_JWT_SECRET || (isDevLike ? 'cp-portal-local-dev-only-change-me' : PORTAL_SECRET);
+if (isDevLike && (!process.env.CP_ADMIN_JWT_SECRET || !process.env.CP_PORTAL_JWT_SECRET)) {
+  console.warn('CP admin/portal JWT secrets are missing in development/test; using deterministic local defaults.')
+}
 
 function authenticateAdmin(req, res, next) {
   const token = req.cookies?.cp_admin_token ||
     (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
   if (!token) return res.status(401).json({ error: 'Admin authentication required.' });
   try {
-    req.admin = jwt.verify(token, ADMIN_SECRET);
+    req.admin = jwt.verify(token, ADMIN_RUNTIME_SECRET);
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired admin token.' });
@@ -36,7 +42,7 @@ async function authenticatePortal(req, _res, next) {
     (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
   if (token) {
     try {
-      const payload = jwt.verify(token, PORTAL_SECRET);
+      const payload = jwt.verify(token, PORTAL_RUNTIME_SECRET);
       payload.id = payload.userId; // alias: routes use req.portalUser.id
       req.portalUser = payload;
       const [[userRecord]] = await pool.execute(
@@ -97,4 +103,12 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { authenticateAdmin, authenticatePortal, requirePortalAuth, requireClientAccess, requireRole, ADMIN_SECRET, PORTAL_SECRET };
+module.exports = {
+  authenticateAdmin,
+  authenticatePortal,
+  requirePortalAuth,
+  requireClientAccess,
+  requireRole,
+  ADMIN_SECRET: ADMIN_RUNTIME_SECRET,
+  PORTAL_SECRET: PORTAL_RUNTIME_SECRET
+};

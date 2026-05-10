@@ -2,11 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 
-const SUPERADMIN_CREDENTIALS = {
-  email: 'cpadmin',
-  password: 'Admin@123',
-}
-
 export default function LoginPage() {
   const { login, admin } = useAdminAuth()
   const navigate = useNavigate()
@@ -25,8 +20,8 @@ export default function LoginPage() {
   function switchMode(nextMode) {
     setMode(nextMode)
     setError('')
-    setEmail(nextMode === 'superadmin' ? SUPERADMIN_CREDENTIALS.email : '')
-    setPassword(nextMode === 'superadmin' ? SUPERADMIN_CREDENTIALS.password : '')
+    setEmail('')
+    setPassword('')
   }
 
   async function handleLogin(e) {
@@ -41,12 +36,12 @@ export default function LoginPage() {
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Login failed.')
-        setPassword(mode === 'superadmin' ? SUPERADMIN_CREDENTIALS.password : '')
+        setPassword('')
         return
       }
       if (mode === 'superadmin' && data.admin?.role !== 'superadmin') {
         setError('Superadmin access required.')
-        setPassword(SUPERADMIN_CREDENTIALS.password)
+        setPassword('')
         return
       }
       login(data.token, data.admin)
@@ -77,7 +72,7 @@ export default function LoginPage() {
           <div className="cp-field">
             <label>Username</label>
             <input type="text" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="cpadmin" autoFocus required />
+              placeholder="Enter username or email" autoFocus required />
           </div>
           <div className="cp-field cp-field-password">
             <label>Password</label>

@@ -23,12 +23,12 @@ const authLoginLimiter = createRateLimiter({
 })
 
 router.post('/login', authLoginLimiter, async (req, res) => {
-  const { email, password, orgSlug, mfa_code: mfaCode, mfa_challenge_token: mfaChallengeToken } = req.body
-  if (!email || !password || !orgSlug) {
-    return res.status(400).json({ error: 'Email, password and org slug are required' })
+  const { email, password, mfa_code: mfaCode, mfa_challenge_token: mfaChallengeToken } = req.body
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' })
   }
   try {
-    const [[org]] = await pool.execute('SELECT id FROM orgs WHERE slug = ? AND status = ?', [orgSlug, 'active'])
+    const org = req.org
     if (!org) return res.status(401).json({ error: 'Organisation not found or inactive' })
 
     const [[user]] = await pool.execute(
@@ -113,19 +113,16 @@ router.post('/login', authLoginLimiter, async (req, res) => {
   }
 })
 
-router.get('/sso/discovery/:orgSlug', async (req, res) => {
-  const orgSlug = String(req.params.orgSlug || '').trim()
-  if (!orgSlug) return res.status(400).json({ error: 'orgSlug is required' })
+router.get('/org-context', async (req, res) => {
+  const org = req.org
+  if (!org) return res.status(404).json({ error: 'Organisation not found' })
+  res.json({ name: org.name, logo_url: org.logoUrl || null })
+})
 
+router.get('/sso/discovery', async (req, res) => {
+  const org = req.org
+  if (!org) return res.status(404).json({ error: 'Organisation not found or inactive' })
   try {
-    const [[org]] = await pool.execute(
-      'SELECT id, slug, name, status FROM orgs WHERE slug = ? LIMIT 1',
-      [orgSlug]
-    )
-    if (!org || org.status !== 'active') {
-      return res.status(404).json({ error: 'Organisation not found or inactive' })
-    }
-
     const policy = await getOrgAuthPolicy(org.id)
     res.json({
       org_id: org.id,

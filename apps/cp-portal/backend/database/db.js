@@ -34,6 +34,21 @@ async function runIndex(sql) {
 }
 
 async function initializeDatabase() {
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_schema_bootstrap_state (
+      id INT NOT NULL PRIMARY KEY,
+      version_tag VARCHAR(50) NOT NULL,
+      completed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  const [[bootstrapState]] = await pool.execute(
+    'SELECT id, version_tag, completed_at FROM cp_schema_bootstrap_state WHERE id = 1 LIMIT 1'
+  );
+  if (bootstrapState?.completed_at) {
+    console.log('✅ CP Portal schema bootstrap already completed — skipping legacy bootstrap');
+    return;
+  }
 
   // ── ADMIN USERS ────────────────────────────────────────────────
   await run(`
@@ -53,8 +68,7 @@ async function initializeDatabase() {
 
   // Seed local superadmin only on first insert; production must provide an explicit bootstrap password.
   const DEFAULT_EMAIL    = 'cpadmin';
-  const isProductionLike = !['development', 'test'].includes(process.env.NODE_ENV || 'development');
-  const DEFAULT_PASSWORD = process.env.CP_BOOTSTRAP_SUPERADMIN_PASSWORD || (!isProductionLike ? 'Admin@123' : '');
+  const DEFAULT_PASSWORD = String(process.env.CP_BOOTSTRAP_SUPERADMIN_PASSWORD || '').trim();
   const [[existing]] = await pool.execute('SELECT id FROM cp_admin_users WHERE email = ?', [DEFAULT_EMAIL]);
   if (existing) {
     await pool.execute(
@@ -62,9 +76,7 @@ async function initializeDatabase() {
       ['CP Superadmin', existing.id]
     );
   } else {
-    if (!DEFAULT_PASSWORD) {
-      throw new Error('CP_BOOTSTRAP_SUPERADMIN_PASSWORD is required before seeding CP Portal superadmin.');
-    }
+    if (!DEFAULT_PASSWORD) throw new Error('CP_BOOTSTRAP_SUPERADMIN_PASSWORD is required before seeding CP Portal superadmin.');
     const hash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
     await pool.execute(
       `INSERT INTO cp_admin_users (name, email, password, role) VALUES (?, ?, ?, 'superadmin')`,
@@ -825,6 +837,12 @@ async function initializeDatabase() {
       }
     }
   }
+
+  await pool.execute(
+    `INSERT INTO cp_schema_bootstrap_state (id, version_tag)
+     VALUES (1, 'legacy-bootstrap-v1')
+     ON DUPLICATE KEY UPDATE version_tag = VALUES(version_tag), completed_at = NOW()`
+  );
 
   console.log('✅ CP Portal database initialized — tables ready');
 }

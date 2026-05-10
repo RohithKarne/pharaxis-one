@@ -28,6 +28,9 @@ export default function SuperadminOrgDetailPage() {
   const [savingHardening, setSavingHardening] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [showCreateUser, setShowCreateUser] = useState(false)
+  const [creatingUser, setCreatingUser] = useState(false)
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'viewer' })
 
   async function loadOrgUsers() {
     if (!token) {
@@ -63,6 +66,28 @@ export default function SuperadminOrgDetailPage() {
       setError(requestError.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function createUser(event) {
+    event.preventDefault()
+    setCreatingUser(true)
+    setError('')
+    setSuccess('')
+    try {
+      await apiJson(`/api/superadmin/orgs/${id}/users`, {
+        method: 'POST',
+        headers: authHeaders(token, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(userForm)
+      })
+      setSuccess(`User "${userForm.name}" created successfully.`)
+      setUserForm({ name: '', email: '', password: '', role: 'viewer' })
+      setShowCreateUser(false)
+      await loadOrgUsers()
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setCreatingUser(false)
     }
   }
 
@@ -105,8 +130,11 @@ export default function SuperadminOrgDetailPage() {
         <section className="panel span-12">
           <SuperadminTabs active="orgs" />
           <div className="detail-actions">
-            <Link className="btn-secondary link-button" to="/control-tower/orgs">
+            <Link className="btn-secondary link-button" to="/orgs">
               Back to Organizations
+            </Link>
+            <Link className="btn-primary link-button" to={`/orgs/${id}/domain`}>
+              Manage Custom URL
             </Link>
           </div>
           {error ? <div className="auth-error">{error}</div> : null}
@@ -189,8 +217,75 @@ export default function SuperadminOrgDetailPage() {
 
         {!loading && payload ? (
           <section className="panel span-8">
-            <h3>{payload.org?.name} ({payload.org?.slug})</h3>
-            <p className="panel-note">Status: {payload.org?.status}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div>
+                <h3 style={{ margin: 0 }}>{payload.org?.name} ({payload.org?.slug})</h3>
+                <p className="panel-note" style={{ marginTop: 4 }}>Status: {payload.org?.status}</p>
+              </div>
+              <button
+                className="btn-primary"
+                onClick={() => setShowCreateUser(v => !v)}
+              >
+                {showCreateUser ? 'Cancel' : '+ Add User'}
+              </button>
+            </div>
+
+            {showCreateUser ? (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '1rem 1.25rem', margin: '1rem 0' }}>
+                <h4 style={{ margin: '0 0 0.75rem' }}>Create New User</h4>
+                <form className="auth-form users-create-form" onSubmit={createUser}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <div className="form-field">
+                      <label>Full Name</label>
+                      <input
+                        value={userForm.name}
+                        onChange={e => setUserForm({ ...userForm, name: e.target.value })}
+                        placeholder="Jane Smith"
+                        required
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label>Email</label>
+                      <input
+                        type="email"
+                        value={userForm.email}
+                        onChange={e => setUserForm({ ...userForm, email: e.target.value })}
+                        placeholder="jane@viatris.com"
+                        required
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label>Password</label>
+                      <input
+                        type="password"
+                        value={userForm.password}
+                        onChange={e => setUserForm({ ...userForm, password: e.target.value })}
+                        placeholder="Temporary password"
+                        required
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label>Role</label>
+                      <select
+                        value={userForm.role}
+                        onChange={e => setUserForm({ ...userForm, role: e.target.value })}
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="author">Author</option>
+                        <option value="reviewer">Reviewer</option>
+                        <option value="approver">Approver</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <button className="btn-primary" type="submit" disabled={creatingUser}>
+                      {creatingUser ? 'Creating...' : 'Create User'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ) : null}
             <div className="users-table-wrap">
               <table className="users-table">
                 <thead>

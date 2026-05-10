@@ -7,10 +7,10 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
-const { authenticateAdmin } = require('../../middleware/auth');
+const { authenticateAdmin, requireRole } = require('../../middleware/auth');
 
 // GET /api/admin/process-logs?source=&method=&status=&range=&search=&limit=&offset=
-router.get('/', authenticateAdmin, async (req, res) => {
+router.get('/', authenticateAdmin, requireRole('superadmin'), async (req, res) => {
   try {
     const { source, method, status, range, search, limit = 100, offset = 0 } = req.query;
 
@@ -43,7 +43,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
 });
 
 // DELETE /api/admin/process-logs — clear all logs
-router.delete('/', authenticateAdmin, async (_req, res) => {
+router.delete('/', authenticateAdmin, requireRole('superadmin'), async (_req, res) => {
   try {
     await pool.execute('DELETE FROM cp_process_logs');
     res.json({ ok: true });
@@ -53,7 +53,7 @@ router.delete('/', authenticateAdmin, async (_req, res) => {
 });
 
 // DELETE /api/admin/process-logs/purge?days=N — delete logs older than N days
-router.delete('/purge', authenticateAdmin, async (req, res) => {
+router.delete('/purge', authenticateAdmin, requireRole('superadmin'), async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
     const [result] = await pool.execute(`DELETE FROM cp_process_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`, [days]);

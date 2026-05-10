@@ -184,6 +184,20 @@ function registerDefaultJobs() {
       logger.info({ job: 'login-audit-archive', deleted: result.affectedRows, retentionDays }, 'Login audit archive complete');
     },
   })
+
+  // AC-T16: Sessions table cleanup — every 30 min, prune rows where expires_at < NOW()
+  // Keeps the sessions table lean; prevents unbounded growth on long-running instances.
+  registerJob({
+    name: 'session-cleanup',
+    cronExpression: '*/30 * * * *',
+    description: 'Prunes expired rows from the sessions table to prevent unbounded growth',
+    handler: async () => {
+      const [result] = await pool.execute(
+        `DELETE FROM sessions WHERE expires_at < NOW()`
+      );
+      logger.info({ job: 'session-cleanup', deleted: result.affectedRows }, 'session-cleanup: expired sessions pruned');
+    },
+  })
 }
 
 function startScheduler() {

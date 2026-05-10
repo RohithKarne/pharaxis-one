@@ -3,6 +3,7 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { getDbPool } from '../db/pool.js';
 import { env } from '../config/env.js';
+import { createRateLimiter } from '../middleware/rateLimit.js';
 import { recordLoginAudit, readRequestMeta } from '../services/loginAuditService.js';
 import { resolveUserSecurityGroups } from '../services/securityGroupService.js';
 import { queueEmailNotification } from '../services/platform/notificationService.js';
@@ -10,6 +11,23 @@ import { queueEmailNotification } from '../services/platform/notificationService
 const OTP_VALIDITY_SECONDS = 600;
 
 export const authRouter = Router();
+
+const authEndpointLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: Number(process.env.QMS_AUTH_RATE_LIMIT || 30),
+  keyFn: (req) => {
+    const email = String(req.body?.email || req.body?.userId || '').trim().toLowerCase();
+    return `${req.ip}:${email}`;
+  },
+  message: 'Too many authentication attempts. Please retry after 10 minutes.'
+});
+
+const orgDiscoveryLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: Number(process.env.QMS_ORG_DISCOVERY_RATE_LIMIT || 20),
+  keyFn: (req) => req.ip,
+  message: 'Too many org discovery attempts. Please retry shortly.'
+});
 
 const AUTH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -136,17 +154,27 @@ authRouter.get('/providers', (_req, res) => {
   });
 });
 
-authRouter.get('/orgs', async (_req, res, next) => {
+authRouter.get('/orgs', orgDiscoveryLimiter, async (req, res, next) => {
   const pool = getDbPool();
   const client = await pool.connect();
   try {
+    const query = String(req.query.q || '').trim();
+    if (query.length < 2) {
+      return res.json({ orgs: [] });
+    }
     const { rows } = await client.query(
       `
         SELECT org_code, org_name
         FROM qms_orgs
         WHERE is_active = true
+          AND (
+            lower(org_code) LIKE lower($1)
+            OR lower(org_name) LIKE lower($1)
+          )
         ORDER BY org_name ASC
-      `
+        LIMIT 10
+      `,
+      [`%${query}%`]
     );
     return res.json({
       orgs: rows.map((row) => ({
@@ -161,7 +189,7 @@ authRouter.get('/orgs', async (_req, res, next) => {
   }
 });
 
-authRouter.post('/login', async (req, res, next) => {
+authRouter.post('/login', authEndpointLimiter, async (req, res, next) => {
   const pool = getDbPool();
   const client = await pool.connect();
 
@@ -319,7 +347,7 @@ authRouter.post('/login', async (req, res, next) => {
   }
 });
 
-authRouter.post('/login/verify-otp', async (req, res, next) => {
+authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next) => {
   const pool = getDbPool();
   const client = await pool.connect();
 
@@ -471,7 +499,7 @@ authRouter.post('/login/verify-otp', async (req, res, next) => {
   }
 });
 
-authRouter.post('/superadmin/login', async (req, res, next) => {
+authRouter.post('/superadmin/login', authEndpointLimiter, async (req, res, next) => {
   const pool = getDbPool();
   const client = await pool.connect();
 

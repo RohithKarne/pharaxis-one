@@ -1398,6 +1398,16 @@ a.nav-item { text-decoration: none; color: inherit; }
   background: var(--surface);
 }
 .inbox-date-filter input[type="date"]:focus { outline: none; border-color: var(--primary-light); }
+.inbox-tenant-select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  font-size: 12px;
+  font-family: var(--font);
+  color: var(--text-primary);
+  background: var(--surface);
+}
+.inbox-tenant-select:focus { outline: none; border-color: var(--primary-light); }
 .inbox-bulk-bar {
   display: flex;
   align-items: center;
@@ -1423,6 +1433,7 @@ a.nav-item { text-decoration: none; color: inherit; }
 }
 [data-theme="dark"] .inbox-date-filter { background: #1e2126; }
 [data-theme="dark"] .inbox-date-filter input[type="date"] { background: #2a2d31; color: var(--text-primary); border-color: var(--border); }
+[data-theme="dark"] .inbox-tenant-select { background: #2a2d31; color: var(--text-primary); border-color: var(--border); }
 
 /* ─── Compose Modal ─────────────────────────────────────────── */
 .compose-overlay {

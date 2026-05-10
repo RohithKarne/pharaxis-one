@@ -31,24 +31,85 @@ function isSuperadmin(req) {
   return req.user.role === 'superadmin';
 }
 
-function buildInboxOrgScope(req, alias = 'i') {
+function parsePositiveInt(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  const normalized = Math.trunc(parsed);
+  return normalized > 0 ? normalized : null;
+}
+
+async function getAccessibleOrgIds(req) {
+  if (isSuperadmin(req)) return [];
+  if (Array.isArray(req._inboxAccessibleOrgIds)) return req._inboxAccessibleOrgIds;
+
+  const [rows] = await pool.execute(
+    `SELECT DISTINCT org_id
+     FROM user_org_access
+     WHERE user_id = ?
+       AND is_active = 1
+       AND (access_expires_at IS NULL OR access_expires_at >= NOW())`,
+    [req.user.userId]
+  );
+
+  const ids = new Set(rows.map((row) => Number(row.org_id)).filter(Boolean));
+  if (req.user.orgId) ids.add(Number(req.user.orgId));
+  req._inboxAccessibleOrgIds = [...ids];
+  return req._inboxAccessibleOrgIds;
+}
+
+async function resolveInboxScope(req, requestedOrgIdRaw = null) {
+  const requestedOrgId = parsePositiveInt(requestedOrgIdRaw);
+  if (isSuperadmin(req)) {
+    return { requestedOrgId, orgIds: [] };
+  }
+  const orgIds = await getAccessibleOrgIds(req);
+  if (requestedOrgId && !orgIds.includes(requestedOrgId)) {
+    const err = new Error('Access denied for requested tenant.');
+    err.status = 403;
+    throw err;
+  }
+  return { requestedOrgId, orgIds };
+}
+
+function buildInboxWhereClause(alias, scope) {
   const params = [];
   let where = '';
-  if (!isSuperadmin(req)) {
+
+  if (scope.requestedOrgId) {
     where = `WHERE ${alias}.org_id = ?`;
-    params.push(req.user.orgId);
+    params.push(scope.requestedOrgId);
+    return { where, params };
   }
+
+  if (!scope.orgIds.length) return { where: 'WHERE 1 = 0', params };
+  const placeholders = scope.orgIds.map(() => '?').join(', ');
+  where = `WHERE ${alias}.org_id IN (${placeholders})`;
+  params.push(...scope.orgIds);
   return { where, params };
 }
 
+async function buildInboxOrgScope(req, alias = 'i', requestedOrgIdRaw = null) {
+  const scope = await resolveInboxScope(req, requestedOrgIdRaw);
+  if (isSuperadmin(req) && !scope.requestedOrgId) return { where: '', params: [], scope };
+  const { where, params } = buildInboxWhereClause(alias, scope);
+  return { where, params, scope };
+}
+
+async function hasInboxOrgAccess(req, orgId) {
+  if (isSuperadmin(req)) return true;
+  const scope = await resolveInboxScope(req);
+  return scope.orgIds.includes(Number(orgId));
+}
+
 async function getScopedInquiry(req, inquiryId, columns = '*') {
+  const id = Number(inquiryId);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const { where, params } = await buildInboxOrgScope(req, 'i');
   const [rows] = await pool.execute(
-    isSuperadmin(req)
-      ? `SELECT ${columns} FROM inquiries WHERE id = ?`
-      : `SELECT ${columns} FROM inquiries WHERE id = ? AND org_id = ?`,
-    isSuperadmin(req)
-      ? [inquiryId]
-      : [inquiryId, req.user.orgId]
+    `SELECT ${columns}
+     FROM inquiries i
+     WHERE i.id = ? ${where ? `AND ${where.replace(/^WHERE\s+/i, '')}` : ''}`,
+    [id, ...params]
   );
   return rows[0] || null;
 }
@@ -97,19 +158,15 @@ async function clearReadReceipt(connection, inquiryId, userId) {
 }
 
 async function getScopedAttachment(req, attachmentId) {
+  const id = Number(attachmentId);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const { where, params } = await buildInboxOrgScope(req, 'i');
   const [rows] = await pool.execute(
-    isSuperadmin(req)
-      ? `SELECT a.id, a.inquiry_id, a.filename, a.mime_type, a.storage_path, a.size_bytes, i.org_id
-         FROM inquiry_attachments a
-         JOIN inquiries i ON i.id = a.inquiry_id
-         WHERE a.id = ?`
-      : `SELECT a.id, a.inquiry_id, a.filename, a.mime_type, a.storage_path, a.size_bytes, i.org_id
-         FROM inquiry_attachments a
-         JOIN inquiries i ON i.id = a.inquiry_id
-         WHERE a.id = ? AND i.org_id = ?`,
-    isSuperadmin(req)
-      ? [attachmentId]
-      : [attachmentId, req.user.orgId]
+    `SELECT a.id, a.inquiry_id, a.filename, a.mime_type, a.storage_path, a.size_bytes, i.org_id
+     FROM inquiry_attachments a
+     JOIN inquiries i ON i.id = a.inquiry_id
+     WHERE a.id = ? ${where ? `AND ${where.replace(/^WHERE\s+/i, '')}` : ''}`,
+    [id, ...params]
   );
   return rows[0] || null;
 }
@@ -250,8 +307,8 @@ async function applyRoutingRules(req, rows) {
   return nextRows;
 }
 
-async function loadInboxRows(req, limit = 500) {
-  const { where, params } = buildInboxOrgScope(req, 'i');
+async function loadInboxRows(req, limit = 500, requestedOrgIdRaw = null) {
+  const { where, params } = await buildInboxOrgScope(req, 'i', requestedOrgIdRaw);
   const queryParams = [req.user?.userId || 0, ...params];
   const [rows] = await pool.execute(`
     SELECT
@@ -336,9 +393,11 @@ async function loadInboxRows(req, limit = 500) {
 // GET /api/inbox — returns persisted inquiries from DB (real emails only)
 router.get('/', authenticate, async (req, res) => {
   try {
-    const inquiries = await loadInboxRows(req, 500);
+    const inquiries = await loadInboxRows(req, 500, req.query?.org_id ?? null);
     res.json({ source: 'db', inquiries, total: inquiries.length });
-  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Server error.' });
+  }
 });
 
 // F1 FIX — GET /api/inbox/summary — SQL COUNT aggregates + 5-min TTL cache (no limit-500 row-fetch)
@@ -346,13 +405,18 @@ const _summaryCache = new Map();
 const SUMMARY_TTL_MS = 5 * 60 * 1000;
 
 router.get('/summary', authenticate, async (req, res) => {
-  const cacheKey = `summary:${req.user.orgId || req.user.userId}`;
-  const cached = _summaryCache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < SUMMARY_TTL_MS) return res.json(cached.data);
-
   try {
-    const { where, params } = buildInboxOrgScope(req, 'i');
-    const baseWhere = `${where} AND i.status != 'outbox'`;
+    const { where, params, scope } = await buildInboxOrgScope(req, 'i', req.query?.org_id ?? null);
+    const scopeToken = isSuperadmin(req)
+      ? `superadmin:${scope.requestedOrgId || 'all'}`
+      : (scope.requestedOrgId
+        ? `user:${req.user.userId}:org:${scope.requestedOrgId}`
+        : `user:${req.user.userId}:orgs:${scope.orgIds.slice().sort((a, b) => a - b).join(',')}`);
+    const cacheKey = `summary:${scopeToken}`;
+    const cached = _summaryCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < SUMMARY_TTL_MS) return res.json(cached.data);
+
+    const baseWhere = `${where || 'WHERE 1=1'} AND i.status != 'outbox'`;
 
     // Aggregate counts — no row fetch, no limit
     const [[agg]] = await pool.execute(`
@@ -402,7 +466,7 @@ router.get('/summary', authenticate, async (req, res) => {
     _summaryCache.set(cacheKey, { ts: Date.now(), data });
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: 'Server error.' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Server error.' });
   }
 });
 
@@ -417,7 +481,7 @@ router.get('/case/:caseId/correspondence', authenticate, async (req, res) => {
       [caseId]
     );
     if (!caseRow) return res.status(404).json({ error: 'Case not found.' });
-    if (req.user.role !== 'superadmin' && Number(caseRow.org_id) !== Number(req.user.orgId)) {
+    if (!(await hasInboxOrgAccess(req, caseRow.org_id))) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
@@ -447,23 +511,40 @@ router.get('/case/:caseId/correspondence', authenticate, async (req, res) => {
 // GET /api/inbox/users — list active users for assign dropdown (F1)
 router.get('/users', authenticate, async (req, res) => {
   try {
+    const requestedOrgId = parsePositiveInt(req.query?.org_id);
     let rows;
     if (req.user.role === 'superadmin') {
-      [rows] = await pool.execute(
-        `SELECT id, name, email, role FROM users WHERE is_active = 1 ORDER BY name ASC`
-      );
+      if (requestedOrgId) {
+        [rows] = await pool.execute(
+          `SELECT DISTINCT u.id, u.name, u.email, u.role
+           FROM users u
+           INNER JOIN user_org_access uoa ON uoa.user_id = u.id
+           WHERE u.is_active = 1 AND uoa.org_id = ? AND uoa.is_active = 1
+           ORDER BY u.name ASC`,
+          [requestedOrgId]
+        );
+      } else {
+        [rows] = await pool.execute(
+          `SELECT id, name, email, role FROM users WHERE is_active = 1 ORDER BY name ASC`
+        );
+      }
     } else {
+      const { requestedOrgId: scopedOrgId, orgIds } = await resolveInboxScope(req, requestedOrgId);
+      const targetOrgId = scopedOrgId || Number(req.user.orgId || orgIds[0] || 0);
+      if (!targetOrgId) return res.json({ users: [] });
       [rows] = await pool.execute(
         `SELECT DISTINCT u.id, u.name, u.email, u.role
          FROM users u
          INNER JOIN user_org_access uoa ON uoa.user_id = u.id
          WHERE u.is_active = 1 AND uoa.org_id = ? AND uoa.is_active = 1
          ORDER BY u.name ASC`,
-        [req.user.orgId]
+        [targetOrgId]
       );
     }
     res.json({ users: rows });
-  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Server error.' });
+  }
 });
 
 // GET /api/inbox/templates — list active reply templates (F3)
@@ -530,13 +611,17 @@ router.post('/fetch', authenticate, requireRole('admin', 'superadmin'), async (r
   try {
     const { ingestAccount } = require('../services/emailPoller');
     const { logService } = require('../services/serviceLogger');
+    const scope = await resolveInboxScope(req);
+    const orgClause = isSuperadmin(req) || scope.orgIds.length === 0
+      ? ''
+      : `AND org_id IN (${scope.orgIds.map(() => '?').join(',')})`;
     const [accounts] = await pool.execute(
       `SELECT * FROM email_accounts
        WHERE is_active = 1 AND direction IN ('Inbound', 'Both')
          AND imap_host IS NOT NULL AND imap_port IS NOT NULL
          AND imap_username IS NOT NULL AND imap_password IS NOT NULL
-         ${isSuperadmin(req) ? '' : 'AND org_id = ?'}`,
-      isSuperadmin(req) ? [] : [req.user.orgId]
+         ${orgClause}`,
+      isSuperadmin(req) ? [] : scope.orgIds
     );
 
     let totalIngested = 0;
@@ -633,7 +718,7 @@ router.post('/bulk-update', authenticate, async (req, res) => {
 
     updates.push('last_action_at = NOW()');
 
-    const { where, params: scopeParams } = buildInboxOrgScope(req, 'inquiries');
+    const { where, params: scopeParams } = await buildInboxOrgScope(req, 'inquiries');
     const scopedWhere = where ? `AND ${where.replace('WHERE ', '')}` : '';
     const placeholders = ids.map(() => '?').join(', ');
 
@@ -661,9 +746,13 @@ router.post('/bulk-update', authenticate, async (req, res) => {
 // GET /api/inbox/routing-rules — configurable auto-routing rules engine
 router.get('/routing-rules', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
-    const orgId = req.user.role === 'superadmin'
-      ? Number(req.query.org_id || req.user.orgId || 0)
-      : Number(req.user.orgId || 0);
+    let orgId;
+    if (isSuperadmin(req)) {
+      orgId = Number(req.query.org_id || req.user.orgId || 0);
+    } else {
+      const scope = await resolveInboxScope(req, req.query?.org_id);
+      orgId = Number(scope.requestedOrgId || req.user.orgId || 0);
+    }
     if (!orgId) return res.status(400).json({ error: 'org_id is required.' });
 
     const [rows] = await pool.execute(
@@ -683,9 +772,13 @@ router.get('/routing-rules', authenticate, requireRole('admin', 'superadmin'), a
 // POST /api/inbox/routing-rules — create routing rule
 router.post('/routing-rules', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
-    const orgId = req.user.role === 'superadmin'
-      ? Number(req.body?.org_id || req.user.orgId || 0)
-      : Number(req.user.orgId || 0);
+    let orgId;
+    if (isSuperadmin(req)) {
+      orgId = Number(req.body?.org_id || req.user.orgId || 0);
+    } else {
+      const scope = await resolveInboxScope(req, req.body?.org_id);
+      orgId = Number(scope.requestedOrgId || req.user.orgId || 0);
+    }
     if (!orgId) return res.status(400).json({ error: 'org_id is required.' });
     const name = String(req.body?.name || '').trim();
     const queueName = String(req.body?.queue_name || '').trim();
@@ -722,7 +815,7 @@ router.put('/routing-rules/:id', authenticate, requireRole('admin', 'superadmin'
     const id = Number(req.params.id);
     const [[existing]] = await pool.execute('SELECT * FROM inbox_routing_rules WHERE id = ?', [id]);
     if (!existing) return res.status(404).json({ error: 'Routing rule not found.' });
-    if (req.user.role !== 'superadmin' && Number(existing.org_id) !== Number(req.user.orgId)) {
+    if (!(await hasInboxOrgAccess(req, existing.org_id))) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
@@ -757,7 +850,7 @@ router.delete('/routing-rules/:id', authenticate, requireRole('admin', 'superadm
     const id = Number(req.params.id);
     const [[existing]] = await pool.execute('SELECT id, org_id, is_active FROM inbox_routing_rules WHERE id = ?', [id]);
     if (!existing) return res.status(404).json({ error: 'Routing rule not found.' });
-    if (req.user.role !== 'superadmin' && Number(existing.org_id) !== Number(req.user.orgId)) {
+    if (!(await hasInboxOrgAccess(req, existing.org_id))) {
       return res.status(403).json({ error: 'Access denied.' });
     }
     await pool.execute('UPDATE inbox_routing_rules SET is_active = 0 WHERE id = ?', [id]);
@@ -770,8 +863,9 @@ router.delete('/routing-rules/:id', authenticate, requireRole('admin', 'superadm
 // GET /api/inbox/:id/history — sender/contact history with linked cases
 router.get('/:id/history', authenticate, async (req, res) => {
   try {
-    const scopedOrgId = req.user.role === 'superadmin' ? null : Number(req.user.orgId);
-    const history = await getInquiryHistory(scopedOrgId, Number(req.params.id));
+    const inquiry = await getScopedInquiry(req, req.params.id, 'id, org_id');
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
+    const history = await getInquiryHistory(Number(inquiry.org_id || 0), Number(req.params.id));
     if (!history) return res.status(404).json({ error: 'Inquiry not found.' });
     res.json(history);
   } catch (err) {
@@ -782,8 +876,9 @@ router.get('/:id/history', authenticate, async (req, res) => {
 // GET /api/inbox/:id/recommendations — recommended case linking actions
 router.get('/:id/recommendations', authenticate, async (req, res) => {
   try {
-    const scopedOrgId = req.user.role === 'superadmin' ? null : Number(req.user.orgId);
-    const recommendations = await getInquiryRecommendations(scopedOrgId, Number(req.params.id));
+    const inquiry = await getScopedInquiry(req, req.params.id, 'id, org_id');
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
+    const recommendations = await getInquiryRecommendations(Number(inquiry.org_id || 0), Number(req.params.id));
     if (recommendations == null) return res.status(404).json({ error: 'Inquiry not found.' });
     res.json({ recommendations });
   } catch (err) {
@@ -860,16 +955,8 @@ router.post('/:id/notes', authenticate, async (req, res) => {
 // GET /api/inbox/:id/thread — get reply/forward thread for an inquiry (F12)
 router.get('/:id/thread', authenticate, async (req, res) => {
   try {
-    const [[baseInquiry]] = await pool.execute(
-      `SELECT id, org_id, original_inquiry_id
-       FROM inquiries
-       WHERE id = ?`,
-      [req.params.id]
-    );
+    const baseInquiry = await getScopedInquiry(req, req.params.id, 'id, org_id, original_inquiry_id');
     if (!baseInquiry) return res.status(404).json({ error: 'Inquiry not found.' });
-    if (req.user.role !== 'superadmin' && Number(baseInquiry.org_id) !== Number(req.user.orgId)) {
-      return res.status(403).json({ error: 'Access denied.' });
-    }
 
     const rootId = Number(baseInquiry.original_inquiry_id || baseInquiry.id);
     const [rows] = await pool.execute(
@@ -915,7 +1002,9 @@ async function getOutboundAccount(recipientEmail, req, inquiryOrgId = null) {
   const rawEmail = recipientEmail
     ? (recipientEmail.match(/<([^>]+)>/) || [null, recipientEmail])[1].trim()
     : null;
-  const scopedOrgId = isSuperadmin(req) ? (inquiryOrgId || null) : req.user.orgId;
+  const scopedOrgId = isSuperadmin(req)
+    ? (inquiryOrgId || null)
+    : (Number(inquiryOrgId || 0) || Number(req.user.orgId || 0) || null);
   const orgClause = scopedOrgId ? ' AND org_id = ?' : '';
   const orgParams = scopedOrgId ? [scopedOrgId] : [];
 
@@ -1109,7 +1198,7 @@ router.patch('/:id', authenticate, async (req, res) => {
       await connection.rollback();
       return res.status(404).json({ error: 'Inquiry not found.' });
     }
-    if (req.user.role !== 'superadmin' && Number(row.org_id) !== Number(req.user.orgId)) {
+    if (!(await hasInboxOrgAccess(req, row.org_id))) {
       await connection.rollback();
       return res.status(403).json({ error: 'Access denied.' });
     }
@@ -1139,7 +1228,7 @@ router.patch('/:id', authenticate, async (req, res) => {
           await connection.rollback();
           return res.status(404).json({ error: 'Case not found.' });
         }
-        if (req.user.role !== 'superadmin' && Number(caseRow.org_id) !== Number(req.user.orgId)) {
+        if (!(await hasInboxOrgAccess(req, caseRow.org_id))) {
           await connection.rollback();
           return res.status(403).json({ error: 'Cannot link inquiry to a case outside your organisation.' });
         }
@@ -1244,7 +1333,7 @@ router.post('/:id/link-case', authenticate, async (req, res) => {
       [inquiryId]
     );
     if (!inquiry) return res.status(404).json({ error: 'Inquiry not found.' });
-    if (req.user.role !== 'superadmin' && Number(inquiry.org_id) !== Number(req.user.orgId)) {
+    if (!(await hasInboxOrgAccess(req, inquiry.org_id))) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
@@ -1253,7 +1342,7 @@ router.post('/:id/link-case', authenticate, async (req, res) => {
       [caseId]
     );
     if (!caseRow) return res.status(404).json({ error: 'Case not found.' });
-    if (req.user.role !== 'superadmin' && Number(caseRow.org_id) !== Number(req.user.orgId)) {
+    if (!(await hasInboxOrgAccess(req, caseRow.org_id))) {
       return res.status(403).json({ error: 'Cannot link inquiry to a case outside your organisation.' });
     }
 

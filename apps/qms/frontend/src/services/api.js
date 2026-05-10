@@ -4,11 +4,10 @@ import { FEATURE_FLAGS } from '../config/featureFlags';
 
 const RUNTIME_DEFAULT_API_BASE =
   typeof window === 'undefined'
-    ? 'http://127.0.0.1:3145/api'
-    : `${window.location.protocol}//${window.location.hostname}:3145/api`;
+    ? 'http://127.0.0.1:3145/api/v1'
+    : `${window.location.protocol}//${window.location.hostname}:3145/api/v1`;
 const API_BASE = import.meta.env.VITE_QMS_API_BASE || RUNTIME_DEFAULT_API_BASE;
 const AUTH_STORAGE_KEY = 'qms_auth_session';
-const LEGACY_TOKEN_KEY = 'qms_access_token';
 const GET_CACHE_TTL_MS = Number(import.meta.env.VITE_QMS_GET_CACHE_TTL_MS || 15000);
 const getCache = new Map();
 
@@ -31,8 +30,10 @@ export function getStoredAuth() {
   return parseStoredAuth(localStorage.getItem(AUTH_STORAGE_KEY));
 }
 
-export function getStoredToken() {
-  return '';
+function getAuthCacheScope() {
+  const auth = getStoredAuth();
+  const user = auth?.user || {};
+  return String(user.id || user.userId || user.email || auth?.surface || 'anon');
 }
 
 function assertClientSidePermission(path, method) {
@@ -50,14 +51,12 @@ function assertClientSidePermission(path, method) {
 }
 
 export function setStoredAuth(auth) {
-  localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
   emitAuthChanged();
 }
 
 export function clearStoredAuth() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
-  localStorage.removeItem(LEGACY_TOKEN_KEY);
   emitAuthChanged();
 }
 
@@ -112,7 +111,7 @@ export async function apiRequest(path, options = {}) {
     assertClientSidePermission(path, method);
   }
 
-  const cacheKey = `${method}:${path}:${getStoredToken()}`;
+  const cacheKey = `${method}:${path}:${getAuthCacheScope()}`;
   const skipCache = options.forceRefresh || options.skipCache || !FEATURE_FLAGS.apiGetCache;
   if (method === 'GET' && !skipCache) {
     const cached = getCache.get(cacheKey);
@@ -125,13 +124,6 @@ export async function apiRequest(path, options = {}) {
     'Content-Type': 'application/json',
     ...(options.headers || {})
   };
-
-  if (!options.skipAuth) {
-    const token = getStoredToken();
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-  }
 
   const response = await fetch(`${API_BASE}${path}`, {
     method,

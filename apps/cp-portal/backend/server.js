@@ -13,6 +13,7 @@ const path         = require('path');
 const rateLimit    = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const { pool, initializeDatabase } = require('./database/db');
+const { runMigrations } = require('./database/migrate');
 const { attachRequestContext } = require('./middleware/requestContext');
 const { inputSecurity } = require('./middleware/inputSecurity');
 const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandler');
@@ -150,9 +151,15 @@ app.use('/api/portal/bookings',      require('./routes/portal/bookings'));
 // ── S5-6: Content Scheduler — auto-promote scheduled → published ──
 function startContentScheduler() {
   const { notifyPortalUsers } = require('./utils/notify');
+  const SCHEDULER_LOCK_KEY = 'cp-portal-content-scheduler';
 
   async function tick() {
+    let lockAcquired = false;
     try {
+      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [SCHEDULER_LOCK_KEY]);
+      lockAcquired = Number(lockRow?.acquired || 0) === 1;
+      if (!lockAcquired) return;
+
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
       // News: find and promote scheduled posts
@@ -176,6 +183,11 @@ function startContentScheduler() {
         [now]
       );
     } catch { /* silently ignore scheduler errors */ }
+    finally {
+      if (lockAcquired) {
+        await pool.execute('SELECT RELEASE_LOCK(?)', [SCHEDULER_LOCK_KEY]).catch(() => {});
+      }
+    }
   }
 
   tick();
@@ -205,7 +217,8 @@ app.use(notFoundHandler);
 app.use(globalErrorHandler);
 
 // ── Start: init DB then listen ────────────────────────────────
-initializeDatabase()
+runMigrations()
+  .then(() => initializeDatabase())
   .then(() => {
     server = app.listen(PORT, () => {
       console.log(`✅ CP Portal backend running on http://localhost:${PORT}`);

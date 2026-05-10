@@ -69,13 +69,19 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
       'SELECT * FROM case_pc_versions WHERE case_id = ? ORDER BY version_number DESC LIMIT 1 FOR UPDATE',
       [req.params.id]
     );
-    const nextNum = existing.length > 0 ? existing[0].version_number + 1 : 1;
+    const latest = existing[0] || null;
+    const latestStatus = String(latest?.status || '').trim().toLowerCase();
+    if (latest && latestStatus !== 'closed') {
+      await conn.rollback();
+      return res.status(409).json({ error: 'Close the current PC version before creating a new version.' });
+    }
+    const nextNum = latest ? latest.version_number + 1 : 1;
 
     // Lock previous version
-    if (existing.length > 0 && !existing[0].is_locked) {
+    if (latest && !latest.is_locked) {
       await conn.execute(
         'UPDATE case_pc_versions SET is_locked = 1, locked_at = NOW() WHERE id = ?',
-        [existing[0].id]
+        [latest.id]
       );
     }
 
@@ -86,10 +92,10 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
     );
 
     // "Copy from PC" — copy complaint_description from previous version's general tab only
-    if (existing.length > 0) {
+    if (latest) {
       const [[prevGeneral]] = await conn.execute(
         'SELECT complaint_description FROM case_pc_general WHERE version_id = ?',
-        [existing[0].id]
+        [latest.id]
       );
       if (prevGeneral && prevGeneral.complaint_description) {
         await conn.execute(

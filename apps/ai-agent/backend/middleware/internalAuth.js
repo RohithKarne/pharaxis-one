@@ -1,8 +1,11 @@
-const isProductionLike = !['development', 'test'].includes(process.env.NODE_ENV || 'development')
-const INTERNAL_TOKEN = process.env.AI_AGENT_INTERNAL_TOKEN || (!isProductionLike ? 'dev-internal-token-change-in-prod' : '')
+const INTERNAL_TOKEN = String(process.env.AI_AGENT_INTERNAL_TOKEN || '').trim()
+const jwt = require('jsonwebtoken')
+const INTERNAL_JWT_SECRET = String(process.env.AI_AGENT_INTERNAL_JWT_SECRET || '').trim()
 
 if (!INTERNAL_TOKEN) {
-  throw new Error('AI_AGENT_INTERNAL_TOKEN is required outside development/test.')
+  if (!INTERNAL_JWT_SECRET) {
+    throw new Error('AI_AGENT_INTERNAL_TOKEN is required when AI_AGENT_INTERNAL_JWT_SECRET is not configured.')
+  }
 }
 
 function internalAuth(req, res, next) {
@@ -11,6 +14,20 @@ function internalAuth(req, res, next) {
     return res.status(401).json({ error: 'Internal service authentication required' })
   }
   const token = header.split(' ')[1]
+  if (INTERNAL_JWT_SECRET) {
+    try {
+      const decoded = jwt.verify(token, INTERNAL_JWT_SECRET)
+      const orgId = Number(decoded.orgId || decoded.org_id)
+      if (!Number.isInteger(orgId) || orgId <= 0) {
+        return res.status(400).json({ error: 'Valid orgId claim required in internal JWT' })
+      }
+      req.user = { orgId, role: 'admin', auth: 'internal-jwt' }
+      return next()
+    } catch {
+      return res.status(401).json({ error: 'Invalid internal JWT token' })
+    }
+  }
+
   if (token !== INTERNAL_TOKEN) {
     return res.status(401).json({ error: 'Invalid internal service token' })
   }
@@ -18,7 +35,7 @@ function internalAuth(req, res, next) {
   if (!orgId) {
     return res.status(400).json({ error: 'X-Org-Id header required' })
   }
-  req.user = { orgId: Number(orgId), role: 'admin' }
+  req.user = { orgId: Number(orgId), role: 'admin', auth: 'internal-shared-token' }
   next()
 }
 

@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
-import { useNavigate } from 'react-router-dom'
-import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function escapeCsvCell(value) {
@@ -67,8 +65,6 @@ function parseCsv(text) {
 }
 
 export default function AdminPicklistsPanel({ H }) {
-  const navigate = useNavigate()
-
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [picklistCategories, setPicklistCategories] = useState([])
   const [picklistExpandedCategoryIds, setPicklistExpandedCategoryIds] = useState([])
@@ -318,13 +314,8 @@ export default function AdminPicklistsPanel({ H }) {
   }
 
   return (
-    <MIMSLayout showStatStrip={false} bodyClassName="no-scroll admin-page-body">
-      <div className="ac-picklists-page">
-        <div className="ac-picklists-breadcrumb" aria-label="Picklists breadcrumb">
-          <button type="button" className="ac-picklists-breadcrumb-link" onClick={() => navigate('/admin-console')}>Admin Console</button>
-          <span className="ac-picklists-breadcrumb-sep">&gt;</span>
-          <span className="ac-picklists-breadcrumb-current">Picklists</span>
-        </div>
+    <>
+    <div className="ac-picklists-page">
         <div className="ac-picklists-shell">
           <aside className="ac-picklists-left">
             <div className="ac-picklists-left-header">
@@ -650,6 +641,6 @@ export default function AdminPicklistsPanel({ H }) {
           </div>
         )
       })()}
-    </MIMSLayout>
+    </>
   )
 }

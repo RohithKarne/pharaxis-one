@@ -1,7 +1,7 @@
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
-const { initializeDatabase } = require('./database/db')
+const { runMigrations } = require('./database/migrate')
 
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   'http://127.0.0.1:5175',
@@ -111,7 +111,7 @@ adminRoutes.use('/usage', require('./routes/admin/usageLogs'))
 const templatesRoutes = express.Router()
 
 async function startServer() {
-  await initializeDatabase()
+  await runMigrations()
 
   app.use('/api/v1/agent', generalApiLimiter)
   app.use('/api/v1/agent/superadmin', require('./middleware/auth').authenticateSuperadmin, require('./routes/admin/superadmin'))

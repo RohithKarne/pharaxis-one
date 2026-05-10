@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   authHeaders,
   clearOrgSession,
+  getOrgSlug,
   getOrgToken,
   getOrgUser
 } from '../utils/session'
@@ -48,6 +49,7 @@ const PRIMARY_SECTIONS = [
     key: 'platform',
     label: 'Administration',
     moduleKey: 'platform',
+    adminOnly: true,
     match: pathname => pathname.startsWith('/admin')
   }
 ]
@@ -148,6 +150,7 @@ export default function WorkspaceShell({ children }) {
 
   async function logout() {
     const token = getOrgToken()
+    const orgSlug = getOrgSlug()
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',
@@ -155,7 +158,7 @@ export default function WorkspaceShell({ children }) {
       })
     } finally {
       clearOrgSession()
-      navigate('/')
+      navigate(orgSlug ? `/?org=${orgSlug}` : '/')
     }
   }
 
@@ -171,6 +174,7 @@ export default function WorkspaceShell({ children }) {
 
   return (
     <div className="workspace-shell">
+      <div className="workspace-sticky-header">
       <div className="workspace-utility-strip">
         <div className="workspace-utility-brand">
           <button
@@ -273,7 +277,7 @@ export default function WorkspaceShell({ children }) {
         </div>
 
         <nav className="workspace-primary-nav">
-          {PRIMARY_SECTIONS.map(section => (
+          {PRIMARY_SECTIONS.filter(s => isAdmin || !s.adminOnly).map(section => (
             <button
               key={section.key}
               type="button"
@@ -324,6 +328,7 @@ export default function WorkspaceShell({ children }) {
         </div>
       </div>
 
+      </div>{/* end workspace-sticky-header */}
       <main className="workspace-content">{children}</main>
     </div>
   )

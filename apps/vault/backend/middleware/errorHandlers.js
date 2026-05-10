@@ -8,6 +8,9 @@ function notFoundHandler(req, res) {
 
 function globalErrorHandler(error, req, res, _next) {
   const requestId = req.requestId || null
+  const statusCode = Number(error?.statusCode) >= 400 && Number(error?.statusCode) < 600
+    ? Number(error.statusCode)
+    : 500
   logError('unhandled_request_error', {
     request_id: requestId,
     method: req.method,
@@ -18,8 +21,8 @@ function globalErrorHandler(error, req, res, _next) {
 
   if (res.headersSent) return
 
-  res.status(500).json({
-    error: 'Server error',
+  res.status(statusCode).json({
+    error: statusCode >= 500 ? 'Server error' : (error?.message || 'Request failed'),
     request_id: requestId
   })
 }

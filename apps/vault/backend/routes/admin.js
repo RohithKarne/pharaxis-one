@@ -5,6 +5,7 @@ const { authenticate } = require('../middleware/auth')
 const auditService = require('../services/auditService')
 const { sendWorkflowTestEmail } = require('../services/workflowNotificationDeliveryService')
 const { getOrgAuthPolicy, setOrgAuthPolicy } = require('../services/authPolicyService')
+const { assertSafeOutboundUrl } = require('../services/networkGuard')
 
 const router = express.Router()
 
@@ -42,8 +43,8 @@ async function runConnectorHealthTest(connector) {
 
   let parsedUrl
   try {
-    parsedUrl = new URL(targetUrl)
-  } catch {
+    parsedUrl = await assertSafeOutboundUrl(targetUrl)
+  } catch (error) {
     return { status: 'fail', message: 'Invalid connector URL' }
   }
 

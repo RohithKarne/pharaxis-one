@@ -2,6 +2,8 @@ const cron = require('node-cron')
 const { pool } = require('../database/db')
 const auditService = require('./auditService')
 const { logError, logInfo } = require('./logger')
+const { assertSafeOutboundUrl } = require('./networkGuard')
+const { runWithDbLock } = require('./distributedLock')
 
 async function deliverToChannel({ content, channel, action }) {
   if (!channel.webhook_url) {
@@ -12,11 +14,22 @@ async function deliverToChannel({ content, channel, action }) {
     }
   }
 
+  let safeWebhookUrl
+  try {
+    safeWebhookUrl = await assertSafeOutboundUrl(channel.webhook_url)
+  } catch (error) {
+    return {
+      status: 'failed',
+      message: `${action} failed for ${channel.app_name}`,
+      error: error.message || 'Webhook URL blocked by outbound policy'
+    }
+  }
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), Number(process.env.DISTRIBUTION_WEBHOOK_TIMEOUT_MS || 5000))
 
   try {
-    const response = await fetch(channel.webhook_url, {
+    const response = await fetch(safeWebhookUrl.toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -187,7 +200,9 @@ function registerDistributionRetryCron() {
   if (process.env.DISABLE_CRON === 'true') return null
   return cron.schedule('*/5 * * * *', async () => {
     try {
-      const processed = await runDistributionRetryJob()
+      const lockRun = await runWithDbLock('vault:cron:distribution-retry', 1, runDistributionRetryJob)
+      if (lockRun.skipped) return
+      const processed = lockRun.result
       if (processed) logInfo('content_distribution_retry_processed', { processed })
     } catch (error) {
       logError('content_distribution_retry_cron_failed', { error })

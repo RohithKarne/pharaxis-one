@@ -1,8 +1,5 @@
 const jwt = require('jsonwebtoken')
 
-const isProductionLike = !['development', 'test'].includes(process.env.NODE_ENV || 'development')
-const DEV_SUPERADMIN_TOKEN = 'dev-ai-agent-superadmin-token-change-in-prod'
-
 function readBearerOrCookie(req, cookieName) {
   const cookieHeader = req.headers.cookie || ''
   const cookie = cookieHeader
@@ -35,8 +32,9 @@ function authenticateSuperadmin(req, res, next) {
   const token = readBearerOrCookie(req, 'ai_agent_superadmin_token')
   if (!token) return res.status(401).json({ error: 'Superadmin authentication required' })
 
-  const configuredToken = process.env.AI_AGENT_SUPERADMIN_TOKEN || (!isProductionLike ? DEV_SUPERADMIN_TOKEN : '')
-  if (configuredToken && token === configuredToken) {
+  const configuredToken = String(process.env.AI_AGENT_SUPERADMIN_TOKEN || '').trim()
+  const enableStaticBypass = String(process.env.AI_AGENT_ENABLE_SUPERADMIN_STATIC_TOKEN || '').toLowerCase() === 'true'
+  if (enableStaticBypass && configuredToken && token === configuredToken) {
     req.superadmin = { auth: 'static-token' }
     return next()
   }

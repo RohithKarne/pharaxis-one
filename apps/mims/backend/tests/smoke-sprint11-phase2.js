@@ -163,11 +163,11 @@ async function run() {
   assert('Test 8 status', res.status === 200, 'status=' + res.status);
   assert('Test 8 params exists', !!(res.body && res.body.params !== undefined), JSON.stringify(res.body));
 
-  // Test 9 — Vault search requires q param (admin)
+  // Test 9 — Vault search requires query_key param (admin)
   res = await req('GET', '/api/admin/vault/search', null, {
     Authorization: 'Bearer ' + adminToken
   });
-  assert('Test 9 status', res.status === 500, 'status=' + res.status + ' body=' + JSON.stringify(res.body));
+  assert('Test 9 status', res.status === 400, 'status=' + res.status + ' body=' + JSON.stringify(res.body));
 
   // Test 10 — Vault documents list fails gracefully without real Vault (admin)
   res = await req('GET', '/api/admin/vault/documents', null, {

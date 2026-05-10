@@ -1,6 +1,21 @@
 'use strict';
 
 const rateLimit = require('express-rate-limit');
+const { RedisStore } = require('rate-limit-redis');
+const { getClient, isReady } = require('../services/redisClient');
+
+/**
+ * Returns a RedisStore when Redis is available, otherwise undefined
+ * (express-rate-limit falls back to in-memory store automatically).
+ * Prefix ensures different limiters don't share counter keys.
+ */
+function makeStore(prefix) {
+  if (!isReady()) return undefined;
+  return new RedisStore({
+    sendCommand: (...args) => getClient().call(...args),
+    prefix: `mims:rl:${prefix}:`,
+  });
+}
 
 function toPositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -33,6 +48,7 @@ function createLimiter({
   skip,
   message,
   skipSuccessfulRequests = false,
+  storePrefix = 'api',
 }) {
   return rateLimit({
     windowMs,
@@ -42,6 +58,7 @@ function createLimiter({
     keyGenerator,
     skip,
     skipSuccessfulRequests,
+    store: makeStore(storePrefix), // Redis when available, in-memory fallback
     handler: (_req, res) => {
       res.status(429).json({ error: message });
     },
@@ -55,6 +72,7 @@ const authRateLimiter = createLimiter({
     : envInt('RATE_LIMIT_AUTH_MAX_DEV', 600),
   keyGenerator: getFingerprint,
   message: 'Too many authentication requests. Please try again shortly.',
+  storePrefix: 'auth',
 });
 
 const loginRateLimiter = createLimiter({
@@ -68,6 +86,7 @@ const loginRateLimiter = createLimiter({
   },
   skipSuccessfulRequests: true,
   message: 'Too many login attempts. Please try again after 15 minutes.',
+  storePrefix: 'login',
 });
 
 const accountCreationRateLimiter = createLimiter({
@@ -80,6 +99,7 @@ const accountCreationRateLimiter = createLimiter({
     return `${getFingerprint(req)}:${email || 'unknown-email'}`;
   },
   message: 'Too many account creation attempts. Please try again later.',
+  storePrefix: 'acct',
 });
 
 const recoveryRateLimiter = createLimiter({
@@ -92,6 +112,7 @@ const recoveryRateLimiter = createLimiter({
     return `${getFingerprint(req)}:${email || 'unknown-email'}`;
   },
   message: 'Too many recovery attempts. Try again after 15 minutes.',
+  storePrefix: 'recovery',
 });
 
 const verificationRateLimiter = createLimiter({
@@ -104,6 +125,7 @@ const verificationRateLimiter = createLimiter({
     return `${getFingerprint(req)}:${email || 'unknown-email'}`;
   },
   message: 'Too many verification attempts. Try again after 15 minutes.',
+  storePrefix: 'verify',
 });
 
 const apiRateLimiter = createLimiter({
@@ -122,6 +144,7 @@ const apiRateLimiter = createLimiter({
     );
   },
   message: 'Too many API requests. Please slow down and try again shortly.',
+  storePrefix: 'api',
 });
 
 const aiGenerationRateLimiter = createLimiter({
@@ -131,6 +154,7 @@ const aiGenerationRateLimiter = createLimiter({
     : envInt('RATE_LIMIT_AI_MAX_DEV', 200),
   keyGenerator: (req) => req.user?.userId ? `user:${req.user.userId}` : getFingerprint(req),
   message: 'Too many AI generation requests. Please wait a moment and retry.',
+  storePrefix: 'ai',
 });
 
 module.exports = {

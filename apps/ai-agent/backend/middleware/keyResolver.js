@@ -2,7 +2,20 @@ const crypto = require('crypto')
 const { pool } = require('../database/db')
 
 const ALGORITHM = 'aes-256-cbc'
-const KEY = Buffer.from(process.env.AI_AGENT_ENCRYPTION_KEY || '0'.repeat(64), 'hex')
+const isProductionLike = !['development', 'test'].includes(process.env.NODE_ENV || 'development')
+const DEV_FALLBACK_ENCRYPTION_KEY = '0123456789abcdeffedcba98765432100123456789abcdeffedcba9876543210'
+const rawEncryptionKey = String(process.env.AI_AGENT_ENCRYPTION_KEY || '').trim().toLowerCase()
+const hasValidConfiguredKey = /^[a-f0-9]{64}$/.test(rawEncryptionKey)
+if (!hasValidConfiguredKey && isProductionLike) {
+  throw new Error('AI_AGENT_ENCRYPTION_KEY must be a 64-char hex key in production-like environments.')
+}
+const runtimeEncryptionKey = hasValidConfiguredKey
+  ? rawEncryptionKey
+  : DEV_FALLBACK_ENCRYPTION_KEY
+if (!hasValidConfiguredKey && !isProductionLike) {
+  console.warn('AI_AGENT_ENCRYPTION_KEY is missing/invalid; using deterministic local dev fallback key.')
+}
+const KEY = Buffer.from(runtimeEncryptionKey, 'hex')
 const VALID_APP_SOURCES = ['cp_portal', 'mims', 'vault', 'qms', 'safety', 'external']
 const VALID_PROVIDERS = ['openai', 'claude', 'gemini']
 
@@ -63,10 +76,30 @@ async function logFailure({ orgId, appSource, queryType, provider, status = 'fai
 
 async function resolveKey(req, res, next) {
   try {
-    const orgId = req.body?.org_id
+    const authenticatedOrgId = Number(req.user?.orgId)
+    if (!Number.isInteger(authenticatedOrgId) || authenticatedOrgId <= 0) {
+      await logFailure({
+        orgId: null,
+        appSource: req.body?.app_source,
+        queryType: req.body?.query_type
+      })
+      return res.status(401).json({ message: 'Invalid authentication context' })
+    }
+
+    const requestedOrgId = req.body?.org_id
+    if (requestedOrgId !== undefined && Number(requestedOrgId) !== authenticatedOrgId) {
+      await logFailure({
+        orgId: authenticatedOrgId,
+        appSource: req.body?.app_source,
+        queryType: req.body?.query_type
+      })
+      return res.status(403).json({ message: 'org_id does not match authenticated organisation' })
+    }
+
+    const orgId = authenticatedOrgId
     if (!orgId) {
       await logFailure({
-        orgId: req.user?.orgId,
+        orgId,
         appSource: req.body?.app_source,
         queryType: req.body?.query_type
       })

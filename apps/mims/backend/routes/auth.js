@@ -3,7 +3,7 @@
 const express        = require('express');
 const router         = express.Router();
 const authController = require('../controllers/authController');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, sessionCacheInvalidate } = require('../middleware/auth');
 const pool           = require('../database/db');
 const { logger } = require('../services/logger');
 const {
@@ -194,6 +194,7 @@ router.post('/logout', authenticate, async (req, res) => {
   );
   if (token) {
     await pool.execute('DELETE FROM sessions WHERE token = ?', [token]).catch(() => {});
+    await sessionCacheInvalidate(token); // immediately revoke Redis session cache
   }
   logger.info({ user_id: req.user?.userId, route: '/api/auth/logout' }, 'User logged out');
   res.clearCookie('mims_token', { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });

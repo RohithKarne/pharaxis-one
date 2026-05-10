@@ -101,8 +101,8 @@ export default function SuperadminDashboardPage() {
                 <li><span>Inactive Orgs</span><strong>{stats.orgs?.inactive || 0}</strong></li>
               </ul>
               <div className="detail-actions">
-                <Link className="btn-secondary link-button" to="/control-tower/audit">Open Audit</Link>
-                <Link className="btn-secondary link-button" to="/control-tower/orgs">Open Organizations</Link>
+                <Link className="btn-secondary link-button" to="/audit">Open Audit</Link>
+                <Link className="btn-secondary link-button" to="/orgs">Open Organizations</Link>
               </div>
             </section>
 

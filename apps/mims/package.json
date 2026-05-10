@@ -29,6 +29,7 @@
     "geoip-lite": "^1.4.10",
     "imap": "^0.8.17",
     "imapflow": "^1.2.13",
+    "ioredis": "^5.10.1",
     "joi": "^18.1.2",
     "jose": "^6.2.3",
     "jsonwebtoken": "^9.0.2",
@@ -39,7 +40,8 @@
     "node-fetch": "^3.3.2",
     "nodemailer": "^8.0.2",
     "pino": "^10.3.1",
-    "pino-http": "^11.0.0"
+    "pino-http": "^11.0.0",
+    "rate-limit-redis": "^4.3.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

@@ -35,13 +35,14 @@ async function getEmailConfig(clientId) {
 function buildTransporter(config) {
   const secure     = config.smtp_encryption === 'SSL/TLS'
   const requireTLS = config.smtp_encryption === 'STARTTLS'
+  const allowInvalidCerts = String(process.env.CP_SMTP_ALLOW_INVALID_CERTS || '').toLowerCase() === 'true'
   return nodemailer.createTransport({
     host: config.smtp_host,
     port: config.smtp_port,
     secure,
     requireTLS,
     auth: { user: config.smtp_username, pass: config.smtp_password },
-    tls: { rejectUnauthorized: false },
+    tls: { rejectUnauthorized: !allowInvalidCerts },
     connectionTimeout: 10000,
   })
 }

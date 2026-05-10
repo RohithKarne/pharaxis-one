@@ -6,7 +6,9 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
-const { authenticateAdmin } = require('../../middleware/auth');
+const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+
+router.use('/:clientId', authenticateAdmin, requireClientAccess);
 
 // GET /api/admin/forms/:clientId — all form configs grouped by form_type
 router.get('/:clientId', authenticateAdmin, async (req, res) => {

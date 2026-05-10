@@ -842,7 +842,6 @@
 }
 
 .cf-tabbar-btn.active {
-  color: #fff;
   background: #f8fafc;
   color: #1d3557;
   border-bottom: 3px solid #2563eb;
@@ -1100,6 +1099,16 @@
   transition: background 0.15s;
 }
 .cf-add-btn:hover { background: var(--accent-hover); }
+.cf-add-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cf-inline-note {
+  margin: 8px 0 10px;
+  font-size: 12px;
+  color: #8a6d3b;
+}
 
 .cf-cancel-btn {
   background: transparent;

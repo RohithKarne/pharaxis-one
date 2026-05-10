@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal } = require('../../middleware/auth');
 const { sendEmail } = require('../../utils/mailer');
+const { assertSafeOutboundUrl } = require('../../utils/networkGuard');
 
 // POST /api/portal/submit/:clientCode/:formType
 router.post('/:clientCode/:formType', authenticatePortal, async (req, res) => {
@@ -127,13 +128,14 @@ async function syncToIntegration(clientId, submissionId, formType) {
 
   try {
     await pool.execute(`UPDATE cp_submissions SET status='pending_sync', sync_attempts=sync_attempts+1 WHERE id=?`, [submissionId]);
+    const safeBaseUrl = await assertSafeOutboundUrl(integration.api_base_url);
 
     const headers = { 'Content-Type': 'application/json' };
     if (integration.auth_type === 'bearer' && integration.api_key) headers['Authorization'] = `Bearer ${integration.api_key}`;
     if (integration.auth_type === 'apikey' && integration.api_key) headers['X-API-Key'] = integration.api_key;
     if (integration.extra_headers) Object.assign(headers, JSON.parse(integration.extra_headers));
 
-    const r = await fetch(`${integration.api_base_url}/api/cases`, {
+    const r = await fetch(new URL('/api/cases', safeBaseUrl).toString(), {
       method: 'POST', headers, body: JSON.stringify(payload),
     });
 

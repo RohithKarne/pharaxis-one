@@ -6,8 +6,10 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
-const { authenticateAdmin } = require('../../middleware/auth');
+const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+
+router.use('/:clientId', authenticateAdmin, requireClientAccess);
 
 // GET /api/admin/compliance/:clientId — get compliance config
 router.get('/:clientId', authenticateAdmin, async (req, res) => {

@@ -122,7 +122,7 @@ router.delete('/superadmin/integrations/:id', authenticate, requireRole("superad
 });
 
 // Admin Console routes
-router.get('/admin/integrations', authenticate, async (req, res) => {
+router.get('/admin/integrations', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) {
@@ -143,7 +143,7 @@ router.get('/admin/integrations', authenticate, async (req, res) => {
   }
 });
 
-router.put('/admin/integrations/:id/toggle', authenticate, async (req, res) => {
+router.put('/admin/integrations/:id/toggle', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) {
@@ -184,7 +184,7 @@ router.put('/admin/integrations/:id/toggle', authenticate, async (req, res) => {
 });
 
 // Admin — get config for a specific integration type
-router.get('/admin/integrations/:type/config', authenticate, async (req, res) => {
+router.get('/admin/integrations/:type/config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });
@@ -205,7 +205,7 @@ router.get('/admin/integrations/:type/config', authenticate, async (req, res) =>
 });
 
 // Admin — save config for a specific integration type
-router.put('/admin/integrations/:type/config', authenticate, async (req, res) => {
+router.put('/admin/integrations/:type/config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });

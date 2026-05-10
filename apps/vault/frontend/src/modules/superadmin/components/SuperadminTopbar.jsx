@@ -17,7 +17,7 @@ export default function SuperadminTopbar({ title, subtitle }) {
       })
     } finally {
       clearSuperadminSession()
-      navigate('/control-tower/login')
+      navigate('/login')
     }
   }
 

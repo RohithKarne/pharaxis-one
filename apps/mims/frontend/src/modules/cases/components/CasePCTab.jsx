@@ -27,10 +27,14 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
   const [pcTxDrawer,      setPcTxDrawer]      = useState(false)
   const [pcTxForm,        setPcTxForm]        = useState({ assigned_to_id: '', priority: 'routine', notes: '' })
   const [pcTxSaving,      setPcTxSaving]      = useState(false)
+  const [pcClosingVersion, setPcClosingVersion] = useState(false)
 
   useEffect(() => { loadPCVersions(); loadPcTransmissions() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isLocked = (ver) => ver && ver.is_locked === 1
+  const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
+  const latestPcVersion = pcVersions.length > 0 ? pcVersions[pcVersions.length - 1] : null
+  const canCreatePcVersion = !latestPcVersion || isClosed(latestPcVersion)
 
   async function loadPCVersions() {
     try {
@@ -59,6 +63,10 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
   }
 
   async function createPCVersion() {
+    if (!canCreatePcVersion) {
+      toast.error('Close the current PC version before creating a new version.')
+      return
+    }
     try {
       const res  = await httpFetch(`${API}/cases/${id}/pc/versions`, { method: 'POST', headers })
       const data = await res.json()
@@ -70,6 +78,27 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
       setActivePcTab('general')
       loadPCTab(data.id, 'general')
     } catch (err) { toast.error(err.message) }
+  }
+
+  async function closePCVersion() {
+    if (!activePcVer || isLocked(activePcVer) || isClosed(activePcVer) || pcClosingVersion) return
+    setPcClosingVersion(true)
+    try {
+      const res = await httpFetch(`${API}/cases/pc/versions/${activePcVer.id}/status`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ status: 'Closed' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to close version')
+      setPcVersions(prev => prev.map(v => v.id === activePcVer.id ? { ...v, status: data.status || 'Closed' } : v))
+      setActivePcVer(prev => (prev ? { ...prev, status: data.status || 'Closed' } : prev))
+      setSavedMsg('PC version closed'); setTimeout(() => setSavedMsg(''), 2000)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setPcClosingVersion(false)
+    }
   }
 
   async function savePCTab() {
@@ -121,11 +150,23 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
   return (
     <div className="cf-tab-pane">
       <div className="cf-section-header-row">
-        <button className="cf-add-btn" onClick={createPCVersion}>+ New Version</button>
+        <button className="cf-add-btn" onClick={createPCVersion} disabled={!canCreatePcVersion}>
+          + New Version
+        </button>
+        <button
+          className="cf-cancel-btn"
+          onClick={closePCVersion}
+          disabled={!activePcVer || isLocked(activePcVer) || isClosed(activePcVer) || pcClosingVersion}
+        >
+          {pcClosingVersion ? 'Closing…' : 'Close Version'}
+        </button>
         <button className="cf-tx-trigger-btn" onClick={() => setPcTxDrawer(p => !p)}>
           🧪 {pcTxDrawer ? 'Cancel Routing' : 'Route to Quality'}
         </button>
       </div>
+      {!canCreatePcVersion && (
+        <div className="cf-inline-note">Close the current PC version before creating a new version.</div>
+      )}
 
       {pcVersions.length === 0 ? (
         <div className="cf-empty-msg">No PC versions yet. Click "+ New Version" to start.</div>
@@ -138,9 +179,9 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
                 className={`cf-version-btn ${activePcVer?.id === v.id ? 'active' : ''} ${v.is_locked ? 'locked' : ''}`}
                 onClick={() => { setActivePcVer(v); loadPCTab(v.id, activePcTab) }}
               >
-                V{v.version_number}
+                <span className="cf-version-label">Version #{v.version_number}</span>
                 {v.is_locked && <span className="cf-lock-icon">🔒</span>}
-                <span className={`cf-ver-status ${v.status.toLowerCase()}`}>{v.status}</span>
+                <span className={`cf-ver-status ${v.status.toLowerCase()}`}>Status: {v.status}</span>
               </button>
             ))}
           </div>

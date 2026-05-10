@@ -2,6 +2,7 @@ const cron = require('node-cron')
 const nodemailer = require('nodemailer')
 const { pool } = require('../database/db')
 const auditService = require('./auditService')
+const { runWithDbLock } = require('./distributedLock')
 
 let transporter = null
 
@@ -115,7 +116,9 @@ function registerExpiryAlertCron() {
     '0 8 * * *',
     async () => {
       try {
-        const result = await runExpiryAlertJob()
+        const lockRun = await runWithDbLock('vault:cron:expiry-alert', 1, runExpiryAlertJob)
+        if (lockRun.skipped) return
+        const result = lockRun.result
         console.log(`Expiry alert job complete: ${result.sentCount}/${result.totalCandidates}`)
       } catch (error) {
         console.error('Expiry alert job failed:', error)

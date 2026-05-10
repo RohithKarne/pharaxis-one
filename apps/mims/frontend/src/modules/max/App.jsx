@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../../shared/context/AuthContext'
 import { setSessionExpiryHandler } from '../../shared/api/httpFetch'
@@ -8,36 +8,50 @@ import { useIdleTimer } from '../../shared/hooks/useIdleTimer'
 import SessionTimeoutModal from '../../shared/components/SessionTimeoutModal'
 import ToastContainer from '../../shared/components/ToastContainer'
 import ConfirmModal from '../../shared/components/ConfirmModal'
-import LoginPage from './pages/LoginPage'
-import SsoCompletePage from './pages/SsoCompletePage'
-import DashboardPage from './pages/DashboardPage'
-import SessionManagementPage from './pages/SessionManagementPage'
-import InboxPage from './pages/InboxPage'
-import ChatPage from './pages/ChatPage'
-import AdminConsoleRouter from '../admin/AdminConsoleRouter'
-import ContentPage from '../content/pages/ContentPage'
-import AnalyticsPage from '../dv/pages/AnalyticsPage'
-import ProcessExplorerPage from '../dv/pages/ProcessExplorerPage'
-import ReportsPage from '../reports/pages/ReportsPage'
-import CasesPage from '../cases/pages/CasesPage'
-import CaseFormPage from '../cases/pages/CaseFormPage'
-import CaseQueryPage from '../cases/pages/CaseQueryPage'
-import ExceptionLogsPage from './pages/ExceptionLogsPage'
-import RegressionPage from '../regression/pages/RegressionPage'
-import TransmissionsPage from '../transmissions/pages/TransmissionsPage'
-import BrowseContentPage from '../browse/pages/BrowseContentPage'
-import ResponseLogPage from '../responselog/pages/ResponseLogPage'
-import CaseAuditTrailPage from '../audittrail/pages/CaseAuditTrailPage'
-import CMAuditTrailPage from '../audittrail/pages/CMAuditTrailPage'
-import ResponseErrorLogPage from '../responselog/pages/ResponseErrorLogPage'
-import TransmissionErrorLogPage from '../transmissions/pages/TransmissionErrorLogPage'
-import TransmissionAuditTrailPage from '../transmissions/pages/TransmissionAuditTrailPage'
-import CopyDivisionPage from '../admin/pages/CopyDivisionPage'
-import DPPRPage from '../admin/pages/DPPRPage'
-import NoAccessPage from '../../pages/NoAccessPage'
-import ResetPasswordPage from '../../pages/ResetPasswordPage'
 import ExceptionToast from '../../shared/components/ExceptionToast'
-import SuperadminPage from '../superadmin/pages/SuperadminPage'
+
+// ── Eagerly loaded — part of the critical navigation path ────────────────────
+import LoginPage            from './pages/LoginPage'
+import SsoCompletePage      from './pages/SsoCompletePage'
+import DashboardPage        from './pages/DashboardPage'
+import InboxPage            from './pages/InboxPage'
+import CasesPage            from '../cases/pages/CasesPage'
+import CaseFormPage         from '../cases/pages/CaseFormPage'
+import CaseQueryPage        from '../cases/pages/CaseQueryPage'
+import SessionManagementPage from './pages/SessionManagementPage'
+import NoAccessPage         from '../../pages/NoAccessPage'
+import ResetPasswordPage    from '../../pages/ResetPasswordPage'
+
+// ── Lazily loaded — heavy or rarely-visited pages (loaded on demand) ─────────
+// Each becomes its own JS chunk; only downloaded when the user navigates there.
+const ChatPage                 = lazy(() => import('./pages/ChatPage'))
+const AdminConsoleRouter       = lazy(() => import('../admin/AdminConsoleRouter'))
+const ContentPage              = lazy(() => import('../content/pages/ContentPage'))
+const AnalyticsPage            = lazy(() => import('../dv/pages/AnalyticsPage'))
+const ProcessExplorerPage      = lazy(() => import('../dv/pages/ProcessExplorerPage'))
+const ReportsPage              = lazy(() => import('../reports/pages/ReportsPage'))
+const ExceptionLogsPage        = lazy(() => import('./pages/ExceptionLogsPage'))
+const RegressionPage           = lazy(() => import('../regression/pages/RegressionPage'))
+const TransmissionsPage        = lazy(() => import('../transmissions/pages/TransmissionsPage'))
+const BrowseContentPage        = lazy(() => import('../browse/pages/BrowseContentPage'))
+const ResponseLogPage          = lazy(() => import('../responselog/pages/ResponseLogPage'))
+const CaseAuditTrailPage       = lazy(() => import('../audittrail/pages/CaseAuditTrailPage'))
+const CMAuditTrailPage         = lazy(() => import('../audittrail/pages/CMAuditTrailPage'))
+const ResponseErrorLogPage     = lazy(() => import('../responselog/pages/ResponseErrorLogPage'))
+const TransmissionErrorLogPage = lazy(() => import('../transmissions/pages/TransmissionErrorLogPage'))
+const TransmissionAuditTrailPage = lazy(() => import('../transmissions/pages/TransmissionAuditTrailPage'))
+const CopyDivisionPage         = lazy(() => import('../admin/pages/CopyDivisionPage'))
+const DPPRPage                 = lazy(() => import('../admin/pages/DPPRPage'))
+const SuperadminPage           = lazy(() => import('../superadmin/pages/SuperadminPage'))
+
+// Shared Suspense fallback — minimal spinner so Suspense boundary doesn't flash
+function PageLoader() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', color: '#94a3b8', fontSize: 14 }}>
+      Loading…
+    </div>
+  )
+}
 
 function AppRoutes() {
   const { user, sessionTimeout, logout } = useAuth()
@@ -70,6 +84,7 @@ function AppRoutes() {
       <ToastContainer />
       <ConfirmModal />
       <ExceptionToast />
+      <Suspense fallback={<PageLoader />}>
       <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
@@ -240,7 +255,7 @@ function AppRoutes() {
           } />
           <Route path="/browse-content" element={
             <ProtectedRoute>
-              <ModuleAccessGuard moduleKeys={['browse_content', 'content_mgmt']}>
+              <ModuleAccessGuard moduleKey="mims_core">
                 <BrowseContentPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
@@ -253,6 +268,7 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
       </Routes>
+      </Suspense>
     </>
   )
 }

@@ -67,13 +67,28 @@ const DEFAULT_FORM_FIELDS = {
   ],
 };
 
+function requireSuperadmin(req, res, next) {
+  if (req.admin?.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin access required.' });
+  return next();
+}
+
+function requireClientScopeByIdParam(req, res, next) {
+  if (req.admin?.role === 'superadmin') return next();
+  const requestedClientId = String(req.params.id || '');
+  const adminClientId = req.admin?.clientId != null ? String(req.admin.clientId) : null;
+  if (!adminClientId || adminClientId !== requestedClientId) {
+    return res.status(403).json({ error: 'Access denied. You can only manage your own client.' });
+  }
+  return next();
+}
+
 // MED-33: cp_portal_users is NOT joined in any SELECT query in this file.
 // The only reference to cp_portal_users is a COUNT(*) query in the soft-delete handler
 // for cascade verification — it never returns user rows or password_hash to the API response.
 // No password_hash stripping is required here.
 
 // GET /api/admin/clients
-router.get('/', authenticateAdmin, async (_req, res) => {
+router.get('/', authenticateAdmin, requireSuperadmin, async (_req, res) => {
   try {
     res.json({ clients: await listClients(pool) });
   } catch (err) {
@@ -82,7 +97,7 @@ router.get('/', authenticateAdmin, async (_req, res) => {
 });
 
 // GET /api/admin/clients/:id
-router.get('/:id', authenticateAdmin, async (req, res) => {
+router.get('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req, res) => {
   try {
     const bundle = await getClientBundle(pool, req.params.id);
     if (!bundle) return res.status(404).json({ error: 'Client not found.' });
@@ -93,7 +108,7 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
 });
 
 // GET /api/admin/clients/:id/readiness — F5-01: 8 automated readiness checks
-router.get('/:id/readiness', authenticateAdmin, async (req, res) => {
+router.get('/:id/readiness', authenticateAdmin, requireClientScopeByIdParam, async (req, res) => {
   try {
     const id = req.params.id;
     const [[client]] = await pool.execute('SELECT * FROM cp_clients WHERE id = ?', [id]);
@@ -129,7 +144,7 @@ router.get('/:id/readiness', authenticateAdmin, async (req, res) => {
 });
 
 // POST /api/admin/clients — create client + seed defaults
-router.post('/', authenticateAdmin, async (req, res) => {
+router.post('/', authenticateAdmin, requireSuperadmin, async (req, res) => {
   try {
     const { name, code, description, contact_name, contact_email } = req.body;
     if (!name || !code) return res.status(400).json({ error: 'name and code are required.' });
@@ -200,7 +215,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
 });
 
 // PATCH /api/admin/clients/:id
-router.patch('/:id', authenticateAdmin, async (req, res) => {
+router.patch('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, contact_name, contact_email, is_active } = req.body;
@@ -222,7 +237,7 @@ router.patch('/:id', authenticateAdmin, async (req, res) => {
 });
 
 // DELETE /api/admin/clients/:id — soft delete
-router.delete('/:id', authenticateAdmin, async (req, res) => {
+router.delete('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req, res) => {
   try {
     const clientId = Number(req.params.id);
     await pool.execute(`UPDATE cp_clients SET is_active = 0, updated_at = NOW() WHERE id = ?`, [clientId]);
