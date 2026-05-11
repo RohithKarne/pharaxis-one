@@ -3,7 +3,7 @@ import MIMSAdminShell from '../components/MIMSAdminShell'
 
 export default function MIMSAdminPage() {
   return (
-    <MIMSLayout bodyClassName="no-scroll mims-admin-page-body">
+    <MIMSLayout showStatStrip={false} bodyClassName="no-scroll mims-admin-page-body">
       <MIMSAdminShell />
     </MIMSLayout>
   )
