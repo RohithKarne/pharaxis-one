@@ -3,6 +3,7 @@ import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
+import { ModuleUsageModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
@@ -170,6 +171,7 @@ export default function ModulesSection({ token }) {
   const [filters, setFilters] = useState({ folder_id: '', status: '', search: '' })
   const [showDrawer, setShowDrawer] = useState(false)
   const [editModule, setEditModule] = useState(null)
+  const [usageModule, setUsageModule] = useState(null)
 
   const loadFolders = useCallback(async () => {
     try {
@@ -268,16 +270,7 @@ export default function ModulesSection({ token }) {
                 <td>
                   <div className="cm-action-btns">
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditModule(m); setShowDrawer(true) }}>Edit</button>
-                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={async () => {
-                      try {
-                        const res = await httpFetch(`/api/cm/documents/module-usage/${m.id}`, { headers: authHeaders })
-                        if (res.ok) {
-                          const d = await res.json()
-                          const names = d.linked_documents.map(doc => `• ${doc.name} (${doc.status})`).join('\n') || 'No documents linked.'
-                          toast.info(`Module "${m.name}" — Used in ${d.count} document(s):\n\n${names}`)
-                        }
-                      } catch { /* silent */ }
-                    }}>Usage</button>
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setUsageModule(m)}>Usage</button>
                     {m.status !== 'Archived' && (
                       <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(m)}>Archive</button>
                     )}
@@ -297,6 +290,9 @@ export default function ModulesSection({ token }) {
           onClose={() => { setShowDrawer(false); setEditModule(null) }}
           onSaved={loadModules}
         />
+      )}
+      {usageModule && (
+        <ModuleUsageModal module={usageModule} token={token} onClose={() => setUsageModule(null)} />
       )}
     </div>
   )

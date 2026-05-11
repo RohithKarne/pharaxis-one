@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
+import { VersionHistoryModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
@@ -194,6 +195,7 @@ export default function TemplatesSection({ token }) {
   const [folders, setFolders] = useState([])
   const [showDrawer, setShowDrawer] = useState(false)
   const [editTemplate, setEditTemplate] = useState(null)
+  const [historyTemplate, setHistoryTemplate] = useState(null)
 
   useEffect(() => {
     httpFetch('/api/cm/folders', { headers: authHeaders })
@@ -280,6 +282,7 @@ export default function TemplatesSection({ token }) {
                 <td>
                   <div className="cm-action-btns">
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditTemplate(t); setShowDrawer(true) }}>Edit</button>
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryTemplate(t)}>History</button>
                     <button className={`cm-btn cm-btn-sm ${t.status === 'Active' ? 'cm-btn-danger' : 'cm-btn-primary'}`} onClick={() => toggleStatus(t)}>
                       {t.status === 'Active' ? 'Deactivate' : 'Activate'}
                     </button>
@@ -292,6 +295,9 @@ export default function TemplatesSection({ token }) {
       )}
       {showDrawer && (
         <TemplateDrawer template={editTemplate} token={token} folders={folders} onClose={() => { setShowDrawer(false); setEditTemplate(null) }} onSaved={load} />
+      )}
+      {historyTemplate && (
+        <VersionHistoryModal entityType="template" entityId={historyTemplate.id} entityName={historyTemplate.name} token={token} onClose={() => setHistoryTemplate(null)} />
       )}
     </div>
   )

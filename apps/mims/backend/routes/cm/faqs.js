@@ -410,4 +410,27 @@ router.post('/faqs/:id/archive', authenticate, async (req, res) => {
   }
 });
 
+// POST /api/cm/faqs/:id/clone — duplicate FAQ as Draft (#8)
+router.post('/faqs/:id/clone', authenticate, async (req, res) => {
+  try {
+    const src = await getScopedFaq(req, req.params.id);
+    if (!src) return res.status(404).json({ error: 'FAQ not found.' });
+
+    const [result] = await pool.execute(
+      `INSERT INTO cm_faqs (folder_id, question, answer_html, category, approval_required, expiry_date, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, 'Draft', ?)`,
+      [
+        src.folder_id, `Copy of ${src.question}`, src.answer_html || null,
+        src.category || null, src.approval_required !== undefined ? src.approval_required : 1,
+        src.expiry_date || null, req.user.userId,
+      ]
+    );
+    await audit(req.user.userId, req.user.email, 'CLONE', 'cm_faq', result.insertId, { source_id: src.id, source_question: src.question });
+    res.status(201).json({ message: 'FAQ cloned.', id: result.insertId });
+  } catch (err) {
+    console.error('POST /cm/faqs/:id/clone error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 module.exports = router;

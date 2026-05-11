@@ -162,6 +162,14 @@ export default function FAQsSection({ token, user }) {
     setFaqEsignLoading(false)
   }
 
+  async function handleClone(faq) {
+    try {
+      const res = await httpFetch(`/api/cm/faqs/${faq.id}/clone`, { method: 'POST', headers: authHeaders })
+      if (res.ok) { toast.success('FAQ cloned as Draft.'); loadFaqs() }
+      else { const d = await res.json(); toast.error(d.error || 'Clone failed.') }
+    } catch { toast.error('Network error.') }
+  }
+
   function getFaqActions(faq) {
     const s = faq.status
     const btns = []
@@ -177,6 +185,9 @@ export default function FAQsSection({ token, user }) {
       btns.push(<button key="pub" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handlePublish(faq)}>Publish</button>)
     } else {
       btns.push(<button key="v" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditFaq(faq); setShowDrawer(true) }}>View</button>)
+    }
+    if (s !== 'Archived') {
+      btns.push(<button key="clone" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleClone(faq)}>Clone</button>)
     }
     return <div className="cm-action-btns">{btns}</div>
   }

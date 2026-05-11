@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import DocumentCreationScreen from './DocumentCreationScreen'
-import { CheckInModal, InitiateReviewModal, ApproveModal, PublishModal, ReviewStatusModal } from './ContentModals'
+import { CheckInModal, InitiateReviewModal, ApproveModal, PublishModal, ReviewStatusModal, VersionHistoryModal, ContentUsageModal, DocumentRelationsModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function ReviewRowWithMode({ r, authHeaders, onOpen }) {
@@ -107,6 +107,9 @@ export default function DocumentsSection({ token, user }) {
   const [approveDoc, setApproveDoc] = useState(null)
   const [publishDoc, setPublishDoc] = useState(null)
   const [reviewStatusItem, setReviewStatusItem] = useState(null)
+  const [historyDoc, setHistoryDoc] = useState(null)
+  const [relationsDoc, setRelationsDoc] = useState(null)
+  const [usageDoc, setUsageDoc] = useState(null)
 
   const loadDocs = useCallback(async () => {
     setLoading(true)
@@ -183,6 +186,14 @@ export default function DocumentsSection({ token, user }) {
     } catch { toast.error('Network error.') }
   }
 
+  async function handleClone(doc) {
+    try {
+      const res = await httpFetch(`/api/cm/documents/${doc.id}/clone`, { method: 'POST', headers: authHeaders })
+      if (res.ok) { toast.success('Document cloned as Draft.'); loadDocs() }
+      else { const d = await res.json(); toast.error(d.error || 'Clone failed.') }
+    } catch { toast.error('Network error.') }
+  }
+
   function getDocActions(doc) {
     const btns = []
     const s = doc.status
@@ -221,10 +232,16 @@ export default function DocumentsSection({ token, user }) {
     } else if (s === 'Published') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
       btns.push(<button key="co" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(doc)}>Check Out</button>)
+      btns.push(<button key="usage" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setUsageDoc(doc)}>Usage</button>)
       btns.push(<button key="arch" className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(doc)}>Archive</button>)
     } else if (s === 'Archived') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
     }
+    if (s !== 'Archived') {
+      btns.push(<button key="clone" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleClone(doc)}>Clone</button>)
+    }
+    btns.push(<button key="hist" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryDoc(doc)}>History</button>)
+    btns.push(<button key="rel" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setRelationsDoc(doc)}>Relations</button>)
     return <div className="cm-action-btns">{btns}</div>
   }
 
@@ -517,6 +534,15 @@ export default function DocumentsSection({ token, user }) {
       )}
       {reviewStatusItem && (
         <ReviewStatusModal review={reviewStatusItem} token={token} onClose={() => setReviewStatusItem(null)} onDone={loadReviews} />
+      )}
+      {historyDoc && (
+        <VersionHistoryModal entityType="document" entityId={historyDoc.id} entityName={historyDoc.name} token={token} onClose={() => setHistoryDoc(null)} />
+      )}
+      {relationsDoc && (
+        <DocumentRelationsModal doc={relationsDoc} token={token} onClose={() => setRelationsDoc(null)} />
+      )}
+      {usageDoc && (
+        <ContentUsageModal contentType="document" contentId={usageDoc.id} contentName={usageDoc.name} token={token} onClose={() => setUsageDoc(null)} />
       )}
     </div>
   )

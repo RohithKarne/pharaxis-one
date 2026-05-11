@@ -19,6 +19,8 @@ export default function BrowseSection({ token }) {
   const [detailLoading, setDetailLoading] = useState(false)
   const [showBookmarks, setShowBookmarks] = useState(false)
   const [bookmarks, setBookmarks] = useState([])
+  const [folders, setFolders] = useState([])
+  const [selectedFolderId, setSelectedFolderId] = useState(null)
   const authHeadersJson = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
   async function loadBookmarks() {
@@ -42,18 +44,28 @@ export default function BrowseSection({ token }) {
   useEffect(() => { loadBookmarks() }, [token]) // eslint-disable-line
 
   useEffect(() => {
+    httpFetch('/api/cm/folders', { headers: authHeaders })
+      .then(r => r.json())
+      .then(d => setFolders(d.folders || []))
+      .catch(() => {})
+  }, [token]) // eslint-disable-line
+
+  useEffect(() => {
     setSelectedItem(null)
     setItems([])
     setLoading(true)
+    const params = new URLSearchParams({ status: 'Published', limit: '50' })
+    if (search) params.set('search', search)
+    if (selectedFolderId) params.set('folder_id', String(selectedFolderId))
     const endpoint = contentType === 'documents'
-      ? `/api/cm/documents?status=Published&search=${encodeURIComponent(search)}&limit=50`
-      : `/api/cm/faqs?status=Published&search=${encodeURIComponent(search)}&limit=50`
+      ? `/api/cm/documents?${params}`
+      : `/api/cm/faqs?${params}`
     httpFetch(endpoint, { headers: authHeaders })
       .then(r => r.json())
       .then(d => setItems(d.documents || d.faqs || []))
       .catch(() => setItems([]))
       .finally(() => setLoading(false))
-  }, [contentType, search])
+  }, [contentType, search, selectedFolderId])
 
   async function openItem(item) {
     setDetailLoading(true)
@@ -72,6 +84,31 @@ export default function BrowseSection({ token }) {
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+      {/* Folder sidebar (#1, #3, #26) */}
+      <div style={{ width: 200, flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--surface)' }}>
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Folders</div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div
+            onClick={() => setSelectedFolderId(null)}
+            style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: selectedFolderId === null ? 'var(--primary-light,#f0f4ff)' : 'transparent', fontWeight: selectedFolderId === null ? 600 : 400, color: selectedFolderId === null ? 'var(--primary)' : 'var(--text-primary)' }}>
+            <span>All Content</span>
+          </div>
+          {folders.map(f => {
+            const count = contentType === 'documents' ? (f.doc_count ?? 0) : contentType === 'faqs' ? (f.faq_count ?? 0) : (f.module_count ?? 0)
+            return (
+              <div key={f.id}
+                onClick={() => setSelectedFolderId(f.id)}
+                style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: selectedFolderId === f.id ? 'var(--primary-light,#f0f4ff)' : 'transparent', fontWeight: selectedFolderId === f.id ? 600 : 400, color: selectedFolderId === f.id ? 'var(--primary)' : 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                onMouseEnter={e => { if (selectedFolderId !== f.id) e.currentTarget.style.background = 'var(--bg)' }}
+                onMouseLeave={e => { if (selectedFolderId !== f.id) e.currentTarget.style.background = 'transparent' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>📁 {f.name}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6, flexShrink: 0 }}>{count}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       <div style={{ width: selectedItem ? 340 : '100%', flexShrink: 0, borderRight: selectedItem ? '1px solid var(--border)' : 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
@@ -233,6 +270,7 @@ export default function BrowseSection({ token }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

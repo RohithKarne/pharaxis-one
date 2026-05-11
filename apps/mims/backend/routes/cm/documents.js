@@ -1345,4 +1345,51 @@ router.post('/documents/:id/view', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
+// POST /api/cm/documents/:id/clone — duplicate document as Draft (#8)
+router.post('/documents/:id/clone', authenticate, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const src = await getScopedDocument(req, req.params.id);
+    if (!src) return res.status(404).json({ error: 'Document not found.' });
+
+    await conn.beginTransaction();
+    const newDocId = await generateDocId(conn);
+    const [result] = await conn.execute(
+      `INSERT INTO cm_documents
+         (doc_id, folder_id, doc_type, response_doc_type, name, content_html,
+          status, version_major, version_minor, expiry_date, activation_date, language,
+          is_product_specific, is_site_specific, search_tags, usage_instructions,
+          publish_as_pdf, send_as_pdf, selected_modules, attributes,
+          mi_category_id, document_category, standard_response_text, authoring_source,
+          external_provider, external_document_url, external_share_url, external_document_id,
+          external_drive_id, external_account_email, external_api_endpoint, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, 'Draft', 1, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        newDocId, src.folder_id, src.doc_type, src.response_doc_type,
+        `Copy of ${src.name}`, src.content_html,
+        src.expiry_date || null, src.activation_date || null, src.language || 'en',
+        src.is_product_specific || 0, src.is_site_specific || 0,
+        src.search_tags || null, src.usage_instructions || null,
+        src.publish_as_pdf || 0, src.send_as_pdf || 0,
+        src.selected_modules || null, src.attributes || null,
+        src.mi_category_id || null, src.document_category || null, src.standard_response_text || null,
+        src.authoring_source || 'internal',
+        src.external_provider || null, src.external_document_url || null, src.external_share_url || null,
+        src.external_document_id || null, src.external_drive_id || null,
+        src.external_account_email || null, src.external_api_endpoint || null,
+        req.user.userId,
+      ]
+    );
+    await conn.commit();
+    await audit(req.user.userId, req.user.email, 'CLONE', 'cm_document', result.insertId, { source_id: src.id, source_name: src.name });
+    res.status(201).json({ message: 'Document cloned.', id: result.insertId, doc_id: newDocId });
+  } catch (err) {
+    await conn.rollback();
+    console.error('POST /cm/documents/:id/clone error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  } finally {
+    conn.release();
+  }
+});
+
 module.exports = router;
