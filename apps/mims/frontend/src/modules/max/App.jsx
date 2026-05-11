@@ -43,6 +43,7 @@ const TransmissionAuditTrailPage = lazy(() => import('../transmissions/pages/Tra
 const CopyDivisionPage         = lazy(() => import('../admin/pages/CopyDivisionPage'))
 const DPPRPage                 = lazy(() => import('../admin/pages/DPPRPage'))
 const SuperadminPage           = lazy(() => import('../superadmin/pages/SuperadminPage'))
+const MIMSAdminPage            = lazy(() => import('../mimsadmin/pages/MIMSAdminPage'))
 
 // Shared Suspense fallback — minimal spinner so Suspense boundary doesn't flash
 function PageLoader() {
@@ -126,6 +127,13 @@ function AppRoutes() {
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="admin_console">
                 <AdminConsoleRouter />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/mims-admin" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <MIMSAdminPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />

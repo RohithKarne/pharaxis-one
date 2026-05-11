@@ -3504,3 +3504,53 @@ a.nav-item { text-decoration: none; color: inherit; }
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── MIMS Admin (new) ────────────────────────────────────────── */
+.mims-admin-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mims-admin-topnav {
+  display: flex;
+  align-items: stretch;
+  background: #1d3557;
+  flex-shrink: 0;
+  border-bottom: 2px solid rgba(255,255,255,0.08);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mims-admin-topnav::-webkit-scrollbar { display: none; }
+
+.mims-admin-tab {
+  padding: 0 18px;
+  height: 42px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: rgba(255,255,255,0.72);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.mims-admin-tab:hover { color: #fff; background: rgba(255,255,255,0.07); }
+.mims-admin-tab.active { color: #fff; border-bottom-color: #e8890c; font-weight: 700; }
+
+.mims-admin-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.mims-admin-page-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}

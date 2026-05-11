@@ -167,6 +167,12 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
         active={isActive('/reports')}
         disabled={!canAccess('reports')} />
 
+      {/* MIMS Admin (new) */}
+      {canAccess('admin_console') && (
+        <NavItem to="/mims-admin" icon="🛡️" label="MIMS Admin"
+          active={isActive('/mims-admin')} />
+      )}
+
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
