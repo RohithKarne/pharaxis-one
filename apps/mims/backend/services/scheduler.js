@@ -101,6 +101,26 @@ function registerDefaultJobs() {
   })
 
   registerJob({
+    name: 'cm-content-auto-archive',
+    cronExpression: '0 5 * * *',
+    description: 'Auto-archives published documents and FAQs whose expiry date has passed',
+    handler: async () => {
+      const { runCmContentAutoArchive } = require('./cmContentLifecycleService');
+      await runCmContentAutoArchive();
+    },
+  })
+
+  registerJob({
+    name: 'cm-review-reminders',
+    cronExpression: '0 8 * * 1',
+    description: 'Sends review cycle reminders for published documents due for review',
+    handler: async () => {
+      const { runCmReviewReminders } = require('./cmReviewReminderService');
+      await runCmReviewReminders();
+    },
+  })
+
+  registerJob({
     name: 'emir-poller',
     cronExpression: '*/5 * * * *',
     description: 'Polls EMIR mailbox for new emails',

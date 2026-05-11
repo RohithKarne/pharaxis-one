@@ -73,7 +73,7 @@ async function getScopedCase(req, caseId) {
 // GET /api/cm/templates — list with filters
 router.get('/templates', authenticate, async (req, res) => {
   try {
-    const { type, status, search, product_group_id, page = 1, limit = 50 } = req.query;
+    const { type, status, search, product_group_id, folder_id, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let query = `
@@ -107,6 +107,10 @@ router.get('/templates', authenticate, async (req, res) => {
       )`;
       params.push(Number(product_group_id));
     }
+    if (folder_id) {
+      query += ' AND t.folder_id = ?';
+      params.push(Number(folder_id));
+    }
 
     const countQuery = query.replace('SELECT t.*, u.name AS created_by_name', 'SELECT COUNT(*) AS total');
     const [[{ total }]] = await pool.execute(countQuery, params);
@@ -124,18 +128,48 @@ router.get('/templates', authenticate, async (req, res) => {
 // POST /api/cm/templates — create template
 router.post('/templates', authenticate, async (req, res) => {
   try {
-    const { type, name, subject, body_html, status } = req.body;
+    const { type, name, subject, body_html, status, folder_id } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
 
     const [result] = await pool.execute(
-      'INSERT INTO cm_templates (type, name, subject, body_html, status, created_by) VALUES (?, ?, ?, ?, ?, ?)',
-      [type || 'Response', name.trim(), subject || null, body_html || null, status || 'Active', req.user.userId]
+      'INSERT INTO cm_templates (type, name, subject, body_html, status, folder_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [type || 'Response', name.trim(), subject || null, body_html || null, status || 'Active', folder_id || null, req.user.userId]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_template', result.insertId, { name, type: type || 'Response' });
     const created = await getScopedTemplate(req, result.insertId);
     res.status(201).json({ message: 'Template created.', id: result.insertId, template: created });
   } catch (err) {
     console.error('POST /cm/templates error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/templates/case-search — search cases for template merge-field preview (#13)
+// Must be registered before /templates/:id to prevent route shadowing.
+router.get('/templates/case-search', authenticate, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || String(q).trim().length < 2) {
+      return res.status(400).json({ error: 'Query must be at least 2 characters.' });
+    }
+    const search = `%${String(q).trim()}%`;
+    const params = [search, search];
+    let query = `
+      SELECT c.id, c.case_number, c.case_type, c.org_id,
+             TRIM(CONCAT(COALESCE(cc.first_name,''), ' ', COALESCE(cc.last_name,''))) AS patient_name
+      FROM cases c
+      LEFT JOIN case_contacts cc ON cc.case_id = c.id AND cc.is_primary = 1
+      WHERE (c.case_number LIKE ? OR TRIM(CONCAT(COALESCE(cc.first_name,''), ' ', COALESCE(cc.last_name,''))) LIKE ?)
+    `;
+    if (!isSuperadmin(req)) {
+      query += ' AND c.org_id = ?';
+      params.push(req.user.orgId);
+    }
+    query += ' ORDER BY c.created_at DESC LIMIT 20';
+    const [cases] = await pool.execute(query, params);
+    res.json({ cases });
+  } catch (err) {
+    console.error('GET /cm/templates/case-search error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -159,10 +193,10 @@ router.put('/templates/:id', authenticate, async (req, res) => {
     const existing = await getScopedTemplate(req, id);
     if (!existing) return res.status(404).json({ error: 'Template not found.' });
 
-    const { type, name, subject, body_html, status } = req.body;
+    const { type, name, subject, body_html, status, folder_id } = req.body;
     await pool.execute(
-      'UPDATE cm_templates SET type = ?, name = ?, subject = ?, body_html = ?, status = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
-      [type || 'Response', name, subject || null, body_html || null, status || 'Active', req.user.userId, id]
+      'UPDATE cm_templates SET type = ?, name = ?, subject = ?, body_html = ?, status = ?, folder_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
+      [type || 'Response', name, subject || null, body_html || null, status || 'Active', folder_id !== undefined ? (folder_id || null) : existing.folder_id, req.user.userId, id]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_template', Number(id), { name, type });
     res.json({ message: 'Template updated.' });

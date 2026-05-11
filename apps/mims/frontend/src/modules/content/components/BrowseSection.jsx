@@ -58,6 +58,10 @@ export default function BrowseSection({ token }) {
   async function openItem(item) {
     setDetailLoading(true)
     setSelectedItem({ ...item, _loading: true })
+    const viewEndpoint = contentType === 'documents'
+      ? `/api/cm/documents/${item.id}/view`
+      : `/api/cm/faqs/${item.id}/view`
+    httpFetch(viewEndpoint, { method: 'POST', headers: authHeaders }).catch(() => {})
     const endpoint = contentType === 'documents'
       ? `/api/cm/documents/${item.id}`
       : `/api/cm/faqs/${item.id}`
@@ -122,11 +126,18 @@ export default function BrowseSection({ token }) {
                 {contentType === 'faqs' && item.tags && (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Tags: {item.tags}</div>
                 )}
-                {item.expiry_date && (
-                  <div style={{ fontSize: 11, color: new Date(item.expiry_date) < new Date() ? 'var(--danger)' : 'var(--text-muted)', marginTop: 2 }}>
-                    Expires: {new Date(item.expiry_date).toLocaleDateString()}
-                  </div>
-                )}
+                {item.expiry_date && (() => {
+                  const daysLeft = Math.ceil((new Date(item.expiry_date) - new Date()) / (1000 * 60 * 60 * 24))
+                  if (daysLeft <= 0) return (
+                    <span style={{ display: 'inline-block', marginTop: 4, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: 'var(--danger, #dc2626)', color: '#fff' }}>Expired</span>
+                  )
+                  if (daysLeft <= 30) return (
+                    <span style={{ display: 'inline-block', marginTop: 4, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: '#fef3c7', color: '#92400e' }}>Expires in {daysLeft} day{daysLeft === 1 ? '' : 's'}</span>
+                  )
+                  return (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Expires: {new Date(item.expiry_date).toLocaleDateString()}</div>
+                  )
+                })()}
                 </div>
                 <button onClick={e => { e.stopPropagation(); toggleBookmark(item) }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: bookmarks.find(b => b.entity_id === item.id) ? 'var(--warning, #f59e0b)' : 'var(--border)', flexShrink: 0, alignSelf: 'center' }}>

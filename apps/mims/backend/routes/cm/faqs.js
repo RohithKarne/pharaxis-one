@@ -353,13 +353,17 @@ router.post('/faqs/:id/publish', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/cm/faqs/:id/view — increment view count (CM-E6)
+// POST /api/cm/faqs/:id/view — increment view count and log to cm_content_view_log (#11)
 router.post('/faqs/:id/view', authenticate, async (req, res) => {
   try {
     const faq = await getScopedFaq(req, req.params.id);
     if (!faq) return res.status(404).json({ error: 'FAQ not found.' });
-    // Try to increment view_count column; if column doesn't exist, just return ok
     await pool.execute(`UPDATE cm_faqs SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?`, [req.params.id]).catch(() => {});
+    await pool.execute(
+      `INSERT INTO cm_content_view_log (entity_type, entity_id, user_id, user_name, ip_address)
+       VALUES ('faq', ?, ?, ?, ?)`,
+      [req.params.id, req.user.userId || null, req.user.name || req.user.email || null, req.ip || null]
+    ).catch(() => {});
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

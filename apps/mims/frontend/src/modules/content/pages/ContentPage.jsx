@@ -12,7 +12,7 @@ import CMSettingsSection from '../components/CMSettingsSection'
 
 export default function ContentPage() {
   const { user, token } = useAuth()
-  const [activeTab, setActiveTab] = useState('documents')
+  const [activeTab, setActiveTab] = useState(['agent', 'reviewer'].includes(user?.role) ? 'browse' : 'documents')
   const [showFolders, setShowFolders] = useState(false)
 
   const tabs = [

@@ -1331,4 +1331,18 @@ router.get('/documents/:id/activity', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST /api/cm/documents/:id/view — log document view to cm_content_view_log (#11)
+router.post('/documents/:id/view', authenticate, async (req, res) => {
+  try {
+    const doc = await getScopedDocument(req, req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    await pool.execute(
+      `INSERT INTO cm_content_view_log (entity_type, entity_id, user_id, user_name, ip_address)
+       VALUES ('document', ?, ?, ?, ?)`,
+      [req.params.id, req.user.userId || null, req.user.name || req.user.email || null, req.ip || null]
+    ).catch(() => {});
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
 module.exports = router;

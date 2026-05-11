@@ -85,7 +85,10 @@ router.get('/folders', authenticate, async (req, res) => {
         ? `SELECT f.*,
                   p.trade_name AS product_name,
                   s.name AS site_name,
-                  u.name AS created_by_name
+                  u.name AS created_by_name,
+                  (SELECT COUNT(*) FROM cm_documents WHERE folder_id = f.id AND status != 'Archived') AS doc_count,
+                  (SELECT COUNT(*) FROM cm_faqs WHERE folder_id = f.id AND status != 'Archived') AS faq_count,
+                  (SELECT COUNT(*) FROM cm_modules WHERE folder_id = f.id AND status != 'Archived') AS module_count
            FROM cm_folders f
            LEFT JOIN products p ON f.product_id = p.id
            LEFT JOIN sites s ON f.site_id = s.id
@@ -95,7 +98,10 @@ router.get('/folders', authenticate, async (req, res) => {
         : `SELECT f.*,
                   p.trade_name AS product_name,
                   s.name AS site_name,
-                  u.name AS created_by_name
+                  u.name AS created_by_name,
+                  (SELECT COUNT(*) FROM cm_documents WHERE folder_id = f.id AND status != 'Archived') AS doc_count,
+                  (SELECT COUNT(*) FROM cm_faqs WHERE folder_id = f.id AND status != 'Archived') AS faq_count,
+                  (SELECT COUNT(*) FROM cm_modules WHERE folder_id = f.id AND status != 'Archived') AS module_count
            FROM cm_folders f
            LEFT JOIN products p ON f.product_id = p.id
            LEFT JOIN sites s ON f.site_id = s.id

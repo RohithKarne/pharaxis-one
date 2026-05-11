@@ -170,7 +170,7 @@ router.put('/reviews/:id/reviewer-status', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/cm/reviews/:id/close — close review (doc → Approved)
+// POST /api/cm/reviews/:id/close — close review (doc → Approved, or Draft if any reviewer rejected)
 router.post('/reviews/:id/close', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -183,6 +183,13 @@ router.post('/reviews/:id/close', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Only Open reviews can be closed.' });
     }
 
+    const [[{ rejectedCount }]] = await pool.execute(
+      `SELECT COUNT(*) AS rejectedCount FROM cm_reviewers WHERE review_id = ? AND status = 'Rejected'`,
+      [id]
+    );
+    const wasRejected = rejectedCount > 0;
+    const newDocStatus = wasRejected ? 'Draft' : 'Approved';
+
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -192,16 +199,15 @@ router.post('/reviews/:id/close', authenticate, async (req, res) => {
         [id]
       );
 
-      // Move document to Approved
       if (review.doc_type === 'document') {
         await conn.execute(
-          "UPDATE cm_documents SET status = 'Approved', updated_at = NOW() WHERE id = ? AND status = 'Under Review'",
-          [review.doc_id]
+          `UPDATE cm_documents SET status = ?, updated_at = NOW() WHERE id = ? AND status = 'Under Review'`,
+          [newDocStatus, review.doc_id]
         );
       } else if (review.doc_type === 'faq') {
         await conn.execute(
-          "UPDATE cm_faqs SET status = 'Approved', updated_at = NOW() WHERE id = ? AND status = 'Under Review'",
-          [review.doc_id]
+          `UPDATE cm_faqs SET status = ?, updated_at = NOW() WHERE id = ? AND status = 'Under Review'`,
+          [newDocStatus, review.doc_id]
         );
       }
 
@@ -213,8 +219,41 @@ router.post('/reviews/:id/close', authenticate, async (req, res) => {
       conn.release();
     }
 
-    await audit(req.user.userId, req.user.email, 'CLOSE_REVIEW', 'cm_review', Number(id), { doc_id: review.doc_id, doc_type: review.doc_type });
-    res.json({ message: 'Review closed. Document status set to Approved.' });
+    if (wasRejected) {
+      try {
+        let notifyUserId = null;
+        if (review.doc_type === 'document') {
+          const [[doc]] = await pool.execute(
+            `SELECT COALESCE(owner_user_id, created_by) AS notify_user_id FROM cm_documents WHERE id = ?`,
+            [review.doc_id]
+          );
+          notifyUserId = doc?.notify_user_id;
+        } else if (review.doc_type === 'faq') {
+          const [[faq]] = await pool.execute(
+            `SELECT created_by AS notify_user_id FROM cm_faqs WHERE id = ?`,
+            [review.doc_id]
+          );
+          notifyUserId = faq?.notify_user_id;
+        }
+        if (notifyUserId) {
+          await pool.execute(
+            `INSERT INTO notifications (user_id, category, title, message, link_url, metadata)
+             VALUES (?, 'cm_review_rejected', 'Review Rejected', ?, '/content', ?)`,
+            [
+              notifyUserId,
+              `Review "${review.title}" was closed with rejections. The ${review.doc_type} has been returned to Draft.`,
+              JSON.stringify({ review_id: Number(id), doc_id: review.doc_id, doc_type: review.doc_type }),
+            ]
+          );
+        }
+      } catch (_) {}
+    }
+
+    await audit(req.user.userId, req.user.email, 'CLOSE_REVIEW', 'cm_review', Number(id), { doc_id: review.doc_id, doc_type: review.doc_type, wasRejected });
+    const statusMsg = wasRejected
+      ? 'Review closed with rejections. Document returned to Draft.'
+      : 'Review closed. Document status set to Approved.';
+    res.json({ message: statusMsg, wasRejected });
   } catch (err) {
     console.error('POST /cm/reviews/:id/close error:', err);
     res.status(500).json({ error: 'Server error.' });
