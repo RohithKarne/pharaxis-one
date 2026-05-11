@@ -214,7 +214,7 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
             <div className="mims-dropdown mims-dropdown-right">
               {canAccessAdmin && (
                 <Link to="/admin-console" className="mims-dropdown-item" onClick={() => setSettingsOpen(false)}>
-                  ⚙️ Admin Console
+                  ⚙️ MIMS Admin
                 </Link>
               )}
               {canAccessContent && (

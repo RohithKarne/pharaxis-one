@@ -12,7 +12,7 @@ const MODULES = [
   { key: 'browse_content', label: 'Browse Content' },
   { key: 'analytics', label: 'Analytics' },
   { key: 'user_mgmt', label: 'User Management' },
-  { key: 'admin_console', label: 'Admin Console' },
+  { key: 'admin_console', label: 'MIMS Admin' },
   { key: 'content_mgmt', label: 'Content Management' },
   { key: 'data_visualization', label: 'Data Visualization' },
   { key: 'reports', label: 'Reports' },
@@ -90,7 +90,7 @@ export default function AdminUserSecurityPanel({ H }) {
           <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
             Click ✅ to revoke access | Click 🔒 to grant access
             <br />
-            <span style={{ color: 'var(--warning)', fontWeight: 500 }}>Admin {'->'} Admin Console</span> is permanently locked ON and cannot be changed.
+            <span style={{ color: 'var(--warning)', fontWeight: 500 }}>Admin {'->'} MIMS Admin</span> is permanently locked ON and cannot be changed.
             This is a system safety rule - at least one role must always have admin access to prevent lockout.
           </div>
         </div>

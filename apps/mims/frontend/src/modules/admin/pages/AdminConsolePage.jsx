@@ -701,7 +701,7 @@ export default function AdminConsolePage() {
       case 'overview':
         return (
           <>
-            <SectionHeader title="Admin Console" desc="System configuration and management overview." />
+            <SectionHeader title="MIMS Admin" desc="System configuration and management overview." />
             <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
               {[
                 { label: 'Organisations', value: orgs.filter(o => o.is_active).length, color: 'accent' },
@@ -793,7 +793,7 @@ export default function AdminConsolePage() {
             className="ac-detail-breadcrumb-link"
             onClick={() => navigate('/admin-console')}
           >
-            Admin Console
+            MIMS Admin
           </button>
           <span className="ac-detail-breadcrumb-sep">&gt;</span>
           <span className="ac-detail-breadcrumb-current">{sectionLabel}</span>

@@ -14,7 +14,7 @@ const LEGACY_SEC_TABS = [
 
 const LEGACY_SEC_PERMS = {
   menu: [
-    { key: 'admin_console', label: 'Admin Console' },
+    { key: 'admin_console', label: 'MIMS Admin' },
     { key: 'content_mgmt', label: 'Content Mgmt' },
     { key: 'inbox', label: 'Inbox' },
     { key: 'case_mgmt', label: 'Case Management' },

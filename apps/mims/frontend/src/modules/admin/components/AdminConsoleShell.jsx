@@ -67,7 +67,7 @@ export function AdminConsoleNavigationBoard({ groups, currentSection, onNavigate
   const [primaryGroup, ...otherGroups] = groups
   const compact = mode === 'compact'
   const visibleGroups = compact ? groups : otherGroups
-  const boardTitle = useMemo(() => (compact ? 'Configuration Launcher' : primaryGroup?.title || 'Admin Console'), [compact, primaryGroup])
+  const boardTitle = useMemo(() => (compact ? 'Configuration Launcher' : primaryGroup?.title || 'MIMS Admin'), [compact, primaryGroup])
 
   return (
     <div className={`ac-nav-board ${compact ? 'compact' : 'overview'}`}>

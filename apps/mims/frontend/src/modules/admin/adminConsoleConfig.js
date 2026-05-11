@@ -13,7 +13,7 @@ export const ADMIN_SECTION_ALIASES = {
 export const ADMIN_NAV_GROUPS = [
   {
     key: 'general',
-    title: 'Admin Console',
+    title: 'MIMS Admin',
     overviewLayout: 'stack',
     items: [
       { key: 'picklists', label: 'Picklists', active: true },
@@ -154,7 +154,7 @@ export function normalizeAdminSection(section) {
 export function getAdminSectionLabel(section) {
   const raw = String(section || '').trim()
   const normalized = normalizeAdminSection(raw)
-  return SECTION_LABELS[raw] || SECTION_LABELS[normalized] || normalized || 'Admin Console'
+  return SECTION_LABELS[raw] || SECTION_LABELS[normalized] || normalized || 'MIMS Admin'
 }
 
 export function getAdminNavItem(sectionKey) {

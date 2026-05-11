@@ -4,7 +4,7 @@ import { confirm } from '../../../shared/utils/confirm'
 
 const MODULES = [
   { key: 'mims_core', label: 'MIMS' },
-  { key: 'admin_console', label: 'Admin Console' },
+  { key: 'admin_console', label: 'MIMS Admin' },
   { key: 'content_mgmt', label: 'Content Management' },
   { key: 'data_visualization', label: 'Data Visualization' },
   { key: 'reports', label: 'Reports' },
