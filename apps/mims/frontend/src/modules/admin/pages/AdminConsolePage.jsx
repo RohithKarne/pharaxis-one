@@ -16,6 +16,7 @@ import AdminMICategoriesSection from '../components/AdminMICategoriesSection'
 import AdminPolicyGraphSection from '../components/AdminPolicyGraphSection'
 import AdminContentIntelligenceSection from '../components/AdminContentIntelligenceSection'
 import AdminQASection from '../components/AdminQASection'
+import AdminUATPanel from '../components/AdminUATPanel'
 import {
   ADMIN_NAV_GROUPS,
   getAdminSectionLabel,
@@ -776,6 +777,9 @@ export default function AdminConsolePage() {
       case 'qa-rules':
       case 'qa-overrides':
         return <AdminQASection contentSection={contentSection} H={H} />
+      case 'uat-bugs':
+      case 'uat-features':
+        return <AdminUATPanel />
 
       default: {
         const found = ADMIN_NAV_GROUPS.flatMap((group) => group.items).find((item) => item.key === activeSection)

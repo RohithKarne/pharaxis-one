@@ -107,6 +107,14 @@ export const ADMIN_NAV_GROUPS = [
     ],
   },
   {
+    key: 'uat-qa',
+    title: 'UAT & QA',
+    items: [
+      { key: 'uat-bugs',     label: 'Bug Reports',        active: true },
+      { key: 'uat-features', label: 'Feature Requests',   active: true },
+    ],
+  },
+  {
     key: 'qa-engine',
     title: 'AI QA Engine',
     items: [

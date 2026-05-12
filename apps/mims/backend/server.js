@@ -274,6 +274,7 @@ app.get('/api/users', authenticate, async (req, res) => {
 app.use('/api/admin/orgs', require('./routes/admin/orgs'));
 app.use('/api/admin', require('./routes/admin/serviceLogs'));
 app.use('/api/admin', require('./routes/admin/systemActivity'));
+app.use('/api/admin', require('./routes/admin/serviceDashboard'));
 app.use('/api/admin', require('./routes/admin/observability'));
 app.use('/api/admin', require('./routes/admin/config'));
 app.use('/api/admin/process-logs', processExplorerRouter);
@@ -312,6 +313,9 @@ app.use('/api', require('./routes/integrations/vaultPollTrigger'));
 app.use('/api', require('./routes/integrations/emirReceiver'));
 app.use('/api', require('./routes/integrations/caseExport'));
 
+// ── UAT QA System — bug reports + feature requests ───────────────────────────
+app.use('/api', require('./routes/qa'));
+
 // ── Fix 12: mountRoutes() — single source of truth for all route registrations ─
 // Eliminates the previous pattern where every router was mounted twice
 // (once under /api and again under /api/v1) doubling Express's route table.
@@ -343,6 +347,7 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/dppr'));
   r.use(`${prefix}/admin`, require('./routes/admin/serviceLogs'));
   r.use(`${prefix}/admin`, require('./routes/admin/systemActivity'));
+  r.use(`${prefix}/admin`, require('./routes/admin/serviceDashboard'));
   r.use(`${prefix}/admin`, require('./routes/admin/observability'));
   r.use(`${prefix}/admin`, require('./routes/admin/config'));
   r.use(`${prefix}/admin/orgs`, require('./routes/admin/orgs'));

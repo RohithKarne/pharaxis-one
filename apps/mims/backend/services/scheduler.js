@@ -11,6 +11,7 @@ const cron = require('node-cron')
 const pool = require('../database/db')
 const { logService } = require('./serviceLogger')
 const { logger } = require('./logger')
+const REGISTRY = require('./schedulerRegistry')
 
 const jobs = []
 let isInitialized = false
@@ -67,157 +68,100 @@ function buildTask(job) {
   }, { scheduled: false, timezone: 'UTC' })
 }
 
+const HANDLERS = {
+  'expiry-alerts': async () => {
+    const { runExpiryAlerts } = require('./expiryAlertService')
+    await runExpiryAlerts()
+  },
+  'cm-expiry-alerts': async () => {
+    const { runCmExpiryAlerts } = require('./cmExpiryAlertService')
+    await runCmExpiryAlerts()
+  },
+  'cm-module-lifecycle': async () => {
+    const { runCmModuleLifecycle } = require('./cmModuleLifecycleService')
+    await runCmModuleLifecycle()
+  },
+  'cm-content-auto-archive': async () => {
+    const { runCmContentAutoArchive } = require('./cmContentLifecycleService')
+    await runCmContentAutoArchive()
+  },
+  'cm-review-reminders': async () => {
+    const { runCmReviewReminders } = require('./cmReviewReminderService')
+    await runCmReviewReminders()
+  },
+  'emir-poller': async () => {
+    logger.info({ job: 'emir-poller' }, 'EMIR email poll tick')
+  },
+  'scheduled-exports': async () => {
+    const { runScheduledExports } = require('./scheduledExportService')
+    await runScheduledExports()
+  },
+  'case-transmission-sla': async () => {
+    const { refreshTransmissionSlaAlerts } = require('./caseGovernanceService')
+    await refreshTransmissionSlaAlerts()
+  },
+  'inbox-operational-sla': async () => {
+    const { refreshInboxOperationalAlerts } = require('./inboxGovernanceService')
+    await refreshInboxOperationalAlerts()
+  },
+  'notification-delivery-retry': async () => {
+    const { retryFailedNotifications } = require('./notificationCenterService')
+    await retryFailedNotifications(200)
+  },
+  'novartis-daily-simulation': async () => {
+    const { runNovartisSimulation } = require('./novartisSimulationService')
+    await runNovartisSimulation({ orgId: 1, useScheduledConfig: true })
+  },
+  'extra-org-daily-simulation': async () => {
+    // Runs simulation for any additional demo orgs configured via EXTRA_DEMO_ORG_IDS env var.
+    // Set EXTRA_DEMO_ORG_IDS=2,3 to simulate orgs 2 and 3 alongside Novartis-Demo (org 1).
+    const raw = process.env.EXTRA_DEMO_ORG_IDS || ''
+    const orgIds = raw.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isInteger(n) && n > 0)
+    if (!orgIds.length) return
+    const { runNovartisSimulation } = require('./novartisSimulationService')
+    for (const orgId of orgIds) {
+      try {
+        await runNovartisSimulation({ orgId, useScheduledConfig: true })
+        logger.info({ orgId }, 'extra-org-daily-simulation: completed')
+      } catch (err) {
+        logger.error({ orgId, err: err.message }, 'extra-org-daily-simulation: failed for org')
+      }
+    }
+  },
+  'login-audit-archive': async () => {
+    let retentionDays = 90
+    try {
+      const [[cfg]] = await pool.execute(
+        `SELECT setting_value FROM system_config WHERE setting_key = 'login_audit_retention_days' LIMIT 1`
+      )
+      if (cfg?.setting_value) {
+        const parsed = parseInt(cfg.setting_value, 10)
+        if (!isNaN(parsed) && parsed > 0) retentionDays = parsed
+      }
+    } catch (_) {}
+    const [result] = await pool.execute(
+      `DELETE FROM login_audit WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`,
+      [retentionDays]
+    )
+    logger.info({ job: 'login-audit-archive', deleted: result.affectedRows, retentionDays }, 'Login audit archive complete')
+  },
+  'session-cleanup': async () => {
+    const [result] = await pool.execute(`DELETE FROM sessions WHERE expires_at < NOW()`)
+    logger.info({ job: 'session-cleanup', deleted: result.affectedRows }, 'session-cleanup: expired sessions pruned')
+  },
+}
+
 function registerDefaultJobs() {
   if (jobs.length > 0) return
-
-  registerJob({
-    name: 'expiry-alerts',
-    cronExpression: '0 8 * * *',
-    description: 'Runs expiry alert checks',
-    handler: async () => {
-      const { runExpiryAlerts } = require('./expiryAlertService');
-      await runExpiryAlerts();
-    },
-  })
-
-  registerJob({
-    name: 'cm-expiry-alerts',
-    cronExpression: '0 7 * * *',
-    description: 'Runs CM document expiry alert checks',
-    handler: async () => {
-      const { runCmExpiryAlerts } = require('./cmExpiryAlertService');
-      await runCmExpiryAlerts();
-    },
-  })
-
-  registerJob({
-    name: 'cm-module-lifecycle',
-    cronExpression: '45 6 * * *',
-    description: 'Archives expired modules and cascades archive to linked documents',
-    handler: async () => {
-      const { runCmModuleLifecycle } = require('./cmModuleLifecycleService');
-      await runCmModuleLifecycle();
-    },
-  })
-
-  registerJob({
-    name: 'cm-content-auto-archive',
-    cronExpression: '0 5 * * *',
-    description: 'Auto-archives published documents and FAQs whose expiry date has passed',
-    handler: async () => {
-      const { runCmContentAutoArchive } = require('./cmContentLifecycleService');
-      await runCmContentAutoArchive();
-    },
-  })
-
-  registerJob({
-    name: 'cm-review-reminders',
-    cronExpression: '0 8 * * 1',
-    description: 'Sends review cycle reminders for published documents due for review',
-    handler: async () => {
-      const { runCmReviewReminders } = require('./cmReviewReminderService');
-      await runCmReviewReminders();
-    },
-  })
-
-  registerJob({
-    name: 'emir-poller',
-    cronExpression: '*/5 * * * *',
-    description: 'Polls EMIR mailbox for new emails',
-    handler: async () => {
-      logger.info({ job: 'emir-poller' }, 'EMIR email poll tick')
-    },
-  })
-
-  registerJob({
-    name: 'scheduled-exports',
-    cronExpression: '*/15 * * * *',
-    description: 'Checks timezone-aware scheduled export jobs',
-    handler: async () => {
-      const { runScheduledExports } = require('./scheduledExportService');
-      await runScheduledExports();
-    },
-  })
-
-  registerJob({
-    name: 'case-transmission-sla',
-    cronExpression: '*/30 * * * *',
-    description: 'Refreshes transmission SLA states and sends escalation alerts',
-    handler: async () => {
-      const { refreshTransmissionSlaAlerts } = require('./caseGovernanceService');
-      await refreshTransmissionSlaAlerts();
-    },
-  })
-
-  registerJob({
-    name: 'inbox-operational-sla',
-    cronExpression: '*/30 * * * *',
-    description: 'Refreshes inbox SLA breach alerts for first touch and response',
-    handler: async () => {
-      const { refreshInboxOperationalAlerts } = require('./inboxGovernanceService');
-      await refreshInboxOperationalAlerts();
-    },
-  })
-
-  registerJob({
-    name: 'notification-delivery-retry',
-    cronExpression: '*/10 * * * *',
-    description: 'Retries failed notification deliveries due for retry',
-    handler: async () => {
-      const { retryFailedNotifications } = require('./notificationCenterService')
-      await retryFailedNotifications(200)
-    },
-  })
-
-  registerJob({
-    name: 'novartis-daily-simulation',
-    cronExpression: '15 1 * * *',
-    description: 'Maintains Novartis high-volume simulation data and archives aged generated cases',
-    handler: async () => {
-      const { runNovartisSimulation } = require('./novartisSimulationService')
-      await runNovartisSimulation({ orgId: 1, useScheduledConfig: true })
-    },
-  })
-
-  // AC-T4: Login audit auto-archive — runs daily at 02:00 UTC
-  registerJob({
-    name: 'login-audit-archive',
-    cronExpression: '0 2 * * *',
-    description: 'Deletes login audit records older than configured retention period',
-    handler: async () => {
-      // Configurable retention via system_config key 'login_audit_retention_days' (default 90)
-      let retentionDays = 90;
-      try {
-        const [[cfg]] = await pool.execute(
-          `SELECT setting_value FROM system_config WHERE setting_key = 'login_audit_retention_days' LIMIT 1`
-        );
-        if (cfg?.setting_value) {
-          const parsed = parseInt(cfg.setting_value, 10);
-          if (!isNaN(parsed) && parsed > 0) retentionDays = parsed;
-        }
-      } catch (_) {}
-
-      const [result] = await pool.execute(
-        `DELETE FROM login_audit WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`,
-        [retentionDays]
-      );
-      logger.info({ job: 'login-audit-archive', deleted: result.affectedRows, retentionDays }, 'Login audit archive complete');
-    },
-  })
-
-  // AC-T16: Sessions table cleanup — every 30 min, prune rows where expires_at < NOW()
-  // Keeps the sessions table lean; prevents unbounded growth on long-running instances.
-  registerJob({
-    name: 'session-cleanup',
-    cronExpression: '*/30 * * * *',
-    description: 'Prunes expired rows from the sessions table to prevent unbounded growth',
-    handler: async () => {
-      const [result] = await pool.execute(
-        `DELETE FROM sessions WHERE expires_at < NOW()`
-      );
-      logger.info({ job: 'session-cleanup', deleted: result.affectedRows }, 'session-cleanup: expired sessions pruned');
-    },
-  })
+  for (const entry of REGISTRY) {
+    if (entry.type !== 'cron') continue
+    registerJob({
+      name:           entry.name,
+      cronExpression: entry.cronExpression,
+      description:    entry.description,
+      handler:        HANDLERS[entry.name] || (async () => {}),
+    })
+  }
 }
 
 function startScheduler() {
