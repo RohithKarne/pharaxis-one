@@ -9,7 +9,7 @@ import Documents        from './tabs/Documents'
 import Tables           from './tabs/Tables'
 import System           from './tabs/System'
 import Help             from './tabs/Help'
-import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV } from './configItems'
+import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV } from './configItems'
 
 const TABS = [
   { key: 'service-log',       label: 'Service Log',       component: ServiceLog       },
@@ -54,15 +54,12 @@ function FlyoutMenu({ items, anchorEl, onSelect, onClose }) {
       }}
     >
       {items.map(child => (
-        <div
+        <DropdownRow
           key={child.value}
-          onClick={() => { onSelect(child.value); onClose() }}
-          style={{ padding: '8px 16px', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'nowrap', userSelect: 'none' }}
-          onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
-          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-        >
-          {child.label}
-        </div>
+          item={child}
+          onSelect={onSelect}
+          onCloseAll={onClose}
+        />
       ))}
     </div>,
     document.body
@@ -154,6 +151,83 @@ function ConfigDropdown({ anchorEl, onSelect, onClose }) {
       ))}
     </div>,
     document.body
+  )
+}
+
+// ── Tables dropdown rendered via portal (uses DropdownRow for Shift flyout) ───
+function TablesDropdown({ anchorEl, onSelect, onClose }) {
+  const [pos, setPos] = useState(null)
+
+  useEffect(() => {
+    if (!anchorEl) return
+    const r = anchorEl.getBoundingClientRect()
+    setPos({ top: r.bottom + 2, left: r.left })
+  }, [anchorEl])
+
+  if (!pos) return null
+
+  return ReactDOM.createPortal(
+    <div
+      onMouseEnter={() => {}}
+      onMouseLeave={onClose}
+      style={{
+        position:      'fixed',
+        top:           pos.top,
+        left:          pos.left,
+        zIndex:        9998,
+        background:    'var(--surface)',
+        border:        '1px solid var(--border)',
+        borderRadius:  7,
+        boxShadow:     '0 4px 18px rgba(0,0,0,0.13)',
+        minWidth:      210,
+        paddingTop:    4,
+        paddingBottom: 4,
+      }}
+    >
+      {TABLES_NAV.map(item => (
+        <DropdownRow
+          key={item.value}
+          item={item}
+          onSelect={onSelect}
+          onCloseAll={onClose}
+        />
+      ))}
+    </div>,
+    document.body
+  )
+}
+
+// ── Tables tab button ─────────────────────────────────────────────────────────
+function TablesTab({ isActive, onTabClick, onSelect }) {
+  const btnRef  = useRef(null)
+  const [open, setOpen] = useState(false)
+  const closeTimer = useRef(null)
+
+  function openMenu()  { clearTimeout(closeTimer.current); setOpen(true) }
+  function closeMenu() { closeTimer.current = setTimeout(() => setOpen(false), 150) }
+
+  return (
+    <div
+      style={{ position: 'relative' }}
+      onMouseEnter={openMenu}
+      onMouseLeave={closeMenu}
+    >
+      <button
+        ref={btnRef}
+        className={`mims-admin-tab${isActive ? ' active' : ''}`}
+        onClick={onTabClick}
+      >
+        Tables
+      </button>
+
+      {open && (
+        <TablesDropdown
+          anchorEl={btnRef.current}
+          onSelect={(value) => { onSelect(value); setOpen(false) }}
+          onClose={closeMenu}
+        />
+      )}
+    </div>
   )
 }
 
@@ -317,6 +391,80 @@ function EscalationTab({ isActive, onTabClick, onSelect }) {
   )
 }
 
+// ── Generic portal dropdown (leaf + nested via DropdownRow) ──────────────────
+function NavDropdown({ nav, anchorEl, onSelect, onClose }) {
+  const [pos, setPos] = useState(null)
+
+  useEffect(() => {
+    if (!anchorEl) return
+    const r = anchorEl.getBoundingClientRect()
+    setPos({ top: r.bottom + 2, left: r.left })
+  }, [anchorEl])
+
+  if (!pos) return null
+
+  return ReactDOM.createPortal(
+    <div
+      onMouseEnter={() => {}}
+      onMouseLeave={onClose}
+      style={{
+        position:      'fixed',
+        top:           pos.top,
+        left:          pos.left,
+        zIndex:        9998,
+        background:    'var(--surface)',
+        border:        '1px solid var(--border)',
+        borderRadius:  7,
+        boxShadow:     '0 4px 18px rgba(0,0,0,0.13)',
+        minWidth:      210,
+        paddingTop:    4,
+        paddingBottom: 4,
+      }}
+    >
+      {nav.map(item => (
+        <DropdownRow
+          key={item.value}
+          item={item}
+          onSelect={onSelect}
+          onCloseAll={onClose}
+        />
+      ))}
+    </div>,
+    document.body
+  )
+}
+
+// ── Generic hover tab ─────────────────────────────────────────────────────────
+function HoverTab({ label, nav, isActive, onTabClick, onSelect }) {
+  const btnRef     = useRef(null)
+  const [open, setOpen] = useState(false)
+  const closeTimer = useRef(null)
+
+  function openMenu()  { clearTimeout(closeTimer.current); setOpen(true) }
+  function closeMenu() { closeTimer.current = setTimeout(() => setOpen(false), 150) }
+
+  return (
+    <div style={{ position: 'relative' }} onMouseEnter={openMenu} onMouseLeave={closeMenu}>
+      <button
+        ref={btnRef}
+        className={`mims-admin-tab${isActive ? ' active' : ''}`}
+        onClick={onTabClick}
+      >
+        {label}
+      </button>
+
+      {open && (
+        <NavDropdown
+          nav={nav}
+          anchorEl={btnRef.current}
+          onSelect={(value) => { onSelect(value); setOpen(false) }}
+          onClose={closeMenu}
+        />
+      )}
+    </div>
+  )
+}
+
 // ── Configuration tab button ──────────────────────────────────────────────────
 function ConfigTab({ isActive, onTabClick, onSelect }) {
   const btnRef     = useRef(null)
@@ -357,6 +505,9 @@ export default function MIMSAdminShell() {
   const [configItem,     setConfigItem]     = useState('')
   const [escalationItem, setEscalationItem] = useState('')
   const [documentsItem,  setDocumentsItem]  = useState('')
+  const [tablesItem,     setTablesItem]     = useState('')
+  const [systemItem,     setSystemItem]     = useState('')
+  const [helpItem,       setHelpItem]       = useState('')
 
   function handleConfigSelect(value) {
     setConfigItem(value)
@@ -371,6 +522,21 @@ export default function MIMSAdminShell() {
   function handleDocumentsSelect(value) {
     setDocumentsItem(value)
     setActiveTab('documents')
+  }
+
+  function handleTablesSelect(value) {
+    setTablesItem(value)
+    setActiveTab('tables')
+  }
+
+  function handleSystemSelect(value) {
+    setSystemItem(value)
+    setActiveTab('system')
+  }
+
+  function handleHelpSelect(value) {
+    setHelpItem(value)
+    setActiveTab('help')
   }
 
   const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || ServiceLog
@@ -400,6 +566,31 @@ export default function MIMSAdminShell() {
               onTabClick={() => setActiveTab('documents')}
               onSelect={handleDocumentsSelect}
             />
+          ) : t.key === 'tables' ? (
+            <TablesTab
+              key="tables"
+              isActive={activeTab === 'tables'}
+              onTabClick={() => setActiveTab('tables')}
+              onSelect={handleTablesSelect}
+            />
+          ) : t.key === 'system' ? (
+            <HoverTab
+              key="system"
+              label="System"
+              nav={SYSTEM_NAV}
+              isActive={activeTab === 'system'}
+              onTabClick={() => setActiveTab('system')}
+              onSelect={handleSystemSelect}
+            />
+          ) : t.key === 'help' ? (
+            <HoverTab
+              key="help"
+              label="Help"
+              nav={HELP_NAV}
+              isActive={activeTab === 'help'}
+              onTabClick={() => setActiveTab('help')}
+              onSelect={handleHelpSelect}
+            />
           ) : (
             <button
               key={t.key}
@@ -419,6 +610,12 @@ export default function MIMSAdminShell() {
           ? <Escalation selectedItem={escalationItem} />
           : activeTab === 'documents'
           ? <Documents selectedItem={documentsItem} />
+          : activeTab === 'tables'
+          ? <Tables selectedItem={tablesItem} />
+          : activeTab === 'system'
+          ? <System selectedItem={systemItem} />
+          : activeTab === 'help'
+          ? <Help selectedItem={helpItem} />
           : <ActiveComponent />
         }
       </div>

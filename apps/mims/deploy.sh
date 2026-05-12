@@ -43,7 +43,7 @@ echo "   ✓ Backend dependencies installed"
 echo ""
 echo "→ [3/5] Building frontend..."
 cd "$FRONTEND_DIR"
-npm install --omit=dev
+npm install          # needs devDeps (vite) to build
 npm run build
 echo "   ✓ Frontend built → frontend/dist/"
 
@@ -91,7 +91,14 @@ cd "$SCRIPT_DIR"
 if pm2 describe mims-uat > /dev/null 2>&1; then
   pm2 restart mims-uat
 else
-  pm2 start ecosystem.config.local.js
+  pm2 start "$SCRIPT_DIR/backend/server.js" \
+    --name        mims-uat \
+    --cwd         "$SCRIPT_DIR/backend" \
+    --node-args   "--env-file=.env.uat" \
+    --max-memory-restart 400M \
+    --restart-delay 3000 \
+    --merge-logs \
+    --log-date-format "YYYY-MM-DD HH:mm:ss"
 fi
 echo "   ✓ MIMS restarted"
 

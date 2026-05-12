@@ -48,15 +48,51 @@ echo "   ✓ Done"
 echo ""
 echo "→ Building frontend..."
 cd "$SCRIPT_DIR/frontend"
-npm install --omit=dev
+npm install          # needs devDeps (vite) to build
 npm run build
 echo "   ✓ Frontend built"
 
+# ── Write UAT env file for the backend process ───────────────────────────────
+# PM2 v7 doesn't auto-detect ecosystem.config.local.js — we start the server
+# directly and load env vars via Node's built-in --env-file flag.
+cat > "$SCRIPT_DIR/backend/.env.uat" <<'ENVEOF'
+NODE_ENV=production
+PORT=4001
+HOST=0.0.0.0
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=devuser
+MYSQL_PASSWORD=devpass
+MYSQL_DATABASE=pharaxis_mims_uat
+REDIS_URL=redis://127.0.0.1:6379
+JWT_SECRET=mims-uat-local-jwt-secret-change-before-external-use
+SESSION_CACHE_TTL_SECONDS=60
+SMTP_CONNECT_TIMEOUT_MS=15000
+IMAP_CONNECT_TIMEOUT_MS=10000
+IMAP_SOCKET_TIMEOUT_MS=30000
+EMAIL_WORKER_POLL_MS=15000
+EMAIL_WORKER_BATCH_SIZE=5
+WORKFLOW_CACHE_TTL_SECONDS=300
+MIMS_FRONTEND_BASE_URL=http://localhost:4001/mims
+MIMS_BACKEND_BASE_URL=http://localhost:4001
+MIMS_ALLOWED_FRONTEND_ORIGINS=http://localhost:4001,http://127.0.0.1:4001,http://192.168.0.145:4001
+BOOTSTRAP_SUPERADMIN_EMAIL=superadmin@pharaxis.local
+BOOTSTRAP_SUPERADMIN_PASSWORD=MimsUAT@2026!
+ENVEOF
+echo "   ✓ backend/.env.uat written"
+
 # ── Start MIMS via PM2 ───────────────────────────────────────────────────────
 echo ""
-echo "→ Starting MIMS via PM2..."
-cd "$SCRIPT_DIR"
-pm2 start ecosystem.config.local.js
+echo "→ Starting MIMS UAT via PM2..."
+pm2 delete mims-uat 2>/dev/null || true
+pm2 start "$SCRIPT_DIR/backend/server.js" \
+  --name        mims-uat \
+  --cwd         "$SCRIPT_DIR/backend" \
+  --node-args   "--env-file=.env.uat" \
+  --max-memory-restart 400M \
+  --restart-delay 3000 \
+  --merge-logs \
+  --log-date-format "YYYY-MM-DD HH:mm:ss"
 pm2 save
 
 echo ""
