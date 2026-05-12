@@ -31,7 +31,7 @@ echo "✓ ecosystem.config.local.js found (env vars configured inside)"
 echo ""
 echo "→ Installing PM2 globally..."
 if ! command -v pm2 &>/dev/null; then
-  npm install -g pm2
+  sudo npm install -g pm2
   echo "   ✓ PM2 installed"
 else
   echo "   ✓ PM2 already installed ($(pm2 --version))"
