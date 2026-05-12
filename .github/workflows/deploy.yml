@@ -358,6 +358,34 @@ jobs:
             echo "--- Pulling latest code ---"
             git pull origin main
 
+            # Re-install backend dependencies for any app whose backend changed.
+            # Required when package.json is updated (new packages won't exist in node_modules otherwise).
+            if [ "$MIMS" = "true" ]; then
+              echo "--- [MIMS] npm install --omit=dev ---"
+              cd /home/ubuntu/pharaxis/apps/mims && npm install --omit=dev
+              cd /home/ubuntu/pharaxis
+            fi
+            if [ "$CP_PORTAL" = "true" ]; then
+              echo "--- [CP Portal] npm install --omit=dev ---"
+              cd /home/ubuntu/pharaxis/apps/cp-portal && npm install --omit=dev
+              cd /home/ubuntu/pharaxis
+            fi
+            if [ "$VAULT" = "true" ]; then
+              echo "--- [Vault] npm install --omit=dev ---"
+              cd /home/ubuntu/pharaxis/apps/vault && npm install --omit=dev
+              cd /home/ubuntu/pharaxis
+            fi
+            if [ "$AI_AGENT" = "true" ]; then
+              echo "--- [AI Agent] npm install --omit=dev ---"
+              cd /home/ubuntu/pharaxis/apps/ai-agent && npm install --omit=dev
+              cd /home/ubuntu/pharaxis
+            fi
+            if [ "$QMS" = "true" ]; then
+              echo "--- [QMS] npm install --omit=dev ---"
+              cd /home/ubuntu/pharaxis/apps/qms && npm install --omit=dev
+              cd /home/ubuntu/pharaxis
+            fi
+
             echo "--- Applying PM2 ecosystem config (zero-downtime reload) ---"
             pm2 startOrReload ecosystem.config.js --update-env
             pm2 save
