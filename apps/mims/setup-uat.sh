@@ -58,7 +58,8 @@ echo "   ✓ Frontend built"
 cat > "$SCRIPT_DIR/backend/.env.uat" <<'ENVEOF'
 NODE_ENV=production
 PORT=4001
-HOST=0.0.0.0
+HOST=::
+
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
 MYSQL_USER=devuser
@@ -78,6 +79,8 @@ MIMS_BACKEND_BASE_URL=http://localhost:4001
 MIMS_ALLOWED_FRONTEND_ORIGINS=http://localhost:4001,http://127.0.0.1:4001,http://192.168.0.145:4001
 BOOTSTRAP_SUPERADMIN_EMAIL=superadmin@pharaxis.local
 BOOTSTRAP_SUPERADMIN_PASSWORD=MimsUAT@2026!
+REGRESSION_EMAIL=rohithreddy480@gmail.com
+REGRESSION_PASSWORD=Rohith@UAT2026!
 ENVEOF
 echo "   ✓ backend/.env.uat written"
 
@@ -88,7 +91,7 @@ pm2 delete mims-uat 2>/dev/null || true
 pm2 start "$SCRIPT_DIR/backend/server.js" \
   --name        mims-uat \
   --cwd         "$SCRIPT_DIR/backend" \
-  --node-args   "--env-file=.env.uat" \
+  --node-args   "--env-file=$SCRIPT_DIR/backend/.env.uat" \
   --max-memory-restart 400M \
   --restart-delay 3000 \
   --merge-logs \

@@ -1,6 +1,9 @@
 import { findTableLabel } from '../configItems'
+import PicklistsTable from './PicklistsTable'
 
 export default function Tables({ selectedItem }) {
+  if (selectedItem === 'tbl-general') return <PicklistsTable />
+
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
       {!selectedItem ? (

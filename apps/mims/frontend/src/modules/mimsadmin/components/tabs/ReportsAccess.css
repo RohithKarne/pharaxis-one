@@ -1,0 +1,129 @@
+/* ── ReportsAccess — MIMS Admin > System > Reports Access ── */
+/* CSS namespace: ma-ra- */
+
+.ma-ra-page { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+
+/* ── Header ── */
+.ma-ra-header {
+  padding: 18px 28px; border-bottom: 1px solid var(--border);
+  background: var(--surface); display: flex; align-items: center; justify-content: space-between;
+}
+.ma-ra-title { font-size: 17px; font-weight: 700; color: var(--text-primary); margin: 0; }
+.ma-ra-sub   { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* ── Sub-tabs ── */
+.ma-ra-tabs {
+  display: flex; gap: 4px; padding: 0 28px;
+  border-bottom: 1px solid var(--border); background: var(--surface);
+}
+.ma-ra-tab {
+  padding: 11px 18px; font-size: 13px; font-weight: 600; color: var(--text-muted);
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; user-select: none;
+}
+.ma-ra-tab:hover  { color: var(--text-primary); }
+.ma-ra-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Body ── */
+.ma-ra-body { flex: 1; overflow: hidden; display: flex; }
+
+/* ── Two-pane (org list + report grid) ── */
+.ma-ra-orgs {
+  width: 260px; flex-shrink: 0; border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 12px 0; background: var(--surface-alt, #f7f7fa);
+}
+.ma-ra-org-search {
+  margin: 4px 12px 10px 12px; width: calc(100% - 24px); padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 6px; font-size: 12px;
+  background: var(--surface); color: var(--text-primary);
+}
+.ma-ra-org-item {
+  padding: 10px 16px; font-size: 13px; cursor: pointer; user-select: none;
+  border-left: 3px solid transparent; display: flex; flex-direction: column; gap: 2px;
+}
+.ma-ra-org-item:hover  { background: rgba(0,0,0,0.04); }
+.ma-ra-org-item.active { background: var(--surface); border-left-color: var(--accent); }
+.ma-ra-org-name { font-weight: 600; color: var(--text-primary); }
+.ma-ra-org-meta { font-size: 11px; color: var(--text-muted); }
+
+.ma-ra-content { flex: 1; overflow-y: auto; padding: 22px 28px; }
+.ma-ra-empty { padding: 60px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+/* ── Report grid ── */
+.ma-ra-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.ma-ra-report-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  transition: border-color .15s;
+}
+.ma-ra-report-card:hover { border-color: var(--accent); }
+.ma-ra-report-label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+
+/* ── Toggle switch ── */
+.ma-ra-toggle { position: relative; display: inline-block; width: 38px; height: 20px; flex-shrink: 0; }
+.ma-ra-toggle input { opacity: 0; width: 0; height: 0; }
+.ma-ra-toggle .slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: #ccd1da; border-radius: 22px; transition: .15s;
+}
+.ma-ra-toggle .slider::before {
+  position: absolute; content: ""; height: 14px; width: 14px;
+  left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .15s;
+}
+.ma-ra-toggle input:checked + .slider { background: var(--accent); }
+.ma-ra-toggle input:checked + .slider::before { transform: translateX(18px); }
+
+/* ── User row ── */
+.ma-ra-user-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
+  cursor: pointer; background: var(--surface);
+}
+.ma-ra-user-row:hover  { border-color: var(--accent); }
+.ma-ra-user-row.active { border-color: var(--accent); background: var(--surface-hover, #f0f0f3); }
+.ma-ra-user-info { flex: 1; min-width: 0; }
+.ma-ra-user-name { font-weight: 600; color: var(--text-primary); font-size: 13px; }
+.ma-ra-user-meta { font-size: 11px; color: var(--text-muted); }
+.ma-ra-user-pill {
+  font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+  background: #e6f9ee; color: #1a7a3f;
+}
+
+/* ── Requests table ── */
+.ma-ra-table { width: 100%; border-collapse: collapse; }
+.ma-ra-table th, .ma-ra-table td {
+  padding: 10px 14px; text-align: left; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.ma-ra-table th {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--text-muted);
+}
+.ma-ra-status-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+}
+.ma-ra-status-pending  { background: #fff3cd; color: #855a00; }
+.ma-ra-status-approved { background: #e6f9ee; color: #1a7a3f; }
+.ma-ra-status-rejected { background: #fdecea; color: #b91c1c; }
+.ma-ra-req-btn {
+  padding: 4px 12px; font-size: 12px; border-radius: 5px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-primary);
+}
+.ma-ra-req-btn:hover { background: var(--surface-hover, #f0f0f3); }
+.ma-ra-req-btn.approve { border-color: #1a7a3f; color: #1a7a3f; }
+.ma-ra-req-btn.reject  { border-color: #c00; color: #c00; }
+
+/* ── Misc ── */
+.ma-ra-loading { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.ma-ra-section-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-secondary); margin-bottom: 12px;
+}
+.ma-ra-back-link {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; margin-bottom: 14px;
+  color: var(--accent); font-size: 12px; cursor: pointer; user-select: none;
+}
+.ma-ra-back-link:hover { text-decoration: underline; }

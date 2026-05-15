@@ -22,8 +22,15 @@ export default function useCaseForm(id, token) {
   const [reassignSaving, setReassignSaving] = useState(false)
   const [dynFieldValues, setDynFieldValues] = useState({})
   const [dynFieldSaving, setDynFieldSaving] = useState(false)
+  const [dynFieldErrors, setDynFieldErrors] = useState({})
+  const [draftStatus, setDraftStatus] = useState('')
 
   const autoSaveTimer = useRef(null)
+  const draftRef = useRef({ infoForm, dynFieldValues, caseType: '' })
+
+  useEffect(() => {
+    draftRef.current = { infoForm, dynFieldValues, caseType: caseData?.case_type || 'MI' }
+  }, [infoForm, dynFieldValues, caseData?.case_type])
 
   const loadCase = useCallback(async () => {
     try {
@@ -46,6 +53,7 @@ export default function useCaseForm(id, token) {
       setStatuses(Array.isArray(s) ? s : [])
       setUsers(Array.isArray(u) ? u.filter(x => x.is_active) : [])
       setReassignForm(prev => ({ ...prev, new_owner_id: c.case_owner_id ? String(c.case_owner_id) : '' }))
+      restoreDraftIfNewer(c)
     } catch (err) {
       console.error('loadCase error:', err)
     } finally {
@@ -78,9 +86,47 @@ export default function useCaseForm(id, token) {
     loadDynFields()
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function restoreDraftIfNewer(loadedCase) {
+    try {
+      const res = await httpFetch(`${API}/cases/drafts/${id}`, { headers })
+      const data = await res.json()
+      if (!res.ok || !data.draft?.payload) return
+      const draftTime = data.draft.updated_at ? new Date(data.draft.updated_at).getTime() : 0
+      const caseTime = loadedCase.updated_at ? new Date(loadedCase.updated_at).getTime() : 0
+      if (draftTime <= caseTime) return
+      const payload = data.draft.payload || {}
+      if (payload.infoForm) setInfoForm(prev => ({ ...prev, ...payload.infoForm }))
+      if (payload.dynFieldValues) setDynFieldValues(payload.dynFieldValues)
+      setDraftStatus('Draft restored')
+      setTimeout(() => setDraftStatus(''), 4000)
+    } catch { /* draft restore is best-effort */ }
+  }
+
   function scheduleAutoSave() {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
-    autoSaveTimer.current = setTimeout(() => saveInfo(true), 2 * 60 * 1000)
+    setDraftStatus('Draft pending')
+    autoSaveTimer.current = setTimeout(() => saveDraft(), 15 * 1000)
+  }
+
+  async function saveDraft() {
+    try {
+      const current = draftRef.current
+      const res = await httpFetch(`${API}/cases/drafts/${id || 'new'}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          case_type: current.caseType || 'MI',
+          payload: {
+            infoForm: current.infoForm,
+            dynFieldValues: current.dynFieldValues,
+          },
+        }),
+      })
+      if (!res.ok) throw new Error('Draft save failed')
+      setDraftStatus('Draft saved just now')
+    } catch {
+      setDraftStatus('Draft save failed')
+    }
   }
 
   async function saveInfo(isAutoSave = false) {
@@ -90,9 +136,14 @@ export default function useCaseForm(id, token) {
         ...infoForm,
         status_id:     infoForm.status_id     ? Number(infoForm.status_id)     : null,
         case_owner_id: infoForm.case_owner_id ? Number(infoForm.case_owner_id) : null,
+        expected_version_stamp: caseData?.version_stamp ?? undefined,
       }
       const res  = await httpFetch(`${API}/cases/${id}`, { method: 'PUT', headers, body: JSON.stringify(payload) })
       const data = await res.json()
+      if (res.status === 409) {
+        setSavedMsg('Version conflict - reload to merge latest changes')
+        throw new Error(data.error || 'Version conflict')
+      }
       if (!res.ok) throw new Error(data.error)
       setCaseData(prev => ({ ...prev, ...data }))
       setInfoForm(prev => ({
@@ -107,6 +158,8 @@ export default function useCaseForm(id, token) {
         if (nData.case_number) setCaseData(prev => ({ ...prev, case_number: nData.case_number }))
       }
       setSavedMsg(isAutoSave ? 'Auto-saved' : 'Saved')
+      setDraftStatus('')
+      httpFetch(`${API}/cases/drafts/${id}`, { method: 'DELETE', headers }).catch(() => {})
       setTimeout(() => setSavedMsg(''), 2500)
     } catch {
       setSavedMsg('Save failed')
@@ -155,6 +208,19 @@ export default function useCaseForm(id, token) {
     if (dynFieldSaving || !formConfig) return
     setDynFieldSaving(true)
     try {
+      const validateRes = await httpFetch(`${API}/cases/${id}/validate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ payload: buildDynamicPayload() }),
+      })
+      const validateData = await validateRes.json()
+      if (validateRes.ok && Array.isArray(validateData.errors) && validateData.errors.length) {
+        const nextErrors = {}
+        validateData.errors.forEach(err => { nextErrors[err.field] = err.message })
+        setDynFieldErrors(nextErrors)
+        throw new Error('Please fix validation errors before saving.')
+      }
+      setDynFieldErrors({})
       const fields = Object.entries(dynFieldValues).map(([field_definition_id, value]) => ({
         field_definition_id: Number(field_definition_id),
         value: String(value ?? ''),
@@ -168,6 +234,16 @@ export default function useCaseForm(id, token) {
       setTimeout(() => setSavedMsg(''), 2200)
     } catch (err) { toast.error(err.message) }
     finally { setDynFieldSaving(false) }
+  }
+
+  function buildDynamicPayload() {
+    const payload = {}
+    for (const section of formConfig?.sections || []) {
+      for (const field of section.fields || []) {
+        payload[field.field_name] = dynFieldValues[field.id] ?? ''
+      }
+    }
+    return payload
   }
 
   function getFieldConfig(sectionName, fieldName) {
@@ -195,7 +271,8 @@ export default function useCaseForm(id, token) {
     statuses, users, formConfig,
     infoForm, setInfoForm,
     reassignForm, setReassignForm, reassignSaving,
-    dynFieldValues, setDynFieldValues, dynFieldSaving,
+    dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
+    draftStatus,
     autoSaveTimer, loadCase, saveInfo, scheduleAutoSave, reassignCase,
     loadDynFields, saveDynFields,
     getFieldConfig, getSectionVisible, getPicklistOptions,

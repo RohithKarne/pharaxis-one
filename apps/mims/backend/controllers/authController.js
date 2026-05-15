@@ -10,6 +10,7 @@ const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
 const pool = require('../database/db');
 const JWT_SECRET = require('../utils/jwtSecret');
+const passwordPolicy = require('../services/passwordPolicy');
 const {
   OTP_EXPIRY_MINUTES,
   generateTotpSecret,
@@ -193,7 +194,8 @@ async function getRecentPasswordHistory(userId, limit = 5) {
 
 async function isPasswordReused(userId, newPassword, currentHash) {
   if (currentHash && await bcrypt.compare(newPassword, currentHash)) return true;
-  const historyHashes = await getRecentPasswordHistory(userId, 5);
+  const { history_count } = await passwordPolicy.getPolicy();
+  const historyHashes = await getRecentPasswordHistory(userId, history_count);
   for (const hash of historyHashes) {
     if (await bcrypt.compare(newPassword, hash)) return true;
   }
@@ -218,11 +220,19 @@ async function trimPasswordHistory(userId, keep = 5, conn = pool) {
 }
 
 async function updatePasswordWithHistory(userId, currentHash, newPassword) {
+  // Complexity check (alphanumeric / special chars) — driven by system params
+  const complexity = await passwordPolicy.validateComplexity(newPassword);
+  if (!complexity.ok) {
+    return { invalid: true, error: complexity.error };
+  }
+
   if (await isPasswordReused(userId, newPassword, currentHash)) {
     return { reused: true };
   }
 
-  const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  const { history_count, expiry_days } = await passwordPolicy.getPolicy();
+  const newHash    = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  const expiresAt  = new Date(Date.now() + expiry_days * 24 * 60 * 60 * 1000);
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -234,11 +244,12 @@ async function updatePasswordWithHistory(userId, currentHash, newPassword) {
     }
     await conn.execute(
       `UPDATE users
-       SET password = ?, password_reset_required = ?, password_reset_nonce = NULL, updated_at = NOW()
+       SET password = ?, password_reset_required = ?, password_reset_nonce = NULL,
+           password_expires_at = ?, updated_at = NOW()
        WHERE id = ?`,
-      [newHash, 0, userId]
+      [newHash, 0, expiresAt, userId]
     );
-    await trimPasswordHistory(userId, 5, conn);
+    await trimPasswordHistory(userId, history_count, conn);
     await conn.commit();
     return { reused: false };
   } catch (err) {
@@ -838,12 +849,12 @@ const authController = {
       }
 
       const user = await findUserByLoginIdentifier(email);
-      if (!user || !user.is_active) {
+      if (!user || !user.is_active || user.is_disabled) {
         await logLoginAudit({
           status: 'failed',
           failReason: 'Email-first login denied.',
           authEvent: 'login_start_denied',
-          metadata: { ...auditMeta, reason: 'not_found_or_inactive' },
+          metadata: { ...auditMeta, reason: !user ? 'not_found' : !user.is_active ? 'inactive' : 'disabled' },
           req,
         });
         return res.status(200).json({ outcome: 'denied', error: genericError });
@@ -1751,7 +1762,11 @@ const authController = {
       }
 
       const result = await updatePasswordWithHistory(req.user.userId, dbUser.password, newPassword);
+      if (result.invalid) {
+        return res.status(400).json({ error: result.error });
+      }
       if (result.reused) {
+        const { history_count } = await passwordPolicy.getPolicy();
         await logLoginAudit({
           userId: req.user.userId,
           userName: dbUser.email || req.user.email,
@@ -1760,7 +1775,7 @@ const authController = {
           failReason: 'Password reuse blocked.',
           authEvent: 'password_reuse_blocked',
         });
-        return res.status(400).json({ error: 'You cannot reuse your current password or last 5 passwords.' });
+        return res.status(400).json({ error: `You cannot reuse your current password or last ${history_count} passwords.` });
       }
 
       return res.status(200).json({ message: 'Password updated. Please log in again.' });
@@ -1872,7 +1887,11 @@ const authController = {
       }
 
       const result = await updatePasswordWithHistory(pending.userId, user.password, newPassword);
+      if (result.invalid) {
+        return res.status(400).json({ error: result.error });
+      }
       if (result.reused) {
+        const { history_count } = await passwordPolicy.getPolicy();
         await logLoginAudit({
           userId: pending.userId,
           userName: user.email,
@@ -1881,7 +1900,7 @@ const authController = {
           failReason: 'Password reuse blocked.',
           authEvent: 'password_reuse_blocked',
         });
-        return res.status(400).json({ error: 'You cannot reuse your current password or last 5 passwords.' });
+        return res.status(400).json({ error: `You cannot reuse your current password or last ${history_count} passwords.` });
       }
 
       await logLoginAudit({
@@ -1925,7 +1944,11 @@ const authController = {
       }
 
       const result = await updatePasswordWithHistory(user.id, user.password, newPassword);
+      if (result.invalid) {
+        return res.status(400).json({ error: result.error });
+      }
       if (result.reused) {
+        const { history_count } = await passwordPolicy.getPolicy();
         await logLoginAudit({
           userId: user.id,
           userName: user.email,
@@ -1934,7 +1957,7 @@ const authController = {
           failReason: 'Password reuse blocked.',
           authEvent: 'password_reuse_blocked',
         });
-        return res.status(400).json({ error: 'You cannot reuse your current password or last 5 passwords.' });
+        return res.status(400).json({ error: `You cannot reuse your current password or last ${history_count} passwords.` });
       }
       await logLoginAudit({
         userId: user.id,

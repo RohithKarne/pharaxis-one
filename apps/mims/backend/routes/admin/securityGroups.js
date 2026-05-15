@@ -20,23 +20,108 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
+function parsePrivileges(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch (_) {
+    return {};
+  }
+}
+
+function normalizeTenantIds(privileges) {
+  const ids = privileges?.details?.tenant_ids;
+  if (!Array.isArray(ids)) return [];
+  return ids
+    .map(id => Number(id))
+    .filter(id => Number.isFinite(id) && id > 0);
+}
+
+function groupVisibleToRequest(group, req) {
+  if (!group) return false;
+  if (req.user.role === 'superadmin') return true;
+  if (Number(group.org_id) === Number(req.user.orgId)) return true;
+  const tenantIds = normalizeTenantIds(parsePrivileges(group.privileges));
+  return tenantIds.includes(Number(req.user.orgId));
+}
+
+function mergeSystemOptions(groups) {
+  return mergeBooleanOptions(groups, 'system_options');
+}
+
+function mergeCaseOptions(groups) {
+  return mergeBooleanOptions(groups, 'case_options');
+}
+
+function mergeBooleanOptions(groups, key) {
+  const merged = {};
+  for (const group of groups) {
+    const privileges = parsePrivileges(group.privileges);
+    const optionSet = privileges[key] || {};
+    for (const [sectionKey, options] of Object.entries(optionSet)) {
+      if (!merged[sectionKey]) merged[sectionKey] = {};
+      for (const [optionKey, value] of Object.entries(options || {})) {
+        merged[sectionKey][optionKey] = Boolean(merged[sectionKey][optionKey] || value);
+      }
+    }
+  }
+  return merged;
+}
+
+function hasConfiguredOptionSet(groups, key) {
+  return groups.some(group => {
+    const optionSet = parsePrivileges(group.privileges)?.[key];
+    if (!optionSet || typeof optionSet !== 'object') return false;
+    return Object.values(optionSet).some(options => (
+      options && typeof options === 'object' && Object.keys(options).length > 0
+    ));
+  });
+}
+
+async function loadPicklistChoices(req, names) {
+  const lowerNames = names.map(name => String(name).toLowerCase());
+  const placeholders = lowerNames.map(() => '?').join(', ');
+  const params = [...lowerNames, ...lowerNames, ...lowerNames];
+  const orgFilter = req.user.role === 'superadmin' ? '' : 'AND p.org_id = ?';
+  if (req.user.role !== 'superadmin') params.push(req.user.orgId);
+
+  const [rows] = await pool.execute(
+    `SELECT DISTINCT p.value, p.name, p.field_type, COALESCE(f.name, p.field_type) AS field_name, COALESCE(c.name, p.category) AS category
+     FROM picklists p
+     LEFT JOIN picklist_fields f ON f.id = p.field_id
+     LEFT JOIN picklist_categories c ON c.id = f.category_id
+     WHERE COALESCE(p.status, 'Active') != 'Inactive'
+       AND (
+         LOWER(COALESCE(f.name, p.field_type, '')) IN (${placeholders})
+         OR LOWER(COALESCE(c.name, p.category, '')) IN (${placeholders})
+         OR LOWER(COALESCE(p.field_type, '')) IN (${placeholders})
+       )
+       ${orgFilter}
+     ORDER BY COALESCE(p.value, p.name) ASC`,
+    params
+  );
+
+  return rows
+    .map(row => ({
+      value: row.value || row.name,
+      label: row.value || row.name,
+      field_name: row.field_name,
+      category: row.category,
+    }))
+    .filter(row => row.value);
+}
+
 async function resolveScopedGroup(groupId, req) {
   const id = Number(groupId);
   if (!Number.isFinite(id) || id <= 0) return null;
 
-  if (req.user.role === 'superadmin') {
-    const [[group]] = await pool.execute(
-      'SELECT id, name, description, privileges, is_active, org_id FROM security_groups WHERE id = ?',
-      [id]
-    );
-    return group || null;
-  }
-
   const [[group]] = await pool.execute(
-    'SELECT id, name, description, privileges, is_active, org_id FROM security_groups WHERE id = ? AND org_id = ?',
-    [id, req.user.orgId]
+    'SELECT id, name, description, privileges, is_active, org_id FROM security_groups WHERE id = ?',
+    [id]
   );
-  return group || null;
+  if (!group || !groupVisibleToRequest(group, req)) return null;
+  return group;
 }
 
 async function getActiveMemberDependency(groupId) {
@@ -71,18 +156,81 @@ router.get('/security-groups', authenticate, requireRole('admin', 'superadmin'),
     const [groups] = await pool.execute(
       `SELECT id, name, description, privileges, is_active, created_at, updated_at, org_id
        FROM security_groups
-       ${isSA ? '' : 'WHERE org_id = ?'}
+       ${isSA ? '' : 'WHERE org_id = ? OR org_id IS NULL'}
        ORDER BY name`,
       isSA ? [] : [req.user.orgId]
     );
 
     const parsed = groups.map(g => ({
       ...g,
-      privileges: g.privileges ? (typeof g.privileges === 'string' ? JSON.parse(g.privileges) : g.privileges) : null,
-    }));
+      privileges: parsePrivileges(g.privileges),
+    })).filter(g => groupVisibleToRequest(g, req));
     res.json({ groups: parsed });
   } catch (err) {
     console.error('GET /security-groups error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/security-groups/options — form reference data
+router.get('/security-groups/options', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+  try {
+    const [orgs] = await pool.execute(
+      req.user.role === 'superadmin'
+        ? 'SELECT id, name, is_active FROM organisations ORDER BY name ASC'
+        : 'SELECT id, name, is_active FROM organisations WHERE id = ? ORDER BY name ASC',
+      req.user.role === 'superadmin' ? [] : [req.user.orgId]
+    );
+
+    const [departments, callCenterLocations, callCenterTypes, generalTables] = await Promise.all([
+      loadPicklistChoices(req, ['department', 'departments']),
+      loadPicklistChoices(req, ['call center location', 'call_center_location', 'call center locations']),
+      loadPicklistChoices(req, ['call center type', 'call_center_type', 'call center types']),
+      loadPicklistChoices(req, ['tables general tables', 'general tables', 'table general tables']),
+    ]);
+
+    res.json({
+      tenants: orgs,
+      departments,
+      call_center_locations: callCenterLocations,
+      call_center_types: callCenterTypes,
+      general_tables: generalTables,
+    });
+  } catch (err) {
+    console.error('GET /security-groups/options error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/security-groups/effective — current user's group-derived privileges
+router.get('/security-groups/effective', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+  try {
+    if (req.user.role === 'superadmin') {
+      return res.json({ unrestricted: true, groups: [], system_options: null });
+    }
+
+    const [groups] = await pool.execute(
+      `SELECT DISTINCT sg.id, sg.name, sg.privileges, sg.org_id
+       FROM security_groups sg
+       LEFT JOIN security_group_users sgu ON sgu.group_id = sg.id AND sgu.user_id = ?
+       LEFT JOIN users u ON u.id = ? AND u.security_group_id = sg.id
+       WHERE sg.is_active = 1
+         AND (sgu.id IS NOT NULL OR u.id IS NOT NULL)`,
+      [req.user.userId, req.user.userId]
+    );
+
+    const visibleGroups = groups.filter(group => groupVisibleToRequest(group, req));
+    const hasSystemOptions = hasConfiguredOptionSet(visibleGroups, 'system_options');
+    const hasCaseOptions = hasConfiguredOptionSet(visibleGroups, 'case_options');
+
+    res.json({
+      unrestricted: visibleGroups.length === 0,
+      groups: visibleGroups.map(group => ({ id: group.id, name: group.name })),
+      system_options: hasSystemOptions ? mergeSystemOptions(visibleGroups) : null,
+      case_options: hasCaseOptions ? mergeCaseOptions(visibleGroups) : null,
+    });
+  } catch (err) {
+    console.error('GET /security-groups/effective error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -96,8 +244,9 @@ router.post('/security-groups', authenticate, requireRole('admin', 'superadmin')
     }
 
     const privilegesJson = privileges !== undefined ? JSON.stringify(privileges) : null;
+    const tenantIds = normalizeTenantIds(privileges);
     const orgId = req.user.role === 'superadmin'
-      ? (req.body.org_id !== undefined ? Number(req.body.org_id) : null)
+      ? (tenantIds.length === 1 ? tenantIds[0] : (req.body.org_id !== undefined ? Number(req.body.org_id) || null : null))
       : req.user.orgId;
 
     const [result] = await pool.execute(
@@ -138,9 +287,7 @@ router.get('/security-groups/:id', authenticate, requireRole('admin', 'superadmi
 
     const parsed = {
       ...group,
-      privileges: group.privileges
-        ? (typeof group.privileges === 'string' ? JSON.parse(group.privileges) : group.privileges)
-        : null,
+      privileges: parsePrivileges(group.privileges),
     };
 
     res.json({ group: parsed, members });
@@ -186,6 +333,12 @@ router.put('/security-groups/:id', authenticate, requireRole('admin', 'superadmi
     if (privileges !== undefined) {
       updates.push('privileges = ?');
       params.push(JSON.stringify(privileges));
+
+      if (req.user.role === 'superadmin') {
+        const tenantIds = normalizeTenantIds(privileges);
+        updates.push('org_id = ?');
+        params.push(tenantIds.length === 1 ? tenantIds[0] : null);
+      }
     }
 
     if (is_active !== undefined) {

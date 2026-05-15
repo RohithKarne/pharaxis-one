@@ -34,6 +34,7 @@ const {
   getCaseDuplicateCandidates,
 } = require('../services/caseGovernanceService');
 const { resolveProductGroups } = require('../services/productGroupService');
+const { evaluateRule } = require('../../shared/services/ruleEvaluator');
 
 // ── Architecture Fix A1: shared helpers extracted to service files ─────────────
 // All utility functions, constants and DB helpers previously defined inline here
@@ -603,27 +604,53 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
     const [fields] = await pool.execute(
       `SELECT id, section_name, field_name, field_type, is_required, is_hidden, is_disabled, custom_label, help_text, picklist_type, lookup_target, sort_order, max_length, default_value, is_sensitive, masking_pattern, unmask_roles
        FROM field_setup
-       WHERE (org_id = ? OR org_id IS NULL) AND is_hidden = 0
+       WHERE (org_id = ? OR org_id IS NULL) AND is_hidden = 0 AND is_disabled = 0
+         AND section_name != '__customize_placeholder__'
        ORDER BY section_name, sort_order, id`,
       [orgId]
     );
 
     const today = toDateOnlyOrNull(new Date());
     const [picklists] = await pool.execute(
-      `SELECT pf.name AS field_type, p.value, p.name AS label
+      `SELECT COALESCE(pf.name, p.field_type) AS field_type, p.id, p.value, p.name AS label,
+              p.description, p.external_codes, p.translations, p.parent_value_id, p.sort_order
        FROM picklists p
-       JOIN picklist_fields pf ON p.field_id = pf.id
+       LEFT JOIN picklist_fields pf ON p.field_id = pf.id
        WHERE p.org_id = ? AND p.status = 'Active'
          AND (? IS NULL OR (COALESCE(p.effective_from, '1900-01-01') <= ? AND COALESCE(p.effective_to, '2999-12-31') >= ?))
-       ORDER BY pf.name, p.id`,
+       ORDER BY COALESCE(pf.name, p.field_type), p.sort_order ASC, p.value ASC, p.id ASC`,
       [orgId, today, today, today]
     );
 
     const picklistMap = picklists.reduce((acc, row) => {
       if (!acc[row.field_type]) acc[row.field_type] = [];
-      acc[row.field_type].push({ value: row.value, label: row.label });
+      acc[row.field_type].push({
+        id: row.id,
+        value: row.value,
+        label: row.label || row.value,
+        description: row.description || '',
+        external_codes: parseStoredJson(row.external_codes, null),
+        translations: parseStoredJson(row.translations, null),
+        parent_value_id: row.parent_value_id || null,
+        sort_order: row.sort_order || 0,
+      });
       return acc;
     }, {});
+
+    const [rules] = await pool.execute(
+      `SELECT id, org_id, case_type, section_name, field_name, rule_type,
+              condition_json, action_json, is_active, priority
+       FROM case_form_rules
+       WHERE org_id = ? AND is_active = 1 AND (case_type = ? OR case_type = 'ALL')
+       ORDER BY priority DESC, id ASC`,
+      [orgId, case_type]
+    );
+    const normalizedRules = rules.map((rule) => ({
+      ...rule,
+      condition_json: parseStoredJson(rule.condition_json, {}),
+      action_json: parseStoredJson(rule.action_json, {}),
+      is_active: !!rule.is_active,
+    }));
 
     const sectionsWithFields = sections.map((section) => {
       const sectionFields = fields
@@ -643,7 +670,7 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
       };
     });
 
-    return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields });
+    return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields, rules: normalizedRules });
   } catch (err) {
     logger.error({ err, route: '/api/cases/form-config', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to load case form config');
     return res.status(500).json({ error: err.message });
@@ -753,6 +780,110 @@ router.get('/cases/:id/duplicates', authenticate, async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
+});
+
+// ─── Case Drafts / Productivity ─────────────────────────────────────────────
+
+function draftKey(caseId) {
+  if (String(caseId || '').toLowerCase() === 'new') return null;
+  const parsed = Number(caseId);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+router.get('/cases/drafts', authenticate, requireOrg, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, case_id, user_id, org_id, case_type, payload_json, updated_at
+       FROM case_drafts
+       WHERE user_id = ? AND org_id = ?
+       ORDER BY updated_at DESC
+       LIMIT 50`,
+      [req.user.userId, req.user.orgId]
+    );
+    res.json({ drafts: rows.map((row) => ({ ...row, payload: parseStoredJson(row.payload_json, {}) })) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/cases/drafts/:caseId', authenticate, requireOrg, async (req, res) => {
+  try {
+    const caseId = draftKey(req.params.caseId);
+    const sql = caseId === null
+      ? `SELECT * FROM case_drafts WHERE user_id = ? AND org_id = ? AND case_id IS NULL ORDER BY updated_at DESC LIMIT 1`
+      : `SELECT * FROM case_drafts WHERE user_id = ? AND org_id = ? AND case_id = ? ORDER BY updated_at DESC LIMIT 1`;
+    const params = caseId === null ? [req.user.userId, req.user.orgId] : [req.user.userId, req.user.orgId, caseId];
+    const [[row]] = await pool.execute(sql, params);
+    res.json({ draft: row ? { ...row, payload: parseStoredJson(row.payload_json, {}) } : null });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/cases/drafts/:caseId', authenticate, requireOrg, async (req, res) => {
+  try {
+    const caseId = draftKey(req.params.caseId);
+    const caseType = ['AE', 'MI', 'PC'].includes(req.body?.case_type) ? req.body.case_type : 'MI';
+    const payload = req.body?.payload || req.body || {};
+    if (caseId === null) {
+      const [[existing]] = await pool.execute(
+        `SELECT id FROM case_drafts
+         WHERE user_id = ? AND org_id = ? AND case_id IS NULL
+         ORDER BY updated_at DESC LIMIT 1`,
+        [req.user.userId, req.user.orgId]
+      );
+      if (existing) {
+        await pool.execute(
+          `UPDATE case_drafts
+             SET case_type = ?, payload_json = ?, updated_at = NOW()
+           WHERE id = ?`,
+          [caseType, JSON.stringify(payload), existing.id]
+        );
+      } else {
+        await pool.execute(
+          `INSERT INTO case_drafts (case_id, user_id, org_id, case_type, payload_json)
+           VALUES (NULL, ?, ?, ?, ?)`,
+          [req.user.userId, req.user.orgId, caseType, JSON.stringify(payload)]
+        );
+      }
+    } else {
+      await pool.execute(
+        `INSERT INTO case_drafts (case_id, user_id, org_id, case_type, payload_json)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE case_type = VALUES(case_type), payload_json = VALUES(payload_json), updated_at = NOW()`,
+        [caseId, req.user.userId, req.user.orgId, caseType, JSON.stringify(payload)]
+      );
+    }
+    res.json({ ok: true, updated_at: new Date().toISOString() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/cases/drafts/:caseId', authenticate, requireOrg, async (req, res) => {
+  try {
+    const caseId = draftKey(req.params.caseId);
+    if (caseId === null) {
+      await pool.execute('DELETE FROM case_drafts WHERE user_id = ? AND org_id = ? AND case_id IS NULL', [req.user.userId, req.user.orgId]);
+    } else {
+      await pool.execute('DELETE FROM case_drafts WHERE user_id = ? AND org_id = ? AND case_id = ?', [req.user.userId, req.user.orgId, caseId]);
+    }
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/cases/copy-from/:id', authenticate, requireOrg, async (req, res) => {
+  try {
+    const source = await verifyCaseOrg(req.params.id, req);
+    if (!source) return res.status(403).json({ error: 'Access denied' });
+    const fields = Array.isArray(req.body?.fields_to_copy) ? req.body.fields_to_copy : ['priority', 'intake_channel', 'description', 'internal_notes'];
+    const payload = {};
+    for (const field of fields) {
+      if (Object.prototype.hasOwnProperty.call(source, field)) payload[field] = source[field];
+    }
+    const caseType = req.body?.new_case_type || source.case_type || 'MI';
+    const [result] = await pool.execute(
+      `INSERT INTO case_drafts (case_id, user_id, org_id, case_type, payload_json)
+       VALUES (NULL, ?, ?, ?, ?)`,
+      [req.user.userId, req.user.orgId, caseType, JSON.stringify(payload)]
+    );
+    await writeAuditLog(req.user.userId, req.user.email, 'COPY_FROM_CASE', 'case_draft', result.insertId, { source_case_id: Number(req.params.id), fields });
+    res.status(201).json({ draft_id: result.insertId, payload, case_type: caseType });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // GET /api/cases/:id — single case detail
@@ -1311,7 +1442,7 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
 
     const [[currentCase]] = await pool.execute(
       `SELECT id, org_id, site_id, status_id, case_owner_id, case_number, priority, date_received,
-              description, internal_notes, intake_channel
+              description, internal_notes, intake_channel, version_stamp
        FROM cases
        WHERE id = ? AND is_deleted = 0
        LIMIT 1`,
@@ -1320,6 +1451,13 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
     if (!currentCase) return res.status(404).json({ error: 'Case not found' });
 
     const body = req.body || {};
+    if (body.expected_version_stamp !== undefined && Number(body.expected_version_stamp) !== Number(currentCase.version_stamp || 0)) {
+      return res.status(409).json({
+        error: 'Case was updated by another user.',
+        code: 'VERSION_CONFLICT',
+        current_version_stamp: currentCase.version_stamp,
+      });
+    }
 
     let nextStatusId = currentCase.status_id;
     let statusTransitionRule = null;
@@ -1423,7 +1561,8 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
         date_received  = ?,
         description    = ?,
         internal_notes = ?,
-        intake_channel = ?
+        intake_channel = ?,
+        version_stamp  = version_stamp + 1
        WHERE id = ?`,
       [
         nextStatusId,
@@ -1514,6 +1653,113 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
     logger.error({ err, route: '/api/cases/:id', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to update case');
     res.status(500).json({ error: err.message });
   }
+});
+
+router.post('/cases/:id/validate', authenticate, async (req, res) => {
+  try {
+    const owned = await verifyCaseOrg(req.params.id, req);
+    if (!owned) return res.status(403).json({ error: 'Access denied' });
+    const formData = req.body?.payload || req.body || {};
+    const [rules] = await pool.execute(
+      `SELECT * FROM case_form_rules
+       WHERE org_id = ? AND is_active = 1 AND rule_type IN ('required','validation')
+         AND (case_type = ? OR case_type = 'ALL')
+       ORDER BY priority DESC, id ASC`,
+      [owned.org_id, owned.case_type || 'ALL']
+    );
+    const errors = [];
+    for (const rule of rules) {
+      const result = evaluateRule(rule, formData);
+      if (rule.rule_type === 'required' && result === true) {
+        const value = formData[rule.field_name];
+        if (value === undefined || value === null || value === '') {
+          errors.push({ field: rule.field_name, section: rule.section_name, message: `${rule.field_name} is required.` });
+        }
+      }
+      if (rule.rule_type === 'validation' && result?.matched) {
+        const action = parseStoredJson(rule.action_json, {});
+        const value = formData[rule.field_name];
+        let valid = true;
+        if (action.min !== undefined && Number(value) < Number(action.min)) valid = false;
+        if (action.max !== undefined && Number(value) > Number(action.max)) valid = false;
+        if (action.pattern) {
+          try { valid = new RegExp(action.pattern).test(String(value || '')); } catch (_) { valid = false; }
+        }
+        if (!valid) errors.push({ field: rule.field_name, section: rule.section_name, message: action.message || `${rule.field_name} is invalid.` });
+      }
+    }
+    res.json({ valid: errors.length === 0, errors });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/cases/:id/links', authenticate, async (req, res) => {
+  try {
+    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    const [rows] = await pool.execute(
+      `SELECT l.*, c.case_number AS linked_case_number, c.case_type AS linked_case_type
+       FROM case_links l
+       JOIN cases c ON c.id = l.linked_case_id
+       WHERE l.case_id = ?
+       ORDER BY l.created_at DESC`,
+      [req.params.id]
+    );
+    res.json({ links: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/cases/:id/links', authenticate, async (req, res) => {
+  try {
+    const source = await verifyCaseOrg(req.params.id, req);
+    const target = await verifyCaseOrg(req.body?.linked_case_id, req);
+    if (!source || !target) return res.status(403).json({ error: 'Access denied' });
+    const linkType = ['duplicate', 'related', 'follow_up', 'superseded_by'].includes(req.body?.link_type) ? req.body.link_type : 'related';
+    const [result] = await pool.execute(
+      `INSERT INTO case_links (case_id, linked_case_id, link_type, created_by, notes)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE notes = VALUES(notes)`,
+      [req.params.id, req.body.linked_case_id, linkType, req.user.userId, req.body?.notes || null]
+    );
+    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'CASE_LINKED', 'linked_case_id', null, req.body.linked_case_id);
+    res.status(201).json({ ok: true, id: result.insertId });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/cases/:id/links/:linkId', authenticate, async (req, res) => {
+  try {
+    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    await pool.execute('DELETE FROM case_links WHERE id = ? AND case_id = ?', [req.params.linkId, req.params.id]);
+    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'CASE_LINK_REMOVED', 'case_link_id', req.params.linkId, null);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/cases/:id/merge', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const source = await verifyCaseOrg(req.params.id, req);
+    const target = await verifyCaseOrg(req.body?.target_case_id, req);
+    if (!source || !target) return res.status(403).json({ error: 'Access denied' });
+    if (Number(source.id) === Number(target.id)) return res.status(400).json({ error: 'Cannot merge a case into itself.' });
+    const choices = req.body?.field_choices && typeof req.body.field_choices === 'object' ? req.body.field_choices : {};
+    await conn.beginTransaction();
+    const updatable = ['priority', 'description', 'internal_notes', 'intake_channel', 'status_id', 'case_owner_id'];
+    const updates = {};
+    for (const field of updatable) {
+      if (choices[field] === 'source') updates[field] = source[field];
+    }
+    if (Object.keys(updates).length) {
+      const setSql = Object.keys(updates).map((field) => `${field} = ?`).join(', ');
+      await conn.execute(`UPDATE cases SET ${setSql}, version_stamp = version_stamp + 1 WHERE id = ?`, [...Object.values(updates), target.id]);
+    }
+    await conn.execute('UPDATE cases SET merged_into_case_id = ?, version_stamp = version_stamp + 1 WHERE id = ?', [target.id, source.id]);
+    await conn.commit();
+    await writeCaseAudit(source.id, req.user.userId, req.user.email, 'CASE_MERGED_SOURCE', 'merged_into_case_id', null, target.id);
+    await writeCaseAudit(target.id, req.user.userId, req.user.email, 'CASE_MERGED_TARGET', 'merge_choices', null, JSON.stringify(choices));
+    res.json({ ok: true, merged_into_case_id: target.id, field_choices: choices });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) {}
+    res.status(500).json({ error: err.message });
+  } finally { conn.release(); }
 });
 
 // GET /api/cases/:id/mi-response-builder/context — template/document context for MI response builder

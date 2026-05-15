@@ -213,7 +213,7 @@ router.put('/users/:id/modules', authenticate, requireRole('superadmin'), async 
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.get('/dashboard', authenticate, requireRole('superadmin'), async (_req, res) => {
+router.get('/dashboard', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
   try {
     const summary = await getDashboardSummary();
     res.json(summary);
@@ -225,7 +225,7 @@ router.get('/dashboard', authenticate, requireRole('superadmin'), async (_req, r
 // ── ORGANISATIONS ────────────────────────────────────────────────────────────
 
 // GET /api/superadmin/orgs — list all orgs with their sites
-router.get('/orgs', authenticate, requireRole('superadmin'), async (_req, res) => {
+router.get('/orgs', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
   try {
     const [orgs] = await pool.execute('SELECT * FROM organisations ORDER BY name');
     const [sites] = await pool.execute('SELECT * FROM sites ORDER BY name');
@@ -240,7 +240,7 @@ router.get('/orgs', authenticate, requireRole('superadmin'), async (_req, res) =
 });
 
 // POST /api/superadmin/orgs — create organisation
-router.post('/orgs', authenticate, requireRole('superadmin'), validate(schemas.createOrg), async (req, res) => {
+router.post('/orgs', authenticate, requireRole('admin', 'superadmin'), validate(schemas.createOrg), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Organisation name is required.' });
   try {
@@ -252,7 +252,7 @@ router.post('/orgs', authenticate, requireRole('superadmin'), validate(schemas.c
 });
 
 // PUT /api/superadmin/orgs/:id — update org (name / active status / session timeout)
-router.put('/orgs/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+router.put('/orgs/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const {
       name,
@@ -321,7 +321,7 @@ router.put('/orgs/:id', authenticate, requireRole('superadmin'), async (req, res
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.get('/orgs/:id/readiness', authenticate, requireRole('superadmin'), async (req, res) => {
+router.get('/orgs/:id/readiness', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const readiness = await getOrgReadiness(Number(req.params.id));
     res.json({ readiness });
@@ -333,7 +333,7 @@ router.get('/orgs/:id/readiness', authenticate, requireRole('superadmin'), async
   }
 });
 
-router.post('/orgs/:id/bootstrap', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/orgs/:id/bootstrap', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const readiness = await bootstrapOrg(Number(req.params.id), req.user.userId);
     await audit(req.user.userId, req.user.email, 'BOOTSTRAP', 'organisation', Number(req.params.id), { source: 'superadmin' });
@@ -346,7 +346,7 @@ router.post('/orgs/:id/bootstrap', authenticate, requireRole('superadmin'), asyn
   }
 });
 
-router.post('/orgs/:id/repair', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/orgs/:id/repair', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const readiness = await repairOrgData(Number(req.params.id));
     await audit(req.user.userId, req.user.email, 'REPAIR', 'organisation', Number(req.params.id), { source: 'superadmin' });
@@ -360,7 +360,7 @@ router.post('/orgs/:id/repair', authenticate, requireRole('superadmin'), async (
 });
 
 // GET /api/superadmin/config — get system config (e.g. superadmin timeout)
-router.get('/config', authenticate, requireRole('superadmin'), async (_req, res) => {
+router.get('/config', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const config = rows.reduce((acc, r) => { acc[r.config_key] = r.config_value; return acc; }, {});
@@ -375,7 +375,7 @@ router.get('/config', authenticate, requireRole('superadmin'), async (_req, res)
 });
 
 // PUT /api/superadmin/config — update system config
-router.put('/config', authenticate, requireRole('superadmin'), async (req, res) => {
+router.put('/config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const {
       superadmin_session_timeout_minutes,
@@ -439,7 +439,7 @@ router.put('/config', authenticate, requireRole('superadmin'), async (req, res) 
 });
 
 // POST /api/superadmin/config/test-email — verify SMTP config and optionally send a test email
-router.post('/config/test-email', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/config/test-email', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const currentConfig = rows.reduce((acc, row) => {
@@ -525,7 +525,7 @@ router.post('/config/test-email', authenticate, requireRole('superadmin'), async
 });
 
 // POST /api/superadmin/orgs/:id/sites — create site under an org
-router.post('/orgs/:id/sites', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/orgs/:id/sites', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { name, country, is_primary } = req.body;
     if (!name) return res.status(400).json({ error: 'Site name is required.' });
@@ -544,7 +544,7 @@ router.post('/orgs/:id/sites', authenticate, requireRole('superadmin'), async (r
 });
 
 // PUT /api/superadmin/sites/:id — update site
-router.put('/sites/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+router.put('/sites/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const { name, country, is_primary, is_active } = req.body;
     const [[existing]] = await pool.execute('SELECT id, name, is_active FROM sites WHERE id = ?', [req.params.id]);
@@ -1123,7 +1123,7 @@ router.delete('/users/:id/org-access/:orgId', authenticate, requireRole('superad
 });
 
 // GET /api/superadmin/orgs-for-assignment — all active orgs with their sites (for assignment dropdown)
-router.get('/orgs-for-assignment', authenticate, requireRole('superadmin'), async (_req, res) => {
+router.get('/orgs-for-assignment', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
   try {
     const [orgs]  = await pool.execute('SELECT id, name FROM organisations WHERE is_active = 1 ORDER BY name');
     const [sites] = await pool.execute('SELECT id, org_id, name FROM sites WHERE is_active = 1 ORDER BY name');
@@ -1200,7 +1200,7 @@ const logoUpload = multer({
 });
 
 // POST /api/superadmin/orgs/:orgId/logo
-router.post('/orgs/:orgId/logo', authenticate, requireRole('superadmin'), logoUpload.single('logo'), validateUpload(['image']), async (req, res) => {
+router.post('/orgs/:orgId/logo', authenticate, requireRole('admin', 'superadmin'), logoUpload.single('logo'), validateUpload(['image']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
     const logoUrl = `/storage/org_logos/${req.file.filename}`;

@@ -1,0 +1,99 @@
+/* ── Users — MIMS Admin > System > Security > Add / Edit Users ── */
+/* CSS namespace: ma-usr- */
+
+.ma-usr-page { display: flex; flex-direction: column; gap: 20px; padding: 28px 32px; height: 100%; overflow: auto; }
+
+/* ── Toolbar ── */
+.ma-usr-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ma-usr-search  { flex: 1; max-width: 320px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--surface); color: var(--text-primary); }
+.ma-usr-search:focus { outline: none; border-color: var(--accent); }
+.ma-usr-btn-add { padding: 8px 18px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ma-usr-btn-add:hover { opacity: 0.88; }
+
+/* ── Table ── */
+.ma-usr-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: auto; }
+.ma-usr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ma-usr-table th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); border-bottom: 1px solid var(--border); background: var(--surface-alt, #f9f9f9); white-space: nowrap; }
+.ma-usr-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ma-usr-table tr:last-child td { border-bottom: none; }
+.ma-usr-table tbody tr:hover { background: var(--surface-hover, #f5f5f5); cursor: pointer; }
+
+.ma-usr-pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.ma-usr-pill-active   { background: #e6f9ee; color: #1a7a3f; }
+.ma-usr-pill-inactive { background: #fff3e0; color: #c25700; }
+.ma-usr-pill-disabled { background: #fdecea; color: #b91c1c; }
+
+.ma-usr-edit-btn { padding: 4px 12px; font-size: 12px; background: transparent; border: 1px solid var(--border); border-radius: 5px; cursor: pointer; color: var(--text-secondary); }
+.ma-usr-edit-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.ma-usr-empty { padding: 48px 0; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+/* ── Modal overlay ── */
+.ma-usr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.ma-usr-modal { background: var(--surface); border-radius: 12px; width: 680px; max-width: 96vw; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,.22); overflow: hidden; }
+
+/* ── Modal header ── */
+.ma-usr-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); }
+.ma-usr-modal-title  { font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0; }
+.ma-usr-modal-close  { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); line-height: 1; }
+.ma-usr-modal-close:hover { color: var(--text-primary); }
+
+/* ── Modal tabs ── */
+.ma-usr-modal-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 24px; background: var(--surface-alt, #f9f9f9); }
+.ma-usr-modal-tab  { padding: 12px 18px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.ma-usr-modal-tab:hover  { color: var(--text-primary); }
+.ma-usr-modal-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Modal body ── */
+.ma-usr-modal-body { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Form fields ── */
+.ma-usr-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.ma-usr-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.ma-usr-field { display: flex; flex-direction: column; gap: 5px; }
+.ma-usr-field label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.ma-usr-field label .req { color: var(--error, #c00); margin-left: 2px; }
+.ma-usr-input, .ma-usr-select {
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 13px; background: var(--surface); color: var(--text-primary); width: 100%;
+}
+.ma-usr-input:focus, .ma-usr-select:focus { outline: none; border-color: var(--accent); }
+.ma-usr-input.err, .ma-usr-select.err { border-color: var(--error, #c00); }
+.ma-usr-err-msg { font-size: 11px; color: var(--error, #c00); margin-top: 2px; }
+
+/* ── Checkbox row ── */
+.ma-usr-checks { display: flex; flex-wrap: wrap; gap: 16px; }
+.ma-usr-check  { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-primary); cursor: pointer; user-select: none; }
+.ma-usr-check input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+
+/* ── Quick actions tab ── */
+.ma-usr-expiry-card { background: var(--surface-alt, #f9f9f9); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.ma-usr-expiry-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.ma-usr-expiry-val   { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.ma-usr-expiry-val.expired { color: var(--error, #c00); }
+.ma-usr-qa-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.ma-usr-qa-btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary); }
+.ma-usr-qa-btn:hover { background: var(--surface-hover, #f0f0f0); }
+.ma-usr-qa-btn.danger { border-color: #c00; color: #c00; }
+.ma-usr-qa-btn.danger:hover { background: #fdecea; }
+.ma-usr-pwd-form { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; padding: 16px; background: var(--surface-alt, #f9f9f9); border: 1px solid var(--border); border-radius: 8px; }
+
+/* ── Tenant tab ── */
+.ma-usr-tenants-list { display: flex; flex-direction: column; gap: 6px; }
+.ma-usr-tenant-row   { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 7px; cursor: pointer; font-size: 13px; transition: background .12s; }
+.ma-usr-tenant-row:hover   { background: var(--surface-hover, #f5f5f5); }
+.ma-usr-tenant-row.checked { background: #eef6ff; border-color: var(--accent); }
+.ma-usr-tenant-row input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; flex-shrink: 0; }
+.ma-usr-tenant-name   { font-weight: 600; color: var(--text-primary); }
+.ma-usr-tenant-status { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+
+/* ── Modal footer ── */
+.ma-usr-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--border); }
+.ma-usr-footer-err   { font-size: 12px; color: var(--error, #c00); margin-right: auto; }
+.ma-usr-btn-cancel { padding: 8px 18px; background: transparent; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--text-secondary); }
+.ma-usr-btn-save   { padding: 8px 20px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ma-usr-btn-save:disabled  { opacity: .55; cursor: not-allowed; }
+.ma-usr-btn-cancel:hover { background: var(--surface-hover, #f0f0f0); }
+.ma-usr-btn-save:hover:not(:disabled) { opacity: .88; }
+
+.ma-usr-section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); padding-bottom: 6px; border-bottom: 1px solid var(--border); }

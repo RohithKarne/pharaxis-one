@@ -36,7 +36,6 @@ async function validateAccessToken(token) {
   const decoded = jwt.verify(token, JWT_SECRET);
 
   let sessionFound = false;
-  let requireTrackedSession = false;
 
   try {
     const [[sessionRow]] = await pool.execute(
@@ -51,19 +50,13 @@ async function validateAccessToken(token) {
         await pool.execute('DELETE FROM sessions WHERE id = ?', [sessionRow.id]).catch(() => {});
         throw new Error('Session expired. Please log in again.');
       }
-    } else {
-      const [[countRow]] = await pool.execute(
-        'SELECT COUNT(*) AS cnt FROM sessions WHERE user_id = ?',
-        [decoded.userId]
-      );
-      requireTrackedSession = Number(countRow?.cnt || 0) > 0;
     }
   } catch (err) {
     if (String(err?.message || '').includes('Session expired')) throw err;
     throw new Error('Authentication service unavailable. Please log in again.');
   }
 
-  if (requireTrackedSession && !sessionFound) {
+  if (!sessionFound) {
     throw new Error('Session revoked or invalid. Please log in again.');
   }
 

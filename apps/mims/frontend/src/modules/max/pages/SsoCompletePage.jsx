@@ -18,6 +18,12 @@ function mapSsoError(code) {
   return messages[key] || 'SSO could not be completed.'
 }
 
+const TARGET_CONFIG = {
+  admin: { moduleKey: 'admin_console', destination: '/mims-admin?standalone=1', loginPath: '/mims-admin/login', label: 'MIMS Admin' },
+  content: { moduleKey: 'content_mgmt', destination: '/content?standalone=1', loginPath: '/content/login', label: 'Content Management' },
+  reports: { moduleKey: 'reports', destination: '/reports?standalone=1', loginPath: '/reports/login', label: 'Reports' },
+}
+
 export default function SsoCompletePage() {
   const navigate = useNavigate()
   const { login } = useAuth()
@@ -26,6 +32,7 @@ export default function SsoCompletePage() {
   const [failed, setFailed] = useState(false)
 
   const errorCode = useMemo(() => searchParams.get('sso_error') || '', [searchParams])
+  const target = useMemo(() => searchParams.get('target') || '', [searchParams])
 
   useEffect(() => {
     let cancelled = false
@@ -45,6 +52,17 @@ export default function SsoCompletePage() {
         if (!res.ok) throw new Error(payload.error || 'Unable to restore app session after SSO.')
 
         if (cancelled) return
+        const isAdminUser = payload.user?.role === 'admin' || payload.user?.role === 'superadmin'
+        const hasMimsAppAccess = payload.user?.role === 'superadmin' || (payload.modules || []).includes('mims_core')
+        const targetConfig = TARGET_CONFIG[target] || null
+        const hasTargetAccess = !targetConfig || (isAdminUser && (payload.user?.role === 'superadmin' || (payload.modules || []).includes(targetConfig.moduleKey)))
+        if (!hasTargetAccess) {
+          await httpFetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+          setFailed(true)
+          setMessage(`This account does not have access to ${targetConfig.label}.`)
+          return
+        }
+
         login(payload.user, payload.token || '', payload.modules || [], {
           orgId: payload.orgId || null,
           siteId: payload.siteId || null,
@@ -53,7 +71,16 @@ export default function SsoCompletePage() {
           allOrgs: payload.allOrgs || [],
           sessionTimeout: payload.sessionTimeout ?? 30,
         })
-        navigate(payload.user?.role === 'superadmin' ? '/superadmin' : '/dashboard', { replace: true })
+        if (targetConfig) {
+          navigate(targetConfig.destination, { replace: true })
+        } else if (hasMimsAppAccess) {
+          navigate('/dashboard', { replace: true })
+        } else {
+          const fallback = Object.values(TARGET_CONFIG).find(config =>
+            isAdminUser && (payload.user?.role === 'superadmin' || (payload.modules || []).includes(config.moduleKey))
+          )
+          navigate(fallback?.destination || '/no-access', { replace: true })
+        }
       } catch (err) {
         if (!cancelled) {
           setFailed(true)
@@ -64,7 +91,7 @@ export default function SsoCompletePage() {
 
     finalizeSso()
     return () => { cancelled = true }
-  }, [errorCode, login, navigate])
+  }, [errorCode, login, navigate, target])
 
   return (
     <div className="login-page">
@@ -77,7 +104,7 @@ export default function SsoCompletePage() {
           <div style={{ padding: '18px 0', textAlign: 'center' }}>
             <div style={{ fontSize: 14, marginBottom: 10 }}>{message}</div>
             {failed && (
-              <button className="btn btn-primary" type="button" onClick={() => navigate('/login', { replace: true })}>
+              <button className="btn btn-primary" type="button" onClick={() => navigate(TARGET_CONFIG[target]?.loginPath || '/login', { replace: true })}>
                 Back to Sign In
               </button>
             )}

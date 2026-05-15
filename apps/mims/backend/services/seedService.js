@@ -307,10 +307,34 @@ async function seedCaseFormDefinition(conn, orgId, _userId) {
   }
 }
 
+async function seedCustomizeFormsPlaceholders(conn, orgId) {
+  // Seed placeholder items from the Customize Forms catalog so all tenants
+  // (existing + new) have the placeholder records available to toggle in the
+  // MIMS Admin > System > Setup > Customize Forms screen.
+  let catalogModule;
+  try {
+    catalogModule = require('../catalogs/customizeFormsCatalog');
+  } catch (_) { return; }
+
+  const { CATALOG, PLACEHOLDER_SECTION } = catalogModule;
+  for (const category of Object.values(CATALOG)) {
+    const placeholders = [...category.sections, ...category.fields].filter(it => it.is_placeholder);
+    for (const ph of placeholders) {
+      await conn.execute(
+        `INSERT IGNORE INTO field_setup
+          (section_name, field_name, field_type, is_required, is_hidden, is_disabled, picklist_type, lookup_target, sort_order, org_id)
+         VALUES (?, ?, 'placeholder', 0, 0, 0, NULL, NULL, 0, ?)`,
+        [PLACEHOLDER_SECTION, ph.key, orgId]
+      );
+    }
+  }
+}
+
 async function seedNewOrgWithConnection(conn, orgId, userId) {
   await seedFieldSetup(conn, orgId, userId);
   await seedPicklists(conn, orgId, userId);
   await seedCaseFormDefinition(conn, orgId, userId);
+  await seedCustomizeFormsPlaceholders(conn, orgId);
 }
 
 async function seedNewOrg(orgId, userId) {

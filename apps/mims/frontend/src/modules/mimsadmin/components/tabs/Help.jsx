@@ -1,6 +1,9 @@
 import { findHelpLabel } from '../configItems'
+import HelpGuide from './HelpGuide'
 
 export default function Help({ selectedItem }) {
+  if (selectedItem === 'help-guide') return <HelpGuide />
+
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
       {!selectedItem ? (

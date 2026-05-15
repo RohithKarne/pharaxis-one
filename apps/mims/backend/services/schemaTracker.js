@@ -4,26 +4,38 @@ const pool = require('../database/db');
 const { emitProcessEvent } = require('./processExplorerService');
 
 let timer = null;
+const MAX_SCHEMA_SNAPSHOTS = parseInt(process.env.MIMS_SCHEMA_SNAPSHOT_RETENTION || '100', 10);
 
 async function fetchSchemaMap() {
   const [rows] = await pool.execute(
-    `SELECT table_name, column_name, column_type, is_nullable, column_key
+    `SELECT table_name AS tableName,
+            column_name AS columnName,
+            column_type AS columnType,
+            is_nullable AS isNullable,
+            column_key AS columnKey
      FROM information_schema.columns
      WHERE table_schema = DATABASE()
      ORDER BY table_name, ordinal_position`
   );
   const map = {};
   for (const row of rows) {
-    const t = row.table_name;
+    const t = row.tableName;
     if (!map[t]) map[t] = [];
     map[t].push({
-      name: row.column_name,
-      type: row.column_type,
-      nullable: row.is_nullable,
-      key: row.column_key,
+      name: row.columnName,
+      type: row.columnType,
+      nullable: row.isNullable,
+      key: row.columnKey,
     });
   }
   return map;
+}
+
+function isValidSchemaMap(schemaMap) {
+  if (!schemaMap || typeof schemaMap !== 'object' || Array.isArray(schemaMap)) return false;
+  const tables = Object.keys(schemaMap);
+  if (tables.length === 0 || tables.includes('undefined')) return false;
+  return tables.every(table => Array.isArray(schemaMap[table]));
 }
 
 function diffSchemas(prev, next) {
@@ -81,6 +93,11 @@ async function runSchemaScan() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   );
 
+  await pool.execute(
+    `DELETE FROM mims_schema_snapshots
+      WHERE snapshot_json LIKE '{\\"undefined\\":%'`
+  );
+
   const current = await fetchSchemaMap();
   const [[latest]] = await pool.execute(
     'SELECT id, snapshot_json FROM mims_schema_snapshots ORDER BY id DESC LIMIT 1'
@@ -108,8 +125,14 @@ async function runSchemaScan() {
 
   let previous = {};
   try { previous = JSON.parse(latest.snapshot_json); } catch (_) { previous = {}; }
+  if (!isValidSchemaMap(previous)) previous = {};
 
   const changes = diffSchemas(previous, current);
+  if (changes.length === 0) {
+    await pruneOldSnapshots();
+    return;
+  }
+
   for (const change of changes) {
     await emitProcessEvent({
       sourceModule: 'Schema Tracker',
@@ -129,6 +152,23 @@ async function runSchemaScan() {
     'INSERT INTO mims_schema_snapshots (snapshot_json) VALUES (?)',
     [JSON.stringify(current)]
   );
+  await pruneOldSnapshots();
+}
+
+async function pruneOldSnapshots() {
+  if (!Number.isFinite(MAX_SCHEMA_SNAPSHOTS) || MAX_SCHEMA_SNAPSHOTS <= 0) return;
+  const retention = Math.max(1, Math.floor(MAX_SCHEMA_SNAPSHOTS));
+  await pool.execute(
+    `DELETE FROM mims_schema_snapshots
+      WHERE id NOT IN (
+        SELECT id FROM (
+          SELECT id
+          FROM mims_schema_snapshots
+          ORDER BY id DESC
+          LIMIT ${retention}
+        ) retained
+      )`
+  );
 }
 
 function startSchemaTracker() {
@@ -143,4 +183,4 @@ function stopSchemaTracker() {
   timer = null;
 }
 
-module.exports = { startSchemaTracker, stopSchemaTracker };
+module.exports = { startSchemaTracker, stopSchemaTracker, runSchemaScan };

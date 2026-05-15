@@ -7,8 +7,8 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-export default function ProtectedRoute({ children }) {
+export default function ProtectedRoute({ children, loginPath = '/login' }) {
   const { token } = useAuth()
-  if (!token) return <Navigate to="/login" replace />
+  if (!token) return <Navigate to={loginPath} replace />
   return children
 }

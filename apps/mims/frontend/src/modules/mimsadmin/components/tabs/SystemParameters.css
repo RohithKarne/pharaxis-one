@@ -1,0 +1,115 @@
+/* ── SystemParameters — MIMS Admin > System > System Parameters ── */
+/* CSS namespace: ma-sp- */
+
+.ma-sp-page { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+
+/* ── Header ── */
+.ma-sp-header { padding: 24px 32px 0 32px; }
+.ma-sp-title  { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0 0 4px 0; }
+.ma-sp-sub    { font-size: 12px; color: var(--text-muted); margin-bottom: 18px; }
+
+/* ── Sub-tabs ── */
+.ma-sp-tabs {
+  display: flex; gap: 4px; padding: 0 32px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.ma-sp-tab {
+  padding: 11px 20px; font-size: 13px; font-weight: 600;
+  color: var(--text-muted); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  user-select: none;
+}
+.ma-sp-tab:hover { color: var(--text-primary); }
+.ma-sp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Body ── */
+.ma-sp-body { flex: 1; overflow-y: auto; padding: 24px 32px; }
+
+/* ── Section card ── */
+.ma-sp-section {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 20px 24px; margin-bottom: 20px;
+}
+.ma-sp-section-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-secondary); padding-bottom: 12px; margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Field rows ── */
+.ma-sp-row { display: flex; align-items: flex-start; gap: 16px; padding: 10px 0; }
+.ma-sp-row + .ma-sp-row { border-top: 1px dashed var(--border); }
+.ma-sp-label-block { flex: 1 1 55%; min-width: 0; }
+.ma-sp-label { font-size: 13px; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 3px; }
+.ma-sp-desc  { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+.ma-sp-control { flex: 0 0 200px; display: flex; align-items: center; justify-content: flex-end; }
+
+.ma-sp-num-input {
+  width: 110px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 13px; text-align: right; background: var(--surface); color: var(--text-primary);
+}
+.ma-sp-num-input:focus { outline: none; border-color: var(--accent); }
+.ma-sp-num-suffix { font-size: 12px; color: var(--text-muted); margin-left: 8px; }
+
+/* ── Toggle switch ── */
+.ma-sp-toggle { position: relative; display: inline-block; width: 42px; height: 22px; }
+.ma-sp-toggle input { opacity: 0; width: 0; height: 0; }
+.ma-sp-toggle .slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: #ccd1da; border-radius: 22px; transition: .2s;
+}
+.ma-sp-toggle .slider::before {
+  position: absolute; content: ""; height: 16px; width: 16px;
+  left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s;
+}
+.ma-sp-toggle input:checked + .slider { background: var(--accent); }
+.ma-sp-toggle input:checked + .slider::before { transform: translateX(20px); }
+
+/* ── Save button bar ── */
+.ma-sp-save-bar {
+  position: sticky; bottom: 0; background: var(--surface);
+  padding: 14px 0; margin-top: 12px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: flex-end; gap: 12px;
+}
+.ma-sp-flash-ok  { color: #1a7a3f; font-size: 13px; font-weight: 600; }
+.ma-sp-flash-err { color: var(--error, #c00); font-size: 13px; font-weight: 600; margin-right: auto; }
+.ma-sp-btn-save {
+  padding: 9px 22px; background: var(--accent); color: #fff; border: none;
+  border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.ma-sp-btn-save:disabled { opacity: .55; cursor: not-allowed; }
+.ma-sp-btn-save:hover:not(:disabled) { opacity: .88; }
+
+/* ── Themes tab ── */
+.ma-sp-themes-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px; margin-top: 6px;
+}
+.ma-sp-theme-card {
+  border: 2px solid var(--border); border-radius: 10px; padding: 16px; cursor: pointer;
+  background: var(--surface); transition: border-color .15s, transform .12s;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.ma-sp-theme-card:hover { transform: translateY(-1px); }
+.ma-sp-theme-card.selected {
+  border-color: var(--accent); box-shadow: 0 0 0 3px rgba(18,100,163,0.12);
+}
+.ma-sp-theme-swatches { display: flex; gap: 6px; }
+.ma-sp-theme-swatch {
+  flex: 1; height: 28px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08);
+}
+.ma-sp-theme-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.ma-sp-theme-radio { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.ma-sp-theme-radio input { accent-color: var(--accent); }
+
+/* ── Others tab (placeholder) ── */
+.ma-sp-placeholder {
+  text-align: center; padding: 60px 20px; color: var(--text-muted);
+  background: var(--surface); border: 1px dashed var(--border); border-radius: 10px;
+}
+.ma-sp-placeholder-icon { font-size: 36px; margin-bottom: 12px; }
+.ma-sp-placeholder-title { font-size: 15px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+
+/* ── Loading ── */
+.ma-sp-loading { padding: 60px; text-align: center; color: var(--text-muted); font-size: 13px; }

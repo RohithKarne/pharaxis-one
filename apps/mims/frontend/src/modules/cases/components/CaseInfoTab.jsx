@@ -4,6 +4,7 @@ export default function CaseInfoTab({
   infoForm, setInfoForm, statuses, users,
   reassignForm, setReassignForm, reassignSaving,
   dynFieldValues, setDynFieldValues, dynFieldSaving,
+  dynFieldErrors = {},
   formConfig, scheduleAutoSave, reassignCase, saveDynFields,
 }) {
   return (
@@ -94,9 +95,14 @@ export default function CaseInfoTab({
         <DynamicFieldsSection
           sections={formConfig.sections}
           values={dynFieldValues}
-          onChange={setDynFieldValues}
+          onChange={updater => {
+            setDynFieldValues(updater)
+            scheduleAutoSave()
+          }}
           onSave={saveDynFields}
           saving={dynFieldSaving}
+          rules={formConfig.rules || []}
+          errors={dynFieldErrors}
         />
       )}
     </div>

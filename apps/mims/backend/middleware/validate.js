@@ -85,6 +85,7 @@ const schemas = {
     product_id:        id().optional(),
     source_type_id:    id().optional(),
     site_id:           id().optional(),
+    expected_version_stamp: Joi.number().integer().min(0).optional(),
   }).min(1),
 
   savedView: Joi.object({

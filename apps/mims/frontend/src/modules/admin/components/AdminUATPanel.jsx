@@ -554,10 +554,14 @@ function FeatureRequestsTab({ token }) {
 
 // ── Main Panel ────────────────────────────────────────────────────────────────
 
-export default function AdminUATPanel() {
+export default function AdminUATPanel({ initialTab = 'bugs' }) {
   const token              = useToken()
-  const [tab, setTab]      = useState('bugs')
+  const [tab, setTab]      = useState(initialTab)
   const [stats, setStats]  = useState(null)
+
+  useEffect(() => {
+    setTab(initialTab)
+  }, [initialTab])
 
   useEffect(() => {
     if (!token) return

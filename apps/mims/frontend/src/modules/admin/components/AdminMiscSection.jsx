@@ -1,5 +1,4 @@
 import AdminProductsPanel from './AdminProductsPanel'
-import AdminAuditPanel from './AdminAuditPanel'
 import AdminEmailAccountsPanel from './AdminEmailAccountsPanel'
 import AdminContactMasterPanel from './AdminContactMasterPanel'
 import AdminCaseNumberingPanel from './AdminCaseNumberingPanel'
@@ -8,9 +7,6 @@ export default function AdminMiscSection({ contentSection, H, flash }) {
   switch (contentSection) {
     case 'products':
       return <AdminProductsPanel H={H} flash={flash} />
-    case 'audit-admin':
-    case 'audit-login':
-      return <AdminAuditPanel contentSection={contentSection} H={H} flash={flash} />
     case 'email-accounts':
       return <AdminEmailAccountsPanel H={H} flash={flash} />
     case 'contact-master':

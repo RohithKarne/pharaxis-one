@@ -76,6 +76,32 @@ const DPPR_DOMAINS = [
 ];
 
 const ACTION_RANK = { None: 0, Anonymize: 1, Delete: 2 };
+const DPPR_TEMPLATES = {
+  GDPR: [
+    ['GDPR marketing retention', 'contact_pii', 'Delete', 180, 'GDPR Article 17'],
+    ['GDPR consent withdrawal', 'contact_pii', 'Delete', 0, 'GDPR consent withdrawal'],
+    ['GDPR AE public-health retention', 'medical_data', 'None', 36500, 'Article 9(2)(i) public health'],
+    ['GDPR narrative minimisation', 'case_narrative', 'Anonymize', 3650, 'Data minimisation'],
+    ['GDPR reporter access control', 'reporter_info', 'Anonymize', 3650, 'Purpose limitation'],
+    ['GDPR inquiry retention', 'inquiry_content', 'Anonymize', 730, 'Storage limitation'],
+  ],
+  HIPAA: [
+    ['HIPAA PHI retention', 'medical_data', 'None', 2190, 'HIPAA six year retention'],
+    ['HIPAA audit retention', 'case_narrative', 'None', 2190, 'Audit trail retention'],
+  ],
+  LGPD: [
+    ['LGPD consent withdrawal', 'contact_pii', 'Delete', 0, 'LGPD consent withdrawal'],
+    ['LGPD purpose limitation', 'case_narrative', 'Anonymize', 730, 'Purpose limitation'],
+  ],
+  PDPA: [
+    ['PDPA withdrawal deletion', 'contact_pii', 'Delete', 30, 'Delete within 30 days of withdrawal'],
+    ['PDPA inquiry minimisation', 'inquiry_content', 'Anonymize', 365, 'Consent based minimisation'],
+  ],
+  PIPEDA: [
+    ['PIPEDA access disclosure', 'reporter_info', 'Anonymize', 30, 'Access disclosure within 30 days'],
+    ['PIPEDA purpose limitation', 'contact_pii', 'Anonymize', 730, 'Purpose limitation'],
+  ],
+};
 
 function orgScope(req) {
   if (req.user.role === 'superadmin') return null;
@@ -85,6 +111,50 @@ function orgScope(req) {
 // ── GET /api/admin/dppr/domains ───────────────────────────────────────────────
 router.get('/dppr/domains', authenticate, (_req, res) => {
   res.json({ domains: DPPR_DOMAINS });
+});
+
+router.get('/dppr/templates', authenticate, requireRole('admin', 'superadmin'), (_req, res) => {
+  res.json({ templates: Object.entries(DPPR_TEMPLATES).map(([region, rules]) => ({ region, rule_count: rules.length, rules })) });
+});
+
+router.post('/dppr/templates/:region/apply', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const region = String(req.params.region || '').toUpperCase();
+    const template = DPPR_TEMPLATES[region];
+    if (!template) return res.status(404).json({ error: 'Unknown DPPR template region.' });
+    const resolvedOrg = orgScope(req) ?? (req.body?.org_id ? parseInt(req.body.org_id, 10) : null);
+    if (!resolvedOrg) return res.status(400).json({ error: 'org_id required.' });
+    const ids = [];
+    for (const [ruleName, domain, action, days, legalBasis] of template) {
+      const [result] = await pool.execute(
+        `INSERT INTO dppr_rules
+          (org_id, rule_name, domain, contact_type, consent_type, action, retention_days, is_active, template_region, created_by, updated_by)
+         VALUES (?, ?, ?, 'all', 'all', ?, ?, 1, ?, ?, ?)`,
+        [resolvedOrg, ruleName, domain, action, days, region, req.user.userId, req.user.userId]
+      );
+      ids.push({ id: result.insertId, legal_basis: legalBasis });
+    }
+    res.status(201).json({ region, created: ids.length, ids });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/dppr/conflicts', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const scope = orgScope(req);
+    const orgId = scope ?? (req.query.org_id ? parseInt(req.query.org_id, 10) : null);
+    if (!orgId) return res.status(400).json({ error: 'org_id required.' });
+    const [rules] = await pool.execute('SELECT * FROM dppr_rules WHERE org_id = ? AND is_active = 1 ORDER BY domain, id', [orgId]);
+    const conflicts = [];
+    for (let i = 0; i < rules.length; i++) {
+      for (let j = i + 1; j < rules.length; j++) {
+        const a = rules[i]; const b = rules[j];
+        if (a.domain === b.domain && a.contact_type === b.contact_type && a.consent_type === b.consent_type && a.action !== b.action) {
+          conflicts.push({ rule_a: a, rule_b: b, reason: `Same scope has conflicting actions: ${a.action} vs ${b.action}.` });
+        }
+      }
+    }
+    res.json({ conflicts });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── GET /api/admin/dppr/execution-log ────────────────────────────────────────

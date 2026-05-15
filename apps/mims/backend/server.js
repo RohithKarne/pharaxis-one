@@ -67,12 +67,14 @@ const DEFAULT_ALLOWED_ORIGINS = new Set([
   'https://13.205.213.128'
 ]);
 
-function parseAllowedOrigins(rawOrigins) {
-  const origins = String(rawOrigins || '')
+function parseAllowedOrigins(...rawOriginGroups) {
+  const origins = rawOriginGroups
+    .map((rawOrigins) => String(rawOrigins || ''))
+    .join(',')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
-  return origins.length ? new Set(origins) : DEFAULT_ALLOWED_ORIGINS;
+  return origins.length ? new Set([...DEFAULT_ALLOWED_ORIGINS, ...origins]) : DEFAULT_ALLOWED_ORIGINS;
 }
 
 function getApiVersionContract(requestedVersion = API_LATEST_VERSION) {
@@ -88,12 +90,25 @@ function getApiVersionContract(requestedVersion = API_LATEST_VERSION) {
 
 // ─── Middleware ─────────────────────────────────────────────────────────────
 
+// Local UAT: rewrite /mims/api/... → /api/... so the built frontend works
+// without nginx. On EC2, nginx does this rewrite before reaching Node.
+app.use((req, _res, next) => {
+  if (req.path.startsWith('/mims/api/')) {
+    req.url = req.url.replace('/mims/api/', '/api/');
+  }
+  next();
+});
+
 // CORS — allows the frontend (served from the same origin) to call the API
 const allowAllOrigins = String(process.env.CORS_ALLOW_ALL || '').toLowerCase() === 'true';
 if (allowAllOrigins && process.env.NODE_ENV === 'production') {
   throw new Error('CORS_ALLOW_ALL cannot be enabled in production.');
 }
-const allowedOrigins = parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS);
+const allowedOrigins = parseAllowedOrigins(
+  process.env.CORS_ALLOWED_ORIGINS,
+  process.env.MIMS_ALLOWED_FRONTEND_ORIGINS,
+  process.env.MIMS_BACKEND_BASE_URL
+);
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowAllOrigins || allowedOrigins.has(origin)) return callback(null, true);
@@ -182,6 +197,8 @@ app.use('/api/admin', require('./routes/admin/miCategories'));
 app.use('/api/admin', require('./routes/admin/fieldSetup'));
 app.use('/api/admin', require('./routes/admin/securityGroups'));
 app.use('/api/admin', require('./routes/admin/accessConfigurations'));
+app.use('/api/admin', require('./routes/admin/twoFactor'));
+app.use('/api/admin', require('./routes/admin/alerts'));
 app.use('/api/admin', require('./routes/admin/contacts'));
 app.use('/api/admin', require('./routes/admin/siteConfig'));
 app.use('/api/admin', require('./routes/admin/productDictionary'));
@@ -194,6 +211,16 @@ app.use('/api/admin', require('./routes/admin/responseErrorLog'));
 app.use('/api/admin', require('./routes/admin/transmissionAuditTrail'));
 app.use('/api/admin', require('./routes/admin/copyDivision'));
 app.use('/api/admin', require('./routes/admin/dppr'));
+app.use('/api/admin', require('./routes/admin/rtbf'));
+app.use('/api/admin', require('./routes/admin/consent'));
+app.use('/api/admin', require('./routes/admin/users'));
+app.use('/api/admin', require('./routes/admin/systemParams'));
+app.use('/api/admin', require('./routes/admin/customizeForms'));
+app.use('/api/admin', require('./routes/admin/caseFormRules'));
+app.use('/api/admin', require('./routes/admin/reportsAccess'));
+app.use('/api/admin', require('./routes/admin/picklistsTable'));
+app.use('/api/admin', require('./routes/admin/dashboardActivity'));
+app.use('/api/admin', require('./routes/admin/userPreferences'));
 
 // ─── Case Management Routes (Phase 2) ────────────────────────────────────────
 app.use('/api', require('./routes/cases'));          // F-13 + F-15
@@ -223,9 +250,17 @@ app.use('/uploads/cm', express.static(path.join(__dirname, 'storage/cm_documents
 app.use('/storage/org_logos', express.static(path.join(__dirname, 'storage/org_logos')));
 
 // ─── Serve Static Frontend Files ─────────────────────────────────────────────
-// This tells Express to serve all files in the /frontend folder
-// When the browser goes to http://localhost:3000 it gets index.html automatically
-app.use(express.static(path.join(__dirname, '../frontend')));
+// Dev:  Vite runs separately on :5173 — Express doesn't serve the frontend.
+// Prod: `npm run build` outputs to ../frontend/dist/ with base '/mims/'.
+//       Mount at /mims so /mims/assets/... resolves to dist/assets/...
+const FRONTEND_DIR = process.env.NODE_ENV === 'production'
+  ? path.join(__dirname, '../frontend/dist')
+  : path.join(__dirname, '../frontend');
+if (process.env.NODE_ENV === 'production') {
+  app.use('/mims', express.static(FRONTEND_DIR));
+} else {
+  app.use(express.static(FRONTEND_DIR));
+}
 
 // ─── API Routes ──────────────────────────────────────────────────────────────
 app.use('/api/auth', authRateLimiter, require('./routes/auth'));
@@ -290,6 +325,7 @@ app.use('/api/admin', dependencyCheck);
 app.use('/api/admin', require('./routes/admin/impactPreview'));
 app.use('/api/admin', require('./routes/admin/policyGraph'));
 app.use('/api/admin', require('./routes/admin/contentIntelligence'));
+app.use('/api/admin', require('./routes/admin/loggedInUsers'));
 // ── In-App Help System (S21-1) ──────────────────────────────────────────────
 app.use('/api',       require('./routes/help'));
 app.use('/api/admin', require('./routes/admin/help'));
@@ -333,6 +369,8 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/fieldSetup'));
   r.use(`${prefix}/admin`, require('./routes/admin/securityGroups'));
   r.use(`${prefix}/admin`, require('./routes/admin/accessConfigurations'));
+  r.use(`${prefix}/admin`, require('./routes/admin/twoFactor'));
+  r.use(`${prefix}/admin`, require('./routes/admin/alerts'));
   r.use(`${prefix}/admin`, require('./routes/admin/contacts'));
   r.use(`${prefix}/admin`, require('./routes/admin/siteConfig'));
   r.use(`${prefix}/admin`, require('./routes/admin/productDictionary'));
@@ -345,6 +383,9 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/transmissionAuditTrail'));
   r.use(`${prefix}/admin`, require('./routes/admin/copyDivision'));
   r.use(`${prefix}/admin`, require('./routes/admin/dppr'));
+  r.use(`${prefix}/admin`, require('./routes/admin/rtbf'));
+  r.use(`${prefix}/admin`, require('./routes/admin/consent'));
+  r.use(`${prefix}/admin`, require('./routes/admin/caseFormRules'));
   r.use(`${prefix}/admin`, require('./routes/admin/serviceLogs'));
   r.use(`${prefix}/admin`, require('./routes/admin/systemActivity'));
   r.use(`${prefix}/admin`, require('./routes/admin/serviceDashboard'));
@@ -358,6 +399,7 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/impactPreview'));
   r.use(`${prefix}/admin`, require('./routes/admin/policyGraph'));
   r.use(`${prefix}/admin`, require('./routes/admin/contentIntelligence'));
+  r.use(`${prefix}/admin`, require('./routes/admin/loggedInUsers'));
   r.use(`${prefix}/admin`, require('./routes/integrations/schedulerAdmin'));
   r.use(`${prefix}/admin`, require('./routes/integrations/oauth2Admin'));
   r.use(`${prefix}/admin`, require('./routes/admin/help'));
@@ -443,9 +485,13 @@ mountRoutes(apiV1Router, '');
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend', 'index.html'))
-})
+// SPA fallback — any non-API route returns index.html so client-side routing works
+app.get('/mims', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
+app.get('/mims/*', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
+// Keep legacy catch-all for dev (Vite handles its own routing)
+if (process.env.NODE_ENV !== 'production') {
+  app.get('*', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
+}
 
 // ─── Architecture Fix A2: child process manager ───────────────────────────────
 // emailPoller, scheduler, and emailWorker now run in dedicated child processes.

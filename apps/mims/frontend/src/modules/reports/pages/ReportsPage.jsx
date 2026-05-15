@@ -3,6 +3,7 @@ import { confirm } from '../../../shared/utils/confirm'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
+import StandaloneModuleShell from '../../../shared/components/StandaloneModuleShell'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 const SECTION_LABELS = {
@@ -132,6 +133,7 @@ export default function ReportsPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { token, user } = useAuth()
+  const standalone = new URLSearchParams(location.search || '').get('standalone') === '1'
   const isManager = user?.role === 'admin' || user?.role === 'superadmin'
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
@@ -1888,15 +1890,22 @@ export default function ReportsPage() {
   }
 
   if (loading) {
+    const loadingContent = <div style={{ padding: 24, color: 'var(--text-muted)' }}>Loading reports module…</div>
+    if (standalone) {
+      return (
+        <StandaloneModuleShell title="Reports" subtitle="Reports Console" logo="R" loginPath="/reports/login">
+          {loadingContent}
+        </StandaloneModuleShell>
+      )
+    }
     return (
       <MIMSLayout>
-        <div style={{ padding: 24, color: 'var(--text-muted)' }}>Loading reports module…</div>
+        {loadingContent}
       </MIMSLayout>
     )
   }
 
-  return (
-    <MIMSLayout>
+  const content = (
       <div style={{ display: 'grid', gridTemplateRows: 'auto auto 1fr', height: '100%', overflow: 'hidden' }}>
         <div style={{ padding: '18px 24px 12px', borderBottom: '1px solid var(--border)', background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -1934,6 +1943,19 @@ export default function ReportsPage() {
           {section === 'configuration' && isManager && renderConfigurationSection()}
         </div>
       </div>
+  )
+
+  if (standalone) {
+    return (
+      <StandaloneModuleShell title="Reports" subtitle="Reports Console" logo="R" loginPath="/reports/login">
+        {content}
+      </StandaloneModuleShell>
+    )
+  }
+
+  return (
+    <MIMSLayout>
+      {content}
     </MIMSLayout>
   )
 }

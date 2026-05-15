@@ -28,6 +28,22 @@ function getScopedOrgId(req, providedOrgId = null) {
   return isSuperadmin(req) ? (providedOrgId || null) : req.user.orgId;
 }
 
+async function requireAdminConsoleAccess(req, res, next) {
+  if (isSuperadmin(req)) return next();
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id FROM user_module_permissions
+       WHERE user_id = ? AND module = 'admin_console' AND can_access = 1
+       LIMIT 1`,
+      [req.user.userId]
+    );
+    if (rows.length > 0) return next();
+    return res.status(403).json({ error: 'You do not have permission to view MIMS Admin data.' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Access check failed.' });
+  }
+}
+
 // ─── WORKFLOW STATES ────────────────────────────────────────
 router.get('/workflow-states', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {
@@ -174,20 +190,36 @@ router.put('/products/:id', authenticate, requireRole('admin', 'superadmin'), re
 });
 
 // ─── AUDIT LOGS ───────────────────────────────────────────────
-router.get('/audit-logs', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/audit-logs', authenticate, requireAdminConsoleAccess, async (req, res) => {
   try {
-    const { from, to, user, action, entity, entity_id } = req.query;
+    const { from, to, user, action, entity, entity_id, search } = req.query;
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const pageSize = Math.min(100, Math.max(10, parseInt(req.query.page_size || '20', 10)));
+    const offset = (page - 1) * pageSize;
     let query = 'SELECT * FROM audit_logs WHERE 1=1';
+    let countQuery = 'SELECT COUNT(*) AS total FROM audit_logs WHERE 1=1';
     const params = [];
-    if (from)      { query += ' AND created_at >= ?';       params.push(from); }
-    if (to)        { query += ' AND created_at <= ?';       params.push(to + ' 23:59:59'); }
-    if (user)      { query += ' AND user_name LIKE ?';      params.push(`%${user}%`); }
-    if (action)    { query += ' AND action = ?';            params.push(action); }
-    if (entity)    { query += ' AND entity = ?';            params.push(entity); }
-    if (entity_id) { query += ' AND entity_id = ?';        params.push(entity_id); }
-    query += ' ORDER BY created_at DESC LIMIT 500';
+    const whereParts = [];
+    if (from)      { whereParts.push('created_at >= ?'); params.push(from); }
+    if (to)        { whereParts.push('created_at <= ?'); params.push(to + ' 23:59:59'); }
+    if (user)      { whereParts.push('user_name LIKE ?'); params.push(`%${user}%`); }
+    if (action)    { whereParts.push('action = ?'); params.push(action); }
+    if (entity)    { whereParts.push('entity = ?'); params.push(entity); }
+    if (entity_id) { whereParts.push('entity_id = ?'); params.push(entity_id); }
+    if (search) {
+      whereParts.push('(user_name LIKE ? OR action LIKE ? OR entity LIKE ? OR CAST(entity_id AS CHAR) LIKE ? OR details LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    if (whereParts.length > 0) {
+      const whereSql = ` AND ${whereParts.join(' AND ')}`;
+      query += whereSql;
+      countQuery += whereSql;
+    }
+    query += ` ORDER BY created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
+    const [[countRow]] = await pool.execute(countQuery, params);
     const [logs] = await pool.execute(query, params);
-    res.json({ logs });
+    const total = Number(countRow?.total || 0);
+    res.json({ logs, total, page, page_size: pageSize, total_pages: Math.max(1, Math.ceil(total / pageSize)) });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
@@ -273,17 +305,34 @@ router.put('/permissions', authenticate, requireRole('admin', 'superadmin'), asy
 });
 
 // ─── LOGIN AUDIT TRAIL ────────────────────────────────────────
-router.get('/login-audit', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/login-audit', authenticate, requireAdminConsoleAccess, async (req, res) => {
   try {
-    const { from, to, user } = req.query;
+    const { from, to, user, status, search } = req.query;
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const pageSize = Math.min(100, Math.max(10, parseInt(req.query.page_size || '20', 10)));
+    const offset = (page - 1) * pageSize;
     let query = 'SELECT * FROM login_audit WHERE 1=1';
+    let countQuery = 'SELECT COUNT(*) AS total FROM login_audit WHERE 1=1';
     const params = [];
-    if (from) { query += ' AND login_time >= ?'; params.push(from); }
-    if (to)   { query += ' AND login_time <= ?'; params.push(to + ' 23:59:59'); }
-    if (user) { query += ' AND user_name LIKE ?'; params.push(`%${user}%`); }
-    query += ' ORDER BY login_time DESC LIMIT 500';
+    const whereParts = [];
+    if (from)   { whereParts.push('login_time >= ?'); params.push(from); }
+    if (to)     { whereParts.push('login_time <= ?'); params.push(to + ' 23:59:59'); }
+    if (user)   { whereParts.push('user_name LIKE ?'); params.push(`%${user}%`); }
+    if (status) { whereParts.push('status = ?'); params.push(status); }
+    if (search) {
+      whereParts.push('(user_name LIKE ? OR role LIKE ? OR status LIKE ? OR auth_event LIKE ? OR fail_reason LIKE ? OR metadata LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    if (whereParts.length > 0) {
+      const whereSql = ` AND ${whereParts.join(' AND ')}`;
+      query += whereSql;
+      countQuery += whereSql;
+    }
+    query += ` ORDER BY login_time DESC LIMIT ${pageSize} OFFSET ${offset}`;
+    const [[countRow]] = await pool.execute(countQuery, params);
     const [logs] = await pool.execute(query, params);
-    res.json({ logs });
+    const total = Number(countRow?.total || 0);
+    res.json({ logs, total, page, page_size: pageSize, total_pages: Math.max(1, Math.ceil(total / pageSize)) });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 

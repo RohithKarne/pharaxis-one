@@ -4,30 +4,27 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { httpFetch } from '../api/httpFetch.js'
 
 export default function MIMSHeader({ onBellClick, onHelpClick }) {
-  const { user, token, orgName, orgId, siteName, allOrgs, switchOrg, refreshOrgAccess, logout, getInitials, hasModuleAccess } = useAuth()
+  const { user, token, orgName, orgId, siteName, allOrgs, switchOrg, refreshOrgAccess, logout, getInitials } = useAuth()
   const navigate = useNavigate()
 
   const [orgLogoUrl, setOrgLogoUrl] = useState(null)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [userOpen,     setUserOpen]     = useState(false)
   const [orgOpen,      setOrgOpen]      = useState(false)
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [passwordMsg, setPasswordMsg] = useState({ type: '', text: '' })
   const [savingPassword, setSavingPassword] = useState(false)
-  const settingsRef = useRef(null)
   const userRef     = useRef(null)
   const orgRef      = useRef(null)
 
   // Close dropdowns on outside click
   useEffect(() => {
     function handler(e) {
-      if (settingsRef.current && !settingsRef.current.contains(e.target)) setSettingsOpen(false)
       if (userRef.current    && !userRef.current.contains(e.target))    setUserOpen(false)
       if (orgRef.current     && !orgRef.current.contains(e.target))     setOrgOpen(false)
     }
@@ -96,9 +93,6 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
       setSavingPassword(false)
     }
   }
-
-  const canAccessAdmin   = hasModuleAccess('admin_console')
-  const canAccessContent = hasModuleAccess('content_mgmt')
 
   return (
     <header className="mims-header">
@@ -204,27 +198,8 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
           ❓
         </div>
 
-        {/* Settings gear — Admin Console + Content Management (always visible, rightmost) */}
-        <div className="mims-icon-btn" ref={settingsRef} title="Settings"
-          onClick={() => (canAccessAdmin || canAccessContent) && setSettingsOpen(o => !o)}
-          style={{ opacity: (canAccessAdmin || canAccessContent) ? 1 : 0.4, cursor: (canAccessAdmin || canAccessContent) ? 'pointer' : 'default' }}
-        >
-          ⚙️
-          {settingsOpen && (
-            <div className="mims-dropdown mims-dropdown-right">
-              {canAccessAdmin && (
-                <Link to="/admin-console" className="mims-dropdown-item" onClick={() => setSettingsOpen(false)}>
-                  ⚙️ MIMS Admin
-                </Link>
-              )}
-              {canAccessContent && (
-                <Link to="/content" className="mims-dropdown-item" onClick={() => setSettingsOpen(false)}>
-                  📄 Content Management
-                </Link>
-              )}
-            </div>
-          )}
-        </div>
+        {/* Settings gear retired — old admin console removed.
+            Admin access is available via the sidebar "Admin ↗" link. */}
       </div>
 
       {passwordOpen && (

@@ -16,23 +16,24 @@ const TYPE_LABELS = {
 }
 
 // Frontend-owned route map — no backend dependency for navigation
+// All /admin-console + /superadmin links retired — point to /mims-admin (new MIMS admin).
 const CONFIG_ROUTES = {
-  'expiry-alerts':              '/admin-console/sites',
+  'expiry-alerts':              '/mims-admin',
   'cm-expiry-alerts':           '/browse-content',
   'cm-module-lifecycle':        '/browse-content',
   'cm-content-auto-archive':    '/browse-content',
   'cm-review-reminders':        '/browse-content',
-  'emir-poller':                '/admin-console/emir-int',
+  'emir-poller':                '/mims-admin?system=sys-setup-int-emir',
   'scheduled-exports':          '/reports',
   'case-transmission-sla':      '/transmissions',
-  'inbox-operational-sla':      '/admin-console/sites',
-  'notification-delivery-retry':'/admin-console/sites',
-  'novartis-daily-simulation':   '/superadmin',
-  'extra-org-daily-simulation':  '/superadmin',
-  'login-audit-archive':        '/admin-console/audit-login',
+  'inbox-operational-sla':      '/mims-admin',
+  'notification-delivery-retry':'/mims-admin',
+  'novartis-daily-simulation':  '/mims-admin',
+  'extra-org-daily-simulation': '/mims-admin',
+  'login-audit-archive':        '/mims-admin',
   'session-cleanup':            '/session-management',
   'dppr-enforcement':           '/dppr',
-  'email-worker':               '/admin-console/email-accounts',
+  'email-worker':               '/mims-admin?system=sys-setup-email-accounts',
 }
 
 const COLS = [

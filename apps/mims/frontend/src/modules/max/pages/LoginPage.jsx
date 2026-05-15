@@ -1,24 +1,59 @@
 /**
  * LoginPage.jsx
- * Handles sign-in flows for app and superadmin access.
+ * Single unified sign-in flow. Admin users authenticate the same way as
+ * regular app users — role drives the navigation target.
  * Calls the Express backend API and uses AuthContext to store the session.
  */
 
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
-const SUPERADMIN_CREDENTIALS = {
-  email: 'superadmin',
-  password: 'Manager@123',
+const MODULE_LOGIN_CONFIG = {
+  app: {
+    moduleKey: 'mims_core',
+    destination: '/dashboard',
+    target: '',
+    title: 'Medical Information Management System',
+    message: 'Access is provisioned by administrator approval only.',
+  },
+  admin: {
+    moduleKey: 'admin_console',
+    destination: '/mims-admin?standalone=1',
+    target: 'admin',
+    title: 'Administration Console',
+    message: 'Use this admin login only if your account has MIMS Admin access.',
+  },
+  content: {
+    moduleKey: 'content_mgmt',
+    destination: '/content?standalone=1',
+    target: 'content',
+    title: 'Content Management Console',
+    message: 'Use this CM login only if your account has admin access to Content Management.',
+  },
+  reports: {
+    moduleKey: 'reports',
+    destination: '/reports?standalone=1',
+    target: 'reports',
+    title: 'Reports Console',
+    message: 'Use this Reports login only if your account has admin access to Reports.',
+  },
 }
 
-export default function LoginPage() {
+const LOGIN_SWITCHES = [
+  { key: 'admin', label: 'Admin', to: '/mims-admin/login' },
+  { key: 'content', label: 'CM', to: '/content/login' },
+  { key: 'reports', label: 'Reports', to: '/reports/login' },
+]
+
+export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const activeMode = adminMode ? 'admin' : moduleMode
+  const modeConfig = MODULE_LOGIN_CONFIG[activeMode] || MODULE_LOGIN_CONFIG.app
 
-  const [mode, setMode] = useState('app')
+
   const [alert, setAlert] = useState({ show: false, type: 'error', msg: '' })
   const [loading, setLoading] = useState(false)
   const [backendOnline, setBackendOnline] = useState(null)
@@ -44,16 +79,6 @@ export default function LoginPage() {
     setAlert({ show: true, type, msg })
   }
 
-  function switchMode(nextMode) {
-    setMode(nextMode)
-    setAlert({ show: false, type: 'error', msg: '' })
-    setLoginForm(nextMode === 'superadmin' ? SUPERADMIN_CREDENTIALS : { email: '', password: '' })
-    setLoginStage('email')
-    setSsoChoices([])
-    resetTwoFactorState()
-    resetForgotPasswordState()
-  }
-
   function resetTwoFactorState() {
     setTwoFactor(null)
     setTwoFactorMethod('email')
@@ -72,7 +97,46 @@ export default function LoginPage() {
     setForgotMeta({ maskedEmail: '', resetToken: '' })
   }
 
-  function finishLogin(data) {
+  function isAdminUser(data) {
+    return data.user?.role === 'admin' || data.user?.role === 'superadmin'
+  }
+
+  function hasModuleAccess(data, moduleKey) {
+    return data.user?.role === 'superadmin' || (data.modules || []).includes(moduleKey)
+  }
+
+  function hasTargetAccess(data) {
+    if (activeMode === 'app') return hasModuleAccess(data, 'mims_core')
+    return isAdminUser(data) && hasModuleAccess(data, modeConfig.moduleKey)
+  }
+
+  function hasMimsAppAccess(data) {
+    return hasModuleAccess(data, 'mims_core')
+  }
+
+  function findFallbackAdminDestination(data) {
+    if (isAdminUser(data) && hasModuleAccess(data, 'admin_console')) return MODULE_LOGIN_CONFIG.admin.destination
+    if (isAdminUser(data) && hasModuleAccess(data, 'content_mgmt')) return MODULE_LOGIN_CONFIG.content.destination
+    if (isAdminUser(data) && hasModuleAccess(data, 'reports')) return MODULE_LOGIN_CONFIG.reports.destination
+    return ''
+  }
+
+  async function discardRejectedSession(data) {
+    try {
+      await httpFetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${data.token}` },
+      })
+    } catch { /* best effort */ }
+  }
+
+  async function finishLogin(data) {
+    if (activeMode !== 'app' && !hasTargetAccess(data)) {
+      await discardRejectedSession(data)
+      showAlert(`This account does not have access to ${modeConfig.title}.`)
+      return
+    }
+
     if (data.rememberedDeviceToken) {
       localStorage.setItem('mims_2fa_device_token', data.rememberedDeviceToken)
     }
@@ -84,7 +148,15 @@ export default function LoginPage() {
       allOrgs: data.allOrgs || [],
       sessionTimeout: data.sessionTimeout ?? 30,
     })
-    navigate(data.user?.role === 'superadmin' && mode === 'superadmin' ? '/superadmin' : '/dashboard')
+    if (activeMode !== 'app') {
+      navigate(modeConfig.destination)
+    } else if (hasMimsAppAccess(data)) {
+      navigate('/dashboard')
+    } else {
+      const fallback = findFallbackAdminDestination(data)
+      if (fallback) navigate(fallback)
+      else navigate('/no-access')
+    }
   }
 
   useEffect(() => {
@@ -130,7 +202,7 @@ export default function LoginPage() {
     setAlert({ show: false })
 
     try {
-      if (mode === 'app' && loginStage === 'email') {
+      if (loginStage === 'email') {
         const email = loginForm.email.trim()
         if (!email) return showAlert('Email is required.')
 
@@ -139,7 +211,7 @@ export default function LoginPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email,
-            return_to: `${window.location.origin}/mims/auth/sso-complete`,
+            return_to: `${window.location.origin}/mims/auth/sso-complete${modeConfig.target ? `?target=${modeConfig.target}` : ''}`,
           })
         })
         const data = await res.json().catch(() => ({}))
@@ -178,10 +250,6 @@ export default function LoginPage() {
         return showAlert('No organisation assigned to your account. Contact your administrator.')
       }
 
-      if (mode === 'superadmin' && data.user?.role !== 'superadmin') {
-        return showAlert('Superadmin access required.')
-      }
-
       if (data.passwordResetRequired) {
         // Store reset token in AuthContext so ResetPasswordPage can use useAuth().token
         login(data.user, data.token, [], {})
@@ -199,7 +267,7 @@ export default function LoginPage() {
         return
       }
 
-      finishLogin(data)
+      await finishLogin(data)
     } catch {
       showAlert('Cannot connect to server.')
     } finally {
@@ -370,18 +438,37 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="login-page">
+    <div className="login-page login-page-product">
+      <section className="login-hero-panel" aria-label="MIMS product overview">
+        <div className="login-hero-kicker">Powered by Pharaxis</div>
+        <h1>Medical Information Management System</h1>
+        <p>
+          A controlled workspace for medical information intake, case operations,
+          audit visibility, and administration across regulated teams.
+        </p>
+        <div className="login-hero-grid">
+          <span className="login-hero-chip">Compliant case intake</span>
+          <span className="login-hero-chip">Admin governance</span>
+          <span className="login-hero-chip">Audit-ready activity</span>
+          <span className="login-hero-chip">Operational visibility</span>
+        </div>
+      </section>
       <div className="login-card">
         <div className="login-card-header">
           <div className="login-brand-row">
             <div className="app-name">MIMS</div>
-            {mode === 'app' ? (
-              <button className="superadmin-switch" type="button" onClick={() => switchMode('superadmin')}>
-                Superadmin
-              </button>
-            ) : null}
+            <div className="login-mode-switches">
+              {activeMode !== 'app' && (
+                <Link className="login-mode-switch" to="/login">MIMS App</Link>
+              )}
+              {LOGIN_SWITCHES.filter(item => item.key !== activeMode).map(item => (
+                <Link key={item.key} className="login-mode-switch" to={item.to}>{item.label}</Link>
+              ))}
+            </div>
           </div>
-          <div className="app-tagline">{mode === 'superadmin' ? 'Superadmin Console' : 'Medical Information Management System'}</div>
+          <div className="app-tagline">
+            {modeConfig.title}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
             <span>{today}</span>
             <span style={{ display: 'flex', alignItems: 'center' }}>
@@ -396,40 +483,12 @@ export default function LoginPage() {
         </div>
 
         <div className="login-card-body">
-          {mode === 'superadmin' ? (
-            <>
-              {alert.show && (
-                <div className={`alert alert-${alert.type}`}>{alert.msg}</div>
-              )}
-              <form onSubmit={handleLogin}>
-                <div className="form-group">
-                  <label>Email / Username</label>
-                  <input className="form-control" type="text" placeholder="superadmin" required
-                    value={loginForm.email}
-                    onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label>Password</label>
-                  <input className="form-control" type="password" placeholder="Enter your password" required
-                    value={loginForm.password}
-                    onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))} />
-                </div>
-                <button className="btn btn-primary btn-block mt-8" type="submit" disabled={loading}>
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </button>
-                <button className="btn btn-secondary btn-block mt-8" type="button" onClick={() => switchMode('app')} disabled={loading}>
-                  Back to App Login
-                </button>
-              </form>
-            </>
-          ) : (
-          <>
           {alert.show && (
             <div className={`alert alert-${alert.type}`}>{alert.msg}</div>
           )}
 
           <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-muted)' }}>
-            Access is provisioned by administrator approval only.
+            {modeConfig.message}
           </div>
 
             <form onSubmit={handleLogin}>
@@ -724,8 +783,6 @@ export default function LoginPage() {
                 Back to Sign In
               </button>
             </div>
-          )}
-          </>
           )}
         </div>
       </div>

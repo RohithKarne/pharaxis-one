@@ -28,6 +28,8 @@
 | 2026-04-28 | Bala | Sprint 21 closed (mims). Sprint A complete in app code: frontend raw `fetch()` migrated to shared `httpFetch` wrapper across 83 files (448→1 wrapper-only call), backend integration services (`mirService`, `crmService`, `vaultService`, `oauth2Service`) moved to backend `httpFetch` wrapper. Sprint B close validation complete: new Jest suite `backend/tests/migrationRunner.test.js` covers fresh DB / legacy bootstrap / already-applied paths (3/3 PASS). Sprint C QA regression close: `Sprint21SplitRegression.test.jsx` added for `CaseFormPage` + `ContentPage` split behavior (4/4 PASS), full frontend tests green (10/10), frontend build PASS. Deferred item unchanged: `authRateLimiter` left as-is. |
 | 2026-04-28 | Bala | Sprint 21 final closure. SuperadminPage.jsx (3456 lines) split into 13 files: `superadmin/utils/guardedFetch.js` + 12 view components (`DashboardView`, `OrganisationsView`, `TwoFactorConfigView`, `UsersView`, `AlertsView`, `NotificationsView`, `AuditView`, `LoginAuditView`, `IntegrationsView`, `ReportsAccessView`, `HelpContentView`, `CopyDivisionView`). Shell reduced to 107 lines. Global 401 session-expiry handler wired into `shared/api/httpFetch.js` — all 84 `httpFetch` call sites now auto-logout on 401. `createModuleApp.jsx` registers handler for all non-superadmin modules. `guardedFetch.js` simplified to re-export from shared. Build PASS (246 modules). All code work for Sprint 21 complete. Remaining: QA regression browser pass (human) + MIMS_MEMORY_SOP Sprint 21 docs. |
 | 2026-05-12 | Varun | System Design Sprint complete (16 fixes), Architecture fixes complete (A1+A2), Code Review fixes complete (10 issues). UAT/QA system built and wired. `production` git branch created. All sections updated. |
+| 2026-05-12 | Bala | UAT server live on Rohith's MacBook (port 4001). Full UAT setup documented in Section 15 (new): PM2 process, DB, credentials, push-to-UAT workflow, feedback widget, QA dashboard, deploy script. |
+| 2026-05-12 | Bala | Section 15 expanded — Local vs UAT app purpose, audience, data, workflow fully documented so any team member can understand the difference without verbal explanation. |
 
 ---
 
@@ -826,7 +828,174 @@ Full SOP: `TEAM_OPERATING_SOP.md`. Gate flow, browser verification checklist, co
 
 ---
 
-## 15. How to Update This File
+## 15. UAT Server — Setup, Access & Workflow
+
+---
+
+### 🟡 What Is the Local App? (Dev Environment)
+
+**Who uses it:** Varun, Bhavya, Vivek, Karthik — developers actively writing code.
+
+**What it is:** A developer's personal copy of MIMS running on their laptop. It is unstable by design — code is half-written, features are broken mid-build, the DB is wiped regularly. It is **never** shared with the wider team.
+
+**URL:** `http://localhost:3000` (only accessible on the developer's own laptop, not on the network)
+
+**Data:** Fake seed data. Frequently reset. No real use cases.
+
+**Purpose:** Build and test new features in isolation before they are stable enough to share.
+
+---
+
+### 🟢 What Is the UAT App? (User Acceptance Testing / Production Simulation)
+
+**Who uses it:** The entire Pharaxis team — Rohith, Bala, Saad, Vanaja, Vinay, and any user who is testing or validating MIMS like a real client would.
+
+**What it is:** A stable, production-like copy of MIMS running on Rohith's MacBook via PM2. It runs 24/7 (as long as the laptop is on), never gets wiped mid-session, and always has the latest approved code. It behaves exactly like the live EC2 production app — same codebase, same DB structure, same features — just on a local machine instead of a cloud server.
+
+**URL:** `http://localhost:4001/mims/` (Rohith's laptop) or `http://192.168.0.145:4001/mims/` (anyone on the same WiFi)
+
+**Data:** Realistic demo data (Novartis-Demo org). Team members use it for real workflows — creating cases, testing MI responses, using the inbox — just like a pharma client would.
+
+**Purpose:**
+1. **Feature validation** — every feature built on local must be verified on UAT before it counts as done
+2. **Bug discovery** — team uses the app naturally and reports issues via the ＋ feedback button
+3. **Enhancement ideas** — team submits feature suggestions via the same ＋ button
+4. **Client demo readiness** — UAT is always in a state that could be shown to a prospective client
+
+---
+
+### 🔵 What Is the EC2 / Production App?
+
+**Who uses it:** Real pharma clients (future) + Rohith for client demos via the internet.
+
+**What it is:** MIMS deployed on AWS EC2, accessible from anywhere in the world via a public IP. Auto-deployed via GitHub Actions whenever code is pushed to `main`.
+
+**URL:** `http://13.205.213.128/mims/` (EC2 public IP)
+
+**Purpose:** Live production system. Only stable, UAT-verified code reaches here.
+
+---
+
+### The Flow: How a Feature Goes from Idea → Production
+
+```
+Developer builds feature
+        ↓
+Runs on LOCAL (port 3000) — dev tests it themselves
+        ↓
+Pushes to main branch → GitHub Actions auto-deploys to UAT (port 4001)
+        ↓
+Bala + team USE the feature on UAT — report bugs via ＋ button
+        ↓
+Bugs fixed → re-deployed to UAT
+        ↓
+Bala marks bugs "Verified" → feature is production-ready
+        ↓
+Code is already on EC2 (same push) — clients can use it
+```
+
+> **Key rule:** A feature is NOT done until it passes on UAT. Local testing by the developer alone is not sufficient.
+
+---
+
+### Side-by-Side Comparison
+
+| | Local (Dev) | UAT | EC2 (Production) |
+|---|---|---|---|
+| **URL** | localhost:3000 | localhost:4001/mims/ | 13.205.213.128/mims/ |
+| **Who accesses** | Developer only | Whole team (WiFi) | Anyone (internet) |
+| **Stability** | Unstable — WIP | Stable — always on | Stable — always on |
+| **Data** | Fake, reset often | Realistic demo data | Real client data (future) |
+| **DB** | pharaxis_mims_dev | pharaxis_mims_uat | mims (EC2 MySQL) |
+| **Process manager** | nodemon | PM2 (mims-uat) | PM2 (mims) |
+| **Deployed by** | Developer manually | bash deploy.sh | GitHub Actions auto |
+| **Bug reporting** | Not applicable | ＋ Feedback button | Not applicable |
+| **Purpose** | Build features | Validate + test | Serve clients |
+
+---
+
+### Overview
+MIMS UAT runs locally on Rohith's MacBook alongside the dev server. No AWS required for UAT.
+
+| | Dev | UAT |
+|---|---|---|
+| Port | 3000 | **4001** |
+| DB | `pharaxis_mims_dev` | `pharaxis_mims_uat` |
+| Process | nodemon (manual) | PM2 `mims-uat` (always on) |
+| Frontend | Vite dev server `:5173` | Production build served by Express |
+| URL | `http://localhost:3000` | **`http://localhost:4001/mims/`** |
+| LAN URL | — | `http://192.168.0.145:4001/mims/` |
+
+### PM2 Commands
+```bash
+pm2 status                        # check if mims-uat is running
+pm2 restart mims-uat --update-env # restart after any code change
+pm2 logs mims-uat --lines 50      # tail logs
+pm2 stop mims-uat                 # stop
+```
+
+### UAT Login Credentials
+| Role | Email | Password |
+|------|-------|----------|
+| Superadmin | `superadmin@pharaxis.local` | `MimsUAT@2026!` |
+
+After first login, create org-level admin users via SuperAdmin panel as normal.
+
+### Pushing Code from Dev → UAT
+Since both run on the same machine, no git push needed. Two commands:
+
+```bash
+# Backend-only change:
+pm2 restart mims-uat --update-env
+
+# Frontend change (or both):
+cd /Users/rohithkarne/Pharaxis-One/apps/mims/frontend
+npm run build
+pm2 restart mims-uat --update-env
+```
+
+Or use the full deploy script (includes smoke tests):
+```bash
+cd /Users/rohithkarne/Pharaxis-One/apps/mims
+bash deploy.sh
+```
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `apps/mims/backend/.env.uat` | All UAT env vars (DB, Redis, JWT, ports) |
+| `apps/mims/ecosystem.config.local.js` | PM2 config reference (env vars now in .env.uat) |
+| `apps/mims/setup-uat.sh` | One-time setup script (PM2 install, build, start) |
+| `apps/mims/deploy.sh` | Ongoing deploy: build → smoke test → PM2 restart |
+
+### DB Info
+- **Database:** `pharaxis_mims_uat` on native MySQL (localhost:3306)
+- **User:** `devuser` / `devpass`
+- **Migrations:** Auto-run on server start (170+ tables created on first boot)
+- **Reset DB:** Drop + recreate `pharaxis_mims_uat`, then `pm2 restart mims-uat --update-env`
+
+### Feedback Widget & QA Dashboard
+- **Floating ＋ button** appears bottom-right on every page for all logged-in users
+- Bug reports → **MIMS Admin → UAT & QA → Bug Reports** (Bala's triage dashboard)
+- Feature requests → **MIMS Admin → UAT & QA → Feature Requests** (with upvoting)
+- When Bala marks a bug "Confirmed" → all org admins get an in-app notification instantly
+
+### UAT DB Tables (new as of 2026-05-12)
+| Table | Purpose |
+|-------|---------|
+| `qa_feedback` | Bug reports submitted via the feedback widget |
+| `feature_requests` | Enhancement suggestions from the team |
+| `feature_request_votes` | Per-user upvotes (one per user per request) |
+
+### Server Architecture Notes
+- **No nginx** on local UAT — Express serves everything directly on port 4001
+- Express rewrites `/mims/api/...` → `/api/...` internally (nginx does this on EC2)
+- Frontend built with `base: '/mims/'` in vite.config.js — static files mounted at `/mims`
+- `VITE_API_URL=/mims/api` baked into production build (from `frontend/.env.production`)
+
+---
+
+## 16. How to Update This File
 
 - Updated only when Rohith explicitly confirms and asks Bala to update
 - Rohith says: *"Bala, update the Memory SOP — [summary of what changed]"*

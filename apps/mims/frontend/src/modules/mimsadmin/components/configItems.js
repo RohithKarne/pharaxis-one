@@ -72,6 +72,7 @@ export const SYSTEM_NAV = [
     label: 'Security', value: 'sys-security', children: [
       { label: 'Add / Edit Users', value: 'sys-sec-users'    },
       { label: 'Group Security',   value: 'sys-sec-group'    },
+      { label: 'Auth Policy',      value: 'sys-sec-auth-policy' },
       { label: 'Logged In Users',  value: 'sys-sec-logged-in'},
       { label: 'Security Log',     value: 'sys-sec-log'      },
     ],
@@ -79,7 +80,26 @@ export const SYSTEM_NAV = [
   {
     label: 'Setup', value: 'sys-setup', children: [
       { label: 'Business Rules',              value: 'sys-setup-business-rules' },
+      { label: '2FA Configuration',           value: 'sys-setup-2fa-config'     },
+      { label: 'Alerts',                      value: 'sys-setup-alerts'         },
+      {
+        label: 'Integrations', value: 'sys-setup-integrations', children: [
+          { label: 'Contacts Integration',          value: 'sys-setup-int-contacts'     },
+          { label: 'MIR Integration',               value: 'sys-setup-int-mir'          },
+          { label: 'CRM Integration Notification',  value: 'sys-setup-int-crm'          },
+          { label: 'Content Integration',           value: 'sys-setup-int-content'      },
+          { label: 'EMIR Integration',              value: 'sys-setup-int-emir'         },
+          { label: 'Case Import',                   value: 'sys-setup-int-case-import'  },
+          { label: 'Transmission Setup',            value: 'sys-setup-int-transmission' },
+        ],
+      },
       { label: 'Customize Forms',             value: 'sys-setup-customize-forms'},
+      { label: 'Workflow Setup',              value: 'sys-setup-workflow'       },
+      { label: 'Email Accounts',              value: 'sys-setup-email-accounts' },
+      { label: 'Picklist Definitions',        value: 'sys-setup-picklists-admin'},
+      { label: 'Field Configuration',         value: 'sys-setup-field-config'   },
+      { label: 'Case Form Definition',        value: 'sys-setup-case-form-def'  },
+      { label: 'Change Approvals',            value: 'sys-setup-change-approvals'},
       { label: 'Data Protection Rules',       value: 'sys-setup-data-protect'   },
       { label: 'Individual Protection Rules', value: 'sys-setup-indiv-protect'  },
       { label: 'PDF Security',                value: 'sys-setup-pdf-security'   },
@@ -112,9 +132,23 @@ export const SYSTEM_NAV = [
   },
   { label: 'Division Parameters',    value: 'sys-division-params' },
   { label: 'System Parameters',      value: 'sys-system-params'   },
+  { label: 'Reports Access',         value: 'sys-reports-access'  },
   { label: 'License Administration', value: 'sys-license-admin'   },
   { label: 'View Data',              value: 'sys-view-data'       },
   { label: 'Exception Log',          value: 'sys-exception-log'   },
+  {
+    label: 'UAT & QA', value: 'sys-uat-qa', children: [
+      { label: 'Bug Reports',      value: 'sys-uat-bugs'     },
+      { label: 'Feature Requests', value: 'sys-uat-features' },
+    ],
+  },
+  {
+    label: 'AI QA Engine', value: 'sys-ai-qa-engine', children: [
+      { label: 'Retrospective QA Reports', value: 'sys-ai-qa-reports'   },
+      { label: 'QA Rules Configuration',   value: 'sys-ai-qa-rules'     },
+      { label: 'Override Dashboard',       value: 'sys-ai-qa-overrides' },
+    ],
+  },
 ]
 
 function findInNav(nav, value) {

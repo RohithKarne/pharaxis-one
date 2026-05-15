@@ -26,7 +26,8 @@ export default function CaseFormPage() {
     statuses, users, formConfig,
     infoForm, setInfoForm,
     reassignForm, setReassignForm, reassignSaving,
-    dynFieldValues, setDynFieldValues, dynFieldSaving,
+    dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
+    draftStatus,
     saveInfo, scheduleAutoSave, reassignCase, saveDynFields,
     getFieldConfig, getPicklistOptions,
     headers,
@@ -55,7 +56,7 @@ export default function CaseFormPage() {
 
   const TABS = [
     { key: 'info',           label: 'Case Information' },
-    { key: 'comments',       label: 'Chat / Notes',      badge: countFor('comments') },
+    { key: 'comments',       label: 'Comments / Notes',  badge: countFor('comments') },
     { key: 'contacts',       label: 'Contacts',          badge: countFor('contacts') },
     { key: 'correspondence', label: 'Correspondence',    badge: countFor('correspondence') },
     { key: 'mi',             label: 'MI Component',      badge: countFor('mi') },
@@ -84,6 +85,7 @@ export default function CaseFormPage() {
           <span className="cf-form-site">{caseData.site_name}</span>
         </div>
         <div className="cf-form-header-right">
+          {draftStatus && <span className="cf-draft-save-chip">{draftStatus}</span>}
           {savedMsg && <span className="cf-saved-msg">{savedMsg}</span>}
           <button className="cf-save-btn" onClick={() => saveInfo(false)} disabled={saving}>
             {saving ? 'Saving…' : 'Save Case'}
@@ -107,6 +109,7 @@ export default function CaseFormPage() {
             statuses={statuses} users={users}
             reassignForm={reassignForm} setReassignForm={setReassignForm} reassignSaving={reassignSaving}
             dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues} dynFieldSaving={dynFieldSaving}
+            dynFieldErrors={dynFieldErrors}
             formConfig={formConfig}
             scheduleAutoSave={scheduleAutoSave} reassignCase={reassignCase} saveDynFields={saveDynFields}
           />

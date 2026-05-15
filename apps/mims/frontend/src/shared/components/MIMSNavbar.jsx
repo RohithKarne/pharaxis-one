@@ -4,7 +4,7 @@
  * User toggle persisted in localStorage via MIMSLayout.
  */
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { httpFetch } from '../api/httpFetch.js'
@@ -12,6 +12,23 @@ import { httpFetch } from '../api/httpFetch.js'
 const CASE_MGMT_ROUTES = { 'My Cases': '/cases?tab=my', 'Unassigned Cases': '/cases?tab=unassigned', 'Deleted Cases': '/cases?tab=deleted' }
 const CASE_MGMT_ITEMS  = ['My Cases', 'Unassigned Cases', 'Deleted Cases']
 const COMING_SOON      = ['CDR Log', 'Schedule CDR', 'Non Relevant Emails']
+
+function NavItem({ to, icon, label, active, disabled, onClick, collapsed }) {
+  const cls = `mims-sidenav-item${active ? ' active' : ''}${disabled ? ' disabled' : ''}`
+  const content = (
+    <>
+      <span className="mims-sidenav-icon">{icon}</span>
+      {!collapsed && <span className="mims-sidenav-label">{label}</span>}
+    </>
+  )
+  if (disabled) return <div className={cls} title={collapsed ? label : undefined}>{content}</div>
+  if (onClick) return <div className={cls} onClick={onClick} title={collapsed ? label : undefined}>{content}</div>
+  return (
+    <Link to={to} className={cls} title={collapsed ? label : undefined}>
+      {content}
+    </Link>
+  )
+}
 
 export default function MIMSNavbar({ collapsed, onToggle }) {
   const navigate  = useNavigate()
@@ -21,17 +38,25 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
   const [caseMgmtOpen,  setCaseMgmtOpen]  = useState(false)
   const [utilitiesOpen, setUtilitiesOpen] = useState(false)
   const [processExplorerEnabled, setProcessExplorerEnabled] = useState(user?.role === 'superadmin')
+  const userRole = user?.role
+  const userId = user?.id
+  const userEmail = user?.email
 
   // Close accordions when sidebar collapses
   useEffect(() => {
-    if (collapsed) { setCaseMgmtOpen(false); setUtilitiesOpen(false) }
+    if (!collapsed) return
+    const frame = requestAnimationFrame(() => {
+      setCaseMgmtOpen(false)
+      setUtilitiesOpen(false)
+    })
+    return () => cancelAnimationFrame(frame)
   }, [collapsed])
 
   useEffect(() => {
     let alive = true
     async function load() {
-      if (!token || !user) return
-      if (user.role === 'superadmin') { if (alive) setProcessExplorerEnabled(true); return }
+      if (!token || !userRole) return
+      if (userRole === 'superadmin') { if (alive) setProcessExplorerEnabled(true); return }
       try {
         const res = await httpFetch('/api/admin/process-logs/config', { headers: { Authorization: `Bearer ${token}` } })
         if (!alive) return
@@ -40,34 +65,17 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
     }
     load()
     return () => { alive = false }
-  }, [token, user?.role, user?.id, user?.email])
+  }, [token, userRole, userId, userEmail])
 
   function isActive(path)  { return location.pathname === path }
   function isCasesActive() { return location.pathname === '/cases' || location.pathname.startsWith('/cases/') }
   function isUtilitiesActive() {
-    return ['/exceptions', '/session-management', '/process-explorer', '/regression', '/response-log', '/response-error-log', '/case-audit-trail', '/cm-audit-trail', '/transmission-error-log', '/transmission-audit-trail', '/copy-division', '/dppr'].some(p => location.pathname === p)
+    return ['/session-management', '/process-explorer', '/regression', '/response-log', '/response-error-log', '/case-audit-trail', '/cm-audit-trail', '/transmission-error-log', '/transmission-audit-trail', '/copy-division', '/dppr'].some(p => location.pathname === p)
   }
 
   function canAccess(k)         { return hasModuleAccess(k) }
   function canAccessAny(...ks)  { return ks.some(k => hasModuleAccess(k)) }
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
-
-  function NavItem({ to, icon, label, active, disabled, onClick }) {
-    const cls = `mims-sidenav-item${active ? ' active' : ''}${disabled ? ' disabled' : ''}`
-    const content = (
-      <>
-        <span className="mims-sidenav-icon">{icon}</span>
-        {!collapsed && <span className="mims-sidenav-label">{label}</span>}
-      </>
-    )
-    if (disabled) return <div className={cls} title={collapsed ? label : undefined}>{content}</div>
-    if (onClick)  return <div className={cls} onClick={onClick} title={collapsed ? label : undefined}>{content}</div>
-    return (
-      <Link to={to} className={cls} title={collapsed ? label : undefined}>
-        {content}
-      </Link>
-    )
-  }
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin'
 
   return (
     <nav className={`mims-sidenav${collapsed ? ' collapsed' : ''}`}>
@@ -81,15 +89,15 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       <div className="mims-sidenav-divider" />
 
       {/* Home */}
-      <NavItem to="/dashboard" icon="⊞" label="Home" active={isActive('/dashboard')} />
+      <NavItem collapsed={collapsed} to="/dashboard" icon="⊞" label="Home" active={isActive('/dashboard')} />
 
       {/* Inbox */}
-      <NavItem to="/inbox" icon="📥" label="Inbox"
+      <NavItem collapsed={collapsed} to="/inbox" icon="📥" label="Inbox"
         active={isActive('/inbox')}
         disabled={!canAccess('mims_core')} />
 
       {/* Chat */}
-      <NavItem to="/chat" icon="💬" label="Chat"
+      <NavItem collapsed={collapsed} to="/chat" icon="💬" label="Chat"
         active={isActive('/chat')}
         disabled={!canAccess('mims_core')} />
 
@@ -116,7 +124,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       )}
 
       {/* Case Query */}
-      <NavItem to="/case-query" icon="🔍" label="Case Query"
+      <NavItem collapsed={collapsed} to="/case-query" icon="🔍" label="Case Query"
         active={isActive('/case-query')}
         disabled={!canAccess('mims_core')} />
 
@@ -130,7 +138,6 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       </div>
       {utilitiesOpen && !collapsed && (
         <div className="mims-sidenav-sub">
-          {canAccess('mims_core') && <Link to="/exceptions" className={`mims-sidenav-sub-item${isActive('/exceptions') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Exception Log</Link>}
           {canAccess('mims_core') && <Link to="/session-management" className={`mims-sidenav-sub-item${isActive('/session-management') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Session Management</Link>}
           {canAccess('mims_core') && <Link to="/response-log" className={`mims-sidenav-sub-item${isActive('/response-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>📋 Response Log</Link>}
           {isAdmin && <Link to="/response-error-log" className={`mims-sidenav-sub-item${isActive('/response-error-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Response Error Log</Link>}
@@ -143,7 +150,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
           {isAdmin && <Link to="/cm-audit-trail" className={`mims-sidenav-sub-item${isActive('/cm-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>CM Audit Trail</Link>}
           {isAdmin && <Link to="/transmission-error-log" className={`mims-sidenav-sub-item${isActive('/transmission-error-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Transmission Error Log</Link>}
           {isAdmin && <Link to="/transmission-audit-trail" className={`mims-sidenav-sub-item${isActive('/transmission-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Transmission Audit Trail</Link>}
-          {user?.role === 'superadmin' && <Link to="/copy-division" className={`mims-sidenav-sub-item${isActive('/copy-division') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Copy Division</Link>}
+          {userRole === 'superadmin' && <Link to="/copy-division" className={`mims-sidenav-sub-item${isActive('/copy-division') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Copy Division</Link>}
           {isAdmin && <Link to="/dppr" className={`mims-sidenav-sub-item${isActive('/dppr') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>🔒 Data Privacy (DPPR)</Link>}
           <div className="mims-sidenav-sub-divider" />
           {COMING_SOON.map(item => (
@@ -153,24 +160,61 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       )}
 
       {/* Transmissions */}
-      <NavItem to="/transmissions" icon="📤" label="Transmissions"
+      <NavItem collapsed={collapsed} to="/transmissions" icon="📤" label="Transmissions"
         active={isActive('/transmissions')}
         disabled={!canAccess('transmissions')} />
 
       {/* Browse Content */}
-      <NavItem to="/browse-content" icon="📚" label="Browse Content"
+      <NavItem collapsed={collapsed} to="/browse-content" icon="📚" label="Browse Content"
         active={isActive('/browse-content')}
         disabled={!canAccessAny('browse_content', 'content_mgmt')} />
 
-      {/* Reports */}
-      <NavItem to="/reports" icon="📈" label="Reports"
-        active={isActive('/reports')}
-        disabled={!canAccess('reports')} />
+      {/* Content Management */}
+      {(isAdmin && canAccess('content_mgmt')) && (
+        <a
+          href="/mims/content?standalone=1"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mims-sidenav-item"
+          title={collapsed ? 'Content Management' : undefined}
+          style={{ textDecoration: 'none' }}
+        >
+          <span className="mims-sidenav-icon">📄</span>
+          {!collapsed && <span className="mims-sidenav-label">Content Management</span>}
+          {!collapsed && <span className="mims-external-mark">↗</span>}
+        </a>
+      )}
 
-      {/* MIMS Admin (new) */}
-      {canAccess('admin_console') && (
-        <NavItem to="/mims-admin" icon="🛡️" label="MIMS Admin"
-          active={isActive('/mims-admin')} />
+      {/* Reports */}
+      {(isAdmin && canAccess('reports')) && (
+        <a
+          href="/mims/reports?standalone=1"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mims-sidenav-item"
+          title={collapsed ? 'Reports' : undefined}
+          style={{ textDecoration: 'none' }}
+        >
+          <span className="mims-sidenav-icon">📈</span>
+          {!collapsed && <span className="mims-sidenav-label">Reports</span>}
+          {!collapsed && <span className="mims-external-mark">↗</span>}
+        </a>
+      )}
+
+      {/* MIMS Admin */}
+      {(isAdmin && canAccess('admin_console')) && (
+        <a
+          href="/mims/mims-admin?standalone=1"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mims-sidenav-item"
+          title={collapsed ? 'MIMS Admin' : undefined}
+          style={{ textDecoration: 'none' }}
+        >
+          <span className="mims-sidenav-icon">🛡️</span>
+          {!collapsed && <span className="mims-sidenav-label">MIMS Admin</span>}
+          {!collapsed && <span className="mims-external-mark">↗</span>}
+        </a>
       )}
 
       {/* Spacer */}

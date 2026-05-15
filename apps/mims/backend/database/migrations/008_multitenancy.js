@@ -59,6 +59,7 @@ async function up(conn) {
     `ALTER TABLE organisations ADD COLUMN two_factor_methods VARCHAR(100) NOT NULL DEFAULT 'email,totp'`,
     `ALTER TABLE organisations ADD COLUMN two_factor_remember_days INT NOT NULL DEFAULT 7`,
     `ALTER TABLE organisations ADD COLUMN process_explorer_enabled TINYINT(1) NOT NULL DEFAULT 0`,
+    `ALTER TABLE organisations ADD COLUMN session_timeout_minutes INT NOT NULL DEFAULT 30`,
     `ALTER TABLE login_audit ADD COLUMN auth_event VARCHAR(100)`,
     `ALTER TABLE login_audit ADD COLUMN metadata TEXT`,
   ]) { try { await conn.execute(sql); } catch (_) {} }

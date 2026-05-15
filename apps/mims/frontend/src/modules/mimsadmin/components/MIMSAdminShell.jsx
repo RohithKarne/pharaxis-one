@@ -1,5 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import ReactDOM from 'react-dom'
+import { useLocation } from 'react-router-dom'
+import { useAuth } from '../../../shared/context/AuthContext'
+import { httpFetch } from '../../../shared/api/httpFetch.js'
+import Dashboard        from './tabs/Dashboard'
+import Organizations    from './tabs/Organizations'
 import ServiceLog       from './tabs/ServiceLog'
 import SystemActivity   from './tabs/SystemActivity'
 import ServiceDashboard from './tabs/ServiceDashboard'
@@ -10,8 +15,37 @@ import Tables           from './tabs/Tables'
 import System           from './tabs/System'
 import Help             from './tabs/Help'
 import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV } from './configItems'
+import { SYSTEM_NAV_PERMISSION_BY_VALUE } from './groupSecurityConfig'
+import { AdminTenantProvider, useAdminTenant } from '../utils/AdminTenantContext'
+import HelpHint from '../../../shared/components/HelpHint'
+import { helpKeyFor, helpLabelFor } from '../utils/helpKeys'
+
+function AdminTenantPicker() {
+  const { tenants, tenantId, setTenantId, loading } = useAdminTenant()
+  if (loading) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', marginRight: 16 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Tenant</span>
+      <select
+        value={tenantId}
+        onChange={e => setTenantId(e.target.value)}
+        style={{
+          minWidth: 200, padding: '6px 10px', border: '1px solid var(--border)',
+          borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)',
+        }}
+      >
+        {tenants.length === 0 && <option value="">— No tenants —</option>}
+        {tenants.map(t => (
+          <option key={t.id} value={t.id}>{t.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
 
 const TABS = [
+  { key: 'dashboard',         label: 'Dashboard',         component: Dashboard        },
+  { key: 'organizations',     label: 'Organizations',     component: Organizations    },
   { key: 'service-log',       label: 'Service Log',       component: ServiceLog       },
   { key: 'system-activity',   label: 'System Activity',   component: SystemActivity   },
   { key: 'service-dashboard', label: 'Service Dashboard', component: ServiceDashboard },
@@ -22,6 +56,24 @@ const TABS = [
   { key: 'system',            label: 'System',            component: System           },
   { key: 'help',              label: 'Help',              component: Help             },
 ]
+
+function hasSystemPermission(systemOptions, value) {
+  const mapping = SYSTEM_NAV_PERMISSION_BY_VALUE[value]
+  if (!mapping) return false
+  return Boolean(systemOptions?.[mapping.section]?.[mapping.option])
+}
+
+function filterSystemNav(nav, systemOptions) {
+  return nav.reduce((acc, item) => {
+    if (item.children) {
+      const children = filterSystemNav(item.children, systemOptions)
+      if (children.length) acc.push({ ...item, children })
+      return acc
+    }
+    if (hasSystemPermission(systemOptions, item.value)) acc.push(item)
+    return acc
+  }, [])
+}
 
 // ── Flyout submenu rendered via portal ───────────────────────────────────────
 function FlyoutMenu({ items, anchorEl, onSelect, onClose }) {
@@ -501,13 +553,56 @@ function ConfigTab({ isActive, onTabClick, onSelect }) {
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
 export default function MIMSAdminShell() {
-  const [activeTab,      setActiveTab]      = useState('service-log')
+  const { token } = useAuth()
+  return (
+    <AdminTenantProvider token={token}>
+      <MIMSAdminShellInner />
+    </AdminTenantProvider>
+  )
+}
+
+function MIMSAdminShellInner() {
+  const { token, user } = useAuth()
+  const location = useLocation()
+  const initialSystemItem = new URLSearchParams(location.search).get('system') || ''
+  const [activeTab,      setActiveTab]      = useState(initialSystemItem ? 'system' : 'dashboard')
   const [configItem,     setConfigItem]     = useState('')
   const [escalationItem, setEscalationItem] = useState('')
   const [documentsItem,  setDocumentsItem]  = useState('')
   const [tablesItem,     setTablesItem]     = useState('')
-  const [systemItem,     setSystemItem]     = useState('')
+  const [systemItem,     setSystemItem]     = useState(initialSystemItem)
   const [helpItem,       setHelpItem]       = useState('')
+  const [effectiveAccess, setEffectiveAccess] = useState({ unrestricted: true, system_options: null })
+
+  const loadEffectiveAccess = useCallback(async () => {
+    if (!token || !user) return
+    try {
+      const res = await httpFetch('/api/admin/security-groups/effective', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (res.ok) setEffectiveAccess(data)
+    } catch {
+      setEffectiveAccess({ unrestricted: true, system_options: null })
+    }
+  }, [token, user])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadEffectiveAccess()
+  }, [loadEffectiveAccess])
+
+  useEffect(() => {
+    window.addEventListener('mims-security-groups-updated', loadEffectiveAccess)
+    return () => window.removeEventListener('mims-security-groups-updated', loadEffectiveAccess)
+  }, [loadEffectiveAccess])
+
+  useEffect(() => {
+    const nextSystemItem = new URLSearchParams(location.search).get('system') || ''
+    if (!nextSystemItem) return
+    setSystemItem(nextSystemItem)
+    setActiveTab('system')
+  }, [location.search])
 
   function handleConfigSelect(value) {
     setConfigItem(value)
@@ -539,12 +634,20 @@ export default function MIMSAdminShell() {
     setActiveTab('help')
   }
 
-  const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || ServiceLog
+  const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || Dashboard
+  const systemNav = effectiveAccess?.unrestricted || !effectiveAccess?.system_options
+    ? SYSTEM_NAV
+    : filterSystemNav(SYSTEM_NAV, effectiveAccess.system_options)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (activeTab === 'system' && systemNav.length === 0) setActiveTab('dashboard')
+  }, [activeTab, systemNav.length])
 
   return (
     <div className="mims-admin-shell">
       <div className="mims-admin-topnav">
-        {TABS.map(t =>
+        {TABS.filter(t => t.key !== 'system' || systemNav.length > 0).map(t =>
           t.key === 'configuration' ? (
             <ConfigTab
               key="configuration"
@@ -577,7 +680,7 @@ export default function MIMSAdminShell() {
             <HoverTab
               key="system"
               label="System"
-              nav={SYSTEM_NAV}
+              nav={systemNav}
               isActive={activeTab === 'system'}
               onTabClick={() => setActiveTab('system')}
               onSelect={handleSystemSelect}
@@ -601,6 +704,14 @@ export default function MIMSAdminShell() {
             </button>
           )
         )}
+        <AdminTenantPicker />
+        <div style={{ marginRight: 12 }}>
+          <HelpHint
+            featureKey={helpKeyFor({ activeTab, systemItem, tablesItem })}
+            label={helpLabelFor({ activeTab, systemItem })}
+            placement="topbar"
+          />
+        </div>
       </div>
 
       <div className="mims-admin-tab-content">
@@ -616,6 +727,8 @@ export default function MIMSAdminShell() {
           ? <System selectedItem={systemItem} />
           : activeTab === 'help'
           ? <Help selectedItem={helpItem} />
+          : activeTab === 'dashboard'
+          ? <Dashboard onNavigateTab={setActiveTab} />
           : <ActiveComponent />
         }
       </div>

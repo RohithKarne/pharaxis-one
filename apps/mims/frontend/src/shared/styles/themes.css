@@ -1,0 +1,83 @@
+/* ============================================================
+   MIMS Themes — applied via [data-theme] on <html>
+   Controlled by Admin > System > System Parameters > Themes
+   ============================================================ */
+
+/* ─── Blue theme (default, Slack-inspired) ─── */
+:root,
+html[data-theme="blue"] {
+  --primary:        #611f69;
+  --primary-light:  #7c3085;
+  --primary-dark:   #4a154b;
+  --accent:         #1264a3;
+  --accent-hover:   #0b4d80;
+  --bg:             #f8f9fb;
+  --surface:        #ffffff;
+  --surface-alt:    #f4f6fa;
+  --surface-hover:  #eef2f8;
+  --border:         #e1e4ea;
+  --text-primary:   #1a2233;
+  --text-secondary: #4a5870;
+  --text-muted:     #8b94a8;
+  --success:        #007a5a;
+  --warning:        #ecb22e;
+  --danger:         #e01e5a;
+  --info:           #1264a3;
+  --sidebar-bg:     #1d2b4f;
+  --sidebar-text:   #cdd5e2;
+  --sidebar-hover:  rgba(255,255,255,0.08);
+  --sidebar-active: rgba(255,255,255,0.18);
+  --error:          #c00;
+}
+
+/* ─── Warm theme (amber/burgundy) ─── */
+html[data-theme="warm"] {
+  --primary:        #8a3324;
+  --primary-light:  #b04531;
+  --primary-dark:   #5e1f12;
+  --accent:         #c2410c;
+  --accent-hover:   #9a3308;
+  --bg:             #fdf8f3;
+  --surface:        #ffffff;
+  --surface-alt:    #faf2e8;
+  --surface-hover:  #f5e9d8;
+  --border:         #ead8c2;
+  --text-primary:   #2c1a10;
+  --text-secondary: #5c4530;
+  --text-muted:     #a08770;
+  --success:        #4d7c0f;
+  --warning:        #d97706;
+  --danger:         #b91c1c;
+  --info:           #b45309;
+  --sidebar-bg:     #5e1f12;
+  --sidebar-text:   #f5e1c8;
+  --sidebar-hover:  rgba(255,255,255,0.10);
+  --sidebar-active: rgba(255,255,255,0.20);
+  --error:          #b91c1c;
+}
+
+/* ─── Green theme (forest/teal) ─── */
+html[data-theme="green"] {
+  --primary:        #064e3b;
+  --primary-light:  #0a6b53;
+  --primary-dark:   #033026;
+  --accent:         #047857;
+  --accent-hover:   #03634a;
+  --bg:             #f4faf7;
+  --surface:        #ffffff;
+  --surface-alt:    #ecf6f0;
+  --surface-hover:  #def0e6;
+  --border:         #d0e6d8;
+  --text-primary:   #102820;
+  --text-secondary: #3d5b4e;
+  --text-muted:     #7e9686;
+  --success:        #15803d;
+  --warning:        #ca8a04;
+  --danger:         #be123c;
+  --info:           #0e7490;
+  --sidebar-bg:     #064e3b;
+  --sidebar-text:   #c5e6d4;
+  --sidebar-hover:  rgba(255,255,255,0.10);
+  --sidebar-active: rgba(255,255,255,0.20);
+  --error:          #be123c;
+}

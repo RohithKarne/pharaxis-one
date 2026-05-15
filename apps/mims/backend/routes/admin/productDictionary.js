@@ -378,6 +378,30 @@ router.get('/products-full', authenticate, requireRole('admin', 'superadmin'), r
   }
 });
 
+router.get('/products/:id/defaults', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+  try {
+    const [[product]] = await pool.execute(
+      isSuperadmin(req)
+        ? 'SELECT * FROM products WHERE id = ? LIMIT 1'
+        : 'SELECT * FROM products WHERE id = ? AND org_id = ? LIMIT 1',
+      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+    );
+    if (!product) return res.status(404).json({ error: 'Product not found.' });
+    res.json({
+      product_id: product.id,
+      defaults: {
+        product_name: product.trade_name || product.name || '',
+        dose_unit: product.dosage ? String(product.dosage).split(' ').slice(-1)[0] : '',
+        route_of_admin: product.route_of_admin || '',
+        indication: product.common_indications || product.indication || '',
+        authorization_country: product.authorization_country || '',
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error.' });
+  }
+});
+
 // POST /api/admin/products-full — create product with enriched fields
 router.post('/products-full', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
   try {

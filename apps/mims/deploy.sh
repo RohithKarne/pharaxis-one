@@ -94,7 +94,7 @@ else
   pm2 start "$SCRIPT_DIR/backend/server.js" \
     --name        mims-uat \
     --cwd         "$SCRIPT_DIR/backend" \
-    --node-args   "--env-file=.env.uat" \
+    --node-args   "--env-file=$SCRIPT_DIR/backend/.env.uat" \
     --max-memory-restart 400M \
     --restart-delay 3000 \
     --merge-logs \

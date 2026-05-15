@@ -81,9 +81,9 @@ export default function Sidebar({ collapsed, onCollapse, theme, setTheme }) {
 
         <div className="nav-section-label">System</div>
 
-        <Link to="/admin-console" className={`nav-item ${isActive('/admin-console') ? 'active' : ''}`}>
-          <span className="nav-icon">⚙️</span><span className="nav-label">MIMS Admin</span>
-        </Link>
+        <a href="/mims-admin" target="_blank" rel="noopener noreferrer" className="nav-item" style={{ textDecoration: 'none' }}>
+          <span className="nav-icon">🛡️</span><span className="nav-label">Admin ↗</span>
+        </a>
 
         <div className="nav-item"><span className="nav-icon">📄</span><span className="nav-label">Content Management</span></div>
 

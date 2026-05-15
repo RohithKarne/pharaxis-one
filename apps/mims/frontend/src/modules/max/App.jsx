@@ -25,7 +25,6 @@ import ResetPasswordPage    from '../../pages/ResetPasswordPage'
 // ── Lazily loaded — heavy or rarely-visited pages (loaded on demand) ─────────
 // Each becomes its own JS chunk; only downloaded when the user navigates there.
 const ChatPage                 = lazy(() => import('./pages/ChatPage'))
-const AdminConsoleRouter       = lazy(() => import('../admin/AdminConsoleRouter'))
 const ContentPage              = lazy(() => import('../content/pages/ContentPage'))
 const AnalyticsPage            = lazy(() => import('../dv/pages/AnalyticsPage'))
 const ProcessExplorerPage      = lazy(() => import('../dv/pages/ProcessExplorerPage'))
@@ -42,7 +41,6 @@ const TransmissionErrorLogPage = lazy(() => import('../transmissions/pages/Trans
 const TransmissionAuditTrailPage = lazy(() => import('../transmissions/pages/TransmissionAuditTrailPage'))
 const CopyDivisionPage         = lazy(() => import('../admin/pages/CopyDivisionPage'))
 const DPPRPage                 = lazy(() => import('../admin/pages/DPPRPage'))
-const SuperadminPage           = lazy(() => import('../superadmin/pages/SuperadminPage'))
 const MIMSAdminPage            = lazy(() => import('../mimsadmin/pages/MIMSAdminPage'))
 
 // Shared Suspense fallback — minimal spinner so Suspense boundary doesn't flash
@@ -52,6 +50,12 @@ function PageLoader() {
       Loading…
     </div>
   )
+}
+
+function AdminRoleGuard({ children }) {
+  const { user } = useAuth()
+  if (user?.role === 'admin' || user?.role === 'superadmin') return children
+  return <Navigate to="/no-access" replace />
 }
 
 function AppRoutes() {
@@ -89,17 +93,15 @@ function AppRoutes() {
       <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/mims-admin/login" element={<LoginPage adminMode />} />
+          <Route path="/content/login" element={<LoginPage moduleMode="content" />} />
+          <Route path="/reports/login" element={<LoginPage moduleMode="reports" />} />
           <Route path="/auth/sso-complete" element={<SsoCompletePage />} />
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
                 <DashboardPage />
               </ModuleAccessGuard>
-            </ProtectedRoute>
-          } />
-          <Route path="/superadmin" element={
-            <ProtectedRoute>
-              <SuperadminPage />
             </ProtectedRoute>
           } />
           <Route path="/inbox" element={
@@ -123,24 +125,22 @@ function AppRoutes() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
-          <Route path="/admin-console/*" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="admin_console">
-                <AdminConsoleRouter />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
-          } />
+          {/* /admin-console retired — superseded by /mims-admin */}
+          <Route path="/admin-console" element={<Navigate to="/mims-admin" replace />} />
+          <Route path="/admin-console/*" element={<Navigate to="/mims-admin" replace />} />
           <Route path="/mims-admin" element={
-            <ProtectedRoute>
+            <ProtectedRoute loginPath="/mims-admin/login">
               <ModuleAccessGuard moduleKey="admin_console">
                 <MIMSAdminPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
           <Route path="/content" element={
-            <ProtectedRoute>
+            <ProtectedRoute loginPath="/content/login">
               <ModuleAccessGuard moduleKey="content_mgmt">
-                <ContentPage />
+                <AdminRoleGuard>
+                  <ContentPage />
+                </AdminRoleGuard>
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
@@ -180,9 +180,11 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
           <Route path="/reports" element={
-            <ProtectedRoute>
+            <ProtectedRoute loginPath="/reports/login">
               <ModuleAccessGuard moduleKey="reports">
-                <ReportsPage />
+                <AdminRoleGuard>
+                  <ReportsPage />
+                </AdminRoleGuard>
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />

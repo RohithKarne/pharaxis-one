@@ -19,6 +19,104 @@ const PRIORITIES = ['high', 'medium', 'low']
 const TRIAGE_STATES = ['new', 'in_review', 'linked', 'converted', 'no_action', 'closed']
 const PRIORITY_ICON = { high: '🔴', medium: '🟡', low: '🟢' }
 const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
+const EMAIL_URL_PATTERN = /<?https?:\/\/[^\s<>]+>?/gi
+
+function normalizeEmailUrl(rawUrl) {
+  let href = String(rawUrl || '').trim()
+  let suffix = ''
+
+  if (href.startsWith('<')) href = href.slice(1)
+  if (href.endsWith('>')) href = href.slice(0, -1)
+
+  while (/[.,;:!?)]$/.test(href)) {
+    suffix = href.slice(-1) + suffix
+    href = href.slice(0, -1)
+  }
+
+  return { href, suffix }
+}
+
+function getEmailLinkLabel(href) {
+  try {
+    const url = new URL(href)
+    const host = url.hostname.replace(/^www\./, '')
+    return `${host} link`
+  } catch {
+    return 'email link'
+  }
+}
+
+function compactEmailBodyText(body) {
+  const urlPattern = new RegExp(EMAIL_URL_PATTERN.source, 'gi')
+  return String(body || '')
+    .replace(/\r\n/g, '\n')
+    .replace(urlPattern, rawUrl => {
+      const { href, suffix } = normalizeEmailUrl(rawUrl)
+      return ` [${getEmailLinkLabel(href)}]${suffix}`
+    })
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function renderEmailBodySegments(text) {
+  const urlPattern = new RegExp(EMAIL_URL_PATTERN.source, 'gi')
+  const segments = []
+  let lastIndex = 0
+
+  for (const match of text.matchAll(urlPattern)) {
+    const rawUrl = match[0]
+    const matchIndex = match.index ?? 0
+    if (matchIndex > lastIndex) {
+      segments.push(text.slice(lastIndex, matchIndex))
+    }
+
+    const { href, suffix } = normalizeEmailUrl(rawUrl)
+    segments.push(
+      <a
+        key={`email-link-${matchIndex}`}
+        className="email-body-link"
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        title={href}
+      >
+        {getEmailLinkLabel(href)}
+      </a>
+    )
+    if (suffix) segments.push(suffix)
+    lastIndex = matchIndex + rawUrl.length
+  }
+
+  if (lastIndex < text.length) {
+    segments.push(text.slice(lastIndex))
+  }
+
+  return segments
+}
+
+function EmailBody({ body }) {
+  const normalized = String(body || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim()
+
+  if (!normalized) {
+    return <div className="inbox-detail-body inbox-detail-body-empty">No email body available.</div>
+  }
+
+  const blocks = normalized.split(/\n{2,}/).map(block => block.trim()).filter(Boolean)
+
+  return (
+    <div className="inbox-detail-body">
+      {blocks.map((block, index) => (
+        <p key={`email-body-block-${index}`} className="email-body-paragraph">
+          {renderEmailBodySegments(block.replace(/\n/g, ' '))}
+        </p>
+      ))}
+    </div>
+  )
+}
 
 export default function InboxPage() {
   const location = useLocation()
@@ -479,7 +577,6 @@ export default function InboxPage() {
     setCaseFlow(prev => ({ ...prev, actionBusy: true, actionError: '' }))
     try {
       // S19-P1: carry inquiry context into case — pre-fill description + internal notes
-      const senderName   = (selected.sender || '').split('@')[0] || 'Unknown'
       const subjectText  = selected.subject || '(No subject)'
       const bodySnippet  = (selected.body || '').slice(0, 1000).trim()
       const contextNotes = `[Inbox] From: ${selected.sender || '—'} | Subject: ${subjectText} | Received: ${selected.received_at ? new Date(selected.received_at).toLocaleString() : '—'}`
@@ -1019,6 +1116,9 @@ export default function InboxPage() {
               )}
 
               {/* Sort + Count + Export */}
+              {loadError && (
+                <div className="inbox-load-error">{loadError}</div>
+              )}
               <div className="inbox-sort-bar">
                 <span>
                   Showing {filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
@@ -1056,7 +1156,7 @@ export default function InboxPage() {
                       <div className="inbox-date-group">{group}</div>
                       {grouped[group].map(inq => {
                         const dueStatus = dueDateStatus(inq.due_date)
-                        const bodyPreview = (inq.body || '').replace(/\s+/g, ' ').trim()
+                        const bodyPreview = compactEmailBodyText(inq.body).replace(/\s+/g, ' ')
                         return (
                           <div key={inq.id}
                             className={`inbox-row ${selected?.id === inq.id ? 'selected' : ''} ${!inq.is_read ? 'unread' : ''}`}
@@ -1383,7 +1483,7 @@ export default function InboxPage() {
                   </div>
 
                   {/* Email body */}
-                  <div className="inbox-detail-body">{selected.body}</div>
+                  <EmailBody body={selected.body} />
 
                   {insightPanel && (
                     <button className="inbox-side-drawer-backdrop" onClick={() => setInsightPanel(null)} aria-label="Close panel" />

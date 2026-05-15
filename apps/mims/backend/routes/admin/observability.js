@@ -13,34 +13,6 @@ function parseDetails(raw) {
   }
 }
 
-function maskValue(value) {
-  if (value == null) return value;
-  const text = String(value);
-  if (text.length <= 4) return '****';
-  return `${text.slice(0, 2)}***${text.slice(-2)}`;
-}
-
-function maskDetails(details) {
-  if (!details || typeof details !== 'object') return details;
-  const masked = { ...details };
-  const sensitiveKeys = ['stack', 'authorization', 'cookie', 'token', 'password', 'secret', 'apiKey', 'smtp_pass'];
-  for (const key of Object.keys(masked)) {
-    const lower = key.toLowerCase();
-    if (sensitiveKeys.some((s) => lower.includes(s))) {
-      masked[key] = '[REDACTED]';
-      continue;
-    }
-    if (lower.includes('email') && masked[key]) {
-      masked[key] = maskValue(masked[key]);
-      continue;
-    }
-    if (typeof masked[key] === 'string' && masked[key].length > 500) {
-      masked[key] = `${masked[key].slice(0, 500)}...`;
-    }
-  }
-  return masked;
-}
-
 router.get('/observability/summary', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
   try {
     const [serviceSummaryRows] = await pool.execute(
@@ -113,7 +85,7 @@ router.get('/observability/summary', authenticate, requireRole('admin', 'superad
   }
 });
 
-router.get('/observability/exceptions', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/observability/exceptions', authenticate, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page || '1', 10));
     const pageSize = Math.min(100, Math.max(10, parseInt(req.query.page_size || '20', 10)));
@@ -169,19 +141,18 @@ router.get('/observability/exceptions', authenticate, requireRole('admin', 'supe
 
     const data = rows.map((row) => {
       const details = parseDetails(row.details);
-      const safeDetails = req.user?.role === 'superadmin' ? details : maskDetails(details);
       return {
         id: row.id,
         source: row.source,
         status: row.status,
         description: row.description,
         created_at: row.created_at,
-        exception_id: safeDetails?.exception_id || null,
-        request_id: safeDetails?.request_id || null,
-        route: safeDetails?.path || null,
-        method: safeDetails?.method || null,
-        status_code: safeDetails?.status_code || null,
-        details: safeDetails,
+        exception_id: details?.exception_id || null,
+        request_id: details?.request_id || null,
+        route: details?.path || null,
+        method: details?.method || null,
+        status_code: details?.status_code || null,
+        details,
       };
     });
 
