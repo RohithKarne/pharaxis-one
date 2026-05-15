@@ -504,10 +504,13 @@ export default function InboxPage() {
   }
 
   function openCreateCaseModal() {
+    const suggestedType = ['MI', 'AE', 'PC'].includes(String(selected?.ai_suggested_type || '').toUpperCase())
+      ? String(selected.ai_suggested_type).toUpperCase()
+      : 'MI'
     setCaseFlow({
       open: true,
       mode: 'create',
-      caseType: 'MI',
+      caseType: suggestedType,
       caseNumber: '',
       search: '',
       searching: false,
@@ -914,6 +917,16 @@ export default function InboxPage() {
 
   const colorBarClass = { red: 'color-bar-red', yellow: 'color-bar-yellow', green: 'color-bar-green', blue: 'color-bar-blue' }
   const dotClass      = { red: 'dot-red', yellow: 'dot-yellow', green: 'dot-green', blue: 'dot-blue' }
+  function renderAiChip(inquiry) {
+    const type = String(inquiry?.ai_suggested_type || '').toUpperCase()
+    if (!type) return null
+    let payload = inquiry.ai_suggested_payload
+    if (typeof payload === 'string') {
+      try { payload = JSON.parse(payload) } catch { payload = {} }
+    }
+    const urgency = payload?.urgency ? ` / ${payload.urgency}` : ''
+    return <span className="ai-inbox-chip">AI: {type}{urgency}</span>
+  }
 
   // H2 FIX: map all SLA statuses to correct badge classes instead of defaulting everything to yellow
   function slaClass(status) {
@@ -1196,6 +1209,7 @@ export default function InboxPage() {
                                   <span className="assignee-tag">👤 {inq.assigned_to}</span>
                                 )}
                                 {inq.queue_name && <span className="assignee-tag">📥 {inq.queue_name}</span>}
+                                {renderAiChip(inq)}
                                 {inq.triage_state && <span className="assignee-tag">Workflow: {inq.triage_state.replace(/_/g, ' ')}</span>}
                                 {dueStatus === 'overdue' && <span className="due-chip due-overdue-chip">⏰ Overdue</span>}
                                 {dueStatus === 'today'   && <span className="due-chip due-today-chip">⏰ Due Today</span>}
@@ -1240,6 +1254,7 @@ export default function InboxPage() {
                   {/* Email detail header */}
                   <div className="inbox-detail-header">
                     <div className="inbox-detail-subject">{selected.subject}</div>
+                    {renderAiChip(selected)}
                     <div className="inbox-timezone-note">Dates displayed in {TIMEZONE}</div>
                     <div className="inbox-detail-meta">
                       <div className="inbox-meta-item inbox-meta-item-inline">

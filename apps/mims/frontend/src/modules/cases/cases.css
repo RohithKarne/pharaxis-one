@@ -2848,4 +2848,11 @@
 .icsr-message { padding: 10px; border-radius: 8px; background: #ecfdf5; color: #047857; font-weight: 700; }
 .icsr-errors { display: grid; gap: 8px; margin-top: 12px; }
 .icsr-errors button { text-align: left; border: 1px solid #fecaca; background: #fff1f2; color: #be123c; border-radius: 8px; padding: 8px; }
+.icsr-ack-box, .icsr-sign-box, .cf-pv-panel { margin-top: 18px; border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: #fff; }
+.icsr-sign-box { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.icsr-sign-box h3 { grid-column: 1 / -1; margin: 0; }
+.icsr-sign-box label { display: grid; gap: 6px; font-weight: 700; font-size: 12px; }
+.icsr-sign-box input, .icsr-ack-box textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font: inherit; }
+.cf-pv-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.cf-pv-row { display: grid; grid-template-columns: 1fr 1fr 140px; gap: 10px; border-bottom: 1px solid var(--border); padding: 9px 0; }
 @media (max-width: 1100px) { .icsr-builder-grid { grid-template-columns: 1fr; overflow: auto; } .icsr-xml-pane { min-height: 260px; } }

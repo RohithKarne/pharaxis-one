@@ -16,6 +16,7 @@ const path = require('path')
 const { simpleParser } = require('mailparser')
 const { emitProcessEvent } = require('./processExplorerService')
 const { logger } = require('./logger')
+const { classifyInquiry } = require('./ai/inboxClassifierService')
 
 function toMySqlDateTime(input) {
   const dt = input instanceof Date ? input : new Date(input)
@@ -137,19 +138,24 @@ async function ingestAccount(account, sinceDt) {
 
         if (result.affectedRows) {
           inserted += 1
+          const [[inquiry]] = await pool.execute(`
+            SELECT id FROM inquiries
+            WHERE email_account_id = ?
+              AND (
+                (message_id IS NOT NULL AND message_id = ?)
+                OR (message_hash IS NOT NULL AND message_hash = ?)
+              )
+            ORDER BY id DESC LIMIT 1
+          `, [account.id, messageId, message_hash])
+
+          if (inquiry?.id) {
+            classifyInquiry(inquiry.id).catch((err) => {
+              logger.warn({ inquiry_id: inquiry.id, error: safeText(err?.message || err, 160) }, 'AI inbox classification failed')
+            })
+          }
 
           // Save attachments if enabled and present
           if (account.ingest_attachments && parsedEmail?.attachments?.length > 0) {
-            const [[inquiry]] = await pool.execute(`
-              SELECT id FROM inquiries
-              WHERE email_account_id = ?
-                AND (
-                  (message_id IS NOT NULL AND message_id = ?)
-                  OR (message_hash IS NOT NULL AND message_hash = ?)
-                )
-              ORDER BY id DESC LIMIT 1
-            `, [account.id, messageId, message_hash])
-
             if (inquiry?.id) {
               const maxBytes = (account.max_attachment_mb || 10) * 1024 * 1024
               const baseDir = path.join(__dirname, '..', 'storage', 'email_attachments', String(account.id), String(inquiry.id))

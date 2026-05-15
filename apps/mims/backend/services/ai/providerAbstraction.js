@@ -40,6 +40,56 @@ function localProvider(config = {}) {
   };
 }
 
+async function callJson(endpoint, headers, payload) {
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`AI provider request failed: ${res.status}`);
+  return res.json();
+}
+
+function externalProvider(config = {}) {
+  const fallback = localProvider(config);
+  return {
+    key: config.provider_key,
+    model: config.model_name || 'gpt-4o-mini',
+    async chat(messages = [], opts = {}) {
+      if (config.provider_key === 'openai' || config.provider_key === 'azure_openai') {
+        const endpoint = config.api_endpoint || 'https://api.openai.com/v1/chat/completions';
+        const data = await callJson(endpoint, { Authorization: `Bearer ${config.api_key_plain || ''}` }, {
+          model: opts.model || config.model_name || 'gpt-4o-mini',
+          messages,
+          temperature: opts.temperature ?? 0.2,
+        });
+        return {
+          content: data.choices?.[0]?.message?.content || '',
+          model: data.model || config.model_name,
+          tokens_in: data.usage?.prompt_tokens || fallback.countTokens(JSON.stringify(messages)),
+          tokens_out: data.usage?.completion_tokens || 0,
+        };
+      }
+      if (config.provider_key === 'anthropic') {
+        const endpoint = config.api_endpoint || 'https://api.anthropic.com/v1/messages';
+        const data = await callJson(endpoint, { 'x-api-key': config.api_key_plain || '', 'anthropic-version': '2023-06-01' }, {
+          model: opts.model || config.model_name || 'claude-3-5-sonnet-latest',
+          max_tokens: opts.max_tokens || 1200,
+          messages,
+        });
+        return { content: data.content?.[0]?.text || '', model: data.model || config.model_name, tokens_in: data.usage?.input_tokens || 0, tokens_out: data.usage?.output_tokens || 0 };
+      }
+      if (config.provider_key === 'on_prem' && config.api_endpoint) {
+        const data = await callJson(config.api_endpoint, {}, { model: config.model_name || 'llama3', messages });
+        return { content: data.message?.content || data.response || '', model: config.model_name || 'on_prem', tokens_in: fallback.countTokens(JSON.stringify(messages)), tokens_out: fallback.countTokens(data.response || '') };
+      }
+      return fallback.chat(messages, opts);
+    },
+    async embed(text) { return fallback.embed(text); },
+    countTokens: fallback.countTokens,
+  };
+}
+
 async function getProvider(orgId) {
   try {
     const [[config]] = await pool.execute(
@@ -50,7 +100,7 @@ async function getProvider(orgId) {
     if (config.allow_phi_external !== 1 && config.provider_key !== 'on_prem') {
       return localProvider({ provider_key: 'on_prem', model_name: 'phi-safe-local-fallback' });
     }
-    return localProvider(config);
+    return externalProvider(config);
   } catch (_) {
     return localProvider({ provider_key: 'on_prem' });
   }

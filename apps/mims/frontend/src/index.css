@@ -1839,6 +1839,16 @@ a.nav-item { text-decoration: none; color: inherit; }
   color: var(--text-muted);
   white-space: nowrap;
 }
+.ai-inbox-chip {
+  font-size: 9.5px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  padding: 1px 6px;
+  color: #3730a3;
+  font-weight: 800;
+  white-space: nowrap;
+}
 
 /* F4: Due date chips in row */
 .due-chip {
@@ -2150,6 +2160,7 @@ a.nav-item { text-decoration: none; color: inherit; }
 }
 
 .compact-mode .assignee-tag,
+.compact-mode .ai-inbox-chip,
 .compact-mode .due-chip {
   font-size: 9px;
   padding: 0 6px;
@@ -4014,11 +4025,23 @@ a.nav-item { text-decoration: none; color: inherit; }
 .ma-ai-config, .ma-workflow-engine, .developer-portal { padding: 28px 32px; overflow: auto; color: var(--text-primary); }
 .ma-ai-card { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 14px; max-width: 980px; background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
 .ma-ai-card label, .ma-workflow-engine label { display: grid; gap: 6px; font-weight: 700; font-size: 13px; }
-.ma-ai-card input, .ma-ai-card select, .ma-workflow-engine input, .ma-workflow-engine textarea { border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font: inherit; }
+.ma-ai-card input, .ma-ai-card select, .ma-workflow-engine input, .ma-workflow-engine select, .ma-workflow-engine textarea { border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font: inherit; }
 .ma-ai-card button, .ma-workflow-engine button { border: 0; border-radius: 8px; background: #1d3557; color: #fff; font-weight: 800; padding: 9px 14px; cursor: pointer; }
 .ma-workflow-grid { display: grid; grid-template-columns: 240px 1fr 360px; gap: 14px; }
 .ma-workflow-grid section { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
-.ma-workflow-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; border-bottom: 1px solid var(--border); padding: 8px 0; }
+.ma-workflow-row { display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 8px; align-items: center; border-bottom: 1px solid var(--border); padding: 8px 0; }
+.ma-flow-palette, .ma-flow-inspector { display: grid; gap: 10px; align-content: start; }
+.ma-flow-board { min-height: 360px; border: 1px dashed #9fb3c8; border-radius: 16px; padding: 18px; background: linear-gradient(135deg, #f8fafc, #eef6ff); display: flex; flex-wrap: wrap; gap: 18px; align-content: flex-start; overflow: auto; }
+.ma-flow-node { width: 168px; min-height: 84px; display: grid; justify-items: start; align-content: center; text-align: left; background: #f8fafc !important; color: #172033 !important; border: 2px solid #d9e2ec !important; box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08); }
+.ma-flow-node span { text-transform: uppercase; letter-spacing: .08em; color: #64748b; font-size: 10px; }
+.ma-flow-node strong { font-size: 14px; }
+.ma-flow-node.selected { border-color: #f59e0b !important; box-shadow: 0 0 0 3px rgba(245, 158, 11, .18); }
+.ma-flow-node.start { background: #ecfdf5 !important; }
+.ma-flow-node.condition { background: #fff7ed !important; }
+.ma-flow-node.action { background: #eff6ff !important; }
+.ma-flow-node.end { background: #fef2f2 !important; }
+.ma-flow-edges { display: grid; gap: 8px; }
+.ma-flow-edges div { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
 .developer-portal section { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin: 14px 0; }
 .developer-portal pre, .ma-ai-config pre, .ma-workflow-engine pre { white-space: pre-wrap; background: #0f172a; color: #d1fae5; border-radius: 12px; padding: 14px; overflow: auto; }
 @media (max-width: 1000px) { .ma-ai-card, .ma-workflow-grid { grid-template-columns: 1fr; } }

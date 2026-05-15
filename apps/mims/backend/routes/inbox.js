@@ -356,7 +356,10 @@ async function loadInboxRows(req, limit = 500, requestedOrgIdRaw = null) {
       i.last_action_at,
       i.closed_at,
       i.routing_reason,
-      i.exception_reason
+      i.exception_reason,
+      i.ai_suggested_type,
+      i.ai_suggested_payload,
+      i.ai_classified_at
     FROM inquiries i
     LEFT JOIN email_accounts ea ON ea.id = i.email_account_id
     LEFT JOIN inquiry_read_receipts irr_user
@@ -387,6 +390,9 @@ async function loadInboxRows(req, limit = 500, requestedOrgIdRaw = null) {
     priority: row.priority || null,
     due_date: row.due_date || null,
     case_id: row.case_id || null,
+    ai_suggested_type: row.ai_suggested_type || null,
+    ai_suggested_payload: row.ai_suggested_payload || null,
+    ai_classified_at: row.ai_classified_at || null,
   }));
 }
 

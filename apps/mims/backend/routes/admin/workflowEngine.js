@@ -5,6 +5,7 @@ const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { validateDefinition } = require('../../services/workflow/definitionValidator');
 const { traceGraph } = require('../../services/workflow/executionEngine');
+const { fireWorkflowEvent } = require('../../services/workflow/eventHookService');
 
 const router = express.Router();
 const guard = [authenticate, requireRole('admin', 'superadmin')];
@@ -81,6 +82,20 @@ router.post('/workflow-definitions/:id/publish', ...guard, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.post('/workflow-definitions/:id/hooks', ...guard, async (req, res) => {
+  try {
+    const [[row]] = await pool.execute('SELECT * FROM workflow_definitions WHERE id=? LIMIT 1', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Workflow definition not found.' });
+    const [result] = await pool.execute(
+      `INSERT INTO workflow_event_hooks (definition_id, org_id, event_name, entity_type, is_active)
+       VALUES (?, ?, ?, ?, ?)`,
+      [req.params.id, row.org_id, req.body.event_name || 'case.created', req.body.entity_type || 'case', req.body.is_active === false ? 0 : 1]
+    );
+    await audit(req, 'CREATE', 'workflow_event_hook', result.insertId, { definition_id: Number(req.params.id), event_name: req.body.event_name });
+    res.status(201).json({ id: result.insertId });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.post('/workflow-definitions/:id/simulate', ...guard, async (req, res) => {
   try {
     const [[row]] = await pool.execute('SELECT * FROM workflow_definitions WHERE id=? LIMIT 1', [req.params.id]);
@@ -102,6 +117,20 @@ router.get('/workflow-instances/:id/timeline', ...guard, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM workflow_executions WHERE instance_id=? ORDER BY created_at ASC', [req.params.id]);
     res.json({ timeline: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/workflow-events/fire', ...guard, async (req, res) => {
+  try {
+    const instances = await fireWorkflowEvent({
+      orgId: req.body.org_id || req.user.orgId,
+      eventName: req.body.event_name,
+      entityType: req.body.entity_type || 'case',
+      entityId: req.body.entity_id,
+      entityData: req.body.entity_data || {},
+    });
+    await audit(req, 'FIRE', 'workflow_event', req.body.entity_id || null, { event_name: req.body.event_name, instances: instances.length });
+    res.json({ instances });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

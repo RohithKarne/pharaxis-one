@@ -97,6 +97,7 @@ export const SYSTEM_NAV = [
       { label: 'Workflow Setup',              value: 'sys-setup-workflow'       },
       { label: 'Workflow Engine',             value: 'sys-setup-workflow-engine'},
       { label: 'AI Configuration',            value: 'sys-setup-ai-config'      },
+      { label: 'Developer API Clients',       value: 'sys-setup-developer-api'  },
       { label: 'Email Accounts',              value: 'sys-setup-email-accounts' },
       // Picklist Definitions / Field Configuration / Case Form Definition retired —
       // folded into Tables > General (Picklists Table → Manage Schema) and

@@ -108,6 +108,19 @@ const HANDLERS = {
     const { retryFailedNotifications } = require('./notificationCenterService')
     await retryFailedNotifications(200)
   },
+  'webhook-delivery-dispatch': async () => {
+    const { deliverPendingWebhooks } = require('./api-platform/webhookDeliveryWorker')
+    await deliverPendingWebhooks(50)
+  },
+  'workflow-sla-timers': async () => {
+    const { checkSlaTimers } = require('./workflow/slaTimerService')
+    await checkSlaTimers()
+  },
+  'pv-signal-detection': async () => {
+    const [orgs] = await pool.execute('SELECT id FROM organisations WHERE is_active = 1 LIMIT 200').catch(async () => [ [] ])
+    const { runSignalDetection } = require('./pv/signalDetectionService')
+    for (const org of orgs) await runSignalDetection(org.id)
+  },
   'novartis-daily-simulation': async () => {
     const { runNovartisSimulation } = require('./novartisSimulationService')
     await runNovartisSimulation({ orgId: 1, useScheduledConfig: true })

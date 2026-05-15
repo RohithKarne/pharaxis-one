@@ -17,6 +17,8 @@ export default function ICSRBuilderPage() {
   const [xml, setXml] = useState('')
   const [errors, setErrors] = useState([])
   const [message, setMessage] = useState('')
+  const [ackXml, setAckXml] = useState('')
+  const [signature, setSignature] = useState({ password: '', reason: 'Regulatory ICSR submission' })
 
   async function load() {
     const res = await httpFetch(`/api/admin/icsr/${id}`, { headers })
@@ -38,9 +40,15 @@ export default function ICSRBuilderPage() {
     const lock = await httpFetch(`/api/admin/icsr/${id}/lock`, { method: 'POST', headers })
     const lockData = await lock.json().catch(() => ({}))
     if (!lock.ok) { setErrors(lockData.errors || [{ reason: lockData.error }]); return }
-    const submit = await httpFetch(`/api/admin/icsr/${id}/submit`, { method: 'POST', headers, body: JSON.stringify({ gateway: 'mock', e_signature_reason: 'Regulatory ICSR submission' }) })
+    const submit = await httpFetch(`/api/admin/icsr/${id}/submit`, { method: 'POST', headers, body: JSON.stringify({ gateway: 'mock', password: signature.password, reason: signature.reason }) })
     const submitData = await submit.json().catch(() => ({}))
-    setMessage(submit.ok ? 'Submitted to mock regulatory gateway' : submitData.error)
+    setMessage(submit.ok ? `Submitted to mock regulatory gateway${submitData.e_sign_manifest?.manifest_id ? ` · Manifest ${submitData.e_sign_manifest.manifest_id}` : ''}` : submitData.error)
+    load()
+  }
+  async function parseAck() {
+    const res = await httpFetch(`/api/admin/icsr/${id}/acknowledgements`, { method: 'POST', headers, body: JSON.stringify({ ack_xml: ackXml, gateway: report.receiver_id }) })
+    const d = await res.json().catch(() => ({}))
+    setMessage(res.ok ? `ACK parsed: ${d.ack_status}` : d.error)
     load()
   }
 
@@ -66,6 +74,16 @@ export default function ICSRBuilderPage() {
             <pre>{JSON.stringify(active === 0 ? report : active === 2 ? data.reactions : active === 3 ? data.drugs : active === 4 ? data.tests : active === 1 ? data.history : { narrative: report.narrative, causality: report.causality_per_drug }, null, 2)}</pre>
             {message && <div className="icsr-message">{message}</div>}
             {errors.length > 0 && <div className="icsr-errors">{errors.map((e, i) => <button key={i} onClick={() => setActive(0)}>{e.path || 'XML'}: {e.reason}</button>)}</div>}
+            <div className="icsr-sign-box">
+              <h3>Electronic Signature</h3>
+              <label>Reason<input value={signature.reason} onChange={e => setSignature(s => ({ ...s, reason: e.target.value }))} /></label>
+              <label>Password<input type="password" value={signature.password} onChange={e => setSignature(s => ({ ...s, password: e.target.value }))} placeholder="Required for Lock + Submit" /></label>
+            </div>
+            <div className="icsr-ack-box">
+              <h3>Regulatory ACK Parser</h3>
+              <textarea value={ackXml} onChange={e => setAckXml(e.target.value)} rows={5} placeholder="Paste ACK01 / ACK02 XML here" />
+              <button type="button" onClick={parseAck}>Parse ACK + Update Status</button>
+            </div>
           </main>
           <section className="icsr-xml-pane"><h3>XML Preview</h3><pre>{xml || 'Click Generate XML to preview E2B(R3).'}</pre></section>
         </div>

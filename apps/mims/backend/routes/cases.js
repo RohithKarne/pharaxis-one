@@ -25,6 +25,7 @@ const { logger } = require('../services/logger');
 const { createNotification } = require('../services/notificationCenterService');
 const { emitDataSync } = require('../services/appRealtimeService');
 const { fireIntegrationEvent } = require('../services/integrationEngine');
+const { fireWorkflowEvent } = require('../services/workflow/eventHookService');
 const { resolveDefaultWorkflowStateId } = require('../services/orgBootstrapService');
 const {
   calculateAeDueDate,
@@ -1208,6 +1209,12 @@ router.post('/cases', authenticate, requireOrg, validate(schemas.createCase), as
       case_type: case_type || null,
       intake_channel,
     }, 'case', String(caseId)).catch(() => {});
+    fireWorkflowEvent({
+      orgId: org_id,
+      eventName: 'case.created',
+      entityId: caseId,
+      entityData: { ...newCase, severity: newCase.priority || null, case_type: case_type || null },
+    }).catch((err) => logger.warn({ err, case_id: caseId }, 'Workflow event hook failed for case.created'));
     logger.info({ case_id: caseId, org_id, user_id: req.user?.userId, case_type }, 'Case created with intake data');
     res.status(201).json({ ...newCase, duplicate_candidates: duplicateCandidates });
   } catch (err) {
@@ -1647,6 +1654,12 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
         owner_id: updatedOwnerId,
         changed_by: req.user.userId,
       }, 'case', String(req.params.id)).catch(() => {});
+      fireWorkflowEvent({
+        orgId: currentCase.org_id,
+        eventName: statusChanged ? 'case.status_changed' : 'case.updated',
+        entityId: Number(req.params.id),
+        entityData: { ...updated, severity: updated.priority || null, previous_status_id: previousStatusId, status_id: updatedStatusId },
+      }).catch((err) => logger.warn({ err, case_id: req.params.id }, 'Workflow event hook failed for case update'));
     }
     res.json(updated);
   } catch (err) {

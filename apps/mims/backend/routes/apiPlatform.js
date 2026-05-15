@@ -9,6 +9,8 @@ const { apiKeyAuth } = require('../services/api-platform/apiKeyAuth');
 const { scopeGuard } = require('../services/api-platform/scopeGuard');
 const { publicApiRateLimiter } = require('../services/api-platform/rateLimiter');
 const { signPayload } = require('../services/api-platform/webhookDispatcher');
+const { deliverPendingWebhooks } = require('../services/api-platform/webhookDeliveryWorker');
+const { buildOpenApiYaml } = require('../services/api-platform/openapiSpec');
 
 const router = express.Router();
 
@@ -37,25 +39,7 @@ router.post('/api/admin/api-clients', authenticate, requireRole('admin', 'supera
 });
 
 router.get('/api/openapi.yaml', (_req, res) => {
-  res.type('text/yaml').send(`openapi: 3.1.0
-info:
-  title: MIMS Public API
-  version: 1.0.0
-paths:
-  /oauth/token:
-    post:
-      summary: Issue OAuth2 client credentials token
-  /api/v1/cases:
-    get:
-      summary: List cases
-    post:
-      summary: Create a case
-  /api/v1/webhook-subscriptions:
-    get:
-      summary: List webhook subscriptions
-    post:
-      summary: Create webhook subscription
-`);
+  res.type('text/yaml').send(buildOpenApiYaml());
 });
 
 router.use('/api/v1', apiKeyAuth, publicApiRateLimiter, (req, res, next) => {
@@ -65,20 +49,33 @@ router.use('/api/v1', apiKeyAuth, publicApiRateLimiter, (req, res, next) => {
 });
 
 router.get('/api/v1/cases', scopeGuard('cases:read'), async (req, res) => {
-  const [rows] = await pool.execute('SELECT id, case_number, case_type, status, priority, created_at FROM cases WHERE org_id=? ORDER BY created_at DESC LIMIT 100', [req.apiClient.org_id]);
+  const [rows] = await pool.execute(
+    `SELECT c.id, c.case_number, c.case_type, ws.name AS status, c.priority, c.created_at
+       FROM cases c
+       LEFT JOIN workflow_states ws ON ws.id = c.status_id
+      WHERE c.org_id=? AND c.is_deleted = 0
+      ORDER BY c.created_at DESC LIMIT 100`,
+    [req.apiClient.org_id]
+  );
   res.json({ rows, pagination: { limit: 100 } });
 });
 
 router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
+  const [[site]] = await pool.execute('SELECT id FROM sites WHERE org_id=? ORDER BY id ASC LIMIT 1', [req.apiClient.org_id]);
+  if (!site?.id) return res.status(400).json({ error: 'No site is configured for this organisation.' });
+  const [[state]] = await pool.execute('SELECT id FROM workflow_states WHERE org_id=? OR org_id IS NULL ORDER BY org_id IS NULL DESC, id ASC LIMIT 1', [req.apiClient.org_id]);
   const [result] = await pool.execute(
-    `INSERT INTO cases (org_id, case_type, subject, description, status, priority, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [req.apiClient.org_id, req.body.case_type || 'MI', req.body.subject || 'API case', req.body.description || null, req.body.status || 'New', req.body.priority || 'Normal', null]
+    `INSERT INTO cases (org_id, site_id, case_type, intake_channel, description, status_id, priority, created_by) VALUES (?, ?, ?, 'api', ?, ?, ?, ?)`,
+    [req.apiClient.org_id, site.id, req.body.case_type || 'MI', req.body.description || req.body.subject || null, state?.id || null, req.body.priority || 'normal', null]
   );
   res.status(201).json({ id: result.insertId });
 });
 
 router.put('/api/v1/cases/:id', scopeGuard('cases:write'), async (req, res) => {
-  await pool.execute('UPDATE cases SET subject=COALESCE(?, subject), description=COALESCE(?, description), status=COALESCE(?, status), priority=COALESCE(?, priority) WHERE id=? AND org_id=?', [req.body.subject || null, req.body.description || null, req.body.status || null, req.body.priority || null, req.params.id, req.apiClient.org_id]);
+  await pool.execute(
+    'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=?',
+    [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id]
+  );
   res.json({ id: Number(req.params.id) });
 });
 
@@ -133,10 +130,15 @@ router.post('/api/v1/webhook-subscriptions/:id/deliveries/:dId/replay', scopeGua
   res.json({ queued: true });
 });
 
+router.post('/api/v1/webhook-deliveries/flush', scopeGuard('webhooks:write'), async (_req, res) => {
+  const results = await deliverPendingWebhooks(25);
+  res.json({ results });
+});
+
 router.post('/api/v1/graphql', scopeGuard('graphql:read'), async (req, res) => {
   const query = String(req.body?.query || '');
   if (query.includes('cases')) {
-    const [rows] = await pool.execute('SELECT id, case_number, case_type, status FROM cases WHERE org_id=? LIMIT 20', [req.apiClient.org_id]);
+    const [rows] = await pool.execute('SELECT id, case_number, case_type, priority FROM cases WHERE org_id=? AND is_deleted=0 LIMIT 20', [req.apiClient.org_id]);
     return res.json({ data: { cases: rows } });
   }
   res.json({ data: { viewer: { clientId: req.apiClient.client_id, orgId: req.apiClient.org_id } } });
@@ -145,6 +147,27 @@ router.post('/api/v1/graphql', scopeGuard('graphql:read'), async (req, res) => {
 router.get('/api/v1/webhook-signature-example', scopeGuard('webhooks:write'), (req, res) => {
   const payload = { event: 'case.created', id: 1 };
   res.json({ payload, signature: signPayload('example-secret', payload) });
+});
+
+router.get('/api/v1/sdk/:language', scopeGuard('admin:read'), async (req, res) => {
+  const language = ['node', 'python', 'java'].includes(req.params.language) ? req.params.language : 'node';
+  await pool.execute('INSERT INTO api_sdk_downloads (client_id, sdk_language) VALUES (?, ?)', [req.apiClient.id, language]).catch(() => {});
+  const snippets = {
+    node: `export async function listCases(baseUrl, token) {
+  const res = await fetch(baseUrl + '/api/v1/cases', { headers: { Authorization: 'Bearer ' + token } });
+  return res.json();
+}
+`,
+    python: `import requests
+
+def list_cases(base_url, token):
+    return requests.get(base_url + '/api/v1/cases', headers={'Authorization': f'Bearer {token}'}).json()
+`,
+    java: `// Java SDK stub
+// Use java.net.http.HttpClient with Authorization: Bearer <token> against /api/v1/cases
+`,
+  };
+  res.type('text/plain').send(snippets[language]);
 });
 
 module.exports = router;

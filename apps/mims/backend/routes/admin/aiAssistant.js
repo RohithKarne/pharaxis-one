@@ -11,6 +11,7 @@ const { draftResponse } = require('../../services/ai/responseDrafter');
 const { summarizeCase } = require('../../services/ai/summarizer');
 const { runQualityChecks } = require('../../services/ai/qualityChecker');
 const { vectorSearch } = require('../../services/ai/retriever');
+const { classifyInquiry, classifyRecentInquiries } = require('../../services/ai/inboxClassifierService');
 
 const router = express.Router();
 
@@ -148,6 +149,21 @@ router.post('/cases/:id/ai/suggestions/:sid/reject', authenticate, async (req, r
     await pool.execute('UPDATE ai_suggestions SET accepted=0, accepted_by=?, accepted_at=CURRENT_TIMESTAMP WHERE id=? AND case_id=?', [req.user.userId, req.params.sid, req.params.id]);
     await audit(req, 'REJECT', 'ai_suggestion', req.params.sid, { case_id: Number(req.params.id) });
     res.json({ accepted: false });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/inquiries/:id/ai/classify', authenticate, async (req, res) => {
+  try {
+    const suggestion = await classifyInquiry(req.params.id, req.user.userId);
+    if (!suggestion) return res.status(404).json({ error: 'Inquiry not found.' });
+    res.json({ suggestion });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/admin/ai/classify-inbox', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  try {
+    const results = await classifyRecentInquiries(req.body.org_id || req.user.orgId, req.body.limit || 25);
+    res.json({ results });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

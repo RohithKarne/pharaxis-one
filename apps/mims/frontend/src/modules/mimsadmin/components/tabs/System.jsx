@@ -17,6 +17,7 @@ import SetupWorkflowEngine from './SetupWorkflowEngine'
 import SetupTwoFactor from './SetupTwoFactor'
 import SetupWorkflow from './SetupWorkflow'
 import AiConfig from './AiConfig'
+import DeveloperApiAdmin from './DeveloperApiAdmin'
 import SystemParameters from './SystemParameters'
 import Users from './Users'
 import ViewData from './ViewData'
@@ -37,6 +38,7 @@ export default function System({ selectedItem }) {
   if (selectedItem === 'sys-setup-workflow')        return <SetupWorkflow />
   if (selectedItem === 'sys-setup-workflow-engine') return <SetupWorkflowEngine />
   if (selectedItem === 'sys-setup-ai-config')       return <AiConfig />
+  if (selectedItem === 'sys-setup-developer-api')    return <DeveloperApiAdmin />
   if (selectedItem === 'sys-setup-email-accounts')  return <SetupEmailAccounts />
   if (selectedItem === 'sys-setup-change-approvals') return <SetupChangeApprovals />
   if (selectedItem?.startsWith('sys-setup-int-'))   return <SetupIntegrations selectedItem={selectedItem} />
