@@ -1,0 +1,7 @@
+"requirement_id","requirement_title","functional_spec","test_file","status"
+"URS-01","Pharmacovigilance ICSR Lifecycle","FS-01","backend/tests/enterprise-platform-services.test.js","mapped"
+"URS-02","E2B(R3) XML Generation","FS-02","backend/tests/enterprise-platform-services.test.js","mapped"
+"URS-03","AI Case Assistant","FS-03","backend/tests/enterprise-platform-services.test.js","mapped"
+"URS-04","Configurable Workflow Engine","FS-04","backend/tests/enterprise-platform-services.test.js","mapped"
+"URS-05","Public Integration Platform","FS-05","backend/tests/enterprise-platform-services.test.js","mapped"
+"URS-06","Compliance Evidence Package","FS-06","manual OQ/PQ script","mapped"

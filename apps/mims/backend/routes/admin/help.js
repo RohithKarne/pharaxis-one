@@ -45,10 +45,19 @@ function isSuperadmin(req) {
 
 function helpScope(req, alias = 'ha', { includeGlobal = true } = {}) {
   if (isSuperadmin(req)) return { clause: '', params: [] };
+  const orgId = req.user?.orgId;
+  // Admin user with no current org context (new global admin model) — return
+  // only global (org_id IS NULL) articles. mysql2 throws if we pass undefined
+  // as a parameter, so guard explicitly here.
+  if (orgId == null) {
+    return includeGlobal
+      ? { clause: ` AND ${alias}.org_id IS NULL`, params: [] }
+      : { clause: ' AND 1=0', params: [] };
+  }
   const globalClause = includeGlobal ? ` OR ${alias}.org_id IS NULL` : '';
   return {
     clause: ` AND (${alias}.org_id = ?${globalClause})`,
-    params: [req.user.orgId],
+    params: [orgId],
   };
 }
 

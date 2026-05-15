@@ -12,6 +12,8 @@ import CaseMITab            from '../components/CaseMITab'
 import CaseAETab            from '../components/CaseAETab'
 import CasePCTab            from '../components/CasePCTab'
 import CaseDPPRTab          from '../components/CaseDPPRTab'
+import CaseICSRTab          from '../components/CaseICSRTab'
+import AiAssistantPanel     from '../components/AiAssistantPanel'
 
 const TYPE_COLOR = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 
@@ -39,7 +41,7 @@ export default function CaseFormPage() {
   useEffect(() => {
     const params        = new URLSearchParams(location.search || '')
     const targetSection = params.get('section')
-    const valid = ['info', 'comments', 'contacts', 'correspondence', 'mi', 'ae', 'pc', 'dppr']
+    const valid = ['info', 'comments', 'contacts', 'correspondence', 'mi', 'ae', 'pc', 'dppr', 'icsr']
     if (targetSection && valid.includes(targetSection)) setActiveTab(targetSection)
   }, [location.search])
 
@@ -61,6 +63,7 @@ export default function CaseFormPage() {
     { key: 'correspondence', label: 'Correspondence',    badge: countFor('correspondence') },
     { key: 'mi',             label: 'MI Component',      badge: countFor('mi') },
     { key: 'ae',             label: 'AE Component',      badge: countFor('ae') },
+    { key: 'icsr',           label: 'ICSR / Regulatory', badge: countFor('icsr') },
     { key: 'pc',             label: 'PC Component',      badge: countFor('pc') },
     { key: 'dppr',           label: 'Privacy (DPPR)',    badge: countFor('dppr') },
   ]
@@ -145,6 +148,9 @@ export default function CaseFormPage() {
             onCountChange={n => setTabCounts(p => ({ ...p, ae: n }))}
           />
         )}
+        {activeTab === 'icsr' && (
+          <CaseICSRTab id={id} headers={headers} setSavedMsg={setSavedMsg} />
+        )}
         {activeTab === 'pc' && (
           <CasePCTab
             id={id} headers={headers} setSavedMsg={setSavedMsg}
@@ -156,6 +162,8 @@ export default function CaseFormPage() {
           <CaseDPPRTab id={id} headers={headers} />
         )}
       </div>
+
+      <AiAssistantPanel caseId={id} headers={headers} />
 
     </div>
     </MIMSLayout>

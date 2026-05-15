@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
+const { EXTRA_FIELDS, EXTRA_SECTIONS, EXTRA_PICKLIST_GROUPS } = require('../catalogs/caseFormExtensions');
 
 const FIELD_SETUP_ROWS = [
   // Contact / Requestor
@@ -235,7 +236,8 @@ const CASE_FORM_SECTIONS = {
 };
 
 async function seedFieldSetup(conn, orgId, _userId) {
-  for (const row of FIELD_SETUP_ROWS) {
+  const allRows = [...FIELD_SETUP_ROWS, ...EXTRA_FIELDS];
+  for (const row of allRows) {
     await conn.execute(
       `INSERT IGNORE INTO field_setup
         (section_name, field_name, field_type, is_required, is_hidden, is_disabled, picklist_type, lookup_target, sort_order, org_id)
@@ -276,7 +278,8 @@ async function getOrCreateFieldId(conn, orgId, categoryId, fieldName, userId) {
 }
 
 async function seedPicklists(conn, orgId, userId) {
-  for (const group of PICKLIST_GROUPS) {
+  const allGroups = [...PICKLIST_GROUPS, ...EXTRA_PICKLIST_GROUPS];
+  for (const group of allGroups) {
     const categoryId = await getOrCreateCategoryId(conn, orgId, group.category, userId);
     if (!categoryId) continue;
 
@@ -295,7 +298,20 @@ async function seedPicklists(conn, orgId, userId) {
 }
 
 async function seedCaseFormDefinition(conn, orgId, _userId) {
+  // Build a merged map: { AE: [...], MI: [...], PC: [...] } where each
+  // case type gets its base sections PLUS the cross-cutting (ALL) sections
+  // PLUS any case-type-specific extras from EXTRA_SECTIONS.
+  const sharedExtras = EXTRA_SECTIONS.ALL || [];
+  const merged = {};
   for (const [caseType, sections] of Object.entries(CASE_FORM_SECTIONS)) {
+    merged[caseType] = [
+      ...sections,
+      ...sharedExtras,
+      ...(EXTRA_SECTIONS[caseType] || []),
+    ];
+  }
+
+  for (const [caseType, sections] of Object.entries(merged)) {
     for (const sectionName of sections) {
       await conn.execute(
         `INSERT IGNORE INTO case_form_definition

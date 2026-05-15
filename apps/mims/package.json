@@ -10,7 +10,7 @@
     "dev:clean": "bash ./dev-clean.sh",
     "stop:ports": "bash ./stop-ports.sh",
     "security:scan": "bash ./scripts/security-scan.sh",
-    "test": "jest --testPathPatterns=backend/tests",
+    "test": "jest --testPathPatterns=backend/tests --forceExit",
     "test:process-explorer-guard": "node backend/tests/process-explorer-guard.js",
     "test:smoke:process-explorer-ops": "node backend/tests/smoke-process-explorer-ops.js",
     "test:e2e": "playwright test",

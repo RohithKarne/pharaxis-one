@@ -644,4 +644,155 @@ router.post('/picklists-table/import', authenticate, requireRole(...ROLE), async
   }
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// SCHEMA-LEVEL CRUD — picklist categories + fields per tenant
+// (folded in from the legacy "Picklist Definitions" screen)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// GET /api/admin/picklists-table/schema/categories?tenant_id=
+router.get('/picklists-table/schema/categories', authenticate, requireRole(...ROLE), async (req, res) => {
+  const tenantId = parseInt(req.query.tenant_id, 10);
+  if (!Number.isFinite(tenantId)) return res.status(400).json({ error: 'tenant_id is required.' });
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, name, is_active, sort_order, created_at, updated_at
+         FROM picklist_categories WHERE org_id = ? ORDER BY name ASC`,
+      [tenantId]
+    );
+    res.json({ categories: rows });
+  } catch (err) {
+    console.error('GET schema/categories error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/picklists-table/schema/categories — body {tenant_id, name}
+router.post('/picklists-table/schema/categories', authenticate, requireRole(...ROLE), async (req, res) => {
+  const { tenant_id, name } = req.body || {};
+  if (!tenant_id || !name?.trim()) return res.status(400).json({ error: 'tenant_id and name are required.' });
+  try {
+    const [r] = await pool.execute(
+      `INSERT INTO picklist_categories (org_id, name, is_active, sort_order, created_by)
+       VALUES (?, ?, 1, 0, ?)`,
+      [tenant_id, name.trim(), req.user.userId]
+    );
+    await audit(req.user.userId, 'CREATE_PICKLIST_CATEGORY', r.insertId, { tenant_id, name });
+    res.status(201).json({ ok: true, id: r.insertId });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'A category with this name already exists for this tenant.' });
+    console.error('POST schema/categories error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/picklists-table/schema/categories/:id — body {name?, is_active?}
+router.put('/picklists-table/schema/categories/:id', authenticate, requireRole(...ROLE), async (req, res) => {
+  const { name, is_active } = req.body || {};
+  try {
+    await pool.execute(
+      `UPDATE picklist_categories
+          SET name      = COALESCE(?, name),
+              is_active = COALESCE(?, is_active),
+              updated_at = NOW()
+        WHERE id = ?`,
+      [name?.trim() ?? null, is_active != null ? (is_active ? 1 : 0) : null, req.params.id]
+    );
+    await audit(req.user.userId, 'UPDATE_PICKLIST_CATEGORY', req.params.id, { name, is_active });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('PUT schema/categories/:id error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/picklists-table/schema/categories/:id — soft delete (is_active = 0)
+router.delete('/picklists-table/schema/categories/:id', authenticate, requireRole(...ROLE), async (req, res) => {
+  try {
+    await pool.execute('UPDATE picklist_categories SET is_active = 0, updated_at = NOW() WHERE id = ?', [req.params.id]);
+    await audit(req.user.userId, 'DEACTIVATE_PICKLIST_CATEGORY', req.params.id, {});
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE schema/categories/:id error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/picklists-table/schema/fields?tenant_id=&category_id=
+router.get('/picklists-table/schema/fields', authenticate, requireRole(...ROLE), async (req, res) => {
+  const tenantId = parseInt(req.query.tenant_id, 10);
+  const categoryId = req.query.category_id ? parseInt(req.query.category_id, 10) : null;
+  if (!Number.isFinite(tenantId)) return res.status(400).json({ error: 'tenant_id is required.' });
+  try {
+    const params = [tenantId];
+    let where = 'WHERE pf.org_id = ?';
+    if (categoryId) { where += ' AND pf.category_id = ?'; params.push(categoryId); }
+    const [rows] = await pool.execute(
+      `SELECT pf.id, pf.category_id, pf.name, pf.legacy_field_type AS field_type,
+              pf.is_active, pf.sort_order, pc.name AS category_name
+         FROM picklist_fields pf
+    LEFT JOIN picklist_categories pc ON pc.id = pf.category_id
+        ${where}
+        ORDER BY pc.name, pf.name`,
+      params
+    );
+    res.json({ fields: rows });
+  } catch (err) {
+    console.error('GET schema/fields error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/picklists-table/schema/fields — body {tenant_id, category_id, name, field_type?}
+router.post('/picklists-table/schema/fields', authenticate, requireRole(...ROLE), async (req, res) => {
+  const { tenant_id, category_id, name, field_type } = req.body || {};
+  if (!tenant_id || !category_id || !name?.trim()) {
+    return res.status(400).json({ error: 'tenant_id, category_id, and name are required.' });
+  }
+  try {
+    const [r] = await pool.execute(
+      `INSERT INTO picklist_fields (org_id, category_id, name, legacy_field_type, is_active, sort_order, created_by)
+       VALUES (?, ?, ?, ?, 1, 0, ?)`,
+      [tenant_id, category_id, name.trim(), field_type || name.trim().toLowerCase().replace(/\s+/g, '_'), req.user.userId]
+    );
+    await audit(req.user.userId, 'CREATE_PICKLIST_FIELD', r.insertId, { tenant_id, category_id, name });
+    res.status(201).json({ ok: true, id: r.insertId });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'A field with this name already exists under this category.' });
+    console.error('POST schema/fields error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/picklists-table/schema/fields/:id — body {name?, is_active?}
+router.put('/picklists-table/schema/fields/:id', authenticate, requireRole(...ROLE), async (req, res) => {
+  const { name, is_active } = req.body || {};
+  try {
+    await pool.execute(
+      `UPDATE picklist_fields
+          SET name      = COALESCE(?, name),
+              is_active = COALESCE(?, is_active),
+              updated_at = NOW()
+        WHERE id = ?`,
+      [name?.trim() ?? null, is_active != null ? (is_active ? 1 : 0) : null, req.params.id]
+    );
+    await audit(req.user.userId, 'UPDATE_PICKLIST_FIELD', req.params.id, { name, is_active });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('PUT schema/fields/:id error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/picklists-table/schema/fields/:id — soft delete
+router.delete('/picklists-table/schema/fields/:id', authenticate, requireRole(...ROLE), async (req, res) => {
+  try {
+    await pool.execute('UPDATE picklist_fields SET is_active = 0, updated_at = NOW() WHERE id = ?', [req.params.id]);
+    await audit(req.user.userId, 'DEACTIVATE_PICKLIST_FIELD', req.params.id, {});
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE schema/fields/:id error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

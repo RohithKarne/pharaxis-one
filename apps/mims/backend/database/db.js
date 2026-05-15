@@ -8,7 +8,25 @@
  */
 
 const mysql  = require('mysql2/promise');
+const path   = require('path');
+const fs     = require('fs');
 const { runMigrations } = require('./migrationRunner');
+
+function loadLocalEnvFile() {
+  const envPath = path.join(__dirname, '../../.env');
+  if (!fs.existsSync(envPath) || process.env.NODE_ENV === 'production') return;
+  const text = fs.readFileSync(envPath, 'utf8');
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
+    const idx = trimmed.indexOf('=');
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+    if (key.startsWith('MYSQL_')) process.env[key] = value;
+  }
+}
+
+loadLocalEnvFile();
 
 const isProd        = process.env.NODE_ENV === 'production';
 const MYSQL_HOST     = process.env.MYSQL_HOST     || 'localhost';
@@ -49,6 +67,9 @@ async function initializeDatabase() {
 
 const initPromise = initializeDatabase().catch(err => {
   console.error('❌ Database initialization failed:', err.message);
+  if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) {
+    throw err;
+  }
   process.exit(1);
 });
 

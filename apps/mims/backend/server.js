@@ -44,6 +44,7 @@ const { startSchemaTracker, stopSchemaTracker } = require('./services/schemaTrac
 const { startScheduler, stopScheduler } = require('./services/scheduler');
 const { startDpprScheduler }           = require('./services/dpprScheduler');
 const { apiRateLimiter, authRateLimiter } = require('./middleware/rateLimiters');
+const { auditAutoCapture } = require('./middleware/auditAutoCapture');
 const { attachChatRealtime } = require('./services/chatRealtimeService');
 const { attachAppRealtime } = require('./services/appRealtimeService');
 const { ensureMobilePushSchema } = require('./services/mobilePushService');
@@ -132,6 +133,7 @@ app.use(attachRequestIdHeader);
 app.use(captureApiExceptions);
 app.use('/api', inputSecurityMiddleware);
 app.use('/api', apiRateLimiter);
+app.use('/api', auditAutoCapture());
 
 // ── Fix 13: Process Explorer telemetry — batched flush (500ms) ───────────────
 // Previously wrote one DB row per API response (unbounded write pressure).
@@ -221,6 +223,11 @@ app.use('/api/admin', require('./routes/admin/reportsAccess'));
 app.use('/api/admin', require('./routes/admin/picklistsTable'));
 app.use('/api/admin', require('./routes/admin/dashboardActivity'));
 app.use('/api/admin', require('./routes/admin/userPreferences'));
+app.use('/api/admin', require('./routes/admin/icsr'));
+app.use('/api/admin', require('./routes/admin/workflowEngine'));
+app.use('/api/admin', require('./routes/admin/auditInspectorExport'));
+app.use('/api', require('./routes/admin/aiAssistant'));
+app.use('/', require('./routes/apiPlatform'));
 
 // ─── Case Management Routes (Phase 2) ────────────────────────────────────────
 app.use('/api', require('./routes/cases'));          // F-13 + F-15
@@ -403,6 +410,10 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/integrations/schedulerAdmin'));
   r.use(`${prefix}/admin`, require('./routes/integrations/oauth2Admin'));
   r.use(`${prefix}/admin`, require('./routes/admin/help'));
+  r.use(`${prefix}/admin`, require('./routes/admin/icsr'));
+  r.use(`${prefix}/admin`, require('./routes/admin/workflowEngine'));
+  r.use(`${prefix}/admin`, require('./routes/admin/auditInspectorExport'));
+  r.use(prefix || '/', require('./routes/admin/aiAssistant'));
 
   // Superadmin
   r.use(`${prefix}/superadmin`, require('./routes/superadmin'));

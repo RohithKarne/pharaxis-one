@@ -52,6 +52,8 @@ export default function CustomizeForms() {
   const [saving,      setSaving]      = useState(false)
   const [flash,       setFlash]       = useState(null)
   const [rulesField,  setRulesField]  = useState(null)
+  const [advancedField, setAdvancedField] = useState(null)   // currently-open field for advanced edit
+  const [flexFieldFor,  setFlexFieldFor]  = useState(null)   // section_name to create a flex field for
 
   // ── Boot: load categories (tenants come from context) ─────────────────────
   useEffect(() => { setOrgs(ctxTenants) }, [ctxTenants])
@@ -115,6 +117,31 @@ export default function CustomizeForms() {
     setFlash(null)
   }
 
+  // ── Update arbitrary advanced field property (in local state) ───────────
+  function updateFieldAdvanced(itemKey, patch) {
+    setData(d => {
+      if (!d) return d
+      return { ...d, fields: d.fields.map(f => f.key === itemKey ? { ...f, ...patch } : f) }
+    })
+    setFlash(null)
+  }
+
+  // ── Create flex field (server call + reload) ────────────────────────────
+  async function createFlexField(sectionName, fieldName, fieldType) {
+    if (!orgId || !sectionName.trim() || !fieldName.trim()) return
+    try {
+      const r = await httpFetch(`${API}/customize-forms/${orgId}/flex-field`, {
+        method: 'POST', headers: H,
+        body: JSON.stringify({ section_name: sectionName, field_name: fieldName, field_type: fieldType || 'text' }),
+      })
+      const d = await r.json()
+      if (!r.ok) { setFlash({ type: 'error', msg: d.error || 'Failed to add field.' }); return }
+      setFlash({ type: 'ok', msg: `Field "${fieldName}" added.` })
+      setFlexFieldFor(null)
+      loadData()
+    } catch { setFlash({ type: 'error', msg: 'Network error.' }) }
+  }
+
   // ── Custom label per tenant ─────────────────────────────────────────────
   function setCustomLabel(itemKey, value) {
     setData(d => {
@@ -172,10 +199,18 @@ export default function CustomizeForms() {
     try {
       const items = [...data.sections, ...data.fields].map(i => ({
         key: i.key,
-        is_required: !!i.is_required,
-        is_disabled: !!i.is_disabled,
-        sort_order: i.sort_order ?? 0,
-        custom_label: i.custom_label ?? '',
+        is_required:    !!i.is_required,
+        is_disabled:    !!i.is_disabled,
+        sort_order:     i.sort_order ?? 0,
+        custom_label:   i.custom_label ?? '',
+        field_type:     i.field_type ?? 'text',
+        help_text:      i.help_text ?? '',
+        max_length:     i.max_length ?? null,
+        default_value:  i.default_value ?? '',
+        picklist_type:  i.picklist_type ?? '',
+        lookup_target:  i.lookup_target ?? '',
+        is_sensitive:   !!i.is_sensitive,
+        masking_pattern: i.masking_pattern ?? 'partial',
       }))
       const r = await httpFetch(`${API}/customize-forms/${orgId}/${activeCat}`, {
         method: 'PUT', headers: H,
@@ -280,7 +315,20 @@ export default function CustomizeForms() {
               <div className="ma-cf-group">
                 <div className="ma-cf-group-header">
                   <span className="ma-cf-group-title">Fields — Required + Disabled (mutually exclusive)</span>
-                  <span className="ma-cf-group-count">{data.fields.length} item{data.fields.length !== 1 ? 's' : ''}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className="ma-cf-group-count">{data.fields.length} item{data.fields.length !== 1 ? 's' : ''}</span>
+                    {/* "+ Add Field" per real section — picks first non-placeholder section by default */}
+                    <button
+                      type="button"
+                      className="ma-cf-rules-btn"
+                      onClick={() => {
+                        const firstSection = data.sections.find(s => !s.is_placeholder)?.db_section
+                          || data.fields.find(f => !f.is_placeholder)?.db_section
+                          || ''
+                        setFlexFieldFor(firstSection)
+                      }}
+                    >+ Add Field</button>
+                  </span>
                 </div>
                 {data.fields.length === 0 && <div className="ma-cf-empty">No fields in this category.</div>}
                 {data.fields.length > 0 && (
@@ -294,6 +342,7 @@ export default function CustomizeForms() {
                         <th className="col-toggle">Required</th>
                         <th className="col-toggle">Disabled</th>
                         <th className="col-toggle">Rules</th>
+                        <th className="col-toggle">More</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -365,6 +414,20 @@ export default function CustomizeForms() {
                               </button>
                             )}
                           </td>
+                          <td className="ma-cf-cb-cell">
+                            {f.is_placeholder ? (
+                              <span className="ma-cf-cb-dash">—</span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="ma-cf-rules-btn"
+                                onClick={() => setAdvancedField(f)}
+                                title="Field type, help text, max length, defaults, picklist binding, masking"
+                              >
+                                ⚙ More
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -403,6 +466,153 @@ export default function CustomizeForms() {
           onClose={() => setRulesField(null)}
         />
       )}
+
+      {advancedField && (
+        <AdvancedFieldModal
+          field={advancedField}
+          onClose={() => setAdvancedField(null)}
+          onApply={(patch) => { updateFieldAdvanced(advancedField.key, patch); setAdvancedField(null) }}
+        />
+      )}
+
+      {flexFieldFor !== null && (
+        <FlexFieldModal
+          defaultSection={flexFieldFor}
+          sections={(data?.sections || []).filter(s => !s.is_placeholder && s.db_section)}
+          onClose={() => setFlexFieldFor(null)}
+          onCreate={(section, name, type) => createFlexField(section, name, type)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AdvancedFieldModal — edit field_type / help_text / max_length / default_value
+// / picklist_type / lookup_target / is_sensitive / masking_pattern.
+// Folded in from the legacy Field Setup screen.
+// ─────────────────────────────────────────────────────────────────────────────
+function AdvancedFieldModal({ field, onClose, onApply }) {
+  const [draft, setDraft] = useState({
+    field_type:      field.field_type || 'text',
+    help_text:       field.help_text || '',
+    max_length:      field.max_length ?? '',
+    default_value:   field.default_value || '',
+    picklist_type:   field.picklist_type || '',
+    lookup_target:   field.lookup_target || '',
+    is_sensitive:    !!field.is_sensitive,
+    masking_pattern: field.masking_pattern || 'partial',
+  })
+  function setV(k, v) { setDraft(d => ({ ...d, [k]: v })) }
+  return (
+    <div className="ma-rules-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="ma-rules-modal" style={{ width: 'min(640px, 96vw)' }}>
+        <div className="ma-rules-header">
+          <div>
+            <h2>Advanced settings — {field.label}</h2>
+            <p>{field.db_section} · {field.db_field}</p>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        <div className="ma-rules-body" style={{ gridTemplateColumns: '1fr' }}>
+          <div className="ma-rules-builder">
+            <div className="ma-rules-grid">
+              <label>Field Type
+                <select value={draft.field_type} onChange={e => setV('field_type', e.target.value)}>
+                  {['text','textarea','number','date','datetime','checkbox','dropdown','multiselect','lookup','email','phone','url','currency','address','tags','rich_text','signature','file','formula']
+                    .map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+              <label>Max Length
+                <input type="number" min={0} value={draft.max_length} onChange={e => setV('max_length', e.target.value)} placeholder="—" />
+              </label>
+              <label style={{ gridColumn: '1 / -1' }}>Help Text / Tooltip
+                <textarea rows={2} value={draft.help_text} onChange={e => setV('help_text', e.target.value)} />
+              </label>
+              <label style={{ gridColumn: '1 / -1' }}>Default Value
+                <input type="text" value={draft.default_value} onChange={e => setV('default_value', e.target.value)} placeholder="e.g. Normal" />
+              </label>
+              <label>Picklist Source (binding)
+                <input type="text" value={draft.picklist_type} onChange={e => setV('picklist_type', e.target.value)} placeholder="e.g. ae_status" />
+              </label>
+              <label>Lookup Target
+                <input type="text" value={draft.lookup_target} onChange={e => setV('lookup_target', e.target.value)} placeholder="e.g. product, contact" />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={draft.is_sensitive} onChange={e => setV('is_sensitive', e.target.checked)} />
+                <span>Mark as sensitive (PHI / restricted)</span>
+              </label>
+              <label>Masking Pattern
+                <select value={draft.masking_pattern} onChange={e => setV('masking_pattern', e.target.value)} disabled={!draft.is_sensitive}>
+                  <option value="partial">Partial (last 4 visible)</option>
+                  <option value="full">Full (all masked)</option>
+                  <option value="initial">Initials only</option>
+                </select>
+              </label>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              <button className="ma-cf-btn-reset" onClick={onClose}>Cancel</button>
+              <button className="ma-cf-btn-save" onClick={() => onApply({
+                ...draft,
+                max_length: draft.max_length === '' ? null : parseInt(draft.max_length, 10),
+              })}>Apply</button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+              Apply stages the changes locally. Click <strong>Save Changes</strong> in the toolbar to persist to the tenant.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FlexFieldModal — create a brand-new (flex) field on a section for this tenant.
+// Folded in from the legacy Field Setup screen.
+// ─────────────────────────────────────────────────────────────────────────────
+function FlexFieldModal({ defaultSection, sections, onClose, onCreate }) {
+  const [section, setSection] = useState(defaultSection || (sections[0]?.db_section || ''))
+  const [name, setName]       = useState('')
+  const [type, setType]       = useState('text')
+  return (
+    <div className="ma-rules-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="ma-rules-modal" style={{ width: 'min(520px, 96vw)' }}>
+        <div className="ma-rules-header">
+          <div>
+            <h2>Add a new field</h2>
+            <p>Adds a new (flex) field to the selected section for this tenant.</p>
+          </div>
+          <button onClick={onClose}>×</button>
+        </div>
+        <div className="ma-rules-body" style={{ gridTemplateColumns: '1fr' }}>
+          <div className="ma-rules-builder">
+            <label>Section
+              <select value={section} onChange={e => setSection(e.target.value)}>
+                <option value="">— Select section —</option>
+                {sections.map(s => <option key={s.key} value={s.db_section}>{s.label} — ({s.db_section})</option>)}
+              </select>
+            </label>
+            <label style={{ marginTop: 10 }}>Field Name
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. NPI Number" />
+            </label>
+            <label style={{ marginTop: 10 }}>Field Type
+              <select value={type} onChange={e => setType(e.target.value)}>
+                {['text','textarea','number','date','datetime','checkbox','dropdown','email','phone','url','currency','address','tags','rich_text']
+                  .map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              <button className="ma-cf-btn-reset" onClick={onClose}>Cancel</button>
+              <button
+                className="ma-cf-btn-save"
+                disabled={!section || !name.trim()}
+                onClick={() => onCreate(section, name, type)}
+              >Add Field</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

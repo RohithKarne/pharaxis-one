@@ -29,6 +29,81 @@
 
 const PLACEHOLDER_SECTION = '__customize_placeholder__';
 
+// Pull in the case-form gap audit extensions so every newly seeded field
+// also shows up in Customize Forms as a toggleable item.
+const { EXTRA_FIELDS, EXTRA_SECTIONS: EXTRA_SECTION_NAMES } = require('./caseFormExtensions');
+
+function safeKey(prefix, section, name) {
+  const slug = `${section} ${name}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60);
+  return `${prefix}_${slug}`;
+}
+
+// Field types where "Required" makes semantic sense (input-type fields).
+const REQUIRED_CAPABLE_TYPES = new Set(['text','textarea','number','date','datetime','dropdown','multiselect','checkbox','email','phone','currency','lookup']);
+
+function caseTypeForSection(sectionName) {
+  if (sectionName.startsWith('AE — ')) return 'AE';
+  if (sectionName.startsWith('MI — ')) return 'MI';
+  if (sectionName.startsWith('PC — ')) return 'PC';
+  return 'ALL';
+}
+
+function categoryForSection(sectionName) {
+  if (sectionName.startsWith('AE — ')) return 'ae';
+  if (sectionName.startsWith('MI — ')) return 'mi';
+  if (sectionName.startsWith('PC — ')) return 'pc';
+  return 'shared';
+}
+
+function buildExtraSectionEntries() {
+  const out = { shared: [], ae: [], mi: [], pc: [] };
+  const seen = new Set();
+  for (const sectionName of [
+    ...(EXTRA_SECTION_NAMES.ALL || []),
+    ...(EXTRA_SECTION_NAMES.AE || []),
+    ...(EXTRA_SECTION_NAMES.MI || []),
+    ...(EXTRA_SECTION_NAMES.PC || []),
+  ]) {
+    const cat = categoryForSection(sectionName);
+    const ct  = caseTypeForSection(sectionName);
+    const key = safeKey('sec', cat, sectionName);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out[cat].push({
+      key, label: sectionName, type: 'section',
+      db_section: sectionName, case_type: ct,
+      is_placeholder: false,
+    });
+  }
+  return out;
+}
+
+function buildExtraFieldEntries() {
+  const out = { shared: [], ae: [], mi: [], pc: [] };
+  const seen = new Set();
+  for (const [section, name, type] of EXTRA_FIELDS) {
+    const cat = categoryForSection(section);
+    const ct  = caseTypeForSection(section);
+    const key = safeKey('fld', section, name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out[cat].push({
+      key, label: name, type: 'field',
+      db_section: section, db_field: name, case_type: ct,
+      supports_required: REQUIRED_CAPABLE_TYPES.has(type),
+      is_placeholder: false,
+    });
+  }
+  return out;
+}
+
+const EXTRA_SECTION_ENTRIES = buildExtraSectionEntries();
+const EXTRA_FIELD_ENTRIES   = buildExtraFieldEntries();
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SHARED — Contact / Requestor + Case Information
 // ─────────────────────────────────────────────────────────────────────────────
@@ -283,6 +358,14 @@ const PC = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Fold the gap-audit extensions into the catalog so every newly seeded field
+// shows up as a toggleable item in Customize Forms.
+for (const cat of ['shared', 'ae', 'mi', 'pc']) {
+  const base = ({ shared: SHARED, ae: AE, mi: MI, pc: PC })[cat];
+  base.sections = [...base.sections, ...EXTRA_SECTION_ENTRIES[cat]];
+  base.fields   = [...base.fields,   ...EXTRA_FIELD_ENTRIES[cat]];
+}
 
 const CATALOG = { shared: SHARED, ae: AE, mi: MI, pc: PC };
 

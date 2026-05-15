@@ -2,11 +2,8 @@
 
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const nodeFetch = require('node-fetch');
 const pool = require('../database/db');
 const JWT_SECRET = require('../utils/jwtSecret');
-
-const fetch = nodeFetch.default || nodeFetch;
 
 const DEFAULT_FRONTEND_BASE_URL = process.env.MIMS_FRONTEND_BASE_URL || 'http://localhost:5173/mims';
 const DEFAULT_BACKEND_BASE_URL = process.env.MIMS_BACKEND_BASE_URL || 'http://localhost:3000';
@@ -21,10 +18,18 @@ const PROVIDER_LABELS = {
 const MICROSOFT_DEFAULT_TENANT = 'common';
 
 let josePromise = null;
+let nodeFetchPromise = null;
 
 async function loadJose() {
   if (!josePromise) josePromise = import('jose');
   return josePromise;
+}
+
+async function fetchUrl(url, options) {
+  if (typeof globalThis.fetch === 'function') return globalThis.fetch(url, options);
+  if (!nodeFetchPromise) nodeFetchPromise = import('node-fetch');
+  const mod = await nodeFetchPromise;
+  return (mod.default || mod)(url, options);
 }
 
 function normalizeProviderKey(providerKey) {
@@ -383,7 +388,7 @@ async function exchangeCodeForTokens(orgId, providerKey, code) {
     client_secret: provider.clientSecret,
   });
 
-  const res = await fetch(provider.tokenEndpoint, {
+  const res = await fetchUrl(provider.tokenEndpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),

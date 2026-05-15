@@ -17,6 +17,7 @@ import DashboardPage        from './pages/DashboardPage'
 import InboxPage            from './pages/InboxPage'
 import CasesPage            from '../cases/pages/CasesPage'
 import CaseFormPage         from '../cases/pages/CaseFormPage'
+import ICSRBuilderPage      from '../cases/pages/ICSRBuilderPage'
 import CaseQueryPage        from '../cases/pages/CaseQueryPage'
 import SessionManagementPage from './pages/SessionManagementPage'
 import NoAccessPage         from '../../pages/NoAccessPage'
@@ -42,6 +43,7 @@ const TransmissionAuditTrailPage = lazy(() => import('../transmissions/pages/Tra
 const CopyDivisionPage         = lazy(() => import('../admin/pages/CopyDivisionPage'))
 const DPPRPage                 = lazy(() => import('../admin/pages/DPPRPage'))
 const MIMSAdminPage            = lazy(() => import('../mimsadmin/pages/MIMSAdminPage'))
+const DeveloperPortalPage      = lazy(() => import('../devportal/DeveloperPortalPage'))
 
 // Shared Suspense fallback — minimal spinner so Suspense boundary doesn't flash
 function PageLoader() {
@@ -169,6 +171,20 @@ function AppRoutes() {
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
                 <CaseFormPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/icsr/:id" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <ICSRBuilderPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/developer" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="admin_console">
+                <DeveloperPortalPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />

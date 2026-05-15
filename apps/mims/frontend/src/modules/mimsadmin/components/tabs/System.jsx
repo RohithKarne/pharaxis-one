@@ -10,14 +10,13 @@ import LoggedInUsers from './LoggedInUsers'
 import ReportsAccess from './ReportsAccess'
 import SetupAlerts from './SetupAlerts'
 import SetupAuthPolicy from './SetupAuthPolicy'
-import SetupCaseFormDefinition from './SetupCaseFormDefinition'
 import SetupChangeApprovals from './SetupChangeApprovals'
 import SetupEmailAccounts from './SetupEmailAccounts'
-import SetupFieldConfiguration from './SetupFieldConfiguration'
 import SetupIntegrations from './SetupIntegrations'
-import SetupPicklistsAdmin from './SetupPicklistsAdmin'
+import SetupWorkflowEngine from './SetupWorkflowEngine'
 import SetupTwoFactor from './SetupTwoFactor'
 import SetupWorkflow from './SetupWorkflow'
+import AiConfig from './AiConfig'
 import SystemParameters from './SystemParameters'
 import Users from './Users'
 import ViewData from './ViewData'
@@ -36,10 +35,9 @@ export default function System({ selectedItem }) {
   if (selectedItem === 'sys-setup-2fa-config')      return <SetupTwoFactor />
   if (selectedItem === 'sys-setup-alerts')          return <SetupAlerts />
   if (selectedItem === 'sys-setup-workflow')        return <SetupWorkflow />
+  if (selectedItem === 'sys-setup-workflow-engine') return <SetupWorkflowEngine />
+  if (selectedItem === 'sys-setup-ai-config')       return <AiConfig />
   if (selectedItem === 'sys-setup-email-accounts')  return <SetupEmailAccounts />
-  if (selectedItem === 'sys-setup-picklists-admin') return <SetupPicklistsAdmin />
-  if (selectedItem === 'sys-setup-field-config')    return <SetupFieldConfiguration />
-  if (selectedItem === 'sys-setup-case-form-def')   return <SetupCaseFormDefinition />
   if (selectedItem === 'sys-setup-change-approvals') return <SetupChangeApprovals />
   if (selectedItem?.startsWith('sys-setup-int-'))   return <SetupIntegrations selectedItem={selectedItem} />
   if (selectedItem === 'sys-system-params')         return <SystemParameters />

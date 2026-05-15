@@ -89,16 +89,26 @@ router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin
       if (sectionNames.length) {
         const placeholders = sectionNames.map(() => '?').join(',');
         const [rows] = await pool.execute(
-          `SELECT section_name, field_name, is_required, is_disabled, sort_order, custom_label
+          `SELECT section_name, field_name, field_type, is_required, is_disabled, sort_order,
+                  custom_label, help_text, max_length, default_value, picklist_type, lookup_target,
+                  is_sensitive, masking_pattern
              FROM field_setup
             WHERE org_id = ? AND section_name IN (${placeholders})`,
           [orgId, ...sectionNames]
         );
         for (const r of rows) fieldStates[`${r.section_name}|${r.field_name}`] = {
-          is_required:  !!r.is_required,
-          is_disabled:  !!r.is_disabled,
-          sort_order:   r.sort_order ?? 0,
-          custom_label: r.custom_label || '',
+          is_required:    !!r.is_required,
+          is_disabled:    !!r.is_disabled,
+          sort_order:     r.sort_order ?? 0,
+          custom_label:   r.custom_label || '',
+          field_type:     r.field_type || 'text',
+          help_text:      r.help_text || '',
+          max_length:     r.max_length ?? null,
+          default_value:  r.default_value || '',
+          picklist_type:  r.picklist_type || '',
+          lookup_target:  r.lookup_target || '',
+          is_sensitive:   !!r.is_sensitive,
+          masking_pattern: r.masking_pattern || 'partial',
         };
       }
     }
@@ -127,7 +137,11 @@ router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin
     });
 
     const fields = cat.fields.map(f => {
-      let st = { is_required: false, is_disabled: false, sort_order: 0, custom_label: '' };
+      let st = {
+        is_required: false, is_disabled: false, sort_order: 0, custom_label: '',
+        field_type: 'text', help_text: '', max_length: null, default_value: '',
+        picklist_type: '', lookup_target: '', is_sensitive: false, masking_pattern: 'partial',
+      };
       if (f.is_placeholder) {
         st = { ...st, ...(phStates[f.key] || {}) };
       } else if (f.db_section && f.db_field) {
@@ -135,10 +149,18 @@ router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin
       }
       return {
         ...f,
-        is_required:  st.is_required,
-        is_disabled:  st.is_disabled,
-        sort_order:   st.sort_order || 0,
-        custom_label: st.custom_label || '',
+        is_required:    st.is_required,
+        is_disabled:    st.is_disabled,
+        sort_order:     st.sort_order || 0,
+        custom_label:   st.custom_label || '',
+        field_type:     st.field_type || 'text',
+        help_text:      st.help_text || '',
+        max_length:     st.max_length ?? null,
+        default_value:  st.default_value || '',
+        picklist_type:  st.picklist_type || '',
+        lookup_target:  st.lookup_target || '',
+        is_sensitive:   !!st.is_sensitive,
+        masking_pattern: st.masking_pattern || 'partial',
       };
     });
     // Stable sort by saved sort_order (ascending), preserve catalog order for ties
@@ -213,19 +235,40 @@ router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin
           );
         }
       } else if (def.type === 'field' && def.db_section && def.db_field) {
-        // Real field → write to field_setup (with optional sort_order + custom_label)
-        const sortOrder   = Number.isFinite(parseInt(it.sort_order, 10)) ? parseInt(it.sort_order, 10) : 0;
-        const customLabel = typeof it.custom_label === 'string' ? it.custom_label.trim() || null : null;
+        // Real field → write to field_setup with all advanced properties.
+        const sortOrder    = Number.isFinite(parseInt(it.sort_order, 10)) ? parseInt(it.sort_order, 10) : 0;
+        const customLabel  = typeof it.custom_label === 'string' ? it.custom_label.trim() || null : null;
+        const fieldType    = typeof it.field_type === 'string' && it.field_type.trim() ? it.field_type.trim() : 'text';
+        const helpText     = typeof it.help_text === 'string' ? it.help_text.trim() || null : null;
+        const maxLength    = Number.isFinite(parseInt(it.max_length, 10)) ? parseInt(it.max_length, 10) : null;
+        const defaultValue = typeof it.default_value === 'string' ? it.default_value.trim() || null : null;
+        const picklistType = typeof it.picklist_type === 'string' ? it.picklist_type.trim() || null : null;
+        const lookupTarget = typeof it.lookup_target === 'string' ? it.lookup_target.trim() || null : null;
+        const isSensitive  = it.is_sensitive ? 1 : 0;
+        const maskingPattern = typeof it.masking_pattern === 'string' && it.masking_pattern.trim()
+          ? it.masking_pattern.trim() : 'partial';
         await conn.execute(
           `INSERT INTO field_setup
-             (section_name, field_name, field_type, is_required, is_disabled, org_id, sort_order, custom_label)
-           VALUES (?, ?, 'text', ?, ?, ?, ?, ?)
+             (section_name, field_name, field_type, is_required, is_disabled, org_id, sort_order,
+              custom_label, help_text, max_length, default_value, picklist_type, lookup_target,
+              is_sensitive, masking_pattern)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE
-             is_required  = VALUES(is_required),
-             is_disabled  = VALUES(is_disabled),
-             sort_order   = VALUES(sort_order),
-             custom_label = VALUES(custom_label)`,
-          [def.db_section, def.db_field, isRequired, isDisabled, orgId, sortOrder, customLabel]
+             field_type      = VALUES(field_type),
+             is_required     = VALUES(is_required),
+             is_disabled     = VALUES(is_disabled),
+             sort_order      = VALUES(sort_order),
+             custom_label    = VALUES(custom_label),
+             help_text       = VALUES(help_text),
+             max_length      = VALUES(max_length),
+             default_value   = VALUES(default_value),
+             picklist_type   = VALUES(picklist_type),
+             lookup_target   = VALUES(lookup_target),
+             is_sensitive    = VALUES(is_sensitive),
+             masking_pattern = VALUES(masking_pattern)`,
+          [def.db_section, def.db_field, fieldType, isRequired, isDisabled, orgId, sortOrder,
+           customLabel, helpText, maxLength, defaultValue, picklistType, lookupTarget,
+           isSensitive, maskingPattern]
         );
       }
     }
@@ -239,6 +282,100 @@ router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin
     res.status(500).json({ error: err.message });
   } finally {
     conn.release();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FLEX FIELDS — admin can add brand-new fields to a section for a tenant
+// (folded in from the legacy Field Setup screen)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/admin/customize-forms/:orgId/flex-field
+// Body: { section_name, field_name, field_type, help_text?, max_length?, default_value?, picklist_type? }
+router.post('/customize-forms/:orgId/flex-field', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  const orgId = parseInt(req.params.orgId, 10);
+  if (!Number.isFinite(orgId)) return res.status(400).json({ error: 'Invalid orgId.' });
+  const { section_name, field_name, field_type = 'text', help_text, max_length, default_value, picklist_type, lookup_target } = req.body || {};
+  if (!section_name?.trim() || !field_name?.trim()) {
+    return res.status(400).json({ error: 'section_name and field_name are required.' });
+  }
+  try {
+    const [r] = await pool.execute(
+      `INSERT INTO field_setup
+         (section_name, field_name, field_type, is_required, is_hidden, is_disabled,
+          org_id, sort_order, help_text, max_length, default_value, picklist_type, lookup_target)
+       VALUES (?, ?, ?, 0, 0, 0, ?, 999, ?, ?, ?, ?, ?)`,
+      [
+        section_name.trim(), field_name.trim(), field_type.trim(), orgId,
+        help_text?.trim() || null,
+        Number.isFinite(parseInt(max_length, 10)) ? parseInt(max_length, 10) : null,
+        default_value?.trim() || null,
+        picklist_type?.trim() || null,
+        lookup_target?.trim() || null,
+      ]
+    );
+    await pool.execute(
+      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details)
+       VALUES (?, 'flex_field', ?, 'CREATE_FLEX_FIELD', ?)`,
+      [req.user.userId, r.insertId, JSON.stringify({ orgId, section_name, field_name, field_type })]
+    );
+    res.status(201).json({ ok: true, id: r.insertId });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'A field with this name already exists in this section for this tenant.' });
+    }
+    console.error('POST /customize-forms/:orgId/flex-field error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/customize-forms/:orgId/flex-field/:id
+router.delete('/customize-forms/:orgId/flex-field/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  const orgId = parseInt(req.params.orgId, 10);
+  if (!Number.isFinite(orgId)) return res.status(400).json({ error: 'Invalid orgId.' });
+  try {
+    const [[row]] = await pool.execute(
+      'SELECT id, section_name, field_name FROM field_setup WHERE id = ? AND org_id = ? LIMIT 1',
+      [req.params.id, orgId]
+    );
+    if (!row) return res.status(404).json({ error: 'Flex field not found.' });
+    await pool.execute('DELETE FROM field_setup WHERE id = ?', [req.params.id]);
+    await pool.execute(
+      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details)
+       VALUES (?, 'flex_field', ?, 'DELETE_FLEX_FIELD', ?)`,
+      [req.user.userId, req.params.id, JSON.stringify({ orgId, section_name: row.section_name, field_name: row.field_name })]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /customize-forms/:orgId/flex-field/:id error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/customize-forms/:orgId/case-form-def
+// Body: { case_type, section_name, field_overrides } — writes the rare advanced JSON
+router.put('/customize-forms/:orgId/case-form-def', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+  const orgId = parseInt(req.params.orgId, 10);
+  const { case_type, section_name, field_overrides } = req.body || {};
+  if (!Number.isFinite(orgId) || !case_type || !section_name) {
+    return res.status(400).json({ error: 'orgId, case_type, and section_name are required.' });
+  }
+  try {
+    await pool.execute(
+      `INSERT INTO case_form_definition (org_id, case_type, section_name, is_visible, field_overrides)
+       VALUES (?, ?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE field_overrides = VALUES(field_overrides)`,
+      [orgId, case_type, section_name, field_overrides ? JSON.stringify(field_overrides) : null]
+    );
+    await pool.execute(
+      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details)
+       VALUES (?, 'case_form_def', NULL, 'UPDATE_FIELD_OVERRIDES', ?)`,
+      [req.user.userId, JSON.stringify({ orgId, case_type, section_name })]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('PUT /customize-forms/:orgId/case-form-def error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

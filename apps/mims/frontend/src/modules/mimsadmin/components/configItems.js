@@ -95,10 +95,12 @@ export const SYSTEM_NAV = [
       },
       { label: 'Customize Forms',             value: 'sys-setup-customize-forms'},
       { label: 'Workflow Setup',              value: 'sys-setup-workflow'       },
+      { label: 'Workflow Engine',             value: 'sys-setup-workflow-engine'},
+      { label: 'AI Configuration',            value: 'sys-setup-ai-config'      },
       { label: 'Email Accounts',              value: 'sys-setup-email-accounts' },
-      { label: 'Picklist Definitions',        value: 'sys-setup-picklists-admin'},
-      { label: 'Field Configuration',         value: 'sys-setup-field-config'   },
-      { label: 'Case Form Definition',        value: 'sys-setup-case-form-def'  },
+      // Picklist Definitions / Field Configuration / Case Form Definition retired —
+      // folded into Tables > General (Picklists Table → Manage Schema) and
+      // System > Setup > Customize Forms (⚙ More + Add Field per section).
       { label: 'Change Approvals',            value: 'sys-setup-change-approvals'},
       { label: 'Data Protection Rules',       value: 'sys-setup-data-protect'   },
       { label: 'Individual Protection Rules', value: 'sys-setup-indiv-protect'  },
