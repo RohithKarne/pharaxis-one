@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../context/AuthContext'
+import { FeatureFlagsProvider } from '../context/FeatureFlagsContext'
 import { setSessionExpiryHandler } from '../api/httpFetch'
 import ProtectedRoute from '../components/ProtectedRoute'
 import LoginPage from '../pages/LoginPage'
@@ -67,9 +68,11 @@ export default function createModuleApp({ MainPage, appName, appTagline, moduleK
   return function App() {
     return (
       <AuthProvider storageKeyPrefix={storageKeyPrefix} fallbackPrefixes={fallbackPrefixes}>
-        <HashRouter>
-          <ModuleRoutes />
-        </HashRouter>
+        <FeatureFlagsProvider>
+          <HashRouter>
+            <ModuleRoutes />
+          </HashRouter>
+        </FeatureFlagsProvider>
       </AuthProvider>
     )
   }

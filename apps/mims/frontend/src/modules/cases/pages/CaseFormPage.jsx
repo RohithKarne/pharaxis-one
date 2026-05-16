@@ -14,6 +14,7 @@ import CasePCTab            from '../components/CasePCTab'
 import CaseDPPRTab          from '../components/CaseDPPRTab'
 import CaseICSRTab          from '../components/CaseICSRTab'
 import AiAssistantPanel     from '../components/AiAssistantPanel'
+import CaseFormShell        from '../../../shared/components/CaseFormShell'
 
 const TYPE_COLOR = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 
@@ -105,6 +106,19 @@ export default function CaseFormPage() {
         ))}
       </div>
 
+      <CaseFormShell
+        caseId={id}
+        caseStatus={caseData?.status}
+        caseType={caseData?.case_type}
+        sections={TABS.map(t => ({ id: `tab-${t.key}`, label: t.label, count: t.badge, complete: t.badge }))}
+        requiredFields={[]}
+        payload={infoForm || {}}
+        dueAt={caseData?.due_at || null}
+        dueLabel="Action required"
+        transitions={[]}
+        onTransition={() => { /* Wired by future workflow engine */ }}
+        onCloned={(newId) => navigate(`/case/${newId}`)}
+      >
       <div className="cf-tab-content">
         {activeTab === 'info' && (
           <CaseInfoTab
@@ -162,6 +176,7 @@ export default function CaseFormPage() {
           <CaseDPPRTab id={id} headers={headers} />
         )}
       </div>
+      </CaseFormShell>
 
       <AiAssistantPanel caseId={id} headers={headers} />
 

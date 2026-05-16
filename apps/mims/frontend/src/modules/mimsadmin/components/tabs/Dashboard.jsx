@@ -9,6 +9,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
+import MentionsInbox from '../../../../shared/components/collab/MentionsInbox'
+import RecentPinnedWidget from '../../../../shared/components/caseActions/RecentPinnedWidget'
 
 export default function Dashboard({ onNavigateTab }) {
   const { token } = useAuth()
@@ -111,6 +113,12 @@ export default function Dashboard({ onNavigateTab }) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Wave 4 widgets — mentions inbox + recent/pinned cases */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <MentionsInbox onOpen={(m) => window.location.assign(`#/case/${m.case_id}`)} />
+        <RecentPinnedWidget onOpen={(cid) => window.location.assign(`#/case/${cid}`)} />
       </div>
 
       {/* Three side-by-side panels */}

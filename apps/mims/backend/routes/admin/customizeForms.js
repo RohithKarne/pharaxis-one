@@ -247,12 +247,27 @@ router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin
         const isSensitive  = it.is_sensitive ? 1 : 0;
         const maskingPattern = typeof it.masking_pattern === 'string' && it.masking_pattern.trim()
           ? it.masking_pattern.trim() : 'partial';
+        // Theme 3 validation knobs
+        const formatHint   = typeof it.format_hint === 'string' ? it.format_hint.trim() || null : null;
+        const valRegex     = typeof it.validation_regex === 'string' ? it.validation_regex.trim() || null : null;
+        const valMessage   = typeof it.validation_message === 'string' ? it.validation_message.trim() || null : null;
+        const minValue     = Number.isFinite(parseFloat(it.min_value)) ? parseFloat(it.min_value) : null;
+        const maxValue     = Number.isFinite(parseFloat(it.max_value)) ? parseFloat(it.max_value) : null;
+        const minLength    = Number.isFinite(parseInt(it.min_length, 10)) ? parseInt(it.min_length, 10) : null;
+        const dupCheck     = it.duplicate_check ? 1 : 0;
+        const dupScope     = typeof it.duplicate_scope === 'string' && it.duplicate_scope.trim()
+          ? it.duplicate_scope.trim() : 'org';
+        const dupMatch     = typeof it.duplicate_match === 'string' && it.duplicate_match.trim()
+          ? it.duplicate_match.trim() : 'exact';
         await conn.execute(
           `INSERT INTO field_setup
              (section_name, field_name, field_type, is_required, is_disabled, org_id, sort_order,
               custom_label, help_text, max_length, default_value, picklist_type, lookup_target,
-              is_sensitive, masking_pattern)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              is_sensitive, masking_pattern,
+              format_hint, validation_regex, validation_message,
+              min_value, max_value, min_length,
+              duplicate_check, duplicate_scope, duplicate_match)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE
              field_type      = VALUES(field_type),
              is_required     = VALUES(is_required),
@@ -265,11 +280,25 @@ router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin
              picklist_type   = VALUES(picklist_type),
              lookup_target   = VALUES(lookup_target),
              is_sensitive    = VALUES(is_sensitive),
-             masking_pattern = VALUES(masking_pattern)`,
+             masking_pattern = VALUES(masking_pattern),
+             format_hint        = VALUES(format_hint),
+             validation_regex   = VALUES(validation_regex),
+             validation_message = VALUES(validation_message),
+             min_value          = VALUES(min_value),
+             max_value          = VALUES(max_value),
+             min_length         = VALUES(min_length),
+             duplicate_check    = VALUES(duplicate_check),
+             duplicate_scope    = VALUES(duplicate_scope),
+             duplicate_match    = VALUES(duplicate_match)`,
           [def.db_section, def.db_field, fieldType, isRequired, isDisabled, orgId, sortOrder,
            customLabel, helpText, maxLength, defaultValue, picklistType, lookupTarget,
-           isSensitive, maskingPattern]
+           isSensitive, maskingPattern,
+           formatHint, valRegex, valMessage,
+           minValue, maxValue, minLength,
+           dupCheck, dupScope, dupMatch]
         );
+        // Bust the validation rule cache so the next request picks up new rules
+        try { require('../../services/validationEngine').invalidate(orgId, def.db_section); } catch (_) {}
       }
     }
 

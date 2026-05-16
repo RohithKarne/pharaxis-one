@@ -103,6 +103,12 @@ export const SYSTEM_NAV = [
       // folded into Tables > General (Picklists Table → Manage Schema) and
       // System > Setup > Customize Forms (⚙ More + Add Field per section).
       { label: 'Change Approvals',            value: 'sys-setup-change-approvals'},
+      { label: 'Feature Flags',               value: 'sys-setup-feature-flags'  },
+      { label: 'Smart Field Rules',           value: 'sys-setup-smart-fields'   },
+      { label: 'Validation Rules',            value: 'sys-setup-validation'     },
+      { label: 'Grid Section Templates',      value: 'sys-setup-grid-templates' },
+      { label: 'Case Actions (Templates/Macros)', value: 'sys-setup-case-actions' },
+      { label: 'Compliance Hardening',        value: 'sys-setup-compliance'     },
       { label: 'Data Protection Rules',       value: 'sys-setup-data-protect'   },
       { label: 'Individual Protection Rules', value: 'sys-setup-indiv-protect'  },
       { label: 'PDF Security',                value: 'sys-setup-pdf-security'   },

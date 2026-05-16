@@ -1,9 +1,19 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { evaluateRule } from '../../../shared/ruleEvaluator.js'
+import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
+import useFieldValidation from '../../../shared/hooks/useFieldValidation'
+import useSmartFields from '../../../shared/hooks/useSmartFields'
+import FieldHistoryPopover from '../../../shared/components/FieldHistoryPopover'
+import LockedFieldBadge from '../../../shared/components/compliance/LockedFieldBadge'
+import MaskedRevealButton from '../../../shared/components/compliance/MaskedRevealButton'
+import ReasonForChangeModal from '../../../shared/components/compliance/ReasonForChangeModal'
+import FieldPresenceBadge from '../../../shared/components/collab/FieldPresenceBadge'
+import RichFieldRenderer from '../../../shared/components/richFields/RichFieldRenderer'
+import TypeaheadInput from '../../../shared/components/TypeaheadInput'
 
-function localeCode() {
-  return (navigator.language || 'en').split('-')[0]
-}
+const RICH_TYPES = new Set(['address','phone','currency','rich_text','signature','image_annotation'])
+
+function localeCode() { return (navigator.language || 'en').split('-')[0] }
 
 function buildFormData(sections, values) {
   const data = {}
@@ -23,10 +33,61 @@ function optionLabel(option) {
   return option?.translations?.[lang] || option?.label || option?.value
 }
 
-export default function DynamicFieldsSection({ sections, values, onChange, onSave, saving, rules = [], errors = {} }) {
+/**
+ * Consumer-wired into Wave 0-5 themes:
+ *  - Theme 1 (rich fields)        — via RichFieldRenderer for field_type in RICH_TYPES
+ *  - Theme 2 (smart defaults / auto-calc / typeahead) — via useSmartFields hook
+ *  - Theme 3 (inline validation)  — via useFieldValidation hook
+ *  - Theme 5 (presence)           — via FieldPresenceBadge (caller passes `presence` prop)
+ *  - Theme 9 (compliance)         — LockedFieldBadge, ReasonForChangeModal, MaskedRevealButton
+ *  - Wave 0 #2 (field history)    — FieldHistoryPopover next to each label
+ */
+export default function DynamicFieldsSection({
+  sections, values, onChange, onSave, saving,
+  rules = [], errors = {},
+  // Optional consumer-wiring props (all backward-compatible)
+  caseId        = null,
+  caseStatus    = null,
+  caseSection   = null,    // when this dyn-fields block belongs to a single named section
+  presence      = null,    // from useCasePresence(caseId) — { enabled, focus, typing, users, actions }
+  currentUserId = null,
+}) {
   const activeSections = (sections || []).filter(s => Array.isArray(s.fields) && s.fields.length > 0)
   const formData = useMemo(() => buildFormData(activeSections, values), [activeSections, values])
 
+  const validation = useFieldValidation(caseSection)
+  const smart = useSmartFields(caseSection, {
+    onPatch: (patch) => {
+      // Apply patches from auto-calc / smart-default into values (by field_name → id)
+      onChange(prev => {
+        const next = { ...prev }
+        for (const [fname, v] of Object.entries(patch || {})) {
+          const field = activeSections.flatMap(s => s.fields || []).find(f => f.field_name === fname)
+          if (field) next[field.id] = v
+        }
+        return next
+      })
+    },
+  })
+
+  const themeFlag1 = useFeatureFlag('cf.theme1_rich_fields')
+  const themeFlag2 = useFeatureFlag('cf.theme2_smart_behaviors')
+  const themeFlag9 = useFeatureFlag('cf.theme9_compliance')
+
+  // Apply smart defaults once on mount (when smart is enabled + we have a caseId)
+  useEffect(() => {
+    if (!themeFlag2 || !smart.enabled || !caseId) return
+    smart.applyDefaults(formData)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smart.enabled, caseId, themeFlag2])
+
+  // Debounced recalc whenever values change
+  useEffect(() => {
+    if (!themeFlag2 || !smart.enabled) return
+    smart.recalc(formData)
+  }, [formData, themeFlag2, smart])
+
+  // Legacy rule evaluation (visibility/required/default/validation/cascade)
   const ruleState = useMemo(() => {
     const state = { hidden: new Set(), required: new Set(), validation: {}, cascades: new Map(), defaults: [] }
     for (const rule of rules || []) {
@@ -58,6 +119,20 @@ export default function DynamicFieldsSection({ sections, values, onChange, onSav
     })
   }, [ruleState.defaults, activeSections, onChange])
 
+  // Theme 9: pending reason capture
+  const [pendingReason, setPendingReason] = useState(null) // { fid, field, oldValue, newValue }
+  function attemptSet(field, newValue) {
+    const oldValue = values[field.id]
+    if (themeFlag9 && oldValue != null && oldValue !== '' && oldValue !== newValue) {
+      setPendingReason({ fid: field.id, field: field.field_name, oldValue, newValue })
+      return
+    }
+    commitSet(field.id, newValue)
+  }
+  function commitSet(fid, newValue) {
+    onChange(prev => ({ ...prev, [fid]: newValue }))
+  }
+
   if (activeSections.length === 0) return null
 
   function renderField(field) {
@@ -66,15 +141,98 @@ export default function DynamicFieldsSection({ sections, values, onChange, onSav
     const val = values[fid] ?? ''
     const label = field.custom_label || field.field_name
     const isRequired = !!field.is_required || ruleState.required.has(field.field_name)
-    const error = errors[field.id] || errors[field.field_name] || ruleState.validation[field.field_name]
-    const set = (v) => onChange(prev => ({ ...prev, [fid]: v }))
-    const footer = error ? <div className="cf-inline-error">{error}</div> : null
+    const error = errors[field.id] || errors[field.field_name]
+      || ruleState.validation[field.field_name]
+      || validation.errors?.[field.field_name]
+    const warn  = validation.warnings?.[field.field_name]
 
+    const labelEl = (
+      <label htmlFor={`dyn-field-${fid}`} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span>{label}{isRequired ? ' *' : ''}</span>
+        {field.format_hint && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>{field.format_hint}</span>}
+        {caseId && <FieldHistoryPopover entityType="case" entityId={caseId} field={field.field_name} label={label} />}
+        <LockedFieldBadge section={caseSection} field={field.field_name} caseStatus={caseStatus} />
+        <FieldPresenceBadge field={field.field_name} presence={presence} currentUserId={currentUserId} />
+      </label>
+    )
+
+    function onBlur() {
+      if (!validation.enabled) return
+      const msg = validation.validate(field.field_name, val, formData)
+      validation.setErrors(es => ({ ...es, [field.field_name]: msg }))
+      if (caseId) {
+        validation.checkDuplicate(field.field_name, val, { entityId: caseId, entityType: 'case' })
+          .then(m => m && validation.setErrors(es => ({ ...es, [field.field_name]: es[field.field_name] || m })))
+      }
+      presence?.actions?.blur?.(field.field_name)
+    }
+    function onFocus() { presence?.actions?.focus?.(field.field_name) }
+
+    // ─── Theme 1: rich field types ───
+    if (themeFlag1 && RICH_TYPES.has(field.field_type) && caseId) {
+      return (
+        <div key={fid} className="cf-form-field cf-form-field--full">
+          {labelEl}
+          <RichFieldRenderer
+            entityType="case" entityId={caseId}
+            section={caseSection || field.section_name || 'misc'}
+            field={field.field_name} fieldType={field.field_type}
+            label={null}
+          />
+          {error && <div className="cf-inline-error">{error}</div>}
+          {warn  && <div style={{ fontSize: 11, color: '#8a6a00', marginTop: 3 }}>{warn}</div>}
+        </div>
+      )
+    }
+
+    // ─── Theme 9 sensitive field with masked reveal ───
+    if (themeFlag9 && field.is_sensitive && val) {
+      const masked = String(val).replace(/.(?=.{4})/g, '*')
+      return (
+        <div key={fid} className="cf-form-field">
+          {labelEl}
+          <MaskedRevealButton
+            maskedDisplay={masked} unmaskedValue={val}
+            entityType="case" entityId={caseId} section={caseSection} field={field.field_name}
+          />
+          {error && <div className="cf-inline-error">{error}</div>}
+        </div>
+      )
+    }
+
+    // ─── Theme 2: typeahead-driven input when a smart_field rule says so ───
+    const smartRule = (smart.schema?.rules || []).find(
+      r => r.field_name === field.field_name && r.rule_type === 'typeahead' && r.lookup_source
+    )
+    if (themeFlag2 && smartRule && (field.field_type === 'text' || !field.field_type)) {
+      return (
+        <div key={fid} className="cf-form-field">
+          {labelEl}
+          <TypeaheadInput
+            source={smartRule.lookup_source} filter={smartRule.lookup_filter}
+            value={val} lookup={smart.lookup}
+            onSelect={(m) => attemptSet(field, m.value || m.label || '')}
+          />
+          {error && <div className="cf-inline-error">{error}</div>}
+          {warn  && <div style={{ fontSize: 11, color: '#8a6a00', marginTop: 3 }}>{warn}</div>}
+        </div>
+      )
+    }
+
+    const footer = (
+      <>
+        {error && <div className="cf-inline-error">{error}</div>}
+        {!error && warn && <div style={{ fontSize: 11, color: '#8a6a00', marginTop: 3 }}>{warn}</div>}
+      </>
+    )
+
+    // Standard types
     if (field.field_type === 'textarea') {
       return (
         <div key={fid} className={`cf-form-field cf-form-field--full${error ? ' cf-form-field--error' : ''}`}>
-          <label htmlFor={`dyn-field-${fid}`}>{label}{isRequired ? ' *' : ''}</label>
-          <textarea id={`dyn-field-${fid}`} rows={3} value={val} placeholder={field.placeholder_text || ''} onChange={e => set(e.target.value)} required={isRequired} />
+          {labelEl}
+          <textarea id={`dyn-field-${fid}`} rows={3} value={val} placeholder={field.placeholder_text || ''}
+            onChange={e => attemptSet(field, e.target.value)} onBlur={onBlur} onFocus={onFocus} required={isRequired} />
           {footer}
         </div>
       )
@@ -82,8 +240,9 @@ export default function DynamicFieldsSection({ sections, values, onChange, onSav
     if (field.field_type === 'number') {
       return (
         <div key={fid} className={`cf-form-field${error ? ' cf-form-field--error' : ''}`}>
-          <label htmlFor={`dyn-field-${fid}`}>{label}{isRequired ? ' *' : ''}</label>
-          <input id={`dyn-field-${fid}`} type="number" value={val} placeholder={field.placeholder_text || ''} onChange={e => set(e.target.value)} required={isRequired} />
+          {labelEl}
+          <input id={`dyn-field-${fid}`} type="number" value={val} placeholder={field.placeholder_text || ''}
+            onChange={e => attemptSet(field, e.target.value)} onBlur={onBlur} onFocus={onFocus} required={isRequired} />
           {footer}
         </div>
       )
@@ -91,8 +250,9 @@ export default function DynamicFieldsSection({ sections, values, onChange, onSav
     if (field.field_type === 'date') {
       return (
         <div key={fid} className={`cf-form-field${error ? ' cf-form-field--error' : ''}`}>
-          <label htmlFor={`dyn-field-${fid}`}>{label}{isRequired ? ' *' : ''}</label>
-          <input id={`dyn-field-${fid}`} type="date" value={val} onChange={e => set(e.target.value)} required={isRequired} />
+          {labelEl}
+          <input id={`dyn-field-${fid}`} type="date" value={val}
+            onChange={e => attemptSet(field, e.target.value)} onBlur={onBlur} onFocus={onFocus} required={isRequired} />
           {footer}
         </div>
       )
@@ -101,8 +261,10 @@ export default function DynamicFieldsSection({ sections, values, onChange, onSav
       return (
         <div key={fid} className={`cf-form-field${error ? ' cf-form-field--error' : ''}`}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <input type="checkbox" checked={!!val} onChange={e => set(e.target.checked)} />
+            <input type="checkbox" checked={!!val} onChange={e => attemptSet(field, e.target.checked)} />
             {label}{isRequired ? ' *' : ''}
+            {caseId && <FieldHistoryPopover entityType="case" entityId={caseId} field={field.field_name} label={label} />}
+            <LockedFieldBadge section={caseSection} field={field.field_name} caseStatus={caseStatus} />
           </label>
           {footer}
         </div>
@@ -119,8 +281,8 @@ export default function DynamicFieldsSection({ sections, values, onChange, onSav
       }
       return (
         <div key={fid} className={`cf-form-field${error ? ' cf-form-field--error' : ''}`}>
-          <label htmlFor={`dyn-field-${fid}`}>{label}{isRequired ? ' *' : ''}</label>
-          <select id={`dyn-field-${fid}`} value={val} onChange={e => set(e.target.value)} required={isRequired}>
+          {labelEl}
+          <select id={`dyn-field-${fid}`} value={val} onChange={e => attemptSet(field, e.target.value)} onFocus={onFocus} onBlur={onBlur} required={isRequired}>
             <option value="">— Select —</option>
             {options.map(o => (
               <option key={o.value} value={o.value} title={o.description || ''}>{optionLabel(o)}</option>
@@ -135,7 +297,7 @@ export default function DynamicFieldsSection({ sections, values, onChange, onSav
       const opts = Array.isArray(field.options) ? field.options : []
       return (
         <div key={fid} className={`cf-form-field${error ? ' cf-form-field--error' : ''}`}>
-          <label>{label}{isRequired ? ' *' : ''}</label>
+          {labelEl}
           <div className="cf-multi-select">
             {opts.map(o => (
               <label key={o.value} className="cf-multi-opt">
@@ -144,7 +306,7 @@ export default function DynamicFieldsSection({ sections, values, onChange, onSav
                     const next = e.target.checked
                       ? [...selected, String(o.value)]
                       : selected.filter(x => x !== String(o.value))
-                    set(next.join(','))
+                    attemptSet(field, next.join(','))
                   }} />
                 {optionLabel(o)}
               </label>
@@ -156,8 +318,9 @@ export default function DynamicFieldsSection({ sections, values, onChange, onSav
     }
     return (
       <div key={fid} className={`cf-form-field${error ? ' cf-form-field--error' : ''}`}>
-        <label htmlFor={`dyn-field-${fid}`}>{label}{isRequired ? ' *' : ''}</label>
-        <input id={`dyn-field-${fid}`} type="text" value={val} placeholder={field.placeholder_text || ''} onChange={e => set(e.target.value)} required={isRequired} />
+        {labelEl}
+        <input id={`dyn-field-${fid}`} type="text" value={val} placeholder={field.placeholder_text || ''}
+          onChange={e => attemptSet(field, e.target.value)} onBlur={onBlur} onFocus={onFocus} required={isRequired} />
         {footer}
       </div>
     )
@@ -181,6 +344,30 @@ export default function DynamicFieldsSection({ sections, values, onChange, onSav
           {saving ? 'Saving…' : 'Save Additional Fields'}
         </button>
       </div>
+
+      <ReasonForChangeModal
+        open={!!pendingReason}
+        onClose={() => setPendingReason(null)}
+        onConfirm={async ({ reason }) => {
+          if (!pendingReason) return
+          commitSet(pendingReason.fid, pendingReason.newValue)
+          // Best-effort persist via field history (server still records on save)
+          try {
+            const headers = { 'Content-Type': 'application/json' }
+            await fetch('/api/field-history/manual', {
+              method: 'POST', headers,
+              body: JSON.stringify({
+                entity_type: 'case', entity_id: caseId,
+                section: caseSection, field: pendingReason.field,
+                old_value: pendingReason.oldValue, new_value: pendingReason.newValue, reason,
+              }),
+            }).catch(() => {})
+          } catch {}
+        }}
+        field={pendingReason?.field}
+        oldValue={pendingReason?.oldValue}
+        newValue={pendingReason?.newValue}
+      />
     </div>
   )
 }

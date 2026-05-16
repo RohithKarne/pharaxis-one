@@ -5,6 +5,12 @@ import AdminUATPanel from '../../../admin/components/AdminUATPanel'
 import CopyDivision from './CopyDivision'
 import CustomizeForms from './CustomizeForms'
 import ExceptionLog from './ExceptionLog'
+import FeatureFlags from './FeatureFlags'
+import SmartFields from './SmartFields'
+import ValidationRules from './ValidationRules'
+import GridTemplates from './GridTemplates'
+import CaseActionsAdmin from './CaseActionsAdmin'
+import ComplianceAdmin from './ComplianceAdmin'
 import GroupSecurity from './GroupSecurity'
 import LoggedInUsers from './LoggedInUsers'
 import ReportsAccess from './ReportsAccess'
@@ -41,6 +47,12 @@ export default function System({ selectedItem }) {
   if (selectedItem === 'sys-setup-developer-api')    return <DeveloperApiAdmin />
   if (selectedItem === 'sys-setup-email-accounts')  return <SetupEmailAccounts />
   if (selectedItem === 'sys-setup-change-approvals') return <SetupChangeApprovals />
+  if (selectedItem === 'sys-setup-feature-flags')   return <FeatureFlags />
+  if (selectedItem === 'sys-setup-smart-fields')    return <SmartFields />
+  if (selectedItem === 'sys-setup-validation')      return <ValidationRules />
+  if (selectedItem === 'sys-setup-grid-templates')  return <GridTemplates />
+  if (selectedItem === 'sys-setup-case-actions')    return <CaseActionsAdmin />
+  if (selectedItem === 'sys-setup-compliance')      return <ComplianceAdmin />
   if (selectedItem?.startsWith('sys-setup-int-'))   return <SetupIntegrations selectedItem={selectedItem} />
   if (selectedItem === 'sys-system-params')         return <SystemParameters />
   if (selectedItem === 'sys-reports-access')        return <ReportsAccess />

@@ -46,6 +46,8 @@ const { startDpprScheduler }           = require('./services/dpprScheduler');
 const { apiRateLimiter, authRateLimiter } = require('./middleware/rateLimiters');
 const { auditAutoCapture } = require('./middleware/auditAutoCapture');
 const { attachChatRealtime } = require('./services/chatRealtimeService');
+const { attachCasePresence } = require('./services/casePresenceService');
+const ocrWorker = require('./services/ocrWorker');
 const { attachAppRealtime } = require('./services/appRealtimeService');
 const { ensureMobilePushSchema } = require('./services/mobilePushService');
 
@@ -226,6 +228,20 @@ app.use('/api/admin', require('./routes/admin/userPreferences'));
 app.use('/api/admin', require('./routes/admin/icsr'));
 app.use('/api/admin', require('./routes/admin/workflowEngine'));
 app.use('/api/admin', require('./routes/admin/auditInspectorExport'));
+app.use('/api/admin', require('./routes/admin/featureFlags'));
+app.use('/api', require('./routes/admin/featureFlags')); // exposes /api/feature-flags/resolved
+app.use('/api', require('./routes/admin/casePresence'));
+app.use('/api', require('./routes/admin/attachments'));
+app.use('/api', require('./routes/admin/geocoder'));
+app.use('/api', require('./routes/admin/fieldHistory'));
+app.use('/api', require('./routes/admin/validation'));
+app.use('/api', require('./routes/admin/smartFields'));
+app.use('/api', require('./routes/admin/gridSections'));
+app.use('/api', require('./routes/admin/richFields'));
+app.use('/api', require('./routes/admin/documents'));
+app.use('/api', require('./routes/admin/collab'));
+app.use('/api', require('./routes/admin/caseActions'));
+app.use('/api', require('./routes/admin/compliance'));
 app.use('/api', require('./routes/admin/aiAssistant'));
 app.use('/', require('./routes/apiPlatform'));
 
@@ -526,6 +542,8 @@ if (!isTestEnv) {
     });
     attachChatRealtime(server);
     attachAppRealtime(server);
+    attachCasePresence(server);
+    ocrWorker.start();
     server.on('error', (err) => {
       if (err?.code === 'EADDRINUSE') {
         logger.error({ host: HOST, port: PORT }, 'Port already in use');
@@ -543,6 +561,7 @@ function shutdown(signal) {
   try { stopWorkers() } catch (_) {}     // SIGTERM to pollerProcess + schedulerProcess children
   try { stopScheduler() } catch (_) {}   // dpprScheduler still runs in main process
   try { stopSchemaTracker() } catch (_) {}
+  try { require('./services/jobQueueService').shutdown() } catch (_) {}
   if (server) server.close(() => process.exit(0))
   else process.exit(0)
   // Force-exit if close hangs (e.g. open sockets)
