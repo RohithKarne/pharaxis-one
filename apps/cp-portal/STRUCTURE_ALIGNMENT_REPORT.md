@@ -65,4 +65,4 @@ MIMS is the structure baseline for app operations: root scripts, backend layers,
 | --- | --- | --- |
 | Backend services | Extracted client listing/detail read logic into `backend/services/clientService.js`. | Admin client routes are thinner and closer to the MIMS service/controller pattern. |
 | Frontend API layer | Updated `ClientsPage.jsx` to call the shared `apiJson` client. | New CP screens have a reusable API path instead of repeated raw fetch handling. |
-| CI gates | Added CP Portal to root app quality/security matrix in `.github/workflows/ci.yml`. | Static backend checks and secret scans are now enforced in CI. |
+| CI gates | Added CP Portal to app-specific CI via `.github/workflows/ci-cp-portal.yml` backed by reusable workflow templates. | Static backend checks and secret scans are now enforced in CI. |

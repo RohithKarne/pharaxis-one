@@ -124,9 +124,11 @@ cd apps/qms/frontend && npm run dev
 
 ## CI/CD and Automation
 
-- CI workflow: `.github/workflows/ci.yml`
-- Deploy workflow: `.github/workflows/deploy.yml`
-- Release workflow: `.github/workflows/release.yml`
+- Reusable CI workflow: `.github/workflows/_app-ci.yml`
+- Reusable deploy workflow: `.github/workflows/_app-deploy.yml`
+- Per-app CI workflows: `ci-mims.yml`, `ci-qms.yml`, `ci-vault.yml`, `ci-cp-portal.yml`, `ci-ai-agent.yml`
+- Per-app deploy workflows: `deploy-mims.yml`, `deploy-qms.yml`, `deploy-vault.yml`, `deploy-cp-portal.yml`, `deploy-ai-agent.yml`
+- Per-app release workflows: `release-mims.yml`, `release-qms.yml`, `release-vault.yml`, `release-cp-portal.yml`, `release-ai-agent.yml`
 - Dependency updates: `.github/dependabot.yml`
 
 ## Documentation Index
@@ -134,6 +136,10 @@ cd apps/qms/frontend && npm run dev
 - Project overview: [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Database details: [docs/DB_DETAILS.md](docs/DB_DETAILS.md)
+- GitHub product ops: [docs/GITHUB_PRODUCT_OPERATIONS_SETUP.md](docs/GITHUB_PRODUCT_OPERATIONS_SETUP.md)
+- Branch protection: [docs/BRANCH_PROTECTION_POLICY.md](docs/BRANCH_PROTECTION_POLICY.md)
+- Monitoring and backup baseline: [docs/MONITORING_AND_BACKUP_BASELINE.md](docs/MONITORING_AND_BACKUP_BASELINE.md)
+- Product runbooks: [docs/runbooks/](docs/runbooks)
 
 ## Security and Governance
 

@@ -91,12 +91,21 @@ Record each drill:
 - restore duration
 - owner
 
+## Product Runbook References
+
+- `docs/runbooks/MIMS_PRODUCTION_RUNBOOK.md`
+- `docs/runbooks/QMS_PRODUCTION_RUNBOOK.md`
+- `docs/runbooks/VAULT_PRODUCTION_RUNBOOK.md`
+- `docs/runbooks/CP_PORTAL_PRODUCTION_RUNBOOK.md`
+- `docs/runbooks/AI_AGENT_PRODUCTION_RUNBOOK.md`
+
 ## This Repo Next Step
 
 Still needed after this document:
 
-- actual scheduled backup job definition
-- actual storage destination
+- actual scheduled backup job definition per product
+- actual storage destination per product
+- restore proof for MySQL-backed products on production-like hosts
 
 ## Recorded Drill Evidence
 

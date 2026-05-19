@@ -53,4 +53,4 @@ MIMS is the operational structure baseline: root scripts, backend layers, fronte
 | --- | --- | --- |
 | Frontend modules | Added module wrapper folders for auth, core, platform, quality, and superadmin pages. | Router now imports from module paths while preserving existing view implementations. |
 | API versioning | Added `/api/v1` route mounting alongside legacy `/api` routes. | QMS can migrate consumers incrementally without breaking existing local URLs. |
-| CI gates | Added QMS to root app quality/security matrix in `.github/workflows/ci.yml`. | Static backend checks and secret scans are now enforced in CI. |
+| CI gates | Added QMS to app-specific CI via `.github/workflows/ci-qms.yml` backed by reusable workflow templates. | Static backend checks and secret scans are now enforced in CI. |

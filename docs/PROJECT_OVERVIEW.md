@@ -2,7 +2,7 @@
 
 ## Mission
 
-Pharaxis-One groups medical-affairs and platform products into a single operational monorepo so teams can ship faster with shared standards, CI visibility, and consistent architecture practices.
+Pharaxis-One groups medical-affairs and platform products into a single engineering monorepo while operating them as separate sellable products in production.
 
 ## Product Domains
 
@@ -46,4 +46,4 @@ Pharaxis-One groups medical-affairs and platform products into a single operatio
 1. Start with root `README.md`.
 2. Read `docs/ARCHITECTURE.md` and `docs/DB_DETAILS.md`.
 3. Move to app-specific folders under `apps/`.
-4. Use `.github/workflows/deploy.yml` to understand CI/CD pipeline.
+4. Use `.github/workflows/ci-*.yml`, `.github/workflows/deploy-*.yml`, and `.github/workflows/release-*.yml` to understand the per-product delivery model.

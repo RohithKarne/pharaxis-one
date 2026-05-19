@@ -50,4 +50,4 @@ MIMS is the operational structure baseline: root scripts, backend layers, fronte
 | --- | --- | --- |
 | Upload security | Added centralized upload validation with blocked extensions, path checks, size checks, and magic-byte checks for PDF/PNG/JPEG. | Vault rejects obvious spoofed uploads before route business logic runs. |
 | Frontend API layer | Added shared org/superadmin API helpers and moved taxonomy/folder screens to the shared org API helper. | Vault frontend has the same reusable API direction as MIMS-style screens. |
-| CI gates | Added Vault to root app quality/security matrix in `.github/workflows/ci.yml`. | Static backend checks and secret scans are now enforced in CI. |
+| CI gates | Added Vault to app-specific CI via `.github/workflows/ci-vault.yml` backed by reusable workflow templates. | Static backend checks and secret scans are now enforced in CI. |

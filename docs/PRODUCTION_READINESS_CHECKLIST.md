@@ -22,11 +22,11 @@ No app is production ready until all gates below are green:
 
 - [ ] Frontend build runs in CI for `vault`, `qms`, `cp-portal`, `mims`, `ai-agent`
 - [ ] Backend syntax/startup gate runs in CI for all active apps
-- [ ] Security scan runs at least for `mims` and any app with custom security middleware
-- [ ] Deploy workflow detects changes using push range, not only `HEAD~1`
-- [ ] Deploy workflow skips cleanly when no app changed
+- [ ] Security scan runs per app
+- [ ] Each app has its own deploy workflow and production environment
 - [ ] PM2 deploy path uses reload/startOrReload, not delete-all restart
-- [ ] Postdeploy smoke step exists per app or per changed app set
+- [ ] Postdeploy smoke step exists per app
+- [ ] App-specific release tag and release workflow are defined
 
 ### Security
 
@@ -54,6 +54,7 @@ No app is production ready until all gates below are green:
 - [ ] Restore drill executed and timed
 - [ ] Migration rollback plan documented
 - [ ] Environment-specific DB names and users confirmed
+- [ ] Product-specific runbook exists
 
 ### Observability
 
@@ -61,6 +62,7 @@ No app is production ready until all gates below are green:
 - [ ] Structured error logging enabled
 - [ ] Alerting exists for process crash, DB outage, and deploy failure
 - [ ] Smoke verification artifacts are stored after release
+- [ ] Monitoring owner is defined per product
 
 ## App Table
 
@@ -82,8 +84,8 @@ No app is production ready until all gates below are green:
 
 ## This Turn Summary
 
-Changes introduced in this repo turn target three release blockers:
+Changes introduced in this repo now cover:
 
-- repo-level checklist created here
-- CI and deploy workflows hardened
-- backend baseline security/runtime hardening applied app by app
+- repo-level production checklist
+- per-app CI, deploy, and release workflows
+- product-specific operating docs and runbooks
