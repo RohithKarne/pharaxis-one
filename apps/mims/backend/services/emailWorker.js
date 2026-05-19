@@ -20,6 +20,7 @@ const { logService } = require('./serviceLogger');
 const POLL_INTERVAL_MS  = parseInt(process.env.EMAIL_WORKER_POLL_MS   || '15000', 10);
 const BATCH_SIZE        = parseInt(process.env.EMAIL_WORKER_BATCH_SIZE || '5',     10);
 const SMTP_TIMEOUT_MS   = parseInt(process.env.SMTP_CONNECT_TIMEOUT_MS || '15000', 10);
+const SAFE_BATCH_SIZE   = Number.isFinite(BATCH_SIZE) ? Math.min(Math.max(BATCH_SIZE, 1), 100) : 5;
 
 let _timer = null;
 let _running = false;
@@ -136,9 +137,8 @@ async function processBatch() {
         WHERE status = 'pending'
           AND scheduled_at <= NOW()
         ORDER BY scheduled_at ASC
-        LIMIT ?
-        FOR UPDATE SKIP LOCKED`,
-      [BATCH_SIZE]
+        LIMIT ${SAFE_BATCH_SIZE}
+        FOR UPDATE SKIP LOCKED`
     );
 
     if (!rows.length) {
@@ -215,7 +215,7 @@ function startEmailWorker() {
   _timer = setInterval(processBatch, POLL_INTERVAL_MS);
   // Run immediately on startup to clear any pending jobs from a previous restart
   setImmediate(processBatch);
-  logger.info({ poll_interval_ms: POLL_INTERVAL_MS, batch_size: BATCH_SIZE }, 'emailWorker started');
+  logger.info({ poll_interval_ms: POLL_INTERVAL_MS, batch_size: SAFE_BATCH_SIZE }, 'emailWorker started');
 }
 
 function stopEmailWorker() {

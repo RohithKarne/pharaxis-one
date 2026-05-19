@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import DropzoneUpload from '../../../shared/components/documents/DropzoneUpload'
+import AttachmentGallery from '../../../shared/components/documents/AttachmentGallery'
+import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -156,8 +159,22 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
     return new Date(a?.received_at || 0).getTime() - new Date(b?.received_at || 0).getTime()
   })
 
+  const t6 = useFeatureFlag('cf.theme6_documents')
+  const [uploadKey, setUploadKey] = useState(0)
   return (
-    <div className="cf-tab-pane">
+    <div id="tab-correspondence" className="cf-tab-pane">
+      {t6 && (
+        <div style={{
+          margin: '0 0 14px', padding: 14, borderRadius: 8,
+          background: 'var(--surface,#fff)', border: '1px solid var(--border)',
+        }}>
+          <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 600 }}>📎 Case Attachments</div>
+          <DropzoneUpload entityType="case" entityId={id} onUploaded={() => setUploadKey(k => k + 1)} />
+          <div style={{ marginTop: 12 }}>
+            <AttachmentGallery entityType="case" entityId={id} reloadKey={uploadKey} />
+          </div>
+        </div>
+      )}
       {corrLoading && <div className="cf-empty-msg">Loading correspondence…</div>}
       {!corrLoading && corrError && <div className="cf-corr-error">{corrError}</div>}
       {!corrLoading && !corrError && correspondence.length === 0 && (

@@ -1,10 +1,21 @@
 const { test, expect } = require('@playwright/test')
-test.use({ baseURL: 'http://localhost:5173' })
+const adminRouteMap = require('../frontend/src/shared/config/adminRouteMap.json')
+
+const BACKEND = 'http://localhost:3000'
+const APP_BASE = '/mims'
+
+function appPath(path = '/') {
+  const raw = String(path || '/')
+  if (raw === '/') return `${APP_BASE}/`
+  return `${APP_BASE}${raw.startsWith('/') ? raw : `/${raw}`}`
+}
+
+test.use({ baseURL: `http://localhost:5173${APP_BASE}` })
 
 async function buildSession(request, loginData, token, email, fallbackRole, moduleHints = []) {
   let meData = null
   try {
-    const meRes = await request.get('http://localhost:3000/api/auth/me', {
+    const meRes = await request.get(`${BACKEND}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
       timeout: 30000,
     })
@@ -54,7 +65,7 @@ async function resolveLoginSession(request, candidates, fallbackRole, moduleHint
 
   for (const candidate of candidates) {
     try {
-      const loginResponse = await request.post('http://localhost:3000/api/auth/login', {
+      const loginResponse = await request.post(`${BACKEND}/api/auth/login`, {
         data: candidate,
         timeout: 30000,
       })
@@ -65,7 +76,7 @@ async function resolveLoginSession(request, candidates, fallbackRole, moduleHint
       const challengeToken = loginData?.challengeToken
 
       if (!token && challengeToken) {
-        const skipRes = await request.post('http://localhost:3000/api/auth/2fa/skip-setup', {
+        const skipRes = await request.post(`${BACKEND}/api/auth/2fa/skip-setup`, {
           data: { challengeToken },
           timeout: 30000,
         })
@@ -169,20 +180,20 @@ test.describe('Phase 3 — Integration Screens', () => {
         return
       }
 
-      await hydrateStorage(page, adminSession, 'mims', 'http://localhost:5173/')
+      await hydrateStorage(page, adminSession, 'mims', `http://localhost:5173${appPath('/')}`)
     })
 
     test('Integration Setup sidebar shows MIR Integration page', async ({ page }) => {
-      await page.goto('/admin-console/mir-int')
+      await page.goto(appPath(adminRouteMap.adminEntryRoutes.mirIntegration))
       await page.waitForLoadState('load')
 
       const body = page.locator('body')
       await expect.soft(body).toContainText('MIR Integration')
-      await expect.soft(body).toContainText('Admin Console')
+      await expect.soft(body).toContainText('MIMS Admin')
     })
 
     test('MIR Integration screen loads without error', async ({ page }) => {
-      await page.goto('/admin-console/mir-int')
+      await page.goto(appPath(adminRouteMap.adminEntryRoutes.mirIntegration))
       await page.waitForLoadState('load')
 
       await expect.soft(page.locator('body')).not.toContainText('Coming Soon')
@@ -194,7 +205,7 @@ test.describe('Phase 3 — Integration Screens', () => {
     })
 
     test('CRM Integration screen loads without error', async ({ page }) => {
-      await page.goto('/admin-console/crm-int')
+      await page.goto(appPath(adminRouteMap.adminEntryRoutes.crmIntegration))
       await page.waitForLoadState('load')
 
       await expect.soft(page.locator('body')).not.toContainText('Coming Soon')
@@ -206,7 +217,7 @@ test.describe('Phase 3 — Integration Screens', () => {
     })
 
     test('Content Integration screen loads without error', async ({ page }) => {
-      await page.goto('/admin-console/content-int')
+      await page.goto(appPath(adminRouteMap.adminEntryRoutes.contentIntegration))
       await page.waitForLoadState('load')
 
       await expect.soft(page.locator('body')).not.toContainText('Coming Soon')
@@ -218,7 +229,7 @@ test.describe('Phase 3 — Integration Screens', () => {
     })
 
     test('EMIR Integration screen loads without error', async ({ page }) => {
-      await page.goto('/admin-console/emir-int')
+      await page.goto(appPath(adminRouteMap.adminEntryRoutes.emirIntegration))
       await page.waitForLoadState('load')
 
       await expect.soft(page.locator('body')).not.toContainText('Coming Soon')
@@ -230,7 +241,7 @@ test.describe('Phase 3 — Integration Screens', () => {
     })
 
     test('Case Import screen loads with filter form', async ({ page }) => {
-      await page.goto('/admin-console/case-import')
+      await page.goto(appPath(adminRouteMap.adminEntryRoutes.caseImport))
       await page.waitForLoadState('load')
 
       await expect.soft(page.locator('body')).not.toContainText('Coming Soon')

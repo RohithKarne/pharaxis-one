@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import AttachmentTagPicker from './AttachmentTagPicker'
 import { useAuth } from '../../context/AuthContext'
 import { httpFetch } from '../../api/httpFetch.js'
 
@@ -23,6 +24,7 @@ export default function AttachmentGallery({
   const { token } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [tagPicker, setTagPicker] = useState(null) // Sprint 2 #14
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -87,14 +89,28 @@ export default function AttachmentGallery({
             }}>{a.original_name}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', marginTop: 2 }}>
               <span>{fmtSize(a.size_bytes)}</span>
-              <button onClick={() => del(a.id)} style={{
-                background: 'transparent', border: 'none', cursor: 'pointer',
-                color: '#b91c1c', fontSize: 11,
-              }}>✕</button>
+              <span style={{ display: 'flex', gap: 4 }}>
+                {/* Sprint 2 #14 — open tag/source picker */}
+                <button onClick={(e) => { e.stopPropagation(); setTagPicker(a.id) }} title="Tag / source" style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  color: 'var(--accent,#1a4f9c)', fontSize: 11,
+                }}>🏷</button>
+                <button onClick={() => del(a.id)} style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  color: '#b91c1c', fontSize: 11,
+                }}>✕</button>
+              </span>
             </div>
           </div>
         </div>
       ))}
+      {tagPicker && (
+        <AttachmentTagPicker
+          attachmentId={tagPicker}
+          onClose={() => setTagPicker(null)}
+          onChanged={() => load()}
+        />
+      )}
     </div>
   )
 }

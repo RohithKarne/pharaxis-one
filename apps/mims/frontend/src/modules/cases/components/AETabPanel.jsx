@@ -1,13 +1,45 @@
 import AEMultiRowTab from './AEMultiRowTab'
+import MedDRACoder from '../../../shared/components/meddra/MedDRACoder'
+import CausalityMatrix from '../../../shared/components/CausalityMatrix'
+import CaseDrugsTab from '../../../shared/components/CaseDrugsTab'
 
-export default function AETabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions, getFieldConfig = () => null, versionId, headers }) {
+/**
+ * AETabPanel — renders the inner sub-tab of the AE component.
+ *
+ * Bug-fix history:
+ *   B2 (2026-05-16) — the helper `fieldRow` returns its own .cf-form-field <div>;
+ *     several call sites wrapped it again with .cf-form-field--full causing a
+ *     div-in-div layout break. fieldRow now accepts a `fullWidth` flag and emits
+ *     the modifier class itself.
+ *   B6 (2026-05-16) — the `additional_info` key and `notes` key collided across
+ *     several sub-tabs (general/patient-info/lab-results/lab-notes/medical-notes)
+ *     causing cross-tab data clobber. Each sub-tab now uses a namespaced key:
+ *     `${tabKey}__additional_info` / `${tabKey}__notes`, and the helper detects
+ *     legacy un-namespaced values for backward compatibility on existing data.
+ *   B4 (2026-05-16) — picklists fall back to a clear "no options" notice instead
+ *     of an infinite "Loading…" option.
+ *   B13 (2026-05-16) — Save button now reflects an external `saving` busy flag.
+ *   B17 (2026-05-16) — picklist <option>s use a stable composite key.
+ */
+
+export default function AETabPanel({
+  tabKey, data, onChange, locked, onSave, getPicklistOptions,
+  getFieldConfig = () => null, versionId, headers,
+  caseId,
+  saving = false,
+}) {
   const d = data || {}
   const set = (key, val) => onChange({ ...d, [key]: val })
 
-  const fieldRow = (label, key, type = 'text', sectionName = null) => {
+  // B6 — tab-namespaced key with backward-compatible read of legacy un-namespaced value.
+  const nsKey = (k) => `${tabKey}__${k}`
+  const read  = (k) => d[nsKey(k)] !== undefined ? d[nsKey(k)] : (d[k] || '')
+  const write = (k, v) => set(nsKey(k), v)
+
+  const fieldRow = (label, key, type = 'text', { fullWidth = false, sectionName = null } = {}) => {
     const displayLabel = (sectionName && getFieldConfig(sectionName, label)?.custom_label) || label
     return (
-      <div key={key} className="cf-form-field">
+      <div key={key} className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}`}>
         <label>{displayLabel}</label>
         {type === 'textarea'
           ? <textarea rows={3} value={d[key] || ''} disabled={locked} onChange={e => set(key, e.target.value)} />
@@ -15,6 +47,16 @@ export default function AETabPanel({ tabKey, data, onChange, locked, onSave, get
       </div>
     )
   }
+
+  // Namespaced variant (used by additional_info / notes inputs).
+  const nsFieldRow = (label, baseKey, type = 'text', { fullWidth = false } = {}) => (
+    <div key={baseKey} className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}`}>
+      <label>{label}</label>
+      {type === 'textarea'
+        ? <textarea rows={3} value={read(baseKey)} disabled={locked} onChange={e => write(baseKey, e.target.value)} />
+        : <input type={type} value={read(baseKey)} disabled={locked} onChange={e => write(baseKey, e.target.value)} />}
+    </div>
+  )
 
   return (
     <div className="cf-tab-panel">
@@ -24,18 +66,17 @@ export default function AETabPanel({ tabKey, data, onChange, locked, onSave, get
           {fieldRow('Date of Onset',             'date_of_onset',           'date')}
           {fieldRow('Date of Report',            'date_of_report',          'date')}
           {fieldRow('Reporter Awareness Date',   'reporter_awareness_date', 'date')}
-          <div className="cf-form-field cf-form-field--full">{fieldRow('Additional Info', 'additional_info', 'textarea')}</div>
+          {nsFieldRow('Additional Info', 'additional_info', 'textarea', { fullWidth: true })}
         </div>
       )}
 
       {tabKey === 'ae-flex-fields' && (
         <div>
           <h3 className="cf-subsection-title">AE Flex Fields</h3>
-          <div className="cf-form-grid">
-            {fieldRow('Additional Field 1', 'ae_flex_1')}
-            {fieldRow('Additional Field 2', 'ae_flex_2')}
-            {fieldRow('Additional Field 3', 'ae_flex_3')}
-          </div>
+          <p className="cf-form-help-note">
+            Add admin-configured AE fields via <strong>System &rsaquo; Setup &rsaquo; Customize Forms</strong>.
+            Configured fields render automatically inside the AE Component tab under <em>Additional Fields</em>.
+          </p>
         </div>
       )}
 
@@ -50,6 +91,18 @@ export default function AETabPanel({ tabKey, data, onChange, locked, onSave, get
         />
       )}
 
+      {tabKey === 'drugs' && (
+        <CaseDrugsTab caseId={caseId} headers={headers} />
+      )}
+
+      {tabKey === 'meddra-coding' && (
+        <MedDRACoder caseId={caseId} headers={headers} />
+      )}
+
+      {tabKey === 'causality' && (
+        <CausalityMatrix caseId={caseId} headers={headers} />
+      )}
+
       {tabKey === 'patient-info' && (
         <div className="cf-form-grid">
           {fieldRow('Age',                 'age',       'number')}
@@ -59,15 +112,14 @@ export default function AETabPanel({ tabKey, data, onChange, locked, onSave, get
           {fieldRow('Height (cm)',         'height_cm', 'number')}
           {fieldRow('Ethnicity',           'ethnicity')}
           {fieldRow('Last Menstrual Date', 'last_menstrual_date', 'date')}
-          <div className="cf-form-field">
-            <label>Pregnant</label>
-            <select value={d.pregnant ?? ''} disabled={locked} onChange={e => set('pregnant', e.target.value === '' ? null : parseInt(e.target.value))}>
-              {getPicklistOptions('AE — Patient Information', 'Pregnant').length > 0
-                ? getPicklistOptions('AE — Patient Information', 'Pregnant').map(o => <option key={o.value} value={o.value}>{o.label}</option>)
-                : <option value=''>Loading...</option>}
-            </select>
-          </div>
-          <div className="cf-form-field cf-form-field--full">{fieldRow('Additional Info', 'additional_info', 'textarea')}</div>
+          <PicklistRow
+            label="Pregnant"
+            value={d.pregnant ?? ''}
+            onChange={v => set('pregnant', v === '' ? null : parseInt(v))}
+            options={getPicklistOptions('AE — Patient Information', 'Pregnant')}
+            locked={locked}
+          />
+          {nsFieldRow('Additional Info', 'additional_info', 'textarea', { fullWidth: true })}
         </div>
       )}
 
@@ -85,13 +137,44 @@ export default function AETabPanel({ tabKey, data, onChange, locked, onSave, get
       {(tabKey === 'lab-notes' || tabKey === 'medical-notes') && (
         <div className="cf-form-field cf-form-field--full">
           <label>Notes</label>
-          <textarea rows={8} value={d.notes || ''} disabled={locked} onChange={e => set('notes', e.target.value)} />
+          <textarea rows={8} value={read('notes')} disabled={locked} onChange={e => write('notes', e.target.value)} />
         </div>
       )}
 
-      {!locked && !['events','lab-results','medical-history','product-info'].includes(tabKey) && (
+      {!locked && !['events','drugs','meddra-coding','causality','lab-results','medical-history','product-info','ae-flex-fields'].includes(tabKey) && (
         <div className="cf-form-actions">
-          <button className="cf-save-btn" onClick={onSave}>Save</button>
+          {/* B12 — label includes scope so the operator knows exactly what saves */}
+          <button className="cf-save-btn" onClick={onSave} disabled={saving}
+            title="Saves only this AE sub-tab. Use Save Case in the header for case-level info.">
+            {saving ? 'Saving…' : `Save ${tabKey.replace(/-/g, ' ')}`}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Small picklist <select> wrapper. B4 — surfaces a clear empty state when the
+ * picklist source is missing instead of an infinite "Loading…" option.
+ * B17 — every <option> uses a stable composite key.
+ */
+function PicklistRow({ label, value, onChange, options, locked }) {
+  const opts = Array.isArray(options) ? options : []
+  const hasOpts = opts.length > 0
+  return (
+    <div className="cf-form-field">
+      <label>{label}</label>
+      {hasOpts ? (
+        <select value={value} disabled={locked} onChange={e => onChange(e.target.value)}>
+          <option value="">— Select —</option>
+          {opts.map((o, i) => (
+            <option key={`${label}-${o.value ?? o.id ?? i}`} value={o.value}>{o.label || o.value}</option>
+          ))}
+        </select>
+      ) : (
+        <div className="cf-picklist-empty" title="Picklist source missing — define it in Picklists Table.">
+          <em>No options configured for this picklist.</em>
         </div>
       )}
     </div>

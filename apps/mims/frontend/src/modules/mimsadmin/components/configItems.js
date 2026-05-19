@@ -109,6 +109,13 @@ export const SYSTEM_NAV = [
       { label: 'Grid Section Templates',      value: 'sys-setup-grid-templates' },
       { label: 'Case Actions (Templates/Macros)', value: 'sys-setup-case-actions' },
       { label: 'Compliance Hardening',        value: 'sys-setup-compliance'     },
+      // Sprint 2 Week 1 — PV operational depth
+      { label: 'Document Types',              value: 'sys-setup-document-types' },
+      { label: 'Complaint Codes',             value: 'sys-setup-complaint-codes'},
+      { label: 'Lot Master',                  value: 'sys-setup-lot-master'     },
+      { label: 'Field Actions / Recalls',     value: 'sys-setup-field-actions'  },
+      { label: 'CAPA Workflow',               value: 'sys-setup-capa'           },
+      { label: 'PII Redaction Rules',         value: 'sys-setup-pii-redaction'  },
       { label: 'Data Protection Rules',       value: 'sys-setup-data-protect'   },
       { label: 'Individual Protection Rules', value: 'sys-setup-indiv-protect'  },
       { label: 'PDF Security',                value: 'sys-setup-pdf-security'   },

@@ -203,7 +203,7 @@ router.get('/security-groups/options', authenticate, requireRole('admin', 'super
 });
 
 // GET /api/admin/security-groups/effective — current user's group-derived privileges
-router.get('/security-groups/effective', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/security-groups/effective', authenticate, requireOrg, async (req, res) => {
   try {
     if (req.user.role === 'superadmin') {
       return res.json({ unrestricted: true, groups: [], system_options: null });

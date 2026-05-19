@@ -36,6 +36,7 @@ const {
 } = require('../services/caseGovernanceService');
 const { resolveProductGroups } = require('../services/productGroupService');
 const { evaluateRule } = require('../../shared/services/ruleEvaluator');
+const { recalculateAll: recalculateHaClocks } = require('../services/haClockService');
 
 // ── Architecture Fix A1: shared helpers extracted to service files ─────────────
 // All utility functions, constants and DB helpers previously defined inline here
@@ -602,13 +603,18 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
       [orgId, case_type]
     );
 
+    const caseTypeLc = String(case_type || '').toLowerCase();
     const [fields] = await pool.execute(
-      `SELECT id, section_name, field_name, field_type, is_required, is_hidden, is_disabled, custom_label, help_text, picklist_type, lookup_target, sort_order, max_length, default_value, is_sensitive, masking_pattern, unmask_roles
+      `SELECT id, section_name, field_name, field_type, is_required, is_hidden, is_disabled,
+              custom_label, help_text, picklist_type, lookup_target, sort_order,
+              max_length, default_value, is_sensitive, masking_pattern, unmask_roles,
+              case_type_scope, display_tab
        FROM field_setup
        WHERE (org_id = ? OR org_id IS NULL) AND is_hidden = 0 AND is_disabled = 0
          AND section_name != '__customize_placeholder__'
+         AND (case_type_scope = 'shared' OR case_type_scope = ?)
        ORDER BY section_name, sort_order, id`,
-      [orgId]
+      [orgId, caseTypeLc]
     );
 
     const today = toDateOnlyOrNull(new Date());
@@ -965,7 +971,7 @@ router.post('/cases', authenticate, requireOrg, validate(schemas.createCase), as
   try {
     await conn.beginTransaction();
     const {
-      site_id, case_type, intake_channel = 'manual', date_received, case_number,
+      site_id, case_type, intake_channel = 'manual', date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number,
       // CF-E3: Reporter
       reporter,
       // CF-E3: Patient (AE/PC)
@@ -988,6 +994,9 @@ router.post('/cases', authenticate, requireOrg, validate(schemas.createCase), as
       return res.status(400).json({ error: 'case_type must be MI, AE, or PC' });
     }
     const dateReceived = toDateOnlyOrNull(date_received);
+    const awarenessDate = awareness_date ? toDateOnlyOrNull(awareness_date) : null;
+    const learnOfValidityDate = learn_of_validity_date ? toDateOnlyOrNull(learn_of_validity_date) : null;
+    const followUpReceivedDate = follow_up_received_date ? toDateOnlyOrNull(follow_up_received_date) : null;
     const validationDate = dateReceived || toDateOnlyOrNull(new Date());
     const defaultStatusId = await resolveDefaultWorkflowStateId(conn, org_id);
 
@@ -1035,16 +1044,16 @@ router.post('/cases', authenticate, requireOrg, validate(schemas.createCase), as
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, case_number, status_id, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [org_id, site_id, case_type ?? null, intake_channel, dateReceived, case_number ?? null, defaultStatusId, req.user.userId]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [org_id, site_id, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId]
       );
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY' && String(err.message || '').includes('case_number')) {
         [result] = await conn.execute(
-          `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, case_number, status_id, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [org_id, site_id, case_type ?? null, intake_channel, dateReceived, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId]
+          `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [org_id, site_id, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId]
         );
       } else { throw err; }
     }
@@ -1432,6 +1441,9 @@ router.post('/cases/:id/reassign', authenticate, async (req, res) => {
        WHERE c.id = ?`,
       [req.params.id]
     );
+    if (hasOwn(body, 'awareness_date') || hasOwn(body, 'learn_of_validity_date') || hasOwn(body, 'follow_up_received_date') || hasOwn(body, 'date_received')) {
+      recalculateHaClocks({ orgId: currentCase.org_id, caseId: req.params.id }).catch(() => {});
+    }
     return res.json(updated);
   } catch (err) {
     logger.error({ err, route: '/api/cases/:id/reassign', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to reassign case');
@@ -1449,6 +1461,7 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
 
     const [[currentCase]] = await pool.execute(
       `SELECT id, org_id, site_id, status_id, case_owner_id, case_number, priority, date_received,
+              awareness_date, learn_of_validity_date, follow_up_received_date,
               description, internal_notes, intake_channel, version_stamp
        FROM cases
        WHERE id = ? AND is_deleted = 0
@@ -1554,6 +1567,33 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
         nextDateReceived = normalized;
       }
     }
+    let nextAwarenessDate = currentCase.awareness_date;
+    if (hasOwn(body, 'awareness_date')) {
+      if (body.awareness_date === '' || body.awareness_date === null) nextAwarenessDate = null;
+      else {
+        const normalized = toDateOnlyOrNull(body.awareness_date);
+        if (!normalized) return res.status(400).json({ error: 'awareness_date must be a valid date.' });
+        nextAwarenessDate = normalized;
+      }
+    }
+    let nextLearnOfValidityDate = currentCase.learn_of_validity_date;
+    if (hasOwn(body, 'learn_of_validity_date')) {
+      if (body.learn_of_validity_date === '' || body.learn_of_validity_date === null) nextLearnOfValidityDate = null;
+      else {
+        const normalized = toDateOnlyOrNull(body.learn_of_validity_date);
+        if (!normalized) return res.status(400).json({ error: 'learn_of_validity_date must be a valid date.' });
+        nextLearnOfValidityDate = normalized;
+      }
+    }
+    let nextFollowUpReceivedDate = currentCase.follow_up_received_date;
+    if (hasOwn(body, 'follow_up_received_date')) {
+      if (body.follow_up_received_date === '' || body.follow_up_received_date === null) nextFollowUpReceivedDate = null;
+      else {
+        const normalized = toDateOnlyOrNull(body.follow_up_received_date);
+        if (!normalized) return res.status(400).json({ error: 'follow_up_received_date must be a valid date.' });
+        nextFollowUpReceivedDate = normalized;
+      }
+    }
 
     const nextPriority = hasOwn(body, 'priority') ? (body.priority ?? null) : currentCase.priority;
     const nextDescription = hasOwn(body, 'description') ? (body.description ?? null) : currentCase.description;
@@ -1566,6 +1606,9 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
         case_owner_id  = ?,
         priority       = ?,
         date_received  = ?,
+        awareness_date = ?,
+        learn_of_validity_date = ?,
+        follow_up_received_date = ?,
         description    = ?,
         internal_notes = ?,
         intake_channel = ?,
@@ -1576,6 +1619,9 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
         nextOwnerId,
         nextPriority,
         nextDateReceived,
+        nextAwarenessDate,
+        nextLearnOfValidityDate,
+        nextFollowUpReceivedDate,
         nextDescription,
         nextInternalNotes,
         nextIntakeChannel,

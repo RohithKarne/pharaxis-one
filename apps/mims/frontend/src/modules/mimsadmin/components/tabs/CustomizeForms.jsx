@@ -211,6 +211,9 @@ export default function CustomizeForms() {
         lookup_target:  i.lookup_target ?? '',
         is_sensitive:   !!i.is_sensitive,
         masking_pattern: i.masking_pattern ?? 'partial',
+        // B1 — case-type routing
+        case_type_scope: i.case_type_scope ?? 'shared',
+        display_tab:     i.display_tab ?? null,
       }))
       const r = await httpFetch(`${API}/customize-forms/${orgId}/${activeCat}`, {
         method: 'PUT', headers: H,
@@ -502,6 +505,9 @@ function AdvancedFieldModal({ field, onClose, onApply }) {
     lookup_target:   field.lookup_target || '',
     is_sensitive:    !!field.is_sensitive,
     masking_pattern: field.masking_pattern || 'partial',
+    // B1 — case-type routing
+    case_type_scope: field.case_type_scope || 'shared',
+    display_tab:     field.display_tab || '',
   })
   function setV(k, v) { setDraft(d => ({ ...d, [k]: v })) }
   return (
@@ -547,6 +553,27 @@ function AdvancedFieldModal({ field, onClose, onApply }) {
                   <option value="partial">Partial (last 4 visible)</option>
                   <option value="full">Full (all masked)</option>
                   <option value="initial">Initials only</option>
+                </select>
+              </label>
+              <label>Case Type Scope
+                <select value={draft.case_type_scope} onChange={e => setV('case_type_scope', e.target.value)}>
+                  <option value="shared">Shared (all case types)</option>
+                  <option value="ae">AE only (Adverse Event cases)</option>
+                  <option value="mi">MI only (Medical Inquiry cases)</option>
+                  <option value="pc">PC only (Product Complaint cases)</option>
+                </select>
+              </label>
+              <label>Display Tab
+                <select value={draft.display_tab || ''} onChange={e => setV('display_tab', e.target.value)}>
+                  <option value="">— Auto (any tab) —</option>
+                  <option value="info">Case Information</option>
+                  <option value="contacts">Contacts</option>
+                  <option value="correspondence">Correspondence</option>
+                  <option value="mi">MI Component</option>
+                  <option value="ae">AE Component</option>
+                  <option value="pc">PC Component</option>
+                  <option value="icsr">ICSR / Regulatory</option>
+                  <option value="dppr">Privacy (DPPR)</option>
                 </select>
               </label>
             </div>

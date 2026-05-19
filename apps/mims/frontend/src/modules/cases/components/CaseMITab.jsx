@@ -5,6 +5,9 @@ import RichTextEditor from '../../content/components/RichTextEditor'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import DynamicFieldsSection from './DynamicFieldsSection'
+import { useCaseFieldContext } from '../../../shared/components/WiredField'
+import MiApprovalPanel from '../../../shared/components/MiApprovalPanel'  // Sprint 2 #16 + #17
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -50,8 +53,15 @@ function emptyMiRespForm(tab = null) {
   }
 }
 
-export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChange }) {
-  const miDraftStorageKey = `mims_case_${id}_mi_response_draft`
+export default function CaseMITab({
+  id, token, headers, setSavedMsg, onCountChange,
+  formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
+  saveDynFields, caseType,
+}) {
+  const ctx = useCaseFieldContext()
+  // B8 — Draft storage MUST be scoped by both case and MI tab id, otherwise a
+  // draft started against MI tab #1 leaks into MI tab #2 on the same case.
+  // Key is computed below once activeMiTab is known.
 
   const [miTabs,       setMiTabs]       = useState([])
   const [activeMiTab,  setActiveMiTab]  = useState(0)
@@ -73,15 +83,24 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
 
   useEffect(() => { loadMI(); loadMiResponses() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // B8 — draft key now includes the active MI tab id so drafts don't bleed
+  // across MI inquiries on the same case.
+  const activeMiTabId = miTabs[activeMiTab]?.id || 'new'
+  const miDraftStorageKey = `mims_case_${id}_mi_${activeMiTabId}_response_draft`
+
   useEffect(() => {
     if (!miRespModal) return
     try {
       const stored = localStorage.getItem(miDraftStorageKey)
       if (!stored) return
       const parsed = JSON.parse(stored)
-      if (parsed && typeof parsed === 'object') setMiRespForm(prev => ({ ...prev, ...parsed }))
+      if (parsed && typeof parsed === 'object' &&
+          // Only restore if the draft's mi_tab_id matches the currently active tab
+          (!parsed.mi_tab_id || String(parsed.mi_tab_id) === String(activeMiTabId))) {
+        setMiRespForm(prev => ({ ...prev, ...parsed }))
+      }
     } catch { /* no-op */ }
-  }, [miRespModal]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [miRespModal, miDraftStorageKey, activeMiTabId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!miRespModal) return
@@ -194,7 +213,25 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
 
   async function deleteMITab() {
     const tab = miTabs[activeMiTab]
-    if (!tab || !await confirm('Delete this MI tab?')) return
+    if (!tab) return
+    // B7 — MI immutability policy.
+    // MI is NOT snapshot-versioned the way AE/PC are. Each MI inquiry is a row
+    // in miTabs; each Response in miResponses is e-signed and immutable once
+    // its status is APPROVED or SENT. We therefore allow deleting an MI tab
+    // ONLY while it has no APPROVED/SENT response — otherwise the audit chain
+    // breaks. (Voided drafts are fine to delete.)
+    const blockingResponses = (miResponses || []).filter(r =>
+      Number(r.mi_tab_id) === Number(tab.id) &&
+      ['APPROVED', 'SENT'].includes(String(r.response_status || '').toUpperCase())
+    )
+    if (blockingResponses.length) {
+      toast.error(
+        `Cannot delete: ${blockingResponses.length} approved/sent response(s) are e-signed against this MI inquiry. ` +
+        `Open them to void or supersede before deleting.`
+      )
+      return
+    }
+    if (!await confirm('Delete this MI tab? This cannot be undone.')) return
     try {
       await httpFetch(`${API}/cases/mi/${tab.id}`, { method: 'DELETE', headers })
       const updated = miTabs.filter((_, i) => i !== activeMiTab)
@@ -204,6 +241,25 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
       setActiveMiTab(newIdx)
       setMiForm(updated[newIdx] ? toMiForm(updated[newIdx]) : {})
     } catch { toast.error('Failed to delete MI tab') }
+  }
+
+  async function convertMI(target) {
+    const tab = miTabs[activeMiTab]
+    if (!tab || tab.converted_to_case_id) return
+    try {
+      const res = await httpFetch(`${API}/cases/mi/${tab.id}/convert`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ target }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Conversion failed')
+      setMiTabs(prev => prev.map((t, i) => i === activeMiTab
+        ? { ...t, converted_to_case_id: data.case_id, converted_to_type: target, converted_at: new Date().toISOString() }
+        : t))
+      setSavedMsg(`Converted to ${String(target).toUpperCase()} Case #${data.case_id}`)
+      setTimeout(() => setSavedMsg(''), 2500)
+    } catch (err) { toast.error(err.message) }
   }
 
   function selectedTemplate() {
@@ -380,7 +436,7 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
   const chosenTemplate = selectedTemplate()
 
   return (
-    <div className="cf-tab-pane">
+    <div id="tab-mi" className="cf-tab-pane">
       <div className="cf-section-header-row">
         <button className="cf-add-btn" onClick={addMITab}>+ Add MI</button>
         <button className="cf-open-btn" style={{ marginLeft: 8 }} onClick={openResponseBuilder}>Build MI Response</button>
@@ -398,6 +454,17 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
             ))}
           </div>
           <div className="cf-mi-panel">
+            {/* Sprint 2 #16 — off-label / solicited classification + promo review request */}
+            {miTabs[activeMiTab]?.id && (
+              <div style={{ marginBottom: 12 }}>
+                <MiApprovalPanel miTabId={miTabs[activeMiTab].id} mode="classification" onChange={loadMI} />
+              </div>
+            )}
+            {miTabs[activeMiTab]?.converted_to_case_id && (
+              <div className="cf-inline-note">
+                Converted to {String(miTabs[activeMiTab].converted_to_type || '').toUpperCase()} Case #{miTabs[activeMiTab].converted_to_case_id}
+              </div>
+            )}
             <div className="cf-form-grid">
               {[
                 { label: 'MI Category',          key: 'mi_category',           type: 'text' },
@@ -442,6 +509,8 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
               <CaseAssociatedDocs miTab={miTabs[activeMiTab]} token={token} />
             </div>
             <div className="cf-form-actions">
+              <button className="cf-open-btn" onClick={() => convertMI('ae')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to AE</button>
+              <button className="cf-open-btn" onClick={() => convertMI('pc')} disabled={!!miTabs[activeMiTab]?.converted_to_case_id}>Convert to PC</button>
               <button className="cf-delete-btn" onClick={deleteMITab}>Delete MI {activeMiTab + 1}</button>
               <button className="cf-save-btn" onClick={saveMI}>Save MI</button>
             </div>
@@ -479,6 +548,12 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
               {bodyHtml
                 ? <div className="cf-response-rich" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(bodyHtml) }} />
                 : r.response_text && <div className="cf-response-text">{r.response_text}</div>}
+              {/* Sprint 2 #17 — two-signer approval panel for this response */}
+              {!isVoided && !isSent && (
+                <div style={{ marginTop: 8 }}>
+                  <MiApprovalPanel responseId={r.id} mode="approval" onChange={loadMiResponses} />
+                </div>
+              )}
               {!isVoided && !isSent && (
                 <div className="cf-mi-transition-row">
                   {st === 'DRAFT' && <>
@@ -683,6 +758,26 @@ export default function CaseMITab({ id, token, headers, setSavedMsg, onCountChan
             </div>
           </div>
         </div>
+      )}
+
+      {/* B1 fix — admin-configured MI fields render here, scoped to displayTab='mi' */}
+      {formConfig && Array.isArray(formConfig.sections) && (
+        <DynamicFieldsSection
+          sections={formConfig.sections}
+          values={dynFieldValues || {}}
+          onChange={setDynFieldValues || (() => {})}
+          onSave={saveDynFields || (() => {})}
+          saving={dynFieldSaving}
+          rules={formConfig.rules || []}
+          errors={dynFieldErrors || {}}
+          caseId={ctx?.caseId}
+          caseStatus={ctx?.caseStatus}
+          caseSection="mi"
+          presence={ctx?.presence}
+          currentUserId={ctx?.currentUserId}
+          caseType={caseType}
+          displayTab="mi"
+        />
       )}
     </div>
   )

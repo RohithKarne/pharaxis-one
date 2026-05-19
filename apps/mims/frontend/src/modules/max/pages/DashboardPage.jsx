@@ -38,9 +38,94 @@ function normalizeSectionPrefs(value, canSeeObservability) {
   return next
 }
 
+function roleLabel(role) {
+  if (role === 'admin' || role === 'superadmin') return 'Administrator'
+  if (role === 'reviewer') return 'Reviewer'
+  if (role === 'content_manager') return 'Content Manager'
+  return 'Case Operator'
+}
+
+function buildPrimaryStats({ user, summary, sessions }) {
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
+  if (isAdmin) {
+    return [
+      { label: 'Total Cases', value: Number(summary.stats.total_cases || 0), hint: 'All active records', tone: '' },
+      { label: 'Needs Triage', value: Number(summary.stats.unassigned_cases || 0), hint: 'Waiting for ownership', tone: 'warning' },
+      { label: 'Pending Approval', value: Number(summary.mi_stats.pending_approval || 0), hint: 'Awaiting review sign-off', tone: 'accent' },
+      { label: 'Active Sessions', value: Number(sessions.activeSessionCount || 0), hint: 'Logged-in user sessions', tone: 'success' },
+    ]
+  }
+  return [
+    { label: 'Open Cases', value: Number(summary.stats.open_cases || 0), hint: 'Current work queue', tone: 'accent' },
+    { label: 'My Cases', value: Number(summary.stats.my_cases || 0), hint: 'Assigned to you', tone: 'warning' },
+    { label: 'Responses In Progress', value: Number(summary.mi_stats.pending_responses || 0), hint: 'Draft or ready responses', tone: '' },
+    { label: 'Sent Today', value: Number(summary.mi_stats.sent_today || 0), hint: 'Completed outbound responses', tone: 'success' },
+  ]
+}
+
+function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
+  if (isAdmin) {
+    return [
+      {
+        title: 'Unassigned intake',
+        value: Number(summary.stats.unassigned_cases || 0),
+        body: 'Claim new work quickly so the queue does not age without an owner.',
+        actionLabel: 'Open unassigned queue',
+        actionTo: '/cases?tab=unassigned',
+        tone: 'warning',
+      },
+      {
+        title: 'Approval queue',
+        value: Number(summary.mi_stats.pending_approval || 0),
+        body: 'Keep approval bottlenecks visible before they turn into SLA misses.',
+        actionLabel: 'Open response log',
+        actionTo: '/response-log',
+        tone: 'accent',
+      },
+      {
+        title: canSeeObservability ? 'Platform watch' : 'Session watch',
+        value: canSeeObservability ? Number(summary.alerts.length || 0) : Number(sessions.activeSessionCount || 0),
+        body: canSeeObservability
+          ? 'Review alerts, errors, and service health from the same working session.'
+          : 'Review active sessions and confirm access is healthy for today’s work.',
+        actionLabel: canSeeObservability ? 'Open exception logs' : 'Open session management',
+        actionTo: canSeeObservability ? '/exceptions' : '/session-management',
+        tone: canSeeObservability ? 'danger' : 'success',
+      },
+    ]
+  }
+  return [
+    {
+      title: 'My queue',
+      value: Number(summary.stats.my_cases || 0),
+      body: 'Jump directly into the cases already assigned to you.',
+      actionLabel: 'Open my cases',
+      actionTo: '/cases?tab=my',
+      tone: 'accent',
+    },
+    {
+      title: 'Response work',
+      value: Number(summary.mi_stats.pending_responses || 0),
+      body: 'Track draft and ready responses without searching through the full queue.',
+      actionLabel: 'Open response log',
+      actionTo: '/response-log',
+      tone: 'warning',
+    },
+    {
+      title: 'Session health',
+      value: Number(sessions.activeSessionCount || 0),
+      body: 'Confirm the current session window before longer drafting or review work.',
+      actionLabel: 'Open session management',
+      actionTo: '/session-management',
+      tone: 'success',
+    },
+  ]
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const { token, user } = useAuth()
+  const { token, user, orgName, siteName } = useAuth()
   const canSeeObservability = user?.role === 'admin' || user?.role === 'superadmin'
   const headers = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
@@ -160,6 +245,9 @@ export default function DashboardPage() {
   }
 
   const firstName = user?.name?.split(' ')[0] || 'there'
+  const roleName = roleLabel(user?.role)
+  const primaryStats = buildPrimaryStats({ user, summary, sessions })
+  const focusCards = buildFocusCards({ user, summary, sessions, canSeeObservability })
   const visibleOptionalSections =
     Number(sectionPrefs.miResponseActivity) +
     Number(sectionPrefs.observabilitySnapshot && canSeeObservability) +
@@ -175,9 +263,20 @@ export default function DashboardPage() {
     <MIMSLayout showStatStrip={false} bodyClassName="mims-home-page-body">
       <div className="mims-home-wrap">
         <div className="mims-home-hero">
-          <div>
+          <div className="mims-home-hero-copy">
+            <div className="mims-home-eyebrow">{roleName} Workspace</div>
             <h1>Welcome back, {firstName}</h1>
-            <p>Home dashboard with case stats, recent activity, alerts, and session status.</p>
+            <p>
+              {canSeeObservability
+                ? 'Track work ownership, approvals, alerts, and platform health from one operating view.'
+                : 'See your active workload, response activity, and session status without jumping across modules.'}
+            </p>
+            <div className="mims-home-meta">
+              <span className="mims-home-meta-pill strong">{roleName}</span>
+              {orgName && <span className="mims-home-meta-pill">{orgName}</span>}
+              {siteName && <span className="mims-home-meta-pill">{siteName}</span>}
+              <span className="mims-home-meta-pill">{Number(sessions.activeSessionCount || 0)} active session{Number(sessions.activeSessionCount || 0) === 1 ? '' : 's'}</span>
+            </div>
           </div>
           <div className="mims-home-hero-actions">
             <button className="btn btn-outline" onClick={loadDashboard} disabled={loading}>Refresh</button>
@@ -185,6 +284,23 @@ export default function DashboardPage() {
             <button className="btn btn-primary" onClick={() => navigate('/cases')}>Open Case Management</button>
           </div>
         </div>
+
+        <section className="mims-home-focus-grid" aria-label="Today focus">
+          {focusCards.map((item) => (
+            <article key={item.title} className={`mims-home-focus-card ${item.tone || ''}`}>
+              <div className="mims-home-focus-top">
+                <div>
+                  <div className="mims-home-focus-title">{item.title}</div>
+                  <div className="mims-home-focus-body">{item.body}</div>
+                </div>
+                <strong>{item.value}</strong>
+              </div>
+              <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={() => navigate(item.actionTo)}>
+                {item.actionLabel}
+              </button>
+            </article>
+          ))}
+        </section>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -202,26 +318,13 @@ export default function DashboardPage() {
         {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
 
         <div className="mims-home-stats-grid">
-          <article className="mims-home-stat-card">
-            <span>Total Cases</span>
-            <strong>{Number(summary.stats.total_cases || 0)}</strong>
-            <small>All active cases</small>
-          </article>
-          <article className="mims-home-stat-card accent">
-            <span>Open Cases</span>
-            <strong>{Number(summary.stats.open_cases || 0)}</strong>
-            <small>Needs action</small>
-          </article>
-          <article className="mims-home-stat-card warning">
-            <span>My Cases</span>
-            <strong>{Number(summary.stats.my_cases || 0)}</strong>
-            <small>Assigned to you</small>
-          </article>
-          <article className="mims-home-stat-card success">
-            <span>Unassigned</span>
-            <strong>{Number(summary.stats.unassigned_cases || 0)}</strong>
-            <small>Awaiting owner</small>
-          </article>
+          {primaryStats.map((card) => (
+            <article key={card.label} className={`mims-home-stat-card ${card.tone || ''}`}>
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+              <small>{card.hint}</small>
+            </article>
+          ))}
         </div>
 
         {sectionPrefs.miResponseActivity && (
@@ -440,7 +543,7 @@ export default function DashboardPage() {
                   <input type="checkbox" checked={sectionPrefs.observabilitySnapshot} onChange={(e) => setSectionEnabled('observabilitySnapshot', e.target.checked)} />
                   <span>
                     <strong style={{ display: 'block' }}>Observability Snapshot</strong>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Technical health metrics for admins and superadmins.</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Technical health metrics for administrators handling operations and support.</span>
                   </span>
                 </label>
               )}
@@ -471,7 +574,7 @@ export default function DashboardPage() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
                 <button className="btn btn-outline" onClick={() => setSectionPrefs(normalizeSectionPrefs({}, canSeeObservability))}>
-                  Reset To Default
+                  Reset To Minimal
                 </button>
                 <button className="btn btn-primary" onClick={() => setPrefsOpen(false)}>
                   Done

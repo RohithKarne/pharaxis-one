@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../../shared/context/AuthContext'
-import { setSessionExpiryHandler } from '../../shared/api/httpFetch'
+import { setAuthIssueHandler, setSessionExpiryHandler } from '../../shared/api/httpFetch'
 import ProtectedRoute from '../../shared/components/ProtectedRoute'
 import ModuleAccessGuard from '../../shared/components/ModuleAccessGuard'
 import { useIdleTimer } from '../../shared/hooks/useIdleTimer'
@@ -9,6 +9,7 @@ import SessionTimeoutModal from '../../shared/components/SessionTimeoutModal'
 import ToastContainer from '../../shared/components/ToastContainer'
 import ConfirmModal from '../../shared/components/ConfirmModal'
 import ExceptionToast from '../../shared/components/ExceptionToast'
+import adminRouteMap from '../../shared/config/adminRouteMap.json'
 
 // ── Eagerly loaded — part of the critical navigation path ────────────────────
 import LoginPage            from './pages/LoginPage'
@@ -60,19 +61,121 @@ function AdminRoleGuard({ children }) {
   return <Navigate to="/no-access" replace />
 }
 
+function LegacyAdminConsoleRedirect({ to }) {
+  return <Navigate to={to} replace />
+}
+
+function AuthIssueBanner({ issue, onDismiss, onAction }) {
+  if (!issue) return null
+  const tones = {
+    warning: { border: '#facc15', background: '#fef3c7', color: '#854d0e', accent: '#ca8a04' },
+    info: { border: '#93c5fd', background: '#eff6ff', color: '#1d4ed8', accent: '#2563eb' },
+    danger: { border: '#fca5a5', background: '#fef2f2', color: '#b91c1c', accent: '#dc2626' },
+  }
+  const palette = tones[issue.tone] || tones.warning
+  return (
+    <div style={{ margin: '0 16px 12px', border: `1px solid ${palette.border}`, background: palette.background, color: palette.color, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, boxShadow: '0 8px 18px rgba(15, 23, 42, 0.06)' }}>
+      <div style={{ width: 28, height: 28, borderRadius: 999, background: palette.accent, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 700, lineHeight: 1, flexShrink: 0 }}>!</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>{issue.title || 'Access warning'}</div>
+        <div style={{ fontSize: 13, lineHeight: 1.45 }}>{issue.message}</div>
+        {issue.url && <div style={{ fontSize: 11, marginTop: 6, opacity: 0.85 }}>Request: {issue.url}</div>}
+        {issue.actionLabel && onAction && (
+          <button
+            type="button"
+            onClick={onAction}
+            style={{ marginTop: 10, border: `1px solid ${palette.border}`, background: '#fff', color: palette.color, borderRadius: 999, padding: '6px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
+            {issue.actionLabel}
+          </button>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        style={{ border: 'none', background: 'transparent', color: palette.color, fontSize: 18, cursor: 'pointer', lineHeight: 1 }}
+        aria-label="Dismiss auth warning"
+      >
+        ×
+      </button>
+    </div>
+  )
+}
+
+function buildAuthIssuePresentation(detail, canOpenAdmin) {
+  switch (detail?.error_code) {
+    case 'ORG_CONTEXT_MISSING':
+      return {
+        title: 'Organisation context missing',
+        message: 'Your session is still active, but this request has no active organisation attached. Review access or restore your working organisation before continuing.',
+        tone: 'warning',
+        actionLabel: canOpenAdmin ? 'Open MIMS Admin' : 'Open dashboard',
+        actionTo: canOpenAdmin ? '/mims-admin' : '/dashboard',
+      }
+    case 'ORG_ACCESS_EXPIRED':
+      return {
+        title: 'Organisation access expired',
+        message: 'You are still signed in, but organisation access for this action has expired. Restore access before working further in this area.',
+        tone: 'danger',
+        actionLabel: canOpenAdmin ? 'Review access in MIMS Admin' : 'Open session management',
+        actionTo: canOpenAdmin ? '/mims-admin' : '/session-management',
+      }
+    case 'ROLE_FORBIDDEN':
+      return {
+        title: 'This area is restricted',
+        message: 'You are signed in, but your current role does not allow this action. The session remains active.',
+        tone: 'info',
+        actionLabel: 'Return to dashboard',
+        actionTo: '/dashboard',
+      }
+    case 'AUTH_SERVICE_UNAVAILABLE':
+      return {
+        title: 'Session check temporarily unavailable',
+        message: 'Authentication services are temporarily unavailable. Wait a moment and retry instead of signing out.',
+        tone: 'warning',
+        actionLabel: 'Open session management',
+        actionTo: '/session-management',
+      }
+    default:
+      return {
+        title: 'Request blocked',
+        message: detail?.error || 'This request was blocked, but your session was kept active.',
+        tone: 'warning',
+        actionLabel: 'Open dashboard',
+        actionTo: '/dashboard',
+      }
+  }
+}
+
 function AppRoutes() {
-  const { user, sessionTimeout, logout } = useAuth()
+  const { user, sessionTimeout, logout, hasModuleAccess } = useAuth()
   const navigate = useNavigate()
   const [showWarning, setShowWarning]     = useState(false)
   const [warnSeconds, setWarnSeconds]     = useState(120)
+  const [authIssue, setAuthIssue]         = useState(null)
 
   useEffect(() => {
     setSessionExpiryHandler(async () => {
       await logout()
       navigate('/login', { replace: true })
     })
-    return () => setSessionExpiryHandler(null)
-  }, [logout, navigate])
+    setAuthIssueHandler((detail) => {
+      const presentation = buildAuthIssuePresentation(detail, hasModuleAccess?.('admin_console'))
+      setAuthIssue({
+        url: detail?.url || '',
+        title: presentation.title,
+        message: presentation.message,
+        tone: presentation.tone,
+        actionLabel: presentation.actionLabel,
+        actionTo: presentation.actionTo,
+        error_code: detail?.error_code || '',
+      })
+    })
+    return () => {
+      setSessionExpiryHandler(null)
+      setAuthIssueHandler(null)
+    }
+  }, [hasModuleAccess, logout, navigate])
 
   const { reset } = useIdleTimer({
     timeoutMinutes: user ? sessionTimeout : 0,
@@ -91,6 +194,14 @@ function AppRoutes() {
       <ToastContainer />
       <ConfirmModal />
       <ExceptionToast />
+      <AuthIssueBanner
+        issue={authIssue}
+        onDismiss={() => setAuthIssue(null)}
+        onAction={authIssue?.actionTo ? () => {
+          navigate(authIssue.actionTo)
+          setAuthIssue(null)
+        } : null}
+      />
       <Suspense fallback={<PageLoader />}>
       <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
@@ -99,6 +210,9 @@ function AppRoutes() {
           <Route path="/content/login" element={<LoginPage moduleMode="content" />} />
           <Route path="/reports/login" element={<LoginPage moduleMode="reports" />} />
           <Route path="/auth/sso-complete" element={<SsoCompletePage />} />
+          {Object.entries(adminRouteMap.legacyAdminRoutes).map(([path, to]) => (
+            <Route key={path} path={path} element={<LegacyAdminConsoleRedirect to={to} />} />
+          ))}
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">

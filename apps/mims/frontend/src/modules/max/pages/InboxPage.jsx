@@ -48,7 +48,7 @@ function getEmailLinkLabel(href) {
 
 function compactEmailBodyText(body) {
   const urlPattern = new RegExp(EMAIL_URL_PATTERN.source, 'gi')
-  return String(body || '')
+  return normalizeEmailBodyText(body)
     .replace(/\r\n/g, '\n')
     .replace(urlPattern, rawUrl => {
       const { href, suffix } = normalizeEmailUrl(rawUrl)
@@ -57,6 +57,21 @@ function compactEmailBodyText(body) {
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+function decodeEmailEntities(text) {
+  if (typeof document === 'undefined') return String(text || '')
+  const el = document.createElement('textarea')
+  el.innerHTML = String(text || '')
+  return el.value
+}
+
+function normalizeEmailBodyText(body) {
+  return decodeEmailEntities(body)
+    .replace(/=\r?\n/g, '')
+    .replace(/=3D/gi, '=')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\r\n/g, '\n')
 }
 
 function renderEmailBodySegments(text) {
@@ -96,9 +111,9 @@ function renderEmailBodySegments(text) {
 }
 
 function EmailBody({ body }) {
-  const normalized = String(body || '')
-    .replace(/\r\n/g, '\n')
+  const normalized = normalizeEmailBodyText(body)
     .replace(/[ \t]+\n/g, '\n')
+    .replace(/[ \t]{3,}/g, ' ')
     .trim()
 
   if (!normalized) {

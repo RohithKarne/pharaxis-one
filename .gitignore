@@ -33,6 +33,13 @@ uploads/
 # Runtime outputs
 test-results/
 playwright-report/
+.playwright-cli/
+.claude/worktrees/
+tasks/todo.md
+
+# Local generated backup/archive artifacts
+apps/**/backend/scripts/cleanup-backups/
+apps/**/backend/scripts/novartis-full-scope-backups/
 
 # Runtime storage/data artifacts
 apps/**/backend/storage/email_attachments/

@@ -47,6 +47,12 @@ const LOGIN_SWITCHES = [
   { key: 'reports', label: 'Reports', to: '/reports/login' },
 ]
 
+const LOGIN_PROGRESS_STEPS = [
+  { key: 'identify', label: 'Identify' },
+  { key: 'authenticate', label: 'Authenticate' },
+  { key: 'verify', label: 'Verify' },
+]
+
 export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   const { login } = useAuth()
   const navigate = useNavigate()
@@ -113,6 +119,22 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   function hasMimsAppAccess(data) {
     return hasModuleAccess(data, 'mims_core')
   }
+
+  const progressStep = twoFactor ? 3 : (loginStage === 'password' || loginStage === 'choice' ? 2 : 1)
+  const progressTitle = twoFactor
+    ? 'Complete secure verification'
+    : loginStage === 'choice'
+      ? 'Choose the right sign-in path'
+      : loginStage === 'password'
+        ? 'Enter password for this account'
+        : 'Identify your account first'
+  const progressMessage = twoFactor
+    ? 'Password check is complete. Finish verification to open your workspace.'
+    : loginStage === 'choice'
+      ? 'Your account supports multiple sign-in providers. Pick the approved route below.'
+      : loginStage === 'password'
+        ? `Continue as ${loginForm.email || 'this account'} and enter the password for ${modeConfig.title}.`
+        : `We will check the access path for ${modeConfig.title} before asking for a password or SSO verification.`
 
   function findFallbackAdminDestination(data) {
     if (isAdminUser(data) && hasModuleAccess(data, 'admin_console')) return MODULE_LOGIN_CONFIG.admin.destination
@@ -491,9 +513,31 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
             {modeConfig.message}
           </div>
 
-            <form onSubmit={handleLogin}>
+          <div className="login-progress-panel">
+            <div className="login-progress-header">
+              <div>
+                <div className="login-progress-kicker">Step {progressStep} of 3</div>
+                <div className="login-progress-title">{progressTitle}</div>
+              </div>
+              <div className="login-progress-target">{modeConfig.title}</div>
+            </div>
+            <div className="login-progress-copy">{progressMessage}</div>
+            <div className="login-progress-steps" aria-hidden="true">
+              {LOGIN_PROGRESS_STEPS.map((step, index) => {
+                const state = index + 1 < progressStep ? 'complete' : index + 1 === progressStep ? 'active' : 'idle'
+                return (
+                  <div key={step.key} className={`login-progress-step ${state}`}>
+                    <span>{index + 1}</span>
+                    <strong>{step.label}</strong>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <form onSubmit={handleLogin}>
               <div className="form-group">
-                <label>Email / Username</label>
+                <label>Work Email / Username</label>
                 <input
                   className="form-control"
                   type="text"
@@ -513,32 +557,39 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
               </div>
 
               {loginStage === 'password' && !twoFactor && (
-                <div className="form-group">
-                  <label>Password</label>
-                  <input
-                    className="form-control"
-                    type="password"
-                    placeholder="Enter your password"
-                    required
-                    value={loginForm.password}
-                    onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))}
-                  />
-                  <div style={{ marginTop: 8, textAlign: 'right' }}>
-                    <button
-                      type="button"
-                      className="btn btn-link"
-                      style={{ padding: 0, fontSize: 12 }}
-                      onClick={() => {
-                        resetTwoFactorState()
-                        setForgotOpen(true)
-                        setForgotStep('email')
-                        setForgotForm(f => ({ ...f, email: loginForm.email }))
-                      }}
-                    >
-                      Forgot Password?
-                    </button>
+                <>
+                  <div className="login-stage-card">
+                    <div className="login-stage-card-label">Continuing as</div>
+                    <div className="login-stage-card-value">{loginForm.email}</div>
+                    <div className="login-stage-card-copy">Enter the password for this account to continue into {modeConfig.title}.</div>
                   </div>
-                </div>
+                  <div className="form-group">
+                    <label>Password</label>
+                    <input
+                      className="form-control"
+                      type="password"
+                      placeholder="Enter your password"
+                      required
+                      value={loginForm.password}
+                      onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))}
+                    />
+                    <div style={{ marginTop: 8, textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        className="btn btn-link"
+                        style={{ padding: 0, fontSize: 12 }}
+                        onClick={() => {
+                          resetTwoFactorState()
+                          setForgotOpen(true)
+                          setForgotStep('email')
+                          setForgotForm(f => ({ ...f, email: loginForm.email }))
+                        }}
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
 
               {loginStage === 'choice' && (
@@ -699,7 +750,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
 
               {!twoFactor && loginStage !== 'choice' && (
                 <button className="btn btn-primary btn-block mt-8" type="submit" disabled={loading}>
-                  {loading ? (loginStage === 'email' ? 'Checking...' : 'Signing in...') : (loginStage === 'email' ? 'Submit' : 'Sign In')}
+                  {loading ? (loginStage === 'email' ? 'Checking access...' : 'Signing in...') : (loginStage === 'email' ? 'Continue' : 'Sign In')}
                 </button>
               )}
               {!twoFactor && loginStage === 'password' && (
@@ -728,7 +779,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                     onChange={e => setForgotForm(f => ({ ...f, email: e.target.value }))}
                   />
                   <button className="btn btn-primary btn-block mt-8" type="button" onClick={sendForgotPasswordCode} disabled={loading}>
-                    {loading ? 'Sending...' : 'Send 2FA Code'}
+                    {loading ? 'Sending...' : 'Send Verification Code'}
                   </button>
                 </>
               )}

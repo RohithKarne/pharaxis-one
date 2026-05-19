@@ -11,6 +11,13 @@ import ValidationRules from './ValidationRules'
 import GridTemplates from './GridTemplates'
 import CaseActionsAdmin from './CaseActionsAdmin'
 import ComplianceAdmin from './ComplianceAdmin'
+// Sprint 2 Week 1 admin surfaces
+import DocumentTypesAdmin from './DocumentTypesAdmin'
+import ComplaintCodesAdmin from './ComplaintCodesAdmin'
+import LotMasterAdmin from './LotMasterAdmin'
+import FieldActionsAdmin from './FieldActionsAdmin'
+import CapaAdmin from './CapaAdmin'
+import PiiRedactionRules from './PiiRedactionRules'
 import GroupSecurity from './GroupSecurity'
 import LoggedInUsers from './LoggedInUsers'
 import ReportsAccess from './ReportsAccess'
@@ -53,6 +60,13 @@ export default function System({ selectedItem }) {
   if (selectedItem === 'sys-setup-grid-templates')  return <GridTemplates />
   if (selectedItem === 'sys-setup-case-actions')    return <CaseActionsAdmin />
   if (selectedItem === 'sys-setup-compliance')      return <ComplianceAdmin />
+  // Sprint 2 Week 1 admin surfaces
+  if (selectedItem === 'sys-setup-document-types')  return <DocumentTypesAdmin />
+  if (selectedItem === 'sys-setup-complaint-codes') return <ComplaintCodesAdmin />
+  if (selectedItem === 'sys-setup-lot-master')      return <LotMasterAdmin />
+  if (selectedItem === 'sys-setup-field-actions')   return <FieldActionsAdmin />
+  if (selectedItem === 'sys-setup-capa')            return <CapaAdmin />
+  if (selectedItem === 'sys-setup-pii-redaction')   return <PiiRedactionRules />
   if (selectedItem?.startsWith('sys-setup-int-'))   return <SetupIntegrations selectedItem={selectedItem} />
   if (selectedItem === 'sys-system-params')         return <SystemParameters />
   if (selectedItem === 'sys-reports-access')        return <ReportsAccess />

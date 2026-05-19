@@ -63,6 +63,42 @@ function hasSystemPermission(systemOptions, value) {
   return Boolean(systemOptions?.[mapping.section]?.[mapping.option])
 }
 
+function hasSystemSectionPermission(systemOptions, section, option) {
+  if (!systemOptions) return false
+  return Boolean(systemOptions?.[section]?.[option])
+}
+
+function isSystemItemAllowed(effectiveAccess, value) {
+  if (!value) return true
+  if (effectiveAccess?.unrestricted || !effectiveAccess?.system_options) return true
+  return hasSystemPermission(effectiveAccess.system_options, value)
+}
+
+function isAdminTabAllowed(tabKey, effectiveAccess) {
+  if (effectiveAccess?.unrestricted || !effectiveAccess?.system_options) return true
+  const options = effectiveAccess.system_options
+  if (tabKey === 'dashboard' || tabKey === 'help') return true
+  if (tabKey === 'service-log' || tabKey === 'system-activity' || tabKey === 'service-dashboard') {
+    return hasSystemSectionPermission(options, 'general', 'service_configurations')
+  }
+  if (tabKey === 'system') return true
+  return true
+}
+
+function AdminAccessDenied({ label = 'this admin screen' }) {
+  return (
+    <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 32 }}>
+      <div style={{ maxWidth: 480, textAlign: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 28 }}>
+        <div style={{ fontSize: 34, marginBottom: 10 }}>🚫</div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 18, color: 'var(--text-primary)' }}>Access not available</h2>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>
+          Your security group does not allow access to {label}. Ask an administrator to update Group Security.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function filterSystemNav(nav, systemOptions) {
   return nav.reduce((acc, item) => {
     if (item.children) {
@@ -564,12 +600,13 @@ export default function MIMSAdminShell() {
 function MIMSAdminShellInner() {
   const { token, user } = useAuth()
   const location = useLocation()
+  const initialTablesItem = new URLSearchParams(location.search).get('tables') || ''
   const initialSystemItem = new URLSearchParams(location.search).get('system') || ''
-  const [activeTab,      setActiveTab]      = useState(initialSystemItem ? 'system' : 'dashboard')
+  const [activeTab,      setActiveTab]      = useState(initialSystemItem ? 'system' : initialTablesItem ? 'tables' : 'dashboard')
   const [configItem,     setConfigItem]     = useState('')
   const [escalationItem, setEscalationItem] = useState('')
   const [documentsItem,  setDocumentsItem]  = useState('')
-  const [tablesItem,     setTablesItem]     = useState('')
+  const [tablesItem,     setTablesItem]     = useState(initialTablesItem)
   const [systemItem,     setSystemItem]     = useState(initialSystemItem)
   const [helpItem,       setHelpItem]       = useState('')
   const [effectiveAccess, setEffectiveAccess] = useState({ unrestricted: true, system_options: null })
@@ -598,10 +635,18 @@ function MIMSAdminShellInner() {
   }, [loadEffectiveAccess])
 
   useEffect(() => {
-    const nextSystemItem = new URLSearchParams(location.search).get('system') || ''
-    if (!nextSystemItem) return
-    setSystemItem(nextSystemItem)
-    setActiveTab('system')
+    const params = new URLSearchParams(location.search)
+    const nextSystemItem = params.get('system') || ''
+    const nextTablesItem = params.get('tables') || ''
+    if (nextSystemItem) {
+      setSystemItem(nextSystemItem)
+      setActiveTab('system')
+      return
+    }
+    if (nextTablesItem) {
+      setTablesItem(nextTablesItem)
+      setActiveTab('tables')
+    }
   }, [location.search])
 
   function handleConfigSelect(value) {
@@ -638,16 +683,24 @@ function MIMSAdminShellInner() {
   const systemNav = effectiveAccess?.unrestricted || !effectiveAccess?.system_options
     ? SYSTEM_NAV
     : filterSystemNav(SYSTEM_NAV, effectiveAccess.system_options)
+  const visibleTabs = TABS.filter(t => {
+    if (t.key === 'system') return systemNav.length > 0
+    return isAdminTabAllowed(t.key, effectiveAccess)
+  })
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeTab === 'system' && systemNav.length === 0) setActiveTab('dashboard')
   }, [activeTab, systemNav.length])
 
+  useEffect(() => {
+    if (!visibleTabs.some(t => t.key === activeTab)) setActiveTab('dashboard')
+  }, [activeTab, visibleTabs])
+
   return (
     <div className="mims-admin-shell">
       <div className="mims-admin-topnav">
-        {TABS.filter(t => t.key !== 'system' || systemNav.length > 0).map(t =>
+        {visibleTabs.map(t =>
           t.key === 'configuration' ? (
             <ConfigTab
               key="configuration"
@@ -715,7 +768,11 @@ function MIMSAdminShellInner() {
       </div>
 
       <div className="mims-admin-tab-content">
-        {activeTab === 'configuration'
+        {activeTab === 'system' && systemItem && !isSystemItemAllowed(effectiveAccess, systemItem)
+          ? <AdminAccessDenied label={helpLabelFor({ activeTab, systemItem }) || 'this system option'} />
+          : activeTab !== 'system' && !isAdminTabAllowed(activeTab, effectiveAccess)
+          ? <AdminAccessDenied label={TABS.find(t => t.key === activeTab)?.label || 'this admin tab'} />
+          : activeTab === 'configuration'
           ? <Configuration selectedItem={configItem} />
           : activeTab === 'escalation'
           ? <Escalation selectedItem={escalationItem} />

@@ -30,10 +30,15 @@ function NavItem({ to, icon, label, active, disabled, onClick, collapsed }) {
   )
 }
 
+function NavSection({ title, collapsed }) {
+  if (collapsed) return <div className="mims-sidenav-section-spacer" aria-hidden="true" />
+  return <div className="mims-sidenav-section">{title}</div>
+}
+
 export default function MIMSNavbar({ collapsed, onToggle }) {
   const navigate  = useNavigate()
   const location  = useLocation()
-  const { hasModuleAccess, user, token } = useAuth()
+  const { hasModuleAccess, hasSystemOption, hasCaseOption, user, token } = useAuth()
 
   const [caseMgmtOpen,  setCaseMgmtOpen]  = useState(false)
   const [utilitiesOpen, setUtilitiesOpen] = useState(false)
@@ -75,7 +80,10 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
 
   function canAccess(k)         { return hasModuleAccess(k) }
   function canAccessAny(...ks)  { return ks.some(k => hasModuleAccess(k)) }
+  function canUseSystem(section, option) { return hasSystemOption ? hasSystemOption(section, option) : true }
+  function canUseCase(section, option) { return hasCaseOption ? hasCaseOption(section, option) : true }
   const isAdmin = userRole === 'admin' || userRole === 'superadmin'
+  const canCreateCase = canAccessAny('mims_core', 'case_mgmt') && canUseCase('case_entry_options', 'add_new_case')
 
   return (
     <nav className={`mims-sidenav${collapsed ? ' collapsed' : ''}`}>
@@ -89,7 +97,8 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       <div className="mims-sidenav-divider" />
 
       {/* Home */}
-      <NavItem collapsed={collapsed} to="/dashboard" icon="⊞" label="Home" active={isActive('/dashboard')} />
+      <NavSection collapsed={collapsed} title="Work" />
+      <NavItem collapsed={collapsed} to="/dashboard" icon="⊞" label="Overview" active={isActive('/dashboard')} />
 
       {/* Inbox */}
       <NavItem collapsed={collapsed} to="/inbox" icon="📥" label="Inbox"
@@ -129,40 +138,11 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
         disabled={!canAccess('mims_core')} />
 
       {/* Utilities — accordion */}
-      <div className={`mims-sidenav-item${isUtilitiesActive() ? ' active' : ''}`}
-        title={collapsed ? 'Utilities' : undefined}
-        onClick={() => !collapsed && setUtilitiesOpen(o => !o)}>
-        <span className="mims-sidenav-icon">🔧</span>
-        {!collapsed && <span className="mims-sidenav-label">Utilities</span>}
-        {!collapsed && <span className="mims-sidenav-arrow">{utilitiesOpen ? '▴' : '▾'}</span>}
-      </div>
-      {utilitiesOpen && !collapsed && (
-        <div className="mims-sidenav-sub">
-          {canAccess('mims_core') && <Link to="/session-management" className={`mims-sidenav-sub-item${isActive('/session-management') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Session Management</Link>}
-          {canAccess('mims_core') && <Link to="/response-log" className={`mims-sidenav-sub-item${isActive('/response-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>📋 Response Log</Link>}
-          {isAdmin && <Link to="/response-error-log" className={`mims-sidenav-sub-item${isActive('/response-error-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Response Error Log</Link>}
-          {isAdmin && (processExplorerEnabled
-            ? <Link to="/process-explorer" className={`mims-sidenav-sub-item${isActive('/process-explorer') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Process Explorer</Link>
-            : <div className="mims-sidenav-sub-item coming-soon">Process Explorer <span className="mims-coming-tag">Off</span></div>
-          )}
-          {isAdmin && <Link to="/regression" className={`mims-sidenav-sub-item${isActive('/regression') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>🧪 Regression Testing</Link>}
-          {isAdmin && <Link to="/case-audit-trail" className={`mims-sidenav-sub-item${isActive('/case-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Case Audit Trail</Link>}
-          {isAdmin && <Link to="/cm-audit-trail" className={`mims-sidenav-sub-item${isActive('/cm-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>CM Audit Trail</Link>}
-          {isAdmin && <Link to="/transmission-error-log" className={`mims-sidenav-sub-item${isActive('/transmission-error-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Transmission Error Log</Link>}
-          {isAdmin && <Link to="/transmission-audit-trail" className={`mims-sidenav-sub-item${isActive('/transmission-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Transmission Audit Trail</Link>}
-          {userRole === 'superadmin' && <Link to="/copy-division" className={`mims-sidenav-sub-item${isActive('/copy-division') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Copy Division</Link>}
-          {isAdmin && <Link to="/dppr" className={`mims-sidenav-sub-item${isActive('/dppr') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>🔒 Data Privacy (DPPR)</Link>}
-          <div className="mims-sidenav-sub-divider" />
-          {COMING_SOON.map(item => (
-            <div key={item} className="mims-sidenav-sub-item coming-soon">{item} <span className="mims-coming-tag">Soon</span></div>
-          ))}
-        </div>
-      )}
-
-      {/* Transmissions */}
       <NavItem collapsed={collapsed} to="/transmissions" icon="📤" label="Transmissions"
         active={isActive('/transmissions')}
         disabled={!canAccess('transmissions')} />
+
+      <NavSection collapsed={collapsed} title="Knowledge" />
 
       {/* Browse Content */}
       <NavItem collapsed={collapsed} to="/browse-content" icon="📚" label="Browse Content"
@@ -201,6 +181,38 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
         </a>
       )}
 
+      <NavSection collapsed={collapsed} title="Control" />
+
+      <div className={`mims-sidenav-item${isUtilitiesActive() ? ' active' : ''}`}
+        title={collapsed ? 'Control Tools' : undefined}
+        onClick={() => !collapsed && setUtilitiesOpen(o => !o)}>
+        <span className="mims-sidenav-icon">🔧</span>
+        {!collapsed && <span className="mims-sidenav-label">Control Tools</span>}
+        {!collapsed && <span className="mims-sidenav-arrow">{utilitiesOpen ? '▴' : '▾'}</span>}
+      </div>
+      {utilitiesOpen && !collapsed && (
+        <div className="mims-sidenav-sub">
+          {canAccess('mims_core') && <Link to="/session-management" className={`mims-sidenav-sub-item${isActive('/session-management') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Session Management</Link>}
+          {canAccess('mims_core') && <Link to="/response-log" className={`mims-sidenav-sub-item${isActive('/response-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>📋 Response Log</Link>}
+          {isAdmin && canUseSystem('general', 'service_configurations') && <Link to="/response-error-log" className={`mims-sidenav-sub-item${isActive('/response-error-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Response Error Log</Link>}
+          {isAdmin && canUseSystem('general', 'service_configurations') && (processExplorerEnabled
+            ? <Link to="/process-explorer" className={`mims-sidenav-sub-item${isActive('/process-explorer') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Process Explorer</Link>
+            : <div className="mims-sidenav-sub-item coming-soon">Process Explorer <span className="mims-coming-tag">Off</span></div>
+          )}
+          {isAdmin && canUseSystem('general', 'service_configurations') && <Link to="/regression" className={`mims-sidenav-sub-item${isActive('/regression') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>🧪 Regression Testing</Link>}
+          {isAdmin && canUseSystem('general', 'view_data') && <Link to="/case-audit-trail" className={`mims-sidenav-sub-item${isActive('/case-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Case Audit Trail</Link>}
+          {isAdmin && canUseSystem('general', 'view_data') && <Link to="/cm-audit-trail" className={`mims-sidenav-sub-item${isActive('/cm-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>CM Audit Trail</Link>}
+          {isAdmin && canUseSystem('general', 'view_data') && <Link to="/transmission-error-log" className={`mims-sidenav-sub-item${isActive('/transmission-error-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Transmission Error Log</Link>}
+          {isAdmin && canUseSystem('general', 'view_data') && <Link to="/transmission-audit-trail" className={`mims-sidenav-sub-item${isActive('/transmission-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Transmission Audit Trail</Link>}
+          {userRole === 'superadmin' && canUseSystem('maintenance', 'copy_division') && <Link to="/copy-division" className={`mims-sidenav-sub-item${isActive('/copy-division') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Copy Division</Link>}
+          {isAdmin && canUseSystem('setup', 'data_protection_rules') && <Link to="/dppr" className={`mims-sidenav-sub-item${isActive('/dppr') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>🔒 Data Privacy (DPPR)</Link>}
+          <div className="mims-sidenav-sub-divider" />
+          {COMING_SOON.map(item => (
+            <div key={item} className="mims-sidenav-sub-item coming-soon">{item} <span className="mims-coming-tag">Soon</span></div>
+          ))}
+        </div>
+      )}
+
       {/* MIMS Admin */}
       {(isAdmin && canAccess('admin_console')) && (
         <a
@@ -223,7 +235,9 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       {/* + New Case */}
       <div className="mims-sidenav-new-case">
         <button className="mims-new-case-btn" style={{ width: collapsed ? 36 : '100%', padding: collapsed ? '6px 0' : '6px 16px', fontSize: collapsed ? 16 : 13 }}
-          onClick={() => navigate('/cases')}>
+          onClick={() => canCreateCase && navigate('/cases')}
+          disabled={!canCreateCase}
+          title={!canCreateCase ? 'Your security group does not allow Add New Case.' : undefined}>
           {collapsed ? '+' : '+ New Case'}
         </button>
       </div>

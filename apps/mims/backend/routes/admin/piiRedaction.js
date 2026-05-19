@@ -1,0 +1,11 @@
+'use strict';
+const express = require('express');
+const router = express.Router();
+const pool = require('../../database/db');
+const { authenticate, requireRole } = require('../../middleware/auth');
+const adminOnly = [authenticate, requireRole('admin', 'superadmin')];
+router.get('/admin/pii-redaction-rules', ...adminOnly, async (_req, res) => { try { const [rows] = await pool.execute('SELECT * FROM pii_redaction_rules ORDER BY COALESCE(ha_code, "GLOBAL"), field_path'); res.json({ rows }); } catch (err) { res.status(500).json({ error: err.message }); } });
+router.post('/admin/pii-redaction-rules', ...adminOnly, async (req, res) => { try { const b = req.body || {}; const [r] = await pool.execute('INSERT INTO pii_redaction_rules (ha_code, field_path, action, mask_pattern, generalization) VALUES (?, ?, ?, ?, ?)', [b.ha_code || null, b.field_path, b.action, b.mask_pattern || null, b.generalization || null]); res.status(201).json({ id: r.insertId }); } catch (err) { res.status(400).json({ error: err.message }); } });
+router.put('/admin/pii-redaction-rules/:id', ...adminOnly, async (req, res) => { try { const b = req.body || {}; await pool.execute('UPDATE pii_redaction_rules SET ha_code=?, field_path=?, action=?, mask_pattern=?, generalization=? WHERE id=?', [b.ha_code || null, b.field_path, b.action, b.mask_pattern || null, b.generalization || null, req.params.id]); res.json({ success: true }); } catch (err) { res.status(400).json({ error: err.message }); } });
+router.delete('/admin/pii-redaction-rules/:id', ...adminOnly, async (req, res) => { try { await pool.execute('DELETE FROM pii_redaction_rules WHERE id=?', [req.params.id]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: err.message }); } });
+module.exports = router;

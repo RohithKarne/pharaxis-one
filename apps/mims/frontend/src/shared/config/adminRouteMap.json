@@ -1,0 +1,40 @@
+{
+  "adminEntryRoutes": {
+    "adminHome": "/mims-admin",
+    "picklists": "/mims-admin?tables=tbl-general",
+    "customizeForms": "/mims-admin?system=sys-setup-customize-forms",
+    "mirIntegration": "/mims-admin?system=sys-setup-int-mir",
+    "crmIntegration": "/mims-admin?system=sys-setup-int-crm",
+    "contentIntegration": "/mims-admin?system=sys-setup-int-content",
+    "emirIntegration": "/mims-admin?system=sys-setup-int-emir",
+    "caseImport": "/mims-admin?system=sys-setup-int-case-import",
+    "viewData": "/mims-admin?system=sys-view-data",
+    "emailAccounts": "/mims-admin?system=sys-setup-email-accounts"
+  },
+  "legacyAdminRoutes": {
+    "/admin-console/picklists": "/mims-admin?tables=tbl-general",
+    "/admin-console/mir-int": "/mims-admin?system=sys-setup-int-mir",
+    "/admin-console/crm-int": "/mims-admin?system=sys-setup-int-crm",
+    "/admin-console/content-int": "/mims-admin?system=sys-setup-int-content",
+    "/admin-console/emir-int": "/mims-admin?system=sys-setup-int-emir",
+    "/admin-console/case-import": "/mims-admin?system=sys-setup-int-case-import"
+  },
+  "serviceConfigRoutes": {
+    "expiry-alerts": "/mims-admin",
+    "cm-expiry-alerts": "/browse-content",
+    "cm-module-lifecycle": "/browse-content",
+    "cm-content-auto-archive": "/browse-content",
+    "cm-review-reminders": "/browse-content",
+    "emir-poller": "/mims-admin?system=sys-setup-int-emir",
+    "scheduled-exports": "/reports",
+    "case-transmission-sla": "/transmissions",
+    "inbox-operational-sla": "/mims-admin",
+    "notification-delivery-retry": "/mims-admin",
+    "novartis-daily-simulation": "/mims-admin",
+    "extra-org-daily-simulation": "/mims-admin",
+    "login-audit-archive": "/mims-admin",
+    "session-cleanup": "/session-management",
+    "dppr-enforcement": "/dppr",
+    "email-worker": "/mims-admin?system=sys-setup-email-accounts"
+  }
+}

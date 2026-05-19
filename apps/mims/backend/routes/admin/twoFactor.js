@@ -7,6 +7,7 @@ const { authenticate, requireRole, requireOrg } = require('../../middleware/auth
 const { emitSuperadminAlert } = require('../../services/alertService');
 
 const router = express.Router();
+const adminTwoFactorAuth = [authenticate, requireRole('admin', 'superadmin'), requireOrg];
 
 function parseIntSafe(value, fallback) {
   const parsed = parseInt(value, 10);
@@ -35,10 +36,8 @@ function handleError(res, err) {
   return res.status(err.status || 500).json({ error: err.message || 'Server error.' });
 }
 
-router.use(authenticate, requireRole('admin', 'superadmin'), requireOrg);
-
 // GET /api/admin/two-factor/orgs
-router.get('/two-factor/orgs', async (req, res) => {
+router.get('/two-factor/orgs', ...adminTwoFactorAuth, async (req, res) => {
   try {
     const isSuperadmin = req.user.role === 'superadmin';
     const [orgs] = await pool.execute(
@@ -52,7 +51,7 @@ router.get('/two-factor/orgs', async (req, res) => {
 });
 
 // PUT /api/admin/two-factor/orgs/:id
-router.put('/two-factor/orgs/:id', async (req, res) => {
+router.put('/two-factor/orgs/:id', ...adminTwoFactorAuth, async (req, res) => {
   try {
     const scopeError = assertOrgScope(req, req.params.id);
     if (scopeError) throw scopeError;
@@ -102,7 +101,7 @@ router.put('/two-factor/orgs/:id', async (req, res) => {
 });
 
 // GET /api/admin/two-factor/config
-router.get('/two-factor/config', async (_req, res) => {
+router.get('/two-factor/config', ...adminTwoFactorAuth, async (_req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const config = rows.reduce((acc, row) => {
@@ -122,7 +121,7 @@ router.get('/two-factor/config', async (_req, res) => {
 });
 
 // PUT /api/admin/two-factor/config
-router.put('/two-factor/config', async (req, res) => {
+router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
   try {
     const {
       superadmin_session_timeout_minutes,
@@ -196,7 +195,7 @@ router.put('/two-factor/config', async (req, res) => {
 });
 
 // POST /api/admin/two-factor/config/test-email
-router.post('/two-factor/config/test-email', async (req, res) => {
+router.post('/two-factor/config/test-email', ...adminTwoFactorAuth, async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const currentConfig = rows.reduce((acc, row) => {

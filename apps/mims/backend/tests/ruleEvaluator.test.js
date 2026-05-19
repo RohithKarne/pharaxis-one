@@ -61,6 +61,22 @@ describe('case form rule evaluator', () => {
     ] }, { outcome: 'Recovered', serious: true })).toBe(true);
   });
 
+  test('compound NOT conditions invert the nested condition', () => {
+    expect(evaluateCondition({ not: { field: 'status', op: '=', value: 'Closed' } }, { status: 'Open' })).toBe(true);
+  });
+
+  test('nested AND/OR/NOT conditions evaluate predictably', () => {
+    expect(evaluateCondition({
+      and: [
+        { field: 'case_type', op: 'IN', value: ['AE', 'PC'] },
+        { or: [
+          { field: 'severity', op: '=', value: 'Critical' },
+          { not: { field: 'country', op: '=', value: 'US' } },
+        ] },
+      ],
+    }, { case_type: 'AE', severity: 'Normal', country: 'CA' })).toBe(true);
+  });
+
   test('visibility rule returns false when the condition does not match', () => {
     expect(evaluateRule({ rule_type: 'visibility', condition_json: { field: 'outcome', op: '=', value: 'Fatal' }, action_json: { action: 'show' } }, { outcome: 'Recovered' })).toBe(false);
   });

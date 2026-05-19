@@ -42,16 +42,23 @@ import CommentThread from './collab/CommentThread'
 import CloneCaseButton from './caseActions/CloneCaseButton'
 import RunMacroButton from './caseActions/RunMacroButton'
 import ESignModal from './compliance/ESignModal'
+import { CaseFieldProvider } from './WiredField'
+import HaClockBar from './HaClockBar'
+import SlaChip from './SlaChip'                       // Sprint 2 #11
+import CaseTimelineDrawer from './CaseTimelineDrawer' // Sprint 2 #13
+import CaseValidityPanel from './CaseValidityPanel'
 
 export default function CaseFormShell({
   caseId, caseStatus, caseType,
   sections = [],
+  showSectionRail = false,   // B20 — only show StickySectionNav for long-form pages
   requiredFields = [],
   payload = {},
   dueAt, dueLabel = 'Action required', urgencyMessage,
   transitions = [],
   onTransition,
   onCloned,
+  onValidityNavigate,
   children,
 }) {
   const { user } = useAuth()
@@ -59,10 +66,13 @@ export default function CaseFormShell({
   const t5 = useFeatureFlag('cf.theme5_realtime_collab')
   const t8 = useFeatureFlag('cf.theme8_smart_actions')
   const t9 = useFeatureFlag('cf.theme9_compliance')
+  const pvHaClocks = useFeatureFlag('cf.pv_ha_clocks')
+  const pvValidity = useFeatureFlag('cf.pv_case_validity')
 
   const presence = useCasePresence(caseId)
 
   const [commentsOpen, setCommentsOpen] = useState(false)
+  const [timelineOpen, setTimelineOpen] = useState(false) // Sprint 2 #13
   const [esign, setESign] = useState(null) // { transition, fromStatus, toStatus }
 
   function tryTransition(t) {
@@ -95,7 +105,14 @@ export default function CaseFormShell({
             <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10,
               background: 'var(--surface-alt,#fafafa)', color: 'var(--text-secondary)' }}>{caseStatus}</span>
           )}
+          {pvValidity && <CaseValidityPanel caseId={caseId} onNavigate={onValidityNavigate} />}
+          {/* Sprint 2 #11 — workflow SLA chip (current state + remaining time) */}
+          <SlaChip caseId={caseId} />
         </div>
+        {/* Sprint 2 #13 — chronology drawer toggle */}
+        <button onClick={() => setTimelineOpen(o => !o)} style={ghostBtn} title="View case chronology">
+          🕘 Timeline
+        </button>
         {t5 && presence.enabled && <PresenceIndicator users={presence.users} />}
         {t5 && <WatchersButton caseId={caseId} />}
         {t8 && <CloneCaseButton caseId={caseId} variant="ghost" onCloned={onCloned} />}
@@ -112,14 +129,34 @@ export default function CaseFormShell({
         )}
       </div>
 
+      {pvHaClocks && (
+        <div style={{ padding: '8px 14px 0' }}>
+          <HaClockBar caseId={caseId} />
+        </div>
+      )}
+
       {t4 && requiredFields.length > 0 && (
         <CompletenessBar fields={requiredFields} payload={payload} />
       )}
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {t4 && sections.length > 0 && <StickySectionNav sections={sections} />}
+        {/*
+          B20 — Only render the in-page StickySectionNav when the sections
+          passed in represent IN-PAGE anchors that are all mounted at once
+          (i.e. a long-form view). When sections represent top-level tabs
+          (only one mounted at a time), the existing horizontal tab bar above
+          already handles navigation; rendering the side rail there causes
+          scroll-spy to fail because the other anchors don't exist in the DOM.
+          Callers signal "long form" by passing `showSectionRail`.
+        */}
+        {t4 && showSectionRail && sections.length > 0 && <StickySectionNav sections={sections} />}
         <div style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
-          {children}
+          <CaseFieldProvider
+            caseId={caseId} caseStatus={caseStatus}
+            presence={presence} currentUserId={user?.userId}
+          >
+            {children}
+          </CaseFieldProvider>
         </div>
         {t5 && commentsOpen && (
           <aside style={drawer}>
@@ -141,6 +178,8 @@ export default function CaseFormShell({
         fromStatus={esign?.fromStatus} toStatus={esign?.toStatus}
         onSigned={onSigned}
       />
+      {/* Sprint 2 #13 — case timeline / chronology */}
+      <CaseTimelineDrawer caseId={caseId} open={timelineOpen} onClose={() => setTimelineOpen(false)} />
     </div>
   )
 }

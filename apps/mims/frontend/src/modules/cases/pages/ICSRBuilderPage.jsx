@@ -15,9 +15,12 @@ export default function ICSRBuilderPage() {
   const [active, setActive] = useState(0)
   const [data, setData] = useState(null)
   const [xml, setXml] = useState('')
+  const [redactedXml, setRedactedXml] = useState('')
+  const [xmlTab, setXmlTab] = useState('redacted')
   const [errors, setErrors] = useState([])
   const [message, setMessage] = useState('')
-  const [ackXml, setAckXml] = useState('')
+  const [ackXml, setAckXml] = useState({ ACK1: '', ACK2: '', ACK3: '' })
+  const [submissionType, setSubmissionType] = useState('initial')
   const [signature, setSignature] = useState({ password: '', reason: 'Regulatory ICSR submission' })
 
   async function load() {
@@ -27,8 +30,13 @@ export default function ICSRBuilderPage() {
   useEffect(() => { load() }, [id])
 
   async function previewXml() {
-    const res = await httpFetch(`/api/admin/icsr/${id}/xml`, { headers })
-    setXml(await res.text())
+    const [rawRes, redRes] = await Promise.all([
+      httpFetch(`/api/admin/icsr/${id}/xml`, { headers }),
+      httpFetch(`/api/admin/icsr/${id}/xml-preview-redacted`, { headers }),
+    ])
+    setXml(await rawRes.text())
+    const red = await redRes.json().catch(() => ({}))
+    setRedactedXml(red.redacted || '')
   }
   async function validate() {
     const res = await httpFetch(`/api/admin/icsr/${id}/validate`, { method: 'POST', headers })
@@ -45,11 +53,21 @@ export default function ICSRBuilderPage() {
     setMessage(submit.ok ? `Submitted to mock regulatory gateway${submitData.e_sign_manifest?.manifest_id ? ` · Manifest ${submitData.e_sign_manifest.manifest_id}` : ''}` : submitData.error)
     load()
   }
-  async function parseAck() {
-    const res = await httpFetch(`/api/admin/icsr/${id}/acknowledgements`, { method: 'POST', headers, body: JSON.stringify({ ack_xml: ackXml, gateway: report.receiver_id }) })
+  async function parseAck(level) {
+    const res = await httpFetch(`/api/admin/icsr/${id}/ack/${level}`, { method: 'POST', headers, body: JSON.stringify({ ack_xml: ackXml[level], gateway: report.receiver_id }) })
     const d = await res.json().catch(() => ({}))
-    setMessage(res.ok ? `ACK parsed: ${d.ack_status}` : d.error)
+    setMessage(res.ok ? `${level} parsed: ${d.ack_status}` : d.error)
     load()
+  }
+  async function createLifecycle(type) {
+    if (type === 'initial') return
+    if (!window.confirm(`Create ${type} submission? This creates a regulated child report.`)) return
+    const body = type === 'nullification' ? { reason: signature.reason, password: signature.password } : {}
+    const path = type === 'followup' ? 'follow-up' : type === 'amendment' ? 'amend' : 'nullify'
+    const res = await httpFetch(`/api/admin/icsr/${id}/${path}`, { method: 'POST', headers, body: JSON.stringify(body) })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok && data.id) navigate(`/icsr/${data.id}`)
+    else setMessage(data.error || 'Lifecycle action failed')
   }
 
   if (!data) return <MIMSLayout><div className="cf-form-loading">Loading ICSR...</div></MIMSLayout>
@@ -63,6 +81,12 @@ export default function ICSRBuilderPage() {
           <div><h1>ICSR Builder</h1><p>{report.sender_safety_report_id} · {report.receiver_id} · {report.status}</p></div>
           <div className="icsr-builder-actions">
             <button type="button" onClick={previewXml}>Generate XML</button>
+            <select value={submissionType} onChange={e => { setSubmissionType(e.target.value); createLifecycle(e.target.value) }}>
+              <option value="initial">Initial</option>
+              <option value="followup">Follow-up</option>
+              <option value="amendment">Amendment</option>
+              <option value="nullification">Nullification</option>
+            </select>
             <button type="button" onClick={validate}>Validate</button>
             <button type="button" onClick={lockSubmit}>Lock + Submit</button>
           </div>
@@ -81,11 +105,19 @@ export default function ICSRBuilderPage() {
             </div>
             <div className="icsr-ack-box">
               <h3>Regulatory ACK Parser</h3>
-              <textarea value={ackXml} onChange={e => setAckXml(e.target.value)} rows={5} placeholder="Paste ACK01 / ACK02 XML here" />
-              <button type="button" onClick={parseAck}>Parse ACK + Update Status</button>
+              <div className="icsr-ack-lanes">
+                {['ACK1','ACK2','ACK3'].map(level => <div key={level} className="icsr-ack-lane">
+                  <strong>{level}</strong>
+                  <textarea value={ackXml[level]} onChange={e => setAckXml(p => ({ ...p, [level]: e.target.value }))} rows={4} placeholder={`Paste ${level} XML here`} />
+                  <button type="button" onClick={() => parseAck(level)}>Parse {level}</button>
+                </div>)}
+              </div>
             </div>
           </main>
-          <section className="icsr-xml-pane"><h3>XML Preview</h3><pre>{xml || 'Click Generate XML to preview E2B(R3).'}</pre></section>
+          <section className="icsr-xml-pane"><h3>XML Preview</h3>
+            <div className="icsr-xml-tabs"><button className={xmlTab === 'raw' ? 'active' : ''} onClick={() => setXmlTab('raw')}>Raw internal</button><button className={xmlTab === 'redacted' ? 'active' : ''} onClick={() => setXmlTab('redacted')}>Submitted redacted</button></div>
+            <pre>{(xmlTab === 'raw' ? xml : redactedXml) || 'Click Generate XML to preview E2B(R3).'}</pre>
+          </section>
         </div>
       </div>
     </MIMSLayout>

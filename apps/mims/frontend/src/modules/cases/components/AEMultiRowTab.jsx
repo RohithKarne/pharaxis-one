@@ -2,6 +2,7 @@ import { useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import SeriousnessChecklist from '../../../shared/components/SeriousnessChecklist'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -14,7 +15,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
     if (tabKey === 'lab-results')     return { test_name: '', result: '', unit: '', normal_range: '', test_date: '' }
     if (tabKey === 'medical-history') return { condition_name: '', start_date: '', end_date: '', is_ongoing: false, notes: '' }
     if (tabKey === 'product-info')    return { product_name: '', dose: '', dose_unit: '', route_of_admin: '', frequency: '', start_date: '', end_date: '', indication: '', is_suspect: true, is_concomitant: false }
-    if (tabKey === 'events')          return { event_description: '', outcome: '', start_date: '', end_date: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false }
+    if (tabKey === 'events')          return { event_description: '', outcome: 'unknown', start_date: '', end_date: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false, is_required_intervention: false, is_lab_abnormality: false }
     return {}
   }
   const [form, setForm] = useState(blankForm)
@@ -34,7 +35,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
     setSaving(true)
     try {
       const body = { ...form }
-      const boolCols = ['is_ongoing','is_suspect','is_concomitant','is_serious','is_death','is_life_threatening','is_hospitalization','is_disability','is_congenital_anomaly','is_other_medically_important']
+      const boolCols = ['is_ongoing','is_suspect','is_concomitant','is_serious','is_death','is_life_threatening','is_hospitalization','is_disability','is_congenital_anomaly','is_other_medically_important','is_required_intervention','is_lab_abnormality']
       boolCols.forEach(k => { if (typeof body[k] === 'boolean') body[k] = body[k] ? 1 : 0 })
       const res  = await httpFetch(postUrl(), { method: 'POST', headers, body: JSON.stringify(body) })
       const data = await res.json()
@@ -154,19 +155,13 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                 </>}
                 {tabKey === 'events' && <>
                   <div className="cf-form-field cf-form-field--full"><label>Event Description</label><textarea rows={2} value={form.event_description} onChange={e => set('event_description', e.target.value)} /></div>
-                  <div className="cf-form-field"><label>Outcome</label><input value={form.outcome} onChange={e => set('outcome', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Outcome</label><select value={form.outcome} onChange={e => set('outcome', e.target.value)}>
+                    <option value="recovered">Recovered</option><option value="recovering">Recovering</option><option value="not_recovered">Not recovered</option><option value="recovered_with_sequelae">Recovered with sequelae</option><option value="fatal">Fatal</option><option value="unknown">Unknown</option>
+                  </select></div>
                   <div className="cf-form-field"><label>Start Date</label><input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></div>
                   <div className="cf-form-field"><label>End Date</label><input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
-                  <div className="cf-form-field">
-                    <label style={{ fontWeight: 600, marginBottom: 4 }}>Seriousness Criteria</label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {[['is_serious','Serious'],['is_death','Death'],['is_life_threatening','Life-Threatening'],['is_hospitalization','Hospitalization'],['is_disability','Disability'],['is_congenital_anomaly','Congenital Anomaly'],['is_other_medically_important','Other Medically Important']].map(([k,l]) => (
-                        <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 'normal' }}>
-                          <input type="checkbox" checked={!!form[k]} onChange={e => set(k, e.target.checked)} />
-                          {l}
-                        </label>
-                      ))}
-                    </div>
+                  <div className="cf-form-field cf-form-field--full">
+                    <SeriousnessChecklist value={form} onChange={setForm} />
                   </div>
                 </>}
                 {tabKey === 'product-info' && <>

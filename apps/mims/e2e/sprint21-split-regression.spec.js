@@ -11,6 +11,7 @@
  *  6. 401 auto-logout — clearing token triggers redirect to /login
  */
 const { test, expect } = require('@playwright/test')
+const adminRouteMap = require('../frontend/src/shared/config/adminRouteMap.json')
 
 // ─── helpers (same pattern as admin-console.spec.js) ─────────────────────────
 
@@ -158,20 +159,16 @@ test.describe('Admin Console — tab navigation', () => {
   })
 
   const ADMIN_TABS = [
-    'Picklists',
-    'Field Setup',
-    'Help Content',
-    'Integration Setup',
-    'Audit Trail',
-    'Process Explorer',
+    { label: 'Tables → General', path: appPath(adminRouteMap.adminEntryRoutes.picklists) },
+    { label: 'System → Customize Forms', path: appPath(adminRouteMap.adminEntryRoutes.customizeForms) },
+    { label: 'System → MIR Integration', path: appPath(adminRouteMap.adminEntryRoutes.mirIntegration) },
+    { label: 'System → View Data', path: appPath(adminRouteMap.adminEntryRoutes.viewData) },
+    { label: 'Process Explorer', path: appPath('/process-explorer') },
   ]
 
   for (const tab of ADMIN_TABS) {
-    test(`Admin Console → ${tab} section renders`, async ({ page }) => {
-      const navItem = page.getByText(tab, { exact: true }).first()
-      const visible = await navItem.isVisible({ timeout: 10000 }).catch(() => false)
-      if (!visible) return // some builds/orgs do not expose every section label
-      await navItem.click()
+    test(`Admin Console → ${tab.label} section renders`, async ({ page }) => {
+      await page.goto(tab.path)
       await page.waitForLoadState('networkidle')
 
       // Page must show content — no blank body, no server error text
@@ -282,10 +279,7 @@ test.describe('Picklist → CaseForm cross-feature', () => {
     if (!createdPicklistId)   { test.skip(true, 'Picklist creation failed — skipping'); return }
 
     await hydrateAuthStorage(page, session)
-    await page.goto(appPath('/admin-console'))
-    await page.waitForLoadState('networkidle')
-
-    await page.getByText('Picklists', { exact: true }).first().click()
+    await page.goto(appPath(adminRouteMap.adminEntryRoutes.picklists))
     await page.waitForLoadState('networkidle')
 
     // Search for the unique value by field type filter

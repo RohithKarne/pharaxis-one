@@ -91,7 +91,8 @@ router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin
         const [rows] = await pool.execute(
           `SELECT section_name, field_name, field_type, is_required, is_disabled, sort_order,
                   custom_label, help_text, max_length, default_value, picklist_type, lookup_target,
-                  is_sensitive, masking_pattern
+                  is_sensitive, masking_pattern,
+                  case_type_scope, display_tab
              FROM field_setup
             WHERE org_id = ? AND section_name IN (${placeholders})`,
           [orgId, ...sectionNames]
@@ -109,6 +110,8 @@ router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin
           lookup_target:  r.lookup_target || '',
           is_sensitive:   !!r.is_sensitive,
           masking_pattern: r.masking_pattern || 'partial',
+          case_type_scope: r.case_type_scope || 'shared',
+          display_tab:     r.display_tab || null,
         };
       }
     }
@@ -141,6 +144,7 @@ router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin
         is_required: false, is_disabled: false, sort_order: 0, custom_label: '',
         field_type: 'text', help_text: '', max_length: null, default_value: '',
         picklist_type: '', lookup_target: '', is_sensitive: false, masking_pattern: 'partial',
+        case_type_scope: 'shared', display_tab: null,
       };
       if (f.is_placeholder) {
         st = { ...st, ...(phStates[f.key] || {}) };
@@ -161,6 +165,8 @@ router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin
         lookup_target:  st.lookup_target || '',
         is_sensitive:   !!st.is_sensitive,
         masking_pattern: st.masking_pattern || 'partial',
+        case_type_scope: st.case_type_scope || 'shared',
+        display_tab:     st.display_tab || null,
       };
     });
     // Stable sort by saved sort_order (ascending), preserve catalog order for ties
@@ -259,6 +265,11 @@ router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin
           ? it.duplicate_scope.trim() : 'org';
         const dupMatch     = typeof it.duplicate_match === 'string' && it.duplicate_match.trim()
           ? it.duplicate_match.trim() : 'exact';
+        // B1 — case-type routing knobs
+        const caseTypeScope = ['shared','ae','mi','pc'].includes(String(it.case_type_scope || '').toLowerCase())
+          ? String(it.case_type_scope).toLowerCase() : 'shared';
+        const displayTab    = typeof it.display_tab === 'string' && it.display_tab.trim()
+          ? it.display_tab.trim() : null;
         await conn.execute(
           `INSERT INTO field_setup
              (section_name, field_name, field_type, is_required, is_disabled, org_id, sort_order,
@@ -266,8 +277,9 @@ router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin
               is_sensitive, masking_pattern,
               format_hint, validation_regex, validation_message,
               min_value, max_value, min_length,
-              duplicate_check, duplicate_scope, duplicate_match)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              duplicate_check, duplicate_scope, duplicate_match,
+              case_type_scope, display_tab)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE
              field_type      = VALUES(field_type),
              is_required     = VALUES(is_required),
@@ -289,13 +301,16 @@ router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin
              min_length         = VALUES(min_length),
              duplicate_check    = VALUES(duplicate_check),
              duplicate_scope    = VALUES(duplicate_scope),
-             duplicate_match    = VALUES(duplicate_match)`,
+             duplicate_match    = VALUES(duplicate_match),
+             case_type_scope    = VALUES(case_type_scope),
+             display_tab        = VALUES(display_tab)`,
           [def.db_section, def.db_field, fieldType, isRequired, isDisabled, orgId, sortOrder,
            customLabel, helpText, maxLength, defaultValue, picklistType, lookupTarget,
            isSensitive, maskingPattern,
            formatHint, valRegex, valMessage,
            minValue, maxValue, minLength,
-           dupCheck, dupScope, dupMatch]
+           dupCheck, dupScope, dupMatch,
+           caseTypeScope, displayTab]
         );
         // Bust the validation rule cache so the next request picks up new rules
         try { require('../../services/validationEngine').invalidate(orgId, def.db_section); } catch (_) {}

@@ -7,6 +7,16 @@ const SCRIPT_INJECTION_PATTERN = /<\s*\/?\s*script\b|javascript:|on[a-z]+\s*=/i;
 const SQLI_PATTERN = /\bunion\b\s+\bselect\b|\bor\b\s+1\s*=\s*1|\bdrop\b\s+table\b|--|\/\*|\*\//i;
 const COMMAND_INJECTION_PATTERN = /`|\$\(|\|\||&&|;\s*(?:rm|bash|sh|curl|wget|nc|python|node)\b/i;
 const HIGH_RISK_KEY_PATTERN = /(command|cmd|shell|exec|script|query|sql)/i;
+const OAUTH_CALLBACK_QUERY_KEYS = new Set([
+  'state',
+  'code',
+  'scope',
+  'error',
+  'error_description',
+  'prompt',
+  'authuser',
+  'hd',
+]);
 
 const MAX_DEPTH = Number.parseInt(process.env.INPUT_MAX_DEPTH || '8', 10);
 const MAX_ARRAY_ITEMS = Number.parseInt(process.env.INPUT_MAX_ARRAY_ITEMS || '500', 10);
@@ -19,7 +29,17 @@ function sanitizeString(value) {
   return String(value).replace(CONTROL_CHARS, '');
 }
 
-function assertSafeString({ value, key, location, path }) {
+function shouldRelaxOAuthCallbackChecks(req, location, key) {
+  if (location !== 'query') return false;
+
+  const keyName = String(key || '').trim().toLowerCase();
+  if (!OAUTH_CALLBACK_QUERY_KEYS.has(keyName)) return false;
+
+  const mountedPath = `${req.baseUrl || ''}${req.path || ''}`;
+  return /^\/api\/auth\/sso\/[^/]+\/callback$/i.test(mountedPath);
+}
+
+function assertSafeString({ value, key, location, path, req }) {
   const maxLength = location === 'body'
     ? MAX_BODY_STRING
     : (location === 'query' ? MAX_QUERY_STRING : MAX_PARAM_STRING);
@@ -32,7 +52,8 @@ function assertSafeString({ value, key, location, path }) {
   }
 
   const isEdgeInput = location === 'query' || location === 'params';
-  if (isEdgeInput && (SQLI_PATTERN.test(value) || COMMAND_INJECTION_PATTERN.test(value))) {
+  const shouldRelaxEdgeChecks = shouldRelaxOAuthCallbackChecks(req, location, key);
+  if (isEdgeInput && !shouldRelaxEdgeChecks && (SQLI_PATTERN.test(value) || COMMAND_INJECTION_PATTERN.test(value))) {
     throw new Error(`Invalid input at ${path}: unsafe pattern detected.`);
   }
 
@@ -41,7 +62,7 @@ function assertSafeString({ value, key, location, path }) {
   }
 }
 
-function sanitizeValue(value, location, path, depth = 0, key = '') {
+function sanitizeValue(value, location, path, depth = 0, key = '', req = null) {
   if (depth > MAX_DEPTH) {
     throw new Error(`Invalid input at ${path}: payload nesting too deep.`);
   }
@@ -52,7 +73,7 @@ function sanitizeValue(value, location, path, depth = 0, key = '') {
     if (value.length > MAX_ARRAY_ITEMS) {
       throw new Error(`Invalid input at ${path}: too many items.`);
     }
-    return value.map((item, index) => sanitizeValue(item, location, `${path}[${index}]`, depth + 1, key));
+    return value.map((item, index) => sanitizeValue(item, location, `${path}[${index}]`, depth + 1, key, req));
   }
 
   if (typeof value === 'object') {
@@ -65,7 +86,7 @@ function sanitizeValue(value, location, path, depth = 0, key = '') {
       if (DANGEROUS_KEYS.has(entryKey)) {
         throw new Error(`Invalid input at ${path}.${entryKey}: forbidden key.`);
       }
-      out[entryKey] = sanitizeValue(entryValue, location, `${path}.${entryKey}`, depth + 1, entryKey);
+      out[entryKey] = sanitizeValue(entryValue, location, `${path}.${entryKey}`, depth + 1, entryKey, req);
     }
     return out;
   }
@@ -81,24 +102,24 @@ function sanitizeValue(value, location, path, depth = 0, key = '') {
 
   if (typeof value === 'string') {
     const sanitized = sanitizeString(value);
-    assertSafeString({ value: sanitized, key, location, path });
+    assertSafeString({ value: sanitized, key, location, path, req });
     return location === 'body' ? sanitized : sanitized.trim();
   }
 
   throw new Error(`Invalid input at ${path}: unsupported value type.`);
 }
 
-function sanitizeInputBucket(value, location) {
+function sanitizeInputBucket(value, location, req) {
   if (!value || typeof value !== 'object') return value;
-  return sanitizeValue(value, location, `req.${location}`);
+  return sanitizeValue(value, location, `req.${location}`, 0, '', req);
 }
 
 function inputSecurityMiddleware(req, res, next) {
   try {
-    req.params = sanitizeInputBucket(req.params, 'params') || {};
-    req.query = sanitizeInputBucket(req.query, 'query') || {};
+    req.params = sanitizeInputBucket(req.params, 'params', req) || {};
+    req.query = sanitizeInputBucket(req.query, 'query', req) || {};
     if (req.body && typeof req.body === 'object') {
-      req.body = sanitizeInputBucket(req.body, 'body') || {};
+      req.body = sanitizeInputBucket(req.body, 'body', req) || {};
     }
     next();
   } catch (err) {

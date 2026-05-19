@@ -4,12 +4,12 @@ const pool = require('../../database/db');
 const { signPayload } = require('./webhookDispatcher');
 
 async function deliverPendingWebhooks(limit = 50) {
+  const safeLimit = Number.isFinite(Number(limit)) ? Math.min(Math.max(Number(limit), 1), 200) : 50;
   const [rows] = await pool.execute(
     `SELECT d.*, s.url, s.signing_secret
        FROM webhook_deliveries d JOIN webhook_subscriptions s ON s.id = d.subscription_id
       WHERE s.status = 'active' AND d.delivered_at IS NULL AND (d.next_retry_at IS NULL OR d.next_retry_at <= CURRENT_TIMESTAMP)
-      ORDER BY d.id ASC LIMIT ?`,
-    [Number(limit)]
+      ORDER BY d.id ASC LIMIT ${safeLimit}`
   );
   const results = [];
   for (const row of rows) {

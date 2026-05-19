@@ -50,6 +50,8 @@ const { attachCasePresence } = require('./services/casePresenceService');
 const ocrWorker = require('./services/ocrWorker');
 const { attachAppRealtime } = require('./services/appRealtimeService');
 const { ensureMobilePushSchema } = require('./services/mobilePushService');
+const changeApprovals = require('./routes/admin/changeApprovals');
+const dependencyCheck = require('./routes/admin/dependencyCheck');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -194,77 +196,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// ─── Admin Console — Extended Routes (updated 2026-04-25b) ──────────────────
-app.use('/api/admin', require('./routes/admin/regression'));
-app.use('/api/admin', require('./routes/admin/picklists'));
-app.use('/api/admin', require('./routes/admin/miCategories'));
-app.use('/api/admin', require('./routes/admin/fieldSetup'));
-app.use('/api/admin', require('./routes/admin/securityGroups'));
-app.use('/api/admin', require('./routes/admin/accessConfigurations'));
-app.use('/api/admin', require('./routes/admin/twoFactor'));
-app.use('/api/admin', require('./routes/admin/alerts'));
-app.use('/api/admin', require('./routes/admin/contacts'));
-app.use('/api/admin', require('./routes/admin/siteConfig'));
-app.use('/api/admin', require('./routes/admin/productDictionary'));
-app.use('/api/admin', require('./routes/admin/caseNumbering'));
-app.use('/api/admin', require('./routes/admin/caseFormDefinition'));
-app.use('/api/admin', require('./routes/admin/workflowActivities'));
-app.use('/api/admin', require('./routes/admin/caseAuditTrail'));
-app.use('/api/admin', require('./routes/admin/cmAuditTrail'));
-app.use('/api/admin', require('./routes/admin/responseErrorLog'));
-app.use('/api/admin', require('./routes/admin/transmissionAuditTrail'));
-app.use('/api/admin', require('./routes/admin/copyDivision'));
-app.use('/api/admin', require('./routes/admin/dppr'));
-app.use('/api/admin', require('./routes/admin/rtbf'));
-app.use('/api/admin', require('./routes/admin/consent'));
-app.use('/api/admin', require('./routes/admin/users'));
-app.use('/api/admin', require('./routes/admin/systemParams'));
-app.use('/api/admin', require('./routes/admin/customizeForms'));
-app.use('/api/admin', require('./routes/admin/caseFormRules'));
-app.use('/api/admin', require('./routes/admin/reportsAccess'));
-app.use('/api/admin', require('./routes/admin/picklistsTable'));
-app.use('/api/admin', require('./routes/admin/dashboardActivity'));
-app.use('/api/admin', require('./routes/admin/userPreferences'));
-app.use('/api/admin', require('./routes/admin/icsr'));
-app.use('/api/admin', require('./routes/admin/workflowEngine'));
-app.use('/api/admin', require('./routes/admin/auditInspectorExport'));
-app.use('/api/admin', require('./routes/admin/featureFlags'));
-app.use('/api', require('./routes/admin/featureFlags')); // exposes /api/feature-flags/resolved
-app.use('/api', require('./routes/admin/casePresence'));
-app.use('/api', require('./routes/admin/attachments'));
-app.use('/api', require('./routes/admin/geocoder'));
-app.use('/api', require('./routes/admin/fieldHistory'));
-app.use('/api', require('./routes/admin/validation'));
-app.use('/api', require('./routes/admin/smartFields'));
-app.use('/api', require('./routes/admin/gridSections'));
-app.use('/api', require('./routes/admin/richFields'));
-app.use('/api', require('./routes/admin/documents'));
-app.use('/api', require('./routes/admin/collab'));
-app.use('/api', require('./routes/admin/caseActions'));
-app.use('/api', require('./routes/admin/compliance'));
-app.use('/api', require('./routes/admin/aiAssistant'));
 app.use('/', require('./routes/apiPlatform'));
-
-// ─── Case Management Routes (Phase 2) ────────────────────────────────────────
-app.use('/api', require('./routes/cases'));          // F-13 + F-15
-app.use('/api', require('./routes/caseContacts'));   // F-14
-app.use('/api', require('./routes/caseMI'));         // F-16
-app.use('/api', require('./routes/caseAE'));         // F-17
-app.use('/api', require('./routes/casePC'));         // F-18
-app.use('/api', require('./routes/caseQA'));         // Sprint 15 — AI QA Engine
-app.use('/api', require('./routes/notifications'));  // G10 notifications feed
-app.use('/api', require('./routes/chat'));           // Sprint 20 — internal chat
-
-// ─── Content Management Routes ───────────────────────────────────────────────
-app.use('/api/cm', require('./routes/cm/picklists'));
-app.use('/api/cm', require('./routes/cm/settings'));
-app.use('/api/cm', require('./routes/cm/folders'));
-app.use('/api/cm', require('./routes/cm/documents'));
-app.use('/api/cm', require('./routes/cm/modules'));
-app.use('/api/cm', require('./routes/cm/faqs'));
-app.use('/api/cm', require('./routes/cm/mergeReports'));
-app.use('/api/cm', require('./routes/cm/templates'));
-app.use('/api/cm', require('./routes/cm/reviews'));
 
 // Serve CM document uploads as static files
 app.use('/uploads/cm', express.static(path.join(__dirname, 'storage/cm_documents')));
@@ -285,10 +217,6 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(FRONTEND_DIR));
 }
 
-// ─── API Routes ──────────────────────────────────────────────────────────────
-app.use('/api/auth', authRateLimiter, require('./routes/auth'));
-app.use('/api/inbox', require('./routes/inbox'));
-app.use('/api/mobile-sync', require('./routes/mobileSync'));
 // Fix 2: health check now verifies DB connectivity (not just process liveness)
 app.get('/api/health', async (_req, res) => {
   try {
@@ -328,53 +256,6 @@ app.get('/api/users', authenticate, async (req, res) => {
   }
 });
 
-// Admin Console routes (admin role required)
-app.use('/api/admin/orgs', require('./routes/admin/orgs'));
-app.use('/api/admin', require('./routes/admin/serviceLogs'));
-app.use('/api/admin', require('./routes/admin/systemActivity'));
-app.use('/api/admin', require('./routes/admin/serviceDashboard'));
-app.use('/api/admin', require('./routes/admin/observability'));
-app.use('/api/admin', require('./routes/admin/config'));
-app.use('/api/admin/process-logs', processExplorerRouter);
-app.use('/api/telemetry', require('./routes/telemetry'));
-// Superadmin routes (superadmin role required)
-app.use('/api/superadmin', require('./routes/superadmin'));
-app.use('/api/superadmin', require('./routes/superadmin/reportsAccess'));
-app.use('/api/admin', require('./routes/admin/reportAccessRequests'));
-const changeApprovals = require('./routes/admin/changeApprovals');
-app.use('/api/admin', changeApprovals);
-const dependencyCheck = require('./routes/admin/dependencyCheck');
-app.use('/api/admin', dependencyCheck);
-app.use('/api/admin', require('./routes/admin/impactPreview'));
-app.use('/api/admin', require('./routes/admin/policyGraph'));
-app.use('/api/admin', require('./routes/admin/contentIntelligence'));
-app.use('/api/admin', require('./routes/admin/loggedInUsers'));
-// ── In-App Help System (S21-1) ──────────────────────────────────────────────
-app.use('/api',       require('./routes/help'));
-app.use('/api/admin', require('./routes/admin/help'));
-app.use("/api/integrations", require("./routes/integrations/dataExport"))
-app.use("/api", require("./routes/integrations/integrationsAdmin"))
-app.use('/api/admin', require('./routes/integrations/schedulerAdmin'));
-app.use('/api/admin', require('./routes/integrations/oauth2Admin'));
-app.use('/api', require('./routes/integrations/emirRules'));
-app.use('/api', require('./routes/integrations/mirIntegration'));
-app.use('/api', require('./routes/integrations/crmIntegration'));
-app.use('/api', require('./routes/integrations/caseImport'));
-app.use('/api', require('./routes/integrations/scheduledExports'));
-app.use('/api', require('./routes/reportModule'));
-app.use('/api', require('./routes/reports'));
-app.use('/api', require('./routes/integrations/vaultAdmin'));
-app.use('/api', require('./routes/integrations/emirAdmin'));
-app.use('/api', require('./routes/integrations/vaultQuery'));
-app.use('/api', require('./routes/integrations/vaultPull'));
-app.use('/api', require('./routes/integrations/vaultIngest'));
-app.use('/api', require('./routes/integrations/vaultPollTrigger'));
-app.use('/api', require('./routes/integrations/emirReceiver'));
-app.use('/api', require('./routes/integrations/caseExport'));
-
-// ── UAT QA System — bug reports + feature requests ───────────────────────────
-app.use('/api', require('./routes/qa'));
-
 // ── Fix 12: mountRoutes() — single source of truth for all route registrations ─
 // Eliminates the previous pattern where every router was mounted twice
 // (once under /api and again under /api/v1) doubling Express's route table.
@@ -408,7 +289,14 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/dppr'));
   r.use(`${prefix}/admin`, require('./routes/admin/rtbf'));
   r.use(`${prefix}/admin`, require('./routes/admin/consent'));
+  r.use(`${prefix}/admin`, require('./routes/admin/users'));
+  r.use(`${prefix}/admin`, require('./routes/admin/systemParams'));
+  r.use(`${prefix}/admin`, require('./routes/admin/customizeForms'));
   r.use(`${prefix}/admin`, require('./routes/admin/caseFormRules'));
+  r.use(`${prefix}/admin`, require('./routes/admin/reportsAccess'));
+  r.use(`${prefix}/admin`, require('./routes/admin/picklistsTable'));
+  r.use(`${prefix}/admin`, require('./routes/admin/dashboardActivity'));
+  r.use(`${prefix}/admin`, require('./routes/admin/userPreferences'));
   r.use(`${prefix}/admin`, require('./routes/admin/serviceLogs'));
   r.use(`${prefix}/admin`, require('./routes/admin/systemActivity'));
   r.use(`${prefix}/admin`, require('./routes/admin/serviceDashboard'));
@@ -427,8 +315,40 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/integrations/oauth2Admin'));
   r.use(`${prefix}/admin`, require('./routes/admin/help'));
   r.use(`${prefix}/admin`, require('./routes/admin/icsr'));
+  r.use(prefix || '/', require('./routes/admin/haClock'));
+  r.use(prefix || '/', require('./routes/admin/caseValidity'));
+  r.use(prefix || '/', require('./routes/admin/meddra'));
+  r.use(prefix || '/', require('./routes/admin/causality'));
+  r.use(prefix || '/', require('./routes/admin/caseDrugs'));
+  r.use(prefix || '/', require('./routes/admin/caseConversion'));
+  r.use(prefix || '/', require('./routes/admin/piiRedaction'));
   r.use(`${prefix}/admin`, require('./routes/admin/workflowEngine'));
   r.use(`${prefix}/admin`, require('./routes/admin/auditInspectorExport'));
+  r.use(`${prefix}/admin`, require('./routes/admin/featureFlags'));
+  r.use(prefix || '/', require('./routes/admin/featureFlags'));
+  r.use(prefix || '/', require('./routes/admin/casePresence'));
+  r.use(prefix || '/', require('./routes/admin/attachments'));
+  r.use(prefix || '/', require('./routes/admin/geocoder'));
+  r.use(prefix || '/', require('./routes/admin/fieldHistory'));
+  r.use(prefix || '/', require('./routes/admin/validation'));
+  r.use(prefix || '/', require('./routes/admin/smartFields'));
+  r.use(prefix || '/', require('./routes/admin/gridSections'));
+  r.use(prefix || '/', require('./routes/admin/richFields'));
+  r.use(prefix || '/', require('./routes/admin/documents'));
+  r.use(prefix || '/', require('./routes/admin/collab'));
+  r.use(prefix || '/', require('./routes/admin/caseActions'));
+  r.use(prefix || '/', require('./routes/admin/compliance'));
+  // ── Bucket 2 Sprint 2 Week 1 (PV operational depth) ───────────────────────
+  r.use(prefix || '/', require('./routes/admin/documentTypes'));   // #15 doc taxonomy
+  r.use(prefix || '/', require('./routes/admin/complaintCodes'));  // #19 codes + lot master
+  r.use(prefix || '/', require('./routes/admin/fieldActions'));    // #28 recalls / field actions
+  r.use(prefix || '/', require('./routes/admin/capa'));            // #20 CAPA workflow
+  r.use(prefix || '/', require('./routes/admin/pcTrending'));      // #29 PC trending + signals
+  // ── Bucket 2 Sprint 2 Week 2 (workflow + chronology + MI compliance) ──────
+  r.use(prefix || '/', require('./routes/admin/workflowSla'));     // #11 SLA timer per state
+  r.use(prefix || '/', require('./routes/admin/caseTimeline'));    // #13 chronology
+  r.use(prefix || '/', require('./routes/admin/miApproval'));      // #17 two-signer MI
+  r.use(prefix || '/', require('./routes/admin/miPromoReview'));   // #16 off-label + promo review
   r.use(prefix || '/', require('./routes/admin/aiAssistant'));
 
   // Superadmin
@@ -461,6 +381,7 @@ function mountRoutes(r, prefix = '') {
   r.use(prefix || '/', require('./routes/integrations/vaultPollTrigger'));
   r.use(prefix || '/', require('./routes/integrations/emirReceiver'));
   r.use(prefix || '/', require('./routes/integrations/caseExport'));
+  r.use(prefix || '/', require('./routes/qa'));
 
   // Content management
   r.use(`${prefix}/cm`, require('./routes/cm/picklists'));
@@ -509,16 +430,17 @@ apiV1Router.get('/version', (_req, res) => {
 // Mount same routes on /api/v1 (routers are shared — require() is cached by Node)
 mountRoutes(apiV1Router, '');
 
-app.use(notFoundHandler);
-app.use(errorHandler);
-
 // SPA fallback — any non-API route returns index.html so client-side routing works
+app.use('/api', notFoundHandler)
+app.use('/oauth', notFoundHandler)
 app.get('/mims', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
 app.get('/mims/*', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
 // Keep legacy catch-all for dev (Vite handles its own routing)
 if (process.env.NODE_ENV !== 'production') {
   app.get('*', (_req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')))
 }
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // ─── Architecture Fix A2: child process manager ───────────────────────────────
 // emailPoller, scheduler, and emailWorker now run in dedicated child processes.

@@ -19,6 +19,9 @@ const { getGatewayConfig } = require('../../services/pv/gatewayConfig');
 const { generatePeriodicReport } = require('../../services/pv/periodicReportService');
 const { runSignalDetection } = require('../../services/pv/signalDetectionService');
 const { createESignManifest } = require('../../services/eSignManifestService');
+const { assess: assessCaseValidity } = require('../../services/caseValidityService');
+const { redact: redactPii } = require('../../services/piiRedactionService');
+const { createFollowup, createAmendment, createNullification } = require('../../services/icsrLifecycleService');
 
 const router = express.Router();
 const adminOnly = [authenticate, requireRole('admin', 'superadmin')];
@@ -86,9 +89,34 @@ async function loadIcsr(id, req) {
   const [reactions] = await pool.execute('SELECT * FROM icsr_reactions WHERE icsr_id = ? ORDER BY id ASC', [id]);
   const [tests] = await pool.execute('SELECT * FROM icsr_test_results WHERE icsr_id = ? ORDER BY id ASC', [id]);
   const [history] = await pool.execute('SELECT * FROM icsr_medical_history WHERE icsr_id = ? ORDER BY id ASC', [id]);
+  const [caseDrugs] = await pool.execute('SELECT * FROM case_drugs WHERE case_id = ? ORDER BY id ASC', [report.case_id]).catch(() => [[]]);
+  const [causality] = await pool.execute('SELECT * FROM case_causality WHERE case_id = ? ORDER BY id ASC', [report.case_id]).catch(() => [[]]);
+  const [meddraCodes] = await pool.execute(
+    `SELECT c.*, t.code, t.term, t.level AS term_level
+       FROM case_meddra_codes c LEFT JOIN meddra_terms t ON t.id = c.approved_term_id
+      WHERE c.case_id = ? ORDER BY c.id ASC`,
+    [report.case_id]
+  ).catch(() => [[]]);
+  const [contacts] = await pool.execute('SELECT * FROM case_contacts WHERE case_id = ? ORDER BY is_primary DESC, id ASC', [report.case_id]).catch(() => [[]]);
+  const reporter = contacts.find(c => String(c.contact_role || '').toLowerCase() === 'reporter') || null;
+  const patientContact = contacts.find(c => String(c.contact_role || '').toLowerCase() === 'patient') || null;
   report.seriousness_classification = safeJson(report.seriousness_classification, {});
   report.causality_per_drug = safeJson(report.causality_per_drug, {});
-  return { report, drugs, reactions, tests, history };
+  const normalizedDrugs = caseDrugs.length ? caseDrugs.map(d => ({ ...d, drug_role: d.role, medicinal_product_name: d.drug_name_verbatim, route_of_admin: d.route_of_administration, batch_no: d.lot_number })) : drugs;
+  const codedReactions = reactions.map(r => {
+    const code = meddraCodes.find(c => String(c.ae_event_id || '') === String(r.ae_event_id || r.id || '')) || meddraCodes.find(c => String(c.verbatim_text || '').toLowerCase() === String(r.meddra_pt_name || '').toLowerCase());
+    return code ? { ...r, meddra_pt: code.code || r.meddra_pt, meddra_pt_name: code.term || r.meddra_pt_name } : r;
+  });
+  return {
+    report,
+    drugs: normalizedDrugs,
+    reactions: codedReactions,
+    tests,
+    history,
+    causality,
+    reporter: reporter ? { given_name: reporter.first_name, family_name: reporter.last_name, email: reporter.email, phone: reporter.phone, address: reporter.address, country: reporter.country } : {},
+    patient: patientContact ? { name: [patientContact.first_name, patientContact.last_name].filter(Boolean).join(' '), sex: patientContact.sex, dob: patientContact.date_of_birth } : {},
+  };
 }
 
 async function replaceChildren(icsrId, body = {}) {
@@ -194,8 +222,14 @@ router.get('/icsr', ...adminOnly, async (req, res) => {
     const params = [...scope.params];
     let where = scope.sql;
     if (req.query.status) { where += ' AND r.status = ?'; params.push(req.query.status); }
-    if (req.query.from) { where += ' AND r.created_at >= ?'; params.push(req.query.from); }
-    if (req.query.to) { where += ' AND r.created_at <= ?'; params.push(`${req.query.to} 23:59:59`); }
+    if (req.query.from)   { where += ' AND r.created_at >= ?'; params.push(req.query.from); }
+    if (req.query.to)     { where += ' AND r.created_at <= ?'; params.push(`${req.query.to} 23:59:59`); }
+    // B9 — server-side filter by case_id so the case-form ICSR tab doesn't pull
+    // the whole tenant's report list every time it mounts.
+    if (req.query.case_id) {
+      const cid = Number(req.query.case_id);
+      if (Number.isFinite(cid)) { where += ' AND r.case_id = ?'; params.push(cid); }
+    }
     const [rows] = await pool.execute(`SELECT r.*, c.case_number FROM icsr_reports r LEFT JOIN cases c ON c.id = r.case_id WHERE ${where} ORDER BY r.updated_at DESC LIMIT 200`, params);
     res.json({ rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -233,6 +267,18 @@ router.get('/icsr/:id/xml', ...adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.get('/icsr/:id/xml-preview-redacted', ...adminOnly, async (req, res) => {
+  try {
+    const data = await loadIcsr(req.params.id, req);
+    if (!data) return res.status(404).json({ error: 'ICSR not found.' });
+    const raw = generateE2BXml(data);
+    const redactedData = await redactPii({ report: data, ha_code: data.report.receiver_id });
+    const redacted = generateE2BXml(redactedData.report);
+    await audit(req, 'PII_REDACTION_PREVIEW', 'icsr_report', req.params.id, { rule_ids: redactedData.applied_rule_ids });
+    res.json({ raw, redacted, applied_rule_ids: redactedData.applied_rule_ids });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.post('/icsr/:id/validate', ...adminOnly, async (req, res) => {
   try {
     const data = await loadIcsr(req.params.id, req);
@@ -262,8 +308,13 @@ router.post('/icsr/:id/submit', ...adminOnly, async (req, res) => {
     const data = await loadIcsr(req.params.id, req);
     if (!data) return res.status(404).json({ error: 'ICSR not found.' });
     if (data.report.status !== 'validated') return res.status(409).json({ error: 'ICSR must be validated before submission.' });
+    const validity = await assessCaseValidity({ orgId: data.report.org_id, caseId: data.report.case_id });
+    if (validity?.blocking_for_submission) {
+      return res.status(422).json({ error: `Validity ${validity.score}/4 — fix missing ICH validity elements before ICSR submission.`, validity });
+    }
     const signature = await verifyElectronicSignature(req, 'ICSR_SUBMIT', req.params.id);
-    const xml = generateE2BXml(data);
+    const redactedData = await redactPii({ report: data, ha_code: data.report.receiver_id });
+    const xml = generateE2BXml(redactedData.report);
     const manifest = await createSubmissionManifest(req, data, xml, signature);
     const configured = await getGatewayConfig(data.report.org_id, data.report.receiver_id);
     const gatewayName = String(req.body.gateway || configured.mode || data.report.receiver_id || 'mock').toLowerCase();
@@ -275,7 +326,7 @@ router.post('/icsr/:id/submit', ...adminOnly, async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [data.report.case_id, req.user.userId, req.user.email, `ICSR-${data.report.receiver_id}`, xml.slice(0, 1000), result.status || 'submitted', result.gateway_id || null]
     );
-    await audit(req, 'SUBMIT', 'icsr_report', req.params.id, { gateway: gatewayName, gateway_id: result.gateway_id, manifest_id: manifest.manifest_id || null });
+    await audit(req, 'SUBMIT', 'icsr_report', req.params.id, { gateway: gatewayName, gateway_id: result.gateway_id, manifest_id: manifest.manifest_id || null, pii_redaction_rule_ids: redactedData.applied_rule_ids });
     res.json({ status: 'submitted', gateway: result, e_sign_manifest: manifest });
   } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
 });
@@ -296,6 +347,29 @@ router.post('/icsr/:id/acknowledgements', ...adminOnly, async (req, res) => {
       [parsed.report_status, parsed.errors.join('; ').slice(0, 1000) || null, req.params.id]
     );
     await audit(req, 'ACK_PARSE', 'icsr_report', req.params.id, parsed);
+    res.json(parsed);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/icsr/:id/ack/:level', ...adminOnly, async (req, res) => {
+  try {
+    const data = await loadIcsr(req.params.id, req);
+    if (!data) return res.status(404).json({ error: 'ICSR not found.' });
+    const requestedLevel = String(req.params.level || '').toUpperCase();
+    if (!['ACK1', 'ACK2', 'ACK3'].includes(requestedLevel)) return res.status(400).json({ error: 'level must be ACK1, ACK2, or ACK3.' });
+    const ackXml = req.body.ack_xml || '';
+    const parsed = { ...parseAck(ackXml), level: requestedLevel };
+    await pool.execute(
+      `INSERT INTO icsr_acknowledgements (org_id, icsr_report_id, level, received_at, ack_status, ack_code, ack_xml, details_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [data.report.org_id, req.params.id, requestedLevel, req.body.received_at || new Date(), parsed.ack_status, parsed.ack_code || null, ackXml, JSON.stringify(parsed)]
+    );
+    if (requestedLevel === 'ACK3') {
+      await pool.execute('UPDATE icsr_reports SET status=?, last_ack_at=CURRENT_TIMESTAMP, ack_error_summary=? WHERE id=?', [parsed.report_status, (parsed.errors || []).join('; ').slice(0, 1000) || null, req.params.id]);
+    } else {
+      await pool.execute('UPDATE icsr_reports SET last_ack_at=CURRENT_TIMESTAMP WHERE id=?', [req.params.id]);
+    }
+    await audit(req, `ACK_${requestedLevel}`, 'icsr_report', req.params.id, parsed);
     res.json(parsed);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -342,18 +416,30 @@ router.get('/pv/signals', ...adminOnly, async (req, res) => {
 
 router.post('/icsr/:id/follow-up', ...adminOnly, async (req, res) => {
   try {
-    const data = await loadIcsr(req.params.id, req);
-    if (!data) return res.status(404).json({ error: 'ICSR not found.' });
-    await pool.execute('UPDATE icsr_reports SET status="superseded" WHERE id=?', [req.params.id]);
-    const [result] = await pool.execute(
-      `INSERT INTO icsr_reports (org_id, case_id, receiver_id, receive_date, primary_source_country, report_type, seriousness_classification, causality_per_drug, narrative, status, parent_report_id, created_by, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
-      [data.report.org_id, data.report.case_id, data.report.receiver_id, data.report.receive_date, data.report.primary_source_country, data.report.report_type, JSON.stringify(data.report.seriousness_classification || {}), JSON.stringify(data.report.causality_per_drug || {}), data.report.narrative, req.params.id, req.user.userId, req.user.userId]
-    );
-    await pool.execute('UPDATE icsr_reports SET sender_safety_report_id=? WHERE id=?', [`${data.report.sender_safety_report_id || 'ICSR'}-FU${result.insertId}`, result.insertId]);
-    await audit(req, 'FOLLOW_UP', 'icsr_report', result.insertId, { parent_report_id: Number(req.params.id) });
-    res.status(201).json({ id: result.insertId, parent_report_id: Number(req.params.id) });
+    const result = await createFollowup(req.params.id, req.user.userId);
+    if (!result) return res.status(404).json({ error: 'ICSR not found.' });
+    await audit(req, 'FOLLOW_UP', 'icsr_report', result.id, { parent_submission_id: Number(req.params.id) });
+    res.status(201).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/icsr/:id/amend', ...adminOnly, async (req, res) => {
+  try {
+    const result = await createAmendment(req.params.id, req.user.userId);
+    if (!result) return res.status(404).json({ error: 'ICSR not found.' });
+    await audit(req, 'AMENDMENT', 'icsr_report', result.id, { parent_submission_id: Number(req.params.id) });
+    res.status(201).json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/icsr/:id/nullify', ...adminOnly, async (req, res) => {
+  try {
+    const signature = await verifyElectronicSignature(req, 'ICSR_NULLIFY', req.params.id);
+    const result = await createNullification(req.params.id, req.body.reason || signature.reason, req.user.userId);
+    if (!result) return res.status(404).json({ error: 'ICSR not found.' });
+    await audit(req, 'NULLIFICATION', 'icsr_report', result.id, { parent_submission_id: Number(req.params.id), reason: req.body.reason || signature.reason });
+    res.status(201).json(result);
+  } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
 });
 
 router.get('/icsr/:id/timeline', ...adminOnly, async (req, res) => {

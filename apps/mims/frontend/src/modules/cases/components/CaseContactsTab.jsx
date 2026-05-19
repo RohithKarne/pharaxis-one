@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { WiredField, WiredSelect, WiredTextarea } from '../../../shared/components/WiredField'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -87,7 +88,7 @@ export default function CaseContactsTab({ id, headers, onCountChange }) {
   }
 
   return (
-    <div className="cf-tab-pane">
+    <div id="tab-contacts" className="cf-tab-pane">
       <div className="cf-section-header-row">
         <button className="cf-add-btn" onClick={() => setShowContactAdd(true)}>+ Add Contact</button>
       </div>
@@ -146,28 +147,22 @@ export default function CaseContactsTab({ id, headers, onCountChange }) {
               { label: 'Specialty',   key: 'specialty'   },
               { label: 'Institution', key: 'institution' },
             ].map(f => (
-              <div key={f.key} className="cf-form-field">
-                <label>{f.label}</label>
-                <input value={addContactForm[f.key]} onChange={e => setAddContactForm(p => ({ ...p, [f.key]: e.target.value }))} />
-              </div>
+              <WiredField key={f.key} label={f.label} section="case_contacts" field={f.key}
+                value={addContactForm[f.key]}
+                onChange={v => setAddContactForm(p => ({ ...p, [f.key]: v }))} />
             ))}
-            <div className="cf-form-field">
-              <label>Contact Type</label>
-              <select value={addContactForm.contact_type} onChange={e => setAddContactForm(p => ({ ...p, contact_type: e.target.value }))}>
-                {['HCP', 'Patient', 'Reporter', 'Other'].map(t => <option key={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="cf-form-field">
-              <label>Role</label>
-              <select value={addContactForm.contact_role} onChange={e => setAddContactForm(p => ({ ...p, contact_role: e.target.value }))}>
-                {[{v:'reporter',l:'Reporter'},{v:'patient',l:'Patient'},{v:'hcp',l:'HCP'},{v:'other',l:'Other'}].map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
-              </select>
-            </div>
+            <WiredSelect label="Contact Type" section="case_contacts" field="contact_type"
+              value={addContactForm.contact_type}
+              onChange={v => setAddContactForm(p => ({ ...p, contact_type: v }))}
+              options={['HCP', 'Patient', 'Reporter', 'Other'].map(t => ({ value: t, label: t }))} />
+            <WiredSelect label="Role" section="case_contacts" field="contact_role"
+              value={addContactForm.contact_role}
+              onChange={v => setAddContactForm(p => ({ ...p, contact_role: v }))}
+              options={[{v:'reporter',l:'Reporter'},{v:'patient',l:'Patient'},{v:'hcp',l:'HCP'},{v:'other',l:'Other'}].map(r => ({ value: r.v, label: r.l }))} />
           </div>
-          <div className="cf-form-field cf-form-field--full">
-            <label>Address</label>
-            <textarea rows={2} value={addContactForm.address} onChange={e => setAddContactForm(p => ({ ...p, address: e.target.value }))} />
-          </div>
+          <WiredTextarea label="Address" section="case_contacts" field="address" rows={2}
+            value={addContactForm.address}
+            onChange={v => setAddContactForm(p => ({ ...p, address: v }))} />
           <div className="cf-contact-flags">
             <label><input type="checkbox" checked={addContactForm.is_primary} onChange={e => setAddContactForm(p => ({ ...p, is_primary: e.target.checked }))} /> Primary contact</label>
             <label><input type="checkbox" checked={addContactForm.do_not_update_master} onChange={e => setAddContactForm(p => ({ ...p, do_not_update_master: e.target.checked }))} /> Do Not Update Master Data</label>

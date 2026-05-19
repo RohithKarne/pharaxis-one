@@ -24,6 +24,22 @@ function boolCode(value) {
   return 'false';
 }
 
+function drugCharacterization(role) {
+  const r = String(role || '').toLowerCase();
+  if (r === 'suspect' || r === 'co_suspect') return '1';
+  if (r === 'concomitant') return '2';
+  if (r === 'interacting') return '3';
+  return role || '1';
+}
+
+function senderReportType(type) {
+  const t = String(type || 'initial').toLowerCase();
+  if (t === 'followup') return '2';
+  if (t === 'amendment') return '3';
+  if (t === 'nullification') return '5';
+  return '1';
+}
+
 function generateE2BXml(icsr = {}, dependencies = {}) {
   const report = icsr.report || icsr;
   const drugs = icsr.drugs || [];
@@ -47,14 +63,14 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
   ].join(''))).join('');
 
   const drugXml = drugs.map((drug) => block('drug', [
-    tag('drugcharacterization', drug.drug_role || 'suspect'),
-    tag('medicinalproduct', drug.medicinal_product_name || drug.product_name || ''),
+    tag('drugcharacterization', drugCharacterization(drug.drug_role || drug.role)),
+    tag('medicinalproduct', drug.medicinal_product_name || drug.product_name || drug.drug_name_verbatim || ''),
     tag('activesubstancename', drug.active_substance || ''),
-    tag('drugbatchnumb', drug.batch_no || ''),
+    tag('drugbatchnumb', drug.batch_no || drug.lot_number || ''),
     tag('drugstructuredosagenumb', drug.dose_amount || ''),
     tag('drugstructuredosageunit', drug.dose_unit || ''),
     tag('drugdosageform', drug.dose_form || ''),
-    tag('drugadministrationroute', drug.route_of_admin || ''),
+    tag('drugadministrationroute', drug.route_of_admin || drug.route_of_administration || ''),
     tag('drugindication', drug.indication || ''),
     tag('drugindicationmeddraversion', drug.indication_meddra_version || dependencies.meddraVersion || ''),
     tag('drugindicationmeddrallt', drug.indication_meddra || ''),
@@ -62,6 +78,13 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
     tag('drugenddate', drug.end_date || ''),
     tag('actiondrug', drug.action_taken || ''),
     tag('drugrecurreadministration', drug.rechallenge || ''),
+    (icsr.causality || [])
+      .filter(c => String(c.suspect_drug_id) === String(drug.id))
+      .map(c => block('drugreactionrelatedness', [
+        tag('reactionassessmentsource', c.assessor),
+        tag('reactionassessmentmethod', c.method),
+        tag('reactionassessmentresult', c.category),
+      ].join(''))).join(''),
   ].join(''))).join('');
 
   const testXml = tests.map((test) => block('test', [
@@ -97,6 +120,9 @@ function generateE2BXml(icsr = {}, dependencies = {}) {
     ${tag('primarysourcecountry', report.primary_source_country || '')}
     ${tag('occurcountry', report.primary_source_country || '')}
     ${tag('receiptdate', report.receive_date || '')}
+    ${tag('senderreporttype', senderReportType(report.submission_type))}
+    ${tag('transmissionreasoncode', senderReportType(report.submission_type))}
+    ${tag('nullificationreason', report.nullification_reason || '')}
     ${tag('reporttype', report.report_type || 'spontaneous')}
     ${tag('serious', Object.values(seriousness).some(Boolean) ? '1' : '2')}
     ${tag('seriousnessdeath', boolCode(seriousness.death))}

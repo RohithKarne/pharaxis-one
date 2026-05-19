@@ -17,6 +17,7 @@ export default function useCaseForm(id, token) {
   const [infoForm,       setInfoForm]       = useState({
     status_id: '', case_owner_id: '', priority: 'normal',
     date_received: '', description: '', internal_notes: '', intake_channel: 'manual',
+    awareness_date: '', learn_of_validity_date: '', follow_up_received_date: '',
   })
   const [reassignForm,   setReassignForm]   = useState({ new_owner_id: '', reason: '' })
   const [reassignSaving, setReassignSaving] = useState(false)
@@ -46,6 +47,9 @@ export default function useCaseForm(id, token) {
         case_owner_id:  c.case_owner_id  ? String(c.case_owner_id)  : '',
         priority:       c.priority       || 'normal',
         date_received:  c.date_received  ? c.date_received.slice(0, 10) : '',
+        awareness_date: c.awareness_date ? c.awareness_date.slice(0, 10) : '',
+        learn_of_validity_date: c.learn_of_validity_date ? c.learn_of_validity_date.slice(0, 10) : '',
+        follow_up_received_date: c.follow_up_received_date ? c.follow_up_received_date.slice(0, 10) : '',
         description:    c.description    || '',
         internal_notes: c.internal_notes || '',
         intake_channel: c.intake_channel || 'manual',

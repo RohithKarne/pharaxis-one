@@ -6,6 +6,7 @@ const { authenticate, requireRole, requireOrg } = require('../../middleware/auth
 const { parseJson } = require('../../services/alertService');
 
 const router = express.Router();
+const adminAlertAuth = [authenticate, requireRole('admin', 'superadmin'), requireOrg];
 
 const THRESHOLD_ALERT_EVENTS = new Set(['failed_login_spike', 'two_factor_lockout', 'service_error_threshold']);
 const DEFAULT_ALERT_EMAIL_SUBJECT = 'MIMS Alert: {{alert_title}}';
@@ -43,10 +44,8 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-router.use(authenticate, requireRole('admin', 'superadmin'), requireOrg);
-
 // GET /api/admin/alerts/rules
-router.get('/alerts/rules', async (_req, res) => {
+router.get('/alerts/rules', ...adminAlertAuth, async (_req, res) => {
   try {
     const [rules] = await pool.execute(
       'SELECT * FROM superadmin_alert_rules ORDER BY is_active DESC, name ASC'
@@ -58,7 +57,7 @@ router.get('/alerts/rules', async (_req, res) => {
 });
 
 // POST /api/admin/alerts/rules
-router.post('/alerts/rules', async (req, res) => {
+router.post('/alerts/rules', ...adminAlertAuth, async (req, res) => {
   try {
     const payload = normalizeAlertRulePayload(req.body || {});
     if (!payload.name || !payload.event_type) return res.status(400).json({ error: 'name and event_type are required.' });
@@ -91,7 +90,7 @@ router.post('/alerts/rules', async (req, res) => {
 });
 
 // PUT /api/admin/alerts/rules/:id
-router.put('/alerts/rules/:id', async (req, res) => {
+router.put('/alerts/rules/:id', ...adminAlertAuth, async (req, res) => {
   try {
     const [[existing]] = await pool.execute('SELECT * FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
@@ -126,7 +125,7 @@ router.put('/alerts/rules/:id', async (req, res) => {
 });
 
 // DELETE /api/admin/alerts/rules/:id
-router.delete('/alerts/rules/:id', async (req, res) => {
+router.delete('/alerts/rules/:id', ...adminAlertAuth, async (req, res) => {
   try {
     const [[existing]] = await pool.execute('SELECT * FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
@@ -143,7 +142,7 @@ router.delete('/alerts/rules/:id', async (req, res) => {
 });
 
 // GET /api/admin/alerts/events
-router.get('/alerts/events', async (req, res) => {
+router.get('/alerts/events', ...adminAlertAuth, async (req, res) => {
   try {
     const limit = Math.min(parseIntSafe(req.query.limit, 50), 200);
     const offset = parseIntSafe(req.query.offset, 0);
@@ -180,7 +179,7 @@ router.get('/alerts/events', async (req, res) => {
 });
 
 // GET /api/admin/alert-email-template
-router.get('/alert-email-template', async (_req, res) => {
+router.get('/alert-email-template', ...adminAlertAuth, async (_req, res) => {
   try {
     const [rows] = await pool.execute(
       "SELECT config_key, config_value FROM system_config WHERE config_key IN ('alert_email_subject','alert_email_body')"
@@ -199,7 +198,7 @@ router.get('/alert-email-template', async (_req, res) => {
 });
 
 // PUT /api/admin/alert-email-template
-router.put('/alert-email-template', async (req, res) => {
+router.put('/alert-email-template', ...adminAlertAuth, async (req, res) => {
   try {
     const { subject, body } = req.body || {};
     if (!subject || !body) return res.status(400).json({ error: 'subject and body are required.' });

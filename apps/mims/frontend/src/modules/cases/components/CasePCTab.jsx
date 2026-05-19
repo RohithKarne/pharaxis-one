@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import toast from '../../../shared/utils/toast'
 import PCTabPanel from './PCTabPanel'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import DynamicFieldsSection from './DynamicFieldsSection'
+import { useCaseFieldContext } from '../../../shared/components/WiredField'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -15,7 +17,12 @@ const PC_TABS = [
   { key: 'refund-credit',    label: 'Refund / Credit' },
 ]
 
-export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklistOptions, onCountChange }) {
+export default function CasePCTab({
+  id, headers, setSavedMsg, users, getPicklistOptions, onCountChange,
+  formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
+  saveDynFields, caseType,
+}) {
+  const ctx = useCaseFieldContext()
   const [pcVersions,   setPcVersions]   = useState([])
   const [activePcVer,  setActivePcVer]  = useState(null)
   const [activePcTab,  setActivePcTab]  = useState('general')
@@ -71,12 +78,16 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
       const res  = await httpFetch(`${API}/cases/${id}/pc/versions`, { method: 'POST', headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      const updated = [...pcVersions.map(v => v.id === (pcVersions[pcVersions.length - 1]?.id) ? { ...v, is_locked: 1 } : v), data]
-      setPcVersions(updated)
-      onCountChange?.(updated.length)
-      setActivePcVer(data)
+      // B5 — refetch authoritative version list from server (kill client-side race).
+      const refetch = await httpFetch(`${API}/cases/${id}/pc/versions`, { headers })
+      const list    = await refetch.json()
+      const safeList = Array.isArray(list) ? list : []
+      setPcVersions(safeList)
+      onCountChange?.(safeList.length)
+      const fresh = safeList.find(v => v.id === data.id) || data
+      setActivePcVer(fresh)
       setActivePcTab('general')
-      loadPCTab(data.id, 'general')
+      loadPCTab(fresh.id, 'general')
     } catch (err) { toast.error(err.message) }
   }
 
@@ -101,8 +112,10 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
     }
   }
 
+  const [pcTabSaving, setPcTabSaving] = useState(false)
   async function savePCTab() {
-    if (!activePcVer || isLocked(activePcVer)) return
+    if (!activePcVer || isLocked(activePcVer) || pcTabSaving) return
+    setPcTabSaving(true)
     const tabData = pcTabData[`${activePcVer.id}_${activePcTab}`] || {}
     try {
       const res  = await httpFetch(`${API}/cases/pc/versions/${activePcVer.id}/${activePcTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
@@ -111,6 +124,7 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
       setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: data }))
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) { toast.error(err.message) }
+    finally { setPcTabSaving(false) }
   }
 
   async function loadPcTransmissions() {
@@ -148,7 +162,7 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
   }
 
   return (
-    <div className="cf-tab-pane">
+    <div id="tab-pc" className="cf-tab-pane">
       <div className="cf-section-header-row">
         <button className="cf-add-btn" onClick={createPCVersion} disabled={!canCreatePcVersion}>
           + New Version
@@ -169,7 +183,20 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
       )}
 
       {pcVersions.length === 0 ? (
-        <div className="cf-empty-msg">No PC versions yet. Click "+ New Version" to start.</div>
+        <div className="cf-empty-state">
+          <div className="cf-empty-icon" aria-hidden="true">📦</div>
+          <h3 className="cf-empty-title">No PC versions yet</h3>
+          <p className="cf-empty-msg">
+            Create the first PC version to start the product-complaint investigation.
+            Each version is a sealed snapshot tied to a regulatory submission or
+            quality milestone.
+          </p>
+          <ul className="cf-empty-hints">
+            <li>Click <strong>+ New Version</strong> above to start.</li>
+            <li>Close a version when investigation results are submitted to QMS.</li>
+            <li>Investigation updates create a new version — never overwrite prior data.</li>
+          </ul>
+        </div>
       ) : (
         <>
           <div className="cf-version-bar">
@@ -210,6 +237,7 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
               versionId={activePcVer?.id}
               headers={headers}
               onSave={savePCTab}
+              saving={pcTabSaving}
             />
           )}
         </>
@@ -268,6 +296,26 @@ export default function CasePCTab({ id, headers, setSavedMsg, users, getPicklist
           </div>
         ))}
       </div>
+
+      {/* B1 fix — admin-configured PC fields render here, scoped to displayTab='pc' */}
+      {formConfig && Array.isArray(formConfig.sections) && (
+        <DynamicFieldsSection
+          sections={formConfig.sections}
+          values={dynFieldValues || {}}
+          onChange={setDynFieldValues || (() => {})}
+          onSave={saveDynFields || (() => {})}
+          saving={dynFieldSaving}
+          rules={formConfig.rules || []}
+          errors={dynFieldErrors || {}}
+          caseId={ctx?.caseId}
+          caseStatus={ctx?.caseStatus}
+          caseSection="pc"
+          presence={ctx?.presence}
+          currentUserId={ctx?.currentUserId}
+          caseType={caseType}
+          displayTab="pc"
+        />
+      )}
     </div>
   )
 }

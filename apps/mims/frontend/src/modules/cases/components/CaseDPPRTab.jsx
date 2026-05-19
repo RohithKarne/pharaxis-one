@@ -13,6 +13,13 @@ const DOMAINS = [
   { key: 'inquiry_content',     label: 'Inquiry Content',      desc: 'Full text of MI inquiries and responses' },
 ]
 
+// B10 — Action restrictiveness rank. Higher = more restrictive.
+// Invariant: tenant rules SET A FLOOR. A case-level override must satisfy
+//   ACTION_RANK[override] >= ACTION_RANK[tenant]
+// i.e. you can match or strengthen the tenant rule, never weaken it.
+// DO NOT reorder these constants — the dropdown filter below depends on this
+// ordering. If you add a new action (e.g. 'Pseudonymize') insert it at the
+// rank position it deserves; do not push it to the end.
 const ACTION_RANK = { None: 0, Anonymize: 1, Delete: 2 }
 
 export default function CaseDPPRTab({ id, headers }) {
@@ -71,7 +78,7 @@ export default function CaseDPPRTab({ id, headers }) {
   }
 
   return (
-    <div className="cf-tab-pane">
+    <div id="tab-dppr" className="cf-tab-pane">
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Case-Level Data Privacy Overrides</div>
         <div style={{ fontSize: 12, color: '#64748b' }}>

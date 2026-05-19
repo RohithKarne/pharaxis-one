@@ -9,8 +9,10 @@ export default function CaseICSRTab({ id, headers, setSavedMsg }) {
   const [busy, setBusy] = useState(false)
 
   async function load() {
-    const res = await httpFetch('/api/admin/icsr?status=', { headers })
+    // B9 — server-side case_id filter avoids pulling the whole tenant's ICSR list.
+    const res = await httpFetch(`/api/admin/icsr?case_id=${encodeURIComponent(id)}`, { headers })
     const data = await res.json().catch(() => ({ rows: [] }))
+    // Backstop client-side filter in case the API ignores case_id (older deploys).
     setReports((data.rows || []).filter(r => String(r.case_id) === String(id)))
   }
 
@@ -30,7 +32,7 @@ export default function CaseICSRTab({ id, headers, setSavedMsg }) {
   }
 
   return (
-    <div className="cf-icsr-tab">
+    <div id="tab-icsr" className="cf-icsr-tab">
       <div className="cf-icsr-hero">
         <div>
           <h2>ICSR / Regulatory</h2>

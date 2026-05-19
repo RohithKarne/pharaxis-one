@@ -5,7 +5,7 @@
  * Provides: login(), logout(), switchOrg(), refreshOrgAccess(), getInitials(), formatRole(), hasModuleAccess()
  */
 
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { httpFetch } from '../api/httpFetch.js'
 
 const AuthContext = createContext(null)
@@ -50,6 +50,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   const [orgName,  setOrgName]  = useState(() => initState('orgName'))
   const [siteName, setSiteName] = useState(() => initState('siteName'))
   const [allOrgs,       setAllOrgs]       = useState(() => initState('allOrgs'))
+  const [securityAccess, setSecurityAccess] = useState(() => ({ unrestricted: true, system_options: null, case_options: null }))
   const [sessionTimeout, setSessionTimeout] = useState(() => {
     const saved = localStorage.getItem(`${KEY}_session_timeout`)
     return saved ? parseInt(saved) : 30
@@ -82,7 +83,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     try {
       await httpFetch('/api/auth/logout', { method: 'POST' })
     } catch { /* silent */ }
-    setUser(null); setToken(null); setModules([]); setOrgId(null); setSiteId(null); setOrgName(null); setSiteName(null); setAllOrgs([]); setSessionTimeout(30)
+    setUser(null); setToken(null); setModules([]); setOrgId(null); setSiteId(null); setOrgName(null); setSiteName(null); setAllOrgs([]); setSecurityAccess({ unrestricted: true, system_options: null, case_options: null }); setSessionTimeout(30)
     ;[`${KEY}_user`,`${KEY}_token`,`${KEY}_modules`,`${KEY}_org_id`,`${KEY}_site_id`,`${KEY}_org_name`,`${KEY}_site_name`,`${KEY}_all_orgs`,`${KEY}_session_timeout`]
       .forEach(k => localStorage.removeItem(k))
     if (fallbackPrefixes.length > 0) localStorage.setItem(disableFallbackKey, '1')
@@ -145,6 +146,36 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     window.location.reload()
   }, [KEY, user?.role]) // stable deps — KEY is constant, role changes rarely (login/logout)
 
+  const refreshSecurityAccess = useCallback(async () => {
+    if (!token || !user) {
+      setSecurityAccess({ unrestricted: true, system_options: null, case_options: null })
+      return
+    }
+    if (user.role === 'superadmin') {
+      setSecurityAccess({ unrestricted: true, system_options: null, case_options: null })
+      return
+    }
+    try {
+      const res = await httpFetch('/api/admin/security-groups/effective', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('security access unavailable')
+      const data = await res.json()
+      setSecurityAccess(data || { unrestricted: true, system_options: null, case_options: null })
+    } catch {
+      setSecurityAccess({ unrestricted: true, system_options: null, case_options: null })
+    }
+  }, [token, user])
+
+  useEffect(() => {
+    refreshSecurityAccess()
+  }, [refreshSecurityAccess])
+
+  useEffect(() => {
+    window.addEventListener('mims-security-groups-updated', refreshSecurityAccess)
+    return () => window.removeEventListener('mims-security-groups-updated', refreshSecurityAccess)
+  }, [refreshSecurityAccess])
+
   function getInitials() {
     if (!user?.name) return '?'
     return user.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -164,10 +195,27 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     return modules.includes(module)
   }
 
+  function hasSecurityOption(scope, section, option) {
+    if (!user) return false
+    if (user.role === 'superadmin') return true
+    if (securityAccess?.unrestricted) return true
+    const matrix = securityAccess?.[scope]
+    if (!matrix) return true
+    return Boolean(matrix?.[section]?.[option])
+  }
+
+  function hasSystemOption(section, option) {
+    return hasSecurityOption('system_options', section, option)
+  }
+
+  function hasCaseOption(section, option) {
+    return hasSecurityOption('case_options', section, option)
+  }
+
   return (
     <AuthContext.Provider value={{
-      user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout,
-      login, logout, switchOrg, refreshOrgAccess, getInitials, formatRole, hasModuleAccess
+      user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, securityAccess,
+      login, logout, switchOrg, refreshOrgAccess, refreshSecurityAccess, getInitials, formatRole, hasModuleAccess, hasSystemOption, hasCaseOption
     }}>
       {children}
     </AuthContext.Provider>

@@ -1,13 +1,33 @@
 import { useEffect } from 'react';
+import toast from '../utils/toast.js'
 
 /**
- * ExceptionToast — listens for mims-api-exception events and logs them silently.
- * Visual popup is intentionally suppressed; errors are written to the browser console only.
+ * ExceptionToast — surfaces high-severity API/runtime failures without
+ * interrupting the user for every warning-level response.
  */
 export default function ExceptionToast() {
   useEffect(() => {
+    const recentKeys = new Map()
+
     function onException(event) {
       const detail = event?.detail || {};
+      const statusCode = Number(detail.status_code || 0)
+      const shouldToast = statusCode === 0 || statusCode >= 500
+      const key = `${detail.route || 'route'}:${statusCode}:${detail.message || 'error'}`
+      const now = Date.now()
+
+      if (shouldToast) {
+        const lastSeen = recentKeys.get(key) || 0
+        if (now - lastSeen > 8000) {
+          recentKeys.set(key, now)
+          toast.error(
+            detail.exception_id
+              ? `${detail.message || 'Request failed'} (Ref: ${detail.exception_id})`
+              : (detail.message || 'Request failed')
+          )
+        }
+      }
+
       console.warn(
         '[MIMS Exception]',
         `ID: ${detail.exception_id || 'N/A'}`,
@@ -19,6 +39,5 @@ export default function ExceptionToast() {
     return () => window.removeEventListener('mims-api-exception', onException);
   }, []);
 
-  // No visual output — errors are console-only so they don't disrupt the UI
   return null;
 }

@@ -51,8 +51,32 @@ export default function DynamicFieldsSection({
   caseSection   = null,    // when this dyn-fields block belongs to a single named section
   presence      = null,    // from useCasePresence(caseId) — { enabled, focus, typing, users, actions }
   currentUserId = null,
+  // B1 fix — route fields only to their case_type_scope + display_tab.
+  // Both default to null, which preserves the legacy "render everything" behaviour
+  // for callers that haven't been wired yet.
+  caseType      = null,    // 'ae' | 'mi' | 'pc' — keep only fields where case_type_scope IN (caseType, 'shared')
+  displayTab    = null,    // 'info' | 'contacts' | 'ae' | … — keep only fields whose field.display_tab === this
 }) {
-  const activeSections = (sections || []).filter(s => Array.isArray(s.fields) && s.fields.length > 0)
+  const lcType = caseType ? String(caseType).toLowerCase() : null
+
+  // Filter sections/fields by case_type_scope + display_tab before doing anything else.
+  // If either filter is null, that dimension is not applied (backward compatible).
+  const filteredSections = useMemo(() => {
+    return (sections || [])
+      .map(s => {
+        const fields = (s.fields || []).filter(f => {
+          const scope = String(f.case_type_scope || 'shared').toLowerCase()
+          const tab   = f.display_tab || null
+          if (lcType && scope !== 'shared' && scope !== lcType) return false
+          if (displayTab && tab && tab !== displayTab)          return false
+          return true
+        })
+        return { ...s, fields }
+      })
+      .filter(s => (s.fields || []).length > 0)
+  }, [sections, lcType, displayTab])
+
+  const activeSections = filteredSections
   const formData = useMemo(() => buildFormData(activeSections, values), [activeSections, values])
 
   const validation = useFieldValidation(caseSection)
@@ -273,11 +297,13 @@ export default function DynamicFieldsSection({
     if (field.field_type === 'dropdown') {
       let options = Array.isArray(field.options) ? field.options : []
       const cascade = ruleState.cascades.get(field.field_name)
-      if (cascade?.parentValue) {
+      if (cascade) {
         const parentField = activeSections.flatMap(s => s.fields || []).find(f => f.field_name === cascade.parentField)
         const parentOption = (parentField?.options || []).find(o => String(o.value) === String(cascade.parentValue))
         const parentId = parentOption?.id || cascade.parentValue
-        options = options.filter(o => !o.parent_value_id || String(o.parent_value_id) === String(parentId))
+        options = cascade.parentValue
+          ? options.filter(o => String(o.parent_value_id || '') === String(parentId))
+          : options.filter(o => !o.parent_value_id)
       }
       return (
         <div key={fid} className={`cf-form-field${error ? ' cf-form-field--error' : ''}`}>

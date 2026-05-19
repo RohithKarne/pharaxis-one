@@ -15,6 +15,7 @@ import CaseDPPRTab          from '../components/CaseDPPRTab'
 import CaseICSRTab          from '../components/CaseICSRTab'
 import AiAssistantPanel     from '../components/AiAssistantPanel'
 import CaseFormShell        from '../../../shared/components/CaseFormShell'
+import useUnsavedChangesGuard from '../../../shared/hooks/useUnsavedChangesGuard'
 
 const TYPE_COLOR = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 
@@ -38,6 +39,18 @@ export default function CaseFormPage() {
 
   const [activeTab,  setActiveTab]  = useState('info')
   const [tabCounts,  setTabCounts]  = useState({})
+
+  // B19 — unsaved-changes guard. `draftStatus` is set by useCaseForm whenever
+  // there's an in-flight autosave; we treat that as the canonical "dirty" signal.
+  const guard = useUnsavedChangesGuard()
+  useEffect(() => { guard.setDirty(!!draftStatus && draftStatus !== 'Saved') },
+    [draftStatus, guard])
+
+  function safeSetActiveTab(next) {
+    if (guard.isDirty.current &&
+        !window.confirm('You have unsaved changes. Switch tabs and lose them?')) return
+    setActiveTab(next)
+  }
 
   useEffect(() => {
     const params        = new URLSearchParams(location.search || '')
@@ -99,7 +112,7 @@ export default function CaseFormPage() {
 
       <div className="cf-tabbar">
         {TABS.map(t => (
-          <button key={t.key} className={`cf-tabbar-btn${activeTab === t.key ? ' active' : ''}`} onClick={() => setActiveTab(t.key)}>
+          <button key={t.key} className={`cf-tabbar-btn${activeTab === t.key ? ' active' : ''}`} onClick={() => safeSetActiveTab(t.key)}>
             {t.label}
             {t.badge != null && <span className="cf-tabbar-badge">{t.badge}</span>}
           </button>
@@ -118,6 +131,10 @@ export default function CaseFormPage() {
         transitions={[]}
         onTransition={() => { /* Wired by future workflow engine */ }}
         onCloned={(newId) => navigate(`/case/${newId}`)}
+        onValidityNavigate={(key) => {
+          if (key === 'reporter' || key === 'patient') safeSetActiveTab('contacts')
+          else if (key === 'product' || key === 'event') safeSetActiveTab('ae')
+        }}
       >
       <div className="cf-tab-content">
         {activeTab === 'info' && (
@@ -129,6 +146,7 @@ export default function CaseFormPage() {
             dynFieldErrors={dynFieldErrors}
             formConfig={formConfig}
             scheduleAutoSave={scheduleAutoSave} reassignCase={reassignCase} saveDynFields={saveDynFields}
+            caseType={caseData?.case_type}
           />
         )}
         {activeTab === 'comments' && (
@@ -153,6 +171,11 @@ export default function CaseFormPage() {
           <CaseMITab
             id={id} token={token} headers={headers} setSavedMsg={setSavedMsg}
             onCountChange={n => setTabCounts(p => ({ ...p, mi: n }))}
+            formConfig={formConfig}
+            dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}
+            dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
+            saveDynFields={saveDynFields}
+            caseType={caseData?.case_type}
           />
         )}
         {activeTab === 'ae' && (
@@ -160,6 +183,11 @@ export default function CaseFormPage() {
             id={id} headers={headers} setSavedMsg={setSavedMsg}
             users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
             onCountChange={n => setTabCounts(p => ({ ...p, ae: n }))}
+            formConfig={formConfig}
+            dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}
+            dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
+            saveDynFields={saveDynFields}
+            caseType={caseData?.case_type}
           />
         )}
         {activeTab === 'icsr' && (
@@ -170,6 +198,11 @@ export default function CaseFormPage() {
             id={id} headers={headers} setSavedMsg={setSavedMsg}
             users={users} getPicklistOptions={getPicklistOptions}
             onCountChange={n => setTabCounts(p => ({ ...p, pc: n }))}
+            formConfig={formConfig}
+            dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}
+            dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
+            saveDynFields={saveDynFields}
+            caseType={caseData?.case_type}
           />
         )}
         {activeTab === 'dppr' && (

@@ -208,4 +208,106 @@ router.get('/files/:orgId/*', authenticate, async (req, res) => {
   }
 });
 
+// ─── Sprint 2 #14 — Source-document tagging ─────────────────────────────────
+
+// PUT /attachments/:id/document-type   body { document_type_id }
+router.put('/attachments/:id/document-type', authenticate, async (req, res) => {
+  try {
+    const { document_type_id } = req.body || {};
+    await pool.execute(
+      `UPDATE attachments SET document_type_id = ? WHERE id = ? AND deleted_at IS NULL`,
+      [document_type_id || null, req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /attachments/:id/source-for      body { source_for: [{section,field,entity_type,entity_id}] }
+router.put('/attachments/:id/source-for', authenticate, async (req, res) => {
+  try {
+    const { source_for } = req.body || {};
+    if (source_for != null && !Array.isArray(source_for)) {
+      return res.status(400).json({ error: 'source_for must be an array' });
+    }
+    await pool.execute(
+      `UPDATE attachments SET source_for_json = ? WHERE id = ? AND deleted_at IS NULL`,
+      [source_for ? JSON.stringify(source_for) : null, req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /attachments/source-for/:entity_type/:entity_id/:field
+//   → list attachments tagged as source of this specific field
+router.get('/attachments/source-for/:entity_type/:entity_id/:field', authenticate, async (req, res) => {
+  try {
+    const { entity_type, entity_id, field } = req.params;
+    const [rows] = await pool.execute(
+      `SELECT a.id, a.original_name, a.mime_type, a.uploaded_at, a.document_type_id,
+              dt.label AS document_type_label
+         FROM attachments a
+         LEFT JOIN document_types dt ON dt.id = a.document_type_id
+        WHERE a.deleted_at IS NULL
+          AND a.org_id = ?
+          AND a.entity_type = ?
+          AND a.entity_id = ?
+          AND JSON_CONTAINS(COALESCE(a.source_for_json, JSON_ARRAY()),
+                JSON_OBJECT('field', ?), '$')`,
+      [req.user.orgId, entity_type, entity_id, field]
+    );
+    res.json({ attachments: rows });
+  } catch (err) {
+    // JSON_CONTAINS may not be available on very old MySQL; fall back to a string LIKE.
+    try {
+      const [rows] = await pool.execute(
+        `SELECT a.id, a.original_name, a.mime_type, a.uploaded_at, a.document_type_id,
+                dt.label AS document_type_label
+           FROM attachments a
+           LEFT JOIN document_types dt ON dt.id = a.document_type_id
+          WHERE a.deleted_at IS NULL
+            AND a.org_id = ?
+            AND a.entity_type = ?
+            AND a.entity_id = ?
+            AND a.source_for_json LIKE ?`,
+        [req.user.orgId, req.params.entity_type, req.params.entity_id, `%"field":"${req.params.field}"%`]
+      );
+      res.json({ attachments: rows });
+    } catch (err2) { res.status(500).json({ error: err2.message }); }
+  }
+});
+
+// POST /attachments/:id/tags   body { tag }
+router.post('/attachments/:id/tags', authenticate, async (req, res) => {
+  try {
+    const { tag } = req.body || {};
+    if (!tag || !String(tag).trim()) return res.status(400).json({ error: 'tag required' });
+    await pool.execute(
+      `INSERT IGNORE INTO attachment_tags (org_id, attachment_id, tag, created_by)
+       VALUES (?, ?, ?, ?)`,
+      [req.user.orgId, req.params.id, String(tag).trim().slice(0, 60), req.user.userId]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/attachments/:id/tags/:tag', authenticate, async (req, res) => {
+  try {
+    await pool.execute(
+      `DELETE FROM attachment_tags WHERE attachment_id = ? AND tag = ?`,
+      [req.params.id, req.params.tag]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/attachments/:id/tags', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT tag, created_by, created_at FROM attachment_tags WHERE attachment_id = ? ORDER BY tag`,
+      [req.params.id]
+    );
+    res.json({ tags: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import toast from '../../../shared/utils/toast'
 import AETabPanel from './AETabPanel'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import DynamicFieldsSection from './DynamicFieldsSection'
+import { useCaseFieldContext } from '../../../shared/components/WiredField'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -9,6 +11,9 @@ const AE_TABS = [
   { key: 'general',         label: 'General' },
   { key: 'ae-flex-fields',  label: 'AE Flex Fields' },
   { key: 'events',          label: 'Events' },
+  { key: 'drugs',           label: 'Drugs' },
+  { key: 'meddra-coding',   label: 'Reactions Coding' },
+  { key: 'causality',       label: 'Causality' },
   { key: 'patient-info',    label: 'AE Patient Info' },
   { key: 'lab-results',     label: 'Lab Results' },
   { key: 'lab-notes',       label: 'Lab Notes' },
@@ -17,7 +22,12 @@ const AE_TABS = [
   { key: 'product-info',    label: 'Product Info' },
 ]
 
-export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange }) {
+export default function CaseAETab({
+  id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
+  formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
+  saveDynFields, caseType,
+}) {
+  const ctx = useCaseFieldContext()
   const [aeVersions,   setAeVersions]   = useState([])
   const [activeAeVer,  setActiveAeVer]  = useState(null)
   const [activeAeTab,  setActiveAeTab]  = useState('general')
@@ -73,12 +83,18 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
       const res  = await httpFetch(`${API}/cases/${id}/ae/versions`, { method: 'POST', headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      const updated = [...aeVersions.map(v => v.id === (aeVersions[aeVersions.length - 1]?.id) ? { ...v, is_locked: 1 } : v), data]
-      setAeVersions(updated)
-      onCountChange?.(updated.length)
-      setActiveAeVer(data)
+      // B5 — refetch authoritative version list from server (kill client-side race).
+      // The server is responsible for locking the previous version atomically with
+      // creating the new one; do not infer that state in the client.
+      const refetch = await httpFetch(`${API}/cases/${id}/ae/versions`, { headers })
+      const list    = await refetch.json()
+      const safeList = Array.isArray(list) ? list : []
+      setAeVersions(safeList)
+      onCountChange?.(safeList.length)
+      const fresh = safeList.find(v => v.id === data.id) || data
+      setActiveAeVer(fresh)
       setActiveAeTab('general')
-      loadAETab(data.id, 'general')
+      loadAETab(fresh.id, 'general')
     } catch (err) { toast.error(err.message) }
   }
 
@@ -103,8 +119,10 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
     }
   }
 
+  const [aeTabSaving, setAeTabSaving] = useState(false)
   async function saveAETab() {
-    if (!activeAeVer || isLocked(activeAeVer)) return
+    if (!activeAeVer || isLocked(activeAeVer) || aeTabSaving) return
+    setAeTabSaving(true)
     const tabData = aeTabData[`${activeAeVer.id}_${activeAeTab}`] || {}
     try {
       const res  = await httpFetch(`${API}/cases/ae/versions/${activeAeVer.id}/${activeAeTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
@@ -113,6 +131,7 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
       setAeTabData(prev => ({ ...prev, [`${activeAeVer.id}_${activeAeTab}`]: data }))
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) { toast.error(err.message) }
+    finally { setAeTabSaving(false) }
   }
 
   async function loadAeTransmissions() {
@@ -150,7 +169,7 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
   }
 
   return (
-    <div className="cf-tab-pane">
+    <div id="tab-ae" className="cf-tab-pane">
       <div className="cf-section-header-row">
         <button className="cf-add-btn" onClick={createAEVersion} disabled={!canCreateAeVersion}>
           + New Version
@@ -171,7 +190,20 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
       )}
 
       {aeVersions.length === 0 ? (
-        <div className="cf-empty-msg">No AE versions yet. Click "+ New Version" to start.</div>
+        <div className="cf-empty-state">
+          <div className="cf-empty-icon" aria-hidden="true">🩺</div>
+          <h3 className="cf-empty-title">No AE versions yet</h3>
+          <p className="cf-empty-msg">
+            Create the first AE version to begin clinical assessment.
+            Each version captures a snapshot of the case at a regulatory milestone
+            (initial intake, follow-up, expedited submission).
+          </p>
+          <ul className="cf-empty-hints">
+            <li>Click <strong>+ New Version</strong> above to start.</li>
+            <li>Close a version when you submit it — that locks it for audit.</li>
+            <li>Follow-up info goes into a new version, never overwriting the prior one.</li>
+          </ul>
+        </div>
       ) : (
         <>
           <div className="cf-version-bar">
@@ -212,7 +244,9 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
               getPicklistOptions={getPicklistOptions}
               versionId={activeAeVer?.id}
               headers={headers}
+              caseId={id}
               onSave={saveAETab}
+              saving={aeTabSaving}
             />
           )}
         </>
@@ -272,6 +306,26 @@ export default function CaseAETab({ id, headers, setSavedMsg, users, getFieldCon
           </div>
         ))}
       </div>
+
+      {/* B1 fix — admin-configured AE fields render here, scoped to displayTab='ae' */}
+      {formConfig && Array.isArray(formConfig.sections) && (
+        <DynamicFieldsSection
+          sections={formConfig.sections}
+          values={dynFieldValues || {}}
+          onChange={setDynFieldValues || (() => {})}
+          onSave={saveDynFields || (() => {})}
+          saving={dynFieldSaving}
+          rules={formConfig.rules || []}
+          errors={dynFieldErrors || {}}
+          caseId={ctx?.caseId}
+          caseStatus={ctx?.caseStatus}
+          caseSection="ae"
+          presence={ctx?.presence}
+          currentUserId={ctx?.currentUserId}
+          caseType={caseType}
+          displayTab="ae"
+        />
+      )}
     </div>
   )
 }

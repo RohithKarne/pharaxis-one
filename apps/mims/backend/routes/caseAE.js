@@ -219,19 +219,24 @@ router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, re
       event_description, outcome, start_date, end_date,
       is_serious = 0, is_death = 0, is_life_threatening = 0,
       is_hospitalization = 0, is_disability = 0,
-      is_congenital_anomaly = 0, is_other_medically_important = 0
+      is_congenital_anomaly = 0, is_other_medically_important = 0,
+      is_required_intervention = 0, is_lab_abnormality = 0
     } = req.body;
+    const serious = is_serious || is_death || is_life_threatening || is_hospitalization || is_disability ||
+      is_congenital_anomaly || is_other_medically_important || is_required_intervention || is_lab_abnormality;
     const [result] = await pool.execute(
       `INSERT INTO case_ae_events
         (version_id, event_description, outcome, start_date, end_date,
          is_serious, is_death, is_life_threatening, is_hospitalization,
-         is_disability, is_congenital_anomaly, is_other_medically_important)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         is_disability, is_congenital_anomaly, is_other_medically_important,
+         is_required_intervention, is_lab_abnormality)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [req.params.versionId, event_description || null, outcome || null,
        start_date || null, end_date || null,
-       is_serious ? 1 : 0, is_death ? 1 : 0, is_life_threatening ? 1 : 0,
+       serious ? 1 : 0, is_death ? 1 : 0, is_life_threatening ? 1 : 0,
        is_hospitalization ? 1 : 0, is_disability ? 1 : 0,
-       is_congenital_anomaly ? 1 : 0, is_other_medically_important ? 1 : 0]
+       is_congenital_anomaly ? 1 : 0, is_other_medically_important ? 1 : 0,
+       is_required_intervention ? 1 : 0, is_lab_abnormality ? 1 : 0]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_events WHERE id = ?', [result.insertId]
@@ -246,28 +251,36 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
     const {
       event_description, outcome, start_date, end_date,
       is_serious, is_death, is_life_threatening, is_hospitalization,
-      is_disability, is_congenital_anomaly, is_other_medically_important
+      is_disability, is_congenital_anomaly, is_other_medically_important,
+      is_required_intervention, is_lab_abnormality
     } = req.body;
+    const nextSerious = [
+      is_serious, is_death, is_life_threatening, is_hospitalization, is_disability,
+      is_congenital_anomaly, is_other_medically_important, is_required_intervention, is_lab_abnormality,
+    ].some(v => v === 1 || v === true || v === '1');
     await pool.execute(
       `UPDATE case_ae_events SET
         event_description          = COALESCE(?, event_description),
         outcome                    = COALESCE(?, outcome),
         start_date                 = COALESCE(?, start_date),
         end_date                   = COALESCE(?, end_date),
-        is_serious                 = COALESCE(?, is_serious),
         is_death                   = COALESCE(?, is_death),
         is_life_threatening        = COALESCE(?, is_life_threatening),
         is_hospitalization         = COALESCE(?, is_hospitalization),
         is_disability              = COALESCE(?, is_disability),
         is_congenital_anomaly      = COALESCE(?, is_congenital_anomaly),
-        is_other_medically_important = COALESCE(?, is_other_medically_important)
+        is_other_medically_important = COALESCE(?, is_other_medically_important),
+        is_required_intervention   = COALESCE(?, is_required_intervention),
+        is_lab_abnormality         = COALESCE(?, is_lab_abnormality),
+        is_serious                 = CASE WHEN ? = 1 THEN 1 ELSE is_serious END
        WHERE id = ?`,
       [
         event_description ?? null, outcome ?? null,
         start_date ?? null, end_date ?? null,
-        is_serious ?? null, is_death ?? null, is_life_threatening ?? null,
+        is_death ?? null, is_life_threatening ?? null,
         is_hospitalization ?? null, is_disability ?? null,
         is_congenital_anomaly ?? null, is_other_medically_important ?? null,
+        is_required_intervention ?? null, is_lab_abnormality ?? null, nextSerious ? 1 : 0,
         req.params.eventId
       ]
     );

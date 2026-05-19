@@ -2,11 +2,21 @@
  * admin-console.spec.js — Playwright E2E: MIMS Admin Console Navigation
  */
 const { test, expect } = require('@playwright/test')
+const adminRouteMap = require('../frontend/src/shared/config/adminRouteMap.json')
+
+const BACKEND = 'http://localhost:3000'
+const APP_BASE = '/mims'
+
+function appPath(path = '/') {
+  const raw = String(path || '/')
+  if (raw === '/') return `${APP_BASE}/`
+  return `${APP_BASE}${raw.startsWith('/') ? raw : `/${raw}`}`
+}
 
 async function buildSession(request, loginData, token, email, fallbackRole, moduleHints = []) {
   let meData = null
   try {
-    const meRes = await request.get('http://localhost:3000/api/auth/me', {
+    const meRes = await request.get(`${BACKEND}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
       timeout: 30000,
     })
@@ -56,7 +66,7 @@ async function resolveLoginSession(request, candidates, fallbackRole, moduleHint
 
   for (const candidate of candidates) {
     try {
-      const loginRes = await request.post('http://localhost:3000/api/auth/login', {
+      const loginRes = await request.post(`${BACKEND}/api/auth/login`, {
         data: candidate,
         timeout: 30000,
       })
@@ -67,7 +77,7 @@ async function resolveLoginSession(request, candidates, fallbackRole, moduleHint
       const challengeToken = loginData?.challengeToken
 
       if (!token && challengeToken) {
-        const skipRes = await request.post('http://localhost:3000/api/auth/2fa/skip-setup', {
+        const skipRes = await request.post(`${BACKEND}/api/auth/2fa/skip-setup`, {
           data: { challengeToken },
           timeout: 30000,
         })
@@ -91,7 +101,7 @@ async function resolveLoginSession(request, candidates, fallbackRole, moduleHint
 }
 
 async function hydrateAuthStorage(page, session) {
-  await page.goto('/')
+  await page.goto(appPath('/'))
   await page.evaluate((auth) => {
     localStorage.setItem('mims_token', auth.token)
     localStorage.setItem('mims_user', JSON.stringify(auth.user || {}))
@@ -132,7 +142,7 @@ test.describe('MIMS Admin Console', () => {
 
     await hydrateAuthStorage(page, sharedSession)
 
-    await page.goto('/admin-console')
+    await page.goto(appPath('/admin-console'))
     await page.waitForLoadState('networkidle')
   })
 
@@ -142,21 +152,28 @@ test.describe('MIMS Admin Console', () => {
     expect(bodyText.length).toBeGreaterThan(10)
   })
 
-  test('Picklists nav item is visible', async ({ page }) => {
-    await expect(page.getByText('Picklists', { exact: true })).toBeVisible({ timeout: 10000 })
+  test('Tables tab is visible', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Tables' })).toBeVisible({ timeout: 10000 })
   })
 
-  test('Audit Trail section is visible in sidebar', async ({ page }) => {
-    await expect(page.getByText('Audit Trail')).toBeVisible({ timeout: 10000 })
+  test('System tab is visible', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'System', exact: true })).toBeVisible({ timeout: 10000 })
   })
 
-  test('clicking Picklists navigates to picklists section', async ({ page }) => {
-    await page.getByText('Picklists', { exact: true }).first().click()
+  test('legacy picklists route lands on the table manager', async ({ page }) => {
+    await page.goto(appPath('/admin-console/picklists'))
     await page.waitForLoadState('networkidle')
-    await expect(page.locator('body')).toContainText('Picklist', { timeout: 10000 })
+    await expect(page.locator('body')).toContainText('Picklists', { timeout: 10000 })
   })
 
-  test('Integration Setup section is visible', async ({ page }) => {
-    await expect(page.getByText('Integration Setup')).toBeVisible({ timeout: 10000 })
+  test('legacy MIR integration route lands on the new system setup page', async ({ page }) => {
+    await page.goto(appPath('/admin-console/mir-int'))
+    await page.waitForLoadState('networkidle')
+    await expect(page.locator('body')).toContainText('MIR Integration', { timeout: 10000 })
+  })
+
+  test('shared admin route map stays aligned with the mounted routes', async () => {
+    expect(adminRouteMap.legacyAdminRoutes['/admin-console/picklists']).toBe(adminRouteMap.adminEntryRoutes.picklists)
+    expect(adminRouteMap.legacyAdminRoutes['/admin-console/mir-int']).toBe(adminRouteMap.adminEntryRoutes.mirIntegration)
   })
 })

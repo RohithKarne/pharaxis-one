@@ -5,6 +5,14 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = require('../utils/jwtSecret');
 const { sessionCacheGet, sessionCacheSet, sessionCacheInvalidate } = require('../services/redisClient');
 
+function createAuthError(message, code, status = 401, shouldLogout = status === 401) {
+  const err = new Error(message);
+  err.code = code;
+  err.status = status;
+  err.shouldLogout = shouldLogout;
+  return err;
+}
+
 function readCookie(req, name) {
   const cookieHeader = req.headers.cookie || '';
   const cookie = cookieHeader
@@ -22,18 +30,27 @@ function readBearer(req) {
 }
 
 async function validateAccessToken(token) {
-  if (!token) throw new Error('Access denied. No token provided.');
+  if (!token) throw createAuthError('Access denied. No token provided.', 'AUTH_TOKEN_MISSING');
 
   // ── Redis session cache (60s TTL) — eliminates DB hit on every request ──────
   // Cache miss / Redis down → falls through to DB check transparently.
   const cached = await sessionCacheGet(token);
   if (cached) {
     // Re-verify JWT signature even on cache hit (catches key rotation edge cases)
-    jwt.verify(token, JWT_SECRET);
+    try {
+      jwt.verify(token, JWT_SECRET);
+    } catch (_) {
+      throw createAuthError('Session revoked or invalid. Please log in again.', 'AUTH_TOKEN_INVALID');
+    }
     return { ...cached, token };
   }
 
-  const decoded = jwt.verify(token, JWT_SECRET);
+  let decoded;
+  try {
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch (_) {
+    throw createAuthError('Session revoked or invalid. Please log in again.', 'AUTH_TOKEN_INVALID');
+  }
 
   let sessionFound = false;
 
@@ -48,16 +65,16 @@ async function validateAccessToken(token) {
       const expiresAt = sessionRow.expires_at ? new Date(sessionRow.expires_at).getTime() : null;
       if (expiresAt && !Number.isNaN(expiresAt) && expiresAt < Date.now()) {
         await pool.execute('DELETE FROM sessions WHERE id = ?', [sessionRow.id]).catch(() => {});
-        throw new Error('Session expired. Please log in again.');
+        throw createAuthError('Session expired. Please log in again.', 'SESSION_EXPIRED');
       }
     }
   } catch (err) {
-    if (String(err?.message || '').includes('Session expired')) throw err;
-    throw new Error('Authentication service unavailable. Please log in again.');
+    if (err?.code) throw err;
+    throw createAuthError('Authentication service unavailable. Please try again shortly.', 'AUTH_SERVICE_UNAVAILABLE', 503, false);
   }
 
   if (!sessionFound) {
-    throw new Error('Session revoked or invalid. Please log in again.');
+    throw createAuthError('Session revoked or invalid. Please log in again.', 'SESSION_REVOKED');
   }
 
   const result = {
@@ -82,15 +99,25 @@ async function validateAccessToken(token) {
  */
 async function authenticate(req, res, next) {
   const token = readCookie(req, 'mims_token') || readBearer(req);
-  if (!token) return res.status(401).json({ error: 'Access denied. No token provided.' });
+  if (!token) {
+    return res.status(401).json({
+      error: 'Access denied. No token provided.',
+      error_code: 'AUTH_TOKEN_MISSING',
+      should_logout: true,
+    });
+  }
 
   try {
     req.user = await validateAccessToken(token);
     next();
   } catch (err) {
-    const message = String(err?.message || '');
-    if (message) return res.status(401).json({ error: message });
-    return res.status(401).json({ error: 'Invalid or expired token. Please log in again.' });
+    const status = Number(err?.status || 401);
+    const message = String(err?.message || 'Invalid or expired token. Please log in again.');
+    return res.status(status).json({
+      error: message,
+      error_code: err?.code || (status === 503 ? 'AUTH_SERVICE_UNAVAILABLE' : 'AUTH_TOKEN_INVALID'),
+      should_logout: Boolean(err?.shouldLogout),
+    });
   }
 }
 
@@ -101,7 +128,11 @@ async function authenticate(req, res, next) {
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+      return res.status(403).json({
+        error: 'You do not have permission to perform this action.',
+        error_code: 'ROLE_FORBIDDEN',
+        should_logout: false,
+      });
     }
     next();
   };
@@ -114,7 +145,11 @@ function requireRole(...roles) {
 function requireOrg(req, res, next) {
   if (req.user.role === 'superadmin') return next();
   if (!req.user.orgId) {
-    return res.status(403).json({ error: 'No active organisation. Please contact your administrator.' });
+    return res.status(403).json({
+      error: 'No active organisation. Please contact your administrator.',
+      error_code: 'ORG_CONTEXT_MISSING',
+      should_logout: false,
+    });
   }
   next();
 }
@@ -127,7 +162,11 @@ async function requireAccessNotExpired(req, res, next) {
       [req.user.userId, req.user.orgId]
     );
     if (rows.length > 0 && rows[0].access_expires_at && new Date(rows[0].access_expires_at) < new Date()) {
-      return res.status(401).json({ error: 'Your access to this organisation has expired. Please contact your administrator.' });
+      return res.status(403).json({
+        error: 'Your access to this organisation has expired. Please contact your administrator.',
+        error_code: 'ORG_ACCESS_EXPIRED',
+        should_logout: false,
+      });
     }
     next();
   } catch (_) {

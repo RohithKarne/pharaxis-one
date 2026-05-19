@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { getRuntimeHealth } = require('../../services/runtimeHealthService');
 
 function parseDetails(raw) {
   if (!raw) return null;
@@ -82,6 +83,15 @@ router.get('/observability/summary', authenticate, requireRole('admin', 'superad
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to load observability summary.' });
+  }
+});
+
+router.get('/observability/runtime-health', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+  try {
+    const health = await getRuntimeHealth();
+    res.json(health);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to load runtime health.' });
   }
 });
 

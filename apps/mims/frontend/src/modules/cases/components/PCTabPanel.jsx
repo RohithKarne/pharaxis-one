@@ -1,9 +1,27 @@
-export default function PCTabPanel({ tabKey, data, onChange, locked, onSave, getPicklistOptions }) {
+/**
+ * PCTabPanel — inner sub-tab of the PC component.
+ *
+ * Bug-fix history:
+ *   B3 (2026-05-16) — retired hardcoded PC Flex Fields ("Additional Field 1/2/3").
+ *     Admin-configurable now via Customize Forms; the PC Component tab renders
+ *     them via DynamicFieldsSection (display_tab='pc').
+ *   B4 (2026-05-16) — picklists fall back to a clear "no options" notice instead
+ *     of an infinite "Loading…" option.
+ *   B6 (2026-05-16) — `additional_info` / `notes` collided across sub-tabs.
+ *     Each PC sub-tab now uses a per-tab key (additional_info_general /
+ *     _patient / _product, notes_return / _replacement / _refund).
+ *   B13 (2026-05-16) — Save button now reflects external `saving` busy flag.
+ *   B17 (2026-05-16) — picklist <option>s use stable composite keys.
+ */
+
+export default function PCTabPanel({
+  tabKey, data, onChange, locked, onSave, getPicklistOptions, saving = false,
+}) {
   const d = data || {}
   const set = (key, val) => onChange({ ...d, [key]: val })
 
-  const fieldRow = (label, key, type = 'text') => (
-    <div key={key} className="cf-form-field">
+  const fieldRow = (label, key, type = 'text', { fullWidth = false } = {}) => (
+    <div key={key} className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}`}>
       <label>{label}</label>
       {type === 'textarea'
         ? <textarea rows={3} value={d[key] || ''} disabled={locked} onChange={e => set(key, e.target.value)} />
@@ -18,40 +36,50 @@ export default function PCTabPanel({ tabKey, data, onChange, locked, onSave, get
     </label>
   )
 
-  const selectRow = (label, key, sectionName, fieldName) => (
-    <div key={key} className="cf-form-field">
-      <label>{label}</label>
-      <select value={d[key] ?? ''} disabled={locked} onChange={e => set(key, e.target.value)}>
-        {getPicklistOptions(sectionName, fieldName).length > 0
-          ? getPicklistOptions(sectionName, fieldName).map(o => <option key={o.value} value={o.value}>{o.label}</option>)
-          : <option value=''>Loading...</option>}
-      </select>
-    </div>
-  )
+  const selectRow = (label, key, sectionName, fieldName) => {
+    const opts = getPicklistOptions(sectionName, fieldName)
+    const hasOpts = Array.isArray(opts) && opts.length > 0
+    return (
+      <div key={key} className="cf-form-field">
+        <label>{label}</label>
+        {hasOpts ? (
+          <select value={d[key] ?? ''} disabled={locked} onChange={e => set(key, e.target.value)}>
+            <option value="">— Select —</option>
+            {opts.map((o, i) => (
+              <option key={`${key}-${o.value ?? o.id ?? i}`} value={o.value}>{o.label || o.value}</option>
+            ))}
+          </select>
+        ) : (
+          <div className="cf-picklist-empty" title="Picklist source missing — define it in Picklists Table.">
+            <em>No options configured for this picklist.</em>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="cf-tab-panel">
       {tabKey === 'general' && (
         <div className="cf-form-grid">
-          {fieldRow('Complaint Description', 'complaint_description', 'textarea')}
+          {fieldRow('Complaint Description', 'complaint_description', 'textarea', { fullWidth: true })}
           {selectRow('PC Status',            'pc_status',          'PC — General', 'PC Status')}
           {selectRow('PC Category',          'pc_category',        'PC — General', 'PC Category')}
           {selectRow('PC Classification',    'pc_classification',  'PC — General', 'PC Classification')}
           {fieldRow('Date of Complaint',     'date_of_complaint', 'date')}
           {fieldRow('Date Received',         'date_received',     'date')}
           {fieldRow('Severity',              'severity')}
-          <div className="cf-form-field cf-form-field--full">{fieldRow('Additional Info', 'additional_info', 'textarea')}</div>
+          {fieldRow('Additional Info',       'additional_info_general', 'textarea', { fullWidth: true })}
         </div>
       )}
 
       {tabKey === 'pc-flex-fields' && (
         <div>
           <h3 className="cf-subsection-title">PC Flex Fields</h3>
-          <div className="cf-form-grid">
-            {fieldRow('Additional Field 1', 'pc_flex_1')}
-            {fieldRow('Additional Field 2', 'pc_flex_2')}
-            {fieldRow('Additional Field 3', 'pc_flex_3')}
-          </div>
+          <p className="cf-form-help-note">
+            Add admin-configured PC fields via <strong>System &rsaquo; Setup &rsaquo; Customize Forms</strong>.
+            Configured fields render automatically inside the PC Component tab under <em>Additional Fields</em>.
+          </p>
         </div>
       )}
 
@@ -65,7 +93,7 @@ export default function PCTabPanel({ tabKey, data, onChange, locked, onSave, get
           {fieldRow('Therapy End Date',   'therapy_end_date',    'date')}
           {fieldRow('Indication',         'indication')}
           {selectRow('Injury Experienced','injury_experienced',  'PC — Patient Information', 'Injury Experienced')}
-          <div className="cf-form-field cf-form-field--full">{fieldRow('Additional Info', 'additional_info', 'textarea')}</div>
+          {fieldRow('Additional Info',    'additional_info_patient', 'textarea', { fullWidth: true })}
         </div>
       )}
 
@@ -75,8 +103,8 @@ export default function PCTabPanel({ tabKey, data, onChange, locked, onSave, get
           {fieldRow('Lot Number',      'lot_number')}
           {fieldRow('Expiry Date',     'expiry_date', 'date')}
           {boolField('Product Sample Available', 'quantity_available')}
-          <div className="cf-form-field cf-form-field--full">{fieldRow('Storage Conditions', 'storage_conditions', 'textarea')}</div>
-          <div className="cf-form-field cf-form-field--full">{fieldRow('Additional Info', 'additional_info', 'textarea')}</div>
+          {fieldRow('Storage Conditions', 'storage_conditions', 'textarea', { fullWidth: true })}
+          {fieldRow('Additional Info',    'additional_info_product', 'textarea', { fullWidth: true })}
         </div>
       )}
 
@@ -89,7 +117,7 @@ export default function PCTabPanel({ tabKey, data, onChange, locked, onSave, get
           {fieldRow('Retrieval Date',       'retrieval_date', 'date')}
           {selectRow('Retrieval Method',    'retrieval_method', 'PC — Return & Retrieval', 'Retrieval Method')}
           {fieldRow('Tracking Number',      'tracking_number')}
-          <div className="cf-form-field cf-form-field--full">{fieldRow('Notes', 'notes', 'textarea')}</div>
+          {fieldRow('Notes',                'notes_return', 'textarea', { fullWidth: true })}
         </div>
       )}
 
@@ -100,7 +128,7 @@ export default function PCTabPanel({ tabKey, data, onChange, locked, onSave, get
           {fieldRow('Replacement Date',       'replacement_date',    'date')}
           {fieldRow('Replacement Product',    'replacement_product')}
           {fieldRow('Quantity',               'quantity',            'number')}
-          <div className="cf-form-field cf-form-field--full">{fieldRow('Notes', 'notes', 'textarea')}</div>
+          {fieldRow('Notes',                  'notes_replacement', 'textarea', { fullWidth: true })}
         </div>
       )}
 
@@ -112,13 +140,17 @@ export default function PCTabPanel({ tabKey, data, onChange, locked, onSave, get
           {boolField('Credit Requested',  'credit_requested')}
           {boolField('Credit Approved',   'credit_approved')}
           {fieldRow('Credit Amount',      'credit_amount',  'number')}
-          <div className="cf-form-field cf-form-field--full">{fieldRow('Notes', 'notes', 'textarea')}</div>
+          {fieldRow('Notes',              'notes_refund', 'textarea', { fullWidth: true })}
         </div>
       )}
 
-      {!locked && (
+      {!locked && tabKey !== 'pc-flex-fields' && (
         <div className="cf-form-actions">
-          <button className="cf-save-btn" onClick={onSave}>Save</button>
+          {/* B12 — label includes scope so the operator knows exactly what saves */}
+          <button className="cf-save-btn" onClick={onSave} disabled={saving}
+            title="Saves only this PC sub-tab. Use Save Case in the header for case-level info.">
+            {saving ? 'Saving…' : `Save ${tabKey.replace(/-/g, ' ')}`}
+          </button>
         </div>
       )}
     </div>

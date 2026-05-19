@@ -2856,3 +2856,54 @@
 .cf-pv-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .cf-pv-row { display: grid; grid-template-columns: 1fr 1fr 140px; gap: 10px; border-bottom: 1px solid var(--border); padding: 9px 0; }
 @media (max-width: 1100px) { .icsr-builder-grid { grid-template-columns: 1fr; overflow: auto; } .icsr-xml-pane { min-height: 260px; } }
+
+/* PV compliance extensions */
+.cf-ha-clock-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cf-ha-clock-chip { border: 1px solid var(--border); border-radius: 999px; padding: 4px 9px; font-size: 11px; background: #f8fafc; color: #334155; }
+.cf-ha-clock-chip.green { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+.cf-ha-clock-chip.amber { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.cf-ha-clock-chip.red { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
+.cf-validity-panel { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cf-validity-panel strong { font-size: 11px; color: #334155; }
+.cf-validity-item { border: 1px solid var(--border); border-radius: 999px; padding: 3px 7px; font-size: 11px; background: #fff; cursor: pointer; }
+.cf-validity-item.ok { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.cf-validity-item.missing { background: #fff1f2; color: #be123c; border-color: #fecdd3; }
+.cf-regulatory-dates { margin-top: 18px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #f8fafc; }
+.cf-regulatory-dates h3, .cf-drugs-tab h3, .cf-causality-matrix h3 { margin: 0 0 12px; }
+.cf-seriousness-box { border: 1px solid #fecaca; border-radius: 12px; padding: 12px; background: #fff7f7; }
+.cf-seriousness-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.cf-seriousness-head span { background: #dc2626; color: #fff; border-radius: 999px; font-size: 11px; font-weight: 800; padding: 3px 8px; }
+.cf-seriousness-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
+.cf-seriousness-grid label { font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.cf-meddra-coder { display: grid; grid-template-columns: 280px 1fr; gap: 16px; min-height: 420px; }
+.cf-meddra-coder aside, .cf-meddra-coder main { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: #fff; }
+.cf-meddra-coder aside { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.cf-meddra-coder aside button, .cf-meddra-results button { text-align: left; border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 8px; cursor: pointer; }
+.cf-meddra-coder aside button.active { border-color: #1d4ed8; background: #eff6ff; }
+.cf-meddra-coder input { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 9px; }
+.cf-meddra-results { display: grid; gap: 8px; margin: 12px 0; }
+.cf-meddra-results span { display: block; color: var(--text-secondary); font-size: 11px; }
+.cf-meddra-code-row { border-top: 1px solid var(--border); padding: 8px 0; }
+.cf-matrix-scroll { overflow: auto; border: 1px solid var(--border); border-radius: 12px; }
+.cf-causality-matrix table { width: 100%; border-collapse: collapse; }
+.cf-causality-matrix th, .cf-causality-matrix td { border-bottom: 1px solid var(--border); padding: 8px; vertical-align: top; }
+.cf-causality-matrix td button { display: grid; gap: 4px; width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 8px; cursor: pointer; }
+.cf-causality-matrix .company { color: #1d4ed8; font-weight: 700; }
+.cf-causality-matrix .reporter { color: #7c3aed; font-weight: 700; }
+.cf-modal-lite { position: fixed; inset: 0; z-index: 90; background: rgba(15, 23, 42, .36); display: grid; place-items: center; }
+.cf-modal-lite > div { width: min(520px, 92vw); background: #fff; border-radius: 14px; padding: 18px; display: grid; gap: 10px; }
+.cf-modal-lite label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; }
+.cf-drug-form { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; align-items: end; }
+.cf-drug-form input, .cf-drug-form select { border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.cf-role-badge { border-radius: 999px; padding: 3px 8px; font-size: 11px; color: #fff; font-weight: 800; }
+.cf-role-badge.suspect { background: #dc2626; }
+.cf-role-badge.co_suspect { background: #f97316; }
+.cf-role-badge.concomitant { background: #2563eb; }
+.cf-role-badge.interacting { background: #7c3aed; }
+.icsr-ack-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.icsr-ack-lane { border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: #f8fafc; }
+.icsr-ack-lane textarea { margin: 8px 0; }
+.icsr-xml-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.icsr-xml-tabs button { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 5px 10px; cursor: pointer; }
+.icsr-xml-tabs button.active { background: #1d3557; color: #fff; border-color: #1d3557; }
+@media (max-width: 900px) { .cf-meddra-coder, .icsr-ack-lanes { grid-template-columns: 1fr; } }

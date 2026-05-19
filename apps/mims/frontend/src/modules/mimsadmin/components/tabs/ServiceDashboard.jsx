@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
+import adminRouteMap from '../../../../shared/config/adminRouteMap.json'
 
 const STATUS_COLORS = {
   success: { bg: '#e6f4ee', color: '#007a5a', label: 'Success' },
@@ -15,26 +16,7 @@ const TYPE_LABELS = {
   poll:       { bg: '#fff7ed', color: '#c2410c', label: 'Poll'       },
 }
 
-// Frontend-owned route map — no backend dependency for navigation
-// All /admin-console + /superadmin links retired — point to /mims-admin (new MIMS admin).
-const CONFIG_ROUTES = {
-  'expiry-alerts':              '/mims-admin',
-  'cm-expiry-alerts':           '/browse-content',
-  'cm-module-lifecycle':        '/browse-content',
-  'cm-content-auto-archive':    '/browse-content',
-  'cm-review-reminders':        '/browse-content',
-  'emir-poller':                '/mims-admin?system=sys-setup-int-emir',
-  'scheduled-exports':          '/reports',
-  'case-transmission-sla':      '/transmissions',
-  'inbox-operational-sla':      '/mims-admin',
-  'notification-delivery-retry':'/mims-admin',
-  'novartis-daily-simulation':  '/mims-admin',
-  'extra-org-daily-simulation': '/mims-admin',
-  'login-audit-archive':        '/mims-admin',
-  'session-cleanup':            '/session-management',
-  'dppr-enforcement':           '/dppr',
-  'email-worker':               '/mims-admin?system=sys-setup-email-accounts',
-}
+const CONFIG_ROUTES = adminRouteMap.serviceConfigRoutes || {}
 
 const COLS = [
   'Task Name', 'Source', 'Type', 'Schedule',
@@ -47,6 +29,8 @@ export default function ServiceDashboard() {
   const navigate  = useNavigate()
 
   const [services,  setServices]  = useState([])
+  const [runtimeHealth, setRuntimeHealth] = useState(null)
+  const [observability, setObservability] = useState(null)
   const [loading,   setLoading]   = useState(false)
   const [lastFetch, setLastFetch] = useState(null)
 
@@ -57,8 +41,24 @@ export default function ServiceDashboard() {
   async function load() {
     setLoading(true)
     try {
-      const d = await httpFetch('/api/admin/service-dashboard', { headers: H }).then(r => r.json())
-      setServices(d.services || [])
+      const [servicesResult, healthResult, summaryResult] = await Promise.allSettled([
+        httpFetch('/api/admin/service-dashboard', { headers: H }),
+        httpFetch('/api/admin/observability/runtime-health', { headers: H }),
+        httpFetch('/api/admin/observability/summary', { headers: H }),
+      ])
+
+      if (servicesResult.status === 'fulfilled') {
+        const servicesData = await servicesResult.value.json()
+        setServices(servicesData.services || [])
+      }
+      if (healthResult.status === 'fulfilled') {
+        const healthData = await healthResult.value.json()
+        setRuntimeHealth(healthResult.value.ok ? healthData : null)
+      }
+      if (summaryResult.status === 'fulfilled') {
+        const summaryData = await summaryResult.value.json()
+        setObservability(summaryResult.value.ok ? summaryData : null)
+      }
       setLastFetch(new Date().toLocaleTimeString())
     } catch {
       /* silent */
@@ -88,6 +88,72 @@ export default function ServiceDashboard() {
           </span>
         )}
       </div>
+
+      {runtimeHealth && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
+          {[
+            { label: 'Runtime Status', value: String(runtimeHealth.status || 'unknown').toUpperCase() },
+            { label: 'Active Orgs', value: runtimeHealth.summary?.active_orgs ?? 0 },
+            { label: 'Admins With Access', value: runtimeHealth.summary?.admins_with_org_access ?? 0 },
+            { label: '401s (24h)', value: runtimeHealth.summary?.auth_401_24h ?? 0 },
+            { label: '5xx (24h)', value: runtimeHealth.summary?.server_5xx_24h ?? 0 },
+            { label: 'Worker Alerts (24h)', value: runtimeHealth.summary?.worker_alerts_24h ?? 0 },
+          ].map(card => (
+            <div key={card.label} style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{card.label}</div>
+              <div style={{ marginTop: 6, fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{card.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(runtimeHealth?.checks?.length || observability?.error_endpoints?.length) ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) minmax(320px, 1fr)', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
+          <section style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', padding: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>Runtime Checks</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {(runtimeHealth?.checks || []).slice(0, 8).map(check => (
+                <div key={check.name} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', background: check.status === 'failed' ? '#fff1f2' : check.status === 'warning' ? '#fffbeb' : '#f8fafc' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{check.name.replaceAll('_', ' ')}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: check.status === 'failed' ? '#be123c' : check.status === 'warning' ? '#a16207' : '#0f766e' }}>
+                      {check.status}
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{check.detail}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', padding: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Top Error Endpoints</div>
+              <button
+                type="button"
+                onClick={() => navigate('/exceptions')}
+                style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', fontSize: 12, cursor: 'pointer', color: 'var(--text-primary)' }}
+              >
+                Open Exceptions
+              </button>
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {(observability?.error_endpoints || []).slice(0, 8).map((item, idx) => (
+                <div key={`${item.path}-${item.method}-${item.status_code}-${idx}`} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
+                    <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.method} {item.path}</div>
+                    <div style={{ color: 'var(--text-muted)' }}>{item.total} hit(s)</div>
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-secondary)' }}>Status {item.status_code}</div>
+                </div>
+              ))}
+              {(!observability?.error_endpoints || observability.error_endpoints.length === 0) && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No error-heavy endpoints in the last 24 hours.</div>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {/* Table */}
       <div style={{ flex: 1, overflow: 'auto' }}>

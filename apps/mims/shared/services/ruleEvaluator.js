@@ -47,6 +47,7 @@ function evaluateCondition(condition, formData) {
   if (!condition || typeof condition !== 'object') return true;
   if (Array.isArray(condition.and)) return condition.and.every((c) => evaluateCondition(c, formData));
   if (Array.isArray(condition.or)) return condition.or.some((c) => evaluateCondition(c, formData));
+  if (condition.not) return !evaluateCondition(condition.not, formData);
   return compareCondition(condition, formData);
 }
 
