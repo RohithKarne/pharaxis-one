@@ -1,0 +1,209 @@
+name: Reusable App Deploy
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        required: true
+        type: string
+      app_slug:
+        required: true
+        type: string
+      app_root:
+        required: true
+        type: string
+      frontend_dir:
+        required: true
+        type: string
+      frontend_lockfile:
+        required: true
+        type: string
+      publish_dir:
+        required: true
+        type: string
+      pm2_name:
+        required: true
+        type: string
+      environment_name:
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ inputs.app_name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.frontend_dir }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ${{ inputs.frontend_lockfile }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ inputs.app_slug }}
+          path: ${{ inputs.frontend_dir }}/dist/
+          retention-days: 1
+
+  deploy:
+    name: Deploy ${{ inputs.app_name }}
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 15
+    environment: ${{ inputs.environment_name }}
+    concurrency:
+      group: pharaxis-production-ec2
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ inputs.app_slug }}
+          path: artifacts/${{ inputs.app_slug }}/
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/pharaxis-key.pem
+          sed -i 's/\r$//' ~/.ssh/pharaxis-key.pem
+          chmod 600 ~/.ssh/pharaxis-key.pem
+
+      - name: Preflight EC2 SSH reachability
+        run: |
+          HOST="${{ secrets.EC2_HOST }}"
+          PORT="${{ secrets.EC2_SSH_PORT }}"
+          if [ -z "$PORT" ]; then PORT="22"; fi
+
+          echo "Checking SSH reachability to ${HOST}:${PORT}"
+          for i in {1..6}; do
+            if nc -z -w 5 "$HOST" "$PORT"; then
+              echo "SSH port is reachable."
+              exit 0
+            fi
+            echo "Attempt $i/6 failed. Retrying in 10s..."
+            sleep 10
+          done
+
+          echo "ERROR: Cannot reach ${HOST}:${PORT} from GitHub runner."
+          echo "Check EC2 instance state, EC2_HOST secret, security-group inbound rule for SSH, and NACL."
+          exit 1
+
+      - name: Copy dist files to EC2 staging dir
+        env:
+          APP_SLUG: ${{ inputs.app_slug }}
+          APP_NAME: ${{ inputs.app_name }}
+          STAGING_DIR: /tmp/pharaxis-dist-${{ inputs.app_slug }}-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          PORT="${{ secrets.EC2_SSH_PORT }}"
+          if [ -z "$PORT" ]; then PORT="22"; fi
+
+          DEST="${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}"
+
+          run_ssh() {
+            ssh -i ~/.ssh/pharaxis-key.pem \
+              -p "$PORT" \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=20 \
+              -o ConnectionAttempts=3 \
+              -o ServerAliveInterval=15 \
+              -o ServerAliveCountMax=3 \
+              "$DEST" "$@"
+          }
+
+          run_scp() {
+            scp -i ~/.ssh/pharaxis-key.pem \
+              -P "$PORT" \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=20 \
+              -o ConnectionAttempts=3 \
+              -o ServerAliveInterval=15 \
+              -o ServerAliveCountMax=3 \
+              -r "$@"
+          }
+
+          retry() {
+            local max=4
+            local attempt=1
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                echo "Command failed after ${max} attempts: $*"
+                return 1
+              fi
+              echo "Attempt ${attempt}/${max} failed. Retrying in 8s..."
+              attempt=$((attempt + 1))
+              sleep 8
+            done
+          }
+
+          retry run_ssh "mkdir -p '$STAGING_DIR'"
+          echo "--- Staging ${APP_NAME} dist ---"
+          retry run_scp "artifacts/${APP_SLUG}/." "$DEST:$STAGING_DIR/"
+
+      - name: Publish dist + pull backend + restart PM2
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          APP_SLUG: ${{ inputs.app_slug }}
+          APP_NAME: ${{ inputs.app_name }}
+          APP_ROOT: ${{ inputs.app_root }}
+          PUBLISH_DIR: ${{ inputs.publish_dir }}
+          PM2_NAME: ${{ inputs.pm2_name }}
+          STAGING_DIR: /tmp/pharaxis-dist-${{ inputs.app_slug }}-${{ github.run_id }}-${{ github.run_attempt }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          port: ${{ secrets.EC2_SSH_PORT != '' && secrets.EC2_SSH_PORT || '22' }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 60s
+          command_timeout: 10m
+          envs: APP_SLUG,APP_NAME,APP_ROOT,PUBLISH_DIR,PM2_NAME,STAGING_DIR
+          script: |
+            set -e
+
+            echo "======================================"
+            echo " Pharaxis One — Deploying ${APP_NAME}"
+            echo "======================================"
+
+            sudo mkdir -p "$PUBLISH_DIR"
+            sudo cp -r "$STAGING_DIR"/. "$PUBLISH_DIR"/
+            echo "--- [${APP_NAME}] Published ✅ ---"
+            rm -rf "$STAGING_DIR"
+
+            cd /home/ubuntu/pharaxis
+            echo "--- Pulling latest code ---"
+            git pull origin main
+
+            echo "--- [${APP_NAME}] npm install --omit=dev ---"
+            cd "/home/ubuntu/pharaxis/${APP_ROOT}" && npm install --omit=dev
+            cd /home/ubuntu/pharaxis
+
+            echo "--- Applying PM2 ecosystem config ---"
+            pm2 startOrReload ecosystem.config.js --only "$PM2_NAME" --update-env
+            pm2 save
+
+            echo "--- Running postdeploy smoke ---"
+            PUBLIC_BASE_URL="http://127.0.0.1" CHANGED_APPS="$APP_SLUG" node scripts/postdeploy-smoke.mjs
+
+            echo ""
+            echo "======================================"
+            echo " Deploy Complete ✅"
+            echo "======================================"

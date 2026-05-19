@@ -1,0 +1,31 @@
+app:mims:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/mims/**'
+
+app:qms:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/qms/**'
+
+app:vault:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/vault/**'
+
+app:cp-portal:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/cp-portal/**'
+
+app:ai-agent:
+  - changed-files:
+      - any-glob-to-any-file: 'apps/ai-agent/**'
+
+area:github:
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+area:docs:
+  - changed-files:
+      - any-glob-to-any-file: 'docs/**'
+
+area:scripts:
+  - changed-files:
+      - any-glob-to-any-file: 'scripts/**'

@@ -1,8 +1,8 @@
 ---
 name: Feature Request
-about: New feature or enhancement for MIMS-CP Portal
+about: New feature or enhancement for one of the Pharaxis products
 title: '[FEATURE] '
-labels: enhancement
+labels: type:enhancement
 assignees: ''
 ---
 

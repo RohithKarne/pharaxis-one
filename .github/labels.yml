@@ -1,0 +1,42 @@
+- name: app:mims
+  color: '0E8A16'
+  description: Changes affecting the MIMS product
+- name: app:qms
+  color: '1D76DB'
+  description: Changes affecting the QMS product
+- name: app:vault
+  color: '5319E7'
+  description: Changes affecting the Vault product
+- name: app:cp-portal
+  color: 'FBCA04'
+  description: Changes affecting the CP Portal product
+- name: app:ai-agent
+  color: 'D93F0B'
+  description: Changes affecting the AI-Agent product
+- name: area:github
+  color: 'BFD4F2'
+  description: Changes affecting GitHub workflows or repository automation
+- name: area:docs
+  color: 'C2E0C6'
+  description: Documentation changes
+- name: area:scripts
+  color: 'F9D0C4'
+  description: Shared script changes
+- name: type:bug
+  color: 'D73A4A'
+  description: Defect or regression work
+- name: type:enhancement
+  color: 'A2EEEF'
+  description: Product or engineering improvement
+- name: dependencies
+  color: '0366D6'
+  description: Dependency management changes
+- name: frontend
+  color: 'F9D0C4'
+  description: Frontend specific dependency or feature work
+- name: backend
+  color: '7057FF'
+  description: Backend specific dependency or feature work
+- name: area:ci
+  color: 'C5DEF5'
+  description: CI or release automation changes

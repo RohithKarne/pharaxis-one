@@ -6,7 +6,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["dependencies", "mims"]
+    labels: ["dependencies", "app:mims"]
 
   - package-ecosystem: "npm"
     directory: "/apps/mims/frontend"
@@ -14,7 +14,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["dependencies", "mims", "frontend"]
+    labels: ["dependencies", "app:mims", "frontend"]
 
   - package-ecosystem: "npm"
     directory: "/apps/cp-portal/backend"
@@ -22,7 +22,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["dependencies", "cp-portal", "backend"]
+    labels: ["dependencies", "app:cp-portal", "backend"]
 
   - package-ecosystem: "npm"
     directory: "/apps/cp-portal/frontend"
@@ -30,7 +30,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["dependencies", "cp-portal", "frontend"]
+    labels: ["dependencies", "app:cp-portal", "frontend"]
 
   - package-ecosystem: "npm"
     directory: "/apps/ai-agent"
@@ -38,7 +38,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["dependencies", "ai-agent"]
+    labels: ["dependencies", "app:ai-agent"]
 
   - package-ecosystem: "npm"
     directory: "/apps/ai-agent/frontend"
@@ -46,7 +46,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["dependencies", "ai-agent", "frontend"]
+    labels: ["dependencies", "app:ai-agent", "frontend"]
 
   - package-ecosystem: "npm"
     directory: "/apps/vault"
@@ -54,7 +54,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["dependencies", "vault"]
+    labels: ["dependencies", "app:vault"]
 
   - package-ecosystem: "npm"
     directory: "/apps/vault/frontend"
@@ -62,7 +62,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["dependencies", "vault", "frontend"]
+    labels: ["dependencies", "app:vault", "frontend"]
 
   - package-ecosystem: "npm"
     directory: "/apps/qms/backend"
@@ -70,7 +70,7 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["dependencies", "qms", "backend"]
+    labels: ["dependencies", "app:qms", "backend"]
 
   - package-ecosystem: "npm"
     directory: "/apps/qms/frontend"
@@ -78,10 +78,10 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    labels: ["dependencies", "qms", "frontend"]
+    labels: ["dependencies", "app:qms", "frontend"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
-    labels: ["dependencies", "ci"]
+    labels: ["dependencies", "area:ci"]

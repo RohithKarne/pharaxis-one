@@ -1,0 +1,19 @@
+name: AI-Agent Release
+
+on:
+  push:
+    tags:
+      - 'ai-agent-v*.*.*'
+
+jobs:
+  release:
+    uses: ./.github/workflows/_standard-app-release.yml
+    with:
+      app_name: AI-Agent
+      app_slug: ai-agent
+      app_root: apps/ai-agent
+      app_lockfile: apps/ai-agent/package-lock.json
+      frontend_dir: apps/ai-agent/frontend
+      frontend_lockfile: apps/ai-agent/frontend/package-lock.json
+      test_command: npm run test
+      security_command: npm run security:scan

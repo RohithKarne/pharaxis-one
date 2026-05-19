@@ -1,0 +1,19 @@
+name: Vault Release
+
+on:
+  push:
+    tags:
+      - 'vault-v*.*.*'
+
+jobs:
+  release:
+    uses: ./.github/workflows/_standard-app-release.yml
+    with:
+      app_name: Vault
+      app_slug: vault
+      app_root: apps/vault
+      app_lockfile: apps/vault/package-lock.json
+      frontend_dir: apps/vault/frontend
+      frontend_lockfile: apps/vault/frontend/package-lock.json
+      test_command: npm run test
+      security_command: npm run security:scan

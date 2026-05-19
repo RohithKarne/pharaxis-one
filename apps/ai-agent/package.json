@@ -6,7 +6,11 @@
     "db:migrate": "node backend/database/migrate.js",
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
-    "dev:all": "concurrently -n backend,frontend -c cyan,magenta \"nodemon backend/server.js\" \"cd frontend && npm run dev\""
+    "dev:all": "concurrently -n backend,frontend -c cyan,magenta \"nodemon backend/server.js\" \"cd frontend && npm run dev\"",
+    "build": "cd frontend && npm run build",
+    "security:scan": "bash ./scripts/security-scan.sh",
+    "test": "npm run test:static",
+    "test:static": "node backend/tests/syntax-check.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",

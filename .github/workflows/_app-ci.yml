@@ -1,0 +1,134 @@
+name: Reusable App CI
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        required: true
+        type: string
+      app_root:
+        required: true
+        type: string
+      app_lockfile:
+        required: true
+        type: string
+      frontend_dir:
+        required: true
+        type: string
+      frontend_lockfile:
+        required: true
+        type: string
+      backend_working_directory:
+        required: true
+        type: string
+      backend_entrypoint:
+        required: true
+        type: string
+      quality_command:
+        required: false
+        default: ''
+        type: string
+      security_command:
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.frontend_dir }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ${{ inputs.frontend_lockfile }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+  backend-syntax:
+    name: Backend Syntax
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.backend_working_directory }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Syntax check backend entrypoint
+        run: node --check ${{ inputs.backend_entrypoint }}
+
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    if: ${{ inputs.quality_command != '' }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.app_root }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ${{ inputs.app_lockfile }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install scanner dependencies
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+
+      - name: Run quality gate
+        run: ${{ inputs.quality_command }}
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: ${{ inputs.security_command != '' }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.app_root }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ${{ inputs.app_lockfile }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install scanner dependencies
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+
+      - name: Run security scan
+        run: ${{ inputs.security_command }}

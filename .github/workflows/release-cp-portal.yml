@@ -1,0 +1,19 @@
+name: CP Portal Release
+
+on:
+  push:
+    tags:
+      - 'cp-portal-v*.*.*'
+
+jobs:
+  release:
+    uses: ./.github/workflows/_standard-app-release.yml
+    with:
+      app_name: CP Portal
+      app_slug: cp-portal
+      app_root: apps/cp-portal
+      app_lockfile: apps/cp-portal/package-lock.json
+      frontend_dir: apps/cp-portal/frontend
+      frontend_lockfile: apps/cp-portal/frontend/package-lock.json
+      test_command: npm run test
+      security_command: npm run security:scan

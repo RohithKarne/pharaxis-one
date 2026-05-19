@@ -3,19 +3,21 @@ name: MIMS Validated Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'mims-v*.*.*'
 
 jobs:
   validated-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: apps/mims
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: '20'
       - run: npm ci
       - run: cd frontend && npm ci
       - run: npm test -- --runInBand

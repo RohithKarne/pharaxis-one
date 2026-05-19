@@ -1,0 +1,30 @@
+name: AI-Agent CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/ai-agent/**'
+      - '.github/workflows/_app-ci.yml'
+      - '.github/workflows/ci-ai-agent.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/ai-agent/**'
+      - '.github/workflows/_app-ci.yml'
+      - '.github/workflows/ci-ai-agent.yml'
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/_app-ci.yml
+    with:
+      app_name: AI-Agent
+      app_root: apps/ai-agent
+      app_lockfile: apps/ai-agent/package-lock.json
+      frontend_dir: apps/ai-agent/frontend
+      frontend_lockfile: apps/ai-agent/frontend/package-lock.json
+      backend_working_directory: apps/ai-agent
+      backend_entrypoint: backend/server.js
+      quality_command: npm run test:static
+      security_command: npm run security:scan

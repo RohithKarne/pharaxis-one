@@ -1,0 +1,19 @@
+name: QMS Release
+
+on:
+  push:
+    tags:
+      - 'qms-v*.*.*'
+
+jobs:
+  release:
+    uses: ./.github/workflows/_standard-app-release.yml
+    with:
+      app_name: QMS
+      app_slug: qms
+      app_root: apps/qms
+      app_lockfile: apps/qms/package-lock.json
+      frontend_dir: apps/qms/frontend
+      frontend_lockfile: apps/qms/frontend/package-lock.json
+      test_command: npm run test
+      security_command: npm run security:scan

@@ -1,0 +1,30 @@
+name: CP Portal CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/cp-portal/**'
+      - '.github/workflows/_app-ci.yml'
+      - '.github/workflows/ci-cp-portal.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/cp-portal/**'
+      - '.github/workflows/_app-ci.yml'
+      - '.github/workflows/ci-cp-portal.yml'
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/_app-ci.yml
+    with:
+      app_name: CP Portal
+      app_root: apps/cp-portal
+      app_lockfile: apps/cp-portal/package-lock.json
+      frontend_dir: apps/cp-portal/frontend
+      frontend_lockfile: apps/cp-portal/frontend/package-lock.json
+      backend_working_directory: apps/cp-portal/backend
+      backend_entrypoint: server.js
+      quality_command: npm run test:static
+      security_command: npm run security:scan

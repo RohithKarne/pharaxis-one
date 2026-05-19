@@ -1,0 +1,30 @@
+name: Vault CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/vault/**'
+      - '.github/workflows/_app-ci.yml'
+      - '.github/workflows/ci-vault.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/vault/**'
+      - '.github/workflows/_app-ci.yml'
+      - '.github/workflows/ci-vault.yml'
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/_app-ci.yml
+    with:
+      app_name: Vault
+      app_root: apps/vault
+      app_lockfile: apps/vault/package-lock.json
+      frontend_dir: apps/vault/frontend
+      frontend_lockfile: apps/vault/frontend/package-lock.json
+      backend_working_directory: apps/vault
+      backend_entrypoint: backend/server.js
+      quality_command: npm run test:static
+      security_command: npm run security:scan

@@ -1,0 +1,82 @@
+name: Reusable Standard App Release
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        required: true
+        type: string
+      app_slug:
+        required: true
+        type: string
+      app_root:
+        required: true
+        type: string
+      app_lockfile:
+        required: true
+        type: string
+      frontend_dir:
+        required: true
+        type: string
+      frontend_lockfile:
+        required: true
+        type: string
+      test_command:
+        required: false
+        default: ''
+        type: string
+      security_command:
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: ${{ inputs.app_root }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            ${{ inputs.app_lockfile }}
+            ${{ inputs.frontend_lockfile }}
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: ${{ inputs.frontend_dir }}
+
+      - name: Run tests
+        if: ${{ inputs.test_command != '' }}
+        run: ${{ inputs.test_command }}
+
+      - name: Run security scan
+        if: ${{ inputs.security_command != '' }}
+        run: ${{ inputs.security_command }}
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Package release artifacts
+        run: |
+          tar -czf "${{ inputs.app_slug }}-dist.tar.gz" -C frontend dist
+          npx --yes @cyclonedx/cyclonedx-npm --output-file "sbom-${{ inputs.app_slug }}.json" || true
+          sha256sum "${{ inputs.app_slug }}-dist.tar.gz" "sbom-${{ inputs.app_slug }}.json" > "${{ inputs.app_slug }}-release-manifest.sha256"
+
+      - name: Publish GitHub release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ inputs.app_root }}/${{ inputs.app_slug }}-dist.tar.gz
+            ${{ inputs.app_root }}/sbom-${{ inputs.app_slug }}.json
+            ${{ inputs.app_root }}/${{ inputs.app_slug }}-release-manifest.sha256

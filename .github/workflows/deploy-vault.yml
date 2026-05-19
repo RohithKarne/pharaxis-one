@@ -1,0 +1,22 @@
+name: Deploy Vault
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/vault/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_app-deploy.yml
+    secrets: inherit
+    with:
+      app_name: Vault
+      app_slug: vault
+      app_root: apps/vault
+      frontend_dir: apps/vault/frontend
+      frontend_lockfile: apps/vault/frontend/package-lock.json
+      publish_dir: /var/www/pharaxis/vault
+      pm2_name: vault
+      environment_name: vault-prod

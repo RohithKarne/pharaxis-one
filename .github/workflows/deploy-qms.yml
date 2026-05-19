@@ -1,0 +1,22 @@
+name: Deploy QMS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/qms/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_app-deploy.yml
+    secrets: inherit
+    with:
+      app_name: QMS
+      app_slug: qms
+      app_root: apps/qms
+      frontend_dir: apps/qms/frontend
+      frontend_lockfile: apps/qms/frontend/package-lock.json
+      publish_dir: /var/www/pharaxis/qms
+      pm2_name: qms
+      environment_name: qms-prod

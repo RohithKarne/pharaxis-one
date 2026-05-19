@@ -1,0 +1,22 @@
+name: Deploy CP Portal
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/cp-portal/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_app-deploy.yml
+    secrets: inherit
+    with:
+      app_name: CP Portal
+      app_slug: cp-portal
+      app_root: apps/cp-portal
+      frontend_dir: apps/cp-portal/frontend
+      frontend_lockfile: apps/cp-portal/frontend/package-lock.json
+      publish_dir: /var/www/pharaxis/cp-portal
+      pm2_name: cp-portal
+      environment_name: cp-portal-prod

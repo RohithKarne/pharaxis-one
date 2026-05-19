@@ -1,0 +1,29 @@
+name: MIMS CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mims/**'
+      - '.github/workflows/_app-ci.yml'
+      - '.github/workflows/ci-mims.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/mims/**'
+      - '.github/workflows/_app-ci.yml'
+      - '.github/workflows/ci-mims.yml'
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/_app-ci.yml
+    with:
+      app_name: MIMS
+      app_root: apps/mims
+      app_lockfile: apps/mims/package-lock.json
+      frontend_dir: apps/mims/frontend
+      frontend_lockfile: apps/mims/frontend/package-lock.json
+      backend_working_directory: apps/mims
+      backend_entrypoint: backend/server.js
+      security_command: npm run security:scan

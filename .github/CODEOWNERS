@@ -1,0 +1,14 @@
+# Default repo owner until app-specific maintainers are split further.
+* @RohithKarne
+
+# Product ownership
+/apps/mims/ @RohithKarne
+/apps/qms/ @RohithKarne
+/apps/vault/ @RohithKarne
+/apps/cp-portal/ @RohithKarne
+/apps/ai-agent/ @RohithKarne
+
+# Shared repo operations
+/.github/ @RohithKarne
+/docs/ @RohithKarne
+/scripts/ @RohithKarne

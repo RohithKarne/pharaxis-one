@@ -1,0 +1,22 @@
+name: Deploy AI-Agent
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/ai-agent/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_app-deploy.yml
+    secrets: inherit
+    with:
+      app_name: AI-Agent
+      app_slug: ai-agent
+      app_root: apps/ai-agent
+      frontend_dir: apps/ai-agent/frontend
+      frontend_lockfile: apps/ai-agent/frontend/package-lock.json
+      publish_dir: /var/www/pharaxis/ai-agent
+      pm2_name: ai-agent
+      environment_name: ai-agent-prod
