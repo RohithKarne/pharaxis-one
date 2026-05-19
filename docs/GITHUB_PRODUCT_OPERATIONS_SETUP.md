@@ -27,6 +27,13 @@ Create these GitHub environments in the repository settings:
 | `cp-portal-prod` | CP Portal | `.github/workflows/deploy-cp-portal.yml` |
 | `ai-agent-prod` | AI-Agent | `.github/workflows/deploy-ai-agent.yml` |
 
+## Repo Automation Helpers
+
+After `gh auth login` is working on an admin machine, these scripts can apply most of the setup:
+
+- `./scripts/github/bootstrap-product-ops.sh`
+- `./scripts/github/apply-main-branch-protection.sh`
+
 ## Minimum Environment Rules
 
 Apply these rules to each production environment:
@@ -122,3 +129,4 @@ Use:
 - [ ] Run label sync once
 - [ ] Confirm PR labeler has permission to write labels
 - [ ] Start using app-specific release tags
+- [ ] Apply branch protection with the exact required GitHub check names
