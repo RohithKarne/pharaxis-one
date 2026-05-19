@@ -160,7 +160,7 @@ jobs:
           retry run_scp "artifacts/${APP_SLUG}/." "$DEST:$STAGING_DIR/"
 
       - name: Publish dist + pull backend + restart PM2
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         env:
           APP_SLUG: ${{ inputs.app_slug }}
           APP_NAME: ${{ inputs.app_name }}
