@@ -23,6 +23,7 @@ const {
   sendEmailOtp,
 } = require('../services/twoFactorService');
 const { emitSuperadminAlert } = require('../services/alertService');
+const { sessionCacheInvalidate } = require('../services/redisClient');
 const {
   buildAuthorizationUrl,
   exchangeCodeForTokens,
@@ -93,6 +94,22 @@ async function logLoginAudit({ userId, userName, role, status, failReason, authE
 
 function issueToken(payload, expiresIn = '8h') {
   return jwt.sign(payload, JWT_SECRET, { expiresIn });
+}
+
+/**
+ * issueSessionToken — issues a full login/session token that carries an
+ * `originalIat` claim marking the moment the user FIRST authenticated.
+ *
+ * The claim is preserved across re-issuance (org switch, session refresh) so
+ * the 12-hour absolute session cap is measured from the original login, not
+ * from the latest token. Do NOT use for short-lived flow tokens (2FA pending,
+ * password reset) — those use issueToken directly.
+ */
+function issueSessionToken(payload, expiresIn = '8h') {
+  const originalIat = Number.isFinite(payload.originalIat)
+    ? payload.originalIat
+    : Math.floor(Date.now() / 1000);
+  return issueToken({ ...payload, originalIat }, expiresIn);
 }
 
 function attachAuthCookie(res, token, maxAgeMs = 8 * 60 * 60 * 1000) {
@@ -549,7 +566,7 @@ async function buildLoginStartSsoRedirect({ orgId, providerKey, returnTo }) {
 
 async function establishRegularSession({ res, req, user, context, trustedDeviceToken = null, authEvent = 'login_success' }) {
   const roleForOrg = context.selected?.role_at_org || user.role;
-  const token = issueToken({
+  const token = issueSessionToken({
     userId: user.id,
     email: user.email,
     role: roleForOrg,
@@ -1080,7 +1097,7 @@ const authController = {
       }
 
       if (user.role === 'superadmin') {
-        const token = issueToken({ userId: user.id, email: user.email, role: user.role, orgId: null, siteId: null });
+        const token = issueSessionToken({ userId: user.id, email: user.email, role: user.role, orgId: null, siteId: null });
         await trackSessionToken(user.id, token);
         const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
         const config = await getSystemConfig();
@@ -1277,7 +1294,7 @@ const authController = {
       }
 
       if (user.role === 'superadmin') {
-        const token = issueToken({ userId: user.id, email: user.email, role: user.role, orgId: null, siteId: null });
+        const token = issueSessionToken({ userId: user.id, email: user.email, role: user.role, orgId: null, siteId: null });
         await trackSessionToken(user.id, token);
         const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
         const config = await getSystemConfig();
@@ -1589,7 +1606,7 @@ const authController = {
         authEvent,
         metadata: { orgId: pending.orgId, method: backupCode ? 'backup' : method, rememberDevice: !!rememberDevice },
       });
-      const token = issueToken({
+      const token = issueSessionToken({
         userId: pending.userId,
         email: pending.email,
         role: pending.role,
@@ -1705,12 +1722,15 @@ const authController = {
 
       const siteId = access.primary_site_id;
       const roleForOrg = access.role_at_org || req.user.role;
-      const token = issueToken({
+      // Preserve original login time across org switch so the 12h cap is unaffected.
+      const priorOriginalIat = jwt.decode(req.user.token)?.originalIat;
+      const token = issueSessionToken({
         userId: req.user.userId,
         email: req.user.email,
         role: roleForOrg,
         orgId: Number(orgId),
         siteId,
+        originalIat: priorOriginalIat,
       });
       await trackSessionToken(req.user.userId, token);
       attachAuthCookie(res, token, Number(access.session_timeout_minutes || 30) * 60 * 1000);
@@ -1781,6 +1801,83 @@ const authController = {
       return res.status(200).json({ message: 'Password updated. Please log in again.' });
     } catch (err) {
       console.error('Reset-password error:', err);
+      return res.status(500).json({ error: 'Server error.' });
+    }
+  },
+
+  /**
+   * refreshSession — issues a fresh 8h session token for an authenticated user
+   * who is approaching JWT expiry, so they can keep working without losing state.
+   *
+   * Guards:
+   *  - Window guard: only refresh in the last 15 min before expiry (blocks early
+   *    refresh of a long-lived stolen token).
+   *  - 12h absolute cap: measured from `originalIat` (original login). Past the
+   *    cap, refusal forces a real re-login.
+   *
+   * On success: rotates the session row, invalidates the old Redis cache entry,
+   * re-attaches the cookie, audits `session_refreshed`, and returns the new token.
+   */
+  async refreshSession(req, res) {
+    try {
+      const currentToken = req.user.token;
+      const decoded = jwt.decode(currentToken) || {};
+      const nowSec = Math.floor(Date.now() / 1000);
+
+      const exp = Number(decoded.exp || 0);
+      if (!exp) {
+        return res.status(400).json({
+          error: 'Session not eligible for refresh.',
+          error_code: 'REFRESH_NOT_ELIGIBLE',
+        });
+      }
+
+      // Window guard — refuse refresh until within 15 minutes of expiry.
+      if (exp - nowSec > 15 * 60) {
+        return res.status(400).json({
+          error: 'Session not eligible for refresh yet.',
+          error_code: 'REFRESH_NOT_ELIGIBLE',
+        });
+      }
+
+      // 12-hour absolute cap, measured from the original login.
+      const originalIat = Number(decoded.originalIat || decoded.iat || nowSec);
+      if (nowSec - originalIat >= 12 * 60 * 60) {
+        return res.status(403).json({
+          error: 'You have been signed in for 12 hours. For security, please sign in again.',
+          error_code: 'session_cap_reached',
+        });
+      }
+
+      const newToken = issueSessionToken({
+        userId: req.user.userId,
+        email: req.user.email,
+        role: req.user.role,
+        orgId: req.user.orgId,
+        siteId: req.user.siteId,
+        originalIat,
+      });
+
+      // Rotate: track the new token, drop the old session row, clear stale cache.
+      await trackSessionToken(req.user.userId, newToken);
+      await pool.execute('DELETE FROM sessions WHERE token = ?', [currentToken]).catch(() => {});
+      await sessionCacheInvalidate(currentToken).catch(() => {});
+
+      attachAuthCookie(res, newToken);
+
+      await logLoginAudit({
+        userId: req.user.userId,
+        userName: req.user.email,
+        role: req.user.role,
+        status: 'success',
+        authEvent: 'session_refreshed',
+        metadata: { orgId: req.user.orgId },
+        req,
+      });
+
+      return res.status(200).json({ token: newToken });
+    } catch (err) {
+      console.error('refreshSession error:', err);
       return res.status(500).json({ error: 'Server error.' });
     }
   },

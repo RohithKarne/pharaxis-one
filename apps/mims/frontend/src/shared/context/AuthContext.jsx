@@ -89,6 +89,25 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     if (fallbackPrefixes.length > 0) localStorage.setItem(disableFallbackKey, '1')
   }
 
+  // Apply a refreshed session token (from /api/auth/refresh-session) without
+  // reloading the app — preserves all in-progress page/form state.
+  function applyRefreshedToken(newToken) {
+    if (!newToken) return
+    setToken(newToken)
+    localStorage.setItem(`${KEY}_token`, newToken)
+  }
+
+  // Cross-tab sync — if another tab refreshes (or clears) the token, pick it up
+  // here so this tab re-arms its expiry timer and never logs out on a stale token.
+  useEffect(() => {
+    function onStorage(e) {
+      if (e.key !== `${KEY}_token`) return
+      setToken(e.newValue || null)
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [KEY])
+
   // Switch active org — calls API, stores new token + org info, reloads app
   async function switchOrg(newOrgId) {
     const res  = await httpFetch('/api/auth/switch-org', {
@@ -215,7 +234,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   return (
     <AuthContext.Provider value={{
       user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, securityAccess,
-      login, logout, switchOrg, refreshOrgAccess, refreshSecurityAccess, getInitials, formatRole, hasModuleAccess, hasSystemOption, hasCaseOption
+      login, logout, switchOrg, applyRefreshedToken, refreshOrgAccess, refreshSecurityAccess, getInitials, formatRole, hasModuleAccess, hasSystemOption, hasCaseOption
     }}>
       {children}
     </AuthContext.Provider>

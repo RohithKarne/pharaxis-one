@@ -86,6 +86,7 @@ router.delete('/sso/linked-accounts/:provider', authenticate, authController.unl
 router.post('/switch-org',     authenticate, authController.switchOrg);
 router.post('/reset-password', authenticate, authController.resetPassword);
 router.post('/change-password', authenticate, authController.changePassword);
+router.post('/refresh-session', authenticate, authController.refreshSession);
 
 // GET /api/auth/sessions — Session management data (Sprint 14 G11)
 router.get('/sessions', authenticate, async (req, res) => {

@@ -2,10 +2,21 @@
 import { useState, useEffect } from 'react'
 
 /**
- * SessionTimeoutModal — warns user before auto-logout.
- * Shows a countdown. "Stay Logged In" resets the idle timer.
+ * SessionTimeoutModal — warns user before auto-logout with a countdown.
+ *
+ * Two modes:
+ *  - 'idle'   (default): inactivity timeout. Single "Stay Logged In" button → onStay.
+ *  - 'expiry'          : absolute JWT expiry. "Continue working" → onContinue,
+ *                        "Sign out" → onSignout.
  */
-export default function SessionTimeoutModal({ visible, remainingSeconds, onStay }) {
+export default function SessionTimeoutModal({
+  visible,
+  remainingSeconds,
+  mode = 'idle',
+  onStay,
+  onContinue,
+  onSignout,
+}) {
   const [countdown, setCountdown] = useState(remainingSeconds)
 
   useEffect(() => {
@@ -22,6 +33,12 @@ export default function SessionTimeoutModal({ visible, remainingSeconds, onStay 
   const mins = Math.floor(countdown / 60)
   const secs = String(countdown % 60).padStart(2, '0')
   const isUrgent = countdown <= 60
+  const isExpiry = mode === 'expiry'
+
+  const heading = isExpiry ? 'Your session will expire soon' : 'Session Expiring Soon'
+  const body = isExpiry
+    ? "For security reasons, you'll be signed out in:"
+    : "You've been inactive. You'll be automatically logged out in:"
 
   return (
     <div style={{
@@ -41,10 +58,10 @@ export default function SessionTimeoutModal({ visible, remainingSeconds, onStay 
       }}>
         <div style={{ fontSize: 44, marginBottom: 12 }}>⏱</div>
         <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary, #212529)' }}>
-          Session Expiring Soon
+          {heading}
         </h3>
         <p style={{ color: 'var(--text-muted, #6c757d)', marginBottom: 20, fontSize: 14 }}>
-          You've been inactive. You'll be automatically logged out in:
+          {body}
         </p>
         <div style={{
           fontSize: 52,
@@ -55,13 +72,33 @@ export default function SessionTimeoutModal({ visible, remainingSeconds, onStay 
         }}>
           {mins}:{secs}
         </div>
-        <button
-          className="btn btn-primary"
-          style={{ width: '100%', fontSize: 15, padding: '10px 0' }}
-          onClick={onStay}
-        >
-          Stay Logged In
-        </button>
+
+        {isExpiry ? (
+          <>
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', fontSize: 15, padding: '10px 0', marginBottom: 10 }}
+              onClick={onContinue}
+            >
+              Continue working
+            </button>
+            <button
+              className="btn btn-secondary"
+              style={{ width: '100%', fontSize: 14, padding: '9px 0' }}
+              onClick={onSignout}
+            >
+              Sign out
+            </button>
+          </>
+        ) : (
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', fontSize: 15, padding: '10px 0' }}
+            onClick={onStay}
+          >
+            Stay Logged In
+          </button>
+        )}
       </div>
     </div>
   )
