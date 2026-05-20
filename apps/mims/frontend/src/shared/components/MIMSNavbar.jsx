@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { httpFetch } from '../api/httpFetch.js'
+import { hasGlobalAdminScope, isAdminUser } from '../utils/adminScope.js'
 
 const CASE_MGMT_ROUTES = { 'My Cases': '/cases?tab=my', 'Unassigned Cases': '/cases?tab=unassigned', 'Deleted Cases': '/cases?tab=deleted' }
 const CASE_MGMT_ITEMS  = ['My Cases', 'Unassigned Cases', 'Deleted Cases']
@@ -42,7 +43,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
 
   const [caseMgmtOpen,  setCaseMgmtOpen]  = useState(false)
   const [utilitiesOpen, setUtilitiesOpen] = useState(false)
-  const [processExplorerEnabled, setProcessExplorerEnabled] = useState(user?.role === 'superadmin')
+  const [processExplorerEnabled, setProcessExplorerEnabled] = useState(hasGlobalAdminScope(user))
   const userRole = user?.role
   const userId = user?.id
   const userEmail = user?.email
@@ -61,7 +62,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
     let alive = true
     async function load() {
       if (!token || !userRole) return
-      if (userRole === 'superadmin') { if (alive) setProcessExplorerEnabled(true); return }
+      if (hasGlobalAdminScope(userRole)) { if (alive) setProcessExplorerEnabled(true); return }
       try {
         const res = await httpFetch('/api/admin/process-logs/config', { headers: { Authorization: `Bearer ${token}` } })
         if (!alive) return
@@ -82,7 +83,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
   function canAccessAny(...ks)  { return ks.some(k => hasModuleAccess(k)) }
   function canUseSystem(section, option) { return hasSystemOption ? hasSystemOption(section, option) : true }
   function canUseCase(section, option) { return hasCaseOption ? hasCaseOption(section, option) : true }
-  const isAdmin = userRole === 'admin' || userRole === 'superadmin'
+  const isAdmin = isAdminUser(userRole)
   const canCreateCase = canAccessAny('mims_core', 'case_mgmt') && canUseCase('case_entry_options', 'add_new_case')
 
   return (
@@ -204,7 +205,7 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
           {isAdmin && canUseSystem('general', 'view_data') && <Link to="/cm-audit-trail" className={`mims-sidenav-sub-item${isActive('/cm-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>CM Audit Trail</Link>}
           {isAdmin && canUseSystem('general', 'view_data') && <Link to="/transmission-error-log" className={`mims-sidenav-sub-item${isActive('/transmission-error-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Transmission Error Log</Link>}
           {isAdmin && canUseSystem('general', 'view_data') && <Link to="/transmission-audit-trail" className={`mims-sidenav-sub-item${isActive('/transmission-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Transmission Audit Trail</Link>}
-          {userRole === 'superadmin' && canUseSystem('maintenance', 'copy_division') && <Link to="/copy-division" className={`mims-sidenav-sub-item${isActive('/copy-division') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Copy Division</Link>}
+          {hasGlobalAdminScope(userRole) && canUseSystem('maintenance', 'copy_division') && <Link to="/copy-division" className={`mims-sidenav-sub-item${isActive('/copy-division') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Copy Division</Link>}
           {isAdmin && canUseSystem('setup', 'data_protection_rules') && <Link to="/dppr" className={`mims-sidenav-sub-item${isActive('/dppr') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>🔒 Data Privacy (DPPR)</Link>}
           <div className="mims-sidenav-sub-divider" />
           {COMING_SOON.map(item => (

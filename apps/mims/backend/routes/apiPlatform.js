@@ -31,7 +31,7 @@ router.post('/oauth/token', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/api/admin/api-clients', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/api/admin/api-clients', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const client = await createApiClient({ org_id: req.body.org_id || req.user.orgId, name: req.body.name, scopes: req.body.scopes || ['cases:read'], rate_limit_per_min: req.body.rate_limit_per_min || 60, created_by: req.user.userId });
     res.status(201).json(client);

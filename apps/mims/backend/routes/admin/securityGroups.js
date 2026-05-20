@@ -10,6 +10,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -40,7 +41,7 @@ function normalizeTenantIds(privileges) {
 
 function groupVisibleToRequest(group, req) {
   if (!group) return false;
-  if (req.user.role === 'superadmin') return true;
+  if (hasGlobalAdminScope(req.user)) return true;
   if (Number(group.org_id) === Number(req.user.orgId)) return true;
   const tenantIds = normalizeTenantIds(parsePrivileges(group.privileges));
   return tenantIds.includes(Number(req.user.orgId));
@@ -83,8 +84,8 @@ async function loadPicklistChoices(req, names) {
   const lowerNames = names.map(name => String(name).toLowerCase());
   const placeholders = lowerNames.map(() => '?').join(', ');
   const params = [...lowerNames, ...lowerNames, ...lowerNames];
-  const orgFilter = req.user.role === 'superadmin' ? '' : 'AND p.org_id = ?';
-  if (req.user.role !== 'superadmin') params.push(req.user.orgId);
+  const orgFilter = hasGlobalAdminScope(req.user) ? '' : 'AND p.org_id = ?';
+  if (!hasGlobalAdminScope(req.user)) params.push(req.user.orgId);
 
   const [rows] = await pool.execute(
     `SELECT DISTINCT p.value, p.name, p.field_type, COALESCE(f.name, p.field_type) AS field_name, COALESCE(c.name, p.category) AS category
@@ -150,9 +151,9 @@ async function getActiveMemberDependency(groupId) {
 }
 
 // GET /api/admin/security-groups — list all groups
-router.get('/security-groups', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/security-groups', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
-    const isSA = req.user.role === 'superadmin';
+    const isSA = hasGlobalAdminScope(req.user);
     const [groups] = await pool.execute(
       `SELECT id, name, description, privileges, is_active, created_at, updated_at, org_id
        FROM security_groups
@@ -173,13 +174,13 @@ router.get('/security-groups', authenticate, requireRole('admin', 'superadmin'),
 });
 
 // GET /api/admin/security-groups/options — form reference data
-router.get('/security-groups/options', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/security-groups/options', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [orgs] = await pool.execute(
-      req.user.role === 'superadmin'
+      hasGlobalAdminScope(req.user)
         ? 'SELECT id, name, is_active FROM organisations ORDER BY name ASC'
         : 'SELECT id, name, is_active FROM organisations WHERE id = ? ORDER BY name ASC',
-      req.user.role === 'superadmin' ? [] : [req.user.orgId]
+      hasGlobalAdminScope(req.user) ? [] : [req.user.orgId]
     );
 
     const [departments, callCenterLocations, callCenterTypes, generalTables] = await Promise.all([
@@ -205,7 +206,7 @@ router.get('/security-groups/options', authenticate, requireRole('admin', 'super
 // GET /api/admin/security-groups/effective — current user's group-derived privileges
 router.get('/security-groups/effective', authenticate, requireOrg, async (req, res) => {
   try {
-    if (req.user.role === 'superadmin') {
+    if (hasGlobalAdminScope(req.user)) {
       return res.json({ unrestricted: true, groups: [], system_options: null });
     }
 
@@ -236,7 +237,7 @@ router.get('/security-groups/effective', authenticate, requireOrg, async (req, r
 });
 
 // POST /api/admin/security-groups — create group
-router.post('/security-groups', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createSecurityGroup), async (req, res) => {
+router.post('/security-groups', authenticate, requireRole('admin', 'platform_admin'), requireOrg, validate(schemas.createSecurityGroup), async (req, res) => {
   try {
     const { name, description, privileges } = req.body;
     if (!name || !String(name).trim()) {
@@ -245,7 +246,7 @@ router.post('/security-groups', authenticate, requireRole('admin', 'superadmin')
 
     const privilegesJson = privileges !== undefined ? JSON.stringify(privileges) : null;
     const tenantIds = normalizeTenantIds(privileges);
-    const orgId = req.user.role === 'superadmin'
+    const orgId = hasGlobalAdminScope(req.user)
       ? (tenantIds.length === 1 ? tenantIds[0] : (req.body.org_id !== undefined ? Number(req.body.org_id) || null : null))
       : req.user.orgId;
 
@@ -271,7 +272,7 @@ router.post('/security-groups', authenticate, requireRole('admin', 'superadmin')
 });
 
 // GET /api/admin/security-groups/:id — get group with its users
-router.get('/security-groups/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/security-groups/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const group = await resolveScopedGroup(req.params.id, req);
     if (!group) return res.status(404).json({ error: 'Security group not found.' });
@@ -298,7 +299,7 @@ router.get('/security-groups/:id', authenticate, requireRole('admin', 'superadmi
 });
 
 // PUT /api/admin/security-groups/:id — update group
-router.put('/security-groups/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/security-groups/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { name, description, privileges, is_active } = req.body;
     const group = await resolveScopedGroup(req.params.id, req);
@@ -334,7 +335,7 @@ router.put('/security-groups/:id', authenticate, requireRole('admin', 'superadmi
       updates.push('privileges = ?');
       params.push(JSON.stringify(privileges));
 
-      if (req.user.role === 'superadmin') {
+      if (hasGlobalAdminScope(req.user)) {
         const tenantIds = normalizeTenantIds(privileges);
         updates.push('org_id = ?');
         params.push(tenantIds.length === 1 ? tenantIds[0] : null);
@@ -370,7 +371,7 @@ router.put('/security-groups/:id', authenticate, requireRole('admin', 'superadmi
 });
 
 // DELETE /api/admin/security-groups/:id — soft delete (is_active=0)
-router.delete('/security-groups/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/security-groups/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const group = await resolveScopedGroup(req.params.id, req);
     if (!group) return res.status(404).json({ error: 'Security group not found.' });
@@ -393,7 +394,7 @@ router.delete('/security-groups/:id', authenticate, requireRole('admin', 'supera
 });
 
 // POST /api/admin/security-groups/:id/users — add user to group
-router.post('/security-groups/:id/users', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/security-groups/:id/users', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { user_id } = req.body;
     if (!user_id) return res.status(400).json({ error: 'user_id is required.' });
@@ -418,7 +419,7 @@ router.post('/security-groups/:id/users', authenticate, requireRole('admin', 'su
 });
 
 // DELETE /api/admin/security-groups/:id/users/:userId — remove user from group
-router.delete('/security-groups/:id/users/:userId', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/security-groups/:id/users/:userId', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { userId } = req.params;
     const group = await resolveScopedGroup(req.params.id, req);
@@ -437,12 +438,12 @@ router.delete('/security-groups/:id/users/:userId', authenticate, requireRole('a
 });
 
 // POST /api/admin/security-groups/:id/clone — Clone group with its privileges
-router.post('/security-groups/:id/clone', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/security-groups/:id/clone', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const group = await resolveScopedGroup(req.params.id, req);
     if (!group) return res.status(404).json({ error: 'Group not found' });
     const newName = `${group.name} (Copy)`;
-    const orgId = req.user.role === 'superadmin'
+    const orgId = hasGlobalAdminScope(req.user)
       ? (req.body.org_id !== undefined ? Number(req.body.org_id) : group.org_id)
       : req.user.orgId;
     const [result] = await pool.execute(
@@ -461,7 +462,7 @@ router.post('/security-groups/:id/clone', authenticate, requireRole('admin', 'su
 });
 
 // PUT /api/admin/users/:id — update user (role, is_active)
-router.put('/users/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { role, is_active } = req.body;

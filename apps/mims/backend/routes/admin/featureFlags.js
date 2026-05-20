@@ -11,7 +11,7 @@ const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const flags   = require('../../services/featureFlagsService');
 
-const ROLE = ['admin', 'superadmin'];
+const ROLE = ['admin', 'platform_admin'];
 
 // GET /api/admin/feature-flags — full catalog (per-flag rollout summary)
 router.get('/feature-flags', authenticate, requireRole(...ROLE), async (_req, res) => {

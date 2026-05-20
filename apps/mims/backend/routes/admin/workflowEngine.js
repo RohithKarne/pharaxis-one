@@ -6,12 +6,13 @@ const { authenticate, requireRole } = require('../../middleware/auth');
 const { validateDefinition } = require('../../services/workflow/definitionValidator');
 const { traceGraph } = require('../../services/workflow/executionEngine');
 const { fireWorkflowEvent } = require('../../services/workflow/eventHookService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 const router = express.Router();
-const guard = [authenticate, requireRole('admin', 'superadmin')];
+const guard = [authenticate, requireRole('admin', 'platform_admin')];
 
 function scope(req, alias = 'wd') {
-  return req.user.role === 'superadmin' ? { sql: '1=1', params: [] } : { sql: `${alias}.org_id = ?`, params: [req.user.orgId] };
+  return hasGlobalAdminScope(req.user) ? { sql: '1=1', params: [] } : { sql: `${alias}.org_id = ?`, params: [req.user.orgId] };
 }
 
 async function audit(req, action, entity, entityId, details) {

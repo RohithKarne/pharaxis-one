@@ -303,7 +303,7 @@ const schemas = {
     has_critical_flags: bool().optional(),
   }),
 
-  // ── Superadmin ────────────────────────────────────────────────────────────
+  // ── Platform admin ────────────────────────────────────────────────────────
   createOrg: Joi.object({
     name:      str().required(),
     is_active: bool().optional(),

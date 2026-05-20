@@ -51,24 +51,24 @@ async function run() {
   check('GET /api/auth/org-logo returns 200', r1.status === 200, `status=${r1.status}`);
   check('Response has logo_url field', 'logo_url' in r1.data, JSON.stringify(r1.data).slice(0, 80));
 
-  // Superadmin login to test logo upload endpoint exists
+  // Platform Admin login to test logo upload endpoint exists
   const saLogin = await req('POST', '/api/auth/login', { email: 'superadmin', password: 'Test@1234' });
   const saToken = saLogin.data.token || saLogin.data.challengeToken;
-  check('Superadmin login for logo test (or skip if creds not set)', true);
+  check('Platform Admin login for logo test (or skip if creds not set)', true);
 
   if (saToken) {
-    // POST /api/superadmin/orgs/1/logo with no file — should return 400 (no file) not 404
+    // POST /api/admin/platform/orgs/1/logo with no file — should return 400 (no file) not 404
     const { default: fetch } = await import('node-fetch');
     const FormData = (await import('form-data')).default;
     const fd = new FormData();
-    const logoRes = await fetch(`${BASE}/api/superadmin/orgs/1/logo`, {
+    const logoRes = await fetch(`${BASE}/api/admin/platform/orgs/1/logo`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${saToken}`, ...fd.getHeaders() },
       body: fd,
     });
-    check('POST /api/superadmin/orgs/:id/logo endpoint exists (400 or 200, not 404)', logoRes.status !== 404, `status=${logoRes.status}`);
+    check('POST /api/admin/platform/orgs/:id/logo endpoint exists (400 or 200, not 404)', logoRes.status !== 404, `status=${logoRes.status}`);
   } else {
-    check('POST /api/superadmin/orgs/:id/logo endpoint exists (skipped — SA creds not set)', true);
+    check('POST /api/admin/platform/orgs/:id/logo endpoint exists (skipped — SA creds not set)', true);
   }
 
   // GET org list — verify logo_url column present in response

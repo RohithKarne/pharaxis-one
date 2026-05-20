@@ -1,6 +1,6 @@
 /**
  * CopyDivisionPage.jsx — Copy Division
- * Superadmin-only: copy all selected org config from one tenant to another.
+ * Platform-admin-only: copy all selected org config from one tenant to another.
  * CSS namespace: cd-
  */
 
@@ -111,9 +111,9 @@ export default function CopyDivisionPage() {
         <div className="cd-header">
           <div>
             <h1 className="cd-title">Copy Division</h1>
-            <span className="cd-subtitle">Copy all selected configuration from one organisation to another. Superadmin only. This action cannot be automatically undone.</span>
+            <span className="cd-subtitle">Copy all selected configuration from one organisation to another. Admin only. This action cannot be automatically undone.</span>
           </div>
-          <div className="cd-badge-superadmin">Superadmin Only</div>
+          <div className="cd-badge-platform-admin">Admin Only</div>
         </div>
 
         {error && <div className="cd-error-banner">{error}</div>}

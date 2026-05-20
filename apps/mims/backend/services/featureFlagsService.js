@@ -12,6 +12,7 @@
  */
 
 const pool = require('../database/db');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 const CACHE_TTL_MS = 60 * 1000;
 const _cache = new Map(); // key=`${flagKey}|${orgId}` → { value: bool, expiresAt: number }
@@ -89,9 +90,9 @@ async function resolveAllForOrg(orgId) {
  * Express middleware factory: gate a route on a flag.
  *   router.get('/x', authenticate, requireFlag('cf.theme3_inline_validation'), handler)
  */
-function requireFlag(flagKey, { allowSuperadmin = true } = {}) {
+function requireFlag(flagKey, { allowPlatformAdmin = true } = {}) {
   return async (req, res, next) => {
-    if (allowSuperadmin && req.user?.role === 'superadmin') return next();
+    if (allowPlatformAdmin && hasGlobalAdminScope(req.user)) return next();
     const orgId = req.user?.orgId ?? null;
     const ok = await isEnabledForOrg(flagKey, orgId);
     if (!ok) return res.status(403).json({ error: `Feature not enabled for this tenant.`, flag: flagKey });

@@ -4,6 +4,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './DPPRPage.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { isAdminUser } from '../../../shared/utils/adminScope.js'
 
 const ACTION_OPTIONS = ['None', 'Anonymize', 'Delete']
 const CONTACT_TYPES  = ['all', 'HCP', 'Patient', 'Other']
@@ -34,7 +35,7 @@ function fmtDate(dt) {
 export default function DPPRPage() {
   const { token, user } = useAuth()
   const H = { Authorization: `Bearer ${token}` }
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
+  const isAdmin = isAdminUser(user)
 
   const [tab, setTab]               = useState('rules')
   const [rules, setRules]           = useState([])

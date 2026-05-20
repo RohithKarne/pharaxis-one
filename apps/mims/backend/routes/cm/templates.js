@@ -10,6 +10,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -20,12 +21,12 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function templateScopePredicate(req, alias = 't') {
-  if (isSuperadmin(req)) return '1=1';
+  if (hasPlatformAdminScope(req)) return '1=1';
   return `EXISTS (
     SELECT 1
     FROM users tu
@@ -39,7 +40,7 @@ function templateScopePredicate(req, alias = 't') {
 }
 
 function templateScopeParams(req) {
-  return isSuperadmin(req) ? [] : [req.user.orgId, req.user.orgId];
+  return hasPlatformAdminScope(req) ? [] : [req.user.orgId, req.user.orgId];
 }
 
 async function getScopedTemplate(req, templateId) {
@@ -56,7 +57,7 @@ async function getScopedTemplate(req, templateId) {
 
 async function getScopedCase(req, caseId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? `SELECT c.id, c.case_number, c.case_type, c.org_id, o.name AS org_name
          FROM cases c
          LEFT JOIN organisations o ON o.id = c.org_id
@@ -65,7 +66,7 @@ async function getScopedCase(req, caseId) {
          FROM cases c
          LEFT JOIN organisations o ON o.id = c.org_id
          WHERE c.id = ? AND c.org_id = ?`,
-    isSuperadmin(req) ? [caseId] : [caseId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [caseId] : [caseId, req.user.orgId]
   );
   return rows[0] || null;
 }
@@ -161,7 +162,7 @@ router.get('/templates/case-search', authenticate, async (req, res) => {
       LEFT JOIN case_contacts cc ON cc.case_id = c.id AND cc.is_primary = 1
       WHERE (c.case_number LIKE ? OR TRIM(CONCAT(COALESCE(cc.first_name,''), ' ', COALESCE(cc.last_name,''))) LIKE ?)
     `;
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       query += ' AND c.org_id = ?';
       params.push(req.user.orgId);
     }

@@ -4,10 +4,11 @@ const express = require('express');
 const nodemailer = require('nodemailer');
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
-const { emitSuperadminAlert } = require('../../services/alertService');
+const { emitPlatformAdminAlert } = require('../../services/alertService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 const router = express.Router();
-const adminTwoFactorAuth = [authenticate, requireRole('admin', 'superadmin'), requireOrg];
+const adminTwoFactorAuth = [authenticate, requireRole('admin', 'platform_admin'), requireOrg];
 
 function parseIntSafe(value, fallback) {
   const parsed = parseInt(value, 10);
@@ -25,7 +26,7 @@ async function audit(userId, userName, action, entity, entityId, details) {
 }
 
 function assertOrgScope(req, orgId) {
-  if (req.user.role === 'superadmin') return null;
+  if (hasGlobalAdminScope(req.user)) return null;
   if (Number(req.user.orgId) === Number(orgId)) return null;
   const err = new Error('You can update 2FA only for your active organisation.');
   err.status = 403;
@@ -39,10 +40,10 @@ function handleError(res, err) {
 // GET /api/admin/two-factor/orgs
 router.get('/two-factor/orgs', ...adminTwoFactorAuth, async (req, res) => {
   try {
-    const isSuperadmin = req.user.role === 'superadmin';
+    const isPlatformAdmin = hasGlobalAdminScope(req.user);
     const [orgs] = await pool.execute(
-      isSuperadmin ? 'SELECT * FROM organisations ORDER BY name' : 'SELECT * FROM organisations WHERE id = ? ORDER BY name',
-      isSuperadmin ? [] : [req.user.orgId]
+      isPlatformAdmin ? 'SELECT * FROM organisations ORDER BY name' : 'SELECT * FROM organisations WHERE id = ? ORDER BY name',
+      isPlatformAdmin ? [] : [req.user.orgId]
     );
     return res.json({ orgs });
   } catch (err) {
@@ -108,6 +109,9 @@ router.get('/two-factor/config', ...adminTwoFactorAuth, async (_req, res) => {
       acc[row.config_key] = row.config_value;
       return acc;
     }, {});
+    if (config.platform_admin_session_timeout_minutes === undefined && config.superadmin_session_timeout_minutes !== undefined) {
+      config.platform_admin_session_timeout_minutes = config.superadmin_session_timeout_minutes;
+    }
     const sensitiveKeyPattern = /(password|secret|token|api[_-]?key)/i;
     for (const [key, value] of Object.entries(config)) {
       if (!sensitiveKeyPattern.test(key)) continue;
@@ -124,6 +128,7 @@ router.get('/two-factor/config', ...adminTwoFactorAuth, async (_req, res) => {
 router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
   try {
     const {
+      platform_admin_session_timeout_minutes,
       superadmin_session_timeout_minutes,
       smtp_host,
       smtp_port,
@@ -135,9 +140,11 @@ router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
     } = req.body || {};
 
     const upserts = [];
-    if (superadmin_session_timeout_minutes !== undefined) {
-      const mins = parseIntSafe(superadmin_session_timeout_minutes, 0);
-      if (mins < 30) return res.status(400).json({ error: 'Superadmin session timeout must be at least 30 minutes.' });
+    const timeoutValue = platform_admin_session_timeout_minutes ?? superadmin_session_timeout_minutes;
+    if (timeoutValue !== undefined) {
+      const mins = parseIntSafe(timeoutValue, 0);
+      if (mins < 30) return res.status(400).json({ error: 'Platform admin session timeout must be at least 30 minutes.' });
+      upserts.push(['platform_admin_session_timeout_minutes', String(mins)]);
       upserts.push(['superadmin_session_timeout_minutes', String(mins)]);
     }
 
@@ -165,7 +172,7 @@ router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
     }
 
     await audit(req.user.userId, req.user.email, 'UPDATE', 'system_config', null, {
-      superadmin_session_timeout_minutes,
+      platform_admin_session_timeout_minutes: timeoutValue,
       smtp_host,
       smtp_port,
       smtp_encryption,
@@ -176,14 +183,14 @@ router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
       source: 'mims_admin_system_setup',
     });
 
-    await emitSuperadminAlert('sensitive_config_change', {
+    await emitPlatformAdminAlert('sensitive_config_change', {
       severity: 'medium',
       title: 'Sensitive MIMS Admin configuration changed',
       message: `2FA system configuration was updated by ${req.user.email}.`,
       metadata: {
         updatedBy: req.user.email,
         changedKeys: Object.keys(configPairs).filter(key => configPairs[key] !== undefined)
-          .concat(superadmin_session_timeout_minutes !== undefined ? ['superadmin_session_timeout_minutes'] : []),
+          .concat(timeoutValue !== undefined ? ['platform_admin_session_timeout_minutes'] : []),
       },
       linkUrl: '/mims/mims-admin',
     });
@@ -269,7 +276,7 @@ router.post('/two-factor/config/test-email', ...adminTwoFactorAuth, async (req, 
     });
     return res.json({ message: 'SMTP connection verified successfully.' });
   } catch (err) {
-    await emitSuperadminAlert('smtp_failure', {
+    await emitPlatformAdminAlert('smtp_failure', {
       severity: 'high',
       title: 'SMTP verification failed',
       message: err.message || 'SMTP test failed.',

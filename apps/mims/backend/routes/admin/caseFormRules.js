@@ -5,8 +5,9 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { evaluateRule } = require('../../../shared/services/ruleEvaluator');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
-const ROLE = ['admin', 'superadmin'];
+const ROLE = ['admin', 'platform_admin'];
 const CASE_TYPES = new Set(['AE', 'MI', 'PC', 'ALL']);
 const RULE_TYPES = new Set(['visibility', 'required', 'default', 'validation', 'cascade']);
 
@@ -26,7 +27,7 @@ function normalizeRule(row) {
 }
 
 function scopedOrgId(req, input) {
-  if (req.user.role === 'superadmin') return Number(input || req.query.org_id || req.user.orgId || 0);
+  if (hasGlobalAdminScope(req.user)) return Number(input || req.query.org_id || req.user.orgId || 0);
   return Number(req.user.orgId || 0);
 }
 

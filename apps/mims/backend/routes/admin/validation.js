@@ -24,7 +24,7 @@ const flags   = require('../../services/featureFlagsService');
 const engine  = require('../../services/validationEngine');
 
 const FLAG = 'cf.theme3_inline_validation';
-const ADMIN = ['admin', 'superadmin'];
+const ADMIN = ['admin', 'platform_admin'];
 
 // ── GET /api/validation/schema?section= ──────────────────────────────────────
 router.get('/validation/schema', authenticate, async (req, res) => {

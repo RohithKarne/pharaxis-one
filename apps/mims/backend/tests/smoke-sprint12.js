@@ -153,7 +153,7 @@ function run() {
     return { pass, detail: `status=${res.status}, statusOk=${okField}` };
   });
 
-  runTest('Superadmin login', () => {
+  runTest('Platform Admin login', () => {
     const res = runCurl('POST', '/api/auth/login', { body: superadminCreds });
     const hasToken = res.body && typeof res.body === 'object' && !!res.body.token;
     const pass = res.status === 200 && hasToken;

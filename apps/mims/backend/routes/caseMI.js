@@ -10,13 +10,14 @@ const router  = express.Router();
 const pool    = require('../database/db');
 const { authenticate } = require('../middleware/auth');
 const { summarizeResolvedProductGroups } = require('../services/productGroupService');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
 async function verifyCaseOrg(caseId, req) {
   const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
   if (!c) return false;
-  if (req.user.role === 'superadmin') return true;
+  if (hasGlobalAdminScope(req.user)) return true;
   return Number(c.org_id) === Number(req.user.orgId);
 }
 
@@ -27,7 +28,7 @@ async function verifyMiOrg(miId, req) {
     [miId]
   );
   if (!row) return false;
-  if (req.user.role === 'superadmin') return true;
+  if (hasGlobalAdminScope(req.user)) return true;
   return Number(row.org_id) === Number(req.user.orgId);
 }
 
@@ -166,7 +167,7 @@ router.delete('/cases/mi/:miId', authenticate, async (req, res) => {
 router.get('/cases/mi/products', authenticate, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      req.user.role === 'superadmin'
+      hasGlobalAdminScope(req.user)
         ? `SELECT p.id, p.trade_name, p.mah, p.org_id, p.family_id, p.dosage, p.atc_code, p.authorization_country, pf.name AS family_name
              FROM products p
              LEFT JOIN product_families pf ON pf.id = p.family_id
@@ -177,7 +178,7 @@ router.get('/cases/mi/products', authenticate, async (req, res) => {
              LEFT JOIN product_families pf ON pf.id = p.family_id
             WHERE p.org_id = ? AND p.is_active = 1
             ORDER BY p.trade_name`,
-      req.user.role === 'superadmin' ? [] : [req.user.orgId]
+      hasGlobalAdminScope(req.user) ? [] : [req.user.orgId]
     );
     const enriched = [];
     for (const row of rows) {

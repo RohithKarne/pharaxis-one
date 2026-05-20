@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -19,8 +20,8 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function reviewOrgJoins() {
@@ -33,7 +34,7 @@ function reviewOrgJoins() {
 }
 
 function reviewOrgFilter(req) {
-  return isSuperadmin(req) ? { clause: '', params: [] } : { clause: ' AND COALESCE(fd.org_id, ff.org_id) = ?', params: [req.user.orgId] };
+  return hasPlatformAdminScope(req) ? { clause: '', params: [] } : { clause: ' AND COALESCE(fd.org_id, ff.org_id) = ?', params: [req.user.orgId] };
 }
 
 async function getScopedReview(req, reviewId) {
@@ -327,7 +328,7 @@ router.put('/reviews/:id/transfer', authenticate, async (req, res) => {
 
     const [[newOwner]] = await pool.execute('SELECT id, name, email FROM users WHERE id = ?', [new_owner_id]);
     if (!newOwner) return res.status(404).json({ error: 'New owner user not found.' });
-    if (!isSuperadmin(req) && !await isUserInScopeOrg(new_owner_id, req.user.orgId)) {
+    if (!hasPlatformAdminScope(req) && !await isUserInScopeOrg(new_owner_id, req.user.orgId)) {
       return res.status(403).json({ error: 'New owner must belong to your organisation.' });
     }
 

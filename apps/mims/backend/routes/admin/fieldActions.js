@@ -18,7 +18,7 @@ const router  = express.Router();
 const { authenticate, requireRole } = require('../../middleware/auth');
 const fieldActions = require('../../services/fieldActionsService');
 
-const ADMIN = ['admin', 'superadmin'];
+const ADMIN = ['admin', 'platform_admin'];
 const QA_OR_ADMIN = ['admin', 'superadmin', 'qa'];
 
 router.get('/field-actions/status-flow', authenticate, (_req, res) => {

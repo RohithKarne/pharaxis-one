@@ -25,7 +25,7 @@ const flags   = require('../../services/featureFlagsService');
 const grid    = require('../../services/gridSectionService');
 
 const FLAG  = 'cf.theme7_multirow_grids';
-const ADMIN = ['admin', 'superadmin'];
+const ADMIN = ['admin', 'platform_admin'];
 
 router.get('/cases/:caseId/grid/:section', authenticate, async (req, res) => {
   try {

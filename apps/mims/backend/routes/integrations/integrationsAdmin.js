@@ -6,8 +6,8 @@ const pool = require('../../database/db');
 
 const router = express.Router();
 
-// SuperAdmin routes
-router.get('/superadmin/integrations', authenticate, requireRole("superadmin"), async (_req, res) => {
+// Platform Admin routes
+router.get(['/admin/platform/integrations', '/superadmin/integrations'], authenticate, requireRole("platform_admin"), async (_req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT oi.*, o.name as org_name
@@ -30,7 +30,7 @@ router.get('/superadmin/integrations', authenticate, requireRole("superadmin"), 
   }
 });
 
-router.post('/superadmin/integrations', authenticate, requireRole("superadmin"), async (req, res) => {
+router.post(['/admin/platform/integrations', '/superadmin/integrations'], authenticate, requireRole("platform_admin"), async (req, res) => {
   try {
     const {
       org_id,
@@ -67,7 +67,7 @@ router.post('/superadmin/integrations', authenticate, requireRole("superadmin"),
   }
 });
 
-router.put('/superadmin/integrations/:id', authenticate, requireRole("superadmin"), async (req, res) => {
+router.put(['/admin/platform/integrations/:id', '/superadmin/integrations/:id'], authenticate, requireRole("platform_admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const { endpoint_url, api_key, enabled, event_triggers, org_override_allowed } = req.body;
@@ -109,7 +109,7 @@ router.put('/superadmin/integrations/:id', authenticate, requireRole("superadmin
   }
 });
 
-router.delete('/superadmin/integrations/:id', authenticate, requireRole("superadmin"), async (req, res) => {
+router.delete(['/admin/platform/integrations/:id', '/superadmin/integrations/:id'], authenticate, requireRole("platform_admin"), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -122,7 +122,7 @@ router.delete('/superadmin/integrations/:id', authenticate, requireRole("superad
 });
 
 // Admin Console routes
-router.get('/admin/integrations', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/admin/integrations', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) {
@@ -143,7 +143,7 @@ router.get('/admin/integrations', authenticate, requireRole('admin', 'superadmin
   }
 });
 
-router.put('/admin/integrations/:id/toggle', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/admin/integrations/:id/toggle', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) {
@@ -184,7 +184,7 @@ router.put('/admin/integrations/:id/toggle', authenticate, requireRole('admin', 
 });
 
 // Admin — get config for a specific integration type
-router.get('/admin/integrations/:type/config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/admin/integrations/:type/config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });
@@ -205,7 +205,7 @@ router.get('/admin/integrations/:type/config', authenticate, requireRole('admin'
 });
 
 // Admin — save config for a specific integration type
-router.put('/admin/integrations/:type/config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/admin/integrations/:type/config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (orgId == null) return res.status(403).json({ error: 'Forbidden' });

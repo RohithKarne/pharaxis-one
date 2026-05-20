@@ -14,7 +14,7 @@
  *   GET    /api/admin/help/coverage          — known feature keys vs DB distinct keys
  *   PATCH  /api/admin/help/:id/reviewed      — mark reviewed (last_reviewed_at = NOW())
  *
- * Role guard: admin + superadmin only.
+ * Role guard: admin + platform-admin only.
  * Cache: busts public help cache on every write.
  */
 
@@ -23,6 +23,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 // Import public cache buster
 let cacheBust = () => {};
@@ -33,18 +34,18 @@ try {
 
 // ── Role guard middleware ─────────────────────────────────────────────────────
 function adminOnly(req, res, next) {
-  if (!['admin', 'superadmin', 'cm_admin'].includes(req.user?.role)) {
+  if (!['admin', 'superadmin', 'cm_admin'].includes(req.user?.role) && !hasGlobalAdminScope(req.user)) {
     return res.status(403).json({ error: 'Admin access required.' });
   }
   next();
 }
 
-function isSuperadmin(req) {
-  return req.user?.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function helpScope(req, alias = 'ha', { includeGlobal = true } = {}) {
-  if (isSuperadmin(req)) return { clause: '', params: [] };
+  if (hasPlatformAdminScope(req)) return { clause: '', params: [] };
   const orgId = req.user?.orgId;
   // Admin user with no current org context (new global admin model) — return
   // only global (org_id IS NULL) articles. mysql2 throws if we pass undefined
@@ -170,7 +171,7 @@ router.post('/help', authenticate, adminOnly, validate(schemas.createHelpArticle
 
     const audienceVal = Array.isArray(audience) ? audience : ['all'];
     const tagsVal = Array.isArray(tags) ? tags : [];
-    const resolvedOrgId = isSuperadmin(req) ? (org_id || null) : req.user.orgId;
+    const resolvedOrgId = hasPlatformAdminScope(req) ? (org_id || null) : req.user.orgId;
 
     const [result] = await pool.execute(
       `INSERT INTO help_articles
@@ -271,7 +272,7 @@ router.post('/help/bulk-import', authenticate, adminOnly, async (req, res) => {
 
         const audienceVal = Array.isArray(audience) ? audience : ['all'];
         const tagsVal = Array.isArray(tags) ? tags : [];
-        const resolvedOrgId = isSuperadmin(req) ? (org_id || null) : req.user.orgId;
+        const resolvedOrgId = hasPlatformAdminScope(req) ? (org_id || null) : req.user.orgId;
 
         // Upsert on (feature_key, title) — if both match, update content
         const [[existing]] = await pool.execute(
@@ -362,7 +363,7 @@ router.put('/help/:id', authenticate, adminOnly, async (req, res) => {
       feature_key, feature_group, tags, title, content_html,
       summary, audience, org_id, sort_order, is_active,
     } = req.body;
-    const resolvedOrgId = isSuperadmin(req)
+    const resolvedOrgId = hasPlatformAdminScope(req)
       ? (org_id !== undefined ? org_id : existing.org_id)
       : req.user.orgId;
 

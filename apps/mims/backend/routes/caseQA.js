@@ -234,7 +234,7 @@ router.get('/cases/:id/qa-history', authenticate, requireOrg, async (req, res) =
 
 // ─── GET /api/admin/qa/overrides ─────────────────────────────────────────────
 // Manager override dashboard — all overrides for org, filterable by user/date/severity.
-router.get('/admin/qa/overrides', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/admin/qa/overrides', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   const orgId = req.user.orgId;
   const { user_id, from_date, to_date, page = 1, limit = 50 } = req.query;
 
@@ -281,7 +281,7 @@ router.get('/admin/qa/overrides', authenticate, requireRole('admin', 'superadmin
 
 // ─── POST /api/admin/qa/reports ──────────────────────────────────────────────
 // Admin initiates retrospective QA batch job.
-router.post('/admin/qa/reports', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createQaReport), async (req, res) => {
+router.post('/admin/qa/reports', authenticate, requireRole('admin', 'platform_admin'), requireOrg, validate(schemas.createQaReport), async (req, res) => {
   const orgId = req.user.orgId;
   const { report_name, date_range_start, date_range_end, case_type_filter } = req.body;
 
@@ -309,7 +309,7 @@ router.post('/admin/qa/reports', authenticate, requireRole('admin', 'superadmin'
 });
 
 // ─── GET /api/admin/qa/reports ───────────────────────────────────────────────
-router.get('/admin/qa/reports', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/admin/qa/reports', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   const orgId = req.user.orgId;
   try {
     const [rows] = await pool.execute(
@@ -331,7 +331,7 @@ router.get('/admin/qa/reports', authenticate, requireRole('admin', 'superadmin')
 });
 
 // ─── GET /api/admin/qa/reports/:reportId ─────────────────────────────────────
-router.get('/admin/qa/reports/:reportId', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/admin/qa/reports/:reportId', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   const reportId = parseInt(req.params.reportId, 10);
   const orgId    = req.user.orgId;
   try {
@@ -359,7 +359,7 @@ router.get('/admin/qa/reports/:reportId', authenticate, requireRole('admin', 'su
 });
 
 // ─── GET /api/admin/qa/rules ─────────────────────────────────────────────────
-router.get('/admin/qa/rules', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/admin/qa/rules', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   const orgId = req.user.orgId;
   try {
     await ensureOrgRules(orgId);
@@ -378,7 +378,7 @@ router.get('/admin/qa/rules', authenticate, requireRole('admin', 'superadmin'), 
 });
 
 // ─── PUT /api/admin/qa/rules/:ruleId ─────────────────────────────────────────
-router.put('/admin/qa/rules/:ruleId', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.updateQaRule), async (req, res) => {
+router.put('/admin/qa/rules/:ruleId', authenticate, requireRole('admin', 'platform_admin'), requireOrg, validate(schemas.updateQaRule), async (req, res) => {
   const ruleId = parseInt(req.params.ruleId, 10);
   const orgId  = req.user.orgId;
   const { is_active, severity, condition_json } = req.body;
@@ -413,7 +413,7 @@ router.put('/admin/qa/rules/:ruleId', authenticate, requireRole('admin', 'supera
 
 // ─── POST /api/admin/qa/rules/reset ──────────────────────────────────────────
 // Wipe org rules and re-seed from knowledge base defaults.
-router.post('/admin/qa/rules/reset', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/admin/qa/rules/reset', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   const orgId = req.user.orgId;
   try {
     await pool.execute('DELETE FROM org_qa_rules WHERE org_id = ?', [orgId]);

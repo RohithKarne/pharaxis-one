@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { hasGlobalAdminScope, isAdminUser } from '../../../shared/utils/adminScope.js'
 
 function mapSsoError(code) {
   const key = String(code || '').trim().toLowerCase()
@@ -52,10 +53,10 @@ export default function SsoCompletePage() {
         if (!res.ok) throw new Error(payload.error || 'Unable to restore app session after SSO.')
 
         if (cancelled) return
-        const isAdminUser = payload.user?.role === 'admin' || payload.user?.role === 'superadmin'
-        const hasMimsAppAccess = payload.user?.role === 'superadmin' || (payload.modules || []).includes('mims_core')
+        const adminUser = isAdminUser(payload.user)
+        const hasMimsAppAccess = hasGlobalAdminScope(payload.user) || (payload.modules || []).includes('mims_core')
         const targetConfig = TARGET_CONFIG[target] || null
-        const hasTargetAccess = !targetConfig || (isAdminUser && (payload.user?.role === 'superadmin' || (payload.modules || []).includes(targetConfig.moduleKey)))
+        const hasTargetAccess = !targetConfig || (adminUser && (hasGlobalAdminScope(payload.user) || (payload.modules || []).includes(targetConfig.moduleKey)))
         if (!hasTargetAccess) {
           await httpFetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
           setFailed(true)
@@ -77,7 +78,7 @@ export default function SsoCompletePage() {
           navigate('/dashboard', { replace: true })
         } else {
           const fallback = Object.values(TARGET_CONFIG).find(config =>
-            isAdminUser && (payload.user?.role === 'superadmin' || (payload.modules || []).includes(config.moduleKey))
+            adminUser && (hasGlobalAdminScope(payload.user) || (payload.modules || []).includes(config.moduleKey))
           )
           navigate(fallback?.destination || '/no-access', { replace: true })
         }

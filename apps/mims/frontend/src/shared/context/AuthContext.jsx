@@ -7,6 +7,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { httpFetch } from '../api/httpFetch.js'
+import { formatAdminRoleLabel, hasGlobalAdminScope } from '../utils/adminScope.js'
 
 const AuthContext = createContext(null)
 
@@ -111,7 +112,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const refreshOrgAccess = useCallback(async () => {
-    if (user?.role === 'superadmin') return
+    if (hasGlobalAdminScope({ ...user, modules })) return
 
     const res = await httpFetch('/api/auth/me')
     if (!res.ok) return
@@ -144,14 +145,14 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     localStorage.setItem(`${KEY}_all_orgs`,        JSON.stringify(switched.allOrgs || []))
     localStorage.setItem(`${KEY}_session_timeout`, String(switched.sessionTimeout ?? 30))
     window.location.reload()
-  }, [KEY, user?.role]) // stable deps — KEY is constant, role changes rarely (login/logout)
+  }, [KEY, modules, user]) // stable enough for auth changes and storage refresh
 
   const refreshSecurityAccess = useCallback(async () => {
     if (!token || !user) {
       setSecurityAccess({ unrestricted: true, system_options: null, case_options: null })
       return
     }
-    if (user.role === 'superadmin') {
+    if (hasGlobalAdminScope({ ...user, modules })) {
       setSecurityAccess({ unrestricted: true, system_options: null, case_options: null })
       return
     }
@@ -182,22 +183,18 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   }
 
   function formatRole(role) {
-    const labels = {
-      superadmin: 'Super Administrator', admin: 'Administrator',
-      agent: 'MI Agent', reviewer: 'Reviewer', content_manager: 'Content Manager'
-    }
-    return labels[role] || role
+    return formatAdminRoleLabel(role)
   }
 
   function hasModuleAccess(module) {
     if (!user) return false
-    if (user.role === 'superadmin') return true
+    if (hasGlobalAdminScope({ ...user, modules })) return true
     return modules.includes(module)
   }
 
   function hasSecurityOption(scope, section, option) {
     if (!user) return false
-    if (user.role === 'superadmin') return true
+    if (hasGlobalAdminScope({ ...user, modules })) return true
     if (securityAccess?.unrestricted) return true
     const matrix = securityAccess?.[scope]
     if (!matrix) return true

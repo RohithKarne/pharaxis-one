@@ -14,7 +14,7 @@ const { makeTextPdf } = require('../../services/pdfExportService');
 
 const router = express.Router();
 
-router.post('/audit/inspector-export', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/audit/inspector-export', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const caseId = Number(req.body.case_id);
     if (!caseId) return res.status(400).json({ error: 'case_id is required.' });

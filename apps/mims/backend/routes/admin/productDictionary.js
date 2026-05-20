@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const {
   GROUP_TYPES,
   TARGET_TYPES,
@@ -33,12 +34,12 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function getScopedOrgId(req, providedOrgId = null) {
-  return isSuperadmin(req) ? (providedOrgId || null) : req.user.orgId;
+  return hasPlatformAdminScope(req) ? (providedOrgId || null) : req.user.orgId;
 }
 
 function parseMetadata(raw) {
@@ -60,14 +61,14 @@ function memberLabelSource(memberType) {
 
 // ─── PRODUCT GROUPS ──────────────────────────────────────────────────────────
 
-router.get('/product-group-types', authenticate, requireRole('admin', 'superadmin'), (_req, res) => {
+router.get('/product-group-types', authenticate, requireRole('admin', 'platform_admin'), (_req, res) => {
   res.json({
     group_types: Object.entries(GROUP_TYPES).map(([key, label]) => ({ key, label })),
     target_types: Array.from(TARGET_TYPES).map(key => ({ key })),
   });
 });
 
-router.get('/product-groups/resolve', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/product-groups/resolve', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const groups = await resolveProductGroups({
       orgId: req.user.orgId || null,
@@ -82,7 +83,7 @@ router.get('/product-groups/resolve', authenticate, requireRole('admin', 'supera
   }
 });
 
-router.get('/product-groups', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/product-groups', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const groups = await listProductGroups(req.user.orgId || null, req.query);
     res.json({ groups });
@@ -91,7 +92,7 @@ router.get('/product-groups', authenticate, requireRole('admin', 'superadmin'), 
   }
 });
 
-router.post('/product-groups', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/product-groups', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { name, description, is_active } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
@@ -110,7 +111,7 @@ router.post('/product-groups', authenticate, requireRole('admin', 'superadmin'),
   }
 });
 
-router.put('/product-groups/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/product-groups/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const group = await getProductGroup(req.user.orgId || null, req.params.id);
     if (!group) return res.status(404).json({ error: 'Product group not found.' });
@@ -136,7 +137,7 @@ router.put('/product-groups/:id', authenticate, requireRole('admin', 'superadmin
   }
 });
 
-router.delete('/product-groups/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/product-groups/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const group = await getProductGroup(req.user.orgId || null, req.params.id);
     if (!group) return res.status(404).json({ error: 'Product group not found.' });
@@ -148,7 +149,7 @@ router.delete('/product-groups/:id', authenticate, requireRole('admin', 'superad
   }
 });
 
-router.get('/product-groups/:id/members', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/product-groups/:id/members', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const members = await listMembers(req.user.orgId || null, req.params.id);
     if (!members) return res.status(404).json({ error: 'Product group not found.' });
@@ -158,7 +159,7 @@ router.get('/product-groups/:id/members', authenticate, requireRole('admin', 'su
   }
 });
 
-router.post('/product-groups/:id/members', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/product-groups/:id/members', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const group = await getProductGroup(req.user.orgId || null, req.params.id);
     if (!group) return res.status(404).json({ error: 'Product group not found.' });
@@ -178,7 +179,7 @@ router.post('/product-groups/:id/members', authenticate, requireRole('admin', 's
   }
 });
 
-router.delete('/product-groups/:id/members/:memberId', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/product-groups/:id/members/:memberId', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const group = await getProductGroup(req.user.orgId || null, req.params.id);
     if (!group) return res.status(404).json({ error: 'Product group not found.' });
@@ -190,7 +191,7 @@ router.delete('/product-groups/:id/members/:memberId', authenticate, requireRole
   }
 });
 
-router.get('/product-groups/:id/assignments', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/product-groups/:id/assignments', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const assignments = await listAssignments(req.user.orgId || null, req.params.id);
     if (!assignments) return res.status(404).json({ error: 'Product group not found.' });
@@ -200,7 +201,7 @@ router.get('/product-groups/:id/assignments', authenticate, requireRole('admin',
   }
 });
 
-router.post('/product-groups/:id/assignments', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/product-groups/:id/assignments', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const group = await getProductGroup(req.user.orgId || null, req.params.id);
     if (!group) return res.status(404).json({ error: 'Product group not found.' });
@@ -223,7 +224,7 @@ router.post('/product-groups/:id/assignments', authenticate, requireRole('admin'
   }
 });
 
-router.delete('/product-groups/:id/assignments/:assignmentId', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/product-groups/:id/assignments/:assignmentId', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const group = await getProductGroup(req.user.orgId || null, req.params.id);
     if (!group) return res.status(404).json({ error: 'Product group not found.' });
@@ -238,13 +239,13 @@ router.delete('/product-groups/:id/assignments/:assignmentId', authenticate, req
 // ─── PRODUCT FAMILIES ────────────────────────────────────────────────────────
 
 // GET /api/admin/product-families — list families with their products
-router.get('/product-families', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/product-families', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [families] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT * FROM product_families ORDER BY name'
         : 'SELECT * FROM product_families WHERE org_id = ? ORDER BY name',
-      isSuperadmin(req) ? [] : [req.user.orgId]
+      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
 
     // Attach products to each family
@@ -256,8 +257,8 @@ router.get('/product-families', authenticate, requireRole('admin', 'superadmin')
         `SELECT p.*, pf.name AS family_name
          FROM products p
          LEFT JOIN product_families pf ON p.family_id = pf.id
-         WHERE p.family_id IN (${placeholders}) ${isSuperadmin(req) ? '' : 'AND p.org_id = ?'}`,
-        isSuperadmin(req) ? familyIds : [...familyIds, req.user.orgId]
+         WHERE p.family_id IN (${placeholders}) ${hasPlatformAdminScope(req) ? '' : 'AND p.org_id = ?'}`,
+        hasPlatformAdminScope(req) ? familyIds : [...familyIds, req.user.orgId]
       );
     }
 
@@ -275,7 +276,7 @@ router.get('/product-families', authenticate, requireRole('admin', 'superadmin')
 });
 
 // POST /api/admin/product-families — create family
-router.post('/product-families', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/product-families', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { name, ingredients, is_active } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
@@ -298,14 +299,14 @@ router.post('/product-families', authenticate, requireRole('admin', 'superadmin'
 });
 
 // PUT /api/admin/product-families/:id — update family
-router.put('/product-families/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/product-families/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id FROM product_families WHERE id = ?'
         : 'SELECT id FROM product_families WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Product family not found.' });
 
@@ -328,7 +329,7 @@ router.put('/product-families/:id', authenticate, requireRole('admin', 'superadm
 // ─── PRODUCTS (FULL / ENRICHED) ───────────────────────────────────────────────
 
 // GET /api/admin/products-full — list all products with org info joined
-router.get('/products-full', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/products-full', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { search, org_id, family_id, is_active } = req.query;
 
@@ -348,7 +349,7 @@ router.get('/products-full', authenticate, requireRole('admin', 'superadmin'), r
     if (org_id) {
       query += ' AND p.org_id = ?';
       params.push(org_id);
-    } else if (!isSuperadmin(req)) {
+    } else if (!hasPlatformAdminScope(req)) {
       query += ' AND p.org_id = ?';
       params.push(req.user.orgId);
     }
@@ -378,13 +379,13 @@ router.get('/products-full', authenticate, requireRole('admin', 'superadmin'), r
   }
 });
 
-router.get('/products/:id/defaults', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/products/:id/defaults', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [[product]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT * FROM products WHERE id = ? LIMIT 1'
         : 'SELECT * FROM products WHERE id = ? AND org_id = ? LIMIT 1',
-      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     if (!product) return res.status(404).json({ error: 'Product not found.' });
     res.json({
@@ -403,7 +404,7 @@ router.get('/products/:id/defaults', authenticate, requireRole('admin', 'superad
 });
 
 // POST /api/admin/products-full — create product with enriched fields
-router.post('/products-full', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/products-full', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { trade_name, family_id, mah, dosage, atc_code, authorization_country, is_active } = req.body;
     if (!trade_name) return res.status(400).json({ error: 'trade_name is required.' });
@@ -448,14 +449,14 @@ router.post('/products-full', authenticate, requireRole('admin', 'superadmin'), 
 });
 
 // PUT /api/admin/products-full/:id — update product
-router.put('/products-full/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/products-full/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id FROM products WHERE id = ?'
         : 'SELECT id FROM products WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Product not found.' });
 
@@ -487,7 +488,7 @@ router.put('/products-full/:id', authenticate, requireRole('admin', 'superadmin'
 });
 
 // DELETE /api/admin/products-full/:id — soft delete
-router.delete('/products-full/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/products-full/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute('SELECT id, trade_name FROM products WHERE id = ?', [id]);
@@ -503,7 +504,7 @@ router.delete('/products-full/:id', authenticate, requireRole('admin', 'superadm
 });
 
 // POST /api/admin/products/:id/clone — Clone a product
-router.post('/products/:id/clone', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/products/:id/clone', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [rows] = await pool.execute(`SELECT * FROM products WHERE id = ?`, [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Product not found' });
@@ -535,13 +536,13 @@ router.post('/products/:id/clone', authenticate, requireRole('admin', 'superadmi
 });
 
 // PATCH /api/admin/products/bulk-deactivate — Bulk deactivate
-router.patch('/products/bulk-deactivate', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.patch('/products/bulk-deactivate', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
     const placeholders = ids.map(() => '?').join(',');
-    const scopeClause = isSuperadmin(req) ? '' : ` AND org_id = ?`;
-    const params = isSuperadmin(req) ? [...ids] : [...ids, req.user.orgId];
+    const scopeClause = hasPlatformAdminScope(req) ? '' : ` AND org_id = ?`;
+    const params = hasPlatformAdminScope(req) ? [...ids] : [...ids, req.user.orgId];
     await pool.execute(`UPDATE products SET is_active = 0 WHERE id IN (${placeholders})${scopeClause}`, params);
     await audit(req.user.userId, req.user.email, 'BULK_DEACTIVATE', 'product', null, { ids, count: ids.length });
     res.json({ success: true, deactivated: ids.length });
@@ -554,7 +555,7 @@ router.patch('/products/bulk-deactivate', authenticate, requireRole('admin', 'su
 // ─── PRODUCT APPROVALS (F-07) ─────────────────────────────────────────────────
 
 // GET /api/admin/products/:id/approvals
-router.get('/products/:id/approvals', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/products/:id/approvals', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [approvals] = await pool.execute(
       'SELECT * FROM product_approvals WHERE product_id = ? ORDER BY approval_date DESC',
@@ -568,7 +569,7 @@ router.get('/products/:id/approvals', authenticate, requireRole('admin', 'supera
 });
 
 // POST /api/admin/products/:id/approvals
-router.post('/products/:id/approvals', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/products/:id/approvals', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { approval_number, regulatory_body, approval_date, expiry_date, status } = req.body;
     if (!approval_number) return res.status(400).json({ error: 'approval_number is required.' });
@@ -589,7 +590,7 @@ router.post('/products/:id/approvals', authenticate, requireRole('admin', 'super
 });
 
 // PUT /api/admin/products/approvals/:approvalId
-router.put('/products/approvals/:approvalId', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/products/approvals/:approvalId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { approvalId } = req.params;
     const [[existing]] = await pool.execute('SELECT id FROM product_approvals WHERE id = ?', [approvalId]);
@@ -612,7 +613,7 @@ router.put('/products/approvals/:approvalId', authenticate, requireRole('admin',
 });
 
 // DELETE /api/admin/products/approvals/:approvalId
-router.delete('/products/approvals/:approvalId', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/products/approvals/:approvalId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { approvalId } = req.params;
     const [[existing]] = await pool.execute('SELECT id FROM product_approvals WHERE id = ?', [approvalId]);
@@ -630,7 +631,7 @@ router.delete('/products/approvals/:approvalId', authenticate, requireRole('admi
 // ─── PRODUCT COUNTRY AUTHORIZATIONS (F-07) ────────────────────────────────────
 
 // GET /api/admin/products/:id/country-authorizations
-router.get('/products/:id/country-authorizations', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/products/:id/country-authorizations', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [auths] = await pool.execute(
       'SELECT * FROM product_country_authorizations WHERE product_id = ? ORDER BY country',
@@ -644,7 +645,7 @@ router.get('/products/:id/country-authorizations', authenticate, requireRole('ad
 });
 
 // POST /api/admin/products/:id/country-authorizations
-router.post('/products/:id/country-authorizations', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/products/:id/country-authorizations', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { country, auth_number, auth_date, status } = req.body;
     if (!country) return res.status(400).json({ error: 'country is required.' });
@@ -664,7 +665,7 @@ router.post('/products/:id/country-authorizations', authenticate, requireRole('a
 });
 
 // PUT /api/admin/products/country-authorizations/:authId
-router.put('/products/country-authorizations/:authId', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/products/country-authorizations/:authId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { authId } = req.params;
     const [[existing]] = await pool.execute('SELECT id FROM product_country_authorizations WHERE id = ?', [authId]);
@@ -687,7 +688,7 @@ router.put('/products/country-authorizations/:authId', authenticate, requireRole
 });
 
 // DELETE /api/admin/products/country-authorizations/:authId
-router.delete('/products/country-authorizations/:authId', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/products/country-authorizations/:authId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { authId } = req.params;
     const [[existing]] = await pool.execute('SELECT id FROM product_country_authorizations WHERE id = ?', [authId]);

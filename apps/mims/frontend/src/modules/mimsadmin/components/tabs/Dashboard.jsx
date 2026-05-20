@@ -2,8 +2,8 @@
  * Dashboard.jsx — MIMS Admin home / landing tab
  *
  * Platform-level KPIs + readiness + recent audit/login activity.
- * Migrated from superadmin/DashboardView. Backend endpoint
- * `/api/superadmin/dashboard` now accepts admin role.
+ * Migrated from the legacy superadmin dashboard. Canonical backend endpoint
+ * is `/api/admin/platform/dashboard`, with legacy compatibility still mounted.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -25,7 +25,7 @@ export default function Dashboard({ onNavigateTab }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res  = await httpFetch('/api/superadmin/dashboard', { headers: H })
+      const res  = await httpFetch('/api/admin/platform/dashboard', { headers: H })
       const data = await res.json()
       setSummary(data)
     } finally {

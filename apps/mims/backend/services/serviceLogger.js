@@ -13,7 +13,7 @@
  */
 
 const pool = require('../database/db')
-const { emitSuperadminAlert } = require('./alertService')
+const { emitPlatformAdminAlert } = require('./alertService')
 
 async function logService({ source, service_type, description, status = 'success', details = null }) {
   try {
@@ -27,12 +27,12 @@ async function logService({ source, service_type, description, status = 'success
       const eventType = normalizedSource.includes('mail')
         ? 'mailbox_failure'
         : 'service_error_threshold'
-      await emitSuperadminAlert(eventType, {
+      await emitPlatformAdminAlert(eventType, {
         severity: 'high',
         title: eventType === 'mailbox_failure' ? 'Mailbox operation failed' : 'Service error threshold breached',
         message: description || `${source || 'Service'} reported a failure.`,
         metadata: { source, service_type, description, details },
-        linkUrl: '/superadmin',
+        linkUrl: '/mims-admin?standalone=1',
       })
     }
   } catch (err) {

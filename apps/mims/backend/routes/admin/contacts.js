@@ -10,6 +10,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -20,18 +21,18 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function getScopedOrgId(req, providedOrgId = null) {
-  return isSuperadmin(req) ? (providedOrgId || null) : req.user.orgId;
+  return hasPlatformAdminScope(req) ? (providedOrgId || null) : req.user.orgId;
 }
 
 // ─── CONTACTS ────────────────────────────────────────────────────────────────
 
 // GET /api/admin/contacts — list contacts with filters and pagination
-router.get('/contacts', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/contacts', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { type, search, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -48,7 +49,7 @@ router.get('/contacts', authenticate, requireRole('admin', 'superadmin'), requir
       query += ' AND c.type = ?';
       params.push(type);
     }
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       query += ' AND c.org_id = ?';
       params.push(req.user.orgId);
     }
@@ -71,7 +72,7 @@ router.get('/contacts', authenticate, requireRole('admin', 'superadmin'), requir
 });
 
 // POST /api/admin/contacts — create contact
-router.post('/contacts', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createContact), async (req, res) => {
+router.post('/contacts', authenticate, requireRole('admin', 'platform_admin'), requireOrg, validate(schemas.createContact), async (req, res) => {
   try {
     const { type, first_name, last_name, specialty, institution, email, phone, site_id, notes, address, do_not_update_master } = req.body;
     if (!first_name) return res.status(400).json({ error: 'first_name is required.' });
@@ -108,14 +109,14 @@ router.post('/contacts', authenticate, requireRole('admin', 'superadmin'), requi
 });
 
 // GET /api/admin/contacts/:id — get single contact
-router.get('/contacts/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/contacts/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [[contact]] = await pool.execute(
       `SELECT c.*, o.name AS org_name
        FROM contacts c
        LEFT JOIN organisations o ON c.org_id = o.id
-       WHERE c.id = ? ${isSuperadmin(req) ? '' : 'AND c.org_id = ?'}`,
-      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+       WHERE c.id = ? ${hasPlatformAdminScope(req) ? '' : 'AND c.org_id = ?'}`,
+      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     if (!contact) return res.status(404).json({ error: 'Contact not found.' });
     res.json({ contact });
@@ -126,14 +127,14 @@ router.get('/contacts/:id', authenticate, requireRole('admin', 'superadmin'), re
 });
 
 // PUT /api/admin/contacts/:id — update contact
-router.put('/contacts/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/contacts/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id FROM contacts WHERE id = ?'
         : 'SELECT id FROM contacts WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Contact not found.' });
 
@@ -159,14 +160,14 @@ router.put('/contacts/:id', authenticate, requireRole('admin', 'superadmin'), re
 });
 
 // DELETE /api/admin/contacts/:id — soft delete
-router.delete('/contacts/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/contacts/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id, first_name, last_name FROM contacts WHERE id = ?'
         : 'SELECT id, first_name, last_name FROM contacts WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Contact not found.' });
 
@@ -182,7 +183,7 @@ router.delete('/contacts/:id', authenticate, requireRole('admin', 'superadmin'),
 // ─── COMPANY REPS ────────────────────────────────────────────────────────────
 
 // GET /api/admin/company-reps — list company reps
-router.get('/company-reps', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/company-reps', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { search, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -199,7 +200,7 @@ router.get('/company-reps', authenticate, requireRole('admin', 'superadmin'), re
       query += ' AND (cr.name LIKE ? OR cr.email LIKE ? OR cr.title LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       query += ' AND cr.org_id = ?';
       params.push(req.user.orgId);
     }
@@ -218,7 +219,7 @@ router.get('/company-reps', authenticate, requireRole('admin', 'superadmin'), re
 });
 
 // POST /api/admin/company-reps — create company rep
-router.post('/company-reps', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/company-reps', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { name, title, territory, email, phone } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
@@ -238,14 +239,14 @@ router.post('/company-reps', authenticate, requireRole('admin', 'superadmin'), r
 });
 
 // PUT /api/admin/company-reps/:id — update company rep
-router.put('/company-reps/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/company-reps/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id FROM company_reps WHERE id = ?'
         : 'SELECT id FROM company_reps WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Company rep not found.' });
 
@@ -266,7 +267,7 @@ router.put('/company-reps/:id', authenticate, requireRole('admin', 'superadmin')
 });
 
 // POST /api/admin/company-reps/import — Bulk import reps from CSV rows
-router.post('/company-reps/import', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/company-reps/import', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { rows } = req.body; // array of {name, email, phone, territory, org_id}
     if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'rows array required' });
@@ -289,14 +290,14 @@ router.post('/company-reps/import', authenticate, requireRole('admin', 'superadm
 });
 
 // DELETE /api/admin/company-reps/:id — soft delete
-router.delete('/company-reps/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/company-reps/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id, name FROM company_reps WHERE id = ?'
         : 'SELECT id, name FROM company_reps WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Company rep not found.' });
 

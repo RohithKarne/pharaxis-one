@@ -52,11 +52,12 @@ const {
   deleteExportConfig,
 } = require('../services/scheduledExportService');
 const { recordReportRun } = require('../services/reportOpsService');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 const router = express.Router();
 
 function canManageReports(req) {
-  return req.user?.role === 'admin' || req.user?.role === 'superadmin';
+  return req.user?.role === 'admin' || hasGlobalAdminScope(req.user);
 }
 
 function parseMaybeJson(value, fallback = {}) {

@@ -72,7 +72,7 @@ function assert(label, cond, detail) {
 }
 
 async function run() {
-  // Test 1 — Superadmin login
+  // Test 1 — Platform Admin login
   let res = await req('POST', '/api/auth/login', {
     email: 'superadmin',
     password: '__SET_SMOKE_TEST_PASSWORD__'
@@ -93,7 +93,7 @@ async function run() {
   // Test 3 — Create vault config (superadmin)
   res = await req(
     'POST',
-    '/api/superadmin/vault-config',
+    '/api/admin/platform/vault-config',
     {
       org_id: 26,
       vault_domain: 'https://test.veevavault.com',
@@ -110,7 +110,7 @@ async function run() {
   vaultConfigId = res.body && res.body.id;
 
   // Test 4 — Get vault configs (superadmin)
-  res = await req('GET', '/api/superadmin/vault-config', null, {
+  res = await req('GET', '/api/admin/platform/vault-config', null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 4 status', res.status === 200, 'status=' + res.status);
@@ -119,7 +119,7 @@ async function run() {
   // Test 5 — Create EMIR config (superadmin)
   res = await req(
     'POST',
-    '/api/superadmin/emir-config',
+    '/api/admin/platform/emir-config',
     {
       org_id: 26,
       inbound_email: 'emir@test.com',
@@ -134,7 +134,7 @@ async function run() {
   emirConfigId = res.body && res.body.id;
 
   // Test 6 — Get EMIR configs (superadmin)
-  res = await req('GET', '/api/superadmin/emir-config', null, {
+  res = await req('GET', '/api/admin/platform/emir-config', null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 6 status', res.status === 200, 'status=' + res.status);
@@ -143,7 +143,7 @@ async function run() {
   // Test 7 — Create vault document type mapping (superadmin)
   res = await req(
     'POST',
-    '/api/superadmin/vault-query-params/26',
+    '/api/admin/platform/vault-query-params/26',
     {
       vault_type: 'promotional_piece__v',
       vault_subtype: null,
@@ -157,7 +157,7 @@ async function run() {
   typeMapId = res.body && res.body.id;
 
   // Test 8 — Get vault query params (superadmin)
-  res = await req('GET', '/api/superadmin/vault-query-params/26', null, {
+  res = await req('GET', '/api/admin/platform/vault-query-params/26', null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 8 status', res.status === 200, 'status=' + res.status);
@@ -209,14 +209,14 @@ async function run() {
   assert('Test 12 status', res.status === 500, 'status=' + res.status + ' body=' + JSON.stringify(res.body));
 
   // Test 13 — EMIR requests list (superadmin)
-  res = await req('GET', '/api/superadmin/emir/requests', null, {
+  res = await req('GET', '/api/admin/platform/emir/requests', null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 13 status', res.status === 200, 'status=' + res.status);
   assert('Test 13 requests array', !!(res.body && Array.isArray(res.body.requests)), JSON.stringify(res.body));
 
   // Test 14 — EMIR audit log (superadmin)
-  const listForAudit = await req('GET', '/api/superadmin/emir/requests', null, {
+  const listForAudit = await req('GET', '/api/admin/platform/emir/requests', null, {
     Authorization: 'Bearer ' + superadminToken
   });
   let emirRequestNumericId;
@@ -225,7 +225,7 @@ async function run() {
   }
   assert('Test 14 request id present', !!emirRequestNumericId, JSON.stringify(listForAudit.body));
 
-  res = await req('GET', '/api/superadmin/emir/requests/' + emirRequestNumericId + '/audit', null, {
+  res = await req('GET', '/api/admin/platform/emir/requests/' + emirRequestNumericId + '/audit', null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 14 status', res.status === 200, 'status=' + res.status + ' body=' + JSON.stringify(res.body));
@@ -233,7 +233,7 @@ async function run() {
   assert('Test 14 audit length >= 3', !!(res.body && Array.isArray(res.body.audit) && res.body.audit.length >= 3), JSON.stringify(res.body));
 
   // Test 15 — Vault poll trigger (superadmin)
-  res = await req('GET', '/api/superadmin/vault/poll-now/26', null, {
+  res = await req('GET', '/api/admin/platform/vault/poll-now/26', null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 15 status', res.status === 200, 'status=' + res.status + ' body=' + JSON.stringify(res.body));
@@ -244,19 +244,19 @@ async function run() {
   );
 
   // Test 16 — Delete vault type mapping (cleanup)
-  res = await req('DELETE', '/api/superadmin/vault-query-params/' + typeMapId, null, {
+  res = await req('DELETE', '/api/admin/platform/vault-query-params/' + typeMapId, null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 16 status', res.status === 200, 'status=' + res.status + ' body=' + JSON.stringify(res.body));
 
   // Test 17 — Delete EMIR config (cleanup)
-  res = await req('DELETE', '/api/superadmin/emir-config/' + emirConfigId, null, {
+  res = await req('DELETE', '/api/admin/platform/emir-config/' + emirConfigId, null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 17 status', res.status === 200, 'status=' + res.status + ' body=' + JSON.stringify(res.body));
 
   // Test 18 — Delete vault config (cleanup)
-  res = await req('DELETE', '/api/superadmin/vault-config/' + vaultConfigId, null, {
+  res = await req('DELETE', '/api/admin/platform/vault-config/' + vaultConfigId, null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 18 status', res.status === 200, 'status=' + res.status + ' body=' + JSON.stringify(res.body));

@@ -29,7 +29,7 @@ function inferModule(pathname) {
   if (p.includes('/inbox')) return 'Inbox';
   if (p.includes('/cases') || p.includes('/case')) return 'Case Management';
   if (p.includes('/admin')) return 'Admin Console';
-  if (p.includes('/superadmin')) return 'Superadmin';
+  if (p.includes('/superadmin')) return 'Platform Admin';
   if (p.includes('/cm')) return 'Content';
   if (p.includes('/analytics')) return 'Analytics';
   if (p.includes('/dv')) return 'Data Visualization';

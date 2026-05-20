@@ -20,7 +20,7 @@ const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const sla = require('../../services/workflowSlaService');
 
-const ADMIN = ['admin', 'superadmin'];
+const ADMIN = ['admin', 'platform_admin'];
 
 router.get('/cases/:caseId/sla', authenticate, async (req, res) => {
   try {

@@ -11,6 +11,7 @@ const {
   getTransmissionSlaReport,
 } = require('../services/reportDatasetService');
 const { recordReportRun, listReportRunLedger } = require('../services/reportOpsService');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 const router = express.Router();
 
 function dateFilters(from, to, col) {
@@ -29,7 +30,7 @@ function normalizeOrgId(value) {
 function resolveReportOrgId(req) {
   const userOrgId = normalizeOrgId(req.user.orgId);
   const overrideOrgId = parseInt(req.query.org_id, 10);
-  return req.user.role === 'superadmin' && !Number.isNaN(overrideOrgId) ? overrideOrgId : userOrgId;
+  return hasGlobalAdminScope(req.user) && !Number.isNaN(overrideOrgId) ? overrideOrgId : userOrgId;
 }
 
 router.get('/reports/daily-case-openings', authenticate, async (req, res) => {
@@ -147,7 +148,7 @@ router.get('/reports/case-volume', authenticate, async (req, res) => {
     const { date_from, date_to, org_id } = req.query;
     const userOrgId = normalizeOrgId(req.user.orgId);
     const overrideOrgId = parseInt(org_id, 10);
-    const orgId = req.user.role === 'superadmin' && !Number.isNaN(overrideOrgId) ? overrideOrgId : userOrgId;
+    const orgId = hasGlobalAdminScope(req.user) && !Number.isNaN(overrideOrgId) ? overrideOrgId : userOrgId;
     const df = dateFilters(date_from, date_to, 'created_at');
 
     let sql = `
@@ -276,7 +277,7 @@ router.get('/reports/case-assignee', authenticate, async (req, res) => {
 
 router.get('/reports/case-by-org', authenticate, async (req, res) => {
   try {
-    const isSuperadmin = req.user.role === 'superadmin';
+    const isPlatformAdmin = hasGlobalAdminScope(req.user);
     const orgId = normalizeOrgId(req.user.orgId);
 
     let sql = `
@@ -287,7 +288,7 @@ router.get('/reports/case-by-org', authenticate, async (req, res) => {
     `;
     const params = [];
 
-    if (!isSuperadmin) {
+    if (!isPlatformAdmin) {
       sql += ' AND c.org_id = ?';
       params.push(orgId);
     }
@@ -609,7 +610,7 @@ router.get('/reports/module-usage', authenticate, async (req, res) => {
 
 router.get('/reports/org-activity', authenticate, async (req, res) => {
   try {
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 

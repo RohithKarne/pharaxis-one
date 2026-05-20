@@ -50,28 +50,28 @@ async function loginForToken(makeRequest, email, password) {
   return { status: login.status, token: null, body: login.body }
 }
 
-async function createTemporarySuperadmin(makeRequest) {
+async function createTemporaryPlatformAdmin(makeRequest) {
   const email = `${uniqueName('regression-superadmin').toLowerCase()}@example.com`
-  const password = 'TempSuperadmin@123'
+  const password = 'TempPlatformAdmin@123'
   const hash = await bcrypt.hash(password, 10)
   const [insert] = await pool.execute(
     `INSERT INTO users (name, email, password, role, is_active, email_verified)
      VALUES (?, ?, ?, 'superadmin', 1, 1)`,
-    ['Regression Superadmin', email, hash]
+    ['Regression Platform Admin', email, hash]
   )
   const userId = Number(insert.insertId || 0)
   const login = await loginForToken(makeRequest, email, password)
   return { userId, email, password, token: login.token, status: login.status, body: login.body }
 }
 
-async function createTemporaryOrgScopedSuperadmin(makeRequest, orgId, siteId) {
+async function createTemporaryOrgScopedPlatformAdmin(makeRequest, orgId, siteId) {
   const email = `${uniqueName('regression-org-superadmin').toLowerCase()}@example.com`
-  const password = 'TempOrgSuperadmin@123'
+  const password = 'TempOrgPlatformAdmin@123'
   const hash = await bcrypt.hash(password, 10)
   const [insert] = await pool.execute(
     `INSERT INTO users (name, email, password, role, is_active, email_verified)
      VALUES (?, ?, ?, 'admin', 1, 1)`,
-    ['Regression Org Superadmin', email, hash]
+    ['Regression Org Platform Admin', email, hash]
   )
   const userId = Number(insert.insertId || 0)
   await pool.execute(
@@ -1051,7 +1051,7 @@ module.exports = [
       let originalProcessExplorerEnabled = null
       let approveRequestId = null
       let rejectRequestId = null
-      let tempSuperadminUserId = null
+      let tempPlatformAdminUserId = null
       try {
         const auth = decodeJwtPayload(token)
         const orgId = Number(auth.orgId || auth.org_id || 0)
@@ -1067,10 +1067,10 @@ module.exports = [
           await pool.execute('UPDATE organisations SET process_explorer_enabled = 1 WHERE id = ?', [orgId])
         }
 
-        const scopedSuperadmin = await createTemporaryOrgScopedSuperadmin(makeRequest, orgId, site?.id || null)
-        tempSuperadminUserId = scopedSuperadmin.userId
-        if (scopedSuperadmin.status !== 200 || !scopedSuperadmin.token) {
-          return { pass: false, details: `scopedSuperadminLogin=${scopedSuperadmin.status}` }
+        const scopedPlatformAdmin = await createTemporaryOrgScopedPlatformAdmin(makeRequest, orgId, site?.id || null)
+        tempPlatformAdminUserId = scopedPlatformAdmin.userId
+        if (scopedPlatformAdmin.status !== 200 || !scopedPlatformAdmin.token) {
+          return { pass: false, details: `scopedPlatformAdminLogin=${scopedPlatformAdmin.status}` }
         }
 
         const requestListBefore = await makeRequest('GET', '/api/admin/process-logs/ops/requests?status=all', null, token)
@@ -1106,10 +1106,10 @@ module.exports = [
 
         const approve = await makeRequest('POST', `/api/admin/process-logs/ops/requests/${approveRequestId}/approve`, {
           confirmation_text: 'CONFIRM SAFE OPS',
-        }, scopedSuperadmin.token)
+        }, scopedPlatformAdmin.token)
         const reject = await makeRequest('POST', `/api/admin/process-logs/ops/requests/${rejectRequestId}/reject`, {
           reason: 'Regression rejection approved by superadmin',
-        }, scopedSuperadmin.token)
+        }, scopedPlatformAdmin.token)
 
         const requestsAfter = await makeRequest('GET', '/api/admin/process-logs/ops/requests?status=all', null, token)
         const metrics = await makeRequest('GET', '/api/admin/process-logs/ops/metrics', null, token)
@@ -1138,9 +1138,9 @@ module.exports = [
         if (approveRequestId) await pool.execute('DELETE FROM process_explorer_ops_requests WHERE id = ?', [approveRequestId]).catch(() => {})
         if (rejectRequestId) await pool.execute('DELETE FROM process_explorer_ops_snapshots WHERE ops_request_id = ?', [rejectRequestId]).catch(() => {})
         if (rejectRequestId) await pool.execute('DELETE FROM process_explorer_ops_requests WHERE id = ?', [rejectRequestId]).catch(() => {})
-        if (tempSuperadminUserId) await pool.execute('DELETE FROM sessions WHERE user_id = ?', [tempSuperadminUserId]).catch(() => {})
-        if (tempSuperadminUserId) await pool.execute('DELETE FROM user_org_access WHERE user_id = ?', [tempSuperadminUserId]).catch(() => {})
-        if (tempSuperadminUserId) await pool.execute('DELETE FROM users WHERE id = ?', [tempSuperadminUserId]).catch(() => {})
+        if (tempPlatformAdminUserId) await pool.execute('DELETE FROM sessions WHERE user_id = ?', [tempPlatformAdminUserId]).catch(() => {})
+        if (tempPlatformAdminUserId) await pool.execute('DELETE FROM user_org_access WHERE user_id = ?', [tempPlatformAdminUserId]).catch(() => {})
+        if (tempPlatformAdminUserId) await pool.execute('DELETE FROM users WHERE id = ?', [tempPlatformAdminUserId]).catch(() => {})
         if (originalProcessExplorerEnabled != null) {
           await pool.execute('UPDATE organisations SET process_explorer_enabled = ? WHERE id = ?', [originalProcessExplorerEnabled, Number(decodeJwtPayload(token).orgId || 0)]).catch(() => {})
         }
@@ -1159,10 +1159,10 @@ module.exports = [
     run: async ({ makeRequest }) => {
       let sourceOrgId = null
       let targetOrgId = null
-      let tempSuperadminUserId = null
+      let tempPlatformAdminUserId = null
       try {
-        const superadmin = await createTemporarySuperadmin(makeRequest)
-        tempSuperadminUserId = superadmin.userId
+        const superadmin = await createTemporaryPlatformAdmin(makeRequest)
+        tempPlatformAdminUserId = superadmin.userId
         if (superadmin.status !== 200 || !superadmin.token) {
           return { pass: false, details: `superadminLogin=${superadmin.status}` }
         }
@@ -1213,9 +1213,9 @@ module.exports = [
         if (targetOrgId) await pool.execute(`DELETE FROM audit_logs WHERE entity = 'org_config_copy' AND entity_id = ?`, [targetOrgId]).catch(() => {})
         if (targetOrgId) await pool.execute('DELETE FROM organisations WHERE id = ?', [targetOrgId]).catch(() => {})
         if (sourceOrgId) await pool.execute('DELETE FROM organisations WHERE id = ?', [sourceOrgId]).catch(() => {})
-        if (tempSuperadminUserId) await pool.execute('DELETE FROM sessions WHERE user_id = ?', [tempSuperadminUserId]).catch(() => {})
-        if (tempSuperadminUserId) await pool.execute('DELETE FROM user_module_permissions WHERE user_id = ?', [tempSuperadminUserId]).catch(() => {})
-        if (tempSuperadminUserId) await pool.execute('DELETE FROM users WHERE id = ?', [tempSuperadminUserId]).catch(() => {})
+        if (tempPlatformAdminUserId) await pool.execute('DELETE FROM sessions WHERE user_id = ?', [tempPlatformAdminUserId]).catch(() => {})
+        if (tempPlatformAdminUserId) await pool.execute('DELETE FROM user_module_permissions WHERE user_id = ?', [tempPlatformAdminUserId]).catch(() => {})
+        if (tempPlatformAdminUserId) await pool.execute('DELETE FROM users WHERE id = ?', [tempPlatformAdminUserId]).catch(() => {})
       }
     }
   },

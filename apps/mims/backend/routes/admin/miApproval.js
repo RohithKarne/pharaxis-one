@@ -19,7 +19,7 @@ const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const miApproval = require('../../services/miApprovalService');
 
-const ADMIN = ['admin', 'superadmin'];
+const ADMIN = ['admin', 'platform_admin'];
 
 function clientMeta(req) {
   return {

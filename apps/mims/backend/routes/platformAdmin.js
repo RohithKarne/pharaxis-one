@@ -1,6 +1,6 @@
 /**
- * routes/superadmin.js — Superadmin API
- * Superadmin manages organisations, users, sites, and per-user module access.
+ * routes/platformAdmin.js — Platform admin API (legacy superadmin alias)
+ * Platform admin manages organisations, users, sites, and per-user module access.
  * Clients cannot self-provision any billing-affecting resource.
  */
 
@@ -14,7 +14,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validate');
 const { accountCreationRateLimiter } = require('../middleware/rateLimiters');
 const { validateUpload } = require('../middleware/uploadValidation');
-const { emitSuperadminAlert, getSystemConfig, parseJson } = require('../services/alertService');
+const { emitPlatformAdminAlert, getSystemConfig, parseJson } = require('../services/alertService');
 const {
   bootstrapOrg,
   getOrgReadiness,
@@ -25,6 +25,8 @@ const {
 const ALLOWED_MODULES = ['mims_core', 'admin_console', 'content_mgmt', 'data_visualization', 'reports'];
 const ASSIGNABLE_ROLES = ['admin', 'agent', 'reviewer', 'content_manager'];
 const THRESHOLD_ALERT_EVENTS = new Set(['failed_login_spike', 'two_factor_lockout', 'service_error_threshold']);
+const PLATFORM_ADMIN_EXCLUSION_SQL =
+  "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module IN ('platform_admin_console', 'superadmin_console') AND ump.can_access = 1)";
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -104,7 +106,10 @@ async function getDashboardSummary() {
                          SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active,
                          SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive
                   FROM users
-                  WHERE role != 'superadmin'`),
+                  WHERE id NOT IN (
+                    SELECT user_id FROM user_module_permissions
+                    WHERE module IN ('platform_admin_console', 'superadmin_console') AND can_access = 1
+                  )`),
     pool.execute(`SELECT COUNT(*) AS count
                   FROM login_audit
                   WHERE status = 'failed'
@@ -124,8 +129,8 @@ async function getDashboardSummary() {
                   FROM email_accounts`),
     pool.execute(`SELECT COUNT(*) AS count
                   FROM notifications n
-                  JOIN users u ON u.id = n.user_id
-                  WHERE u.role = 'superadmin' AND n.is_read = 0`),
+                  JOIN user_module_permissions ump ON ump.user_id = n.user_id
+                  WHERE ump.module IN ('platform_admin_console', 'superadmin_console') AND ump.can_access = 1 AND n.is_read = 0`),
     pool.execute(`SELECT COUNT(*) AS count
                   FROM superadmin_alert_events
                   WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`),
@@ -155,11 +160,14 @@ async function getDashboardSummary() {
   };
 }
 
-// GET /api/superadmin/users — list users with current module overrides (excludes superadmin system account)
-router.get('/users', authenticate, requireRole('superadmin'), async (_req, res) => {
+// GET /api/admin/platform/users — list users with current module overrides (excludes superadmin system account)
+router.get('/users', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [users] = await pool.execute(
-      "SELECT id, name, email, role, is_active, created_at FROM users WHERE role != 'superadmin' ORDER BY created_at DESC"
+      `SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at
+       FROM users u
+       WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
+       ORDER BY u.created_at DESC`
     );
     const [perms] = await pool.execute(
       'SELECT user_id, module FROM user_module_permissions WHERE can_access = 1'
@@ -173,8 +181,8 @@ router.get('/users', authenticate, requireRole('superadmin'), async (_req, res) 
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// PUT /api/superadmin/users/:id/modules — replace module list for a user
-router.put('/users/:id/modules', authenticate, requireRole('superadmin'), async (req, res) => {
+// PUT /api/admin/platform/users/:id/modules — replace module list for a user
+router.put('/users/:id/modules', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { modules } = req.body || {};
@@ -213,7 +221,7 @@ router.put('/users/:id/modules', authenticate, requireRole('superadmin'), async 
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.get('/dashboard', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+router.get('/dashboard', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
   try {
     const summary = await getDashboardSummary();
     res.json(summary);
@@ -224,8 +232,8 @@ router.get('/dashboard', authenticate, requireRole('admin', 'superadmin'), async
 
 // ── ORGANISATIONS ────────────────────────────────────────────────────────────
 
-// GET /api/superadmin/orgs — list all orgs with their sites
-router.get('/orgs', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+// GET /api/admin/platform/orgs — list all orgs with their sites
+router.get('/orgs', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
   try {
     const [orgs] = await pool.execute('SELECT * FROM organisations ORDER BY name');
     const [sites] = await pool.execute('SELECT * FROM sites ORDER BY name');
@@ -239,8 +247,8 @@ router.get('/orgs', authenticate, requireRole('admin', 'superadmin'), async (_re
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// POST /api/superadmin/orgs — create organisation
-router.post('/orgs', authenticate, requireRole('admin', 'superadmin'), validate(schemas.createOrg), async (req, res) => {
+// POST /api/admin/platform/orgs — create organisation
+router.post('/orgs', authenticate, requireRole('admin', 'platform_admin'), validate(schemas.createOrg), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Organisation name is required.' });
   try {
@@ -251,8 +259,8 @@ router.post('/orgs', authenticate, requireRole('admin', 'superadmin'), validate(
   } catch { res.status(409).json({ error: 'Organisation name already exists.' }); }
 });
 
-// PUT /api/superadmin/orgs/:id — update org (name / active status / session timeout)
-router.put('/orgs/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// PUT /api/admin/platform/orgs/:id — update org (name / active status / session timeout)
+router.put('/orgs/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const {
       name,
@@ -309,19 +317,19 @@ router.put('/orgs/:id', authenticate, requireRole('admin', 'superadmin'), async 
       two_factor_remember_days, process_explorer_enabled,
     });
     if (existing.is_active && is_active === 0) {
-      await emitSuperadminAlert('organization_deactivated', {
+      await emitPlatformAdminAlert('organization_deactivated', {
         severity: 'medium',
         title: 'Organisation deactivated',
-        message: `${existing.name} was deactivated by SuperAdmin.`,
+        message: `${existing.name} was deactivated by a platform admin.`,
         metadata: { orgId: Number(req.params.id), orgName: existing.name, updatedBy: req.user.email },
-        linkUrl: '/superadmin',
+        linkUrl: '/mims-admin?standalone=1',
       });
     }
     res.json({ message: 'Updated.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.get('/orgs/:id/readiness', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/orgs/:id/readiness', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const readiness = await getOrgReadiness(Number(req.params.id));
     res.json({ readiness });
@@ -333,7 +341,7 @@ router.get('/orgs/:id/readiness', authenticate, requireRole('admin', 'superadmin
   }
 });
 
-router.post('/orgs/:id/bootstrap', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/orgs/:id/bootstrap', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const readiness = await bootstrapOrg(Number(req.params.id), req.user.userId);
     await audit(req.user.userId, req.user.email, 'BOOTSTRAP', 'organisation', Number(req.params.id), { source: 'superadmin' });
@@ -346,7 +354,7 @@ router.post('/orgs/:id/bootstrap', authenticate, requireRole('admin', 'superadmi
   }
 });
 
-router.post('/orgs/:id/repair', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/orgs/:id/repair', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const readiness = await repairOrgData(Number(req.params.id));
     await audit(req.user.userId, req.user.email, 'REPAIR', 'organisation', Number(req.params.id), { source: 'superadmin' });
@@ -359,11 +367,14 @@ router.post('/orgs/:id/repair', authenticate, requireRole('admin', 'superadmin')
   }
 });
 
-// GET /api/superadmin/config — get system config (e.g. superadmin timeout)
-router.get('/config', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+// GET legacy/admin-platform config — get system config (e.g. platform admin timeout)
+router.get('/config', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const config = rows.reduce((acc, r) => { acc[r.config_key] = r.config_value; return acc; }, {});
+    if (config.platform_admin_session_timeout_minutes === undefined && config.superadmin_session_timeout_minutes !== undefined) {
+      config.platform_admin_session_timeout_minutes = config.superadmin_session_timeout_minutes;
+    }
     const sensitiveKeyPattern = /(password|secret|token|api[_-]?key)/i;
     for (const [key, value] of Object.entries(config)) {
       if (!sensitiveKeyPattern.test(key)) continue;
@@ -374,10 +385,11 @@ router.get('/config', authenticate, requireRole('admin', 'superadmin'), async (_
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// PUT /api/superadmin/config — update system config
-router.put('/config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// PUT legacy/admin-platform config — update system config
+router.put('/config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const {
+      platform_admin_session_timeout_minutes,
       superadmin_session_timeout_minutes,
       smtp_host,
       smtp_port,
@@ -388,10 +400,12 @@ router.put('/config', authenticate, requireRole('admin', 'superadmin'), async (r
       smtp_from_name,
     } = req.body;
     const upserts = [];
-    if (superadmin_session_timeout_minutes !== undefined) {
-      const mins = parseInt(superadmin_session_timeout_minutes);
+    const timeoutValue = platform_admin_session_timeout_minutes ?? superadmin_session_timeout_minutes;
+    if (timeoutValue !== undefined) {
+      const mins = parseInt(timeoutValue);
       if (isNaN(mins) || mins < 30)
-        return res.status(400).json({ error: 'Superadmin session timeout must be at least 30 minutes.' });
+        return res.status(400).json({ error: 'Platform admin session timeout must be at least 30 minutes.' });
+      upserts.push(['platform_admin_session_timeout_minutes', String(mins)]);
       upserts.push(['superadmin_session_timeout_minutes', String(mins)]);
     }
     const configPairs = {
@@ -414,7 +428,7 @@ router.put('/config', authenticate, requireRole('admin', 'superadmin'), async (r
       );
     }
     await audit(req.user.userId, req.user.email, 'UPDATE', 'system_config', null, {
-      superadmin_session_timeout_minutes,
+      platform_admin_session_timeout_minutes: timeoutValue,
       smtp_host,
       smtp_port,
       smtp_encryption,
@@ -423,23 +437,23 @@ router.put('/config', authenticate, requireRole('admin', 'superadmin'), async (r
       smtp_from_name,
       smtp_password: smtp_password ? '[UPDATED]' : undefined,
     });
-    await emitSuperadminAlert('sensitive_config_change', {
+    await emitPlatformAdminAlert('sensitive_config_change', {
       severity: 'medium',
-      title: 'Sensitive SuperAdmin configuration changed',
+      title: 'Sensitive platform admin configuration changed',
       message: `System configuration was updated by ${req.user.email}.`,
       metadata: {
         updatedBy: req.user.email,
         changedKeys: Object.keys(configPairs).filter(key => configPairs[key] !== undefined)
-          .concat(superadmin_session_timeout_minutes !== undefined ? ['superadmin_session_timeout_minutes'] : []),
+          .concat(timeoutValue !== undefined ? ['platform_admin_session_timeout_minutes'] : []),
       },
-      linkUrl: '/superadmin',
+      linkUrl: '/mims-admin?standalone=1',
     });
     res.json({ message: 'Config updated.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// POST /api/superadmin/config/test-email — verify SMTP config and optionally send a test email
-router.post('/config/test-email', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// POST /api/admin/platform/config/test-email — verify SMTP config and optionally send a test email
+router.post('/config/test-email', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const currentConfig = rows.reduce((acc, row) => {
@@ -513,19 +527,19 @@ router.post('/config/test-email', authenticate, requireRole('admin', 'superadmin
     });
     return res.json({ message: 'SMTP connection verified successfully.' });
   } catch (err) {
-    await emitSuperadminAlert('smtp_failure', {
+    await emitPlatformAdminAlert('smtp_failure', {
       severity: 'high',
       title: 'SMTP verification failed',
       message: err.message || 'SMTP test failed.',
       metadata: { updatedBy: req.user.email },
-      linkUrl: '/superadmin',
+      linkUrl: '/mims-admin?standalone=1',
     });
     return res.status(400).json({ error: err.message || 'SMTP test failed.' });
   }
 });
 
-// POST /api/superadmin/orgs/:id/sites — create site under an org
-router.post('/orgs/:id/sites', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// POST /api/admin/platform/orgs/:id/sites — create site under an org
+router.post('/orgs/:id/sites', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { name, country, is_primary } = req.body;
     if (!name) return res.status(400).json({ error: 'Site name is required.' });
@@ -543,8 +557,8 @@ router.post('/orgs/:id/sites', authenticate, requireRole('admin', 'superadmin'),
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// PUT /api/superadmin/sites/:id — update site
-router.put('/sites/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// PUT /api/admin/platform/sites/:id — update site
+router.put('/sites/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { name, country, is_primary, is_active } = req.body;
     const [[existing]] = await pool.execute('SELECT id, name, is_active FROM sites WHERE id = ?', [req.params.id]);
@@ -555,12 +569,12 @@ router.put('/sites/:id', authenticate, requireRole('admin', 'superadmin'), async
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'site', req.params.id, req.body);
     if (existing.is_active && is_active === 0) {
-      await emitSuperadminAlert('site_deactivated', {
+      await emitPlatformAdminAlert('site_deactivated', {
         severity: 'medium',
         title: 'Site deactivated',
-        message: `${existing.name} was deactivated by SuperAdmin.`,
+        message: `${existing.name} was deactivated by a platform admin.`,
         metadata: { siteId: Number(req.params.id), siteName: existing.name, updatedBy: req.user.email },
-        linkUrl: '/superadmin',
+        linkUrl: '/mims-admin?standalone=1',
       });
     }
     res.json({ message: 'Updated.' });
@@ -569,8 +583,8 @@ router.put('/sites/:id', authenticate, requireRole('admin', 'superadmin'), async
 
 // ── USERS ────────────────────────────────────────────────────────────────────
 
-// GET /api/superadmin/all-users — full user list with org assignment (excludes superadmin system account)
-router.get('/all-users', authenticate, requireRole('superadmin'), async (_req, res) => {
+// GET /api/admin/platform/all-users — full user list with org assignment (excludes the legacy platform-admin account)
+router.get('/all-users', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [users] = await pool.execute(`
       SELECT u.id, u.name, u.email, u.role, u.is_active, u.created_at, u.password_reset_required,
@@ -585,7 +599,7 @@ router.get('/all-users', authenticate, requireRole('superadmin'), async (_req, r
               WHERE la.user_id = u.id AND la.status = 'success') AS last_login_at
       FROM users u
       LEFT JOIN user_2fa_settings ufs ON ufs.user_id = u.id
-      WHERE u.role != 'superadmin'
+      WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
       GROUP BY u.id, u.name, u.email, u.role, u.is_active, u.created_at, u.password_reset_required
       ORDER BY u.created_at DESC
     `);
@@ -593,8 +607,8 @@ router.get('/all-users', authenticate, requireRole('superadmin'), async (_req, r
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// POST /api/superadmin/users/create — create user with one-time temporary password
-router.post('/users/create', authenticate, requireRole('superadmin'), accountCreationRateLimiter, validate(schemas.createUser), async (req, res) => {
+// POST /api/admin/platform/users/create — create user with one-time temporary password
+router.post('/users/create', authenticate, requireRole('platform_admin'), accountCreationRateLimiter, validate(schemas.createUser), async (req, res) => {
   try {
     const { name, email, role } = req.body;
     if (!name || !email) return res.status(400).json({ error: 'name and email are required.' });
@@ -646,8 +660,8 @@ router.post('/users/create', authenticate, requireRole('superadmin'), accountCre
   } catch { res.status(409).json({ error: 'Email already exists.' }); }
 });
 
-// PUT /api/superadmin/users/:id — update user (name, email, role, org, active)
-router.put('/users/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+// PUT /api/admin/platform/users/:id — update user (name, email, role, org, active)
+router.put('/users/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { name, email, role, org_id, is_active } = req.body;
     if (role && !ASSIGNABLE_ROLES.includes(role))
@@ -661,7 +675,7 @@ router.put('/users/:id', authenticate, requireRole('superadmin'), async (req, re
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.post('/users/:id/reset-2fa', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/users/:id/reset-2fa', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     await pool.execute('DELETE FROM user_2fa_backup_codes WHERE user_id = ?', [id]);
@@ -680,11 +694,16 @@ router.post('/users/:id/reset-2fa', authenticate, requireRole('superadmin'), asy
   }
 });
 
-router.post('/users/:id/force-password-reset', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/users/:id/force-password-reset', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const [[user]] = await pool.execute('SELECT id, name, role FROM users WHERE id = ?', [id]);
-    if (!user || user.role === 'superadmin') return res.status(404).json({ error: 'User not found.' });
+    const [[user]] = await pool.execute(
+      `SELECT u.id, u.name, u.role
+       FROM users u
+       WHERE u.id = ? AND ${PLATFORM_ADMIN_EXCLUSION_SQL}`,
+      [id]
+    );
+    if (!user) return res.status(404).json({ error: 'User not found.' });
     await pool.execute(
       'UPDATE users SET password_reset_required = 1, updated_at = NOW() WHERE id = ?',
       [id]
@@ -696,11 +715,16 @@ router.post('/users/:id/force-password-reset', authenticate, requireRole('supera
   }
 });
 
-router.post('/users/:id/unlock', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/users/:id/unlock', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const [[user]] = await pool.execute('SELECT id, name, role FROM users WHERE id = ?', [id]);
-    if (!user || user.role === 'superadmin') return res.status(404).json({ error: 'User not found.' });
+    const [[user]] = await pool.execute(
+      `SELECT u.id, u.name, u.role
+       FROM users u
+       WHERE u.id = ? AND ${PLATFORM_ADMIN_EXCLUSION_SQL}`,
+      [id]
+    );
+    if (!user) return res.status(404).json({ error: 'User not found.' });
     await pool.execute(
       `UPDATE user_2fa_settings
        SET failed_attempts = 0, is_locked = 0, updated_at = NOW()
@@ -714,7 +738,7 @@ router.post('/users/:id/unlock', authenticate, requireRole('superadmin'), async 
   }
 });
 
-router.post('/users/bulk-action', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { userIds, action } = req.body || {};
     const ids = Array.isArray(userIds) ? userIds.map(id => Number(id)).filter(Boolean) : [];
@@ -725,12 +749,22 @@ router.post('/users/bulk-action', authenticate, requireRole('superadmin'), async
 
     if (action === 'force_password_reset') {
       await pool.query(
-        'UPDATE users SET password_reset_required = 1, updated_at = NOW() WHERE id IN (?) AND role != "superadmin"',
+        `UPDATE users
+         SET password_reset_required = 1, updated_at = NOW()
+         WHERE id IN (?) AND id NOT IN (
+           SELECT user_id FROM user_module_permissions
+           WHERE module IN ('platform_admin_console', 'superadmin_console') AND can_access = 1
+         )`,
         [ids]
       );
     } else {
       await pool.query(
-        'UPDATE users SET is_active = ?, updated_at = NOW() WHERE id IN (?) AND role != "superadmin"',
+        `UPDATE users
+         SET is_active = ?, updated_at = NOW()
+         WHERE id IN (?) AND id NOT IN (
+           SELECT user_id FROM user_module_permissions
+           WHERE module IN ('platform_admin_console', 'superadmin_console') AND can_access = 1
+         )`,
         [action === 'activate' ? 1 : 0, ids]
       );
     }
@@ -743,8 +777,8 @@ router.post('/users/bulk-action', authenticate, requireRole('superadmin'), async
 
 // ── AUDIT ────────────────────────────────────────────────────────────────────
 
-// GET /api/superadmin/audit — general audit log (module access changes)
-router.get('/audit', authenticate, requireRole('superadmin'), async (req, res) => {
+// GET /api/admin/platform/audit — general audit log (module access changes)
+router.get('/audit', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const limit = Math.min(parseIntSafe(req.query.limit, 50), 200);
     const offset = parseIntSafe(req.query.offset, 0);
@@ -797,8 +831,8 @@ router.get('/audit', authenticate, requireRole('superadmin'), async (req, res) =
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// GET /api/superadmin/login-audit — login/logout event log
-router.get('/login-audit', authenticate, requireRole('superadmin'), async (req, res) => {
+// GET /api/admin/platform/login-audit — login/logout event log
+router.get('/login-audit', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const limit = Math.min(parseIntSafe(req.query.limit, 50), 200);
     const offset = parseIntSafe(req.query.offset, 0);
@@ -854,7 +888,7 @@ router.get('/login-audit', authenticate, requireRole('superadmin'), async (req, 
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.get('/alerts/rules', authenticate, requireRole('superadmin'), async (_req, res) => {
+router.get('/alerts/rules', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [rules] = await pool.execute(
       'SELECT * FROM superadmin_alert_rules ORDER BY is_active DESC, name ASC'
@@ -865,7 +899,7 @@ router.get('/alerts/rules', authenticate, requireRole('superadmin'), async (_req
   }
 });
 
-router.post('/alerts/rules', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/alerts/rules', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const payload = normalizeAlertRulePayload(req.body || {});
     if (!payload.name || !payload.event_type) return res.status(400).json({ error: 'name and event_type are required.' });
@@ -894,7 +928,7 @@ router.post('/alerts/rules', authenticate, requireRole('superadmin'), async (req
   }
 });
 
-router.put('/alerts/rules/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+router.put('/alerts/rules/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [[existing]] = await pool.execute('SELECT * FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
@@ -925,7 +959,7 @@ router.put('/alerts/rules/:id', authenticate, requireRole('superadmin'), async (
   }
 });
 
-router.delete('/alerts/rules/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+router.delete('/alerts/rules/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [[existing]] = await pool.execute('SELECT * FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
@@ -941,7 +975,7 @@ router.delete('/alerts/rules/:id', authenticate, requireRole('superadmin'), asyn
   }
 });
 
-router.get('/alerts/events', authenticate, requireRole('superadmin'), async (req, res) => {
+router.get('/alerts/events', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const limit = Math.min(parseIntSafe(req.query.limit, 50), 200);
     const offset = parseIntSafe(req.query.offset, 0);
@@ -977,7 +1011,7 @@ router.get('/alerts/events', authenticate, requireRole('superadmin'), async (req
   }
 });
 
-router.get('/notifications', authenticate, requireRole('superadmin'), async (req, res) => {
+router.get('/notifications', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const limit = Math.min(parseIntSafe(req.query.limit, 50), 200);
     const offset = parseIntSafe(req.query.offset, 0);
@@ -1009,7 +1043,7 @@ router.get('/notifications', authenticate, requireRole('superadmin'), async (req
   }
 });
 
-router.post('/notifications/:id/read', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/notifications/:id/read', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     await pool.execute(
       'UPDATE notifications SET is_read = 1, read_at = NOW() WHERE id = ? AND user_id = ?',
@@ -1021,9 +1055,9 @@ router.post('/notifications/:id/read', authenticate, requireRole('superadmin'), 
   }
 });
 
-// DELETE /api/superadmin/notifications/read — clear all read notifications
+// DELETE /api/admin/platform/notifications/read — clear all read notifications
 // MUST be registered before /:id to prevent Express matching 'read' as a param
-router.delete('/notifications/read', authenticate, requireRole('superadmin'), async (req, res) => {
+router.delete('/notifications/read', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [result] = await pool.execute(
       'DELETE FROM notifications WHERE user_id = ? AND is_read = 1',
@@ -1035,8 +1069,8 @@ router.delete('/notifications/read', authenticate, requireRole('superadmin'), as
   }
 });
 
-// DELETE /api/superadmin/notifications/:id — delete a single notification
-router.delete('/notifications/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+// DELETE /api/admin/platform/notifications/:id — delete a single notification
+router.delete('/notifications/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     await pool.execute(
       'DELETE FROM notifications WHERE id = ? AND user_id = ?',
@@ -1050,8 +1084,8 @@ router.delete('/notifications/:id', authenticate, requireRole('superadmin'), asy
 
 // ── ORG ACCESS (user_org_access) ─────────────────────────────────────────────
 
-// GET /api/superadmin/users/:id/org-access — list all org assignments for a user
-router.get('/users/:id/org-access', authenticate, requireRole('superadmin'), async (req, res) => {
+// GET /api/admin/platform/users/:id/org-access — list all org assignments for a user
+router.get('/users/:id/org-access', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT uoa.id, uoa.org_id, uoa.primary_site_id, uoa.role_at_org, uoa.site_permission, uoa.is_active,
@@ -1077,8 +1111,8 @@ router.get('/users/:id/org-access', authenticate, requireRole('superadmin'), asy
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// POST /api/superadmin/users/:id/org-access — assign user to an org
-router.post('/users/:id/org-access', authenticate, requireRole('superadmin'), async (req, res) => {
+// POST /api/admin/platform/users/:id/org-access — assign user to an org
+router.post('/users/:id/org-access', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { org_id, primary_site_id, role_at_org, site_permission } = req.body;
     if (!org_id) return res.status(400).json({ error: 'org_id is required.' });
@@ -1095,8 +1129,8 @@ router.post('/users/:id/org-access', authenticate, requireRole('superadmin'), as
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// PUT /api/superadmin/users/:id/org-access/:orgId — update role/site/permission for an org
-router.put('/users/:id/org-access/:orgId', authenticate, requireRole('superadmin'), async (req, res) => {
+// PUT /api/admin/platform/users/:id/org-access/:orgId — update role/site/permission for an org
+router.put('/users/:id/org-access/:orgId', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { primary_site_id, role_at_org, site_permission, is_active } = req.body;
     await pool.execute(
@@ -1111,8 +1145,8 @@ router.put('/users/:id/org-access/:orgId', authenticate, requireRole('superadmin
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// DELETE /api/superadmin/users/:id/org-access/:orgId — remove org assignment
-router.delete('/users/:id/org-access/:orgId', authenticate, requireRole('superadmin'), async (req, res) => {
+// DELETE /api/admin/platform/users/:id/org-access/:orgId — remove org assignment
+router.delete('/users/:id/org-access/:orgId', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     await pool.execute('DELETE FROM user_org_access WHERE user_id = ? AND org_id = ?',
       [req.params.id, req.params.orgId]);
@@ -1122,8 +1156,8 @@ router.delete('/users/:id/org-access/:orgId', authenticate, requireRole('superad
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// GET /api/superadmin/orgs-for-assignment — all active orgs with their sites (for assignment dropdown)
-router.get('/orgs-for-assignment', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+// GET /api/admin/platform/orgs-for-assignment — all active orgs with their sites (for assignment dropdown)
+router.get('/orgs-for-assignment', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
   try {
     const [orgs]  = await pool.execute('SELECT id, name FROM organisations WHERE is_active = 1 ORDER BY name');
     const [sites] = await pool.execute('SELECT id, org_id, name FROM sites WHERE is_active = 1 ORDER BY name');
@@ -1142,8 +1176,8 @@ const DEFAULT_ALERT_EMAIL_SUBJECT = 'MIMS Alert: {{alert_title}}';
 const DEFAULT_ALERT_EMAIL_BODY =
   'Alert: {{alert_title}}\nSeverity: {{severity}}\nOrganisation: {{org_name}}\nTriggered at: {{triggered_at}}\n\n{{message}}';
 
-// GET /api/superadmin/alert-email-template
-router.get('/alert-email-template', authenticate, requireRole('superadmin'), async (_req, res) => {
+// GET /api/admin/platform/alert-email-template
+router.get('/alert-email-template', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [rows] = await pool.execute(
       "SELECT config_key, config_value FROM system_config WHERE config_key IN ('alert_email_subject','alert_email_body')"
@@ -1156,8 +1190,8 @@ router.get('/alert-email-template', authenticate, requireRole('superadmin'), asy
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// PUT /api/superadmin/alert-email-template
-router.put('/alert-email-template', authenticate, requireRole('superadmin'), async (req, res) => {
+// PUT /api/admin/platform/alert-email-template
+router.put('/alert-email-template', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { subject, body } = req.body;
     if (!subject || !body) return res.status(400).json({ error: 'subject and body are required.' });
@@ -1199,8 +1233,8 @@ const logoUpload = multer({
   },
 });
 
-// POST /api/superadmin/orgs/:orgId/logo
-router.post('/orgs/:orgId/logo', authenticate, requireRole('admin', 'superadmin'), logoUpload.single('logo'), validateUpload(['image']), async (req, res) => {
+// POST /api/admin/platform/orgs/:orgId/logo
+router.post('/orgs/:orgId/logo', authenticate, requireRole('admin', 'platform_admin'), logoUpload.single('logo'), validateUpload(['image']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
     const logoUrl = `/storage/org_logos/${req.file.filename}`;

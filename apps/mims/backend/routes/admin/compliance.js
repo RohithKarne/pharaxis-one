@@ -29,7 +29,7 @@ const compliance = require('../../services/complianceService');
 const { csvEscape } = require('../../shared/csvHelpers');
 
 const FLAG  = 'cf.theme9_compliance';
-const ADMIN = ['admin', 'superadmin'];
+const ADMIN = ['admin', 'platform_admin'];
 
 async function gated(req, res) {
   const on = await flags.isEnabledForOrg(FLAG, req.user.orgId);

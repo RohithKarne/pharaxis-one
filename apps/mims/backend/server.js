@@ -27,6 +27,7 @@ const path = require('path');
 const pool = require('./database/db');
 const { authenticate } = require('./middleware/auth');
 const { router: processExplorerRouter } = require('./routes/admin/processExplorer');
+const { hasGlobalAdminScope } = require('./utils/adminScope');
 const {
   inferModule,
   deriveEntity,
@@ -236,7 +237,7 @@ app.get('/api/version', (_req, res) => {
 app.get('/api/users', authenticate, async (req, res) => {
   try {
     let rows;
-    if (req.user.role === 'superadmin') {
+    if (hasGlobalAdminScope(req.user)) {
       [rows] = await pool.execute(
         'SELECT id, name, email, role FROM users WHERE is_active = 1 ORDER BY name ASC'
       );
@@ -351,9 +352,11 @@ function mountRoutes(r, prefix = '') {
   r.use(prefix || '/', require('./routes/admin/miPromoReview'));   // #16 off-label + promo review
   r.use(prefix || '/', require('./routes/admin/aiAssistant'));
 
-  // Superadmin
-  r.use(`${prefix}/superadmin`, require('./routes/superadmin'));
-  r.use(`${prefix}/superadmin`, require('./routes/superadmin/reportsAccess'));
+  // Legacy superadmin compatibility + canonical platform-admin alias
+  r.use(`${prefix}/superadmin`, require('./routes/platformAdmin'));
+  r.use(`${prefix}/superadmin`, require('./routes/platformAdmin/reportsAccess'));
+  r.use(`${prefix}/admin/platform`, require('./routes/platformAdmin'));
+  r.use(`${prefix}/admin/platform`, require('./routes/platformAdmin/reportsAccess'));
 
   // Cases & core
   r.use(prefix || '/', require('./routes/cases'));

@@ -32,11 +32,11 @@ function assert(condition, message) {
     method: 'POST',
     body: { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
   });
-  assert(superLogin.res.ok, `Superadmin login failed: ${JSON.stringify(superLogin.data)}`);
+  assert(superLogin.res.ok, `Platform Admin login failed: ${JSON.stringify(superLogin.data)}`);
   const superToken = superLogin.data.token;
-  summary.push(['Superadmin login', 'PASS']);
+  summary.push(['Platform Admin login', 'PASS']);
 
-  const orgsRes = await req('/api/superadmin/orgs-for-assignment', { token: superToken });
+  const orgsRes = await req('/api/admin/platform/orgs-for-assignment', { token: superToken });
   assert(orgsRes.res.ok, `Load orgs-for-assignment failed: ${JSON.stringify(orgsRes.data)}`);
   const novartis = (orgsRes.data.orgs || []).find(o => o.id === 1 || o.name === 'Novartis');
   assert(novartis, 'Novartis org not found.');
@@ -44,7 +44,7 @@ function assert(condition, message) {
   assert(primarySite, 'No active Novartis site available for smoke test.');
   summary.push(['Novartis org lookup', 'PASS']);
 
-  const enable2fa = await req('/api/superadmin/orgs/1', {
+  const enable2fa = await req('/api/admin/platform/orgs/1', {
     method: 'PUT',
     token: superToken,
     body: {
@@ -59,7 +59,7 @@ function assert(condition, message) {
   assert(enable2fa.res.ok, `Enable org 2FA failed: ${JSON.stringify(enable2fa.data)}`);
   summary.push(['Enable Novartis 2FA', 'PASS']);
 
-  const createUser = await req('/api/superadmin/users/create', {
+  const createUser = await req('/api/admin/platform/users/create', {
     method: 'POST',
     token: superToken,
     body: { name: 'QA 2FA Smoke', email, role: 'agent' },
@@ -68,7 +68,7 @@ function assert(condition, message) {
   const userId = createUser.data.id;
   summary.push(['Create test user', 'PASS']);
 
-  const assignOrg = await req(`/api/superadmin/users/${userId}/org-access`, {
+  const assignOrg = await req(`/api/admin/platform/users/${userId}/org-access`, {
     method: 'POST',
     token: superToken,
     body: { org_id: novartis.id, primary_site_id: primarySite.id, role_at_org: 'agent', site_permission: 'full' },
@@ -164,12 +164,12 @@ function assert(condition, message) {
   }
   summary.push(['Lock after 3 invalid 2FA attempts', 'PASS']);
 
-  const reset2fa = await req(`/api/superadmin/users/${userId}/reset-2fa`, {
+  const reset2fa = await req(`/api/admin/platform/users/${userId}/reset-2fa`, {
     method: 'POST',
     token: superToken,
   });
   assert(reset2fa.res.ok, `Reset 2FA failed: ${JSON.stringify(reset2fa.data)}`);
-  summary.push(['Superadmin reset 2FA', 'PASS']);
+  summary.push(['Platform Admin reset 2FA', 'PASS']);
 
   const postResetLogin = await req('/api/auth/login', {
     method: 'POST',
@@ -178,7 +178,7 @@ function assert(condition, message) {
   assert(postResetLogin.res.ok && postResetLogin.data.twoFactorSetupAvailable, `Expected setup available after reset, got: ${JSON.stringify(postResetLogin.data)}`);
   summary.push(['Optional setup restored after reset', 'PASS']);
 
-  const auditRes = await req('/api/superadmin/login-audit?limit=20', { token: superToken });
+  const auditRes = await req('/api/admin/platform/login-audit?limit=20', { token: superToken });
   assert(auditRes.res.ok, `Login audit fetch failed: ${JSON.stringify(auditRes.data)}`);
   const auditRows = auditRes.data.logs || [];
   const has2faAudit = auditRows.some(row => ['2fa_setup_completed', '2fa_trusted_device_bypass', '2fa_locked'].includes(row.auth_event) || /2FA/i.test(row.fail_reason || ''));

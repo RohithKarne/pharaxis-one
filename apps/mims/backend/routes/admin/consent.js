@@ -4,19 +4,20 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 function orgScope(req) {
-  return req.user.role === 'superadmin' ? (Number(req.query.org_id || req.body?.org_id || 0) || null) : req.user.orgId;
+  return hasGlobalAdminScope(req.user) ? (Number(req.query.org_id || req.body?.org_id || 0) || null) : req.user.orgId;
 }
 
-router.get('/consent/records', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/consent/records', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const orgId = orgScope(req);
   if (!orgId) return res.status(400).json({ error: 'org_id required.' });
   const [rows] = await pool.execute('SELECT * FROM consent_records WHERE org_id = ? ORDER BY updated_at DESC', [orgId]);
   res.json({ records: rows });
 });
 
-router.post('/consent/records', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/consent/records', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const orgId = orgScope(req);
   if (!orgId) return res.status(400).json({ error: 'org_id required.' });
   const body = req.body || {};
@@ -29,7 +30,7 @@ router.post('/consent/records', authenticate, requireRole('admin', 'superadmin')
   res.status(201).json({ id: result.insertId });
 });
 
-router.put('/consent/records/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/consent/records/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const body = req.body || {};
   await pool.execute(
     `UPDATE consent_records SET subject_identifier = COALESCE(?, subject_identifier),
@@ -41,12 +42,12 @@ router.put('/consent/records/:id', authenticate, requireRole('admin', 'superadmi
   res.json({ ok: true });
 });
 
-router.delete('/consent/records/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/consent/records/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   await pool.execute('DELETE FROM consent_records WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
 });
 
-router.post('/consent/:id/withdraw', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/consent/:id/withdraw', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   await pool.execute(`UPDATE consent_records SET status = 'withdrawn', withdrawn_at = NOW(), updated_at = NOW() WHERE id = ?`, [req.params.id]);
   const [[consent]] = await pool.execute('SELECT * FROM consent_records WHERE id = ?', [req.params.id]);
   const [rules] = await pool.execute(

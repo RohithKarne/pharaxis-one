@@ -9,6 +9,7 @@ const router = express.Router();
 const { authenticate, requireRole } = require('../middleware/auth');
 const pool = require('../database/db');
 const { emitDataSync } = require('../services/appRealtimeService');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 const {
   hydrateInquiryRows,
   getInquiryHistory,
@@ -27,8 +28,8 @@ async function audit(userId, userName, action, entity, entityId, details) {
   }
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function parsePositiveInt(value) {
@@ -39,7 +40,7 @@ function parsePositiveInt(value) {
 }
 
 async function getAccessibleOrgIds(req) {
-  if (isSuperadmin(req)) return [];
+  if (hasPlatformAdminScope(req)) return [];
   if (Array.isArray(req._inboxAccessibleOrgIds)) return req._inboxAccessibleOrgIds;
 
   const [rows] = await pool.execute(
@@ -59,7 +60,7 @@ async function getAccessibleOrgIds(req) {
 
 async function resolveInboxScope(req, requestedOrgIdRaw = null) {
   const requestedOrgId = parsePositiveInt(requestedOrgIdRaw);
-  if (isSuperadmin(req)) {
+  if (hasPlatformAdminScope(req)) {
     return { requestedOrgId, orgIds: [] };
   }
   const orgIds = await getAccessibleOrgIds(req);
@@ -90,13 +91,13 @@ function buildInboxWhereClause(alias, scope) {
 
 async function buildInboxOrgScope(req, alias = 'i', requestedOrgIdRaw = null) {
   const scope = await resolveInboxScope(req, requestedOrgIdRaw);
-  if (isSuperadmin(req) && !scope.requestedOrgId) return { where: '', params: [], scope };
+  if (hasPlatformAdminScope(req) && !scope.requestedOrgId) return { where: '', params: [], scope };
   const { where, params } = buildInboxWhereClause(alias, scope);
   return { where, params, scope };
 }
 
 async function hasInboxOrgAccess(req, orgId) {
-  if (isSuperadmin(req)) return true;
+  if (hasPlatformAdminScope(req)) return true;
   const scope = await resolveInboxScope(req);
   return scope.orgIds.includes(Number(orgId));
 }
@@ -172,7 +173,7 @@ async function getScopedAttachment(req, attachmentId) {
 }
 
 function replyTemplateScopePredicate(req, alias = 'rt') {
-  if (isSuperadmin(req)) return '1=1';
+  if (hasPlatformAdminScope(req)) return '1=1';
   return `EXISTS (
     SELECT 1
     FROM users ru
@@ -186,7 +187,7 @@ function replyTemplateScopePredicate(req, alias = 'rt') {
 }
 
 function replyTemplateScopeParams(req) {
-  return isSuperadmin(req) ? [] : [req.user.orgId, req.user.orgId];
+  return hasPlatformAdminScope(req) ? [] : [req.user.orgId, req.user.orgId];
 }
 
 async function getScopedReplyTemplate(req, templateId, columns = '*') {
@@ -413,7 +414,7 @@ const SUMMARY_TTL_MS = 5 * 60 * 1000;
 router.get('/summary', authenticate, async (req, res) => {
   try {
     const { where, params, scope } = await buildInboxOrgScope(req, 'i', req.query?.org_id ?? null);
-    const scopeToken = isSuperadmin(req)
+    const scopeToken = hasPlatformAdminScope(req)
       ? `superadmin:${scope.requestedOrgId || 'all'}`
       : (scope.requestedOrgId
         ? `user:${req.user.userId}:org:${scope.requestedOrgId}`
@@ -519,7 +520,7 @@ router.get('/users', authenticate, async (req, res) => {
   try {
     const requestedOrgId = parsePositiveInt(req.query?.org_id);
     let rows;
-    if (req.user.role === 'superadmin') {
+    if (hasGlobalAdminScope(req.user)) {
       if (requestedOrgId) {
         [rows] = await pool.execute(
           `SELECT DISTINCT u.id, u.name, u.email, u.role
@@ -613,12 +614,12 @@ router.delete('/templates/:tid', authenticate, async (req, res) => {
 });
 
 // POST /api/inbox/fetch — trigger immediate IMAP ingest for all active inbound accounts
-router.post('/fetch', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/fetch', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { ingestAccount } = require('../services/emailPoller');
     const { logService } = require('../services/serviceLogger');
     const scope = await resolveInboxScope(req);
-    const orgClause = isSuperadmin(req) || scope.orgIds.length === 0
+    const orgClause = hasPlatformAdminScope(req) || scope.orgIds.length === 0
       ? ''
       : `AND org_id IN (${scope.orgIds.map(() => '?').join(',')})`;
     const [accounts] = await pool.execute(
@@ -627,7 +628,7 @@ router.post('/fetch', authenticate, requireRole('admin', 'superadmin'), async (r
          AND imap_host IS NOT NULL AND imap_port IS NOT NULL
          AND imap_username IS NOT NULL AND imap_password IS NOT NULL
          ${orgClause}`,
-      isSuperadmin(req) ? [] : scope.orgIds
+      hasPlatformAdminScope(req) ? [] : scope.orgIds
     );
 
     let totalIngested = 0;
@@ -750,10 +751,10 @@ router.post('/bulk-update', authenticate, async (req, res) => {
 });
 
 // GET /api/inbox/routing-rules — configurable auto-routing rules engine
-router.get('/routing-rules', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/routing-rules', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     let orgId;
-    if (isSuperadmin(req)) {
+    if (hasPlatformAdminScope(req)) {
       orgId = Number(req.query.org_id || req.user.orgId || 0);
     } else {
       const scope = await resolveInboxScope(req, req.query?.org_id);
@@ -776,10 +777,10 @@ router.get('/routing-rules', authenticate, requireRole('admin', 'superadmin'), a
 });
 
 // POST /api/inbox/routing-rules — create routing rule
-router.post('/routing-rules', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/routing-rules', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     let orgId;
-    if (isSuperadmin(req)) {
+    if (hasPlatformAdminScope(req)) {
       orgId = Number(req.body?.org_id || req.user.orgId || 0);
     } else {
       const scope = await resolveInboxScope(req, req.body?.org_id);
@@ -816,7 +817,7 @@ router.post('/routing-rules', authenticate, requireRole('admin', 'superadmin'), 
 });
 
 // PUT /api/inbox/routing-rules/:id — update routing rule
-router.put('/routing-rules/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/routing-rules/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [[existing]] = await pool.execute('SELECT * FROM inbox_routing_rules WHERE id = ?', [id]);
@@ -851,7 +852,7 @@ router.put('/routing-rules/:id', authenticate, requireRole('admin', 'superadmin'
 });
 
 // DELETE /api/inbox/routing-rules/:id — soft-delete routing rule (C2 FIX: no hard deletes)
-router.delete('/routing-rules/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/routing-rules/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [[existing]] = await pool.execute('SELECT id, org_id, is_active FROM inbox_routing_rules WHERE id = ?', [id]);
@@ -1008,7 +1009,7 @@ async function getOutboundAccount(recipientEmail, req, inquiryOrgId = null) {
   const rawEmail = recipientEmail
     ? (recipientEmail.match(/<([^>]+)>/) || [null, recipientEmail])[1].trim()
     : null;
-  const scopedOrgId = isSuperadmin(req)
+  const scopedOrgId = hasPlatformAdminScope(req)
     ? (inquiryOrgId || null)
     : (Number(inquiryOrgId || 0) || Number(req.user.orgId || 0) || null);
   const orgClause = scopedOrgId ? ' AND org_id = ?' : '';

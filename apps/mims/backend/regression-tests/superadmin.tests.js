@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Superadmin module regression tests
+ * Platform Admin module regression tests
  */
 
 const pool = require('../database/db');
@@ -37,7 +37,7 @@ async function createTemporarySuperadmin(makeRequest) {
   const [insert] = await pool.execute(
     `INSERT INTO users (name, email, password, role, is_active, email_verified)
      VALUES (?, ?, ?, 'superadmin', 1, 1)`,
-    ['Regression Superadmin', email, hash]
+    ['Regression Platform Admin', email, hash]
   );
   const userId = Number(insert.insertId || 0);
   const login = await loginForToken(makeRequest, email, password);
@@ -93,32 +93,32 @@ async function cleanupUser(userId) {
 
 module.exports = [
   {
-    name: 'Superadmin core routes cover dashboard org config alerts notifications and template flows',
-    module: 'Superadmin',
+    name: 'Platform Admin core routes cover dashboard org config alerts notifications and template flows',
+    module: 'Platform Admin',
     covers: [
-      'GET /api/superadmin/dashboard',
-      'GET /api/superadmin/orgs',
-      'POST /api/superadmin/orgs',
-      'PUT /api/superadmin/orgs/:id',
-      'POST /api/superadmin/orgs/:id/sites',
-      'PUT /api/superadmin/sites/:id',
-      'GET /api/superadmin/orgs-for-assignment',
-      'GET /api/superadmin/config',
-      'PUT /api/superadmin/config',
-      'POST /api/superadmin/config/test-email',
-      'GET /api/superadmin/audit',
-      'GET /api/superadmin/login-audit',
-      'GET /api/superadmin/alerts/rules',
-      'POST /api/superadmin/alerts/rules',
-      'PUT /api/superadmin/alerts/rules/:id',
-      'DELETE /api/superadmin/alerts/rules/:id',
-      'GET /api/superadmin/alerts/events',
-      'GET /api/superadmin/notifications',
-      'POST /api/superadmin/notifications/:id/read',
-      'DELETE /api/superadmin/notifications/read',
-      'DELETE /api/superadmin/notifications/:id',
-      'GET /api/superadmin/alert-email-template',
-      'PUT /api/superadmin/alert-email-template',
+      'GET /api/admin/platform/dashboard',
+      'GET /api/admin/platform/orgs',
+      'POST /api/admin/platform/orgs',
+      'PUT /api/admin/platform/orgs/:id',
+      'POST /api/admin/platform/orgs/:id/sites',
+      'PUT /api/admin/platform/sites/:id',
+      'GET /api/admin/platform/orgs-for-assignment',
+      'GET /api/admin/platform/config',
+      'PUT /api/admin/platform/config',
+      'POST /api/admin/platform/config/test-email',
+      'GET /api/admin/platform/audit',
+      'GET /api/admin/platform/login-audit',
+      'GET /api/admin/platform/alerts/rules',
+      'POST /api/admin/platform/alerts/rules',
+      'PUT /api/admin/platform/alerts/rules/:id',
+      'DELETE /api/admin/platform/alerts/rules/:id',
+      'GET /api/admin/platform/alerts/events',
+      'GET /api/admin/platform/notifications',
+      'POST /api/admin/platform/notifications/:id/read',
+      'DELETE /api/admin/platform/notifications/read',
+      'DELETE /api/admin/platform/notifications/:id',
+      'GET /api/admin/platform/alert-email-template',
+      'PUT /api/admin/platform/alert-email-template',
     ],
     run: async ({ makeRequest }) => {
       let superadminUserId = 0;
@@ -135,14 +135,14 @@ module.exports = [
           return { pass: false, details: `superadminLogin=${superadmin.status}` };
         }
 
-        const dashboard = await makeRequest('GET', '/api/superadmin/dashboard', null, superadmin.token);
-        const orgs = await makeRequest('GET', '/api/superadmin/orgs', null, superadmin.token);
-        const createOrg = await makeRequest('POST', '/api/superadmin/orgs', {
-          name: uniqueName('Regression Superadmin Org'),
+        const dashboard = await makeRequest('GET', '/api/admin/platform/dashboard', null, superadmin.token);
+        const orgs = await makeRequest('GET', '/api/admin/platform/orgs', null, superadmin.token);
+        const createOrg = await makeRequest('POST', '/api/admin/platform/orgs', {
+          name: uniqueName('Regression Platform Admin Org'),
         }, superadmin.token);
         createdOrgId = Number(createOrg.body?.id || 0);
         const updateOrg = createdOrgId
-          ? await makeRequest('PUT', `/api/superadmin/orgs/${createdOrgId}`, {
+          ? await makeRequest('PUT', `/api/admin/platform/orgs/${createdOrgId}`, {
             name: `${createOrg.body?.name || 'Regression Org'} Updated`,
             is_active: true,
             session_timeout_minutes: 45,
@@ -153,7 +153,7 @@ module.exports = [
           }, superadmin.token)
           : { status: 0 };
         const createSite = createdOrgId
-          ? await makeRequest('POST', `/api/superadmin/orgs/${createdOrgId}/sites`, {
+          ? await makeRequest('POST', `/api/admin/platform/orgs/${createdOrgId}/sites`, {
             name: uniqueName('Regression Site'),
             country: 'India',
             is_primary: true,
@@ -161,21 +161,21 @@ module.exports = [
           : { status: 0, body: {} };
         createdSiteId = Number(createSite.body?.id || 0);
         const updateSite = createdSiteId
-          ? await makeRequest('PUT', `/api/superadmin/sites/${createdSiteId}`, {
+          ? await makeRequest('PUT', `/api/admin/platform/sites/${createdSiteId}`, {
             name: `${createSite.body?.name || 'Regression Site'} Updated`,
             country: 'India',
             is_primary: true,
             is_active: true,
           }, superadmin.token)
           : { status: 0 };
-        const orgsForAssignment = await makeRequest('GET', '/api/superadmin/orgs-for-assignment', null, superadmin.token);
+        const orgsForAssignment = await makeRequest('GET', '/api/admin/platform/orgs-for-assignment', null, superadmin.token);
 
-        const getConfig = await makeRequest('GET', '/api/superadmin/config', null, superadmin.token);
-        const putConfig = await makeRequest('PUT', '/api/superadmin/config', {
-          superadmin_session_timeout_minutes: 35,
-          smtp_from_name: 'Regression Superadmin',
+        const getConfig = await makeRequest('GET', '/api/admin/platform/config', null, superadmin.token);
+        const putConfig = await makeRequest('PUT', '/api/admin/platform/config', {
+          platform_admin_session_timeout_minutes: 35,
+          smtp_from_name: 'Regression Platform Admin',
         }, superadmin.token);
-        const testEmail = await makeRequest('POST', '/api/superadmin/config/test-email', {
+        const testEmail = await makeRequest('POST', '/api/admin/platform/config/test-email', {
           smtp_host: '127.0.0.1',
           smtp_port: 1,
           smtp_encryption: 'SSL/TLS',
@@ -186,8 +186,8 @@ module.exports = [
           mode: 'verify',
         }, superadmin.token);
 
-        const alertRulesBefore = await makeRequest('GET', '/api/superadmin/alerts/rules', null, superadmin.token);
-        const createRule = await makeRequest('POST', '/api/superadmin/alerts/rules', {
+        const alertRulesBefore = await makeRequest('GET', '/api/admin/platform/alerts/rules', null, superadmin.token);
+        const createRule = await makeRequest('POST', '/api/admin/platform/alerts/rules', {
           name: uniqueName('Regression Alert Rule'),
           event_type: uniqueName('regression_alert_event').toLowerCase(),
           severity: 'medium',
@@ -198,7 +198,7 @@ module.exports = [
         }, superadmin.token);
         alertRuleId = Number(createRule.body?.id || 0);
         const updateRule = alertRuleId
-          ? await makeRequest('PUT', `/api/superadmin/alerts/rules/${alertRuleId}`, {
+          ? await makeRequest('PUT', `/api/admin/platform/alerts/rules/${alertRuleId}`, {
             name: uniqueName('Regression Alert Rule Updated'),
             event_type: uniqueName('regression_alert_event_upd').toLowerCase(),
             severity: 'high',
@@ -223,7 +223,7 @@ module.exports = [
             ]
           ).catch(() => {});
         }
-        const alertEvents = await makeRequest('GET', '/api/superadmin/alerts/events?limit=5', null, superadmin.token);
+        const alertEvents = await makeRequest('GET', '/api/admin/platform/alerts/events?limit=5', null, superadmin.token);
 
         const [readInsert] = await pool.execute(
           `INSERT INTO notifications (user_id, category, title, message, metadata, is_read, read_at)
@@ -238,11 +238,11 @@ module.exports = [
         );
         unreadNotificationId = Number(unreadInsert.insertId || 0);
 
-        const notifications = await makeRequest('GET', '/api/superadmin/notifications?limit=10', null, superadmin.token);
+        const notifications = await makeRequest('GET', '/api/admin/platform/notifications?limit=10', null, superadmin.token);
         const markRead = unreadNotificationId
-          ? await makeRequest('POST', `/api/superadmin/notifications/${unreadNotificationId}/read`, null, superadmin.token)
+          ? await makeRequest('POST', `/api/admin/platform/notifications/${unreadNotificationId}/read`, null, superadmin.token)
           : { status: 0 };
-        const clearRead = await makeRequest('DELETE', '/api/superadmin/notifications/read', null, superadmin.token);
+        const clearRead = await makeRequest('DELETE', '/api/admin/platform/notifications/read', null, superadmin.token);
 
         const [deleteInsert] = await pool.execute(
           `INSERT INTO notifications (user_id, category, title, message, metadata, is_read)
@@ -251,19 +251,19 @@ module.exports = [
         );
         const deleteNotificationId = Number(deleteInsert.insertId || 0);
         const deleteOne = deleteNotificationId
-          ? await makeRequest('DELETE', `/api/superadmin/notifications/${deleteNotificationId}`, null, superadmin.token)
+          ? await makeRequest('DELETE', `/api/admin/platform/notifications/${deleteNotificationId}`, null, superadmin.token)
           : { status: 0 };
 
-        const alertTemplateGet = await makeRequest('GET', '/api/superadmin/alert-email-template', null, superadmin.token);
-        const alertTemplatePut = await makeRequest('PUT', '/api/superadmin/alert-email-template', {
+        const alertTemplateGet = await makeRequest('GET', '/api/admin/platform/alert-email-template', null, superadmin.token);
+        const alertTemplatePut = await makeRequest('PUT', '/api/admin/platform/alert-email-template', {
           subject: 'Regression Subject {{alert_title}}',
           body: 'Regression Body {{message}}',
         }, superadmin.token);
 
-        const audit = await makeRequest('GET', '/api/superadmin/audit?limit=5', null, superadmin.token);
-        const loginAudit = await makeRequest('GET', '/api/superadmin/login-audit?limit=5', null, superadmin.token);
+        const audit = await makeRequest('GET', '/api/admin/platform/audit?limit=5', null, superadmin.token);
+        const loginAudit = await makeRequest('GET', '/api/admin/platform/login-audit?limit=5', null, superadmin.token);
         const deleteRule = alertRuleId
-          ? await makeRequest('DELETE', `/api/superadmin/alerts/rules/${alertRuleId}`, null, superadmin.token)
+          ? await makeRequest('DELETE', `/api/admin/platform/alerts/rules/${alertRuleId}`, null, superadmin.token)
           : { status: 0 };
 
         const pass =
@@ -314,22 +314,22 @@ module.exports = [
     },
   },
   {
-    name: 'Superadmin user routes cover list lifecycle module assignment and org access',
-    module: 'Superadmin',
+    name: 'Platform Admin user routes cover list lifecycle module assignment and org access',
+    module: 'Platform Admin',
     covers: [
-      'GET /api/superadmin/users',
-      'GET /api/superadmin/all-users',
-      'POST /api/superadmin/users/create',
-      'PUT /api/superadmin/users/:id',
-      'PUT /api/superadmin/users/:id/modules',
-      'POST /api/superadmin/users/:id/reset-2fa',
-      'POST /api/superadmin/users/:id/force-password-reset',
-      'POST /api/superadmin/users/:id/unlock',
-      'POST /api/superadmin/users/bulk-action',
-      'GET /api/superadmin/users/:id/org-access',
-      'POST /api/superadmin/users/:id/org-access',
-      'PUT /api/superadmin/users/:id/org-access/:orgId',
-      'DELETE /api/superadmin/users/:id/org-access/:orgId',
+      'GET /api/admin/platform/users',
+      'GET /api/admin/platform/all-users',
+      'POST /api/admin/platform/users/create',
+      'PUT /api/admin/platform/users/:id',
+      'PUT /api/admin/platform/users/:id/modules',
+      'POST /api/admin/platform/users/:id/reset-2fa',
+      'POST /api/admin/platform/users/:id/force-password-reset',
+      'POST /api/admin/platform/users/:id/unlock',
+      'POST /api/admin/platform/users/bulk-action',
+      'GET /api/admin/platform/users/:id/org-access',
+      'POST /api/admin/platform/users/:id/org-access',
+      'PUT /api/admin/platform/users/:id/org-access/:orgId',
+      'DELETE /api/admin/platform/users/:id/org-access/:orgId',
     ],
     run: async ({ makeRequest }) => {
       let superadminUserId = 0;
@@ -346,9 +346,9 @@ module.exports = [
           return { pass: false, details: 'No active organisation found.' };
         }
 
-        const users = await makeRequest('GET', '/api/superadmin/users', null, superadmin.token);
-        const allUsers = await makeRequest('GET', '/api/superadmin/all-users', null, superadmin.token);
-        const createUser = await makeRequest('POST', '/api/superadmin/users/create', {
+        const users = await makeRequest('GET', '/api/admin/platform/users', null, superadmin.token);
+        const allUsers = await makeRequest('GET', '/api/admin/platform/all-users', null, superadmin.token);
+        const createUser = await makeRequest('POST', '/api/admin/platform/users/create', {
           name: 'Regression Managed User',
           email: `${uniqueName('managed-user').toLowerCase()}@example.com`,
           role: 'agent',
@@ -356,7 +356,7 @@ module.exports = [
         createdUserId = Number(createUser.body?.id || 0);
 
         const updateUser = createdUserId
-          ? await makeRequest('PUT', `/api/superadmin/users/${createdUserId}`, {
+          ? await makeRequest('PUT', `/api/admin/platform/users/${createdUserId}`, {
             name: 'Regression Managed User Updated',
             email: `${uniqueName('managed-user-upd').toLowerCase()}@example.com`,
             role: 'reviewer',
@@ -365,24 +365,24 @@ module.exports = [
           }, superadmin.token)
           : { status: 0 };
         const updateModules = createdUserId
-          ? await makeRequest('PUT', `/api/superadmin/users/${createdUserId}/modules`, {
+          ? await makeRequest('PUT', `/api/admin/platform/users/${createdUserId}/modules`, {
             modules: ['mims_core', 'reports'],
           }, superadmin.token)
           : { status: 0 };
         const reset2fa = createdUserId
-          ? await makeRequest('POST', `/api/superadmin/users/${createdUserId}/reset-2fa`, null, superadmin.token)
+          ? await makeRequest('POST', `/api/admin/platform/users/${createdUserId}/reset-2fa`, null, superadmin.token)
           : { status: 0 };
         const forcePasswordReset = createdUserId
-          ? await makeRequest('POST', `/api/superadmin/users/${createdUserId}/force-password-reset`, null, superadmin.token)
+          ? await makeRequest('POST', `/api/admin/platform/users/${createdUserId}/force-password-reset`, null, superadmin.token)
           : { status: 0 };
         const unlock = createdUserId
-          ? await makeRequest('POST', `/api/superadmin/users/${createdUserId}/unlock`, null, superadmin.token)
+          ? await makeRequest('POST', `/api/admin/platform/users/${createdUserId}/unlock`, null, superadmin.token)
           : { status: 0 };
         const orgAccessBefore = createdUserId
-          ? await makeRequest('GET', `/api/superadmin/users/${createdUserId}/org-access`, null, superadmin.token)
+          ? await makeRequest('GET', `/api/admin/platform/users/${createdUserId}/org-access`, null, superadmin.token)
           : { status: 0 };
         const createOrgAccess = createdUserId
-          ? await makeRequest('POST', `/api/superadmin/users/${createdUserId}/org-access`, {
+          ? await makeRequest('POST', `/api/admin/platform/users/${createdUserId}/org-access`, {
             org_id: org.id,
             primary_site_id: site?.id || null,
             role_at_org: 'admin',
@@ -390,7 +390,7 @@ module.exports = [
           }, superadmin.token)
           : { status: 0 };
         const updateOrgAccess = createdUserId
-          ? await makeRequest('PUT', `/api/superadmin/users/${createdUserId}/org-access/${org.id}`, {
+          ? await makeRequest('PUT', `/api/admin/platform/users/${createdUserId}/org-access/${org.id}`, {
             primary_site_id: site?.id || null,
             role_at_org: 'reviewer',
             site_permission: 'all',
@@ -398,10 +398,10 @@ module.exports = [
           }, superadmin.token)
           : { status: 0 };
         const deleteOrgAccess = createdUserId
-          ? await makeRequest('DELETE', `/api/superadmin/users/${createdUserId}/org-access/${org.id}`, null, superadmin.token)
+          ? await makeRequest('DELETE', `/api/admin/platform/users/${createdUserId}/org-access/${org.id}`, null, superadmin.token)
           : { status: 0 };
         const bulkAction = createdUserId
-          ? await makeRequest('POST', '/api/superadmin/users/bulk-action', {
+          ? await makeRequest('POST', '/api/admin/platform/users/bulk-action', {
             userIds: [createdUserId],
             action: 'force_password_reset',
           }, superadmin.token)
@@ -433,16 +433,16 @@ module.exports = [
     },
   },
   {
-    name: 'Superadmin report access routes cover org user and request workflows',
-    module: 'Superadmin',
+    name: 'Platform Admin report access routes cover org user and request workflows',
+    module: 'Platform Admin',
     covers: [
-      'GET /api/superadmin/reports/orgs',
-      'GET /api/superadmin/reports/org/:orgId',
-      'PUT /api/superadmin/reports/org/:orgId',
-      'GET /api/superadmin/reports/org/:orgId/users',
-      'PUT /api/superadmin/reports/org/:orgId/user/:userId',
-      'GET /api/superadmin/reports/requests',
-      'PUT /api/superadmin/reports/requests/:id',
+      'GET /api/admin/platform/reports/orgs',
+      'GET /api/admin/platform/reports/org/:orgId',
+      'PUT /api/admin/platform/reports/org/:orgId',
+      'GET /api/admin/platform/reports/org/:orgId/users',
+      'PUT /api/admin/platform/reports/org/:orgId/user/:userId',
+      'GET /api/admin/platform/reports/requests',
+      'PUT /api/admin/platform/reports/requests/:id',
     ],
     run: async ({ makeRequest }) => {
       let superadminUserId = 0;
@@ -469,14 +469,14 @@ module.exports = [
           [targetUserId, org.id, site?.id || null]
         );
 
-        const reportsOrgs = await makeRequest('GET', '/api/superadmin/reports/orgs', null, superadmin.token);
-        const reportsByOrg = await makeRequest('GET', `/api/superadmin/reports/org/${org.id}`, null, superadmin.token);
-        const updateOrgReport = await makeRequest('PUT', `/api/superadmin/reports/org/${org.id}`, {
+        const reportsOrgs = await makeRequest('GET', '/api/admin/platform/reports/orgs', null, superadmin.token);
+        const reportsByOrg = await makeRequest('GET', `/api/admin/platform/reports/org/${org.id}`, null, superadmin.token);
+        const updateOrgReport = await makeRequest('PUT', `/api/admin/platform/reports/org/${org.id}`, {
           report_key: 'system-health',
           is_enabled: true,
         }, superadmin.token);
-        const orgUsers = await makeRequest('GET', `/api/superadmin/reports/org/${org.id}/users`, null, superadmin.token);
-        const updateUserReport = await makeRequest('PUT', `/api/superadmin/reports/org/${org.id}/user/${targetUserId}`, {
+        const orgUsers = await makeRequest('GET', `/api/admin/platform/reports/org/${org.id}/users`, null, superadmin.token);
+        const updateUserReport = await makeRequest('PUT', `/api/admin/platform/reports/org/${org.id}/user/${targetUserId}`, {
           report_key: 'system-health',
           is_enabled: true,
         }, superadmin.token);
@@ -487,9 +487,9 @@ module.exports = [
           [org.id, superadminUserId, targetUserId]
         );
         requestId = Number(requestInsert.insertId || 0);
-        const requests = await makeRequest('GET', '/api/superadmin/reports/requests', null, superadmin.token);
+        const requests = await makeRequest('GET', '/api/admin/platform/reports/requests', null, superadmin.token);
         const approveRequest = requestId
-          ? await makeRequest('PUT', `/api/superadmin/reports/requests/${requestId}`, {
+          ? await makeRequest('PUT', `/api/admin/platform/reports/requests/${requestId}`, {
             status: 'approved',
             notes: 'Approved by regression suite',
           }, superadmin.token)
@@ -522,21 +522,21 @@ module.exports = [
     },
   },
   {
-    name: 'Superadmin integration config routes cover EMIR Vault mapping and poll-now flows',
-    module: 'Superadmin',
+    name: 'Platform Admin integration config routes cover EMIR Vault mapping and poll-now flows',
+    module: 'Platform Admin',
     covers: [
-      'GET /api/superadmin/emir-config',
-      'POST /api/superadmin/emir-config',
-      'PUT /api/superadmin/emir-config/:id',
-      'DELETE /api/superadmin/emir-config/:id',
-      'GET /api/superadmin/vault-config',
-      'POST /api/superadmin/vault-config',
-      'PUT /api/superadmin/vault-config/:id',
-      'DELETE /api/superadmin/vault-config/:id',
-      'GET /api/superadmin/vault-query-params/:org_id',
-      'POST /api/superadmin/vault-query-params/:org_id',
-      'DELETE /api/superadmin/vault-query-params/:id',
-      'GET /api/superadmin/vault/poll-now/:org_id',
+      'GET /api/admin/platform/emir-config',
+      'POST /api/admin/platform/emir-config',
+      'PUT /api/admin/platform/emir-config/:id',
+      'DELETE /api/admin/platform/emir-config/:id',
+      'GET /api/admin/platform/vault-config',
+      'POST /api/admin/platform/vault-config',
+      'PUT /api/admin/platform/vault-config/:id',
+      'DELETE /api/admin/platform/vault-config/:id',
+      'GET /api/admin/platform/vault-query-params/:org_id',
+      'POST /api/admin/platform/vault-query-params/:org_id',
+      'DELETE /api/admin/platform/vault-query-params/:id',
+      'GET /api/admin/platform/vault/poll-now/:org_id',
     ],
     run: async ({ makeRequest }) => {
       let superadminUserId = 0;
@@ -556,8 +556,8 @@ module.exports = [
           return { pass: false, details: 'No active organisation found.' };
         }
 
-        const listEmir = await makeRequest('GET', '/api/superadmin/emir-config', null, superadmin.token);
-        const createEmir = await makeRequest('POST', '/api/superadmin/emir-config', {
+        const listEmir = await makeRequest('GET', '/api/admin/platform/emir-config', null, superadmin.token);
+        const createEmir = await makeRequest('POST', '/api/admin/platform/emir-config', {
           org_id: org.id,
           inbound_email: `${uniqueName('emir').toLowerCase()}@example.com`,
           sender_whitelist: ['allowed@example.com'],
@@ -566,7 +566,7 @@ module.exports = [
         }, superadmin.token);
         emirConfigId = Number(createEmir.body?.id || 0);
         const updateEmir = emirConfigId
-          ? await makeRequest('PUT', `/api/superadmin/emir-config/${emirConfigId}`, {
+          ? await makeRequest('PUT', `/api/admin/platform/emir-config/${emirConfigId}`, {
             inbound_email: `${uniqueName('emir-updated').toLowerCase()}@example.com`,
             sender_whitelist: ['updated@example.com'],
             ack_template: 'Updated Regression EMIR Ack',
@@ -574,11 +574,11 @@ module.exports = [
           }, superadmin.token)
           : { status: 0 };
         const deleteEmir = emirConfigId
-          ? await makeRequest('DELETE', `/api/superadmin/emir-config/${emirConfigId}`, null, superadmin.token)
+          ? await makeRequest('DELETE', `/api/admin/platform/emir-config/${emirConfigId}`, null, superadmin.token)
           : { status: 0 };
 
-        const listVault = await makeRequest('GET', '/api/superadmin/vault-config', null, superadmin.token);
-        const createVault = await makeRequest('POST', '/api/superadmin/vault-config', {
+        const listVault = await makeRequest('GET', '/api/admin/platform/vault-config', null, superadmin.token);
+        const createVault = await makeRequest('POST', '/api/admin/platform/vault-config', {
           org_id: org.id,
           vault_domain: 'https://vault.invalid.example',
           vault_username: 'regression',
@@ -589,7 +589,7 @@ module.exports = [
         }, superadmin.token);
         vaultConfigId = Number(createVault.body?.id || 0);
         const updateVault = vaultConfigId
-          ? await makeRequest('PUT', `/api/superadmin/vault-config/${vaultConfigId}`, {
+          ? await makeRequest('PUT', `/api/admin/platform/vault-config/${vaultConfigId}`, {
             vault_domain: 'https://vault-updated.invalid.example',
             vault_username: 'regression-updated',
             vault_password: 'regression-updated',
@@ -599,20 +599,20 @@ module.exports = [
           }, superadmin.token)
           : { status: 0 };
 
-        const getVaultParams = await makeRequest('GET', `/api/superadmin/vault-query-params/${org.id}`, null, superadmin.token);
-        const createVaultMap = await makeRequest('POST', `/api/superadmin/vault-query-params/${org.id}`, {
+        const getVaultParams = await makeRequest('GET', `/api/admin/platform/vault-query-params/${org.id}`, null, superadmin.token);
+        const createVaultMap = await makeRequest('POST', `/api/admin/platform/vault-query-params/${org.id}`, {
           vault_type: 'Product Information',
           vault_subtype: 'Response Letter',
           vault_classification: 'Public',
           mims_cm_category: 'FAQ',
         }, superadmin.token);
         vaultMapId = Number(createVaultMap.body?.id || 0);
-        const pollNow = await makeRequest('GET', `/api/superadmin/vault/poll-now/${org.id}`, null, superadmin.token);
+        const pollNow = await makeRequest('GET', `/api/admin/platform/vault/poll-now/${org.id}`, null, superadmin.token);
         const deleteVaultMap = vaultMapId
-          ? await makeRequest('DELETE', `/api/superadmin/vault-query-params/${vaultMapId}`, null, superadmin.token)
+          ? await makeRequest('DELETE', `/api/admin/platform/vault-query-params/${vaultMapId}`, null, superadmin.token)
           : { status: 0 };
         const deleteVault = vaultConfigId
-          ? await makeRequest('DELETE', `/api/superadmin/vault-config/${vaultConfigId}`, null, superadmin.token)
+          ? await makeRequest('DELETE', `/api/admin/platform/vault-config/${vaultConfigId}`, null, superadmin.token)
           : { status: 0 };
 
         const pass =
@@ -648,11 +648,11 @@ module.exports = [
     },
   },
   {
-    name: 'Superadmin EMIR request routes cover request list and audit trail',
-    module: 'Superadmin',
+    name: 'Platform Admin EMIR request routes cover request list and audit trail',
+    module: 'Platform Admin',
     covers: [
-      'GET /api/superadmin/emir/requests',
-      'GET /api/superadmin/emir/requests/:id/audit',
+      'GET /api/admin/platform/emir/requests',
+      'GET /api/admin/platform/emir/requests/:id/audit',
     ],
     run: async ({ makeRequest }) => {
       let superadminUserId = 0;
@@ -690,9 +690,9 @@ module.exports = [
           ).catch(() => {});
         }
 
-        const list = await makeRequest('GET', '/api/superadmin/emir/requests', null, superadmin.token);
+        const list = await makeRequest('GET', '/api/admin/platform/emir/requests', null, superadmin.token);
         const audit = requestId
-          ? await makeRequest('GET', `/api/superadmin/emir/requests/${requestId}/audit`, null, superadmin.token)
+          ? await makeRequest('GET', `/api/admin/platform/emir/requests/${requestId}/audit`, null, superadmin.token)
           : { status: 0 };
 
         return {

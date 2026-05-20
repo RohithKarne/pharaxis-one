@@ -5,6 +5,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const { getVaultSession, runVQL } = require('../../services/vaultService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 function normalizeVaultDocId(rawValue) {
   const value = String(rawValue || '').trim();
@@ -15,7 +16,7 @@ function normalizeVaultDocId(rawValue) {
 router.get('/admin/vault/documents', authenticate, async (req, res) => {
   try {
     let orgId = req.user.orgId;
-    if (req.user.role === 'superadmin') {
+    if (hasGlobalAdminScope(req.user)) {
       orgId = parseInt(req.query.org_id, 10) || req.user.orgId;
     }
 

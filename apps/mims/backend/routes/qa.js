@@ -4,7 +4,7 @@
  *
  * Bug Reports:
  *   POST   /api/qa/feedback              — submit a bug report (any authenticated user)
- *   GET    /api/qa/feedback              — list all reports (admin/superadmin)
+ *   GET    /api/qa/feedback              — list all reports (admin/platform admin)
  *   GET    /api/qa/feedback/:id          — get single report
  *   PATCH  /api/qa/feedback/:id          — update status, notes, assignee (admin)
  *
@@ -26,6 +26,7 @@ const pool      = require('../database/db');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { logger } = require('../services/logger');
 const { createNotifications } = require('../services/notificationCenterService');
+const { hasGlobalAdminScope, isAdminUser } = require('../utils/adminScope');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -99,7 +100,7 @@ router.get('/qa/feedback', authenticate, requireRole('admin'), async (req, res) 
     const conditions = [];
     const params     = [];
 
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       conditions.push('org_id = ?');
       params.push(req.user.orgId);
     }
@@ -135,7 +136,7 @@ router.get('/qa/feedback/:id', authenticate, requireRole('admin'), async (req, r
     const id = parseInt(req.params.id, 10);
     const conditions = ['id = ?'];
     const params     = [id];
-    if (req.user.role !== 'superadmin') { conditions.push('org_id = ?'); params.push(req.user.orgId); }
+    if (!hasGlobalAdminScope(req.user)) { conditions.push('org_id = ?'); params.push(req.user.orgId); }
 
     const [[row]] = await pool.execute(
       `SELECT * FROM qa_feedback WHERE ${conditions.join(' AND ')}`, params
@@ -165,8 +166,8 @@ router.patch('/qa/feedback/:id', authenticate, requireRole('admin'), async (req,
     if (dev_notes !== undefined)   { sets.push('dev_notes = ?');   setParams.push(sanitize(dev_notes, 5000)); }
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
 
-    const orgCond   = req.user.role === 'superadmin' ? '' : ' AND org_id = ?';
-    const condParams = req.user.role === 'superadmin' ? [id] : [req.user.orgId, id];
+    const orgCond   = hasGlobalAdminScope(req.user) ? '' : ' AND org_id = ?';
+    const condParams = hasGlobalAdminScope(req.user) ? [id] : [req.user.orgId, id];
 
     const [result] = await pool.execute(
       `UPDATE qa_feedback SET ${sets.join(', ')} WHERE id = ?${orgCond}`,
@@ -178,8 +179,8 @@ router.patch('/qa/feedback/:id', authenticate, requireRole('admin'), async (req,
     if (status === 'confirmed') {
       try {
         const [[report]] = await pool.execute(`SELECT * FROM qa_feedback WHERE id = ?`, [id]);
-        const orgCond    = req.user.role === 'superadmin' ? '' : 'AND role IN (\'admin\',\'superadmin\') AND org_id = ?';
-        const orgParams  = req.user.role === 'superadmin' ? [] : [req.user.orgId];
+        const orgCond    = hasGlobalAdminScope(req.user) ? '' : 'AND role IN (\'admin\',\'superadmin\') AND org_id = ?';
+        const orgParams  = hasGlobalAdminScope(req.user) ? [] : [req.user.orgId];
         const [admins]   = await pool.execute(
           `SELECT id FROM users WHERE is_active = 1 AND role IN ('admin','superadmin') ${orgCond}`,
           orgParams
@@ -257,12 +258,12 @@ router.get('/qa/features', authenticate, async (req, res) => {
   try {
     const { page, pageSize, offset } = paginationParams(req.query);
     const { status = '', module: mod = '', search = '' } = req.query;
-    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const isAdmin = isAdminUser(req.user);
 
     const conditions = [];
     const params     = [];
 
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       conditions.push('org_id = ?');
       params.push(req.user.orgId);
     }
@@ -303,7 +304,7 @@ router.get('/qa/features/:id', authenticate, async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const conditions = ['fr.id = ?'];
     const params     = [id];
-    if (req.user.role !== 'superadmin') { conditions.push('fr.org_id = ?'); params.push(req.user.orgId); }
+    if (!hasGlobalAdminScope(req.user)) { conditions.push('fr.org_id = ?'); params.push(req.user.orgId); }
 
     const [[row]] = await pool.execute(
       `SELECT fr.*,
@@ -340,8 +341,8 @@ router.patch('/qa/features/:id', authenticate, requireRole('admin'), async (req,
 
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
 
-    const orgCond = req.user.role === 'superadmin' ? '' : ' AND org_id = ?';
-    if (req.user.role !== 'superadmin') params.push(req.user.orgId);
+    const orgCond = hasGlobalAdminScope(req.user) ? '' : ' AND org_id = ?';
+    if (!hasGlobalAdminScope(req.user)) params.push(req.user.orgId);
     params.push(id);
 
     const [result] = await pool.execute(
@@ -366,8 +367,8 @@ router.post('/qa/features/:id/vote', authenticate, async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'User ID required to vote.' });
 
     // Ensure the feature exists and belongs to the user's org
-    const orgCond = req.user.role === 'superadmin' ? '' : ' AND org_id = ?';
-    const orgParam = req.user.role === 'superadmin' ? [] : [req.user.orgId];
+    const orgCond = hasGlobalAdminScope(req.user) ? '' : ' AND org_id = ?';
+    const orgParam = hasGlobalAdminScope(req.user) ? [] : [req.user.orgId];
     const [[feature]] = await pool.execute(
       `SELECT id FROM feature_requests WHERE id = ?${orgCond}`, [featureId, ...orgParam]
     );
@@ -433,8 +434,8 @@ router.delete('/qa/features/:id/vote', authenticate, async (req, res) => {
 
 router.get('/qa/stats', authenticate, requireRole('admin'), async (req, res) => {
   try {
-    const orgCond  = req.user.role === 'superadmin' ? '' : 'WHERE org_id = ?';
-    const orgParam = req.user.role === 'superadmin' ? [] : [req.user.orgId];
+    const orgCond  = hasGlobalAdminScope(req.user) ? '' : 'WHERE org_id = ?';
+    const orgParam = hasGlobalAdminScope(req.user) ? [] : [req.user.orgId];
 
     const [[fbStats]] = await pool.execute(
       `SELECT

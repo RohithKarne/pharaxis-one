@@ -36,14 +36,14 @@ function flattenCatalog(cat) {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/customize-forms/categories — list of left-pane categories
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/customize-forms/categories', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
+router.get('/customize-forms/categories', authenticate, requireRole('admin', 'platform_admin'), (req, res) => {
   res.json({ categories: CATEGORIES_LIST });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/customize-forms/catalog/:category — full item list (static)
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/customize-forms/catalog/:category', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
+router.get('/customize-forms/catalog/:category', authenticate, requireRole('admin', 'platform_admin'), (req, res) => {
   const cat = getCategory(req.params.category);
   if (!cat) return res.status(404).json({ error: 'Unknown category.' });
   res.json({
@@ -58,7 +58,7 @@ router.get('/customize-forms/catalog/:category', authenticate, requireRole('admi
 // GET /api/admin/customize-forms/:orgId/:category — saved state for tenant
 // Returns per-item { key, is_required, is_disabled } merged with catalog.
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const cat = getCategory(req.params.category);
   if (!cat) return res.status(404).json({ error: 'Unknown category.' });
   const orgId = parseInt(req.params.orgId, 10);
@@ -184,7 +184,7 @@ router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin
 // Body: { items: [{ key, is_required, is_disabled, sort_order?, custom_label? }] }
 // sort_order + custom_label apply only to real fields (db_section + db_field).
 // ─────────────────────────────────────────────────────────────────────────────
-router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const cat = getCategory(req.params.category);
   if (!cat) return res.status(404).json({ error: 'Unknown category.' });
   const orgId = parseInt(req.params.orgId, 10);
@@ -336,7 +336,7 @@ router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin
 
 // POST /api/admin/customize-forms/:orgId/flex-field
 // Body: { section_name, field_name, field_type, help_text?, max_length?, default_value?, picklist_type? }
-router.post('/customize-forms/:orgId/flex-field', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/customize-forms/:orgId/flex-field', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const orgId = parseInt(req.params.orgId, 10);
   if (!Number.isFinite(orgId)) return res.status(400).json({ error: 'Invalid orgId.' });
   const { section_name, field_name, field_type = 'text', help_text, max_length, default_value, picklist_type, lookup_target } = req.body || {};
@@ -374,7 +374,7 @@ router.post('/customize-forms/:orgId/flex-field', authenticate, requireRole('adm
 });
 
 // DELETE /api/admin/customize-forms/:orgId/flex-field/:id
-router.delete('/customize-forms/:orgId/flex-field/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/customize-forms/:orgId/flex-field/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const orgId = parseInt(req.params.orgId, 10);
   if (!Number.isFinite(orgId)) return res.status(400).json({ error: 'Invalid orgId.' });
   try {
@@ -398,7 +398,7 @@ router.delete('/customize-forms/:orgId/flex-field/:id', authenticate, requireRol
 
 // PUT /api/admin/customize-forms/:orgId/case-form-def
 // Body: { case_type, section_name, field_overrides } — writes the rare advanced JSON
-router.put('/customize-forms/:orgId/case-form-def', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/customize-forms/:orgId/case-form-def', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const orgId = parseInt(req.params.orgId, 10);
   const { case_type, section_name, field_overrides } = req.body || {};
   if (!Number.isFinite(orgId) || !case_type || !section_name) {

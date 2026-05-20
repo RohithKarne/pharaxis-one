@@ -6,6 +6,7 @@ const pool = require('../database/db');
 const { authenticate, requireOrg } = require('../middleware/auth');
 const { createNotifications } = require('../services/notificationCenterService');
 const { logger } = require('../services/logger');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 const {
   emitConversationUpdated,
   emitMessageCreated,
@@ -233,7 +234,7 @@ router.delete('/chat/conversations/:id/participants/:userId', authenticate, requ
     if (!targetUserId) return res.status(400).json({ error: 'Invalid participant id.' });
 
     const isSelf = Number(targetUserId) === Number(req.user.userId);
-    const canManage = req.user.role === 'admin' || req.user.role === 'superadmin' || Number(conversation.created_by || 0) === Number(req.user.userId);
+    const canManage = req.user.role === 'admin' || hasGlobalAdminScope(req.user) || Number(conversation.created_by || 0) === Number(req.user.userId);
     if (!isSelf && !canManage) {
       return res.status(403).json({ error: 'Only the conversation owner or an admin can remove other participants.' });
     }

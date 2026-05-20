@@ -30,8 +30,8 @@ router.post('/change-approvals', authenticate, requireOrg, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// GET /api/admin/change-approvals — list requests (admin/superadmin sees all for org)
-router.get('/change-approvals', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+// GET /api/admin/change-approvals — list requests (admin/platform admin sees all for org)
+router.get('/change-approvals', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { status = 'pending' } = req.query;
     const [rows] = await pool.execute(
@@ -58,7 +58,7 @@ router.get('/change-approvals/my-requests', authenticate, requireOrg, async (req
 });
 
 // PUT /api/admin/change-approvals/:id/approve
-router.put('/change-approvals/:id/approve', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/change-approvals/:id/approve', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     await pool.execute(
       `UPDATE change_approval_requests SET status = 'approved', approver_id = ?, resolved_at = NOW() WHERE id = ? AND org_id = ?`,
@@ -70,7 +70,7 @@ router.put('/change-approvals/:id/approve', authenticate, requireRole('admin', '
 });
 
 // PUT /api/admin/change-approvals/:id/reject
-router.put('/change-approvals/:id/reject', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/change-approvals/:id/reject', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { rejection_note } = req.body;
     await pool.execute(

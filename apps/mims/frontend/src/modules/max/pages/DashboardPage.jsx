@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { formatAdminRoleLabel, isAdminUser } from '../../../shared/utils/adminScope.js'
 
 const API = '/api'
 const DASHBOARD_SECTION_DEFAULTS = Object.freeze({
@@ -39,14 +40,14 @@ function normalizeSectionPrefs(value, canSeeObservability) {
 }
 
 function roleLabel(role) {
-  if (role === 'admin' || role === 'superadmin') return 'Administrator'
+  if (isAdminUser(role)) return formatAdminRoleLabel(role)
   if (role === 'reviewer') return 'Reviewer'
   if (role === 'content_manager') return 'Content Manager'
   return 'Case Operator'
 }
 
 function buildPrimaryStats({ user, summary, sessions }) {
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
+  const isAdmin = isAdminUser(user)
   if (isAdmin) {
     return [
       { label: 'Total Cases', value: Number(summary.stats.total_cases || 0), hint: 'All active records', tone: '' },
@@ -64,7 +65,7 @@ function buildPrimaryStats({ user, summary, sessions }) {
 }
 
 function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
+  const isAdmin = isAdminUser(user)
   if (isAdmin) {
     return [
       {
@@ -126,7 +127,7 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { token, user, orgName, siteName } = useAuth()
-  const canSeeObservability = user?.role === 'admin' || user?.role === 'superadmin'
+  const canSeeObservability = isAdminUser(user)
   const headers = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
     [token]

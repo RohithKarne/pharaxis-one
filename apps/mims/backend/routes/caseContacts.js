@@ -12,6 +12,7 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../database/db');
 const { authenticate } = require('../middleware/auth');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ const { authenticate } = require('../middleware/auth');
 async function verifyCaseOrg(caseId, req) {
   const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
   if (!c) return false;
-  if (req.user.role === 'superadmin') return true;
+  if (hasGlobalAdminScope(req.user)) return true;
   return Number(c.org_id) === Number(req.user.orgId);
 }
 
@@ -32,14 +33,14 @@ async function verifyCaseContactOrg(ccId, req) {
     [ccId]
   );
   if (!row) return false;
-  if (req.user.role === 'superadmin') return true;
+  if (hasGlobalAdminScope(req.user)) return true;
   return Number(row.org_id) === Number(req.user.orgId);
 }
 
 async function verifyMasterContactOrg(contactId, req) {
   const [[row]] = await pool.execute('SELECT org_id FROM contacts WHERE id = ?', [contactId]);
   if (!row) return false;
-  if (req.user.role === 'superadmin') return true;
+  if (hasGlobalAdminScope(req.user)) return true;
   return Number(row.org_id) === Number(req.user.orgId);
 }
 
@@ -194,7 +195,7 @@ router.get('/cases/contacts/search', authenticate, async (req, res) => {
     const term = `%${q.trim()}%`;
     const params = [term, term, term, term];
     let orgClause = '';
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       orgClause = ' AND org_id = ?';
       params.push(req.user.orgId);
     }

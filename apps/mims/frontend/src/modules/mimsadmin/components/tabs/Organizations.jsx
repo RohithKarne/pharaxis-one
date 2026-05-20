@@ -2,9 +2,9 @@
  * Organizations.jsx — MIMS Admin top-level tab
  *
  * Manages tenants (organisations) + sites + per-org 2FA + session timeout + logos.
- * Reuses OrganisationsView from the legacy superadmin folder (will be moved
- * inline once the superadmin module is removed). Backend route
- * `/api/superadmin/orgs*` now accepts admin role.
+ * Reuses OrganisationsView from the legacy admin-compatibility folder (will be moved
+ * inline once the legacy superadmin module is retired). Canonical backend route
+ * is `/api/admin/platform/orgs*`, with legacy compatibility still mounted.
  */
 
 import { useState, useMemo, useEffect } from 'react'

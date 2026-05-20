@@ -4,11 +4,12 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const causality = require('../../services/causalityService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function orgForCase(caseId, req) {
   const [[row]] = await pool.execute('SELECT org_id FROM cases WHERE id=? LIMIT 1', [caseId]);
   if (!row) return null;
-  if (req.user.role !== 'superadmin' && Number(row.org_id) !== Number(req.user.orgId)) return null;
+  if (!hasGlobalAdminScope(req.user) && Number(row.org_id) !== Number(req.user.orgId)) return null;
   return row.org_id;
 }
 function history(req, orgId, caseId, field, value) {

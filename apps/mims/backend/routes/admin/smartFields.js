@@ -26,7 +26,7 @@ const flags   = require('../../services/featureFlagsService');
 const smart   = require('../../services/smartFieldsService');
 
 const FLAG = 'cf.theme2_smart_behaviors';
-const ADMIN = ['admin', 'superadmin'];
+const ADMIN = ['admin', 'platform_admin'];
 
 router.get('/smart-fields/schema', authenticate, async (req, res) => {
   try {

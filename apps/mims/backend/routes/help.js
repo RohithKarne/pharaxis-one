@@ -15,6 +15,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../database/db');
 const { authenticate } = require('../middleware/auth');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // ── 10-minute in-memory cache ────────────────────────────────────────────────
 const helpCache = new Map();
@@ -39,12 +40,18 @@ module.exports.cacheBust = cacheBust;
  * Build audience filter clause — returns articles visible to the requesting role.
  * audience column is JSON: ["all"] | ["agent","cm_admin"] | etc.
  */
-function audienceClause(role) {
-  // JSON_OVERLAPS available MySQL 8.0.17+; fall back to LIKE for safety
-  return `(
-    JSON_CONTAINS(audience, '"all"')
-    OR JSON_CONTAINS(audience, ?)
-  )`;
+function audienceClause(user) {
+  const roles = hasGlobalAdminScope(user)
+    ? ['admin', 'platform_admin', 'superadmin']
+    : [user?.role || 'agent'];
+  const clause = [
+    `JSON_CONTAINS(audience, '"all"')`,
+    ...roles.map(() => 'JSON_CONTAINS(audience, ?)'),
+  ].join('\n    OR ');
+  return {
+    clause: `(\n    ${clause}\n  )`,
+    params: roles.map((role) => JSON.stringify(role)),
+  };
 }
 
 // ── GET /api/help ─────────────────────────────────────────────────────────────
@@ -57,11 +64,12 @@ router.get('/help', authenticate, async (req, res) => {
     const { feature_key, feature_group, page = 1, limit = 20 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const role = req.user.role || 'agent';
+    const roleCacheKey = hasGlobalAdminScope(req.user) ? 'platform_admin' : role;
     const orgId = req.user.orgId || null;
-    const roleJson = JSON.stringify(role);
+    const audienceFilter = audienceClause(req.user);
 
     // Cache key includes role + org + key/group
-    const cacheKey = `help:${role}:${orgId}:${feature_key || ''}:${feature_group || ''}:${page}:${limit}`;
+    const cacheKey = `help:${roleCacheKey}:${orgId}:${feature_key || ''}:${feature_group || ''}:${page}:${limit}`;
     const cached = cacheGet(cacheKey);
     if (cached) return res.json(cached);
 
@@ -70,7 +78,6 @@ router.get('/help', authenticate, async (req, res) => {
     // 2. Parent key match (e.g. "cm" when key is "cm.documents")
     // 3. feature_group match
     // 4. General articles (feature_key = "general")
-    const audienceFilter = audienceClause(role);
     const params = [];
 
     let articles = [];
@@ -83,7 +90,7 @@ router.get('/help', authenticate, async (req, res) => {
                updated_at
         FROM help_articles
         WHERE is_active = 1
-          AND ${audienceFilter}
+          AND ${audienceFilter.clause}
           AND (org_id IS NULL OR org_id = ?)
           AND (${extraWhere})
         ORDER BY
@@ -92,7 +99,7 @@ router.get('/help', authenticate, async (req, res) => {
           updated_at DESC
         LIMIT ${parseInt(limit, 10)} OFFSET ${offset}
       `;
-      const [rows] = await pool.execute(q, [roleJson, orgId, ...extraParams, orgId]);
+      const [rows] = await pool.execute(q, [...audienceFilter.params, orgId, ...extraParams, orgId]);
       return rows;
     }
 
@@ -149,9 +156,8 @@ router.get('/help/search', authenticate, async (req, res) => {
     const { q, limit = 10 } = req.query;
     if (!q || q.trim().length < 2) return res.json({ articles: [] });
 
-    const role = req.user.role || 'agent';
     const orgId = req.user.orgId || null;
-    const roleJson = JSON.stringify(role);
+    const audienceFilter = audienceClause(req.user);
     const safeLimit = Math.min(parseInt(limit, 10) || 10, 50);
 
     try {
@@ -164,12 +170,12 @@ router.get('/help/search', authenticate, async (req, res) => {
            AND MATCH(title, content_html, summary) AGAINST (? IN BOOLEAN MODE)
            AND (
              JSON_CONTAINS(audience, '"all"')
-             OR JSON_CONTAINS(audience, ?)
+             OR ${audienceFilter.params.map(() => 'JSON_CONTAINS(audience, ?)').join('\n             OR ')}
            )
            AND (org_id IS NULL OR org_id = ?)
          ORDER BY relevance DESC, sort_order ASC
          LIMIT ?`,
-        [q, q, roleJson, orgId, safeLimit]
+        [q, q, ...audienceFilter.params, orgId, safeLimit]
       );
 
       return res.json({ articles, query: q });
@@ -187,12 +193,12 @@ router.get('/help/search', authenticate, async (req, res) => {
            )
            AND (
              JSON_CONTAINS(audience, '"all"')
-             OR JSON_CONTAINS(audience, ?)
+             OR ${audienceFilter.params.map(() => 'JSON_CONTAINS(audience, ?)').join('\n             OR ')}
            )
            AND (org_id IS NULL OR org_id = ?)
          ORDER BY sort_order ASC, updated_at DESC
          LIMIT ${safeLimit}`,
-        [like, like, like, roleJson, orgId]
+        [like, like, like, ...audienceFilter.params, orgId]
       );
       return res.json({ articles, query: q, fallback: 'like' });
     }

@@ -10,6 +10,7 @@ import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
+import { isAdminUser } from '../../../shared/utils/adminScope.js'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -155,7 +156,7 @@ export default function CasesPage() {
     const name = window.prompt('Saved view name')
     if (!name || !name.trim()) return
 
-    const isShared = ['admin', 'superadmin'].includes(user?.role)
+    const isShared = isAdminUser(user)
       ? await confirm('Save this as a shared team view?')
       : false
 
@@ -441,7 +442,7 @@ export default function CasesPage() {
                 {view.name}
                 {view.is_shared ? ' • Shared' : ''}
               </button>
-              {(Number(view.user_id) === Number(user?.id) || ['admin', 'superadmin'].includes(user?.role)) && (
+              {(Number(view.user_id) === Number(user?.id) || isAdminUser(user)) && (
                 <span onClick={() => deleteSavedView(view.id)}>×</span>
               )}
             </div>

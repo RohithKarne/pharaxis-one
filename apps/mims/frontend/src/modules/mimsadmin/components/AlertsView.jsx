@@ -13,7 +13,7 @@ const ALERT_EVENT_OPTIONS = [
   { value: 'service_error_threshold', label: 'Service Error Threshold', mode: 'threshold' },
 ]
 
-export default function AlertsView({ H, flash, apiBase = '/api/superadmin' }) {
+export default function AlertsView({ H, flash, apiBase = '/api/admin' }) {
   const [rules, setRules] = useState([])
   const [events, setEvents] = useState([])
   const [eventTypeError, setEventTypeError] = useState('')

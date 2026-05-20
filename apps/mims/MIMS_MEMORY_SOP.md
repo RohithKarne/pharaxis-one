@@ -13,7 +13,7 @@
 | 2026-03-28 | Bala | Sprint 8 complete: session timeout, superadmin lockdown, org/site toggles, data cleanup, site uniqueness. DB, API, frontend, team updated. |
 | 2026-03-28 | Bala | Post-Sprint 8: org-controlled user 2FA, SuperAdmin 2FA Config, platform SMTP test, QA status added. |
 | 2026-03-28 | Bala | Password recovery + history: forgot-password, in-app change-password, backend blocks reuse of current + last 5 passwords. |
-| 2026-03-28 | Bala | Reshape: audit + login-audit endpoints → Section 7. Superadmin pages table → Section 8. Sprint 8 summary expanded. Section 11 updated (2FA infra, SMTP, reset-2fa, audit). |
+| 2026-03-28 | Bala | Reshape: audit + login-audit endpoints → Section 7. Platform Admin pages table → Section 8. Sprint 8 summary expanded. Section 11 updated (2FA infra, SMTP, reset-2fa, audit). |
 | 2026-03-28 | Bala | Section 11 trimmed — verbose sprint blocks removed. Content already in sections 7–9, 13. Section 11 = current sprint only. |
 | 2026-03-28 | Bala | Team promotions: Varun → Senior Director Engineering, Bhavya → Senior Architect, Vivek → Principal SWE, Karthik → QA Manager, Vanaja → Director Product Management, Vinay → Product Owner. Section 5 updated. |
 | 2026-03-28 | Bala | Sprint 9 closed: SuperAdmin dashboard, audit filters + CSV export, user lifecycle controls, alerts engine, in-app notifications, duplicate alert-rule fix. Sections 7–13 updated. |
@@ -30,6 +30,7 @@
 | 2026-05-12 | Varun | System Design Sprint complete (16 fixes), Architecture fixes complete (A1+A2), Code Review fixes complete (10 issues). UAT/QA system built and wired. `production` git branch created. All sections updated. |
 | 2026-05-12 | Bala | UAT server live on Rohith's MacBook (port 4001). Full UAT setup documented in Section 15 (new): PM2 process, DB, credentials, push-to-UAT workflow, feedback widget, QA dashboard, deploy script. |
 | 2026-05-12 | Bala | Section 15 expanded — Local vs UAT app purpose, audience, data, workflow fully documented so any team member can understand the difference without verbal explanation. |
+| 2026-05-20 | Varun | Local MIMS UAT environment retired and removed from repo/machine. No PM2 `mims-uat`, port `4001`, or `pharaxis_mims_uat` database should be assumed active. |
 
 ---
 
@@ -131,7 +132,7 @@ cd /Users/rohithkarne/MIMS-CP\ Portal/mims/frontend
 npm run dev
 ```
 
-**Default Superadmin login:**
+**Default Platform Admin login:**
 - Username: `superadmin`
 - Password: `__SET_SMOKE_TEST_PASSWORD__`
 - Only superadmin account. No other user can be assigned superadmin role — blocked at API + UI level.
@@ -170,27 +171,27 @@ if (req.user.role !== 'superadmin') {
   query += ' AND org_id = ?'
   params.push(req.user.orgId)
 }
-// Superadmin has orgId = null in JWT → bypasses all org filters
+// Platform Admin has orgId = null in JWT → bypasses all org filters
 ```
 
 ### Module Access
 - Modules: `mims_core`, `admin_console`, `content_mgmt`, `data_visualization`
 - Stored in `user_module_permissions` table per user
 - Frontend enforces via `ModuleAccessGuard` component wrapping each route
-- Superadmin bypasses all module checks
-- Superadmin hidden from User Management + Module Access screens — `WHERE role != 'superadmin'` on both `/api/superadmin/users` and `/api/superadmin/all-users`
+- Platform Admin bypasses all module checks
+- Platform Admin hidden from User Management + Module Access screens — `WHERE role != 'superadmin'` on both `/api/admin/platform/users` and `/api/admin/platform/all-users`
 
 ### Session Timeout
 - Per-org idle timeout set by superadmin. Stored as `session_timeout_minutes` in `organisations` table.
-- Superadmin global timeout in `system_config` (`key: superadmin_session_timeout_minutes`).
+- Platform Admin global timeout in `system_config` (`key: platform_admin_session_timeout_minutes`).
 - Defaults: **30 min** per org, **60 min** superadmin. Min enforced: **30 min**.
 - Login + switch-org APIs return `sessionTimeout`.
 - Frontend: `useIdleTimer.js` tracks mouse/keyboard/scroll. `SessionTimeoutModal.jsx` warns 2 min before logout. "Stay Logged In" resets timer.
 - `sessionTimeout` stored in localStorage as `mims_session_timeout`. Wired into `App.jsx` via `AppRoutes`.
 
 ### User 2FA Architecture
-- 2FA applies to **MIMS users only**. Superadmin login does **not** use this flow.
-- Superadmin controls 2FA per org from `2FA Configuration` screen.
+- 2FA applies to **MIMS users only**. Platform Admin login does **not** use this flow.
+- Platform Admin controls 2FA per org from `2FA Configuration` screen.
 - Supported methods: `Email OTP` and `Authenticator App (TOTP)`.
 - Login flow (same screen):
   1. User enters username/email + password
@@ -198,7 +199,7 @@ if (req.user.role !== 'superadmin') {
   3. User chooses Email OTP or Authenticator App, or skips if allowed
   4. Once enrolled, 2FA required unless remembered device valid
 - Backup codes generated on enrollment. Remember-device supported for org-configured duration. Lock after **3** invalid attempts.
-- Superadmin can reset user 2FA from User Management.
+- Platform Admin can reset user 2FA from User Management.
 - Platform SMTP for 2FA emails in `system_config` — separate from org-level Email Accounts.
 - Security challenge expiry must use **DB time** (`NOW()` / `DATE_ADD`), not JS timestamps. Real QA defect — fixed.
 
@@ -254,7 +255,7 @@ All routes in `mims/frontend/src/modules/max/App.jsx`.
 | `/session-management` | SessionManagementPage | `mims_core` |
 | `/exceptions` | ExceptionLogsPage | `mims_core` |
 | `/process-explorer` | ProcessExplorerPage | `mims_core` |
-| `/regression` | RegressionPage | ProtectedRoute only (admin/superadmin) |
+| `/regression` | RegressionPage | ProtectedRoute only (admin/platform-admin) |
 | `/admin-console/*` | AdminConsoleRouter | `admin_console` |
 | `/content` | ContentPage | `content_mgmt` |
 | `/analytics` | AnalyticsPage | `data_visualization` |
@@ -271,8 +272,8 @@ Main bar: Home · Inbox · Case Management ▾ · Case Query · **Utilities ▾*
 - Exception Log (`/exceptions`) — all users
 - Session Management (`/session-management`) — all users
 - 📋 Response Log (`/response-log`) — all users (Sprint 19)
-- Process Explorer (`/process-explorer`) — admin/superadmin, org-config gated (shows "Off" if disabled)
-- 🧪 Regression Testing (`/regression`) — admin/superadmin only
+- Process Explorer (`/process-explorer`) — admin/platform-admin, org-config gated (shows "Off" if disabled)
+- 🧪 Regression Testing (`/regression`) — admin/platform-admin only
 - ─── divider ───
 - CDR Log, Schedule CDR, Case Audit Trail, Transmission Audit Trail, Non Relevant Emails — all "Soon"
 
@@ -311,7 +312,7 @@ Backend on port 3000. All routes under `/api/`.
 | GET | `/api/cases/my` | Cases owned by logged-in user |
 | GET | `/api/cases/unassigned` | Unassigned cases |
 | POST | `/api/cases` | Create case (org_id from JWT only) |
-| GET | `/api/cases/form-config` | Dynamic form config — merged sections + fields + picklist options for given case_type + org. Auth only (no requireOrg). Superadmin passes `?org_id=`, regular users from JWT orgId. Returns `{ case_type, sections: [{ section_name, is_visible, fields: [{ ...field, options: [] }] }] }`. |
+| GET | `/api/cases/form-config` | Dynamic form config — merged sections + fields + picklist options for given case_type + org. Auth only (no requireOrg). Platform Admin passes `?org_id=`, regular users from JWT orgId. Returns `{ case_type, sections: [{ section_name, is_visible, fields: [{ ...field, options: [] }] }] }`. |
 | GET | `/api/cases/:id` | Single case detail |
 | PUT | `/api/cases/:id` | Update case (COALESCE pattern — partial update) |
 | DELETE | `/api/cases/:id` | Soft delete |
@@ -359,35 +360,35 @@ Backend on port 3000. All routes under `/api/`.
 | GET | `/api/admin/service-logs` | Platform-wide service log |
 | GET | `/api/admin/system-activity` | Email import activity log |
 
-### Superadmin
+### Platform Admin
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/superadmin/all-users` | Full user list with org assignments (excludes superadmin role) |
-| GET | `/api/superadmin/users` | Users for module access screen (excludes superadmin role) |
-| POST | `/api/superadmin/users/create` | Create user — roles: admin/agent/reviewer/content_manager only. superadmin blocked. |
-| PUT | `/api/superadmin/users/:id` | Update user — superadmin role blocked |
-| POST | `/api/superadmin/users/:id/reset-2fa` | Reset user 2FA enrollment, lock state, backup codes, trusted devices |
-| GET/POST/PUT/DELETE | `/api/superadmin/users/:id/org-access` | CRUD org assignments |
-| GET | `/api/superadmin/orgs-for-assignment` | Active orgs + sites for dropdown |
-| PUT | `/api/superadmin/users/:id/modules` | Override user module access |
-| GET | `/api/superadmin/orgs` | List all orgs with sites + session_timeout_minutes |
-| POST | `/api/superadmin/orgs` | Create org |
-| PUT | `/api/superadmin/orgs/:id` | Update org name / is_active / session_timeout_minutes / 2FA settings |
-| POST | `/api/superadmin/orgs/:id/sites` | Create site — validates no duplicate name within org |
-| PUT | `/api/superadmin/sites/:id` | Update site name / country / is_primary / is_active |
-| GET | `/api/superadmin/config` | Get system config (superadmin timeout + platform SMTP) |
-| PUT | `/api/superadmin/config` | Update system config (superadmin timeout + platform SMTP) |
-| POST | `/api/superadmin/config/test-email` | Test SMTP connection or send test email from SuperAdmin 2FA Configuration |
-| GET | `/api/superadmin/dashboard` | SuperAdmin dashboard KPIs + recent audit/login activity |
-| POST | `/api/superadmin/users/:id/force-password-reset` | Force user to reset password on next login |
-| POST | `/api/superadmin/users/:id/unlock` | Clear user security lock / 2FA failed-attempt lock |
-| POST | `/api/superadmin/users/bulk-action` | Bulk activate, deactivate, or force password reset |
-| GET | `/api/superadmin/audit` | Paginated general audit log — all entity changes. Params: `limit` (max 200), `offset` |
-| GET | `/api/superadmin/login-audit` | Paginated login/logout event log. Params: `limit`, `offset`, `status` filter |
-| GET/POST/PUT | `/api/superadmin/alerts/rules` | List, create, update SuperAdmin alert rules |
-| GET | `/api/superadmin/alerts/events` | Alert event history with delivery statuses |
-| GET | `/api/superadmin/notifications` | SuperAdmin in-app notifications |
-| POST | `/api/superadmin/notifications/:id/read` | Mark notification as read |
+| GET | `/api/admin/platform/all-users` | Full user list with org assignments (excludes superadmin role) |
+| GET | `/api/admin/platform/users` | Users for module access screen (excludes superadmin role) |
+| POST | `/api/admin/platform/users/create` | Create user — roles: admin/agent/reviewer/content_manager only. superadmin blocked. |
+| PUT | `/api/admin/platform/users/:id` | Update user — superadmin role blocked |
+| POST | `/api/admin/platform/users/:id/reset-2fa` | Reset user 2FA enrollment, lock state, backup codes, trusted devices |
+| GET/POST/PUT/DELETE | `/api/admin/platform/users/:id/org-access` | CRUD org assignments |
+| GET | `/api/admin/platform/orgs-for-assignment` | Active orgs + sites for dropdown |
+| PUT | `/api/admin/platform/users/:id/modules` | Override user module access |
+| GET | `/api/admin/platform/orgs` | List all orgs with sites + session_timeout_minutes |
+| POST | `/api/admin/platform/orgs` | Create org |
+| PUT | `/api/admin/platform/orgs/:id` | Update org name / is_active / session_timeout_minutes / 2FA settings |
+| POST | `/api/admin/platform/orgs/:id/sites` | Create site — validates no duplicate name within org |
+| PUT | `/api/admin/platform/sites/:id` | Update site name / country / is_primary / is_active |
+| GET | `/api/admin/platform/config` | Get system config (superadmin timeout + platform SMTP) |
+| PUT | `/api/admin/platform/config` | Update system config (superadmin timeout + platform SMTP) |
+| POST | `/api/admin/platform/config/test-email` | Test SMTP connection or send test email from SuperAdmin 2FA Configuration |
+| GET | `/api/admin/platform/dashboard` | SuperAdmin dashboard KPIs + recent audit/login activity |
+| POST | `/api/admin/platform/users/:id/force-password-reset` | Force user to reset password on next login |
+| POST | `/api/admin/platform/users/:id/unlock` | Clear user security lock / 2FA failed-attempt lock |
+| POST | `/api/admin/platform/users/bulk-action` | Bulk activate, deactivate, or force password reset |
+| GET | `/api/admin/platform/audit` | Paginated general audit log — all entity changes. Params: `limit` (max 200), `offset` |
+| GET | `/api/admin/platform/login-audit` | Paginated login/logout event log. Params: `limit`, `offset`, `status` filter |
+| GET/POST/PUT | `/api/admin/platform/alerts/rules` | List, create, update SuperAdmin alert rules |
+| GET | `/api/admin/platform/alerts/events` | Alert event history with delivery statuses |
+| GET | `/api/admin/platform/notifications` | SuperAdmin in-app notifications |
+| POST | `/api/admin/platform/notifications/:id/read` | Mark notification as read |
 
 ### Content Management
 | Method | Path | Purpose |
@@ -463,9 +464,9 @@ All under `/admin-console/*` (requires `admin_console` module).
 - `Admin Console -> Email Accounts` = org-specific MIMS mailboxes for app operations
 - `SuperAdmin -> 2FA Configuration` = platform SMTP for user 2FA email delivery + org-level 2FA controls
 
-### Superadmin Console Pages
+### Platform Admin Console Pages
 
-Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — no URL routing between pages.
+Accessible at `/mims-admin?standalone=1` with legacy `/superadmin` alias compatibility. Sidebar-based nav — no URL routing between pages.
 
 | Page Key | Sidebar Label | What It Shows |
 |----------|--------------|---------------|
@@ -506,7 +507,7 @@ Accessible at `/superadmin` (requires `superadmin` role). Sidebar-based nav — 
 |-------|---------|
 | `organisations` | Pharma client orgs — name, is_active, `session_timeout_minutes` (default 30), `two_factor_enabled`, `two_factor_methods`, `two_factor_remember_days` |
 | `sites` | Locations per org — country, primary flag, is_finalized, abbreviation. **UNIQUE constraint on (org_id, name)** — duplicate site names within org blocked at DB + API. |
-| `system_config` | Key-value global platform config. Uses: `superadmin_session_timeout_minutes`, platform SMTP settings |
+| `system_config` | Key-value global platform config. Uses: `platform_admin_session_timeout_minutes`, platform SMTP settings |
 | `site_config` | Extended site config — GDPR, retry, alert settings |
 | `site_email_accounts` | Email accounts linked to site |
 | `site_email_purpose` | Site → purpose (response / transmissions / correspondence / fax) → email_account |
@@ -705,7 +706,7 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 | Sprint C: `ContentPage.jsx` split | ✅ DONE | Shell 3950→68 lines. 14 sub-components in `content/components/`. |
 | Sprint C: `SuperadminPage.jsx` split | ✅ DONE | 3456→107 lines. 12 view components + shared `guardedFetch` utility. Build PASS. |
 | Sprint C: `AdminMiscSection.jsx` split | ✅ DONE | 1782→23 lines. 6 panels extracted. |
-| QA regression browser pass | ⏳ PENDING | Human click-through — CaseForm tabs, Content sections, Superadmin 12 sections. ~1 hr. |
+| QA regression browser pass | ⏳ PENDING | Human click-through — CaseForm tabs, Content sections, Platform Admin 12 sections. ~1 hr. |
 | `authRateLimiter` review | ⏳ DEFERRED | Left as-is by Rohith decision. |
 
 **Sprints 15-18 — ALL CLOSED (2026-04-22). Gate 1 PASSED.**
@@ -767,7 +768,7 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 | 11 | Chunk size warning in Vite build — main bundle ~1.2MB. Not an error; no action needed unless performance is flagged. | Build debt | Low | Varun |
 | 12 | ~~PC Case — no end-to-end QA walkthrough done since backend was built.~~ | **RESOLVED Sprint 20 QA** — 6 bugs found and fixed: (1) `pc-flex-fields` tab had no backend route — added GET/PUT + `case_pc_flex_fields` table. (2) General tab `pc_status`/`pc_classification` fields not saved — added columns + backend support. (3) Patient-info `gender` key mismatch with DB column `sex` — fixed frontend key. (4) Patient-info `injury_experienced` not saved — added column + backend support. (5) `return_requested` rendered as picklist select but DB is TINYINT boolean — changed to checkbox. (6) `replacement_approved` and `refund_approved` same issue — changed to checkboxes. | — | — |
 | 13 | MI email delivery depends on SMTP being configured in Admin Console → Email Accounts with `site_email_purpose` = 'response'. If not configured, email is silently skipped (SENT status is still committed). | Config dependency | High | Varun / Karthik |
-| 14 | DPPR scheduler runs at 02:00 UTC daily. Requires server restart after first deploy to register cron. DPPR Privacy (DPPR) tab in CaseFormPage visible to admin/superadmin only — non-admin users will see 401 on load (handled silently). | Config / deploy | High | Varun |
+| 14 | DPPR scheduler runs at 02:00 UTC daily. Requires server restart after first deploy to register cron. DPPR Privacy (DPPR) tab in CaseFormPage visible to admin/platform-admin only — non-admin users will see 401 on load (handled silently). | Config / deploy | High | Varun |
 | 15 | After any backend route file change (e.g. `cmAuditTrail.js` entity_id filter), server must be restarted — nodemon or manual `node --env-file=.env backend/server.js`. | Ops | Medium | Varun |
 
 ---
@@ -785,16 +786,16 @@ Non-negotiable. Ignoring causes bugs.
 | MySQL NULL + UNIQUE | NULL != NULL — `ON DUPLICATE KEY UPDATE` won't fire with NULL values |
 | Field setup seeding | Use `INSERT IGNORE`. Unique key is `uq_field_section_org (section_name, field_name, org_id)` — always includes org_id. Old `uq_field_section_name` (no org_id) dropped in Sprint 10. Without org_id, INSERT IGNORE silently blocks per-org seeds when global rows exist. |
 | Org seed on creation | `seedNewOrg(orgId, userId)` in `seedService.js` must be called after every new org INSERT. Wired into `POST /api/admin/orgs`. For orgs created before Sprint 10, run `backfill-existing-orgs.js` once. |
-| form-config org resolution | `GET /api/cases/form-config` uses `authenticate` only — not `requireOrg`. Superadmin has orgId=null; org resolved inline: `superadmin ? parseInt(query.org_id) || 1 : req.user.orgId`. Never apply requireOrg to this route. |
+| form-config org resolution | `GET /api/cases/form-config` uses `authenticate` only — not `requireOrg`. Platform Admin has orgId=null; org resolved inline: `superadmin ? parseInt(query.org_id) || 1 : req.user.orgId`. Never apply requireOrg to this route. |
 | Auth header | `Authorization: Bearer <token>`. Token from `mims_token` in localStorage. |
 | Git push | Disabled since Sprint 3. Never run `git push` or `gh` commands. |
 | New case org_id | Always from JWT (`req.user.orgId`) — never from request body. |
-| Superadmin role | Cannot be assigned to any user via API or UI. Only ID 4 (`superadmin`) has this role. Never add hardcoded role resets to `db.js` init. |
+| Platform Admin role | Cannot be assigned to any user via API or UI. Only ID 4 (`superadmin`) has this role. Never add hardcoded role resets to `db.js` init. |
 | Site names | Unique per org. `UNIQUE KEY uq_site_org_name (org_id, name)`. Pre-validate in API with 409 before INSERT. |
 | Login input type | Login field is `type="text"` NOT `type="email"` — allows `superadmin` username (no @). |
 | Session timeout | Login + switch-org responses must include `sessionTimeout`. AuthContext must store in `mims_session_timeout` localStorage key. |
-| User 2FA scope | 2FA for MIMS users only. Superadmin login has no 2FA. |
-| Platform SMTP vs MIMS Email Accounts | Platform SMTP (Superadmin) = user 2FA emails. Admin Console Email Accounts = org-specific operational mailboxes. Do not mix. |
+| User 2FA scope | 2FA for MIMS users only. Platform Admin login has no 2FA. |
+| Platform SMTP vs MIMS Email Accounts | Platform SMTP (Platform Admin) = user 2FA emails. Admin Console Email Accounts = org-specific operational mailboxes. Do not mix. |
 | Platform SMTP reuse | Same platform SMTP used for user 2FA, forgot-password, and SuperAdmin alert emails. No separate alert SMTP config in Sprint 9. |
 | 2FA expiry handling | Use DB-time expiry (`NOW()` / `DATE_ADD`). Do not use JS Date values in MySQL DATETIME for auth expiry. |
 | Password reuse policy | Block reuse of current + previous 5 passwords across first-login reset, forgot-password, and in-app change. Hardcoded server behavior. |
@@ -816,7 +817,7 @@ Non-negotiable. Ignoring causes bugs.
 | SLA badge data source | `sla_due` field added to /cases/my and /cases/unassigned queries via SQL subquery: `(SELECT MIN(mi.response_required_by) FROM case_mi mi WHERE mi.case_id = c.id)`. NOT on the general /cases list — only My Cases and Unassigned tabs. |
 | Inbox→Case description | `createCaseFromInquiry()` in InboxPage.jsx passes `description` (email body, max 1000 chars) and `internal_notes` (from/subject/received metadata) when creating a case. These fields are COALESCE'd in PUT /cases/:id — safe to pre-populate. |
 | Response Log route | `GET /api/cases/mi-responses/log` must be declared BEFORE `GET /api/cases/:id` in cases.js route order, otherwise Express will try to match "mi-responses" as a case `:id`. Already correct as of Sprint 19. |
-| Audit Trail UI | `AuditAdminPanel` is a standalone component defined in `AdminMiscSection.jsx` (not a separate file). It uses the existing `fmtDateIST` and `H` (auth headers) props passed from the parent. Case field audit calls `GET /api/admin/case-audit-trail/:caseId` (admin/superadmin only). |
+| Audit Trail UI | `AuditAdminPanel` is a standalone component defined in `AdminMiscSection.jsx` (not a separate file). It uses the existing `fmtDateIST` and `H` (auth headers) props passed from the parent. Case field audit calls `GET /api/admin/case-audit-trail/:caseId` (admin/platform-admin only). |
 | `httpFetch` 401 handler | `shared/api/httpFetch.js` intercepts all 401 responses and calls the registered `_onSessionExpiry` handler. Auth endpoints (`/api/auth/*`) are excluded to prevent login-page 401s triggering logout. `createModuleApp.jsx` registers the handler for all non-superadmin modules. `SuperadminPage.jsx` registers via `setSessionExpiryHandler` re-exported from `superadmin/utils/guardedFetch.js`. Do NOT add manual 401 checks in individual components — the wrapper handles it globally. |
 | `guardedFetch` (superadmin) | `superadmin/utils/guardedFetch.js` is now a thin re-export layer over `shared/api/httpFetch.js`. `guardedFetch === httpFetch`. `setSessionExpiryHandler` re-exported from shared. Do not add duplicate 401 logic here. |
 
@@ -832,166 +833,15 @@ Full SOP: `TEAM_OPERATING_SOP.md`. Gate flow, browser verification checklist, co
 
 ---
 
-### 🟡 What Is the Local App? (Dev Environment)
+Local MIMS UAT has been retired.
 
-**Who uses it:** Varun, Bhavya, Vivek, Karthik — developers actively writing code.
+Current assumption:
 
-**What it is:** A developer's personal copy of MIMS running on their laptop. It is unstable by design — code is half-written, features are broken mid-build, the DB is wiped regularly. It is **never** shared with the wider team.
+- local development uses the normal dev environment
+- production/live access uses the deployed `/mims/` app
+- no PM2 `mims-uat`, no port `4001`, and no `pharaxis_mims_uat` database should be expected on this machine
 
-**URL:** `http://localhost:3000` (only accessible on the developer's own laptop, not on the network)
-
-**Data:** Fake seed data. Frequently reset. No real use cases.
-
-**Purpose:** Build and test new features in isolation before they are stable enough to share.
-
----
-
-### 🟢 What Is the UAT App? (User Acceptance Testing / Production Simulation)
-
-**Who uses it:** The entire Pharaxis team — Rohith, Bala, Saad, Vanaja, Vinay, and any user who is testing or validating MIMS like a real client would.
-
-**What it is:** A stable, production-like copy of MIMS running on Rohith's MacBook via PM2. It runs 24/7 (as long as the laptop is on), never gets wiped mid-session, and always has the latest approved code. It behaves exactly like the live EC2 production app — same codebase, same DB structure, same features — just on a local machine instead of a cloud server.
-
-**URL:** `http://localhost:4001/mims/` (Rohith's laptop) or `http://192.168.0.145:4001/mims/` (anyone on the same WiFi)
-
-**Data:** Realistic demo data (Novartis-Demo org). Team members use it for real workflows — creating cases, testing MI responses, using the inbox — just like a pharma client would.
-
-**Purpose:**
-1. **Feature validation** — every feature built on local must be verified on UAT before it counts as done
-2. **Bug discovery** — team uses the app naturally and reports issues via the ＋ feedback button
-3. **Enhancement ideas** — team submits feature suggestions via the same ＋ button
-4. **Client demo readiness** — UAT is always in a state that could be shown to a prospective client
-
----
-
-### 🔵 What Is the EC2 / Production App?
-
-**Who uses it:** Real pharma clients (future) + Rohith for client demos via the internet.
-
-**What it is:** MIMS deployed on AWS EC2, accessible from anywhere in the world via a public IP. Auto-deployed via GitHub Actions whenever code is pushed to `main`.
-
-**URL:** `http://13.205.213.128/mims/` (EC2 public IP)
-
-**Purpose:** Live production system. Only stable, UAT-verified code reaches here.
-
----
-
-### The Flow: How a Feature Goes from Idea → Production
-
-```
-Developer builds feature
-        ↓
-Runs on LOCAL (port 3000) — dev tests it themselves
-        ↓
-Pushes to main branch → GitHub Actions auto-deploys to UAT (port 4001)
-        ↓
-Bala + team USE the feature on UAT — report bugs via ＋ button
-        ↓
-Bugs fixed → re-deployed to UAT
-        ↓
-Bala marks bugs "Verified" → feature is production-ready
-        ↓
-Code is already on EC2 (same push) — clients can use it
-```
-
-> **Key rule:** A feature is NOT done until it passes on UAT. Local testing by the developer alone is not sufficient.
-
----
-
-### Side-by-Side Comparison
-
-| | Local (Dev) | UAT | EC2 (Production) |
-|---|---|---|---|
-| **URL** | localhost:3000 | localhost:4001/mims/ | 13.205.213.128/mims/ |
-| **Who accesses** | Developer only | Whole team (WiFi) | Anyone (internet) |
-| **Stability** | Unstable — WIP | Stable — always on | Stable — always on |
-| **Data** | Fake, reset often | Realistic demo data | Real client data (future) |
-| **DB** | pharaxis_mims_dev | pharaxis_mims_uat | mims (EC2 MySQL) |
-| **Process manager** | nodemon | PM2 (mims-uat) | PM2 (mims) |
-| **Deployed by** | Developer manually | bash deploy.sh | GitHub Actions auto |
-| **Bug reporting** | Not applicable | ＋ Feedback button | Not applicable |
-| **Purpose** | Build features | Validate + test | Serve clients |
-
----
-
-### Overview
-MIMS UAT runs locally on Rohith's MacBook alongside the dev server. No AWS required for UAT.
-
-| | Dev | UAT |
-|---|---|---|
-| Port | 3000 | **4001** |
-| DB | `pharaxis_mims_dev` | `pharaxis_mims_uat` |
-| Process | nodemon (manual) | PM2 `mims-uat` (always on) |
-| Frontend | Vite dev server `:5173` | Production build served by Express |
-| URL | `http://localhost:3000` | **`http://localhost:4001/mims/`** |
-| LAN URL | — | `http://192.168.0.145:4001/mims/` |
-
-### PM2 Commands
-```bash
-pm2 status                        # check if mims-uat is running
-pm2 restart mims-uat --update-env # restart after any code change
-pm2 logs mims-uat --lines 50      # tail logs
-pm2 stop mims-uat                 # stop
-```
-
-### UAT Login Credentials
-| Role | Email | Password |
-|------|-------|----------|
-| Superadmin | `superadmin@pharaxis.local` | `MimsUAT@2026!` |
-
-After first login, create org-level admin users via SuperAdmin panel as normal.
-
-### Pushing Code from Dev → UAT
-Since both run on the same machine, no git push needed. Two commands:
-
-```bash
-# Backend-only change:
-pm2 restart mims-uat --update-env
-
-# Frontend change (or both):
-cd /Users/rohithkarne/Pharaxis-One/apps/mims/frontend
-npm run build
-pm2 restart mims-uat --update-env
-```
-
-Or use the full deploy script (includes smoke tests):
-```bash
-cd /Users/rohithkarne/Pharaxis-One/apps/mims
-bash deploy.sh
-```
-
-### Key Files
-| File | Purpose |
-|------|---------|
-| `apps/mims/backend/.env.uat` | All UAT env vars (DB, Redis, JWT, ports) |
-| `apps/mims/ecosystem.config.local.js` | PM2 config reference (env vars now in .env.uat) |
-| `apps/mims/setup-uat.sh` | One-time setup script (PM2 install, build, start) |
-| `apps/mims/deploy.sh` | Ongoing deploy: build → smoke test → PM2 restart |
-
-### DB Info
-- **Database:** `pharaxis_mims_uat` on native MySQL (localhost:3306)
-- **User:** `devuser` / `devpass`
-- **Migrations:** Auto-run on server start (170+ tables created on first boot)
-- **Reset DB:** Drop + recreate `pharaxis_mims_uat`, then `pm2 restart mims-uat --update-env`
-
-### Feedback Widget & QA Dashboard
-- **Floating ＋ button** appears bottom-right on every page for all logged-in users
-- Bug reports → **MIMS Admin → UAT & QA → Bug Reports** (Bala's triage dashboard)
-- Feature requests → **MIMS Admin → UAT & QA → Feature Requests** (with upvoting)
-- When Bala marks a bug "Confirmed" → all org admins get an in-app notification instantly
-
-### UAT DB Tables (new as of 2026-05-12)
-| Table | Purpose |
-|-------|---------|
-| `qa_feedback` | Bug reports submitted via the feedback widget |
-| `feature_requests` | Enhancement suggestions from the team |
-| `feature_request_votes` | Per-user upvotes (one per user per request) |
-
-### Server Architecture Notes
-- **No nginx** on local UAT — Express serves everything directly on port 4001
-- Express rewrites `/mims/api/...` → `/api/...` internally (nginx does this on EC2)
-- Frontend built with `base: '/mims/'` in vite.config.js — static files mounted at `/mims`
-- `VITE_API_URL=/mims/api` baked into production build (from `frontend/.env.production`)
+The in-app **UAT & QA** admin features remain product features. Only the separate local UAT runtime was removed.
 
 ---
 

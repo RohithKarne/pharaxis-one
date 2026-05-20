@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -19,27 +20,27 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function scopedOrgId(req, explicitOrgId = null) {
-  return isSuperadmin(req) ? (explicitOrgId || null) : req.user.orgId;
+  return hasPlatformAdminScope(req) ? (explicitOrgId || null) : req.user.orgId;
 }
 
 async function getScopedActivity(req, activityId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT * FROM workflow_activities WHERE id = ?'
       : 'SELECT * FROM workflow_activities WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [activityId] : [activityId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [activityId] : [activityId, req.user.orgId]
   );
   return rows[0] || null;
 }
 
 async function getScopedTrigger(req, triggerId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? `SELECT t.*, a.org_id
          FROM workflow_activity_triggers t
          JOIN workflow_activities a ON a.id = t.activity_id
@@ -48,7 +49,7 @@ async function getScopedTrigger(req, triggerId) {
          FROM workflow_activity_triggers t
          JOIN workflow_activities a ON a.id = t.activity_id
          WHERE t.id = ? AND a.org_id = ?`,
-    isSuperadmin(req) ? [triggerId] : [triggerId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [triggerId] : [triggerId, req.user.orgId]
   );
   return rows[0] || null;
 }
@@ -56,10 +57,10 @@ async function getScopedTrigger(req, triggerId) {
 async function isTargetStateInScope(req, targetStateId) {
   if (!targetStateId) return true;
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT id FROM workflow_states WHERE id = ?'
       : 'SELECT id FROM workflow_states WHERE id = ? AND (org_id = ? OR org_id IS NULL)',
-    isSuperadmin(req) ? [targetStateId] : [targetStateId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [targetStateId] : [targetStateId, req.user.orgId]
   );
   return !!rows[0];
 }
@@ -67,13 +68,13 @@ async function isTargetStateInScope(req, targetStateId) {
 // ─── WORKFLOW ACTIVITIES ──────────────────────────────────────────────────────
 
 // GET /api/admin/workflow-activities — list all activities
-router.get('/workflow-activities', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/workflow-activities', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [activities] = await pool.execute(
       `SELECT * FROM workflow_activities
-       ${isSuperadmin(req) ? '' : 'WHERE org_id = ?'}
+       ${hasPlatformAdminScope(req) ? '' : 'WHERE org_id = ?'}
        ORDER BY id`,
-      isSuperadmin(req) ? [] : [req.user.orgId]
+      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
     res.json({ activities });
   } catch (err) {
@@ -83,7 +84,7 @@ router.get('/workflow-activities', authenticate, requireRole('admin', 'superadmi
 });
 
 // POST /api/admin/workflow-activities — create activity
-router.post('/workflow-activities', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/workflow-activities', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { name, description, org_id } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
@@ -104,7 +105,7 @@ router.post('/workflow-activities', authenticate, requireRole('admin', 'superadm
 });
 
 // PUT /api/admin/workflow-activities/:id — update activity
-router.put('/workflow-activities/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/workflow-activities/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const existing = await getScopedActivity(req, id);
@@ -128,16 +129,16 @@ router.put('/workflow-activities/:id', authenticate, requireRole('admin', 'super
 // ─── WORKFLOW ACTIVITY TRIGGERS ───────────────────────────────────────────────
 
 // GET /api/admin/workflow-activity-triggers — list all triggers (with activity + state names)
-router.get('/workflow-activity-triggers', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/workflow-activity-triggers', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [triggers] = await pool.execute(`
       SELECT t.*, a.name AS activity_name, ws.name AS target_state_name
       FROM workflow_activity_triggers t
       LEFT JOIN workflow_activities a ON t.activity_id = a.id
       LEFT JOIN workflow_states ws ON t.target_state_id = ws.id
-      ${isSuperadmin(req) ? '' : 'WHERE a.org_id = ?'}
+      ${hasPlatformAdminScope(req) ? '' : 'WHERE a.org_id = ?'}
       ORDER BY a.name, t.trigger_type
-    `, isSuperadmin(req) ? [] : [req.user.orgId]);
+    `, hasPlatformAdminScope(req) ? [] : [req.user.orgId]);
     res.json({ triggers });
   } catch (err) {
     console.error('GET /workflow-activity-triggers error:', err);
@@ -146,7 +147,7 @@ router.get('/workflow-activity-triggers', authenticate, requireRole('admin', 'su
 });
 
 // POST /api/admin/workflow-activity-triggers — create trigger
-router.post('/workflow-activity-triggers', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/workflow-activity-triggers', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { activity_id, trigger_type, target_state_id, alert_rule, assign_to } = req.body;
     if (!activity_id || !trigger_type) {
@@ -170,8 +171,8 @@ router.post('/workflow-activity-triggers', authenticate, requireRole('admin', 's
       LEFT JOIN workflow_activities a ON t.activity_id = a.id
       LEFT JOIN workflow_states ws ON t.target_state_id = ws.id
       WHERE t.id = ?
-      ${isSuperadmin(req) ? '' : 'AND a.org_id = ?'}
-    `, isSuperadmin(req) ? [result.insertId] : [result.insertId, req.user.orgId]);
+      ${hasPlatformAdminScope(req) ? '' : 'AND a.org_id = ?'}
+    `, hasPlatformAdminScope(req) ? [result.insertId] : [result.insertId, req.user.orgId]);
     res.status(201).json({ message: 'Trigger created.', trigger: created });
   } catch (err) {
     console.error('POST /workflow-activity-triggers error:', err);
@@ -180,7 +181,7 @@ router.post('/workflow-activity-triggers', authenticate, requireRole('admin', 's
 });
 
 // PUT /api/admin/workflow-activity-triggers/:id — update trigger
-router.put('/workflow-activity-triggers/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/workflow-activity-triggers/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const existing = await getScopedTrigger(req, id);
@@ -211,7 +212,7 @@ router.put('/workflow-activity-triggers/:id', authenticate, requireRole('admin',
 });
 
 // DELETE /api/admin/workflow-activity-triggers/:id — delete trigger
-router.delete('/workflow-activity-triggers/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/workflow-activity-triggers/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const existing = await getScopedTrigger(req, id);

@@ -4,12 +4,13 @@ const express = require('express');
 const { authenticate } = require('../../middleware/auth');
 const { requireActivityPrivilege } = require('../../middleware/accessPolicy');
 const accessService = require('../../services/accessConfigurationService');
+const { hasGlobalAdminScope, isAdminUser } = require('../../utils/adminScope');
 
 const router = express.Router();
 
 function requireAccessAdmin(req, res, next) {
-  if (!['admin', 'superadmin'].includes(req.user?.role)) {
-    return res.status(403).json({ error: 'Admin or SuperAdmin access required.' });
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: 'Admin or platform-admin access required.' });
   }
   return next();
 }
@@ -31,7 +32,7 @@ function handleError(res, err, fallback = 'Server error.') {
 
 router.get('/access-config/catalog', authenticate, requireAccessAdmin, async (req, res) => {
   try {
-    const orgId = req.user.role === 'superadmin'
+    const orgId = hasGlobalAdminScope(req.user)
       ? Number(req.query.org_id || 0) || null
       : req.user.orgId;
     const [privileges, roles] = await Promise.all([
@@ -67,7 +68,7 @@ router.post('/access-config/templates/seed', authenticate, requireAccessAdmin, r
 router.get('/access-config/groups/:id/privileges', authenticate, requireAccessAdmin, async (req, res) => {
   try {
     const orgId = resolveOrgId(req);
-    const result = await accessService.getGroupPrivileges(Number(req.params.id), orgId, req.user.role === 'superadmin');
+    const result = await accessService.getGroupPrivileges(Number(req.params.id), orgId, hasGlobalAdminScope(req.user));
     if (!result) return res.status(404).json({ error: 'Security group not found.' });
     return res.json(result);
   } catch (err) {
@@ -83,7 +84,7 @@ router.put('/access-config/groups/:id/privileges', authenticate, requireAccessAd
       privilegeKeys: req.body?.privilege_keys || req.body?.privileges || [],
       userId: req.user.userId,
       orgId,
-      allowGlobal: req.user.role === 'superadmin',
+      allowGlobal: hasGlobalAdminScope(req.user),
       reason: req.body?.reason || null,
     });
     return res.json(result);

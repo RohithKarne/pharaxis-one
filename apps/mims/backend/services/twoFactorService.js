@@ -121,7 +121,7 @@ async function sendEmailOtp({ toEmail, userName, code }) {
   const fromName = config.smtp_from_name || 'MIMS Platform';
 
   if (!host || !port || !username || !password || !fromEmail) {
-    throw new Error('Superadmin SMTP configuration is incomplete.');
+    throw new Error('Platform admin SMTP configuration is incomplete.');
   }
 
   const transporter = nodemailer.createTransport({

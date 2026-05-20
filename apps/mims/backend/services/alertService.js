@@ -2,6 +2,7 @@
 
 const nodemailer = require('nodemailer');
 const pool = require('../database/db');
+const { PLATFORM_ADMIN_MODULE_KEYS } = require('../utils/adminScope');
 
 function parseJson(value, fallback = null) {
   if (!value) return fallback;
@@ -16,9 +17,18 @@ async function getSystemConfig() {
   }, {});
 }
 
-async function getActiveSuperadminUsers() {
+async function getActivePlatformAdminUsers() {
+  const placeholders = PLATFORM_ADMIN_MODULE_KEYS.map(() => '?').join(', ');
   const [rows] = await pool.execute(
-    "SELECT id, email, name FROM users WHERE role = 'superadmin' AND is_active = 1 ORDER BY id"
+    `SELECT DISTINCT u.id, u.email, u.name
+     FROM users u
+     JOIN user_module_permissions ump ON ump.user_id = u.id
+     WHERE u.is_active = 1
+       AND ump.module IN (${placeholders})
+       AND ump.can_access = 1
+     ORDER BY u.id`
+    ,
+    PLATFORM_ADMIN_MODULE_KEYS
   );
   return rows;
 }
@@ -120,8 +130,8 @@ async function passesCooldown(ruleId, cooldownMinutes) {
   return !row;
 }
 
-async function createNotificationsForSuperadmins({ title, message, linkUrl = null, metadata = null }) {
-  const users = await getActiveSuperadminUsers();
+async function createNotificationsForPlatformAdmins({ title, message, linkUrl = null, metadata = null }) {
+  const users = await getActivePlatformAdminUsers();
   for (const user of users) {
     await pool.execute(
       `INSERT INTO notifications (user_id, category, title, message, link_url, metadata)
@@ -155,7 +165,7 @@ async function sendAlertEmail({ recipients, title, message, metadata }) {
   }
 }
 
-async function emitSuperadminAlert(eventType, payload = {}) {
+async function emitPlatformAdminAlert(eventType, payload = {}) {
   const [rules] = await pool.execute(
     `SELECT *
      FROM superadmin_alert_rules
@@ -196,10 +206,10 @@ async function emitSuperadminAlert(eventType, payload = {}) {
     let inAppStatus = channels.includes('in_app') ? 'pending' : 'skipped';
 
     if (channels.includes('in_app')) {
-      await createNotificationsForSuperadmins({
+      await createNotificationsForPlatformAdmins({
         title: payload.title || rule.name,
         message: payload.message || '',
-        linkUrl: payload.linkUrl || '/superadmin',
+        linkUrl: payload.linkUrl || '/mims-admin?standalone=1',
         metadata: payload.metadata || null,
       });
       inAppStatus = 'sent';
@@ -240,7 +250,8 @@ async function emitSuperadminAlert(eventType, payload = {}) {
 }
 
 module.exports = {
-  emitSuperadminAlert,
+  emitPlatformAdminAlert,
   getSystemConfig,
+  getActivePlatformAdminUsers,
   parseJson,
 };

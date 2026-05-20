@@ -9,11 +9,12 @@ const pool = require('../../database/db');
 const { bootstrapOrg, getOrgReadiness } = require('../../services/orgBootstrapService');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { logAudit } = require('../../utils/auditLog');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 // GET /api/admin/orgs — list all (superadmin sees all; admin sees only their org)
-router.get('/', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
-    const isSA = req.user.role === 'superadmin';
+    const isSA = hasGlobalAdminScope(req.user);
     const [orgs] = await pool.execute(
       isSA ? 'SELECT * FROM organisations ORDER BY name'
            : 'SELECT * FROM organisations WHERE id = ? ORDER BY name',
@@ -23,8 +24,8 @@ router.get('/', authenticate, requireRole('admin', 'superadmin'), requireOrg, as
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// POST /api/admin/orgs — create (superadmin only — clients cannot self-provision)
-router.post('/', authenticate, requireRole('superadmin'), async (req, res) => {
+// POST /api/admin/orgs — create (platform-admin only — clients cannot self-provision)
+router.post('/', authenticate, requireRole('platform_admin'), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Organisation name is required.' });
   try {
@@ -38,8 +39,8 @@ router.post('/', authenticate, requireRole('superadmin'), async (req, res) => {
   }
 });
 
-// PUT /api/admin/orgs/:id — update (superadmin only)
-router.put('/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+// PUT /api/admin/orgs/:id — update (platform-admin only)
+router.put('/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { name, is_active } = req.body;
     const [[current]] = await pool.execute('SELECT name, is_active FROM organisations WHERE id = ?', [req.params.id]);
@@ -60,15 +61,15 @@ router.put('/:id', authenticate, requireRole('superadmin'), async (req, res) => 
 });
 
 // GET /api/admin/orgs/:id/sites — list sites for an org
-router.get('/:id/sites', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/:id/sites', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [sites] = await pool.execute('SELECT * FROM sites WHERE org_id = ? ORDER BY name', [req.params.id]);
     res.json({ sites });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// POST /api/admin/orgs/:id/sites — create site (superadmin only)
-router.post('/:id/sites', authenticate, requireRole('superadmin'), async (req, res) => {
+// POST /api/admin/orgs/:id/sites — create site (platform-admin only)
+router.post('/:id/sites', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { name, country, is_primary } = req.body;
     if (!name) return res.status(400).json({ error: 'Site name is required.' });
@@ -82,8 +83,8 @@ router.post('/:id/sites', authenticate, requireRole('superadmin'), async (req, r
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// PUT /api/admin/sites/:id — update site (superadmin only)
-router.put('/sites/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+// PUT /api/admin/sites/:id — update site (platform-admin only)
+router.put('/sites/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { name, country, is_primary, is_active } = req.body;
     const [[siteCurrent]] = await pool.execute('SELECT name, country, is_primary, is_active FROM sites WHERE id = ?', [req.params.id]);
@@ -97,7 +98,7 @@ router.put('/sites/:id', authenticate, requireRole('superadmin'), async (req, re
 });
 
 // GET /api/admin/orgs/:orgId/users — list users in org with access_expires_at
-router.get('/:orgId/users', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/:orgId/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT u.id, u.name, u.email, uoa.role_at_org, uoa.is_active, uoa.access_expires_at, uoa.last_accessed_at
@@ -112,7 +113,7 @@ router.get('/:orgId/users', authenticate, requireRole('admin', 'superadmin'), as
 });
 
 // PUT /api/admin/orgs/:orgId/users/:userId/expiry — set access_expires_at
-router.put('/:orgId/users/:userId/expiry', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/:orgId/users/:userId/expiry', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { access_expires_at } = req.body;
     await pool.execute(

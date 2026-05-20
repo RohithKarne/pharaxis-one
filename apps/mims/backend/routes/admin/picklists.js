@@ -10,6 +10,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -37,7 +38,7 @@ function toDateOnlyOrNull(value) {
 }
 
 function resolveOrgScope(req, requestedOrgId) {
-  if (req.user.role === 'superadmin') {
+  if (hasGlobalAdminScope(req.user)) {
     return Number(requestedOrgId || 0);
   }
   return Number(req.user.orgId || 0);
@@ -88,9 +89,9 @@ async function resolveFieldContext(req, body = {}) {
       `SELECT f.id AS field_id, f.name AS field_name, c.id AS category_id, c.name AS category_name
        FROM picklist_fields f
        INNER JOIN picklist_categories c ON c.id = f.category_id
-       WHERE f.id = ? ${req.user.role === 'superadmin' ? '' : 'AND f.org_id = ?'}
+       WHERE f.id = ? ${hasGlobalAdminScope(req.user) ? '' : 'AND f.org_id = ?'}
        LIMIT 1`,
-      req.user.role === 'superadmin' ? [Number(body.field_id)] : [Number(body.field_id), orgId]
+      hasGlobalAdminScope(req.user) ? [Number(body.field_id)] : [Number(body.field_id), orgId]
     );
     const row = rows[0];
     if (!row) return null;
@@ -116,7 +117,7 @@ async function resolveFieldContext(req, body = {}) {
 }
 
 // GET /api/admin/picklists/categories — list categories (optionally with fields)
-router.get('/picklists/categories', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/picklists/categories', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { include_inactive = '0', include_fields = '1', org_id } = req.query;
     const includeInactive = String(include_inactive) === '1';
@@ -124,7 +125,7 @@ router.get('/picklists/categories', authenticate, requireRole('admin', 'superadm
     const where = [];
     const params = [];
 
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       where.push('c.org_id = ?');
       params.push(req.user.orgId);
     } else if (org_id !== undefined) {
@@ -150,7 +151,7 @@ router.get('/picklists/categories', authenticate, requireRole('admin', 'superadm
 
     const fWhere = [];
     const fParams = [];
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       fWhere.push('f.org_id = ?');
       fParams.push(req.user.orgId);
     } else if (org_id !== undefined) {
@@ -184,7 +185,7 @@ router.get('/picklists/categories', authenticate, requireRole('admin', 'superadm
 });
 
 // POST /api/admin/picklists/categories — create category
-router.post('/picklists/categories', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/picklists/categories', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const orgId = resolveOrgScope(req, req.body.org_id);
     const name = normalizeStr(req.body.name);
@@ -206,12 +207,12 @@ router.post('/picklists/categories', authenticate, requireRole('admin', 'superad
 });
 
 // PUT /api/admin/picklists/categories/:id — update category
-router.put('/picklists/categories/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/picklists/categories/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [[existing]] = await pool.execute(
-      `SELECT id, org_id, name, is_active, sort_order FROM picklist_categories WHERE id = ? ${req.user.role === 'superadmin' ? '' : 'AND org_id = ?'} LIMIT 1`,
-      req.user.role === 'superadmin' ? [id] : [id, req.user.orgId]
+      `SELECT id, org_id, name, is_active, sort_order FROM picklist_categories WHERE id = ? ${hasGlobalAdminScope(req.user) ? '' : 'AND org_id = ?'} LIMIT 1`,
+      hasGlobalAdminScope(req.user) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Category not found.' });
 
@@ -234,7 +235,7 @@ router.put('/picklists/categories/:id', authenticate, requireRole('admin', 'supe
 });
 
 // GET /api/admin/picklists/fields — list fields
-router.get('/picklists/fields', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/picklists/fields', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { category_id, include_inactive = '0', org_id } = req.query;
     const includeInactive = String(include_inactive) === '1';
@@ -242,7 +243,7 @@ router.get('/picklists/fields', authenticate, requireRole('admin', 'superadmin')
     const where = [];
     const params = [];
 
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       where.push('f.org_id = ?');
       params.push(req.user.orgId);
     } else if (org_id !== undefined) {
@@ -277,7 +278,7 @@ router.get('/picklists/fields', authenticate, requireRole('admin', 'superadmin')
 });
 
 // POST /api/admin/picklists/fields — create field
-router.post('/picklists/fields', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/picklists/fields', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const orgId = resolveOrgScope(req, req.body.org_id);
     const categoryId = Number(req.body.category_id || 0);
@@ -288,8 +289,8 @@ router.post('/picklists/fields', authenticate, requireRole('admin', 'superadmin'
     }
 
     const [[category]] = await pool.execute(
-      `SELECT id, org_id FROM picklist_categories WHERE id = ? ${req.user.role === 'superadmin' ? '' : 'AND org_id = ?'} LIMIT 1`,
-      req.user.role === 'superadmin' ? [categoryId] : [categoryId, req.user.orgId]
+      `SELECT id, org_id FROM picklist_categories WHERE id = ? ${hasGlobalAdminScope(req.user) ? '' : 'AND org_id = ?'} LIMIT 1`,
+      hasGlobalAdminScope(req.user) ? [categoryId] : [categoryId, req.user.orgId]
     );
     if (!category) return res.status(404).json({ error: 'Category not found.' });
 
@@ -308,13 +309,13 @@ router.post('/picklists/fields', authenticate, requireRole('admin', 'superadmin'
 });
 
 // PUT /api/admin/picklists/fields/:id — update field
-router.put('/picklists/fields/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/picklists/fields/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [[existing]] = await pool.execute(
       `SELECT id, org_id, category_id, name, legacy_field_type, is_active, sort_order
-       FROM picklist_fields WHERE id = ? ${req.user.role === 'superadmin' ? '' : 'AND org_id = ?'} LIMIT 1`,
-      req.user.role === 'superadmin' ? [id] : [id, req.user.orgId]
+       FROM picklist_fields WHERE id = ? ${hasGlobalAdminScope(req.user) ? '' : 'AND org_id = ?'} LIMIT 1`,
+      hasGlobalAdminScope(req.user) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Field not found.' });
 
@@ -353,7 +354,7 @@ router.put('/picklists/fields/:id', authenticate, requireRole('admin', 'superadm
 });
 
 // GET /api/admin/picklists — list with filters and pagination
-router.get('/picklists', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/picklists', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const {
       status,
@@ -372,7 +373,7 @@ router.get('/picklists', authenticate, requireRole('admin', 'superadmin'), requi
     const where = ['1=1'];
     const params = [];
 
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       where.push('p.org_id = ?');
       params.push(req.user.orgId);
     }
@@ -437,11 +438,11 @@ router.get('/picklists', authenticate, requireRole('admin', 'superadmin'), requi
 });
 
 // GET /api/admin/picklists/export — returns full list as JSON for Excel export
-router.get('/picklists/export', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/picklists/export', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const where = [];
     const params = [];
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       where.push('p.org_id = ?');
       params.push(req.user.orgId);
     }
@@ -474,7 +475,7 @@ router.get('/picklists/export', authenticate, requireRole('admin', 'superadmin')
 });
 
 // POST /api/admin/picklists — create new picklist value
-router.post('/picklists', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createPicklist), async (req, res) => {
+router.post('/picklists', authenticate, requireRole('admin', 'platform_admin'), requireOrg, validate(schemas.createPicklist), async (req, res) => {
   try {
     const { name, value, description, status } = req.body;
     if (!value) {
@@ -538,15 +539,15 @@ router.post('/picklists', authenticate, requireRole('admin', 'superadmin'), requ
 });
 
 // PUT /api/admin/picklists/:id — update picklist value
-router.put('/picklists/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.updatePicklist), async (req, res) => {
+router.put('/picklists/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, validate(schemas.updatePicklist), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [[existing]] = await pool.execute(
       `SELECT p.id, p.org_id, p.name, p.value, p.description, p.status, p.effective_from, p.effective_to, p.governance_note, p.field_id, p.category, p.field_type
        FROM picklists p
-       WHERE p.id = ? ${req.user.role === 'superadmin' ? '' : 'AND p.org_id = ?'}
+       WHERE p.id = ? ${hasGlobalAdminScope(req.user) ? '' : 'AND p.org_id = ?'}
        LIMIT 1`,
-      req.user.role === 'superadmin' ? [id] : [id, req.user.orgId]
+      hasGlobalAdminScope(req.user) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Picklist value not found.' });
 
@@ -611,12 +612,12 @@ router.put('/picklists/:id', authenticate, requireRole('admin', 'superadmin'), r
 });
 
 // DELETE /api/admin/picklists/:id — soft delete (set status=Inactive)
-router.delete('/picklists/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/picklists/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [[existing]] = await pool.execute(
-      `SELECT id, name, field_type, value FROM picklists WHERE id = ? ${req.user.role === 'superadmin' ? '' : 'AND org_id = ?'} LIMIT 1`,
-      req.user.role === 'superadmin' ? [id] : [id, req.user.orgId]
+      `SELECT id, name, field_type, value FROM picklists WHERE id = ? ${hasGlobalAdminScope(req.user) ? '' : 'AND org_id = ?'} LIMIT 1`,
+      hasGlobalAdminScope(req.user) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Picklist value not found.' });
 
@@ -630,7 +631,7 @@ router.delete('/picklists/:id', authenticate, requireRole('admin', 'superadmin')
 });
 
 // POST /api/admin/picklists/bulk-status — activate/inactivate selected rows
-router.post('/picklists/bulk-status', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/picklists/bulk-status', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const ids = Array.isArray(req.body.ids) ? req.body.ids.map((n) => Number(n)).filter(Boolean) : [];
     const status = normalizeStr(req.body.status);
@@ -643,7 +644,7 @@ router.post('/picklists/bulk-status', authenticate, requireRole('admin', 'supera
     const where = [`id IN (${placeholders})`];
     const params = [...ids];
 
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       where.push('org_id = ?');
       params.push(req.user.orgId);
     }
@@ -672,12 +673,12 @@ router.post('/picklists/bulk-status', authenticate, requireRole('admin', 'supera
 });
 
 // GET /api/admin/picklists/export-csv — Export all picklist values as CSV
-router.get('/picklists/export-csv', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/picklists/export-csv', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { category } = req.query;
     let query = `SELECT p.id, p.name, p.field_type, p.value, p.description, p.status, p.effective_from, p.effective_to, p.governance_note FROM picklists p`;
     const params = [];
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       query += ` WHERE p.org_id = ?`;
       params.push(req.user.orgId);
       if (category) { query += ` AND p.name = ?`; params.push(category); }
@@ -709,7 +710,7 @@ router.get('/picklists/export-csv', authenticate, requireRole('admin', 'superadm
 });
 
 // POST /api/admin/picklists/import-csv — Import picklist values from CSV rows
-router.post('/picklists/import-csv', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/picklists/import-csv', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { rows } = req.body; // array of {name, field_type, value, description}
     if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'rows array required' });
@@ -753,12 +754,12 @@ router.post('/picklists/import-csv', authenticate, requireRole('admin', 'superad
 });
 
 // PATCH /api/admin/picklists/:id/toggle — Toggle active/inactive without delete
-router.patch('/picklists/:id/toggle', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.patch('/picklists/:id/toggle', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [rows] = await pool.execute(
-      `SELECT id, status FROM picklists WHERE id = ? ${req.user.role === 'superadmin' ? '' : 'AND org_id = ?'}`,
-      req.user.role === 'superadmin' ? [id] : [id, req.user.orgId]
+      `SELECT id, status FROM picklists WHERE id = ? ${hasGlobalAdminScope(req.user) ? '' : 'AND org_id = ?'}`,
+      hasGlobalAdminScope(req.user) ? [id] : [id, req.user.orgId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     const newStatus = rows[0].status === 'Active' ? 'Inactive' : 'Active';
@@ -772,7 +773,7 @@ router.patch('/picklists/:id/toggle', authenticate, requireRole('admin', 'supera
 });
 
 // POST /api/admin/picklists/bulk — bulk import from JSON array (validate + upsert)
-router.post('/picklists/bulk', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/picklists/bulk', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const raw = Array.isArray(req.body) ? req.body : req.body.items;
     if (!Array.isArray(raw) || raw.length === 0) {

@@ -13,6 +13,7 @@
  */
 
 const pool = require('../database/db');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 const {
   uniquePositiveInts,
   stripHtml,
@@ -23,14 +24,14 @@ const {
 // ── Case + MI tab scope helpers ───────────────────────────────────────────────
 
 async function getResponseBuilderCase(req, caseId) {
-  const isSuperadmin = req.user.role === 'superadmin';
+  const isPlatformAdmin = hasGlobalAdminScope(req.user);
   const [rows] = await pool.execute(
-    isSuperadmin
+    isPlatformAdmin
       ? `SELECT c.id, c.case_number, c.case_type, c.org_id, c.site_id, c.description, o.name AS org_name
            FROM cases c LEFT JOIN organisations o ON o.id = c.org_id WHERE c.id = ?`
       : `SELECT c.id, c.case_number, c.case_type, c.org_id, c.site_id, c.description, o.name AS org_name
            FROM cases c LEFT JOIN organisations o ON o.id = c.org_id WHERE c.id = ? AND c.org_id = ?`,
-    isSuperadmin ? [caseId] : [caseId, req.user.orgId]
+    isPlatformAdmin ? [caseId] : [caseId, req.user.orgId]
   );
   return rows[0] || null;
 }
@@ -134,7 +135,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
           AND (? = 1 OR u.org_id = ? OR EXISTS (
             SELECT 1 FROM user_org_access uoa WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1
           )) LIMIT 1`,
-      [payload.template_id, req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id, scopedCase.org_id]
+      [payload.template_id, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, scopedCase.org_id]
     );
     template = templateRows[0] || null;
     if (!template) {
@@ -157,7 +158,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
               d.send_as_pdf, d.selected_modules
          FROM cm_documents d INNER JOIN cm_folders f ON f.id = d.folder_id
         WHERE d.id IN (${placeholders}) AND (? = 1 OR f.org_id = ?)`,
-      [...selectedDocumentIds, req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id]
+      [...selectedDocumentIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
     selectedDocuments = rows;
   }
@@ -175,7 +176,7 @@ async function buildResponsePackage(req, caseId, payload = {}) {
               m.language, m.send_as_pdf
          FROM cm_modules m INNER JOIN cm_folders f ON f.id = m.folder_id
         WHERE m.id IN (${placeholders}) AND (? = 1 OR f.org_id = ?)`,
-      [...allModuleIds, req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id]
+      [...allModuleIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
     selectedModules = rows;
   }

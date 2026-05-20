@@ -14,7 +14,7 @@ function parseDetails(raw) {
   }
 }
 
-router.get('/observability/summary', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/observability/summary', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [serviceSummaryRows] = await pool.execute(
       `SELECT
@@ -86,7 +86,7 @@ router.get('/observability/summary', authenticate, requireRole('admin', 'superad
   }
 });
 
-router.get('/observability/runtime-health', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+router.get('/observability/runtime-health', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
   try {
     const health = await getRuntimeHealth();
     res.json(health);

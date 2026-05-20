@@ -22,7 +22,7 @@ function depCacheSet(key, data) {
 }
 
 // GET /api/admin/dependencies/picklist/:id
-router.get('/dependencies/picklist/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/dependencies/picklist/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const cacheKey = `picklist:${req.user.orgId}:${id}`;
@@ -53,7 +53,7 @@ router.get('/dependencies/picklist/:id', authenticate, requireRole('admin', 'sup
 });
 
 // GET /api/admin/dependencies/user/:userId
-router.get('/dependencies/user/:userId', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/dependencies/user/:userId', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const userId = parseInt(req.params.userId, 10);
     const cacheKey = `user:${req.user.orgId}:${userId}`;
@@ -72,7 +72,7 @@ router.get('/dependencies/user/:userId', authenticate, requireRole('admin', 'sup
 });
 
 // GET /api/admin/dependencies/org/:orgId
-router.get('/dependencies/org/:orgId', authenticate, requireRole('superadmin'), async (req, res) => {
+router.get('/dependencies/org/:orgId', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const orgId = parseInt(req.params.orgId, 10);
     const cacheKey = `org:${orgId}`;
@@ -90,7 +90,7 @@ router.get('/dependencies/org/:orgId', authenticate, requireRole('superadmin'), 
 });
 
 // GET /api/admin/dependencies/field-definition/:id
-router.get('/dependencies/field-definition/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/dependencies/field-definition/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const fieldId = parseInt(req.params.id, 10);
     const cacheKey = `field:${req.user.orgId}:${fieldId}`;

@@ -5,6 +5,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import StandaloneModuleShell from '../../../shared/components/StandaloneModuleShell'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { isAdminUser } from '../../../shared/utils/adminScope.js'
 
 const SECTION_LABELS = {
   overview: 'Overview',
@@ -134,7 +135,7 @@ export default function ReportsPage() {
   const location = useLocation()
   const { token, user } = useAuth()
   const standalone = new URLSearchParams(location.search || '').get('standalone') === '1'
-  const isManager = user?.role === 'admin' || user?.role === 'superadmin'
+  const isManager = isAdminUser(user)
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   const [section, setSection] = useState('overview')

@@ -9,23 +9,24 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 async function hasCaseAccess(req, caseId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT id FROM cases WHERE id = ?'
       : 'SELECT id FROM cases WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [caseId] : [caseId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [caseId] : [caseId, req.user.orgId]
   );
   return !!rows[0];
 }
 
 function auditLogScope(req, alias = 'al') {
-  if (isSuperadmin(req)) {
+  if (hasPlatformAdminScope(req)) {
     return { joins: '', whereClause: '', params: [] };
   }
   return {
@@ -42,7 +43,7 @@ function auditLogScope(req, alias = 'al') {
 }
 
 // GET /api/admin/case-audit-trail/cases-summary — distinct cases that have audit entries
-router.get('/case-audit-trail/cases-summary', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/case-audit-trail/cases-summary', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { search, from_date, to_date, page = 1, limit = 50 } = req.query;
     const lim    = Math.max(1, parseInt(limit, 10) || 50);
@@ -50,7 +51,7 @@ router.get('/case-audit-trail/cases-summary', authenticate, requireRole('admin',
 
     let where = 'WHERE 1=1';
     const params = [];
-    if (!isSuperadmin(req)) { where += ' AND c.org_id = ?';        params.push(req.user.orgId); }
+    if (!hasPlatformAdminScope(req)) { where += ' AND c.org_id = ?';        params.push(req.user.orgId); }
     if (search)              { where += ' AND c.case_number LIKE ?'; params.push(`%${search}%`); }
     if (from_date)           { where += ' AND cat.timestamp >= ?';   params.push(from_date); }
     if (to_date)             { where += ' AND cat.timestamp <= ?';   params.push(to_date + ' 23:59:59'); }
@@ -80,7 +81,7 @@ router.get('/case-audit-trail/cases-summary', authenticate, requireRole('admin',
 });
 
 // GET /api/admin/case-audit-trail — list all audit entries for the org (Utilities page)
-router.get('/case-audit-trail', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/case-audit-trail', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { case_id, action_type, user_id, from_date, to_date, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -93,7 +94,7 @@ router.get('/case-audit-trail', authenticate, requireRole('admin', 'superadmin')
     `;
     const params = [];
 
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       query += ' AND c.org_id = ?';
       params.push(req.user.orgId);
     }
@@ -117,7 +118,7 @@ router.get('/case-audit-trail', authenticate, requireRole('admin', 'superadmin')
 });
 
 // GET /api/admin/case-audit-trail/:caseId — list audit entries for a case
-router.get('/case-audit-trail/:caseId', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/case-audit-trail/:caseId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { caseId } = req.params;
     if (!await hasCaseAccess(req, caseId)) {
@@ -150,7 +151,7 @@ router.get('/case-audit-trail/:caseId', authenticate, requireRole('admin', 'supe
 });
 
 // GET /api/admin/audit-trail — list audit_logs with advanced filters
-router.get('/audit-trail', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/audit-trail', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { user_id, action, entity, date_from, date_to, page = 1, limit = 100 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -183,7 +184,7 @@ router.get('/audit-trail', authenticate, requireRole('admin', 'superadmin'), asy
 });
 
 // GET /api/admin/audit-trail/export — Export filtered audit trail as CSV
-router.get('/audit-trail/export', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/audit-trail/export', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { user_id, action, entity, date_from, date_to } = req.query;
     const scope = auditLogScope(req, 'al');

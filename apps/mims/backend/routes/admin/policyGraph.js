@@ -4,9 +4,10 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
-function isSuperadmin(req) {
-  return req.user?.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function parsePositiveInt(value) {
@@ -15,7 +16,7 @@ function parsePositiveInt(value) {
 }
 
 function resolveScopedOrgId(req, providedOrgId) {
-  if (!isSuperadmin(req)) {
+  if (!hasPlatformAdminScope(req)) {
     return parsePositiveInt(req.user?.orgId);
   }
   return parsePositiveInt(providedOrgId);
@@ -149,10 +150,10 @@ async function validateEdgeNodePair(orgId, fromNodeId, toNodeId) {
   return { ok: true };
 }
 
-router.get('/policy/nodes', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/policy/nodes', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const nodeScope = req.query.node_scope ? normalizeNodeScope(req.query.node_scope) : null;
     if (req.query.node_scope && !nodeScope) {
@@ -183,10 +184,10 @@ router.get('/policy/nodes', authenticate, requireRole('admin', 'superadmin'), re
   }
 });
 
-router.post('/policy/nodes', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/policy/nodes', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const nodeScope = normalizeNodeScope(req.body.node_scope);
     if (!nodeScope) return res.status(400).json({ error: 'node_scope must be actor, content, or context.' });
@@ -235,10 +236,10 @@ router.post('/policy/nodes', authenticate, requireRole('admin', 'superadmin'), r
   }
 });
 
-router.put('/policy/nodes/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/policy/nodes/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id ?? req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const nodeId = parsePositiveInt(req.params.id);
     if (!nodeId) return res.status(400).json({ error: 'Valid node id is required.' });
@@ -292,10 +293,10 @@ router.put('/policy/nodes/:id', authenticate, requireRole('admin', 'superadmin')
   }
 });
 
-router.delete('/policy/nodes/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/policy/nodes/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const nodeId = parsePositiveInt(req.params.id);
     if (!nodeId) return res.status(400).json({ error: 'Valid node id is required.' });
@@ -331,10 +332,10 @@ router.delete('/policy/nodes/:id', authenticate, requireRole('admin', 'superadmi
   }
 });
 
-router.get('/policy/edges', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/policy/edges', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const activeOnly = req.query.active_only !== '0';
     let sql = `
@@ -365,10 +366,10 @@ router.get('/policy/edges', authenticate, requireRole('admin', 'superadmin'), re
   }
 });
 
-router.post('/policy/edges', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/policy/edges', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const fromNodeId = parsePositiveInt(req.body.from_node_id);
     const toNodeId = parsePositiveInt(req.body.to_node_id);
@@ -431,10 +432,10 @@ router.post('/policy/edges', authenticate, requireRole('admin', 'superadmin'), r
   }
 });
 
-router.put('/policy/edges/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/policy/edges/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id ?? req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const edgeId = parsePositiveInt(req.params.id);
     if (!edgeId) return res.status(400).json({ error: 'Valid edge id is required.' });
@@ -529,10 +530,10 @@ router.put('/policy/edges/:id', authenticate, requireRole('admin', 'superadmin')
   }
 });
 
-router.delete('/policy/edges/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/policy/edges/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const edgeId = parsePositiveInt(req.params.id);
     if (!edgeId) return res.status(400).json({ error: 'Valid edge id is required.' });
@@ -567,11 +568,11 @@ router.delete('/policy/edges/:id', authenticate, requireRole('admin', 'superadmi
   }
 });
 
-router.post('/policy/evaluate', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/policy/evaluate', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   const startedAt = Date.now();
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const action = String(req.body.action || 'view').trim().toLowerCase();
     const actor = req.body.actor && typeof req.body.actor === 'object' ? req.body.actor : {};
@@ -668,10 +669,10 @@ router.post('/policy/evaluate', authenticate, requireRole('admin', 'superadmin')
   }
 });
 
-router.get('/policy/decision-logs', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/policy/decision-logs', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const requestedLimit = Number.parseInt(req.query.limit, 10);
     const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 200) : 50;

@@ -2,13 +2,14 @@
  * Topbar.jsx — Top Header Bar (Sprint 7: Org Switcher)
  * Shows: sidebar toggle | page title | org switcher | date | status | user profile | sign out
  * Org switcher: "Organization [Name] ▼" — dropdown for multi-org users, static for single-org
- * Superadmin: no org switcher shown
+ * Platform admin compatibility: no org switcher shown
  */
 
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { httpFetch } from '../api/httpFetch.js'
+import { hasGlobalAdminScope } from '../utils/adminScope.js'
 
 export default function Topbar({ title, onToggleSidebar }) {
   const { user, logout, getInitials, formatRole, orgId, orgName, allOrgs, switchOrg } = useAuth()
@@ -55,8 +56,7 @@ export default function Topbar({ title, onToggleSidebar }) {
   }
 
   const isMultiOrg      = allOrgs && allOrgs.length > 1
-  const isSuperadmin    = user?.role === 'superadmin'
-  const showOrgSwitcher = !isSuperadmin && orgName
+  const showOrgSwitcher = !hasGlobalAdminScope(user) && orgName
 
   return (
     <header className="topbar">

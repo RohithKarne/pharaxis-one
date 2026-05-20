@@ -5,7 +5,7 @@
  * System > Security > Add / Edit Users
  *
  * Admin is now global — no requireOrg on any route here.
- * All routes: admin + superadmin only.
+ * All routes: admin + platform-admin only.
  */
 
 const express  = require('express');
@@ -17,6 +17,8 @@ const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 
 const SALT_ROUNDS = 12;
+const PLATFORM_ADMIN_EXCLUSION_SQL =
+  "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module IN ('platform_admin_console','superadmin_console') AND ump.can_access = 1)";
 
 function addDays(date, days) {
   const d = new Date(date);
@@ -39,7 +41,7 @@ async function audit(userId, action, entityId, details) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // GET /api/admin/users/export — CSV download of users matching the same filter
-router.get('/users/export', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/users/export', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { search = '' } = req.query;
     const like = `%${search}%`;
@@ -50,7 +52,7 @@ router.get('/users/export', authenticate, requireRole('admin', 'superadmin'), as
               u.password_expires_at, u.created_at, u.updated_at
          FROM users u
     LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-        WHERE u.role != 'superadmin'
+        WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
           AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
         ORDER BY u.name`,
       [like, like, like]
@@ -78,7 +80,7 @@ router.get('/users/export', authenticate, requireRole('admin', 'superadmin'), as
 });
 
 // GET /api/admin/users/security-groups — global list for dropdown (no requireOrg)
-router.get('/users/security-groups', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/users/security-groups', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [groups] = await pool.execute(
       `SELECT id, name, description, is_active FROM security_groups WHERE is_active = 1 ORDER BY name ASC`
@@ -91,7 +93,7 @@ router.get('/users/security-groups', authenticate, requireRole('admin', 'superad
 });
 
 // GET /api/admin/users/orgs — all organisations for tenant assignment tab
-router.get('/users/orgs', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/users/orgs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [orgs] = await pool.execute(
       `SELECT id, name, is_active FROM organisations ORDER BY name ASC`
@@ -104,7 +106,7 @@ router.get('/users/orgs', authenticate, requireRole('admin', 'superadmin'), asyn
 });
 
 // ── GET /api/admin/users — list all users globally ────────────────────────────
-router.get('/users', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { search = '', limit = 100, offset = 0 } = req.query;
     const like = `%${search}%`;
@@ -129,15 +131,17 @@ router.get('/users', authenticate, requireRole('admin', 'superadmin'), async (re
          ) AS updated_by_name
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-       WHERE u.role != 'superadmin'
+       WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
        ORDER BY u.name ASC
        LIMIT ${parseInt(limit, 10)} OFFSET ${parseInt(offset, 10)}`,
       [like, like, like]
     );
     const [[{ total }]] = await pool.execute(
-      `SELECT COUNT(*) AS total FROM users WHERE role != 'superadmin'
-       AND (name LIKE ? OR email LIKE ? OR user_id LIKE ?)`,
+      `SELECT COUNT(*) AS total
+       FROM users u
+       WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
+         AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)`,
       [like, like, like]
     );
     res.json({ users, total });
@@ -148,7 +152,7 @@ router.get('/users', authenticate, requireRole('admin', 'superadmin'), async (re
 });
 
 // ── GET /api/admin/users/:id — single user with tenant assignments ─────────────
-router.get('/users/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [[user]] = await pool.execute(
       `SELECT
@@ -160,7 +164,7 @@ router.get('/users/:id', authenticate, requireRole('admin', 'superadmin'), async
          u.password_expires_at, u.created_at, u.updated_at
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-       WHERE u.id = ? AND u.role != 'superadmin'`,
+       WHERE u.id = ? AND ${PLATFORM_ADMIN_EXCLUSION_SQL}`,
       [req.params.id]
     );
     if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -178,7 +182,7 @@ router.get('/users/:id', authenticate, requireRole('admin', 'superadmin'), async
 });
 
 // ── POST /api/admin/users — create user ───────────────────────────────────────
-router.post('/users', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const {
     user_id, name, email, initials, role = 'agent',
     security_group_id, network_user_id, department,
@@ -281,7 +285,7 @@ router.post('/users', authenticate, requireRole('admin', 'superadmin'), async (r
 });
 
 // ── PUT /api/admin/users/:id — update user fields ─────────────────────────────
-router.put('/users/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const {
     user_id, name, email, initials, role,
     security_group_id, network_user_id, department,
@@ -354,7 +358,7 @@ router.put('/users/:id', authenticate, requireRole('admin', 'superadmin'), async
 });
 
 // ── POST /api/admin/users/:id/expire-password — expire immediately ────────────
-router.post('/users/:id/expire-password', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/users/:id/expire-password', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [[user]] = await pool.execute(
       'SELECT id FROM users WHERE id = ? AND role != ? LIMIT 1', [req.params.id, 'superadmin']
@@ -374,7 +378,7 @@ router.post('/users/:id/expire-password', authenticate, requireRole('admin', 'su
 });
 
 // ── PUT /api/admin/users/:id/change-password — admin sets new password ─────────
-router.put('/users/:id/change-password', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/users/:id/change-password', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const { new_password } = req.body;
 
   // Run shared complexity policy
@@ -410,7 +414,7 @@ router.put('/users/:id/change-password', authenticate, requireRole('admin', 'sup
 });
 
 // ── GET /api/admin/users/:id/tenants ─────────────────────────────────────────
-router.get('/users/:id/tenants', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/users/:id/tenants', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT uoa.org_id, uoa.role_at_org, uoa.is_active, o.name AS org_name
@@ -427,7 +431,7 @@ router.get('/users/:id/tenants', authenticate, requireRole('admin', 'superadmin'
 });
 
 // ── PUT /api/admin/users/:id/tenants — full replace of tenant assignments ──────
-router.put('/users/:id/tenants', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const { tenant_ids = [] } = req.body;
   if (!tenant_ids.length) {
     return res.status(400).json({ error: 'At least one tenant must be assigned.' });

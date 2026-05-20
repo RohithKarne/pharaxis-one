@@ -11,6 +11,7 @@ const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const bcrypt = require('bcrypt');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -33,13 +34,13 @@ async function addVersionHistory(entityId, version, status, notes, authorId) {
 // Try to add view_count column if it doesn't exist (CM-E6)
 pool.execute(`ALTER TABLE cm_faqs ADD COLUMN view_count INT DEFAULT 0`).catch(() => {});
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 async function getScopedFaq(req, faqId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? `SELECT f.*, fo.org_id AS folder_org_id
          FROM cm_faqs f
          INNER JOIN cm_folders fo ON f.folder_id = fo.id
@@ -48,17 +49,17 @@ async function getScopedFaq(req, faqId) {
          FROM cm_faqs f
          INNER JOIN cm_folders fo ON f.folder_id = fo.id
          WHERE f.id = ? AND fo.org_id = ?`,
-    isSuperadmin(req) ? [faqId] : [faqId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [faqId] : [faqId, req.user.orgId]
   );
   return rows[0] || null;
 }
 
 async function getScopedFolder(req, folderId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT id FROM cm_folders WHERE id = ?'
       : 'SELECT id FROM cm_folders WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [folderId] : [folderId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [folderId] : [folderId, req.user.orgId]
   );
   return rows[0] || null;
 }
@@ -78,7 +79,7 @@ router.get('/faqs', authenticate, async (req, res) => {
     `;
     const params = [];
 
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       query += ' AND fo.org_id = ?';
       params.push(req.user.orgId);
     }
@@ -142,7 +143,7 @@ router.post('/faqs', authenticate, async (req, res) => {
 router.get('/faqs/:id', authenticate, async (req, res) => {
   try {
     const [[faq]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT f.*, fo.name AS folder_name, u.name AS created_by_name
            FROM cm_faqs f
            LEFT JOIN cm_folders fo ON f.folder_id = fo.id
@@ -153,7 +154,7 @@ router.get('/faqs/:id', authenticate, async (req, res) => {
            LEFT JOIN cm_folders fo ON f.folder_id = fo.id
            LEFT JOIN users u ON f.created_by = u.id
            WHERE f.id = ? AND fo.org_id = ?`,
-      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     if (!faq) return res.status(404).json({ error: 'FAQ not found.' });
 
@@ -379,7 +380,7 @@ router.patch('/faqs/bulk-tags', authenticate, async (req, res) => {
     const placeholders = normalizedIds.map(() => '?').join(',');
     let query = `UPDATE cm_faqs SET search_tags = ?, updated_by = ?, updated_at = NOW() WHERE id IN (${placeholders})`;
     const params = [tagsStr, req.user.userId, ...normalizedIds];
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       query += ` AND folder_id IN (SELECT id FROM cm_folders WHERE org_id = ?)`;
       params.push(req.user.orgId);
     }

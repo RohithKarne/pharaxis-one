@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 const {
   getOrgSsoPolicy,
   normalizeLoginMode,
@@ -84,7 +85,7 @@ function normalizeBool(value, fallback = false) {
 }
 
 function normalizeOrgId(req, providedOrgId = null) {
-  if (req.user?.role === 'superadmin') return Number(providedOrgId || req.user.orgId || 0) || null;
+  if (hasGlobalAdminScope(req.user)) return Number(providedOrgId || req.user.orgId || 0) || null;
   return Number(req.user?.orgId || 0) || null;
 }
 
@@ -653,7 +654,7 @@ async function resolveEffectivePrivileges(userId, orgId) {
 
 async function userHasActivityPrivilege(user, privilegeKey) {
   if (!user || !privilegeKey) return false;
-  if (user.role === 'superadmin') return true;
+  if (hasGlobalAdminScope(user)) return true;
   if (user.role === 'admin' && String(privilegeKey).startsWith('admin.')) return true;
   if (!user.orgId) return false;
   const effective = await resolveEffectivePrivileges(user.userId, user.orgId);

@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
+import { isAdminUser } from '../../../shared/utils/adminScope.js'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -391,7 +392,7 @@ function FeatureRequestsTab({ token }) {
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
-  const isAdmin = ['admin','superadmin'].includes(user?.role)
+  const isAdmin = isAdminUser(user)
 
   return (
     <div>

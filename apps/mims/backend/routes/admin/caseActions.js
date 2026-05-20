@@ -28,7 +28,7 @@ const flags = require('../../services/featureFlagsService');
 const actions = require('../../services/caseActionsService');
 
 const FLAG  = 'cf.theme8_smart_actions';
-const ADMIN = ['admin', 'superadmin'];
+const ADMIN = ['admin', 'platform_admin'];
 
 async function gated(req, res) {
   const on = await flags.isEnabledForOrg(FLAG, req.user.orgId);

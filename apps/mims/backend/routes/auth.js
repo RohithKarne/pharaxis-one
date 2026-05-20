@@ -6,6 +6,7 @@ const authController = require('../controllers/authController');
 const { authenticate, requireRole, sessionCacheInvalidate } = require('../middleware/auth');
 const pool           = require('../database/db');
 const { logger } = require('../services/logger');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 const {
   accountCreationRateLimiter,
   loginRateLimiter,
@@ -34,11 +35,18 @@ function toNumber(value, fallback = 0) {
 
 async function resolveSessionTimeoutMinutes(req) {
   try {
-    if (req.user.role === 'superadmin') {
-      const [[row]] = await pool.execute(
-        "SELECT config_value FROM system_config WHERE config_key = 'superadmin_session_timeout_minutes' LIMIT 1"
+    if (hasGlobalAdminScope(req.user)) {
+      const [rows] = await pool.execute(
+        "SELECT config_key, config_value FROM system_config WHERE config_key IN ('platform_admin_session_timeout_minutes', 'superadmin_session_timeout_minutes')"
       );
-      return Math.max(15, toNumber(row?.config_value, 60));
+      const config = rows.reduce((acc, row) => {
+        acc[row.config_key] = row.config_value;
+        return acc;
+      }, {});
+      return Math.max(15, toNumber(
+        config.platform_admin_session_timeout_minutes ?? config.superadmin_session_timeout_minutes,
+        60
+      ));
     }
 
     if (!req.user.orgId) return 30;
@@ -48,7 +56,7 @@ async function resolveSessionTimeoutMinutes(req) {
     );
     return Math.max(15, toNumber(org?.session_timeout_minutes, 30));
   } catch (_) {
-    return req.user.role === 'superadmin' ? 60 : 30;
+    return hasGlobalAdminScope(req.user) ? 60 : 30;
   }
 }
 
@@ -202,7 +210,7 @@ router.post('/logout', authenticate, async (req, res) => {
 });
 
 // POST /api/auth/unlock-user — admin manually unlocks a locked account (AC-E6)
-router.post('/unlock-user', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/unlock-user', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { user_id } = req.body;
     if (!user_id) return res.status(400).json({ error: 'user_id required' });

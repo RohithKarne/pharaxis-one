@@ -13,6 +13,7 @@ const { authenticate } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
 
 const multer = require('multer');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 function safeStoredFilename(originalname) {
   const base = path.basename(String(originalname || 'upload'))
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -43,23 +44,23 @@ async function addVersionHistory(entityId, version, status, notes, authorId) {
   } catch (_) {}
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 async function getScopedFolder(req, folderId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT id, org_id FROM cm_folders WHERE id = ?'
       : 'SELECT id, org_id FROM cm_folders WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [folderId] : [folderId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [folderId] : [folderId, req.user.orgId]
   );
   return rows[0] || null;
 }
 
 async function getScopedMergeReport(req, reportId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? `SELECT mr.*, f.org_id AS folder_org_id
          FROM cm_merge_reports mr
          LEFT JOIN cm_folders f ON mr.folder_id = f.id
@@ -68,17 +69,17 @@ async function getScopedMergeReport(req, reportId) {
          FROM cm_merge_reports mr
          LEFT JOIN cm_folders f ON mr.folder_id = f.id
          WHERE mr.id = ? AND f.org_id = ?`,
-    isSuperadmin(req) ? [reportId] : [reportId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [reportId] : [reportId, req.user.orgId]
   );
   return rows[0] || null;
 }
 
 async function getScopedCase(req, caseId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT id, org_id FROM cases WHERE id = ?'
       : 'SELECT id, org_id FROM cases WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [caseId] : [caseId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [caseId] : [caseId, req.user.orgId]
   );
   return rows[0] || null;
 }
@@ -99,7 +100,7 @@ router.get('/merge-reports', authenticate, async (req, res) => {
     `;
     const params = [];
 
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       query += ' AND f.org_id = ?';
       params.push(req.user.orgId);
     }
@@ -161,7 +162,7 @@ router.post('/merge-reports', authenticate, upload.single('file'), validateUploa
 router.get('/merge-reports/:id', authenticate, async (req, res) => {
   try {
     const [rows] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT mr.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name
            FROM cm_merge_reports mr
            LEFT JOIN cm_folders f ON mr.folder_id = f.id
@@ -174,7 +175,7 @@ router.get('/merge-reports/:id', authenticate, async (req, res) => {
            LEFT JOIN users u ON mr.created_by = u.id
            LEFT JOIN users cu ON mr.checked_out_by = cu.id
            WHERE mr.id = ? AND f.org_id = ?`,
-      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     const report = rows[0];
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });
@@ -386,9 +387,9 @@ router.get('/merge-reports/:id/schedule', authenticate, async (req, res) => {
       `SELECT * FROM scheduled_jobs
        WHERE job_type = 'cm_merge_report'
          AND JSON_UNQUOTE(JSON_EXTRACT(job_config, '$.merge_report_id')) = ?
-         ${isSuperadmin(req) ? '' : 'AND org_id = ?'}
+         ${hasPlatformAdminScope(req) ? '' : 'AND org_id = ?'}
        LIMIT 1`,
-      isSuperadmin(req) ? [String(req.params.id)] : [String(req.params.id), req.user.orgId]
+      hasPlatformAdminScope(req) ? [String(req.params.id)] : [String(req.params.id), req.user.orgId]
     );
     res.json({ schedule: jobs[0] || null });
   } catch (err) {
@@ -403,7 +404,7 @@ router.post('/merge-reports/:id/schedule', authenticate, async (req, res) => {
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });
     const { cron_expression, email_recipients, is_active } = req.body;
     if (!cron_expression) return res.status(400).json({ error: 'cron_expression required' });
-    const orgId = isSuperadmin(req) ? (report.folder_org_id || null) : req.user.orgId;
+    const orgId = hasPlatformAdminScope(req) ? (report.folder_org_id || null) : req.user.orgId;
     const jobName = `cm-merge-report-${orgId || 'global'}-${Number(req.params.id)}`;
     const jobConfig = JSON.stringify({
       merge_report_id: Number(req.params.id),

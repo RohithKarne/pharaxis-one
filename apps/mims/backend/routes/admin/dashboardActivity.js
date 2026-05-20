@@ -12,7 +12,7 @@ const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 
-router.get('/dashboard/activity', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/dashboard/activity', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const limit = Math.min(100, parseInt(req.query.limit || '50', 10));
 
   const queries = [

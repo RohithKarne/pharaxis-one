@@ -47,7 +47,7 @@ function run() {
     });
 
     if (saLogin.status !== 200 || !saLogin.body || !saLogin.body.token) {
-      throw new Error(`Superadmin login failed. status=${saLogin.status}`);
+      throw new Error(`Platform Admin login failed. status=${saLogin.status}`);
     }
     saToken = saLogin.body.token;
 
@@ -173,9 +173,9 @@ function run() {
       },
     },
     {
-      name: 'TEST 7 — POST /api/superadmin/integrations creates crm integration for org 1',
+      name: 'TEST 7 — POST /api/admin/platform/integrations creates crm integration for org 1',
       run: () => {
-        const res = runCurl('POST', '/api/superadmin/integrations', {
+        const res = runCurl('POST', '/api/admin/platform/integrations', {
           token: saToken,
           body: {
             org_id: 1,
@@ -192,13 +192,13 @@ function run() {
       },
     },
     {
-      name: 'TEST 8 — Superadmin enable: GET /api/admin/integrations/crm/config shows enabled=true',
+      name: 'TEST 8 — Platform Admin enable: GET /api/admin/integrations/crm/config shows enabled=true',
       run: () => {
         if (!createdIntegrationId) {
           return { pass: false, detail: 'status=NA, enabled=NA (createdIntegrationId missing)' };
         }
 
-        const putRes = runCurl('PUT', `/api/superadmin/integrations/${createdIntegrationId}`, {
+        const putRes = runCurl('PUT', `/api/admin/platform/integrations/${createdIntegrationId}`, {
           token: saToken,
           body: { enabled: 1, org_override_allowed: 0 },
         });
@@ -210,12 +210,12 @@ function run() {
       },
     },
     {
-      name: 'TEST 9 — Cleanup: DELETE /api/superadmin/integrations/:createdIntegrationId',
+      name: 'TEST 9 — Cleanup: DELETE /api/admin/platform/integrations/:createdIntegrationId',
       run: () => {
         if (!createdIntegrationId) {
           return { pass: false, detail: 'status=NA (createdIntegrationId missing)' };
         }
-        const res = runCurl('DELETE', `/api/superadmin/integrations/${createdIntegrationId}`, { token: saToken });
+        const res = runCurl('DELETE', `/api/admin/platform/integrations/${createdIntegrationId}`, { token: saToken });
         const pass = res.status === 200;
         return { pass, detail: `status=${res.status}` };
       },

@@ -53,15 +53,15 @@ async function up(conn) {
     try { await conn.execute(`ALTER TABLE users ADD COLUMN \`${col}\` ${def}`); } catch (_) {}
   }
 
-  // Superadmin bootstrap — idempotent
+  // Platform admin bootstrap — legacy role value remains for compatibility
   const DEFAULT_SUPERADMIN_EMAIL = (process.env.BOOTSTRAP_SUPERADMIN_EMAIL || 'superadmin').trim();
-  const [[existingSuperadmin]] = await conn.execute(
+  const [[existingPlatformAdmin]] = await conn.execute(
     'SELECT id FROM users WHERE email = ?', [DEFAULT_SUPERADMIN_EMAIL]
   );
-  if (existingSuperadmin) {
+  if (existingPlatformAdmin) {
     await conn.execute(
       `UPDATE users SET name = ?, role = 'superadmin', is_active = 1, updated_at = NOW() WHERE id = ?`,
-      ['Superadmin', existingSuperadmin.id]
+      ['Platform Admin', existingPlatformAdmin.id]
     );
   } else {
     const bootstrapPassword = String(process.env.BOOTSTRAP_SUPERADMIN_PASSWORD || '');
@@ -69,7 +69,7 @@ async function up(conn) {
     const hash = await bcrypt.hash(bootstrapPassword, 12);
     await conn.execute(
       `INSERT INTO users (name, email, password, role, is_active, email_verified) VALUES (?, ?, ?, 'superadmin', 1, 1)`,
-      ['Superadmin', DEFAULT_SUPERADMIN_EMAIL, hash]
+      ['Platform Admin', DEFAULT_SUPERADMIN_EMAIL, hash]
     );
   }
 
@@ -180,13 +180,13 @@ async function up(conn) {
   if (permCount === 0) {
     const modules = ['mims_core','inbox','case_mgmt','case_query','utilities','transmissions',
                      'browse_content','analytics','user_mgmt','admin_console',
-                     'content_mgmt','data_visualization','reports','superadmin_console'];
+                     'content_mgmt','data_visualization','reports','platform_admin_console','superadmin_console'];
     const defaultAccess = {
-      superadmin:      { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:1,user_mgmt:1,admin_console:1,content_mgmt:1,data_visualization:1,reports:1,superadmin_console:1 },
-      admin:           { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:1,user_mgmt:1,admin_console:1,content_mgmt:1,data_visualization:1,reports:1,superadmin_console:0 },
-      agent:           { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:0,user_mgmt:0,admin_console:0,content_mgmt:0,data_visualization:0,reports:0,superadmin_console:0 },
-      reviewer:        { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:0,transmissions:0,browse_content:1,analytics:1,user_mgmt:0,admin_console:0,content_mgmt:0,data_visualization:1,reports:1,superadmin_console:0 },
-      content_manager: { mims_core:0,inbox:0,case_mgmt:0,case_query:0,utilities:0,transmissions:0,browse_content:1,analytics:0,user_mgmt:0,admin_console:0,content_mgmt:1,data_visualization:0,reports:0,superadmin_console:0 },
+      superadmin:      { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:1,user_mgmt:1,admin_console:1,content_mgmt:1,data_visualization:1,reports:1,platform_admin_console:1,superadmin_console:1 },
+      admin:           { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:1,user_mgmt:1,admin_console:1,content_mgmt:1,data_visualization:1,reports:1,platform_admin_console:0,superadmin_console:0 },
+      agent:           { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:1,transmissions:1,browse_content:1,analytics:0,user_mgmt:0,admin_console:0,content_mgmt:0,data_visualization:0,reports:0,platform_admin_console:0,superadmin_console:0 },
+      reviewer:        { mims_core:1,inbox:1,case_mgmt:1,case_query:1,utilities:0,transmissions:0,browse_content:1,analytics:1,user_mgmt:0,admin_console:0,content_mgmt:0,data_visualization:1,reports:1,platform_admin_console:0,superadmin_console:0 },
+      content_manager: { mims_core:0,inbox:0,case_mgmt:0,case_query:0,utilities:0,transmissions:0,browse_content:1,analytics:0,user_mgmt:0,admin_console:0,content_mgmt:1,data_visualization:0,reports:0,platform_admin_console:0,superadmin_console:0 },
     };
     for (const role of Object.keys(defaultAccess)) {
       for (const mod of modules) {
@@ -200,7 +200,7 @@ async function up(conn) {
   // Ensure all modules exist for all roles
   const allModules = ['mims_core','inbox','case_mgmt','case_query','utilities','transmissions',
                       'browse_content','analytics','user_mgmt','admin_console',
-                      'content_mgmt','data_visualization','reports','superadmin_console'];
+                      'content_mgmt','data_visualization','reports','platform_admin_console','superadmin_console'];
   for (const mod of allModules) {
     await conn.execute(
       'INSERT IGNORE INTO role_permissions (role, module, can_access) VALUES (?, ?, 1)',

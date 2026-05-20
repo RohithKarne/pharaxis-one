@@ -10,9 +10,10 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 // GET /api/admin/response-error-logs
-router.get('/response-error-logs', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/response-error-logs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { case_id, error_type, from_date, to_date, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -20,7 +21,7 @@ router.get('/response-error-logs', authenticate, requireRole('admin', 'superadmi
     let query = `SELECT * FROM response_error_logs WHERE 1=1`;
     const params = [];
 
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       query += ' AND org_id = ?';
       params.push(req.user.orgId);
     }

@@ -7,7 +7,7 @@
  *     in the matching CaseForm dropdown, then clean up
  *  3. CaseForm — all tabs render without error
  *  4. Content page — section switching
- *  5. Superadmin — all 12 sidebar sections render
+ *  5. Platform Admin — all 12 sidebar sections render
  *  6. 401 auto-logout — clearing token triggers redirect to /login
  */
 const { test, expect } = require('@playwright/test')
@@ -501,9 +501,9 @@ test.describe('Content page — section tabs', () => {
   }
 })
 
-// ─── 5. Superadmin — all sidebar sections ────────────────────────────────────
+// ─── 5. Platform Admin — all sidebar sections ────────────────────────────────────
 
-test.describe('Superadmin — sidebar navigation', () => {
+test.describe('Platform Admin — sidebar navigation', () => {
   let session = null
   let authErr = ''
 
@@ -518,25 +518,13 @@ test.describe('Superadmin — sidebar navigation', () => {
   })
 
   test.beforeEach(async ({ page }) => {
-    if (!session) { test.skip(true, `Superadmin auth unavailable: ${authErr}`); return }
-    // Superadmin app uses a different storage prefix: 'superadmin'
-    await page.goto(appPath('/superadmin.html'))
-    await page.evaluate((auth) => {
-      localStorage.setItem('superadmin_token',           auth.token)
-      localStorage.setItem('superadmin_user',            JSON.stringify(auth.user || {}))
-      localStorage.setItem('superadmin_modules',         JSON.stringify(auth.modules || []))
-      localStorage.setItem('superadmin_org_id',          String(auth.orgId ?? ''))
-      localStorage.setItem('superadmin_site_id',         String(auth.siteId ?? ''))
-      localStorage.setItem('superadmin_org_name',        auth.orgName || '')
-      localStorage.setItem('superadmin_site_name',       auth.siteName || '')
-      localStorage.setItem('superadmin_all_orgs',        JSON.stringify(auth.allOrgs || []))
-      localStorage.setItem('superadmin_session_timeout', String(auth.sessionTimeout || 30))
-    }, session)
-    await page.goto(appPath('/superadmin.html#/'))
+    if (!session) { test.skip(true, `Platform Admin auth unavailable: ${authErr}`); return }
+    await hydrateAuthStorage(page, session)
+    await page.goto(appPath('/mims-admin?standalone=1'))
     await page.waitForLoadState('networkidle')
   })
 
-  const SUPERADMIN_SECTIONS = [
+  const PLATFORM_ADMIN_SECTIONS = [
     'Dashboard',
     'Organizations',
     'Users',
@@ -551,8 +539,8 @@ test.describe('Superadmin — sidebar navigation', () => {
     'Reports',
   ]
 
-  for (const section of SUPERADMIN_SECTIONS) {
-    test(`Superadmin → ${section} renders without blank screen`, async ({ page }) => {
+  for (const section of PLATFORM_ADMIN_SECTIONS) {
+    test(`Platform Admin -> ${section} renders without blank screen`, async ({ page }) => {
       const navItem = page.getByText(section, { exact: true }).first()
       const visible = await navItem.isVisible({ timeout: 8000 }).catch(() => false)
       if (!visible) return // section may not exist in this build

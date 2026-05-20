@@ -184,11 +184,11 @@ module.exports = [
     },
   },
   {
-    name: 'Superadmin logo route rejects unauthenticated upload attempts',
+    name: 'Platform Admin logo route rejects unauthenticated upload attempts',
     module: 'Platform Remaining',
-    covers: ['POST /api/superadmin/orgs/:orgId/logo'],
+    covers: ['POST /api/admin/platform/orgs/:orgId/logo'],
     run: async ({ makeRequest }) => {
-      const res = await makeRequest('POST', '/api/superadmin/orgs/1/logo', null, null);
+      const res = await makeRequest('POST', '/api/admin/platform/orgs/1/logo', null, null);
       return {
         pass: res.status === 401,
         details: `status=${res.status}`,

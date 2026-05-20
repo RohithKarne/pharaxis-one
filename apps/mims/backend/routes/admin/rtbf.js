@@ -6,9 +6,10 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 function orgScope(req) {
-  return req.user.role === 'superadmin' ? (Number(req.query.org_id || req.body?.org_id || 0) || null) : req.user.orgId;
+  return hasGlobalAdminScope(req.user) ? (Number(req.query.org_id || req.body?.org_id || 0) || null) : req.user.orgId;
 }
 
 async function audit(userId, action, entityId, details) {
@@ -80,7 +81,7 @@ function signatureManifest(payload) {
   };
 }
 
-router.post('/rtbf/intake', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/rtbf/intake', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = orgScope(req);
     if (!orgId) return res.status(400).json({ error: 'org_id required.' });
@@ -97,7 +98,7 @@ router.post('/rtbf/intake', authenticate, requireRole('admin', 'superadmin'), as
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/rtbf', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/rtbf', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = orgScope(req);
     if (!orgId) return res.status(400).json({ error: 'org_id required.' });
@@ -109,19 +110,19 @@ router.get('/rtbf', authenticate, requireRole('admin', 'superadmin'), async (req
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/rtbf/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/rtbf/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const [[row]] = await pool.execute('SELECT * FROM rtbf_requests WHERE id = ?', [req.params.id]);
   if (!row) return res.status(404).json({ error: 'RTBF request not found.' });
   res.json({ request: row });
 });
 
-router.get('/rtbf/:id/preview', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/rtbf/:id/preview', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const [[row]] = await pool.execute('SELECT * FROM rtbf_requests WHERE id = ?', [req.params.id]);
   if (!row) return res.status(404).json({ error: 'RTBF request not found.' });
   res.json({ affected: await previewAffected(row.org_id, row.subject_identifier) });
 });
 
-router.post('/rtbf/:id/review', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/rtbf/:id/review', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const decision = req.body?.decision;
   if (!['approved', 'rejected'].includes(decision)) return res.status(400).json({ error: 'decision must be approved or rejected.' });
   await pool.execute(
@@ -132,7 +133,7 @@ router.post('/rtbf/:id/review', authenticate, requireRole('admin', 'superadmin')
   res.json({ ok: true });
 });
 
-router.post('/rtbf/:id/execute', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/rtbf/:id/execute', authenticate, requireRole('platform_admin'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -168,7 +169,7 @@ router.post('/rtbf/:id/execute', authenticate, requireRole('superadmin'), async 
   } finally { conn.release(); }
 });
 
-router.get('/rtbf/:id/certificate', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/rtbf/:id/certificate', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const [[row]] = await pool.execute('SELECT * FROM rtbf_requests WHERE id = ?', [req.params.id]);
   if (!row) return res.status(404).json({ error: 'RTBF request not found.' });
   try {
@@ -193,7 +194,7 @@ router.get('/rtbf/:id/certificate', authenticate, requireRole('admin', 'superadm
   }
 });
 
-router.get('/data-portability/:subjectId', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/data-portability/:subjectId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const orgId = orgScope(req);
   if (!orgId) return res.status(400).json({ error: 'org_id required.' });
   const subjectId = req.params.subjectId;

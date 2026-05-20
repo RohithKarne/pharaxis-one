@@ -16,6 +16,7 @@ const { logger } = require('../../services/logger');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 
 const multer = require('multer');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 function safeStoredFilename(originalname) {
   const base = path.basename(String(originalname || 'upload'))
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -88,8 +89,8 @@ async function generateDocId(conn) {
   return `DOC-${nextNum}`;
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function parseSelectedModules(value) {
@@ -143,17 +144,17 @@ function normalizeOptionalUrl(value) {
 
 async function getScopedFolder(req, folderId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT * FROM cm_folders WHERE id = ?'
       : 'SELECT * FROM cm_folders WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [folderId] : [folderId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [folderId] : [folderId, req.user.orgId]
   );
   return rows[0] || null;
 }
 
 async function getScopedDocument(req, documentId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? `SELECT d.*, f.org_id AS folder_org_id
          FROM cm_documents d
          INNER JOIN cm_folders f ON d.folder_id = f.id
@@ -162,14 +163,14 @@ async function getScopedDocument(req, documentId) {
          FROM cm_documents d
          INNER JOIN cm_folders f ON d.folder_id = f.id
          WHERE d.id = ? AND f.org_id = ?`,
-    isSuperadmin(req) ? [documentId] : [documentId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [documentId] : [documentId, req.user.orgId]
   );
   return rows[0] || null;
 }
 
 async function getScopedFaq(req, faqId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? `SELECT f.*, fo.org_id AS folder_org_id
          FROM cm_faqs f
          INNER JOIN cm_folders fo ON f.folder_id = fo.id
@@ -178,14 +179,14 @@ async function getScopedFaq(req, faqId) {
          FROM cm_faqs f
          INNER JOIN cm_folders fo ON f.folder_id = fo.id
          WHERE f.id = ? AND fo.org_id = ?`,
-    isSuperadmin(req) ? [faqId] : [faqId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [faqId] : [faqId, req.user.orgId]
   );
   return rows[0] || null;
 }
 
 async function getScopedModule(req, moduleId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? `SELECT m.*, f.org_id AS folder_org_id
          FROM cm_modules m
          INNER JOIN cm_folders f ON m.folder_id = f.id
@@ -194,17 +195,17 @@ async function getScopedModule(req, moduleId) {
          FROM cm_modules m
          INNER JOIN cm_folders f ON m.folder_id = f.id
          WHERE m.id = ? AND f.org_id = ?`,
-    isSuperadmin(req) ? [moduleId] : [moduleId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [moduleId] : [moduleId, req.user.orgId]
   );
   return rows[0] || null;
 }
 
 async function getScopedCase(req, caseId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT id, org_id FROM cases WHERE id = ?'
       : 'SELECT id, org_id FROM cases WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [caseId] : [caseId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [caseId] : [caseId, req.user.orgId]
   );
   return rows[0] || null;
 }
@@ -237,7 +238,7 @@ router.get('/documents', authenticate, async (req, res) => {
     `;
     const params = [];
 
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       query += ' AND f.org_id = ?';
       params.push(req.user.orgId);
     }
@@ -402,7 +403,7 @@ router.get('/documents/search', authenticate, async (req, res) => {
       LEFT JOIN cm_folders f ON d.folder_id = f.id
       WHERE MATCH(d.name, d.content_html) AGAINST(? IN NATURAL LANGUAGE MODE)`;
     const params = [q, q];
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       query += ` AND f.org_id = ?`;
       params.push(req.user.orgId);
     }
@@ -419,7 +420,7 @@ router.get('/documents/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const [[doc]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT d.*, f.name AS folder_name, u.name AS created_by_name, cu.name AS checked_out_by_name
            FROM cm_documents d
            LEFT JOIN cm_folders f ON d.folder_id = f.id
@@ -432,7 +433,7 @@ router.get('/documents/:id', authenticate, async (req, res) => {
            LEFT JOIN users u ON d.created_by = u.id
            LEFT JOIN users cu ON d.checked_out_by = cu.id
            WHERE d.id = ? AND f.org_id = ?`,
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
 
@@ -1000,7 +1001,7 @@ router.post('/documents/:id/alert-subs', authenticate, async (req, res) => {
     if (!user_id) return res.status(400).json({ error: 'user_id is required.' });
     const doc = await getScopedDocument(req, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    if (!isSuperadmin(req) && !await isUserInOrg(user_id, req.user.orgId)) {
+    if (!hasPlatformAdminScope(req) && !await isUserInOrg(user_id, req.user.orgId)) {
       return res.status(403).json({ error: 'User does not belong to your organisation.' });
     }
     await pool.execute(
@@ -1075,9 +1076,9 @@ router.get('/documents/:id/version-diff', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents/release-stale-checkouts — auto-release expired checkouts (CM-E4 + CM-T6)
-router.post('/documents/release-stale-checkouts', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/documents/release-stale-checkouts', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const [result] = isSuperadmin(req)
+    const [result] = hasPlatformAdminScope(req)
       ? await pool.execute(
         `UPDATE cm_documents
          SET checked_out_by = NULL, checked_out_at = NULL, checkout_expires_at = NULL
@@ -1121,7 +1122,7 @@ router.post('/documents/bulk', authenticate, async (req, res) => {
         if (!allowedForPublish.includes(doc.status)) {
           results.failed.push({ id: docId, reason: `Cannot publish from status: ${doc.status}` }); continue;
         }
-        if (doc.owner_user_id && doc.owner_user_id !== req.user.userId && req.user.role !== 'admin' && !isSuperadmin(req)) {
+        if (doc.owner_user_id && doc.owner_user_id !== req.user.userId && req.user.role !== 'admin' && !hasPlatformAdminScope(req)) {
           results.failed.push({ id: docId, reason: 'Owner lock — not your document' }); continue;
         }
 
@@ -1198,7 +1199,7 @@ router.get('/content-usage/:contentType/:contentId', authenticate, async (req, r
     if (!['document', 'faq', 'module'].includes(contentType)) {
       return res.status(400).json({ error: 'Invalid contentType.' });
     }
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       if (contentType === 'document') {
         const doc = await getScopedDocument(req, contentId);
         if (!doc) return res.status(404).json({ error: 'Document not found for active organisation.' });
@@ -1216,10 +1217,10 @@ router.get('/content-usage/:contentType/:contentId', authenticate, async (req, r
        LEFT JOIN cases c ON c.id = cu.case_id
        LEFT JOIN users u ON u.id = cu.used_by
        WHERE cu.content_type = ? AND cu.content_id = ?
-       ${isSuperadmin(req) ? '' : 'AND c.org_id = ?'}
+       ${hasPlatformAdminScope(req) ? '' : 'AND c.org_id = ?'}
        ORDER BY cu.used_at DESC
        LIMIT 100`,
-      isSuperadmin(req) ? [contentType, contentId] : [contentType, contentId, req.user.orgId]
+      hasPlatformAdminScope(req) ? [contentType, contentId] : [contentType, contentId, req.user.orgId]
     );
     res.json({ usage: rows, total: rows.length });
   } catch (err) {
@@ -1241,8 +1242,8 @@ router.get('/documents/module-usage/:moduleId', authenticate, async (req, res) =
        WHERE response_doc_type = 'Module'
          AND d.selected_modules IS NOT NULL
          AND JSON_CONTAINS(d.selected_modules, CAST(? AS JSON))
-         ${isSuperadmin(req) ? '' : 'AND f.org_id = ?'}`,
-      isSuperadmin(req) ? [String(moduleId)] : [String(moduleId), req.user.orgId]
+         ${hasPlatformAdminScope(req) ? '' : 'AND f.org_id = ?'}`,
+      hasPlatformAdminScope(req) ? [String(moduleId)] : [String(moduleId), req.user.orgId]
     );
     res.json({ module_id: moduleId, linked_documents: docs, count: docs.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1259,7 +1260,7 @@ router.get('/documents/:id/download', authenticate, async (req, res) => {
       [req.params.id]
     );
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
-    const isSA = req.user.role === 'superadmin';
+    const isSA = hasGlobalAdminScope(req.user);
     if (!isSA && doc.org_id !== req.user.orgId) return res.status(403).json({ error: 'Forbidden.' });
     if (!doc.file_path) return res.status(404).json({ error: 'No file attached to this document.' });
     const absPath = path.isAbsolute(doc.file_path)
@@ -1287,7 +1288,7 @@ router.get('/documents/:id/file', authenticate, async (req, res) => {
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
 
     // Org scope check (superadmin bypasses)
-    const isSA = req.user.role === 'superadmin';
+    const isSA = hasGlobalAdminScope(req.user);
     if (!isSA && doc.org_id !== req.user.orgId) return res.status(403).json({ error: 'Forbidden.' });
 
     if (!doc.file_path) return res.status(404).json({ error: 'No file attached to this document.' });

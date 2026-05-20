@@ -4,8 +4,9 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
 const { assess } = require('../../services/caseValidityService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const cache = new Map();
-async function orgForCase(caseId, req) { const [[row]] = await pool.execute('SELECT org_id FROM cases WHERE id=? LIMIT 1', [caseId]); if (!row) return null; if (req.user.role !== 'superadmin' && Number(row.org_id) !== Number(req.user.orgId)) return null; return row.org_id; }
+async function orgForCase(caseId, req) { const [[row]] = await pool.execute('SELECT org_id FROM cases WHERE id=? LIMIT 1', [caseId]); if (!row) return null; if (!hasGlobalAdminScope(req.user) && Number(row.org_id) !== Number(req.user.orgId)) return null; return row.org_id; }
 router.get('/cases/:caseId/validity', authenticate, async (req, res) => {
   try {
     const orgId = await orgForCase(req.params.caseId, req); if (!orgId) return res.status(404).json({ error: 'Case not found.' });

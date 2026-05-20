@@ -10,6 +10,7 @@ const userModel = require('../../models/userModel');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
 const { logService } = require('../../services/serviceLogger');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -20,16 +21,16 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function getScopedOrgId(req, providedOrgId = null) {
-  return isSuperadmin(req) ? (providedOrgId || null) : req.user.orgId;
+  return hasPlatformAdminScope(req) ? (providedOrgId || null) : req.user.orgId;
 }
 
 async function requireAdminConsoleAccess(req, res, next) {
-  if (isSuperadmin(req)) return next();
+  if (hasPlatformAdminScope(req)) return next();
   try {
     const [rows] = await pool.execute(
       `SELECT id FROM user_module_permissions
@@ -45,19 +46,19 @@ async function requireAdminConsoleAccess(req, res, next) {
 }
 
 // ─── WORKFLOW STATES ────────────────────────────────────────
-router.get('/workflow-states', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/workflow-states', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [states] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT * FROM workflow_states ORDER BY name'
         : 'SELECT * FROM workflow_states WHERE org_id = ? OR org_id IS NULL ORDER BY org_id IS NULL DESC, name',
-      isSuperadmin(req) ? [] : [req.user.orgId]
+      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
     res.json({ states });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.post('/workflow-states', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createWorkflowState), async (req, res) => {
+router.post('/workflow-states', authenticate, requireRole('admin', 'platform_admin'), requireOrg, validate(schemas.createWorkflowState), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
@@ -69,14 +70,14 @@ router.post('/workflow-states', authenticate, requireRole('admin', 'superadmin')
   } catch { res.status(409).json({ error: 'Workflow state already exists.' }); }
 });
 
-router.put('/workflow-states/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/workflow-states/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { name, is_active } = req.body;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id FROM workflow_states WHERE id = ?'
         : 'SELECT id FROM workflow_states WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Workflow state not found.' });
     await pool.execute(
@@ -89,19 +90,19 @@ router.put('/workflow-states/:id', authenticate, requireRole('admin', 'superadmi
 });
 
 // ─── SOURCE TYPES ────────────────────────────────────────────
-router.get('/source-types', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/source-types', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [sources] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT * FROM source_types ORDER BY name'
         : 'SELECT * FROM source_types WHERE org_id = ? ORDER BY name',
-      isSuperadmin(req) ? [] : [req.user.orgId]
+      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
     res.json({ sources });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.post('/source-types', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/source-types', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   try {
@@ -113,14 +114,14 @@ router.post('/source-types', authenticate, requireRole('admin', 'superadmin'), r
   } catch { res.status(409).json({ error: 'Source type already exists.' }); }
 });
 
-router.put('/source-types/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/source-types/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { name, is_active } = req.body;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id FROM source_types WHERE id = ?'
         : 'SELECT id FROM source_types WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Source type not found.' });
     await pool.execute(
@@ -133,10 +134,10 @@ router.put('/source-types/:id', authenticate, requireRole('admin', 'superadmin')
 });
 
 // ─── PRODUCTS ─────────────────────────────────────────────────
-router.get('/products', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/products', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [products] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT p.*, o.name as org_name, pf.name AS family_name
            FROM products p
            LEFT JOIN organisations o ON p.org_id = o.id
@@ -148,13 +149,13 @@ router.get('/products', authenticate, requireRole('admin', 'superadmin'), requir
            LEFT JOIN product_families pf ON pf.id = p.family_id
            WHERE p.org_id = ?
            ORDER BY p.trade_name`,
-      isSuperadmin(req) ? [] : [req.user.orgId]
+      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
     res.json({ products });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.post('/products', authenticate, requireRole('admin', 'superadmin'), requireOrg, validate(schemas.createProduct), async (req, res) => {
+router.post('/products', authenticate, requireRole('admin', 'platform_admin'), requireOrg, validate(schemas.createProduct), async (req, res) => {
   try {
     const { trade_name, mah, family_id, dosage, atc_code, authorization_country } = req.body;
     if (!trade_name) return res.status(400).json({ error: 'Trade name is required.' });
@@ -169,14 +170,14 @@ router.post('/products', authenticate, requireRole('admin', 'superadmin'), requi
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.put('/products/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/products/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { trade_name, mah, family_id, dosage, atc_code, authorization_country, is_active } = req.body;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id FROM products WHERE id = ?'
         : 'SELECT id FROM products WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Product not found.' });
     const orgId = getScopedOrgId(req, req.body.org_id);
@@ -224,23 +225,23 @@ router.get('/audit-logs', authenticate, requireAdminConsoleAccess, async (req, r
 });
 
 // ─── USERS (admin view) ───────────────────────────────────────
-router.get('/users', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/users', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [users] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC'
         : `SELECT DISTINCT u.id, u.name, u.email, u.role, u.is_active, u.created_at
            FROM users u
            INNER JOIN user_org_access uoa ON uoa.user_id = u.id
            WHERE uoa.org_id = ? AND uoa.is_active = 1
            ORDER BY u.created_at DESC`,
-      isSuperadmin(req) ? [] : [req.user.orgId]
+      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
     res.json({ users });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.post('/users', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required.' });
@@ -265,7 +266,7 @@ router.post('/users', authenticate, requireRole('admin', 'superadmin'), async (r
 });
 
 // ─── ELECTRONIC SIGNATURE VERIFY (ESIG-01, ESIG-02, ESIG-03) ──
-router.post('/esig-verify', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/esig-verify', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { password, reason, action, entity, entity_id } = req.body;
     if (!password || !reason) return res.status(400).json({ error: 'Password and reason are required.' });
@@ -284,14 +285,14 @@ router.post('/esig-verify', authenticate, requireRole('admin', 'superadmin'), as
 });
 
 // ─── ROLE PERMISSIONS ─────────────────────────────────────────
-router.get('/permissions', authenticate, requireRole('admin', 'superadmin'), async (_req, res) => {
+router.get('/permissions', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
   try {
     const [permissions] = await pool.execute('SELECT * FROM role_permissions ORDER BY role, module');
     res.json({ permissions });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.put('/permissions', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/permissions', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { role, module, can_access } = req.body;
     if (!role || !module) return res.status(400).json({ error: 'role and module required.' });
@@ -352,10 +353,10 @@ function maskAccount(a) {
 }
 
 // GET — list all accounts (passwords always null)
-router.get('/email-accounts', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/email-accounts', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [accounts] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT ea.*, o.name as org_name
            FROM email_accounts ea
            LEFT JOIN organisations o ON ea.org_id = o.id
@@ -365,14 +366,14 @@ router.get('/email-accounts', authenticate, requireRole('admin', 'superadmin'), 
            LEFT JOIN organisations o ON ea.org_id = o.id
            WHERE ea.org_id = ?
            ORDER BY o.name, ea.account_name`,
-      isSuperadmin(req) ? [] : [req.user.orgId]
+      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
     res.json({ accounts: accounts.map(maskAccount) });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
 // POST — create account
-router.post('/email-accounts', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/email-accounts', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const {
       account_name, provider, direction, is_active,
@@ -437,14 +438,14 @@ router.post('/email-accounts', authenticate, requireRole('admin', 'superadmin'),
 });
 
 // PUT — update account (passwords replace-only: blank = keep existing)
-router.put('/email-accounts/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/email-accounts/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT * FROM email_accounts WHERE id = ?'
         : 'SELECT * FROM email_accounts WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Account not found.' });
 
@@ -506,14 +507,14 @@ router.put('/email-accounts/:id', authenticate, requireRole('admin', 'superadmin
 });
 
 // PATCH — toggle active status
-router.patch('/email-accounts/:id/toggle', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.patch('/email-accounts/:id/toggle', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[account]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id, is_active FROM email_accounts WHERE id = ?'
         : 'SELECT id, is_active FROM email_accounts WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
 
@@ -528,14 +529,14 @@ router.patch('/email-accounts/:id/toggle', authenticate, requireRole('admin', 's
 });
 
 // DELETE — remove account (credentials deleted from storage)
-router.delete('/email-accounts/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.delete('/email-accounts/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[account]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id, account_name, org_id FROM email_accounts WHERE id = ?'
         : 'SELECT id, account_name, org_id FROM email_accounts WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
 
@@ -577,14 +578,14 @@ router.delete('/email-accounts/:id', authenticate, requireRole('admin', 'superad
 });
 
 // POST — test IMAP connection
-router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[account]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT * FROM email_accounts WHERE id = ?'
         : 'SELECT * FROM email_accounts WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
     if (!['Inbound', 'Both'].includes(account.direction))
@@ -646,14 +647,14 @@ router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 
 });
 
 // POST — test SMTP connection
-router.post('/email-accounts/:id/test-smtp', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/email-accounts/:id/test-smtp', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[account]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT * FROM email_accounts WHERE id = ?'
         : 'SELECT * FROM email_accounts WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
     if (!['Outbound', 'Both'].includes(account.direction))
@@ -698,17 +699,17 @@ router.post('/email-accounts/:id/test-smtp', authenticate, requireRole('admin', 
 });
 
 // POST — send test email
-router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const { recipient } = req.body;
     if (!recipient) return res.status(400).json({ error: 'Recipient email is required.' });
 
     const [[account]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT * FROM email_accounts WHERE id = ?'
         : 'SELECT * FROM email_accounts WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
     if (!['Outbound', 'Both'].includes(account.direction))
@@ -759,14 +760,14 @@ router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 
 });
 
 // POST — fetch emails now (immediate IMAP ingest, bypasses polling interval)
-router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[account]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT * FROM email_accounts WHERE id = ?'
         : 'SELECT * FROM email_accounts WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!account) return res.status(404).json({ error: 'Account not found.' });
     if (!['Inbound', 'Both'].includes(account.direction))
@@ -799,7 +800,7 @@ router.post('/email-accounts/:id/fetch-now', authenticate, requireRole('admin', 
 });
 
 // GET /api/admin/system-config — read one or all system_config values
-router.get('/system-config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/system-config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { key } = req.query;
     if (key) {
@@ -814,7 +815,7 @@ router.get('/system-config', authenticate, requireRole('admin', 'superadmin'), a
 });
 
 // POST /api/admin/system-config — upsert a system_config key/value
-router.post('/system-config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/system-config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { key, value } = req.body;
     if (!key) return res.status(400).json({ error: 'key is required.' });

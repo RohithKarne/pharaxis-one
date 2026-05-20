@@ -6,7 +6,8 @@ const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { aiGenerationRateLimiter } = require('../../middleware/rateLimiters');
 const { getRouteServiceCatalog } = require('../../services/routeCatalogService');
-const { emitSuperadminAlert } = require('../../services/alertService');
+const { emitPlatformAdminAlert } = require('../../services/alertService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 const FULL_VIEW_HINTS = String(process.env.PROCESS_EXPLORER_FULL_VIEW_EMAILS || 'superadmin,rohith,rohithkarne')
   .split(',')
@@ -61,12 +62,12 @@ async function checkOrgFeatureEnabled(orgId) {
 
 async function getExplorerConfig(req, includeSensitive = false) {
   const fullView = isFullViewUser(req.user.email);
-  const isSuperadmin = req.user.role === 'superadmin';
+  const isPlatformAdmin = hasGlobalAdminScope(req.user);
   const orgId = req.user.orgId || null;
   const envName = sqlEnvironment();
   const sqlPolicy = buildSqlPolicy(req.user.role, envName);
 
-  if (isSuperadmin) {
+  if (isPlatformAdmin) {
     return {
       allowed: true,
       fullView,
@@ -103,10 +104,10 @@ function sqlEnvironment() {
 
 function buildSqlPolicy(role, envName) {
   const normalizedRole = String(role || '').toLowerCase();
-  const isSuperadmin = normalizedRole === 'superadmin';
+  const isPlatformAdmin = hasGlobalAdminScope({ role: normalizedRole });
   const isAdmin = normalizedRole === 'admin';
-  const canReadOnly = isSuperadmin || isAdmin;
-  const canWriteExecute = isSuperadmin || (isAdmin && envName !== 'prod');
+  const canReadOnly = isPlatformAdmin || isAdmin;
+  const canWriteExecute = isPlatformAdmin || (isAdmin && envName !== 'prod');
 
   return {
     role: normalizedRole || 'unknown',
@@ -651,7 +652,7 @@ async function finalizeOpsExecution(row, actorUserId) {
     [JSON.stringify({ ...executionResult, executed_by: actorUserId || null }), row.id]
   );
   if (String(row.action_type || '').toLowerCase() === 'rollback') {
-    await emitSuperadminAlert('service_error_threshold', {
+    await emitPlatformAdminAlert('service_error_threshold', {
       severity: 'high',
       title: 'Safe rollback operation executed',
       message: `Rollback request #${row.id} was executed in Process Explorer.`,
@@ -775,7 +776,7 @@ async function logSqlExecution({
 }
 
 // GET /api/admin/process-logs/config
-router.get('/config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req, true);
     return res.json(cfg);
@@ -785,7 +786,7 @@ router.get('/config', authenticate, requireRole('admin', 'superadmin'), async (r
 });
 
 // POST /api/admin/process-logs/sql/execute
-router.post('/sql/execute', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/sql/execute', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const started = Date.now();
   const envName = sqlEnvironment();
   try {
@@ -1030,7 +1031,7 @@ router.post('/sql/execute', authenticate, requireRole('admin', 'superadmin'), as
 });
 
 // GET /api/admin/process-logs/sql/schema
-router.get('/sql/schema', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/sql/schema', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1089,7 +1090,7 @@ router.get('/sql/schema', authenticate, requireRole('admin', 'superadmin'), asyn
 });
 
 // GET /api/admin/process-logs/sql/saved
-router.get('/sql/saved', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/sql/saved', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1116,7 +1117,7 @@ router.get('/sql/saved', authenticate, requireRole('admin', 'superadmin'), async
 });
 
 // POST /api/admin/process-logs/sql/saved
-router.post('/sql/saved', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/sql/saved', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1155,7 +1156,7 @@ router.post('/sql/saved', authenticate, requireRole('admin', 'superadmin'), asyn
 });
 
 // PUT /api/admin/process-logs/sql/saved/:id
-router.put('/sql/saved/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/sql/saved/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1204,7 +1205,7 @@ router.put('/sql/saved/:id', authenticate, requireRole('admin', 'superadmin'), a
 });
 
 // DELETE /api/admin/process-logs/sql/saved/:id
-router.delete('/sql/saved/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/sql/saved/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1231,7 +1232,7 @@ router.delete('/sql/saved/:id', authenticate, requireRole('admin', 'superadmin')
 });
 
 // POST /api/admin/process-logs/sql/explain
-router.post('/sql/explain', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/sql/explain', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1249,7 +1250,7 @@ router.post('/sql/explain', authenticate, requireRole('admin', 'superadmin'), as
 });
 
 // POST /api/admin/process-logs/sql/validate
-router.post('/sql/validate', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/sql/validate', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1267,7 +1268,7 @@ router.post('/sql/validate', authenticate, requireRole('admin', 'superadmin'), a
 });
 
 // GET /api/admin/process-logs/sql/suggest?q=...
-router.get('/sql/suggest', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/sql/suggest', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1299,7 +1300,7 @@ router.get('/sql/suggest', authenticate, requireRole('admin', 'superadmin'), asy
 });
 
 // GET /api/admin/process-logs/sql/graph
-router.get('/sql/graph', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/sql/graph', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1335,7 +1336,7 @@ router.get('/sql/graph', authenticate, requireRole('admin', 'superadmin'), async
 });
 
 // POST /api/admin/process-logs/sql/nl2sql
-router.post('/sql/nl2sql', authenticate, requireRole('admin', 'superadmin'), aiGenerationRateLimiter, async (req, res) => {
+router.post('/sql/nl2sql', authenticate, requireRole('admin', 'platform_admin'), aiGenerationRateLimiter, async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1349,7 +1350,7 @@ router.post('/sql/nl2sql', authenticate, requireRole('admin', 'superadmin'), aiG
 });
 
 // GET /api/admin/process-logs/sql/audit
-router.get('/sql/audit', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/sql/audit', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1369,7 +1370,7 @@ router.get('/sql/audit', authenticate, requireRole('admin', 'superadmin'), async
 });
 
 // POST /api/admin/process-logs/flow-map
-router.post('/flow-map', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/flow-map', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1504,7 +1505,7 @@ router.post('/flow-map', authenticate, requireRole('admin', 'superadmin'), async
 });
 
 // GET /api/admin/process-logs/ops/requests
-router.get('/ops/requests', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/ops/requests', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1533,7 +1534,7 @@ router.get('/ops/requests', authenticate, requireRole('admin', 'superadmin'), as
 });
 
 // POST /api/admin/process-logs/ops/request
-router.post('/ops/request', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/ops/request', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1620,7 +1621,7 @@ router.post('/ops/request', authenticate, requireRole('admin', 'superadmin'), as
 });
 
 // POST /api/admin/process-logs/ops/requests/:id/approve
-router.post('/ops/requests/:id/approve', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/ops/requests/:id/approve', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1699,7 +1700,7 @@ router.post('/ops/requests/:id/approve', authenticate, requireRole('superadmin')
 });
 
 // POST /api/admin/process-logs/ops/requests/:id/reject
-router.post('/ops/requests/:id/reject', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post('/ops/requests/:id/reject', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1735,7 +1736,7 @@ router.post('/ops/requests/:id/reject', authenticate, requireRole('superadmin'),
       summary: `Safe ops request rejected: ${row.action_type}`,
       payload: { request_id: id, action_type: row.action_type, reject_reason: reason },
     });
-    await emitSuperadminAlert('service_error_threshold', {
+    await emitPlatformAdminAlert('service_error_threshold', {
       severity: 'medium',
       title: 'Safe operation request rejected',
       message: `Safe operation request #${id} was rejected.`,
@@ -1755,7 +1756,7 @@ router.post('/ops/requests/:id/reject', authenticate, requireRole('superadmin'),
 });
 
 // GET /api/admin/process-logs/ops/metrics
-router.get('/ops/metrics', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/ops/metrics', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1795,7 +1796,7 @@ router.get('/ops/metrics', authenticate, requireRole('admin', 'superadmin'), asy
 });
 
 // GET /api/admin/process-logs/ops/analytics
-router.get('/ops/analytics', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/ops/analytics', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1834,7 +1835,7 @@ router.get('/ops/analytics', authenticate, requireRole('admin', 'superadmin'), a
 });
 
 // GET /api/admin/process-logs/ops/requests/:id/snapshots
-router.get('/ops/requests/:id/snapshots', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/ops/requests/:id/snapshots', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -1859,7 +1860,7 @@ router.get('/ops/requests/:id/snapshots', authenticate, requireRole('admin', 'su
 });
 
 // GET /api/admin/process-logs
-router.get('/', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) {
@@ -1963,7 +1964,7 @@ router.get('/', authenticate, requireRole('admin', 'superadmin'), async (req, re
 });
 
 // GET /api/admin/process-logs/library
-router.get('/library', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/library', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) {
@@ -2054,7 +2055,7 @@ router.get('/library', authenticate, requireRole('admin', 'superadmin'), async (
 });
 
 // POST /api/admin/process-logs/refresh — explicit user-triggered refresh marker
-router.post('/refresh', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/refresh', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });
@@ -2065,7 +2066,7 @@ router.post('/refresh', authenticate, requireRole('admin', 'superadmin'), async 
 });
 
 // DELETE /api/admin/process-logs/purge?days=30
-router.delete('/purge', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/purge', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const cfg = await getExplorerConfig(req);
     if (!cfg.allowed) return res.status(403).json({ error: 'Process Explorer is disabled for your organisation.' });

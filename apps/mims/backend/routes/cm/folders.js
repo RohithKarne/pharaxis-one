@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -19,20 +20,20 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function getScopedOrgId(req, providedOrgId = null) {
-  return isSuperadmin(req) ? (providedOrgId || null) : req.user.orgId;
+  return hasPlatformAdminScope(req) ? (providedOrgId || null) : req.user.orgId;
 }
 
 async function getScopedFolder(req, folderId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT * FROM cm_folders WHERE id = ?'
       : 'SELECT * FROM cm_folders WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [folderId] : [folderId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [folderId] : [folderId, req.user.orgId]
   );
   return rows[0] || null;
 }
@@ -46,7 +47,7 @@ async function verifyScopedEntity(req, entityType, entityId) {
   }
   if (entityType === 'document') {
     const [rows] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT d.id
            FROM cm_documents d
            JOIN cm_folders f ON f.id = d.folder_id
@@ -55,13 +56,13 @@ async function verifyScopedEntity(req, entityType, entityId) {
            FROM cm_documents d
            JOIN cm_folders f ON f.id = d.folder_id
            WHERE d.id = ? AND f.org_id = ?`,
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     return !!rows[0];
   }
   if (entityType === 'faq') {
     const [rows] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT q.id
            FROM cm_faqs q
            JOIN cm_folders f ON f.id = q.folder_id
@@ -70,7 +71,7 @@ async function verifyScopedEntity(req, entityType, entityId) {
            FROM cm_faqs q
            JOIN cm_folders f ON f.id = q.folder_id
            WHERE q.id = ? AND f.org_id = ?`,
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     return !!rows[0];
   }
@@ -81,7 +82,7 @@ async function verifyScopedEntity(req, entityType, entityId) {
 router.get('/folders', authenticate, async (req, res) => {
   try {
     const [folders] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT f.*,
                   p.trade_name AS product_name,
                   s.name AS site_name,
@@ -108,7 +109,7 @@ router.get('/folders', authenticate, async (req, res) => {
            LEFT JOIN users u ON f.created_by = u.id
            WHERE f.status = 'Active' AND f.org_id = ?
            ORDER BY f.name`,
-      isSuperadmin(req) ? [] : [req.user.orgId]
+      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
     res.json({ folders });
   } catch (err) {
@@ -145,10 +146,10 @@ router.put('/folders/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id, org_id FROM cm_folders WHERE id = ?'
         : 'SELECT id, org_id FROM cm_folders WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Folder not found.' });
     const orgId = getScopedOrgId(req, req.body.org_id || existing.org_id);
@@ -174,10 +175,10 @@ router.delete('/folders/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id, name FROM cm_folders WHERE id = ?'
         : 'SELECT id, name FROM cm_folders WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Folder not found.' });
 
@@ -220,8 +221,8 @@ router.get('/folders/:id/permissions', authenticate, async (req, res) => {
        FROM cm_folder_permissions fp
        JOIN security_groups sg ON sg.id = fp.security_group_id
        WHERE fp.folder_id = ?
-       ${isSuperadmin(req) ? '' : 'AND sg.org_id = ?'}`,
-      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+       ${hasPlatformAdminScope(req) ? '' : 'AND sg.org_id = ?'}`,
+      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     res.json({ permissions: perms });
   } catch (err) {
@@ -237,10 +238,10 @@ router.post('/folders/:id/permissions', authenticate, async (req, res) => {
     const { security_group_id, permission_level } = req.body;
     if (!security_group_id) return res.status(400).json({ error: 'security_group_id required' });
     const [groups] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id FROM security_groups WHERE id = ?'
         : 'SELECT id FROM security_groups WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [security_group_id] : [security_group_id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [security_group_id] : [security_group_id, req.user.orgId]
     );
     if (!groups[0]) return res.status(404).json({ error: 'Security group not found for active organisation.' });
     await pool.execute(
@@ -262,10 +263,10 @@ router.delete('/folders/:id/permissions/:groupId', authenticate, async (req, res
     const folder = await getScopedFolder(req, req.params.id);
     if (!folder) return res.status(404).json({ error: 'Folder not found.' });
     const [groups] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id FROM security_groups WHERE id = ?'
         : 'SELECT id FROM security_groups WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [req.params.groupId] : [req.params.groupId, req.user.orgId]
+      hasPlatformAdminScope(req) ? [req.params.groupId] : [req.params.groupId, req.user.orgId]
     );
     if (!groups[0]) return res.status(404).json({ error: 'Security group not found for active organisation.' });
     await pool.execute(

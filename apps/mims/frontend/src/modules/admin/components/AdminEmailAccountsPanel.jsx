@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader, StatusPill } from './AdminShared'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
 
 export default function AdminEmailAccountsPanel({ H, flash }) {
   const [currentUser, setCurrentUser] = useState(null)
@@ -18,7 +19,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
   const [esigForm, setEsigForm] = useState({ password: '', reason: '' })
   const [esigError, setEsigError] = useState('')
 
-  const isSuperadmin = currentUser?.role === 'superadmin'
+  const isPlatformAdmin = hasGlobalAdminScope(currentUser?.user || currentUser)
   const orgId = currentUser?.orgId || currentUser?.org_id || ''
   const orgName = currentUser?.orgName || currentUser?.org_name || ''
 
@@ -58,7 +59,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
 
   function getDefaultEmailForm(overrides = {}) {
     return {
-      org_id: isSuperadmin ? '' : String(orgId || ''),
+      org_id: isPlatformAdmin ? '' : String(orgId || ''),
       account_name: '', provider: 'Generic', direction: 'Both',
       is_active: true, mailbox_email: '', from_email: '', display_name: '',
       is_default_outbound: false,
@@ -176,11 +177,11 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
     <>
       <SectionHeader
         title="Email Accounts"
-        desc={isSuperadmin ? 'Manage email accounts across organisations.' : `Manage email accounts for ${orgName || 'your active organisation'}. These accounts remain isolated per organisation.`}
+        desc={isPlatformAdmin ? 'Manage email accounts across organisations as a platform admin.' : `Manage email accounts for ${orgName || 'your active organisation'}. These accounts remain isolated per organisation.`}
       />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ padding: '8px 14px', background: '#eef7ff', border: '1px solid #cfe8ff', borderRadius: 6, fontSize: 12, color: '#0b5394' }}>
-          {isSuperadmin ? 'SuperAdmin can manage email accounts across orgs. Org admins will only see and manage accounts for their active organisation.' : 'Email account setup is managed inside MIMS and stays isolated to your active organisation.'}
+          {isPlatformAdmin ? 'Platform admins can manage email accounts across organisations. Org admins will only see and manage accounts for their active organisation.' : 'Email account setup is managed inside MIMS and stays isolated to your active organisation.'}
         </div>
         <button className="btn btn-primary" onClick={openAddEmailModal}>+ Add Email Account</button>
       </div>
@@ -296,7 +297,7 @@ export default function AdminEmailAccountsPanel({ H, flash }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Organisation *</label>
-                    {isSuperadmin ? (
+                    {isPlatformAdmin ? (
                       <select className="form-control" value={emailForm.org_id} onChange={e => setEmailForm(f => ({ ...f, org_id: e.target.value }))} required>
                         <option value="">— Select Org —</option>
                         {orgs.filter(o => o.is_active).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}

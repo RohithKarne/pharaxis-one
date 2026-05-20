@@ -6,7 +6,7 @@ const { authenticate, requireRole, requireOrg } = require('../../middleware/auth
 const { parseJson } = require('../../services/alertService');
 
 const router = express.Router();
-const adminAlertAuth = [authenticate, requireRole('admin', 'superadmin'), requireOrg];
+const adminAlertAuth = [authenticate, requireRole('admin', 'platform_admin'), requireOrg];
 
 const THRESHOLD_ALERT_EVENTS = new Set(['failed_login_spike', 'two_factor_lockout', 'service_error_threshold']);
 const DEFAULT_ALERT_EMAIL_SUBJECT = 'MIMS Alert: {{alert_title}}';

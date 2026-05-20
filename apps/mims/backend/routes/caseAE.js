@@ -17,13 +17,14 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../database/db');
 const { authenticate } = require('../middleware/auth');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
 async function verifyCaseOrg(caseId, req) {
   const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
   if (!c) return false;
-  if (req.user.role === 'superadmin') return true;
+  if (hasGlobalAdminScope(req.user)) return true;
   return Number(c.org_id) === Number(req.user.orgId);
 }
 
@@ -33,7 +34,7 @@ async function verifyVersionOrg(versionId, req) {
     [versionId]
   );
   if (!row) return false;
-  if (req.user.role === 'superadmin') return true;
+  if (hasGlobalAdminScope(req.user)) return true;
   return Number(row.org_id) === Number(req.user.orgId);
 }
 
@@ -56,7 +57,7 @@ async function ensureAeChildAccess(tableName, childId, req, { requireUnlocked = 
     err.status = 404;
     throw err;
   }
-  if (req.user.role !== 'superadmin' && Number(row.org_id) !== Number(req.user.orgId)) {
+  if (!hasGlobalAdminScope(req.user) && Number(row.org_id) !== Number(req.user.orgId)) {
     const err = new Error('Access denied');
     err.status = 403;
     throw err;

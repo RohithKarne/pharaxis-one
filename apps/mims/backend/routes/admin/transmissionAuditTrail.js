@@ -9,9 +9,10 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 async function logTransmissionError(orgId, caseId, targetSystem, errorType, errorMessage, details) {
@@ -29,16 +30,16 @@ async function logTransmissionError(orgId, caseId, targetSystem, errorType, erro
 
 async function hasCaseAccess(req, caseId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT id FROM cases WHERE id = ?'
       : 'SELECT id FROM cases WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [caseId] : [caseId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [caseId] : [caseId, req.user.orgId]
   );
   return !!rows[0];
 }
 
 // GET /api/admin/transmission-audit-trail/cases-summary — cases with outbound transmissions
-router.get('/transmission-audit-trail/cases-summary', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/transmission-audit-trail/cases-summary', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { search, page = 1, limit = 50 } = req.query;
     const lim    = Math.max(1, parseInt(limit, 10) || 50);
@@ -46,7 +47,7 @@ router.get('/transmission-audit-trail/cases-summary', authenticate, requireRole(
 
     let where = 'WHERE 1=1';
     const params = [];
-    if (!isSuperadmin(req)) { where += ' AND c.org_id = ?';        params.push(req.user.orgId); }
+    if (!hasPlatformAdminScope(req)) { where += ' AND c.org_id = ?';        params.push(req.user.orgId); }
     if (search)              { where += ' AND c.case_number LIKE ?'; params.push(`%${search}%`); }
 
     const [[{ total }]] = await pool.execute(
@@ -75,7 +76,7 @@ router.get('/transmission-audit-trail/cases-summary', authenticate, requireRole(
 });
 
 // GET /api/admin/transmission-audit-trail — list transmissions with filters
-router.get('/transmission-audit-trail', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/transmission-audit-trail', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { case_id, target_system, status, from_date, to_date, page = 1, limit = 100 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -86,7 +87,7 @@ router.get('/transmission-audit-trail', authenticate, requireRole('admin', 'supe
                  WHERE 1=1`;
     const params = [];
 
-    if (!isSuperadmin(req)) {
+    if (!hasPlatformAdminScope(req)) {
       query += ' AND c.org_id = ?';
       params.push(req.user.orgId);
     }
@@ -153,7 +154,7 @@ router.post('/transmission-audit-trail', authenticate, async (req, res) => {
 });
 
 // GET /api/admin/transmission-error-logs
-router.get('/transmission-error-logs', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/transmission-error-logs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { case_id, target_system, error_type, from_date, to_date, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -161,7 +162,7 @@ router.get('/transmission-error-logs', authenticate, requireRole('admin', 'super
     let query = `SELECT * FROM transmission_error_logs WHERE 1=1`;
     const params = [];
 
-    if (!isSuperadmin(req)) { query += ' AND org_id = ?'; params.push(req.user.orgId); }
+    if (!hasPlatformAdminScope(req)) { query += ' AND org_id = ?'; params.push(req.user.orgId); }
     if (case_id)      { query += ' AND case_id = ?';          params.push(case_id); }
     if (target_system){ query += ' AND target_system LIKE ?'; params.push(`%${target_system}%`); }
     if (error_type)   { query += ' AND error_type LIKE ?';    params.push(`%${error_type}%`); }
@@ -198,8 +199,8 @@ router.post('/transmission-screen-audit', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/admin/transmission-screen-audit — list user interaction events (admin/superadmin only)
-router.get('/transmission-screen-audit', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// GET /api/admin/transmission-screen-audit — list user interaction events (admin/platform admin only)
+router.get('/transmission-screen-audit', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { user_id, action, from_date, to_date, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -207,7 +208,7 @@ router.get('/transmission-screen-audit', authenticate, requireRole('admin', 'sup
     let query = `SELECT * FROM transmission_screen_audit WHERE 1=1`;
     const params = [];
 
-    if (!isSuperadmin(req)) { query += ' AND org_id = ?'; params.push(req.user.orgId); }
+    if (!hasPlatformAdminScope(req)) { query += ' AND org_id = ?'; params.push(req.user.orgId); }
     if (user_id)   { query += ' AND user_id = ?';           params.push(user_id); }
     if (action)    { query += ' AND action LIKE ?';          params.push(`%${action}%`); }
     if (from_date) { query += ' AND created_at >= ?';        params.push(from_date); }

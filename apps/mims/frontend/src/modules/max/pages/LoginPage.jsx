@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { hasGlobalAdminScope, isAdminUser as isAdminRole } from '../../../shared/utils/adminScope.js'
 
 const MODULE_LOGIN_CONFIG = {
   app: {
@@ -104,11 +105,11 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   }
 
   function isAdminUser(data) {
-    return data.user?.role === 'admin' || data.user?.role === 'superadmin'
+    return isAdminRole(data.user)
   }
 
   function hasModuleAccess(data, moduleKey) {
-    return data.user?.role === 'superadmin' || (data.modules || []).includes(moduleKey)
+    return hasGlobalAdminScope(data.user) || (data.modules || []).includes(moduleKey)
   }
 
   function hasTargetAccess(data) {

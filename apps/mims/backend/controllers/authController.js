@@ -22,7 +22,7 @@ const {
   maskEmail,
   sendEmailOtp,
 } = require('../services/twoFactorService');
-const { emitSuperadminAlert } = require('../services/alertService');
+const { emitPlatformAdminAlert } = require('../services/alertService');
 const {
   buildAuthorizationUrl,
   exchangeCodeForTokens,
@@ -35,6 +35,7 @@ const {
   verifyIdToken,
 } = require('../services/ssoService');
 const geoip = require('geoip-lite');
+const { getDisplayRole, hasGlobalAdminScope } = require('../utils/adminScope');
 
 const SALT_ROUNDS = Math.max(10, parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10) || 12);
 
@@ -71,21 +72,21 @@ async function logLoginAudit({ userId, userName, role, status, failReason, authE
       ]
     );
     if (status === 'failed' && authEvent === 'password_login_failed') {
-      await emitSuperadminAlert('failed_login_spike', {
+      await emitPlatformAdminAlert('failed_login_spike', {
         severity: 'high',
         title: 'Failed login spike detected',
         message: failReason || 'Multiple failed login attempts detected.',
         metadata: { userId: userId || null, userName: userName || null, authEvent, details: metadata || null },
-        linkUrl: '/superadmin',
+        linkUrl: '/mims-admin?standalone=1',
       });
     }
     if (authEvent === '2fa_locked') {
-      await emitSuperadminAlert('two_factor_lockout', {
+      await emitPlatformAdminAlert('two_factor_lockout', {
         severity: 'high',
         title: 'Repeated 2FA lockouts detected',
         message: failReason || '2FA lockout triggered.',
         metadata: { userId: userId || null, userName: userName || null, authEvent, details: metadata || null },
-        linkUrl: '/superadmin',
+        linkUrl: '/mims-admin?standalone=1',
       });
     }
   } catch (_) {}
@@ -155,6 +156,15 @@ async function getSystemConfig() {
     acc[row.config_key] = row.config_value;
     return acc;
   }, {});
+}
+
+function getPlatformAdminSessionTimeout(config = {}) {
+  return parseInt(
+    config.platform_admin_session_timeout_minutes
+      || config.superadmin_session_timeout_minutes
+      || '60',
+    10
+  );
 }
 
 async function findUserByLoginIdentifier(identifier) {
@@ -275,6 +285,29 @@ async function getUserModules(userId) {
   return rows.map(r => r.module);
 }
 
+async function resolveUserRuntimePrivileges(user) {
+  const modules = await getUserModules(user.id);
+  return {
+    modules,
+    platformAdmin: hasGlobalAdminScope({ role: user.role, modules }),
+  };
+}
+
+function toRuntimeUser(user, { platformAdmin = false } = {}) {
+  const {
+    password,
+    password_reset_nonce,
+    failed_login_attempts,
+    locked_until,
+    ...safeUser
+  } = user || {};
+  return {
+    ...safeUser,
+    role: platformAdmin ? 'admin' : getDisplayRole(user),
+    platformAdmin,
+  };
+}
+
 async function getActiveOrgRowsForUser(userId) {
   const [orgRows] = await pool.execute(
     `SELECT uoa.org_id, uoa.primary_site_id, uoa.role_at_org, uoa.site_permission, uoa.last_accessed_at,
@@ -352,7 +385,13 @@ function buildLoginResponse({ user, token, modules, orgId, siteId, orgName, site
   return {
     message: 'Login successful.',
     token,
-    user: { id: user.id, name: user.name, email: user.email, role: roleForOrg || user.role },
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: roleForOrg || user.role,
+      platformAdmin: Boolean(user.platformAdmin),
+    },
     modules,
     orgId,
     siteId,
@@ -860,21 +899,11 @@ const authController = {
         return res.status(200).json({ outcome: 'denied', error: genericError });
       }
 
-      if (user.role === 'superadmin') {
-        await logLoginAudit({
-          userId: user.id,
-          role: user.role,
-          status: 'failed',
-          failReason: 'Superadmin attempted app login start.',
-          authEvent: 'login_start_denied',
-          metadata: { ...auditMeta, reason: 'superadmin_uses_dedicated_login' },
-          req,
-        });
-        return res.status(200).json({ outcome: 'denied', error: genericError });
-      }
+      const privileges = await resolveUserRuntimePrivileges(user);
+      const isPlatformAdminUser = privileges.platformAdmin;
 
       const profiles = await getLoginProfilesForUser(user);
-      if (profiles.length === 0) {
+      if (profiles.length === 0 && !isPlatformAdminUser) {
         await logLoginAudit({
           userId: user.id,
           role: user.role,
@@ -885,6 +914,18 @@ const authController = {
           req,
         });
         return res.status(200).json({ outcome: 'denied', error: genericError });
+      }
+
+      if (isPlatformAdminUser && profiles.length === 0) {
+        await logLoginAudit({
+          userId: user.id,
+          role: 'admin',
+          status: 'pending',
+          authEvent: 'login_start_platform_admin_password',
+          metadata: auditMeta,
+          req,
+        });
+        return res.status(200).json({ outcome: 'local_password' });
       }
 
       const ssoProfiles = profiles
@@ -1079,17 +1120,24 @@ const authController = {
         ).catch(() => {});
       }
 
-      if (user.role === 'superadmin') {
-        const token = issueToken({ userId: user.id, email: user.email, role: user.role, orgId: null, siteId: null });
+      const privileges = await resolveUserRuntimePrivileges(user);
+      if (privileges.platformAdmin) {
+        const token = issueToken({
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          orgId: null,
+          siteId: null,
+          platformAdmin: true,
+        });
         await trackSessionToken(user.id, token);
-        const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
         const config = await getSystemConfig();
-        const sessionTimeout = parseInt(config.superadmin_session_timeout_minutes || '60', 10);
+        const sessionTimeout = getPlatformAdminSessionTimeout(config);
         attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
         await logLoginAudit({
           userId: user.id,
           userName: user.email,
-          role: user.role,
+          role: 'admin',
           status: 'success',
           authEvent: `sso_${providerKey}_login_success`,
           req,
@@ -1192,7 +1240,7 @@ const authController = {
 
       let requestedOrgId = null;
       let loginOptions = null;
-      if (user.role !== 'superadmin') {
+      if (!hasGlobalAdminScope(user)) {
         requestedOrgId = await resolvePasswordOrgIdForUser(user, parsePositiveInt(req.body?.org_id));
         if (!requestedOrgId) {
           await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'No org assigned', authEvent: 'password_login_failed', req });
@@ -1266,28 +1314,43 @@ const authController = {
         });
       }
 
+      const privileges = await resolveUserRuntimePrivileges(user);
+
       if (user.password_reset_required) {
-        const resetToken = issueToken({ userId: user.id, email: user.email, role: user.role, passwordResetRequired: true });
+        const resetToken = issueToken({
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          passwordResetRequired: true,
+          platformAdmin: privileges.platformAdmin,
+        });
         attachAuthCookie(res, resetToken, 10 * 60 * 1000);
         return res.status(200).json({
           passwordResetRequired: true,
           token: resetToken,
-          user: { id: user.id, name: user.name, email: user.email, role: user.role },
+          user: toRuntimeUser(user, privileges),
         });
       }
 
-      if (user.role === 'superadmin') {
-        const token = issueToken({ userId: user.id, email: user.email, role: user.role, orgId: null, siteId: null });
+      if (privileges.platformAdmin) {
+        const token = issueToken({
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          orgId: null,
+          siteId: null,
+          platformAdmin: true,
+        });
         await trackSessionToken(user.id, token);
         const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
         const config = await getSystemConfig();
-        const sessionTimeout = parseInt(config.superadmin_session_timeout_minutes || '60', 10);
+        const sessionTimeout = getPlatformAdminSessionTimeout(config);
         attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
-        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'success', authEvent: 'login_success', req });
+        await logLoginAudit({ userId: user.id, userName: user.email, role: 'admin', status: 'success', authEvent: 'login_success', req });
         return res.status(200).json({
           message: 'Login successful.',
           token,
-          user: { id: user.id, name: user.name, email: user.email, role: user.role },
+          user: toRuntimeUser(user, privileges),
           modules: distRows.map(r => r.module),
           orgId: null,
           siteId: null,
@@ -1632,11 +1695,11 @@ const authController = {
     res.set('Cache-Control', 'no-store');
     const user = await userModel.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
-    if (user.role === 'superadmin') {
+    if (hasGlobalAdminScope(req.user)) {
       const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
       const config = await getSystemConfig();
       return res.status(200).json({
-        user,
+        user: toRuntimeUser(user, { platformAdmin: true }),
         token: req.user.token,
         modules: distRows.map((row) => row.module),
         allOrgs: [],
@@ -1644,7 +1707,7 @@ const authController = {
         siteId: null,
         orgName: null,
         siteName: null,
-        sessionTimeout: parseInt(config.superadmin_session_timeout_minutes || '60', 10),
+        sessionTimeout: getPlatformAdminSessionTimeout(config),
       });
     }
 
@@ -1791,7 +1854,7 @@ const authController = {
       if (!email) return res.status(400).json({ error: 'Email is required.' });
 
       const user = await findUserByLoginIdentifier(email);
-      if (!user || user.role === 'superadmin' || !String(user.email || '').includes('@')) {
+      if (!user || hasGlobalAdminScope(user) || !String(user.email || '').includes('@')) {
         return res.status(404).json({ error: 'No eligible user found for this email.' });
       }
       if (!user.is_active) {
@@ -1826,7 +1889,7 @@ const authController = {
         return res.status(400).json({ error: 'Email and code are required.' });
       }
       const user = await findUserByLoginIdentifier(email);
-      if (!user || user.role === 'superadmin' || !String(user.email || '').includes('@')) {
+      if (!user || hasGlobalAdminScope(user) || !String(user.email || '').includes('@')) {
         return res.status(404).json({ error: 'No eligible user found for this email.' });
       }
 

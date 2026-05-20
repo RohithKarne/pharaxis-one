@@ -12,6 +12,7 @@ const { summarizeCase } = require('../../services/ai/summarizer');
 const { runQualityChecks } = require('../../services/ai/qualityChecker');
 const { vectorSearch } = require('../../services/ai/retriever');
 const { classifyInquiry, classifyRecentInquiries } = require('../../services/ai/inboxClassifierService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ async function audit(req, action, entity, entityId, details) {
 async function loadCase(req, id) {
   const params = [id];
   let sql = 'SELECT * FROM cases WHERE id = ?';
-  if (req.user.role !== 'superadmin') { sql += ' AND org_id = ?'; params.push(req.user.orgId); }
+  if (!hasGlobalAdminScope(req.user)) { sql += ' AND org_id = ?'; params.push(req.user.orgId); }
   sql += ' LIMIT 1';
   const [[row]] = await pool.execute(sql, params);
   return row;
@@ -42,17 +43,17 @@ async function logSuggestion(req, caseId, type, payload, meta = {}) {
   return result.insertId;
 }
 
-router.post('/admin/ai-config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/admin/ai-config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const orgId = req.body.org_id || req.user.orgId;
-    if (!orgId && req.user.role !== 'superadmin') return res.status(403).json({ error: 'No active organisation.' });
+    if (!orgId && !hasGlobalAdminScope(req.user)) return res.status(403).json({ error: 'No active organisation.' });
     const id = await saveProviderConfig(orgId || 0, req.body || {});
     await audit(req, 'UPSERT', 'ai_provider_config', id, { provider_key: req.body.provider_key, enabled: Boolean(req.body.enabled) });
     res.json({ id, message: 'AI provider configuration saved.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/admin/ai/usage', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/admin/ai/usage', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const params = [];
     let where = '1=1';
@@ -160,7 +161,7 @@ router.post('/inquiries/:id/ai/classify', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/admin/ai/classify-inbox', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/admin/ai/classify-inbox', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const results = await classifyRecentInquiries(req.body.org_id || req.user.orgId, req.body.limit || 25);
     res.json({ results });

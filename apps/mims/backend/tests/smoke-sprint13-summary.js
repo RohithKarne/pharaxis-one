@@ -97,24 +97,24 @@ async function loginSuperadmin() {
 
   if (r.error) {
     superadminAuthReason = `network error: ${r.error}`;
-    skipPass('Superadmin login for SA reports access', superadminAuthReason);
+    skipPass('Platform Admin login for SA reports access', superadminAuthReason);
     return 'skip';
   }
 
   if (r.status === 401) {
     superadminAuthReason = 'provided credentials returned 401';
-    skipPass('Superadmin login for SA reports access', superadminAuthReason);
+    skipPass('Platform Admin login for SA reports access', superadminAuthReason);
     return 'skip';
   }
 
   if ((r.status === 200 || r.status === 202) && (r.data.token || r.data.challengeToken)) {
     superadminToken = r.data.token || r.data.challengeToken;
-    check('Superadmin login for SA reports access', true);
+    check('Platform Admin login for SA reports access', true);
     return 'pass';
   }
 
   superadminAuthReason = `status=${r.status}, body=${preview(r.data)}`;
-  check('Superadmin login for SA reports access', false, superadminAuthReason);
+  check('Platform Admin login for SA reports access', false, superadminAuthReason);
   return 'fail';
 }
 
@@ -225,7 +225,7 @@ async function run() {
 
   console.log('\n--- SA Reports Access (SA-4) ---');
   await loginSuperadmin();
-  await checkGet('GET /api/superadmin/reports/orgs returns 200', '/api/superadmin/reports/orgs', superadminToken, {
+  await checkGet('GET /api/admin/platform/reports/orgs returns 200', '/api/admin/platform/reports/orgs', superadminToken, {
     skipReason: superadminAuthReason || 'superadmin auth unavailable',
   });
 

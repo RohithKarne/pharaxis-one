@@ -17,6 +17,7 @@ const {
 } = require('../../services/cmModuleLifecycleService');
 
 const multer = require('multer');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 function safeStoredFilename(originalname) {
   const base = path.basename(String(originalname || 'upload'))
     .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -39,7 +40,7 @@ const MODULE_STATUSES = new Set([
   'Archived',
 ]);
 
-function isSuperadmin(req) { return req.user.role === 'superadmin'; }
+function hasPlatformAdminScope(req) { return hasGlobalAdminScope(req.user); }
 
 let schemaReady = false;
 let schemaInitPromise = null;
@@ -198,10 +199,10 @@ async function generateModuleId(conn) {
 
 async function getScopedFolder(req, folderId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT * FROM cm_folders WHERE id = ?'
       : 'SELECT * FROM cm_folders WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [folderId] : [folderId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [folderId] : [folderId, req.user.orgId]
   );
   return rows[0] || null;
 }
@@ -209,7 +210,7 @@ async function getScopedFolder(req, folderId) {
 async function getScopedModule(req, moduleId) {
   try {
     const [rows] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT m.*, f.org_id AS folder_org_id, f.name AS folder_name, u.name AS created_by_name
            FROM cm_modules m
            INNER JOIN cm_folders f ON m.folder_id = f.id
@@ -220,13 +221,13 @@ async function getScopedModule(req, moduleId) {
            INNER JOIN cm_folders f ON m.folder_id = f.id
            LEFT JOIN users u ON m.created_by = u.id
            WHERE m.id = ? AND f.org_id = ?`,
-      isSuperadmin(req) ? [moduleId] : [moduleId, req.user.orgId]
+      hasPlatformAdminScope(req) ? [moduleId] : [moduleId, req.user.orgId]
     );
     return rows[0] || null;
   } catch (err) {
     if (err.code !== 'ER_BAD_FIELD_ERROR') throw err;
     const [rows] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT m.*, f.org_id AS folder_org_id, f.name AS folder_name
            FROM cm_modules m
            INNER JOIN cm_folders f ON m.folder_id = f.id
@@ -235,7 +236,7 @@ async function getScopedModule(req, moduleId) {
            FROM cm_modules m
            INNER JOIN cm_folders f ON m.folder_id = f.id
            WHERE m.id = ? AND f.org_id = ?`,
-      isSuperadmin(req) ? [moduleId] : [moduleId, req.user.orgId]
+      hasPlatformAdminScope(req) ? [moduleId] : [moduleId, req.user.orgId]
     );
     return rows[0] || null;
   }
@@ -256,7 +257,7 @@ router.get('/modules', authenticate, async (req, res) => {
         WHERE 1=1
       `;
       const params = [];
-      if (!isSuperadmin(req)) {
+      if (!hasPlatformAdminScope(req)) {
         query += ' AND f.org_id = ?';
         params.push(req.user.orgId);
       }

@@ -48,7 +48,7 @@ function run() {
     });
 
     if (saLogin.status !== 200 || !saLogin.body || !saLogin.body.token) {
-      throw new Error(`Superadmin login failed. status=${saLogin.status}`);
+      throw new Error(`Platform Admin login failed. status=${saLogin.status}`);
     }
     saToken = saLogin.body.token;
 
@@ -80,17 +80,17 @@ function run() {
       },
     },
     {
-      name: 'TEST 2 — GET /api/v1/superadmin/integrations with saToken returns 200',
+      name: 'TEST 2 — GET /api/v1/admin/platform/integrations with saToken returns 200',
       run: () => {
-        const res = runCurl('GET', '/api/v1/superadmin/integrations', { token: saToken });
+        const res = runCurl('GET', '/api/v1/admin/platform/integrations', { token: saToken });
         const pass = res.status === 200;
         return { pass, detail: `status=${res.status}` };
       },
     },
     {
-      name: 'TEST 3 — GET /api/superadmin/integrations returns integrations array',
+      name: 'TEST 3 — GET /api/admin/platform/integrations returns integrations array',
       run: () => {
-        const res = runCurl('GET', '/api/superadmin/integrations', { token: saToken });
+        const res = runCurl('GET', '/api/admin/platform/integrations', { token: saToken });
         const isArray = res.body && Array.isArray(res.body.integrations);
         const pass = res.status === 200 && isArray;
         return { pass, detail: `status=${res.status}, integrationsArray=${isArray}` };
@@ -131,7 +131,7 @@ function run() {
       },
     },
     {
-      name: 'TEST 8 — POST /api/superadmin/integrations creates integration',
+      name: 'TEST 8 — POST /api/admin/platform/integrations creates integration',
       run: () => {
         const payload = {
           org_id: 26,
@@ -142,7 +142,7 @@ function run() {
           event_triggers: ['case.created', 'case.updated'],
           org_override_allowed: 0,
         };
-        const res = runCurl('POST', '/api/superadmin/integrations', { token: saToken, body: payload });
+        const res = runCurl('POST', '/api/admin/platform/integrations', { token: saToken, body: payload });
         const okStatus = res.status === 201 || res.status === 200;
         const idNum = res.body && typeof res.body.id === 'number';
         if (okStatus && idNum) {
@@ -155,7 +155,7 @@ function run() {
     {
       name: 'TEST 9 — created veeva_vault integration appears in superadmin list',
       run: () => {
-        const res = runCurl('GET', '/api/superadmin/integrations', { token: saToken });
+        const res = runCurl('GET', '/api/admin/platform/integrations', { token: saToken });
         const list = res.body && Array.isArray(res.body.integrations) ? res.body.integrations : [];
         const found = list.some((row) => row && row.id === createdId && row.integration_type === 'veeva_vault');
         const pass = res.status === 200 && found;
@@ -163,7 +163,7 @@ function run() {
       },
     },
     {
-      name: 'TEST 10 — PUT /api/superadmin/integrations/:id updates integration',
+      name: 'TEST 10 — PUT /api/admin/platform/integrations/:id updates integration',
       run: () => {
         if (!createdId) {
           return { pass: false, detail: 'createdId missing from TEST 8' };
@@ -175,7 +175,7 @@ function run() {
           event_triggers: ['case.created'],
           org_override_allowed: 0,
         };
-        const res = runCurl('PUT', `/api/superadmin/integrations/${createdId}`, { token: saToken, body: payload });
+        const res = runCurl('PUT', `/api/admin/platform/integrations/${createdId}`, { token: saToken, body: payload });
         const pass = res.status === 200;
         return { pass, detail: `status=${res.status}, id=${createdId}` };
       },
@@ -226,12 +226,12 @@ function run() {
       },
     },
     {
-      name: 'TEST 15 — DELETE /api/superadmin/integrations/:id removes created integration',
+      name: 'TEST 15 — DELETE /api/admin/platform/integrations/:id removes created integration',
       run: () => {
         if (!createdId) {
           return { pass: false, detail: 'createdId missing from TEST 8' };
         }
-        const res = runCurl('DELETE', `/api/superadmin/integrations/${createdId}`, { token: saToken });
+        const res = runCurl('DELETE', `/api/admin/platform/integrations/${createdId}`, { token: saToken });
         const pass = res.status === 200;
         return { pass, detail: `status=${res.status}, id=${createdId}` };
       },

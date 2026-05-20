@@ -37,6 +37,7 @@ const {
 const { resolveProductGroups } = require('../services/productGroupService');
 const { evaluateRule } = require('../../shared/services/ruleEvaluator');
 const { recalculateAll: recalculateHaClocks } = require('../services/haClockService');
+const { hasGlobalAdminScope, isAdminUser } = require('../utils/adminScope');
 
 // ── Architecture Fix A1: shared helpers extracted to service files ─────────────
 // All utility functions, constants and DB helpers previously defined inline here
@@ -88,7 +89,7 @@ router.post('/cases/saved-views', authenticate, validate(schemas.savedView), asy
     const filters = req.body?.filters && typeof req.body.filters === 'object' ? req.body.filters : {};
     const isShared = !!req.body?.is_shared;
     if (!name) return res.status(400).json({ error: 'name is required.' });
-    if (isShared && !['admin', 'superadmin'].includes(req.user.role)) {
+    if (isShared && !isAdminUser(req.user)) {
       return res.status(403).json({ error: 'Only admin roles can create shared views.' });
     }
 
@@ -126,14 +127,14 @@ router.put('/cases/saved-views/:viewId', authenticate, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Saved view not found.' });
 
     const isOwner = Number(existing.user_id) === Number(req.user.userId);
-    if (!isOwner && !['admin', 'superadmin'].includes(req.user.role)) {
+    if (!isOwner && !isAdminUser(req.user)) {
       return res.status(403).json({ error: 'Only the owner or an admin can update this view.' });
     }
 
     const nextShared = Object.prototype.hasOwnProperty.call(req.body || {}, 'is_shared')
       ? !!req.body.is_shared
       : !!existing.is_shared;
-    if (nextShared && !['admin', 'superadmin'].includes(req.user.role)) {
+    if (nextShared && !isAdminUser(req.user)) {
       return res.status(403).json({ error: 'Only admin roles can publish shared views.' });
     }
 
@@ -177,7 +178,7 @@ router.delete('/cases/saved-views/:viewId', authenticate, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Saved view not found.' });
 
     const isOwner = Number(existing.user_id) === Number(req.user.userId);
-    if (!isOwner && !['admin', 'superadmin'].includes(req.user.role)) {
+    if (!isOwner && !isAdminUser(req.user)) {
       return res.status(403).json({ error: 'Only the owner or an admin can delete this view.' });
     }
 
@@ -394,7 +395,7 @@ router.get('/cases/my', authenticate, async (req, res) => {
     const globalSearch = buildGlobalCaseSearchClause(req.query.search, 'c');
     const params = [req.user.userId];
     let orgClause = '';
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       orgClause = ' AND c.org_id = ?';
       params.push(req.user.orgId);
     }
@@ -426,7 +427,7 @@ router.get('/cases/unassigned', authenticate, async (req, res) => {
     const globalSearch = buildGlobalCaseSearchClause(req.query.search, 'c');
     const params = [];
     let orgClause = '';
-    if (req.user.role !== 'superadmin') {
+    if (!hasGlobalAdminScope(req.user)) {
       orgClause = ' AND c.org_id = ?';
       params.push(req.user.orgId);
     }
@@ -456,8 +457,8 @@ router.get('/cases/mi-responses/log', authenticate, async (req, res) => {
   try {
     const { status, from_date, to_date, search, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
-    const orgClause = req.user.role === 'superadmin' ? '' : ' AND c.org_id = ?';
-    const orgParams = req.user.role === 'superadmin' ? [] : [req.user.orgId];
+    const orgClause = hasGlobalAdminScope(req.user) ? '' : ' AND c.org_id = ?';
+    const orgParams = hasGlobalAdminScope(req.user) ? [] : [req.user.orgId];
 
     let where = `WHERE 1=1${orgClause}`;
     const params = [...orgParams];
@@ -506,8 +507,8 @@ router.get('/cases/mi-responses/log', authenticate, async (req, res) => {
 // GET /api/cases/dashboard-summary — Home dashboard stats/recent/alerts (Sprint 14 G11)
 router.get('/cases/dashboard-summary', authenticate, async (req, res) => {
   try {
-    const orgClause = req.user.role === 'superadmin' ? '' : ' AND c.org_id = ?';
-    const orgParams = req.user.role === 'superadmin' ? [] : [req.user.orgId];
+    const orgClause = hasGlobalAdminScope(req.user) ? '' : ' AND c.org_id = ?';
+    const orgParams = hasGlobalAdminScope(req.user) ? [] : [req.user.orgId];
 
     const [countRows] = await pool.execute(
       'SELECT ' +
@@ -542,8 +543,8 @@ router.get('/cases/dashboard-summary', authenticate, async (req, res) => {
     );
 
     // S19-P1: MI KPIs — pending approvals, sent today, SLA breaches
-    const miOrgClause = req.user.role === 'superadmin' ? '' : ' AND c.org_id = ?';
-    const miOrgParams = req.user.role === 'superadmin' ? [] : [req.user.orgId];
+    const miOrgClause = hasGlobalAdminScope(req.user) ? '' : ' AND c.org_id = ?';
+    const miOrgParams = hasGlobalAdminScope(req.user) ? [] : [req.user.orgId];
     const [[miStats]] = await pool.execute(
       `SELECT
         COALESCE(SUM(CASE WHEN r.response_status IN ('DRAFT','READY') THEN 1 ELSE 0 END), 0) AS pending_responses,
@@ -590,7 +591,7 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'case_type is required and must be MI, AE, or PC' });
     }
 
-    const orgId = req.user.role === 'superadmin' ? (parseInt(req.query.org_id, 10) || 1) : req.user.orgId;
+    const orgId = hasGlobalAdminScope(req.user) ? (parseInt(req.query.org_id, 10) || 1) : req.user.orgId;
     if (orgId == null || Number(orgId) === 0) {
       return res.status(400).json({ error: 'org_id required' });
     }
@@ -911,7 +912,7 @@ router.get('/cases/:id', authenticate, async (req, res) => {
       [req.params.id]
     );
     if (!c) return res.status(404).json({ error: 'Case not found' });
-    if (req.user.role !== 'superadmin' && Number(c.org_id) !== Number(req.user.orgId)) {
+    if (!hasGlobalAdminScope(req.user) && Number(c.org_id) !== Number(req.user.orgId)) {
       return res.status(403).json({ error: 'Access denied' });
     }
     res.json(c);
@@ -1252,7 +1253,7 @@ router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Case not found' });
     }
     // Org isolation check
-    if (req.user.role !== 'superadmin' && Number(c.org_id) !== Number(req.user.orgId)) {
+    if (!hasGlobalAdminScope(req.user) && Number(c.org_id) !== Number(req.user.orgId)) {
       await conn.rollback();
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -1364,7 +1365,7 @@ router.post('/cases/:id/reassign', authenticate, async (req, res) => {
     }
 
     let nextOwner = null;
-    if (req.user.role === 'superadmin') {
+    if (hasGlobalAdminScope(req.user)) {
       [[nextOwner]] = await pool.execute(
         'SELECT id, name, email FROM users WHERE id = ? AND is_active = 1 LIMIT 1',
         [newOwnerId]
@@ -1529,7 +1530,7 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
           return res.status(400).json({ error: 'case_owner_id must be a valid user id.' });
         }
         let owner = null;
-        if (req.user.role === 'superadmin') {
+        if (hasGlobalAdminScope(req.user)) {
           [[owner]] = await pool.execute(
             'SELECT id FROM users WHERE id = ? AND is_active = 1 LIMIT 1',
             [parsed]
@@ -1792,7 +1793,7 @@ router.delete('/cases/:id/links/:linkId', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/cases/:id/merge', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/cases/:id/merge', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const source = await verifyCaseOrg(req.params.id, req);
@@ -1856,7 +1857,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
              WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1
           ))
         ORDER BY product_group_match DESC, FIELD(t.type, 'Response','Email','Acknowledgment','Correspondence'), t.name ASC`,
-      [...responseGroupIds, req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id, scopedCase.org_id]
+      [...responseGroupIds, hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id, scopedCase.org_id]
     );
     const [documents] = await pool.execute(
       `SELECT d.id, d.doc_id, d.name, d.doc_type, d.response_doc_type, d.status,
@@ -1869,7 +1870,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
           AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())
         ORDER BY CASE WHEN d.document_category = 'Response Builder' THEN 0 ELSE 1 END, d.name ASC
         LIMIT 200`,
-      [req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id]
+      [hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
     const [modules] = await pool.execute(
       `SELECT m.id, m.module_id, m.name, m.module_type, m.status,
@@ -1881,7 +1882,7 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
           AND (m.expiry_date IS NULL OR m.expiry_date >= CURDATE())
         ORDER BY CASE WHEN m.document_category = 'Response Builder' THEN 0 ELSE 1 END, m.name ASC
         LIMIT 200`,
-      [req.user.role === 'superadmin' ? 1 : 0, scopedCase.org_id]
+      [hasGlobalAdminScope(req.user) ? 1 : 0, scopedCase.org_id]
     );
     const [bundles] = await pool.execute(
       `SELECT * FROM response_template_bundles
@@ -2726,8 +2727,8 @@ router.put('/cases/:id/intake', authenticate, async (req, res) => {
 
 // ─── SOFT DELETE ──────────────────────────────────────────────────────────────
 
-// DELETE /api/cases/:id — soft delete (admin/superadmin only)
-router.delete('/cases/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+// DELETE /api/cases/:id — soft delete (admin/platform admin only)
+router.delete('/cases/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const owned = await verifyCaseOrg(req.params.id, req);
     if (!owned) return res.status(403).json({ error: 'Access denied' });

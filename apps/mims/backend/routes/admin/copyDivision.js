@@ -2,7 +2,7 @@
 
 /**
  * admin/copyDivision.js — Copy Division
- * Superadmin-only: copies all selected org configuration from one tenant to another.
+ * Platform-admin-only: copies all selected org configuration from one tenant to another.
  * Supports overwrite (delete + re-insert) or skip-existing mode.
  */
 
@@ -163,7 +163,7 @@ async function previewCategory(key, sourceOrgId) {
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // GET /api/admin/copy-division/orgs — list all orgs for source/target selection
-router.get('/copy-division/orgs', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/copy-division/orgs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [orgs] = await pool.execute(
       'SELECT id, name FROM organisations ORDER BY name ASC'
@@ -176,7 +176,7 @@ router.get('/copy-division/orgs', authenticate, requireRole('admin', 'superadmin
 });
 
 // GET /api/admin/copy-division/categories — return category metadata
-router.get('/copy-division/categories', authenticate, requireRole('admin', 'superadmin'), (req, res) => {
+router.get('/copy-division/categories', authenticate, requireRole('admin', 'platform_admin'), (req, res) => {
   const list = Object.entries(CATEGORIES).map(([key, v]) => ({
     key,
     label: v.label,
@@ -186,7 +186,7 @@ router.get('/copy-division/categories', authenticate, requireRole('admin', 'supe
 });
 
 // POST /api/admin/copy-division/preview — count rows that would be copied
-router.post('/copy-division/preview', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/copy-division/preview', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { source_org_id, categories } = req.body;
     if (!source_org_id || !Array.isArray(categories) || categories.length === 0) {
@@ -205,7 +205,7 @@ router.post('/copy-division/preview', authenticate, requireRole('admin', 'supera
 });
 
 // POST /api/admin/copy-division/execute — run the copy
-router.post('/copy-division/execute', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/copy-division/execute', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const { source_org_id, target_org_id, categories, overwrite = false } = req.body;
 
   if (!source_org_id || !target_org_id) {

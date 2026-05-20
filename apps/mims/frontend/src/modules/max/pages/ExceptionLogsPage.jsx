@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import MIMSLayout from '../../../shared/components/MIMSLayout';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { isAdminUser } from '../../../shared/utils/adminScope.js';
 
 function formatDate(value) {
   if (!value) return '—';
@@ -76,7 +77,7 @@ export default function ExceptionLogsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  const isAdmin = isAdminUser(user);
 
   return (
     <MIMSLayout showStatStrip={false} bodyClassName="mims-home-page-body">
@@ -92,7 +93,7 @@ export default function ExceptionLogsPage() {
         </div>
 
         {!isAdmin && (
-          <div className="alert alert-error">Only admin and superadmin users can access exception details.</div>
+          <div className="alert alert-error">Only administrator users can access exception details.</div>
         )}
         {error && <div className="alert alert-error" style={{ marginTop: 10 }}>{error}</div>}
 

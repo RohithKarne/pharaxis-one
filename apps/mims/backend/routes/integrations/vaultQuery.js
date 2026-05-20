@@ -5,6 +5,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { getVaultSession, runVQL } = require('../../services/vaultService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 function normalizeVaultDocId(rawValue) {
   const value = String(rawValue || '').trim();
@@ -46,7 +47,7 @@ function buildAllowedVaultQuery(queryKey, queryParams = {}) {
   }
 }
 
-router.get('/superadmin/vault-query-params/:org_id', authenticate, requireRole('superadmin'), async (req, res) => {
+router.get(['/admin/platform/vault-query-params/:org_id', '/superadmin/vault-query-params/:org_id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM org_vault_config WHERE org_id = ? LIMIT 1', [req.params.org_id]);
     return res.json({ params: rows[0] || null });
@@ -55,7 +56,7 @@ router.get('/superadmin/vault-query-params/:org_id', authenticate, requireRole('
   }
 });
 
-router.post('/superadmin/vault-query-params/:org_id', authenticate, requireRole('superadmin'), async (req, res) => {
+router.post(['/admin/platform/vault-query-params/:org_id', '/superadmin/vault-query-params/:org_id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { vault_type, vault_subtype, vault_classification, mims_cm_category } = req.body;
 
@@ -70,7 +71,7 @@ router.post('/superadmin/vault-query-params/:org_id', authenticate, requireRole(
   }
 });
 
-router.delete('/superadmin/vault-query-params/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+router.delete(['/admin/platform/vault-query-params/:id', '/superadmin/vault-query-params/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     await pool.query('DELETE FROM vault_document_type_map WHERE id = ?', [req.params.id]);
     return res.json({ message: 'Deleted' });
@@ -79,7 +80,7 @@ router.delete('/superadmin/vault-query-params/:id', authenticate, requireRole('s
   }
 });
 
-router.get('/admin/vault/search', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/admin/vault/search', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const queryKey = String(req.query.query_key || '').trim();
     if (!queryKey) {
@@ -87,7 +88,7 @@ router.get('/admin/vault/search', authenticate, requireRole('admin', 'superadmin
     }
 
     let orgId = req.user.orgId;
-    if (req.user.role === 'superadmin') {
+    if (hasGlobalAdminScope(req.user)) {
       orgId = parseInt(req.query.org_id, 10) || req.user.orgId;
     }
     if (!orgId) {

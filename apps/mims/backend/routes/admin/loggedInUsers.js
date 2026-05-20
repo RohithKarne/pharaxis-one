@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../../database/db');
 const JWT_SECRET = require('../../utils/jwtSecret');
 const { authenticate, requireRole, sessionCacheInvalidate } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ function deriveApplication(role) {
   return normalized === 'admin' || normalized === 'superadmin' ? 'Admin' : 'MIMS';
 }
 
-router.get('/logged-in-users', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/logged-in-users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [sessionRows] = await pool.execute(
       `SELECT s.id, s.user_id, s.token, s.created_at, s.expires_at, u.name
@@ -45,7 +46,7 @@ router.get('/logged-in-users', authenticate, requireRole('admin', 'superadmin'),
       const decoded = decodeSessionToken(row.token);
       if (!decoded) continue;
 
-      if (req.user.role !== 'superadmin' && Number(decoded.orgId || 0) !== Number(req.user.orgId || 0)) {
+      if (!hasGlobalAdminScope(req.user) && Number(decoded.orgId || 0) !== Number(req.user.orgId || 0)) {
         continue;
       }
 
@@ -97,7 +98,7 @@ router.get('/logged-in-users', authenticate, requireRole('admin', 'superadmin'),
   }
 });
 
-router.post('/logged-in-users/:sessionId/sign-out', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/logged-in-users/:sessionId/sign-out', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
     if (!Number.isFinite(sessionId) || sessionId <= 0) {
@@ -117,7 +118,7 @@ router.post('/logged-in-users/:sessionId/sign-out', authenticate, requireRole('a
 
     const decoded = decodeSessionToken(sessionRow.token);
     const rowOrgId = Number(decoded?.orgId || 0);
-    if (req.user.role !== 'superadmin' && rowOrgId !== Number(req.user.orgId || 0)) {
+    if (!hasGlobalAdminScope(req.user) && rowOrgId !== Number(req.user.orgId || 0)) {
       return res.status(403).json({ error: 'You can only sign out users in your tenant.' });
     }
 
@@ -132,7 +133,7 @@ router.post('/logged-in-users/:sessionId/sign-out', authenticate, requireRole('a
     for (const row of userSessionRows) {
       const decodedRow = decodeSessionToken(row.token);
       const rowOrgIdValue = Number(decodedRow?.orgId || 0);
-      if (req.user.role !== 'superadmin' && rowOrgIdValue !== Number(req.user.orgId || 0)) {
+      if (!hasGlobalAdminScope(req.user) && rowOrgIdValue !== Number(req.user.orgId || 0)) {
         continue;
       }
       sessionIdsToRevoke.push(row.id);

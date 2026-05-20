@@ -22,7 +22,7 @@ async function login(baseUrl, email = 'superadmin', password = '__SET_SMOKE_TEST
   return data.token;
 }
 
-async function ensureSecondSuperadmin() {
+async function ensureSecondPlatformAdmin() {
   const pool = mysql.createPool({
     host: process.env.MYSQL_HOST || 'localhost',
     port: Number(process.env.MYSQL_PORT || 3306),
@@ -38,7 +38,7 @@ async function ensureSecondSuperadmin() {
       await pool.execute(
         `INSERT INTO users (name, email, password, role, is_active)
          VALUES (?, ?, ?, 'superadmin', 1)`,
-        ['Superadmin QA2', email, hash]
+        ['Platform Admin QA2', email, hash]
       );
     }
     return { email, password: '__SET_SMOKE_TEST_PASSWORD__' };
@@ -59,7 +59,7 @@ async function requestJson(baseUrl, token, method, route, body) {
 
 async function runSmoke(baseUrl) {
   const token = await login(baseUrl, 'superadmin', '__SET_SMOKE_TEST_PASSWORD__');
-  const secondAdmin = await ensureSecondSuperadmin();
+  const secondAdmin = await ensureSecondPlatformAdmin();
   const tokenL2 = await login(baseUrl, secondAdmin.email, secondAdmin.password);
 
   const retry = await requestJson(baseUrl, token, 'POST', '/api/admin/process-logs/ops/request', {

@@ -73,7 +73,7 @@ router.post('/admin/emir/receive', authenticate, async (req, res) => {
   }
 });
 
-router.get('/superadmin/emir/requests', authenticate, requireRole('superadmin'), async (req, res) => {
+router.get(['/admin/platform/emir/requests', '/superadmin/emir/requests'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     let query = 'SELECT r.*, o.name as org_name FROM emir_requests r JOIN organisations o ON r.org_id = o.id';
     const params = [];
@@ -92,7 +92,7 @@ router.get('/superadmin/emir/requests', authenticate, requireRole('superadmin'),
   }
 });
 
-router.get('/superadmin/emir/requests/:id/audit', authenticate, requireRole('superadmin'), async (req, res) => {
+router.get(['/admin/platform/emir/requests/:id/audit', '/superadmin/emir/requests/:id/audit'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.query(
       'SELECT * FROM emir_audit_log WHERE emir_request_id = ? ORDER BY created_at ASC',

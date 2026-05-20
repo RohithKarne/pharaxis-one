@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 function uniqueIds(values) {
   return [...new Set((values || []).map((value) => Number(value)).filter(Boolean))];
@@ -53,7 +54,7 @@ async function getCaseRow(caseId) {
 async function ensureCaseConversation(caseId, user) {
   const caseRow = await getCaseRow(caseId);
   if (!caseRow) return null;
-  if (user.role !== 'superadmin' && Number(caseRow.org_id) !== Number(user.orgId)) return null;
+  if (!hasGlobalAdminScope(user) && Number(caseRow.org_id) !== Number(user.orgId)) return null;
 
   const [existing] = await pool.execute(
     `SELECT c.id, c.org_id, c.conversation_type, c.title, c.created_by, c.is_archived, c.created_at, c.updated_at

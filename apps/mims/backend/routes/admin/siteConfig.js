@@ -10,6 +10,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { invalidateWorkflowRulesCache } = require('../../services/workflowEngine');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -20,26 +21,26 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function getScopedOrgId(req, providedOrgId = null) {
-  return isSuperadmin(req) ? (providedOrgId || null) : req.user.orgId;
+  return hasPlatformAdminScope(req) ? (providedOrgId || null) : req.user.orgId;
 }
 
 async function hasSiteAccess(req, siteId) {
   const [rows] = await pool.execute(
-    isSuperadmin(req)
+    hasPlatformAdminScope(req)
       ? 'SELECT id FROM sites WHERE id = ?'
       : 'SELECT id FROM sites WHERE id = ? AND org_id = ?',
-    isSuperadmin(req) ? [siteId] : [siteId, req.user.orgId]
+    hasPlatformAdminScope(req) ? [siteId] : [siteId, req.user.orgId]
   );
   return rows.length > 0;
 }
 
 // POST /api/admin/site-config/test-smtp — Test SMTP connection
-router.post('/site-config/test-smtp', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/site-config/test-smtp', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const nodemailer = require('nodemailer');
     const { host, port, secure, user, pass } = req.body;
@@ -60,10 +61,10 @@ router.post('/site-config/test-smtp', authenticate, requireRole('admin', 'supera
 // ─── SITES ───────────────────────────────────────────────────────────────────
 
 // GET /api/admin/sites — list sites with org info joined
-router.get('/sites', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/sites', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [sites] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT s.*, o.name AS org_name,
                   sc.abbreviation, sc.enable_data_protection, sc.retry_enabled,
                   sc.retry_count, sc.retry_interval_min, sc.alert_config, sc.response_config
@@ -80,7 +81,7 @@ router.get('/sites', authenticate, requireRole('admin', 'superadmin'), requireOr
            LEFT JOIN site_config sc ON sc.site_id = s.id
            WHERE s.is_active = 1 AND s.org_id = ?
            ORDER BY o.name, s.name`,
-      isSuperadmin(req) ? [] : [req.user.orgId]
+      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
 
     const parsed = sites.map(s => ({
@@ -97,7 +98,7 @@ router.get('/sites', authenticate, requireRole('admin', 'superadmin'), requireOr
 });
 
 // POST /api/admin/sites — create site + site_config record
-router.post('/sites', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/sites', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const {
       name, country, is_primary,
@@ -149,10 +150,10 @@ router.post('/sites', authenticate, requireRole('admin', 'superadmin'), requireO
 });
 
 // GET /api/admin/sites/:id — get site with its config
-router.get('/sites/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/sites/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const [[site]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? `SELECT s.*, o.name AS org_name,
                   sc.abbreviation, sc.enable_data_protection, sc.retry_enabled,
                   sc.retry_count, sc.retry_interval_min, sc.alert_config, sc.response_config
@@ -167,7 +168,7 @@ router.get('/sites/:id', authenticate, requireRole('admin', 'superadmin'), requi
            LEFT JOIN organisations o ON s.org_id = o.id
            LEFT JOIN site_config sc ON sc.site_id = s.id
            WHERE s.id = ? AND s.org_id = ?`,
-      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
 
     if (!site) return res.status(404).json({ error: 'Site not found.' });
@@ -186,14 +187,14 @@ router.get('/sites/:id', authenticate, requireRole('admin', 'superadmin'), requi
 });
 
 // PUT /api/admin/sites/:id — update site + its config
-router.put('/sites/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/sites/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT id FROM sites WHERE id = ?'
         : 'SELECT id FROM sites WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [id] : [id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [id] : [id, req.user.orgId]
     );
     if (!existing) return res.status(404).json({ error: 'Site not found.' });
 
@@ -257,7 +258,7 @@ router.put('/sites/:id', authenticate, requireRole('admin', 'superadmin'), requi
 
 // GET /api/admin/workflow-states-extended — list workflow states with optional site filter
 // Registering under a distinct route to avoid conflict with config.js
-router.get('/workflow-states-extended', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/workflow-states-extended', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [states] = await pool.execute('SELECT * FROM workflow_states ORDER BY name');
     res.json({ states });
@@ -270,7 +271,7 @@ router.get('/workflow-states-extended', authenticate, requireRole('admin', 'supe
 // ─── WORKFLOW RULES ──────────────────────────────────────────────────────────
 
 // GET /api/admin/workflow-rules — list rules
-router.get('/workflow-rules', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/workflow-rules', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [rules] = await pool.execute(`
       SELECT wr.*,
@@ -289,7 +290,7 @@ router.get('/workflow-rules', authenticate, requireRole('admin', 'superadmin'), 
 });
 
 // POST /api/admin/workflow-rules — create rule (validate no self-loop)
-router.post('/workflow-rules', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/workflow-rules', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const {
       site_id, from_state_id, to_state_id,
@@ -327,7 +328,7 @@ router.post('/workflow-rules', authenticate, requireRole('admin', 'superadmin'),
 });
 
 // PUT /api/admin/workflow-rules/:id — update rule
-router.put('/workflow-rules/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/workflow-rules/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute('SELECT id FROM workflow_rules WHERE id = ?', [id]);
@@ -364,7 +365,7 @@ router.put('/workflow-rules/:id', authenticate, requireRole('admin', 'superadmin
 });
 
 // DELETE /api/admin/workflow-rules/:id — delete rule
-router.delete('/workflow-rules/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/workflow-rules/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute('SELECT id FROM workflow_rules WHERE id = ?', [id]);
@@ -385,7 +386,7 @@ router.delete('/workflow-rules/:id', authenticate, requireRole('admin', 'superad
 // ── Email Accounts ────────────────────────────────────────────────────────────
 
 // GET /api/admin/sites/:id/email-accounts
-router.get('/sites/:id/email-accounts', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/sites/:id/email-accounts', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const [rows] = await pool.execute(
@@ -397,7 +398,7 @@ router.get('/sites/:id/email-accounts', authenticate, requireRole('admin', 'supe
 });
 
 // POST /api/admin/sites/:id/email-accounts
-router.post('/sites/:id/email-accounts', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/sites/:id/email-accounts', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const { email, label, case_types } = req.body;
@@ -413,7 +414,7 @@ router.post('/sites/:id/email-accounts', authenticate, requireRole('admin', 'sup
 });
 
 // DELETE /api/admin/sites/:id/email-accounts/:accountId
-router.delete('/sites/:id/email-accounts/:accountId', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/sites/:id/email-accounts/:accountId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     await pool.execute('DELETE FROM site_email_accounts WHERE id = ? AND site_id = ?', [req.params.accountId, req.params.id]);
@@ -425,7 +426,7 @@ router.delete('/sites/:id/email-accounts/:accountId', authenticate, requireRole(
 // ── Response Template ─────────────────────────────────────────────────────────
 
 // GET /api/admin/sites/:id/response-template
-router.get('/sites/:id/response-template', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/sites/:id/response-template', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const [[row]] = await pool.execute('SELECT * FROM site_response_templates WHERE site_id = ?', [req.params.id]);
@@ -434,7 +435,7 @@ router.get('/sites/:id/response-template', authenticate, requireRole('admin', 's
 });
 
 // PUT /api/admin/sites/:id/response-template — upsert
-router.put('/sites/:id/response-template', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/sites/:id/response-template', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const { subject, body_html } = req.body;
@@ -452,7 +453,7 @@ router.put('/sites/:id/response-template', authenticate, requireRole('admin', 's
 // ── Data Retention (Right To Forget) ─────────────────────────────────────────
 
 // GET /api/admin/sites/:id/data-retention
-router.get('/sites/:id/data-retention', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/sites/:id/data-retention', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const [rows] = await pool.execute('SELECT * FROM site_data_retention WHERE site_id = ?', [req.params.id]);
@@ -461,7 +462,7 @@ router.get('/sites/:id/data-retention', authenticate, requireRole('admin', 'supe
 });
 
 // PUT /api/admin/sites/:id/data-retention — upsert per regulation
-router.put('/sites/:id/data-retention', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/sites/:id/data-retention', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const { retention_days, regulation, auto_delete_enabled, notes } = req.body;
@@ -484,7 +485,7 @@ router.put('/sites/:id/data-retention', authenticate, requireRole('admin', 'supe
 // ── Email Purpose (Sprint 7) ──────────────────────────────────────────────────
 
 // GET /api/admin/sites/:id/email-purpose — get all 4 purpose assignments for a site
-router.get('/sites/:id/email-purpose', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/sites/:id/email-purpose', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const [rows] = await pool.execute(`
@@ -501,7 +502,7 @@ router.get('/sites/:id/email-purpose', authenticate, requireRole('admin', 'super
 
 // PUT /api/admin/sites/:id/email-purpose — upsert purpose assignments
 // Body: { assignments: [{ purpose: 'response', email_account_ids: [1,2] }, ...] }
-router.put('/sites/:id/email-purpose', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/sites/:id/email-purpose', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const { assignments } = req.body;
@@ -556,7 +557,7 @@ router.put('/sites/:id/email-purpose', authenticate, requireRole('admin', 'super
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
 // GET /api/admin/sites/:id/alerts
-router.get('/sites/:id/alerts', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/sites/:id/alerts', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const [rows] = await pool.execute('SELECT * FROM site_alerts WHERE site_id = ? ORDER BY id', [req.params.id]);
@@ -565,7 +566,7 @@ router.get('/sites/:id/alerts', authenticate, requireRole('admin', 'superadmin')
 });
 
 // POST /api/admin/sites/:id/alerts
-router.post('/sites/:id/alerts', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/sites/:id/alerts', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const { alert_type, threshold_value, notify_emails } = req.body;
@@ -581,7 +582,7 @@ router.post('/sites/:id/alerts', authenticate, requireRole('admin', 'superadmin'
 });
 
 // PUT /api/admin/sites/:id/alerts/:alertId
-router.put('/sites/:id/alerts/:alertId', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/sites/:id/alerts/:alertId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     const { alert_type, threshold_value, notify_emails, is_active } = req.body;
@@ -595,7 +596,7 @@ router.put('/sites/:id/alerts/:alertId', authenticate, requireRole('admin', 'sup
 });
 
 // DELETE /api/admin/sites/:id/alerts/:alertId
-router.delete('/sites/:id/alerts/:alertId', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/sites/:id/alerts/:alertId', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     if (!(await hasSiteAccess(req, req.params.id))) return res.status(404).json({ error: 'Site not found.' });
     await pool.execute('DELETE FROM site_alerts WHERE id = ? AND site_id = ?', [req.params.alertId, req.params.id]);

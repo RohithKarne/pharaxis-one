@@ -33,7 +33,7 @@ function nextRunDate(cronExpression) {
   }
 }
 
-router.get('/service-dashboard', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/service-dashboard', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     // Last run stats for cron jobs — keyed by job name from details JSON
     const [cronStats] = await pool.execute(`

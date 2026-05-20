@@ -5,6 +5,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { aiGenerationRateLimiter } = require('../../middleware/rateLimiters');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const {
   normalizeContentType,
   normalizeMode,
@@ -34,12 +35,12 @@ function parseJson(value, fallback = null) {
   }
 }
 
-function isSuperadmin(req) {
-  return req.user?.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function resolveScopedOrgId(req, providedOrgId) {
-  if (!isSuperadmin(req)) {
+  if (!hasPlatformAdminScope(req)) {
     return parsePositiveInt(req.user?.orgId);
   }
   return parsePositiveInt(providedOrgId);
@@ -109,10 +110,10 @@ function validateEvidenceRulePayload(body = {}) {
   };
 }
 
-router.get('/evidence-chain/rules', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/evidence-chain/rules', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const [rows] = await pool.execute(
       `SELECT id, org_id, rule_name, applies_to, mode_scope, check_type, check_config, severity, priority, is_active, created_at, updated_at
@@ -131,10 +132,10 @@ router.get('/evidence-chain/rules', authenticate, requireRole('admin', 'superadm
   }
 });
 
-router.post('/evidence-chain/rules', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/evidence-chain/rules', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const validated = validateEvidenceRulePayload(req.body || {});
     if (!validated.ok) return res.status(400).json({ error: validated.error });
@@ -174,10 +175,10 @@ router.post('/evidence-chain/rules', authenticate, requireRole('admin', 'superad
   }
 });
 
-router.put('/evidence-chain/rules/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/evidence-chain/rules/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id ?? req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const ruleId = parsePositiveInt(req.params.id);
     if (!ruleId) return res.status(400).json({ error: 'Valid rule id is required.' });
@@ -231,10 +232,10 @@ router.put('/evidence-chain/rules/:id', authenticate, requireRole('admin', 'supe
   }
 });
 
-router.post('/evidence-chain/compile', authenticate, requireRole('admin', 'superadmin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
+router.post('/evidence-chain/compile', authenticate, requireRole('admin', 'platform_admin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const contentType = normalizeContentType(req.body.content_type);
     const contentId = parsePositiveInt(req.body.content_id);
@@ -259,10 +260,10 @@ router.post('/evidence-chain/compile', authenticate, requireRole('admin', 'super
   }
 });
 
-router.get('/evidence-chain/runs', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/evidence-chain/runs', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
     const runs = await listEvidenceRuns({ orgId: scopedOrgId, limit: req.query.limit });
     res.json({ org_id: scopedOrgId, runs });
   } catch (err) {
@@ -270,10 +271,10 @@ router.get('/evidence-chain/runs', authenticate, requireRole('admin', 'superadmi
   }
 });
 
-router.post('/contradiction-radar/scan', authenticate, requireRole('admin', 'superadmin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
+router.post('/contradiction-radar/scan', authenticate, requireRole('admin', 'platform_admin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const report = await runContradictionScan({
       orgId: scopedOrgId,
@@ -295,10 +296,10 @@ router.post('/contradiction-radar/scan', authenticate, requireRole('admin', 'sup
   }
 });
 
-router.get('/contradiction-radar/findings', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/contradiction-radar/findings', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const findings = await listContradictionFindings({
       orgId: scopedOrgId,
@@ -312,10 +313,10 @@ router.get('/contradiction-radar/findings', authenticate, requireRole('admin', '
   }
 });
 
-router.put('/contradiction-radar/findings/:id/status', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/contradiction-radar/findings/:id/status', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id ?? req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const findingId = parsePositiveInt(req.params.id);
     if (!findingId) return res.status(400).json({ error: 'Valid finding id is required.' });
@@ -354,10 +355,10 @@ router.put('/contradiction-radar/findings/:id/status', authenticate, requireRole
   }
 });
 
-router.post('/digital-twin/simulate', authenticate, requireRole('admin', 'superadmin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
+router.post('/digital-twin/simulate', authenticate, requireRole('admin', 'platform_admin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const simulation = await simulateDigitalTwinRelease({
       orgId: scopedOrgId,
@@ -380,10 +381,10 @@ router.post('/digital-twin/simulate', authenticate, requireRole('admin', 'supera
   }
 });
 
-router.get('/digital-twin/runs', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/digital-twin/runs', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const runs = await listDigitalTwinRuns({ orgId: scopedOrgId, limit: req.query.limit });
     res.json({ org_id: scopedOrgId, runs });
@@ -392,10 +393,10 @@ router.get('/digital-twin/runs', authenticate, requireRole('admin', 'superadmin'
   }
 });
 
-router.get('/adaptive-risk/rules', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/adaptive-risk/rules', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const rules = await listAdaptiveRiskRules(scopedOrgId);
     res.json({ org_id: scopedOrgId, rules });
@@ -404,10 +405,10 @@ router.get('/adaptive-risk/rules', authenticate, requireRole('admin', 'superadmi
   }
 });
 
-router.post('/adaptive-risk/rules', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/adaptive-risk/rules', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const ruleName = String(req.body.rule_name || '').trim();
     const minScore = Number.isInteger(Number(req.body.min_score)) ? Number(req.body.min_score) : null;
@@ -473,10 +474,10 @@ router.post('/adaptive-risk/rules', authenticate, requireRole('admin', 'superadm
   }
 });
 
-router.put('/adaptive-risk/rules/:id', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.put('/adaptive-risk/rules/:id', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id ?? req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const ruleId = parsePositiveInt(req.params.id);
     if (!ruleId) return res.status(400).json({ error: 'Valid rule id is required.' });
@@ -558,10 +559,10 @@ router.put('/adaptive-risk/rules/:id', authenticate, requireRole('admin', 'super
   }
 });
 
-router.post('/adaptive-risk/evaluate', authenticate, requireRole('admin', 'superadmin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
+router.post('/adaptive-risk/evaluate', authenticate, requireRole('admin', 'platform_admin'), requireOrg, aiGenerationRateLimiter, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.body.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const decision = await evaluateAdaptiveRisk({
       orgId: scopedOrgId,
@@ -585,10 +586,10 @@ router.post('/adaptive-risk/evaluate', authenticate, requireRole('admin', 'super
   }
 });
 
-router.get('/adaptive-risk/decisions', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/adaptive-risk/decisions', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const scopedOrgId = resolveScopedOrgId(req, req.query.org_id);
-    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for superadmin scope.' });
+    if (!scopedOrgId) return res.status(400).json({ error: 'org_id is required for platform-admin scope.' });
 
     const decisions = await listAdaptiveRiskDecisions({ orgId: scopedOrgId, limit: req.query.limit });
     res.json({ org_id: scopedOrgId, decisions });

@@ -1,5 +1,5 @@
 'use strict';
-// Migration 009 — Superadmin alerts, notifications, outbound events, process explorer, regression runs
+// Migration 009 — Platform Admin alerts, notifications, outbound events, process explorer, regression runs
 
 async function up(conn) {
   await conn.execute(`

@@ -73,21 +73,21 @@ function printResults(summary, testEmail, testUserId) {
     pass('T00 — Server health check', summary);
   } catch (e) { fail('T00 — Server health check', summary, e.message); }
 
-  // ─── 1. Superadmin login ──────────────────────────────────────────────────
+  // ─── 1. Platform Admin login ──────────────────────────────────────────────────
   let superToken;
   try {
     const { res, data } = await req('/api/auth/login', {
       method: 'POST',
       body: { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
     });
-    assert(res.ok && data.token, `Superadmin login failed: ${JSON.stringify(data)}`);
+    assert(res.ok && data.token, `Platform Admin login failed: ${JSON.stringify(data)}`);
     superToken = data.token;
-    pass('T01 — Superadmin login', summary);
-  } catch (e) { fail('T01 — Superadmin login', summary, e.message); return printResults(summary, testEmail, testUserId); }
+    pass('T01 — Platform Admin login', summary);
+  } catch (e) { fail('T01 — Platform Admin login', summary, e.message); return printResults(summary, testEmail, testUserId); }
 
   // ─── 2. Create test user ──────────────────────────────────────────────────
   try {
-    const { res, data } = await req('/api/superadmin/users/create', {
+    const { res, data } = await req('/api/admin/platform/users/create', {
       method: 'POST',
       token: superToken,
       body: { name: 'Sprint9 Test User', email: testEmail, role: 'agent' },
@@ -100,7 +100,7 @@ function printResults(summary, testEmail, testUserId) {
   // ─── 3. Fetch orgs — get Novartis (id 1) and Vanaja Review Co. (id 26) ───
   let orgA, orgAsite, orgB, orgBsite;
   try {
-    const { res, data } = await req('/api/superadmin/orgs-for-assignment', { token: superToken });
+    const { res, data } = await req('/api/admin/platform/orgs-for-assignment', { token: superToken });
     assert(res.ok, `orgs-for-assignment failed: ${JSON.stringify(data)}`);
     orgA = (data.orgs || []).find(o => o.id === 1);
     orgB = (data.orgs || []).find(o => o.id === 26);
@@ -115,14 +115,14 @@ function printResults(summary, testEmail, testUserId) {
 
   // ─── 4. Assign test user to Org A as admin, Org B as agent ───────────────
   try {
-    const r1 = await req(`/api/superadmin/users/${testUserId}/org-access`, {
+    const r1 = await req(`/api/admin/platform/users/${testUserId}/org-access`, {
       method: 'POST',
       token: superToken,
       body: { org_id: orgA.id, primary_site_id: orgAsite.id, role_at_org: 'admin', site_permission: 'full' },
     });
     assert(r1.res.ok, `Assign Org A failed: ${JSON.stringify(r1.data)}`);
 
-    const r2 = await req(`/api/superadmin/users/${testUserId}/org-access`, {
+    const r2 = await req(`/api/admin/platform/users/${testUserId}/org-access`, {
       method: 'POST',
       token: superToken,
       body: { org_id: orgB.id, primary_site_id: orgBsite.id, role_at_org: 'agent', site_permission: 'read' },
@@ -242,7 +242,7 @@ function printResults(summary, testEmail, testUserId) {
 
   // ─── 11. Login audit: org_switch event logged ────────────────────────────
   try {
-    const { res, data } = await req('/api/superadmin/login-audit?limit=50', { token: superToken });
+    const { res, data } = await req('/api/admin/platform/login-audit?limit=50', { token: superToken });
     assert(res.ok, `Login audit fetch failed: ${JSON.stringify(data)}`);
     const logs = data.logs || [];
     const switchLog = logs.find(l =>
@@ -255,7 +255,7 @@ function printResults(summary, testEmail, testUserId) {
 
   // ─── 12. Login audit: ip_address + location columns present ──────────────
   try {
-    const { res, data } = await req('/api/superadmin/login-audit?limit=20', { token: superToken });
+    const { res, data } = await req('/api/admin/platform/login-audit?limit=20', { token: superToken });
     assert(res.ok, `Audit fetch failed`);
     const logs = data.logs || [];
     assert(logs.length > 0, 'No audit logs returned');
@@ -268,7 +268,7 @@ function printResults(summary, testEmail, testUserId) {
 
   // ─── 13. User search — SuperAdmin users list ─────────────────────────────
   try {
-    const { res, data } = await req('/api/superadmin/all-users?search=Sprint9', { token: superToken });
+    const { res, data } = await req('/api/admin/platform/all-users?search=Sprint9', { token: superToken });
     assert(res.ok, `User search failed: ${JSON.stringify(data)}`);
     const users = data.users || data || [];
     const found = Array.isArray(users) && users.some(u =>
@@ -280,39 +280,39 @@ function printResults(summary, testEmail, testUserId) {
   } catch (e) { fail('T13 — User search: filter by name', summary, e.message); }
 
   // ─── 14. Session timeout config — GET ────────────────────────────────────
-  // Config is nested under data.config; key is superadmin_session_timeout_minutes
+  // Config is nested under data.config; key is platform_admin_session_timeout_minutes
   let currentTimeout;
   try {
-    const { res, data } = await req('/api/superadmin/config', { token: superToken });
+    const { res, data } = await req('/api/admin/platform/config', { token: superToken });
     assert(res.ok, `Config GET failed: ${JSON.stringify(data)}`);
     const cfg = data.config || data;
-    assert(cfg.superadmin_session_timeout_minutes !== undefined,
-      `superadmin_session_timeout_minutes missing from config: ${JSON.stringify(data)}`);
-    currentTimeout = Number(cfg.superadmin_session_timeout_minutes);
+    assert(cfg.platform_admin_session_timeout_minutes !== undefined,
+      `platform_admin_session_timeout_minutes missing from config: ${JSON.stringify(data)}`);
+    currentTimeout = Number(cfg.platform_admin_session_timeout_minutes);
     pass(`T14 — Session timeout config GET (current: ${currentTimeout} min)`, summary);
   } catch (e) { fail('T14 — Session timeout config GET', summary, e.message); }
 
   // ─── 15. Session timeout config — PUT ────────────────────────────────────
   try {
     const newTimeout = currentTimeout === 30 ? 60 : 30;
-    const { res, data } = await req('/api/superadmin/config', {
+    const { res, data } = await req('/api/admin/platform/config', {
       method: 'PUT',
       token: superToken,
-      body: { superadmin_session_timeout_minutes: newTimeout },
+      body: { platform_admin_session_timeout_minutes: newTimeout },
     });
     assert(res.ok, `Config PUT failed: ${JSON.stringify(data)}`);
     // Verify persisted
-    const verify = await req('/api/superadmin/config', { token: superToken });
+    const verify = await req('/api/admin/platform/config', { token: superToken });
     assert(verify.res.ok, 'Config re-fetch failed');
     const verifyCfg = verify.data.config || verify.data;
     assert(
-      Number(verifyCfg.superadmin_session_timeout_minutes) === newTimeout,
-      `Timeout not persisted: expected ${newTimeout}, got ${verifyCfg.superadmin_session_timeout_minutes}`
+      Number(verifyCfg.platform_admin_session_timeout_minutes) === newTimeout,
+      `Timeout not persisted: expected ${newTimeout}, got ${verifyCfg.platform_admin_session_timeout_minutes}`
     );
     // Restore original
-    await req('/api/superadmin/config', {
+    await req('/api/admin/platform/config', {
       method: 'PUT', token: superToken,
-      body: { superadmin_session_timeout_minutes: currentTimeout },
+      body: { platform_admin_session_timeout_minutes: currentTimeout },
     });
     pass(`T15 — Session timeout config PUT + persist (set to ${newTimeout}, restored to ${currentTimeout})`, summary);
   } catch (e) { fail('T15 — Session timeout config PUT + persist', summary, e.message); }
@@ -320,7 +320,7 @@ function printResults(summary, testEmail, testUserId) {
   // ─── 16. Alert email template — GET ──────────────────────────────────────
   let alertTemplate;
   try {
-    const { res, data } = await req('/api/superadmin/alert-email-template', { token: superToken });
+    const { res, data } = await req('/api/admin/platform/alert-email-template', { token: superToken });
     assert(res.ok, `Alert template GET failed: ${JSON.stringify(data)}`);
     assert(data.subject !== undefined, `subject field missing: ${JSON.stringify(data)}`);
     assert(data.body !== undefined, `body field missing: ${JSON.stringify(data)}`);
@@ -332,19 +332,19 @@ function printResults(summary, testEmail, testUserId) {
   try {
     const testSubject = `QA Test Alert — {{alert_title}} [Sprint9]`;
     const testBody = `Severity: {{severity}}\nOrg: {{org_name}}\nTriggered: {{triggered_at}}\n\n{{message}}`;
-    const { res, data } = await req('/api/superadmin/alert-email-template', {
+    const { res, data } = await req('/api/admin/platform/alert-email-template', {
       method: 'PUT',
       token: superToken,
       body: { subject: testSubject, body: testBody },
     });
     assert(res.ok, `Alert template PUT failed: ${JSON.stringify(data)}`);
-    const verify = await req('/api/superadmin/alert-email-template', { token: superToken });
+    const verify = await req('/api/admin/platform/alert-email-template', { token: superToken });
     assert(verify.res.ok, 'Template re-fetch failed');
     assert(verify.data.subject === testSubject, `Subject not persisted: ${verify.data.subject}`);
     assert(verify.data.body === testBody, `Body not persisted: ${verify.data.body}`);
     // Restore original
     if (alertTemplate) {
-      await req('/api/superadmin/alert-email-template', {
+      await req('/api/admin/platform/alert-email-template', {
         method: 'PUT', token: superToken, body: alertTemplate,
       });
     }
@@ -369,7 +369,7 @@ function printResults(summary, testEmail, testUserId) {
   // ─── 20. Notifications — list ────────────────────────────────────────────
   let notifIds = [];
   try {
-    const { res, data } = await req('/api/superadmin/notifications', { token: superToken });
+    const { res, data } = await req('/api/admin/platform/notifications', { token: superToken });
     assert(res.ok, `Notifications list failed: ${JSON.stringify(data)}`);
     const items = data.notifications || data || [];
     notifIds = Array.isArray(items) ? items.map(n => n.id) : [];
@@ -380,7 +380,7 @@ function printResults(summary, testEmail, testUserId) {
   try {
     if (notifIds.length > 0) {
       const idToDelete = notifIds[notifIds.length - 1];
-      const { res, data } = await req(`/api/superadmin/notifications/${idToDelete}`, {
+      const { res, data } = await req(`/api/admin/platform/notifications/${idToDelete}`, {
         method: 'DELETE',
         token: superToken,
       });
@@ -393,7 +393,7 @@ function printResults(summary, testEmail, testUserId) {
 
   // ─── 22. Notifications — clear all read ──────────────────────────────────
   try {
-    const { res, data } = await req('/api/superadmin/notifications/read', {
+    const { res, data } = await req('/api/admin/platform/notifications/read', {
       method: 'DELETE',
       token: superToken,
     });
@@ -402,12 +402,12 @@ function printResults(summary, testEmail, testUserId) {
     pass(`T22 — Clear all read notifications (deleted: ${data.deleted})`, summary);
   } catch (e) { fail('T22 — Clear all read notifications', summary, e.message); }
 
-  // ─── 23. Site inline edit — PUT /api/superadmin/sites/:id ───────────────
+  // ─── 23. Site inline edit — PUT /api/admin/platform/sites/:id ───────────────
   // Verifies the site edit endpoint exists and accepts updates
   try {
     const orgASiteId = orgAsite?.id;
     assert(orgASiteId, 'No site id available for edit test');
-    const { res, data } = await req(`/api/superadmin/sites/${orgASiteId}`, {
+    const { res, data } = await req(`/api/admin/platform/sites/${orgASiteId}`, {
       method: 'PUT',
       token: superToken,
       body: { name: orgAsite.name || 'United States', is_primary: 1 },

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { guardedFetch } from '../utils/guardedFetch'
 
-export default function TwoFactorConfigView({ H, flash, apiBase = '/api/superadmin', showSessionTimeout = true }) {
+export default function TwoFactorConfigView({ H, flash, apiBase = '/api/admin/two-factor', showSessionTimeout = true }) {
   const [orgs, setOrgs] = useState([])
   const [loading, setLoading] = useState(true)
   const [systemForm, setSystemForm] = useState({
@@ -43,7 +43,7 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/superadm
         smtp_from_email: configData.config?.smtp_from_email || '',
         smtp_from_name: configData.config?.smtp_from_name || 'MIMS Platform',
       }))
-      setSessionTimeoutMinutes(Number(configData.config?.superadmin_session_timeout_minutes) || 60)
+      setSessionTimeoutMinutes(Number(configData.config?.platform_admin_session_timeout_minutes ?? configData.config?.superadmin_session_timeout_minutes) || 60)
       setOrgSecurityForms(
         (orgData.orgs || []).reduce((acc, org) => {
           acc[org.id] = {
@@ -127,11 +127,11 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/superadm
       const res = await guardedFetch(`${apiBase}/config`, {
         method: 'PUT',
         headers: H,
-        body: JSON.stringify({ superadmin_session_timeout_minutes: mins }),
+        body: JSON.stringify({ platform_admin_session_timeout_minutes: mins }),
       })
       const data = await res.json()
       if (!res.ok) return flash(data.error || 'Failed to save session timeout.', 'error')
-      flash(`Superadmin session timeout set to ${mins} minutes.`)
+      flash(`Platform admin session timeout set to ${mins} minutes.`)
     } catch {
       flash('Failed to save session timeout.', 'error')
     } finally {
@@ -235,10 +235,10 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/superadm
 
       {showSessionTimeout && (
       <div className="card" style={{ marginBottom: 12 }}>
-        <div className="card-header"><h3>Superadmin Session Timeout</h3></div>
+        <div className="card-header"><h3>Platform Admin Session Timeout</h3></div>
         <div className="card-body">
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-            Set how long a superadmin session stays active before automatic logout (15–480 minutes).
+            Set how long a platform admin session stays active before automatic logout (15–480 minutes).
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div>

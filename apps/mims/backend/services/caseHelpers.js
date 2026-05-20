@@ -15,6 +15,7 @@ const { createNotification } = require('./notificationCenterService');
 const { emitDataSync }   = require('./appRealtimeService');
 const { fireIntegrationEvent } = require('./integrationEngine');
 const { resolveProductGroups } = require('./productGroupService');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ const CASE_SORT_MAP = Object.freeze({
 });
 
 const FORM_RULE_PRECEDENCE   = Object.freeze(['hide', 'disable', 'show', 'require', 'optional']);
-const DEFAULT_UNMASK_ROLES   = Object.freeze(['admin', 'superadmin']);
+const DEFAULT_UNMASK_ROLES   = Object.freeze(['admin', 'platform_admin']);
 
 // ── Pure type utilities ───────────────────────────────────────────────────────
 
@@ -309,7 +310,7 @@ async function verifyCaseOrg(caseId, req) {
     [caseId]
   );
   if (!c) return null;
-  if (req.user.role === 'superadmin') return c;
+  if (hasGlobalAdminScope(req.user)) return c;
   if (Number(c.org_id) !== Number(req.user.orgId)) return null;
   return c;
 }

@@ -31,7 +31,7 @@ function parseCountFromDescription(desc) {
   return m ? parseInt(m[1], 10) : null
 }
 
-router.get('/system-activity', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/system-activity', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const {
       status    = '',

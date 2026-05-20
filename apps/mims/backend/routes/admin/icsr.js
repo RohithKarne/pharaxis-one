@@ -22,12 +22,13 @@ const { createESignManifest } = require('../../services/eSignManifestService');
 const { assess: assessCaseValidity } = require('../../services/caseValidityService');
 const { redact: redactPii } = require('../../services/piiRedactionService');
 const { createFollowup, createAmendment, createNullification } = require('../../services/icsrLifecycleService');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 const router = express.Router();
-const adminOnly = [authenticate, requireRole('admin', 'superadmin')];
+const adminOnly = [authenticate, requireRole('admin', 'platform_admin')];
 
 function orgScope(req, alias = 'r') {
-  return req.user.role === 'superadmin' ? { sql: '1=1', params: [] } : { sql: `${alias}.org_id = ?`, params: [req.user.orgId] };
+  return hasGlobalAdminScope(req.user) ? { sql: '1=1', params: [] } : { sql: `${alias}.org_id = ?`, params: [req.user.orgId] };
 }
 
 async function audit(req, action, entity, entityId, details) {
@@ -167,7 +168,7 @@ router.post('/icsr', ...adminOnly, async (req, res) => {
   try {
     const caseId = Number(req.body.case_id);
     if (!caseId) return res.status(400).json({ error: 'case_id is required.' });
-    const scope = req.user.role === 'superadmin' ? { sql: '1=1', params: [] } : { sql: 'org_id = ?', params: [req.user.orgId] };
+    const scope = hasGlobalAdminScope(req.user) ? { sql: '1=1', params: [] } : { sql: 'org_id = ?', params: [req.user.orgId] };
     const [[caseRow]] = await pool.execute(`SELECT * FROM cases WHERE id = ? AND ${scope.sql} LIMIT 1`, [caseId, ...scope.params]);
     if (!caseRow) return res.status(404).json({ error: 'AE case not found.' });
     const orgId = caseRow.org_id || req.user.orgId;

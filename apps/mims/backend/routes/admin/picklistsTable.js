@@ -22,7 +22,7 @@ const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 
-const ROLE = ['admin', 'superadmin'];
+const ROLE = ['admin', 'platform_admin'];
 
 async function audit(userId, action, entityId, details) {
   try {

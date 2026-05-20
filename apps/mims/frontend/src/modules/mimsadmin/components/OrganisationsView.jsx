@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import React from 'react'
 import { guardedFetch } from '../utils/guardedFetch'
 
+const API_BASE = '/api/admin/platform'
+
 export default function OrganisationsView({ H, flash }) {
   const [orgs, setOrgs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -26,7 +28,7 @@ export default function OrganisationsView({ H, flash }) {
   async function load() {
     setLoading(true)
     try {
-      const res = await guardedFetch('/api/superadmin/orgs', { headers: H })
+      const res = await guardedFetch(`${API_BASE}/orgs`, { headers: H })
       const data = await res.json()
       const orgsData = data.orgs || []
       setOrgs(orgsData)
@@ -40,7 +42,7 @@ export default function OrganisationsView({ H, flash }) {
   async function createOrg(e) {
     e.preventDefault()
     if (!orgForm.name.trim()) return flash('Organisation name is required.', 'error')
-    const res = await guardedFetch('/api/superadmin/orgs', { method: 'POST', headers: H, body: JSON.stringify(orgForm) })
+    const res = await guardedFetch(`${API_BASE}/orgs`, { method: 'POST', headers: H, body: JSON.stringify(orgForm) })
     const data = await res.json()
     if (!res.ok) return flash(data.error || 'Failed to create.', 'error')
     flash('Organisation created.')
@@ -51,7 +53,7 @@ export default function OrganisationsView({ H, flash }) {
 
   async function saveOrgEdit() {
     if (!editingOrg || !editOrgName.trim()) return flash('Organisation name is required.', 'error')
-    const res = await guardedFetch(`/api/superadmin/orgs/${editingOrg.id}`, {
+    const res = await guardedFetch(`${API_BASE}/orgs/${editingOrg.id}`, {
       method: 'PUT',
       headers: H,
       body: JSON.stringify({
@@ -69,7 +71,7 @@ export default function OrganisationsView({ H, flash }) {
   }
 
   async function toggleOrg(org) {
-    const res = await guardedFetch(`/api/superadmin/orgs/${org.id}`, {
+    const res = await guardedFetch(`${API_BASE}/orgs/${org.id}`, {
       method: 'PUT', headers: H,
       body: JSON.stringify({ name: org.name, is_active: org.is_active ? 0 : 1 })
     })
@@ -79,7 +81,7 @@ export default function OrganisationsView({ H, flash }) {
   }
 
   async function toggleSite(site) {
-    const res = await guardedFetch(`/api/superadmin/sites/${site.id}`, {
+    const res = await guardedFetch(`${API_BASE}/sites/${site.id}`, {
       method: 'PUT', headers: H,
       body: JSON.stringify({ name: site.name, country: site.country, is_primary: site.is_primary, is_active: site.is_active ? 0 : 1 })
     })
@@ -91,7 +93,7 @@ export default function OrganisationsView({ H, flash }) {
   async function createSite(e) {
     e.preventDefault()
     if (!siteForm.name.trim()) return flash('Site name is required.', 'error')
-    const res = await guardedFetch(`/api/superadmin/orgs/${showSiteForm}/sites`, {
+    const res = await guardedFetch(`${API_BASE}/orgs/${showSiteForm}/sites`, {
       method: 'POST', headers: H, body: JSON.stringify(siteForm)
     })
     const data = await res.json()
@@ -105,7 +107,7 @@ export default function OrganisationsView({ H, flash }) {
   async function saveSiteEdit() {
     if (!editingSite) return
     if (!siteEditForm.name.trim()) return flash('Site name is required.', 'error')
-    const res = await guardedFetch(`/api/superadmin/sites/${editingSite.id}`, {
+    const res = await guardedFetch(`${API_BASE}/sites/${editingSite.id}`, {
       method: 'PUT',
       headers: H,
       body: JSON.stringify({
@@ -128,7 +130,7 @@ export default function OrganisationsView({ H, flash }) {
     const formData = new FormData()
     formData.append('logo', file)
     try {
-      const res = await guardedFetch(`/api/superadmin/orgs/${orgId}/logo`, {
+      const res = await guardedFetch(`${API_BASE}/orgs/${orgId}/logo`, {
         method: 'POST',
         headers: { Authorization: H.Authorization },
         body: formData,
@@ -157,7 +159,7 @@ export default function OrganisationsView({ H, flash }) {
     for (const id of ids) {
       const org = orgs.find(o => o.id === id)
       if (!org) continue
-      await guardedFetch(`/api/superadmin/orgs/${id}`, {
+      await guardedFetch(`${API_BASE}/orgs/${id}`, {
         method: 'PUT', headers: H,
         body: JSON.stringify({ name: org.name, is_active: activate ? 1 : 0 }),
       })
@@ -170,7 +172,7 @@ export default function OrganisationsView({ H, flash }) {
   async function saveTimeout(org) {
     const mins = parseInt(timeoutValue)
     if (isNaN(mins) || mins < 30) return flash('Minimum session timeout is 30 minutes.', 'error')
-    const res = await guardedFetch(`/api/superadmin/orgs/${org.id}`, {
+    const res = await guardedFetch(`${API_BASE}/orgs/${org.id}`, {
       method: 'PUT', headers: H,
       body: JSON.stringify({ name: org.name, is_active: org.is_active, session_timeout_minutes: mins })
     })
@@ -181,7 +183,7 @@ export default function OrganisationsView({ H, flash }) {
   }
 
   async function toggleProcessExplorer(org) {
-    const res = await guardedFetch(`/api/superadmin/orgs/${org.id}`, {
+    const res = await guardedFetch(`${API_BASE}/orgs/${org.id}`, {
       method: 'PUT',
       headers: H,
       body: JSON.stringify({
@@ -199,7 +201,7 @@ export default function OrganisationsView({ H, flash }) {
   async function runOrgAction(orgId, action, successMessage) {
     setPendingOrgAction(`${action}-${orgId}`)
     try {
-      const res = await guardedFetch(`/api/superadmin/orgs/${orgId}/${action}`, {
+      const res = await guardedFetch(`${API_BASE}/orgs/${orgId}/${action}`, {
         method: 'POST',
         headers: H,
       })

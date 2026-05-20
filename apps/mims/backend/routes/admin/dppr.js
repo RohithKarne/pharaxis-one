@@ -28,6 +28,7 @@ const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
 const { applyDpprRules } = require('../../services/dpprScheduler');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 // ── Data domains catalogue ────────────────────────────────────────────────────
 const DPPR_DOMAINS = [
@@ -104,7 +105,7 @@ const DPPR_TEMPLATES = {
 };
 
 function orgScope(req) {
-  if (req.user.role === 'superadmin') return null;
+  if (hasGlobalAdminScope(req.user)) return null;
   return req.user.orgId;
 }
 
@@ -113,11 +114,11 @@ router.get('/dppr/domains', authenticate, (_req, res) => {
   res.json({ domains: DPPR_DOMAINS });
 });
 
-router.get('/dppr/templates', authenticate, requireRole('admin', 'superadmin'), (_req, res) => {
+router.get('/dppr/templates', authenticate, requireRole('admin', 'platform_admin'), (_req, res) => {
   res.json({ templates: Object.entries(DPPR_TEMPLATES).map(([region, rules]) => ({ region, rule_count: rules.length, rules })) });
 });
 
-router.post('/dppr/templates/:region/apply', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/dppr/templates/:region/apply', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const region = String(req.params.region || '').toUpperCase();
     const template = DPPR_TEMPLATES[region];
@@ -138,7 +139,7 @@ router.post('/dppr/templates/:region/apply', authenticate, requireRole('admin', 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/dppr/conflicts', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/dppr/conflicts', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const scope = orgScope(req);
     const orgId = scope ?? (req.query.org_id ? parseInt(req.query.org_id, 10) : null);
@@ -191,7 +192,7 @@ router.get('/dppr/execution-log', authenticate, async (req, res) => {
 });
 
 // ── POST /api/admin/dppr/run-now ──────────────────────────────────────────────
-router.post('/dppr/run-now', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/dppr/run-now', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { org_id } = req.body;
     const scope = orgScope(req);
@@ -243,7 +244,7 @@ router.get('/dppr', authenticate, async (req, res) => {
 });
 
 // ── POST /api/admin/dppr ──────────────────────────────────────────────────────
-router.post('/dppr', authenticate, requireRole('admin', 'superadmin'), validate(schemas.createDpprRule), async (req, res) => {
+router.post('/dppr', authenticate, requireRole('admin', 'platform_admin'), validate(schemas.createDpprRule), async (req, res) => {
   try {
     const { rule_name, domain, contact_type = 'all', consent_type = 'all',
             action = 'None', retention_days = 365, is_active = 1, org_id } = req.body;
@@ -298,7 +299,7 @@ router.get('/dppr/:id', authenticate, async (req, res) => {
 });
 
 // ── PUT /api/admin/dppr/:id ───────────────────────────────────────────────────
-router.put('/dppr/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/dppr/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const scope = orgScope(req);
     const params = [req.params.id];
@@ -343,7 +344,7 @@ router.put('/dppr/:id', authenticate, requireRole('admin', 'superadmin'), async 
 });
 
 // ── PATCH /api/admin/dppr/:id/toggle ─────────────────────────────────────────
-router.patch('/dppr/:id/toggle', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.patch('/dppr/:id/toggle', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const scope = orgScope(req);
     const params = [req.params.id];
@@ -366,7 +367,7 @@ router.patch('/dppr/:id/toggle', authenticate, requireRole('admin', 'superadmin'
 });
 
 // ── DELETE /api/admin/dppr/:id ────────────────────────────────────────────────
-router.delete('/dppr/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/dppr/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const scope = orgScope(req);
     const params = [req.params.id];
@@ -414,7 +415,7 @@ router.get('/dppr/cases/:caseId/overrides', authenticate, async (req, res) => {
 });
 
 // PUT /api/admin/dppr/cases/:caseId/overrides — upsert, must be >= restrictive than tenant
-router.put('/dppr/cases/:caseId/overrides', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/dppr/cases/:caseId/overrides', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { domain, action, retention_days, override_reason } = req.body;
     if (!domain || !action) return res.status(400).json({ error: 'domain and action are required.' });
@@ -472,7 +473,7 @@ router.put('/dppr/cases/:caseId/overrides', authenticate, requireRole('admin', '
 });
 
 // DELETE /api/admin/dppr/cases/:caseId/overrides/:domain
-router.delete('/dppr/cases/:caseId/overrides/:domain', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/dppr/cases/:caseId/overrides/:domain', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     await pool.execute(
       'DELETE FROM case_dppr_overrides WHERE case_id = ? AND domain = ?',

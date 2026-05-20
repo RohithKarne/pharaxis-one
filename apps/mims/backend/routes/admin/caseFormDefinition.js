@@ -53,7 +53,7 @@ const CASE_TYPE_SECTIONS = {
 };
 
 // GET /api/admin/case-form-definition — get config for org + case_type
-router.get('/case-form-definition', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/case-form-definition', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { org_id = null, case_type, product_group_id } = req.query;
     if (!case_type) return res.status(400).json({ error: 'case_type is required.' });
@@ -97,12 +97,12 @@ router.get('/case-form-definition', authenticate, requireRole('admin', 'superadm
 });
 
 // GET /api/admin/case-form-definition/sections — return all available sections per case type
-router.get('/case-form-definition/sections', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/case-form-definition/sections', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   res.json({ sections: CASE_TYPE_SECTIONS });
 });
 
 // POST /api/admin/case-form-definition — save full definition for an org + case_type
-router.post('/case-form-definition', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/case-form-definition', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { org_id = null, case_type, sections } = req.body;
     if (!case_type || !Array.isArray(sections)) {

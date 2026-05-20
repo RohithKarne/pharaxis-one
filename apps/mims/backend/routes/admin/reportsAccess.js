@@ -51,7 +51,7 @@ const REPORT_LABELS = {
   'field-usage': 'Field Usage'
 };
 
-const ROLE = ['admin', 'superadmin'];
+const ROLE = ['admin', 'platform_admin'];
 
 // ── GET /api/admin/reports-access/orgs ─────────────────────────────────────
 router.get('/reports-access/orgs', authenticate, requireRole(...ROLE), async (_req, res) => {

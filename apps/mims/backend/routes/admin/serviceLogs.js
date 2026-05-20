@@ -34,7 +34,7 @@ function buildFilters(query) {
   return { where, params }
 }
 
-router.get('/service-logs', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/service-logs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const {
       page = '1',
@@ -81,7 +81,7 @@ router.get('/service-logs', authenticate, requireRole('admin', 'superadmin'), as
   }
 })
 
-router.get('/service-logs/aggregation', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/service-logs/aggregation', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { trend_days = '14' } = req.query
     const days = Math.min(60, Math.max(1, parseInt(trend_days, 10) || 14))

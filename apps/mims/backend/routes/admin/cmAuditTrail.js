@@ -9,15 +9,16 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 const CM_ENTITIES = ['cm_document', 'cm_faq', 'cm_folder', 'cm_module', 'cm_template', 'cm_review', 'cm_merge_report'];
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 // GET /api/admin/cm-audit-trail/entities-summary — distinct CM entities with change history
-router.get('/cm-audit-trail/entities-summary', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/cm-audit-trail/entities-summary', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { entity, search, page = 1, limit = 50 } = req.query;
     const lim    = Math.max(1, parseInt(limit, 10) || 50);
@@ -27,7 +28,7 @@ router.get('/cm-audit-trail/entities-summary', authenticate, requireRole('admin'
     const placeholders = entityList.map(() => '?').join(',');
 
     let fromWhere, params;
-    if (isSuperadmin(req)) {
+    if (hasPlatformAdminScope(req)) {
       fromWhere = `FROM audit_logs al WHERE al.entity IN (${placeholders})`;
       params    = [...entityList];
     } else {
@@ -64,7 +65,7 @@ router.get('/cm-audit-trail/entities-summary', authenticate, requireRole('admin'
 });
 
 // GET /api/admin/cm-audit-trail
-router.get('/cm-audit-trail', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/cm-audit-trail', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { entity, entity_id, action, user_id, from_date, to_date, page = 1, limit = 50 } = req.query;
     const lim    = Math.max(1, parseInt(limit, 10) || 50);
@@ -76,7 +77,7 @@ router.get('/cm-audit-trail', authenticate, requireRole('admin', 'superadmin'), 
     // Build shared FROM + WHERE (no SELECT, no ORDER BY)
     let fromWhere, params;
 
-    if (isSuperadmin(req)) {
+    if (hasPlatformAdminScope(req)) {
       fromWhere = `FROM audit_logs al WHERE al.entity IN (${placeholders})`;
       params    = [...entityList];
     } else {

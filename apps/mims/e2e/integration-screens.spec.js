@@ -253,7 +253,7 @@ test.describe('Phase 3 — Integration Screens', () => {
     })
   })
 
-  test.describe('Superadmin Integrations page', () => {
+  test.describe('Platform Admin Integrations page', () => {
     let superSession = null
     let superAuthError = ''
 
@@ -267,7 +267,7 @@ test.describe('Phase 3 — Integration Screens', () => {
           { email: 'superadmin@mims.io', password: 'Test@1234' },
         ],
         'superadmin',
-        ['superadmin_console']
+        ['platform_admin_console']
       )
       superSession = session
       superAuthError = JSON.stringify(failures)
@@ -275,14 +275,14 @@ test.describe('Phase 3 — Integration Screens', () => {
 
     test.beforeEach(async ({ page }) => {
       if (!superSession) {
-        test.skip(true, `Superadmin login failed: ${superAuthError}`)
+        test.skip(true, `Platform Admin login failed: ${superAuthError}`)
         return
       }
 
-      await hydrateStorage(page, superSession, 'mims_superadmin', 'http://localhost:5173/superadmin.html')
+      await hydrateStorage(page, superSession, 'mims', 'http://localhost:5173/mims-admin?standalone=1')
     })
 
-    test('Superadmin Integrations page loads with org table', async ({ page }) => {
+    test('Platform Admin Integrations page loads with org table', async ({ page }) => {
       await clickIntegrationsInSidebar(page)
       await page.waitForLoadState('load')
 
@@ -293,7 +293,7 @@ test.describe('Phase 3 — Integration Screens', () => {
       await expect.soft(body).toContainText('Case Import')
     })
 
-    test('Superadmin Integrations page shows organisation rows', async ({ page }) => {
+    test('Platform Admin Integrations page shows organisation rows', async ({ page }) => {
       await clickIntegrationsInSidebar(page)
       await page.waitForLoadState('load')
 

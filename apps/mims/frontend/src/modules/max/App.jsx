@@ -10,6 +10,7 @@ import ToastContainer from '../../shared/components/ToastContainer'
 import ConfirmModal from '../../shared/components/ConfirmModal'
 import ExceptionToast from '../../shared/components/ExceptionToast'
 import adminRouteMap from '../../shared/config/adminRouteMap.json'
+import { isAdminUser } from '../../shared/utils/adminScope.js'
 
 // ── Eagerly loaded — part of the critical navigation path ────────────────────
 import LoginPage            from './pages/LoginPage'
@@ -57,7 +58,7 @@ function PageLoader() {
 
 function AdminRoleGuard({ children }) {
   const { user } = useAuth()
-  if (user?.role === 'admin' || user?.role === 'superadmin') return children
+  if (isAdminUser(user)) return children
   return <Navigate to="/no-access" replace />
 }
 

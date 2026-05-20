@@ -21,7 +21,7 @@ const REGRESSION_RUN_LOCK_NAME = 'mims:regression:run:lock';
 const REGRESSION_RUN_LOCK_TIMEOUT_SECONDS = 0;
 
 // ── POST /api/admin/regression/run ────────────────────────────────────────────
-router.post('/regression/run', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/regression/run', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   let lockConn = null;
   let lockAcquired = false;
   try {
@@ -52,7 +52,7 @@ router.post('/regression/run', authenticate, requireRole('admin', 'superadmin'),
 });
 
 // ── GET /api/admin/regression/history ─────────────────────────────────────────
-router.get('/regression/history', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/regression/history', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT r.id, r.started_at, r.completed_at, r.total_tests, r.passed, r.failed, r.skipped,
@@ -68,7 +68,7 @@ router.get('/regression/history', authenticate, requireRole('admin', 'superadmin
 });
 
 // ── GET /api/admin/regression/history/:id ─────────────────────────────────────
-router.get('/regression/history/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/regression/history/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [[run]] = await pool.execute('SELECT * FROM regression_runs WHERE id = ?', [req.params.id]);
     if (!run) return res.status(404).json({ error: 'Run not found.' });
@@ -82,7 +82,7 @@ router.get('/regression/history/:id', authenticate, requireRole('admin', 'supera
 });
 
 // ── GET /api/admin/regression/db-health ───────────────────────────────────────
-router.get('/regression/db-health', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/regression/db-health', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const health = await getDbHealth();
     res.json(health);
@@ -92,7 +92,7 @@ router.get('/regression/db-health', authenticate, requireRole('admin', 'superadm
 });
 
 // ── GET /api/admin/regression/api-catalog ─────────────────────────────────────
-router.get('/regression/api-catalog', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/regression/api-catalog', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const routes = getApiCatalog(req.app);
     const coverage = getRegressionCoverage();
@@ -109,7 +109,7 @@ router.get('/regression/api-catalog', authenticate, requireRole('admin', 'supera
 });
 
 // ── GET /api/admin/regression/coverage ────────────────────────────────────────
-router.get('/regression/coverage', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/regression/coverage', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const coverage = getRegressionCoverage();
     const tests = discoverTests();

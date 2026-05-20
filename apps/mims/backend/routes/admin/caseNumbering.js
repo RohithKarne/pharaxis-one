@@ -9,6 +9,7 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -19,12 +20,12 @@ async function audit(userId, userName, action, entity, entityId, details) {
   } catch (_) {}
 }
 
-function isSuperadmin(req) {
-  return req.user.role === 'superadmin';
+function hasPlatformAdminScope(req) {
+  return hasGlobalAdminScope(req.user);
 }
 
 function resolvedOrgId(req, providedOrgId = null) {
-  return isSuperadmin(req) ? (providedOrgId || null) : req.user.orgId;
+  return hasPlatformAdminScope(req) ? (providedOrgId || null) : req.user.orgId;
 }
 
 // Build a preview string from a config object
@@ -40,7 +41,7 @@ function buildPreview(cfg, seq = 1) {
 }
 
 // POST /api/admin/case-numbering/preview — Preview generated case number
-router.post('/case-numbering/preview', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/case-numbering/preview', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { prefix, next_number, pad_length, suffix, include_date, date_format } = req.body;
     const padLen = parseInt(pad_length) || 4;
@@ -64,17 +65,17 @@ router.post('/case-numbering/preview', authenticate, requireRole('admin', 'super
 });
 
 // GET /api/admin/case-number-config — list all configs (global + per org)
-router.get('/case-number-config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/case-number-config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `
       SELECT c.*, o.name AS org_name
       FROM case_number_config c
       LEFT JOIN organisations o ON o.id = c.org_id
-      ${isSuperadmin(req) ? '' : 'WHERE c.org_id = ?'}
+      ${hasPlatformAdminScope(req) ? '' : 'WHERE c.org_id = ?'}
       ORDER BY c.org_id IS NULL DESC, o.name, c.case_type
     `,
-      isSuperadmin(req) ? [] : [req.user.orgId]
+      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
     const configs = rows.map(r => ({ ...r, preview: buildPreview(r, r.current_seq + 1) }));
     res.json({ configs });
@@ -84,7 +85,7 @@ router.get('/case-number-config', authenticate, requireRole('admin', 'superadmin
 });
 
 // GET /api/admin/case-number-config/preview — preview without saving
-router.get('/case-number-config/preview', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/case-number-config/preview', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const { prefix = 'CASE', separator = '-', include_year = '1', include_month = '0', seq_length = '5' } = req.query;
   const cfg = {
     prefix,
@@ -97,7 +98,7 @@ router.get('/case-number-config/preview', authenticate, requireRole('admin', 'su
 });
 
 // POST /api/admin/case-number-config — upsert a config
-router.post('/case-number-config', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.post('/case-number-config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { org_id = null, case_type = 'ALL', prefix, separator, include_year, include_month, seq_length } = req.body;
     if (!prefix) return res.status(400).json({ error: 'Prefix is required.' });
@@ -138,13 +139,13 @@ router.post('/case-number-config', authenticate, requireRole('admin', 'superadmi
 });
 
 // DELETE /api/admin/case-number-config/:id — remove config (only if not locked)
-router.delete('/case-number-config/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/case-number-config/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [[row]] = await pool.execute(
-      isSuperadmin(req)
+      hasPlatformAdminScope(req)
         ? 'SELECT * FROM case_number_config WHERE id = ?'
         : 'SELECT * FROM case_number_config WHERE id = ? AND org_id = ?',
-      isSuperadmin(req) ? [req.params.id] : [req.params.id, req.user.orgId]
+      hasPlatformAdminScope(req) ? [req.params.id] : [req.params.id, req.user.orgId]
     );
     if (!row) return res.status(404).json({ error: 'Not found.' });
     if (row.is_locked) return res.status(409).json({ error: 'Cannot delete a locked configuration.' });

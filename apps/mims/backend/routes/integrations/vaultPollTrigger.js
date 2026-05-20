@@ -5,7 +5,7 @@ const router = express.Router();
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { pollVaultForOrg } = require('../../services/vaultPoller');
 
-router.get('/superadmin/vault/poll-now/:org_id', authenticate, requireRole('superadmin'), async (req, res) => {
+router.get(['/admin/platform/vault/poll-now/:org_id', '/superadmin/vault/poll-now/:org_id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const result = await pollVaultForOrg(parseInt(req.params.org_id, 10));
     return res.json(result);

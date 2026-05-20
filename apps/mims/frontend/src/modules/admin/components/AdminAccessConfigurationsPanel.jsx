@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { SectionHeader, StatusPill } from './AdminShared'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { useAuth } from '../../../shared/context/AuthContext'
+import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
 
 const TAB_LABELS = [
   ['overview', 'Overview'],
@@ -100,7 +101,7 @@ function buildEmptyAuthForm() {
 
 export default function AdminAccessConfigurationsPanel({ H, flash, contentSection }) {
   const { user, orgId: activeOrgId, orgName: activeOrgName } = useAuth()
-  const isSuperadmin = user?.role === 'superadmin'
+  const isPlatformAdmin = hasGlobalAdminScope(user)
   const [activeTab, setActiveTab] = useState(DEFAULT_TAB_BY_SECTION[contentSection] || 'overview')
   const [orgs, setOrgs] = useState([])
   const [selectedOrgId, setSelectedOrgId] = useState('')
@@ -121,10 +122,10 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
 
   useEffect(() => { loadOrgs() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!isSuperadmin && activeOrgId && String(selectedOrgId) !== String(activeOrgId)) {
+    if (!isPlatformAdmin && activeOrgId && String(selectedOrgId) !== String(activeOrgId)) {
       setSelectedOrgId(String(activeOrgId))
     }
-  }, [activeOrgId, isSuperadmin, selectedOrgId])
+  }, [activeOrgId, isPlatformAdmin, selectedOrgId])
   useEffect(() => {
     setActiveTab(DEFAULT_TAB_BY_SECTION[contentSection] || 'overview')
   }, [contentSection])
@@ -158,7 +159,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
   }, [overview?.auth_policy])
 
   async function loadOrgs() {
-    if (!isSuperadmin) {
+    if (!isPlatformAdmin) {
       const fallbackOrgId = activeOrgId ? String(activeOrgId) : ''
       setOrgs(fallbackOrgId ? [{ id: fallbackOrgId, name: activeOrgName || 'Current Organisation' }] : [])
       if (fallbackOrgId) setSelectedOrgId(fallbackOrgId)
@@ -304,7 +305,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
   }
 
   function renderOrgSelector() {
-    if (!isSuperadmin) {
+    if (!isPlatformAdmin) {
       return (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <button style={buttonStyle()} onClick={() => loadOverview()} disabled={!selectedOrgId || loading}>{loading ? 'Loading...' : 'Refresh'}</button>

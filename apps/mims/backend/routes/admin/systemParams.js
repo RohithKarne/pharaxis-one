@@ -76,7 +76,7 @@ async function audit(userId, action, details) {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/admin/system-params — read all (general + themes)
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/system-params', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.get('/system-params', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const params = await readAllParams();
     res.json(params);
@@ -103,7 +103,7 @@ router.get('/system-params/theme', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/admin/system-params/general — update password rules
 // ─────────────────────────────────────────────────────────────────────────────
-router.put('/system-params/general', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/system-params/general', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const {
     password_expiry_days,
     password_require_alphanumeric,
@@ -153,7 +153,7 @@ router.put('/system-params/general', authenticate, requireRole('admin', 'superad
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/admin/system-params/themes — update theme
 // ─────────────────────────────────────────────────────────────────────────────
-router.put('/system-params/themes', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/system-params/themes', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const { ui_theme } = req.body;
   if (!ALLOWED_THEMES.includes(ui_theme)) {
     return res.status(400).json({ error: `Theme must be one of: ${ALLOWED_THEMES.join(', ')}.` });

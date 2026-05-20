@@ -27,14 +27,14 @@ async function loginForToken(makeRequest, email, password) {
   return { status: login.status, token: null, body: login.body };
 }
 
-async function createTemporarySuperadmin(makeRequest) {
+async function createTemporaryPlatformAdmin(makeRequest) {
   const email = `${uniqueName('regression-superadmin').toLowerCase()}@example.com`;
-  const password = 'TempSuperadmin@123';
+  const password = 'TempPlatformAdmin@123';
   const hash = await bcrypt.hash(password, 10);
   const [insert] = await pool.execute(
     `INSERT INTO users (name, email, password, role, is_active, email_verified)
      VALUES (?, ?, ?, 'superadmin', 1, 1)`,
-    ['Regression Superadmin', email, hash]
+    ['Regression Platform Admin', email, hash]
   );
   const userId = Number(insert.insertId || 0);
   const login = await loginForToken(makeRequest, email, password);
@@ -299,7 +299,7 @@ module.exports = [
     module: 'Reports',
     covers: ['GET /api/reports/org-activity'],
     run: async ({ makeRequest }) => {
-      const temp = await createTemporarySuperadmin(makeRequest);
+      const temp = await createTemporaryPlatformAdmin(makeRequest);
       try {
         if (temp.status !== 200 || !temp.token) {
           return { pass: false, details: `superadmin login status=${temp.status}` };

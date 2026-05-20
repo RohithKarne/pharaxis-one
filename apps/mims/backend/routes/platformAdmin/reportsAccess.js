@@ -41,8 +41,8 @@ const REPORT_LABELS = {
   'field-usage': 'Field Usage'
 };
 
-// GET /api/superadmin/reports/orgs
-router.get('/reports/orgs', authenticate, requireRole('superadmin'), async (req, res) => {
+// GET /api/admin/platform/reports/orgs
+router.get('/reports/orgs', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [orgs] = await pool.query(`
       SELECT o.id, o.name, o.is_active,
@@ -59,8 +59,8 @@ router.get('/reports/orgs', authenticate, requireRole('superadmin'), async (req,
   }
 });
 
-// GET /api/superadmin/reports/org/:orgId
-router.get('/reports/org/:orgId', authenticate, requireRole('superadmin'), async (req, res) => {
+// GET /api/admin/platform/reports/org/:orgId
+router.get('/reports/org/:orgId', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { orgId } = req.params;
     const [rows] = await pool.query(
@@ -80,8 +80,8 @@ router.get('/reports/org/:orgId', authenticate, requireRole('superadmin'), async
   }
 });
 
-// PUT /api/superadmin/reports/org/:orgId
-router.put('/reports/org/:orgId', authenticate, requireRole('superadmin'), async (req, res) => {
+// PUT /api/admin/platform/reports/org/:orgId
+router.put('/reports/org/:orgId', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { orgId } = req.params;
     const { report_key, is_enabled } = req.body;
@@ -101,8 +101,8 @@ router.put('/reports/org/:orgId', authenticate, requireRole('superadmin'), async
   }
 });
 
-// GET /api/superadmin/reports/org/:orgId/users
-router.get('/reports/org/:orgId/users', authenticate, requireRole('superadmin'), async (req, res) => {
+// GET /api/admin/platform/reports/org/:orgId/users
+router.get('/reports/org/:orgId/users', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { orgId } = req.params;
     const [users] = await pool.query(`
@@ -121,8 +121,8 @@ router.get('/reports/org/:orgId/users', authenticate, requireRole('superadmin'),
   }
 });
 
-// PUT /api/superadmin/reports/org/:orgId/user/:userId
-router.put('/reports/org/:orgId/user/:userId', authenticate, requireRole('superadmin'), async (req, res) => {
+// PUT /api/admin/platform/reports/org/:orgId/user/:userId
+router.put('/reports/org/:orgId/user/:userId', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { orgId, userId } = req.params;
     const { report_key, is_enabled } = req.body;
@@ -142,8 +142,8 @@ router.put('/reports/org/:orgId/user/:userId', authenticate, requireRole('supera
   }
 });
 
-// GET /api/superadmin/reports/requests
-router.get('/reports/requests', authenticate, requireRole('superadmin'), async (req, res) => {
+// GET /api/admin/platform/reports/requests
+router.get('/reports/requests', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [requests] = await pool.query(`
       SELECT rar.*,
@@ -163,8 +163,8 @@ router.get('/reports/requests', authenticate, requireRole('superadmin'), async (
   }
 });
 
-// PUT /api/superadmin/reports/requests/:id
-router.put('/reports/requests/:id', authenticate, requireRole('superadmin'), async (req, res) => {
+// PUT /api/admin/platform/reports/requests/:id
+router.put('/reports/requests/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, notes } = req.body;

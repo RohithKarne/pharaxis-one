@@ -45,7 +45,7 @@ Every help article MUST follow this HTML structure:
 | `agent` | Case processing agents only |
 | `cm_admin` | Content Management admins |
 | `admin` | Org admins |
-| `superadmin` | Platform superadmins only |
+| `platform_admin` | Platform admins only |
 
 Multiple values can be combined: `["agent", "cm_admin"]`
 
@@ -94,7 +94,7 @@ Pattern: `{module}.{sub-feature}` (dot-separated, lowercase, underscores for spa
 |---|-------|-------------|----------|------|
 | 1 | Welcome to MIMS | `general` | all | 1 |
 | 2 | Navigating the Platform | `general` | all | 2 |
-| 3 | Cases Overview | `cases` | agent, cm_admin, admin, superadmin | 10 |
+| 3 | Cases Overview | `cases` | agent, cm_admin, admin, platform_admin | 10 |
 | 4 | Case Statuses Explained | `cases` | agent, cm_admin, admin | 11 |
 | 5 | Creating a New Case | `cases.create` | agent, admin | 12 |
 | 6 | Case Detail Page Guide | `cases.detail` | agent, cm_admin, admin | 13 |
@@ -103,8 +103,8 @@ Pattern: `{module}.{sub-feature}` (dot-separated, lowercase, underscores for spa
 | 9 | Adverse Event (AE) Reporting | `cases.ae` | agent, admin | 16 |
 | 10 | Product Complaint (PC) Reporting | `cases.pc` | agent, admin | 17 |
 | 11 | Case Workflow & Assignments | `cases.workflow` | agent, admin | 18 |
-| 12 | Content Folders | `cm.folders` | cm_admin, admin, superadmin | 20 |
-| 13 | Managing Documents | `cm.documents` | cm_admin, admin, superadmin | 21 |
+| 12 | Content Folders | `cm.folders` | cm_admin, admin, platform_admin | 20 |
+| 13 | Managing Documents | `cm.documents` | cm_admin, admin, platform_admin | 21 |
 | 14 | Document Versioning & Checkout | `cm.documents` | cm_admin, admin | 22 |
 | 15 | Bulk Document Actions | `cm.documents` | cm_admin, admin | 23 |
 | 16 | Content Modules | `cm.modules` | cm_admin, admin | 30 |
@@ -116,18 +116,18 @@ Pattern: `{module}.{sub-feature}` (dot-separated, lowercase, underscores for spa
 | 22 | Content Reviews | `cm.reviews` | cm_admin, admin | 70 |
 | 23 | Browse Content | `browse` | agent, cm_admin, admin | 80 |
 | 24 | Previewing Documents & Modules | `browse` | agent, cm_admin, admin | 81 |
-| 25 | Reports & Analytics | `reports` | agent, cm_admin, admin, superadmin | 90 |
+| 25 | Reports & Analytics | `reports` | agent, cm_admin, admin, platform_admin | 90 |
 | 26 | Inbox & Notifications | `inbox` | all | 95 |
-| 27 | Managing Picklists | `admin.picklists` | admin, superadmin | 100 |
-| 28 | Field Setup & Custom Fields | `admin.field_setup` | admin, superadmin | 101 |
-| 29 | Workflow Activities | `admin.workflow` | admin, superadmin | 102 |
-| 30 | Product Dictionary | `admin.product_dictionary` | admin, superadmin | 103 |
-| 31 | Security Groups & Permissions | `admin.security_groups` | admin, superadmin | 104 |
-| 32 | Case Numbering Configuration | `admin.case_numbering` | admin, superadmin | 105 |
-| 33 | Organisation Management | `admin.organisations` | superadmin | 110 |
-| 34 | Content Intelligence — Overview | `admin.content_intelligence` | admin, superadmin | 120 |
-| 35 | Evidence Chain Analysis | `admin.content_intelligence` | admin, superadmin | 121 |
-| 36 | Policy Graph | `admin.policy_graph` | admin, superadmin | 130 |
+| 27 | Managing Picklists | `admin.picklists` | admin, platform_admin | 100 |
+| 28 | Field Setup & Custom Fields | `admin.field_setup` | admin, platform_admin | 101 |
+| 29 | Workflow Activities | `admin.workflow` | admin, platform_admin | 102 |
+| 30 | Product Dictionary | `admin.product_dictionary` | admin, platform_admin | 103 |
+| 31 | Security Groups & Permissions | `admin.security_groups` | admin, platform_admin | 104 |
+| 32 | Case Numbering Configuration | `admin.case_numbering` | admin, platform_admin | 105 |
+| 33 | Organisation Management | `admin.organisations` | platform_admin | 110 |
+| 34 | Content Intelligence — Overview | `admin.content_intelligence` | admin, platform_admin | 120 |
+| 35 | Evidence Chain Analysis | `admin.content_intelligence` | admin, platform_admin | 121 |
+| 36 | Policy Graph | `admin.policy_graph` | admin, platform_admin | 130 |
 
 ---
 
@@ -165,7 +165,7 @@ Expected response:
 
 Articles are flagged as stale when `last_reviewed_at` is NULL or older than **90 days**.
 
-- View stale articles: **Superadmin Console → Help Content → Needs Attention** tab
+- View stale articles: **Platform Admin → Help Content → Needs Attention** tab
 - Or via API: `GET /api/admin/help/stale`
 - Each article should be reviewed and marked via `PATCH /api/admin/help/:id/reviewed` at least quarterly.
 

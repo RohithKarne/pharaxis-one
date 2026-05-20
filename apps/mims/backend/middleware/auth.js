@@ -4,6 +4,7 @@ const pool = require('../database/db');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = require('../utils/jwtSecret');
 const { sessionCacheGet, sessionCacheSet, sessionCacheInvalidate } = require('../services/redisClient');
+const { hasGlobalAdminScope, isAdminUser, normalizeRole } = require('../utils/adminScope');
 
 function createAuthError(message, code, status = 401, shouldLogout = status === 401) {
   const err = new Error(message);
@@ -83,6 +84,7 @@ async function validateAccessToken(token) {
     role:                 decoded.role,
     orgId:                decoded.orgId ?? null,
     siteId:               decoded.siteId ?? null,
+    platformAdmin:        Boolean(decoded.platformAdmin),
     token,
     passwordResetRequired: decoded.passwordResetRequired ?? false,
   };
@@ -95,7 +97,7 @@ async function validateAccessToken(token) {
 /**
  * authenticate — verifies JWT and injects req.user
  * req.user = { userId, email, role, orgId, siteId, token }
- * Superadmin: orgId = null, siteId = null
+ * Platform admin compatibility: orgId = null, siteId = null
  */
 async function authenticate(req, res, next) {
   const token = readCookie(req, 'mims_token') || readBearer(req);
@@ -123,11 +125,18 @@ async function authenticate(req, res, next) {
 
 /**
  * requireRole(...roles) — restrict route to specific roles
- * Usage: router.delete('/x', authenticate, requireRole('admin', 'superadmin'), handler)
+ * Usage: router.delete('/x', authenticate, requireRole('admin', 'platform_admin'), handler)
  */
 function requireRole(...roles) {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    const requestedRoles = roles.map((role) => normalizeRole(role));
+    const userRole = normalizeRole(req.user);
+    const allowed =
+      requestedRoles.includes(userRole) ||
+      (requestedRoles.includes('platform_admin') && hasGlobalAdminScope(req.user)) ||
+      (requestedRoles.includes('superadmin') && hasGlobalAdminScope(req.user)) ||
+      (requestedRoles.includes('admin') && isAdminUser(req.user));
+    if (!allowed) {
       return res.status(403).json({
         error: 'You do not have permission to perform this action.',
         error_code: 'ROLE_FORBIDDEN',
@@ -139,11 +148,11 @@ function requireRole(...roles) {
 }
 
 /**
- * requireOrg — blocks requests where orgId is null (non-superadmin must have an active org)
- * Superadmin is exempt.
+ * requireOrg — blocks requests where orgId is null (non-platform-admin must have an active org)
+ * Global platform admin compatibility remains exempt during migration.
  */
 function requireOrg(req, res, next) {
-  if (req.user.role === 'superadmin') return next();
+  if (hasGlobalAdminScope(req.user)) return next();
   if (!req.user.orgId) {
     return res.status(403).json({
       error: 'No active organisation. Please contact your administrator.',
@@ -155,7 +164,7 @@ function requireOrg(req, res, next) {
 }
 
 async function requireAccessNotExpired(req, res, next) {
-  if (!req.user || req.user.role === 'superadmin' || !req.user.orgId) return next();
+  if (!req.user || hasGlobalAdminScope(req.user) || !req.user.orgId) return next();
   try {
     const [rows] = await pool.execute(
       'SELECT access_expires_at FROM user_org_access WHERE user_id = ? AND org_id = ? AND is_active = 1 LIMIT 1',

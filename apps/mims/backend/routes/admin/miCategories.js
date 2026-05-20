@@ -9,13 +9,14 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
-function isSuperadmin(req) { return req.user.role === 'superadmin'; }
+function hasPlatformAdminScope(req) { return hasGlobalAdminScope(req.user); }
 
 // GET /api/admin/mi-categories
 router.get('/mi-categories', authenticate, async (req, res) => {
   try {
-    const orgId = isSuperadmin(req) ? req.query.org_id : req.user.orgId;
+    const orgId = hasPlatformAdminScope(req) ? req.query.org_id : req.user.orgId;
     if (!orgId) return res.status(400).json({ error: 'org_id required.' });
     const [rows] = await pool.execute(
       `SELECT * FROM mi_categories WHERE org_id = ? ORDER BY sort_order ASC, name ASC`,
@@ -33,7 +34,7 @@ router.post('/mi-categories', authenticate, async (req, res) => {
   try {
     const { name, description, sort_order } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
-    const orgId = isSuperadmin(req) ? req.body.org_id : req.user.orgId;
+    const orgId = hasPlatformAdminScope(req) ? req.body.org_id : req.user.orgId;
     if (!orgId) return res.status(400).json({ error: 'org_id required.' });
     const [result] = await pool.execute(
       `INSERT INTO mi_categories (org_id, name, description, sort_order, created_by) VALUES (?, ?, ?, ?, ?)`,
@@ -52,7 +53,7 @@ router.put('/mi-categories/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, sort_order, is_active } = req.body;
-    const orgId = isSuperadmin(req) ? req.body.org_id : req.user.orgId;
+    const orgId = hasPlatformAdminScope(req) ? req.body.org_id : req.user.orgId;
     const [[existing]] = await pool.execute(
       `SELECT id FROM mi_categories WHERE id = ? AND org_id = ?`,
       [id, orgId]
@@ -73,7 +74,7 @@ router.put('/mi-categories/:id', authenticate, async (req, res) => {
 router.delete('/mi-categories/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const orgId = isSuperadmin(req) ? req.query.org_id : req.user.orgId;
+    const orgId = hasPlatformAdminScope(req) ? req.query.org_id : req.user.orgId;
     const [[existing]] = await pool.execute(
       `SELECT id FROM mi_categories WHERE id = ? AND org_id = ?`,
       [id, orgId]

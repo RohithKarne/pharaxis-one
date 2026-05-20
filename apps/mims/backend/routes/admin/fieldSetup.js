@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
 const DEFAULT_FIELDS = [
   // ── Contact / Requestor ──────────────────────────────────────────────────────
@@ -162,11 +163,11 @@ async function seedDefaultFields(conn) {
 }
 
 // GET /api/admin/field-setup — returns all fields grouped by section_name
-router.get('/field-setup', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.get('/field-setup', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     // Fields are seeded on org creation via seedService.js
 
-    const isSA = req.user.role === 'superadmin';
+    const isSA = hasGlobalAdminScope(req.user);
     const [fields] = await pool.execute(
       `SELECT * FROM field_setup ${isSA ? '' : 'WHERE org_id = ? OR org_id IS NULL'} ORDER BY section_name, sort_order, id`,
       isSA ? [] : [req.user.orgId]
@@ -187,7 +188,7 @@ router.get('/field-setup', authenticate, requireRole('admin', 'superadmin'), req
 });
 
 // PUT /api/admin/field-setup — bulk save entire field setup
-router.put('/field-setup', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.put('/field-setup', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { fields } = req.body;
     if (!Array.isArray(fields)) return res.status(400).json({ error: 'fields must be an array.' });
@@ -227,13 +228,13 @@ router.put('/field-setup', authenticate, requireRole('admin', 'superadmin'), asy
 });
 
 // POST /api/admin/field-setup/flex — add a flex field to a section
-router.post('/field-setup/flex', authenticate, requireRole('admin', 'superadmin'), requireOrg, async (req, res) => {
+router.post('/field-setup/flex', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { section_name, field_name, field_type, is_required, custom_label, help_text, picklist_type, lookup_target, do_not_update_master, max_length, default_value, sort_order } = req.body;
     if (!section_name || !field_name) {
       return res.status(400).json({ error: 'section_name and field_name are required.' });
     }
-    const orgId = req.user.role === 'superadmin' ? (req.body.org_id || null) : req.user.orgId;
+    const orgId = hasGlobalAdminScope(req.user) ? (req.body.org_id || null) : req.user.orgId;
     const [result] = await pool.execute(
       `INSERT INTO field_setup (section_name, field_name, field_type, is_required, custom_label, help_text, picklist_type, lookup_target, do_not_update_master, max_length, default_value, sort_order, org_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -251,7 +252,7 @@ router.post('/field-setup/flex', authenticate, requireRole('admin', 'superadmin'
 });
 
 // DELETE /api/admin/field-setup/flex/:id — remove a flex field
-router.delete('/field-setup/flex/:id', authenticate, requireRole('admin', 'superadmin'), async (req, res) => {
+router.delete('/field-setup/flex/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const [[existing]] = await pool.execute('SELECT id, field_name FROM field_setup WHERE id = ?', [id]);

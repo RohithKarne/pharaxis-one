@@ -38,17 +38,17 @@ export const FLOW_TEMPLATES = {
     ],
   },
 
-  mims_superadmin_org_update: {
-    title: 'Superadmin Org Update',
-    description: 'Superadmin updates organisation-level controls and feature toggles.',
+  mims_platform_admin_org_update: {
+    title: 'Platform Admin Org Update',
+    description: 'Platform admin updates organisation-level controls and feature toggles.',
     source: 'mims',
     swimlanes: BASE_SWIMLANES_ADMIN,
     steps: [
-      { from: 0, to: 1, label: 'Open org settings and edit values', type: 'solid', concept: '🖥 UI Action', file: 'mims/frontend/src/modules/superadmin/pages/SuperadminPage.jsx' },
-      { from: 1, to: 2, label: 'PUT /api/superadmin/orgs/:id', type: 'solid', concept: '🔄 Middleware', apiRoute: 'PUT /api/superadmin/orgs/:id' },
-      { from: 2, to: 3, label: 'Validate superadmin privileges', type: 'solid', concept: '🔐 Authentication', file: 'mims/backend/middleware/auth.js' },
+      { from: 0, to: 1, label: 'Open org settings and edit values', type: 'solid', concept: '🖥 UI Action', file: 'mims/frontend/src/modules/mimsadmin/pages/MIMSAdminPage.jsx' },
+      { from: 1, to: 2, label: 'PUT /api/admin/platform/orgs/:id', type: 'solid', concept: '🔄 Middleware', apiRoute: 'PUT /api/admin/platform/orgs/:id' },
+      { from: 2, to: 3, label: 'Validate platform admin privileges', type: 'solid', concept: '🔐 Authentication', file: 'mims/backend/middleware/auth.js' },
       { from: 3, to: 2, label: 'Authorization passed', type: 'dashed', concept: '🔐 Authentication' },
-      { from: 2, to: 4, label: 'Update organisations row', type: 'solid', concept: '💾 DB Write', file: 'mims/backend/routes/superadmin.js', dbQuery: 'UPDATE organisations SET ... WHERE id=?' },
+      { from: 2, to: 4, label: 'Update organisations row', type: 'solid', concept: '💾 DB Write', file: 'mims/backend/routes/platformAdmin.js', dbQuery: 'UPDATE organisations SET ... WHERE id=?' },
       { from: 4, to: 2, label: 'DB confirms update', type: 'dashed', concept: '💾 DB Read' },
       { from: 2, to: 1, label: '200 OK + updated config', type: 'dashed', concept: '🖥 UI Action' },
     ],
@@ -264,7 +264,8 @@ function extractResource(path = '') {
 
 function inferMimsRouteFile(path = '') {
   const p = String(path).toLowerCase()
-  if (p.includes('/api/superadmin/')) return 'mims/backend/routes/superadmin.js'
+  if (p.includes('/api/admin/platform/')) return 'mims/backend/routes/platformAdmin.js'
+  if (p.includes('/api/admin/platform/')) return 'mims/backend/routes/platformAdmin.js'
   if (p.includes('/api/inbox')) return 'mims/backend/routes/inbox.js'
   if (p.includes('/api/cases') || p.includes('/api/case')) return 'mims/backend/routes/cases.js'
   if (p.includes('/api/cm/folders')) return 'mims/backend/routes/cm/folders.js'
@@ -299,7 +300,7 @@ function inferMimsPageFile(path = '') {
   if (p.includes('/cases') || p.includes('/case')) return 'mims/frontend/src/modules/cases/pages/CaseFormPage.jsx'
   if (p.includes('/picklist')) return 'mims/frontend/src/modules/admin/pages/AdminConsolePage.jsx'
   if (p.includes('/process-logs') || p.includes('/process-explorer')) return 'mims/frontend/src/modules/dv/pages/ProcessExplorerPage.jsx'
-  if (p.includes('/superadmin')) return 'mims/frontend/src/modules/superadmin/pages/SuperadminPage.jsx'
+  if (p.includes('/superadmin') || p.includes('/mims-admin')) return 'mims/frontend/src/modules/mimsadmin/pages/MIMSAdminPage.jsx'
   if (p.includes('/cm/')) return 'mims/frontend/src/modules/content/pages/ContentPage.jsx'
   return 'mims/frontend/src/modules/max/pages/DashboardPage.jsx'
 }
