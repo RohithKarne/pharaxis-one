@@ -46,6 +46,11 @@ Apply these rules to each production environment:
 | Prevent self-review | Enabled for production if possible |
 | Environment secrets | Scoped per product |
 
+Note:
+
+- Some private-repo environment protection features may depend on the current GitHub billing plan.
+- If the API rejects `wait_timer`, `prevent_self_review`, or deployment branch policies, keep the environment itself and apply only the protections your plan supports.
+
 ## Secret Model
 
 If all products still deploy to the same EC2 host, the same host/user/key values can be repeated into each environment.  
@@ -130,3 +135,4 @@ Use:
 - [ ] Confirm PR labeler has permission to write labels
 - [ ] Start using app-specific release tags
 - [ ] Apply branch protection with the exact required GitHub check names
+- [ ] If branch protection is blocked by plan, either upgrade GitHub plan or apply the closest available UI protections manually

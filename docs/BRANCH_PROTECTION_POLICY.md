@@ -20,6 +20,11 @@ Enable branch protection for `main` with:
 - restrict force pushes
 - restrict deletions
 
+Note:
+
+- On some GitHub plans for private repositories, full branch protection may be unavailable through the API or unavailable entirely.
+- If GitHub returns `Upgrade to GitHub Pro or make this repository public to enable this feature`, keep the policy as the target state and apply whatever review protections your plan exposes in the UI.
+
 ## Required Checks
 
 Set these checks as required when the workflows appear in GitHub:
