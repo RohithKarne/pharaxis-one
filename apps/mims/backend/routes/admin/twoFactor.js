@@ -109,9 +109,6 @@ router.get('/two-factor/config', ...adminTwoFactorAuth, async (_req, res) => {
       acc[row.config_key] = row.config_value;
       return acc;
     }, {});
-    if (config.platform_admin_session_timeout_minutes === undefined && config.superadmin_session_timeout_minutes !== undefined) {
-      config.platform_admin_session_timeout_minutes = config.superadmin_session_timeout_minutes;
-    }
     const sensitiveKeyPattern = /(password|secret|token|api[_-]?key)/i;
     for (const [key, value] of Object.entries(config)) {
       if (!sensitiveKeyPattern.test(key)) continue;
@@ -129,7 +126,6 @@ router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
   try {
     const {
       platform_admin_session_timeout_minutes,
-      superadmin_session_timeout_minutes,
       smtp_host,
       smtp_port,
       smtp_encryption,
@@ -140,12 +136,11 @@ router.put('/two-factor/config', ...adminTwoFactorAuth, async (req, res) => {
     } = req.body || {};
 
     const upserts = [];
-    const timeoutValue = platform_admin_session_timeout_minutes ?? superadmin_session_timeout_minutes;
+    const timeoutValue = platform_admin_session_timeout_minutes;
     if (timeoutValue !== undefined) {
       const mins = parseIntSafe(timeoutValue, 0);
       if (mins < 30) return res.status(400).json({ error: 'Platform admin session timeout must be at least 30 minutes.' });
       upserts.push(['platform_admin_session_timeout_minutes', String(mins)]);
-      upserts.push(['superadmin_session_timeout_minutes', String(mins)]);
     }
 
     const configPairs = {

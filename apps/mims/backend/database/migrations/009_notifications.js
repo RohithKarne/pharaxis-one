@@ -3,7 +3,7 @@
 
 async function up(conn) {
   await conn.execute(`
-    CREATE TABLE IF NOT EXISTS superadmin_alert_rules (
+    CREATE TABLE IF NOT EXISTS platform_admin_alert_rules (
       id               INT           NOT NULL AUTO_INCREMENT,
       name             VARCHAR(255)  NOT NULL,
       event_type       VARCHAR(100)  NOT NULL,
@@ -27,13 +27,13 @@ async function up(conn) {
 
   // Remove duplicates before adding unique key on existing DBs
   await conn.execute(`
-    DELETE r1 FROM superadmin_alert_rules r1
-    INNER JOIN superadmin_alert_rules r2
+    DELETE r1 FROM platform_admin_alert_rules r1
+    INNER JOIN platform_admin_alert_rules r2
       ON r1.event_type = r2.event_type AND r1.id > r2.id
   `);
   try {
     await conn.execute(
-      `ALTER TABLE superadmin_alert_rules ADD UNIQUE KEY uq_sa_alert_rules_event_type (event_type)`
+      `ALTER TABLE platform_admin_alert_rules ADD UNIQUE KEY uq_sa_alert_rules_event_type (event_type)`
     );
   } catch (_) {}
 
@@ -49,7 +49,7 @@ async function up(conn) {
   ];
   for (const rule of defaultRules) {
     await conn.execute(
-      `INSERT INTO superadmin_alert_rules
+      `INSERT INTO platform_admin_alert_rules
        (name, event_type, severity, channels, recipient_emails, threshold_value, window_minutes, cooldown_minutes, is_active)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
        ON DUPLICATE KEY UPDATE
@@ -61,7 +61,7 @@ async function up(conn) {
   }
 
   await conn.execute(`
-    CREATE TABLE IF NOT EXISTS superadmin_alert_events (
+    CREATE TABLE IF NOT EXISTS platform_admin_alert_events (
       id            INT           NOT NULL AUTO_INCREMENT,
       rule_id       INT           DEFAULT NULL,
       event_type    VARCHAR(100)  NOT NULL,

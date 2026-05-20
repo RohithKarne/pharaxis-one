@@ -19,7 +19,7 @@ const crypto = require('crypto');
 const pool = require('../database/db');
 const compliance = require('./complianceService');
 
-const ROLES_PRIVILEGED = ['admin', 'superadmin', 'medical_director', 'qppv', 'medical_reviewer'];
+const ROLES_PRIVILEGED = ['admin', 'platform_admin', 'medical_director', 'qppv', 'medical_reviewer'];
 
 /**
  * needsTwoSigners({orgId, response}) — determines whether this response

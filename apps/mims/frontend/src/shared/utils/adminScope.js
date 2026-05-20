@@ -1,6 +1,5 @@
 const PRIMARY_PLATFORM_ADMIN_MODULE = 'platform_admin_console'
-const LEGACY_PLATFORM_ADMIN_MODULE = 'superadmin_console'
-const PLATFORM_ADMIN_MODULE_KEYS = [PRIMARY_PLATFORM_ADMIN_MODULE, LEGACY_PLATFORM_ADMIN_MODULE]
+const PLATFORM_ADMIN_MODULE_KEYS = [PRIMARY_PLATFORM_ADMIN_MODULE]
 
 function readRole(subject) {
   if (typeof subject === 'string') return String(subject || '').trim().toLowerCase()
@@ -23,7 +22,7 @@ export function hasPlatformAdminModule(subject) {
 
 export function isPlatformAdmin(subject) {
   if (subject?.platformAdmin === true) return true
-  return readRole(subject) === 'superadmin' || hasPlatformAdminModule(subject)
+  return readRole(subject) === 'platform_admin' || hasPlatformAdminModule(subject)
 }
 
 export function isTenantAdmin(subject) {

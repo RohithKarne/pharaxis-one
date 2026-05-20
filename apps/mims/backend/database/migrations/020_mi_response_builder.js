@@ -72,7 +72,7 @@ async function seedOrgResponseContent(conn) {
     const [[owner]] = await conn.execute(
       `SELECT id FROM users
         WHERE (org_id = ? OR id IN (SELECT user_id FROM user_org_access WHERE org_id = ? AND is_active = 1))
-        ORDER BY CASE WHEN role IN ('admin','superadmin') THEN 0 ELSE 1 END, id ASC
+        ORDER BY CASE WHEN role IN ('platform_admin','admin') THEN 0 ELSE 1 END, id ASC
         LIMIT 1`,
       [org.id, org.id]
     );

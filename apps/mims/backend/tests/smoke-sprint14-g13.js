@@ -49,14 +49,14 @@ async function loginWithCandidates() {
       label: 'org-admin',
     },
     {
-      email: 'superadmin',
+      email: 'platform_admin',
       password: '__SET_SMOKE_TEST_PASSWORD__',
-      label: 'superadmin-short',
+      label: 'platform-admin-short',
     },
     {
-      email: 'superadmin@mims.io',
+      email: 'platform_admin@mims.io',
       password: '__SET_SMOKE_TEST_PASSWORD__',
-      label: 'superadmin-email',
+      label: 'platform-admin-email',
     },
   ];
 

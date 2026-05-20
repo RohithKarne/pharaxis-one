@@ -49,7 +49,7 @@ export default function AdminReportAccessPanel({ H }) {
       })
       const data = await response.json()
       if (response.ok) {
-        setReportReqMsg('✓ Request submitted - pending SuperAdmin approval.')
+        setReportReqMsg('✓ Request submitted - pending platform-admin approval.')
         setReportReqForm({ user_id: '', report_key: '' })
         const updated = await httpFetch('/api/admin/reports/access/requests', { headers: H }).then(r => r.json()).catch(() => ({ requests: [] }))
         setReportAccessRequests(updated.requests || [])
@@ -66,7 +66,7 @@ export default function AdminReportAccessPanel({ H }) {
   return (
     <div style={{ padding: 24, maxWidth: 900 }}>
       <h2 style={{ marginBottom: 4 }}>Report Access Requests</h2>
-      <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>Request report access for users in your organisation. Requests are reviewed and approved by the SuperAdmin team.</p>
+      <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>Request report access for users in your organisation. Requests are reviewed and approved by the platform-admin team.</p>
 
       <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 20, marginBottom: 24 }}>
         <h4 style={{ margin: '0 0 16px', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>New Access Request</h4>

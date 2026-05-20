@@ -6,9 +6,9 @@
 function getLoginCandidates() {
   const raw = [
     {
-      email: process.env.BOOTSTRAP_SUPERADMIN_EMAIL || 'superadmin',
-      password: process.env.BOOTSTRAP_SUPERADMIN_PASSWORD || '',
-      label: 'bootstrap-superadmin',
+      email: process.env.BOOTSTRAP_PLATFORM_ADMIN_EMAIL || 'platform_admin',
+      password: process.env.BOOTSTRAP_PLATFORM_ADMIN_PASSWORD || '',
+      label: 'bootstrap-platform-admin',
     },
     {
       email: process.env.REGRESSION_FALLBACK_EMAIL || '',

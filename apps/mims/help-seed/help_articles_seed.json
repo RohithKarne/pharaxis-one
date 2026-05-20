@@ -26,7 +26,7 @@
       "title": "Cases Overview",
       "summary": "What cases are and how they flow through MIMS.",
       "content_html": "<h4>What is a Case?</h4><p>A case is a record of a medical information request — a question from a healthcare professional, patient, or internal stakeholder about a product. Every case has a unique case number, status, and owner.</p><h4>When to use it</h4><p>Create a case any time you receive a new medical information inquiry that needs to be tracked, responded to, and archived.</p><h4>How to do it</h4><ul><li>Click <strong>+ New Case</strong> from the Cases list.</li><li>Fill in the case type, priority, product, and contact details.</li><li>Assign an owner and submit.</li></ul><h4>What happens next?</h4><p>The case moves to <strong>Open</strong> status. The assigned agent receives a notification and can begin processing the inquiry.</p>",
-      "audience": ["agent","cm_admin","admin","superadmin"],
+      "audience": ["agent","cm_admin","admin","platform_admin"],
       "sort_order": 10,
       "tags": ["cases","overview"]
     },
@@ -116,7 +116,7 @@
       "title": "Content Folders",
       "summary": "How folders organise your content library.",
       "content_html": "<h4>What is this?</h4><p>Folders are the top-level containers in the Content Management module. Every document, FAQ, template, and merge report lives inside a folder.</p><h4>When to use it</h4><p>Create folders to organise content by product, therapy area, country, or document type — whatever structure works for your team.</p><h4>How to do it</h4><ul><li>Go to <strong>Content → Folders</strong> tab.</li><li>Click <strong>+ New Folder</strong>.</li><li>Enter a name, select a product, and save.</li></ul><h4>What happens next?</h4><p>The folder appears in the folder panel of all content tabs (Documents, Modules, FAQs, etc.) and in the Browse Content module for agents.</p>",
-      "audience": ["cm_admin","admin","superadmin"],
+      "audience": ["cm_admin","admin","platform_admin"],
       "sort_order": 20,
       "tags": ["cm","folders"]
     },
@@ -126,7 +126,7 @@
       "title": "Managing Documents",
       "summary": "Uploading, versioning, and publishing approved documents.",
       "content_html": "<h4>What is this?</h4><p>Documents are the primary content assets in MIMS — product monographs, prescribing information, clinical summaries, and other approved reference materials.</p><h4>When to use it</h4><p>Upload a document when you have a new or updated approved resource that agents should be able to access and reference in case responses.</p><h4>How to do it</h4><ol><li>Go to <strong>Content → Documents</strong> tab.</li><li>Select the folder in the left panel.</li><li>Click <strong>+ New Document</strong>.</li><li>Upload a file (PDF, Word, etc.) or paste HTML content.</li><li>Fill in name, category, keywords, and version.</li><li>Click <strong>Save</strong>.</li></ol><h4>What happens next?</h4><p>The document is created in <strong>Draft</strong> status. Use <strong>Publish</strong> to make it available to agents in the Browse Content module.</p>",
-      "audience": ["cm_admin","admin","superadmin"],
+      "audience": ["cm_admin","admin","platform_admin"],
       "sort_order": 21,
       "tags": ["cm","documents","upload"]
     },
@@ -246,7 +246,7 @@
       "title": "Reports & Analytics",
       "summary": "Overview of available reports and how to generate them.",
       "content_html": "<h4>What is this?</h4><p>The Reports module provides analytics and exports for cases, content, and compliance activities across your organisation.</p><h4>When to use it</h4><p>Use reports for periodic case volume reviews, regulatory submissions, team performance tracking, or content usage analytics.</p><h4>How to do it</h4><ul><li>Click <strong>Reports</strong> in the top navigation.</li><li>Select the report type from the left panel.</li><li>Apply date range and filter options.</li><li>Click <strong>Generate</strong> to load the data.</li><li>Use <strong>Export</strong> to download as CSV or PDF.</li></ul><h4>What happens next?</h4><p>Generated reports are not saved automatically. Download or screenshot the results if you need to retain them outside MIMS.</p>",
-      "audience": ["agent","cm_admin","admin","superadmin"],
+      "audience": ["agent","cm_admin","admin","platform_admin"],
       "sort_order": 90,
       "tags": ["reports","analytics","export"]
     },
@@ -266,7 +266,7 @@
       "title": "Managing Picklists",
       "summary": "How to add, edit, and reorder dropdown values across MIMS.",
       "content_html": "<h4>What is this?</h4><p>Picklists define the dropdown options used throughout MIMS — case priorities, types, categories, contact roles, and more. Admins control what values appear in these dropdowns.</p><h4>When to use it</h4><p>Edit picklists when you need to add a new option, rename an existing one, or deactivate values that are no longer relevant.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Picklists</strong>.</li><li>Select the picklist type from the left panel.</li><li>Click <strong>+ Add Item</strong> to add a new value.</li><li>Use drag handles to reorder, or click the edit icon to rename.</li><li>Toggle the active switch to deactivate without deleting.</li></ul><h4>What happens next?</h4><p>Changes take effect immediately. Deactivated values no longer appear in dropdowns but existing records that used them are unaffected.</p>",
-      "audience": ["admin","superadmin"],
+      "audience": ["admin","platform_admin"],
       "sort_order": 100,
       "tags": ["admin","picklists","configuration"]
     },
@@ -276,7 +276,7 @@
       "title": "Field Setup & Custom Fields",
       "summary": "Configuring which fields appear on case and contact forms.",
       "content_html": "<h4>What is this?</h4><p>Field Setup lets admins control which fields appear on case forms — making fields required, optional, hidden, or adding custom fields unique to your organisation.</p><h4>When to use it</h4><p>Use Field Setup when you need to capture additional information in cases that isn't in the default form, or to hide fields that aren't relevant to your workflow.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Field Setup</strong>.</li><li>Select the form (Case, Contact, MI, AE, PC) from the top tabs.</li><li>Toggle fields between Required, Optional, and Hidden.</li><li>Click <strong>+ Add Custom Field</strong> to create a new field.</li></ul><h4>What happens next?</h4><p>Form changes apply to all new cases immediately. Existing case records are not affected.</p>",
-      "audience": ["admin","superadmin"],
+      "audience": ["admin","platform_admin"],
       "sort_order": 101,
       "tags": ["admin","field setup","custom fields","forms"]
     },
@@ -286,7 +286,7 @@
       "title": "Workflow Activities",
       "summary": "Configuring workflow stages and transition rules for cases.",
       "content_html": "<h4>What is this?</h4><p>Workflow Activities define the steps a case goes through — what statuses are available, what transitions are allowed, and whether a note or e-signature is required.</p><h4>When to use it</h4><p>Configure workflow when you need to add a new case status, change who can transition a case, or enforce documentation at a specific step.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Workflow</strong>.</li><li>Select the case type from the dropdown.</li><li>Add, edit, or reorder workflow steps.</li><li>For each step, set: allowed roles, required note, and e-sign requirement.</li></ul><h4>What happens next?</h4><p>The updated workflow applies to new and in-progress cases. Agents will see only the transitions allowed for their role at each step.</p>",
-      "audience": ["admin","superadmin"],
+      "audience": ["admin","platform_admin"],
       "sort_order": 102,
       "tags": ["admin","workflow","activities","transitions"]
     },
@@ -296,7 +296,7 @@
       "title": "Product Dictionary",
       "summary": "Managing your product and brand list in MIMS.",
       "content_html": "<h4>What is this?</h4><p>The Product Dictionary is the master list of products (medicines, devices, etc.) that can be referenced in cases, MI records, and content.</p><h4>When to use it</h4><p>Add a product when a new drug or device needs to be tracked in MIMS, or update an existing product when its details change.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Product Dictionary</strong>.</li><li>Click <strong>+ Add Product</strong>.</li><li>Enter the brand name, INN (international non-proprietary name), therapeutic area, and active status.</li></ul><h4>What happens next?</h4><p>The product becomes available in case MI forms, content folder assignment, and reporting filters.</p>",
-      "audience": ["admin","superadmin"],
+      "audience": ["admin","platform_admin"],
       "sort_order": 103,
       "tags": ["admin","products","product dictionary"]
     },
@@ -306,7 +306,7 @@
       "title": "Security Groups & Permissions",
       "summary": "How security groups control what each user can see and do.",
       "content_html": "<h4>What is this?</h4><p>Security Groups define role-based access control for your organisation — which modules users can see and what actions they can perform.</p><h4>When to use it</h4><p>Use security groups when onboarding new users with specific access requirements, or when you need to restrict access to sensitive case types or content.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Security Groups</strong>.</li><li>Click <strong>+ New Group</strong> or edit an existing one.</li><li>Toggle permissions for each module (Cases, Content, Reports, etc.).</li><li>Assign users to the group from the Users section.</li></ul><h4>What happens next?</h4><p>Users see only the modules and actions permitted by their security group. Changes take effect on next login.</p>",
-      "audience": ["admin","superadmin"],
+      "audience": ["admin","platform_admin"],
       "sort_order": 104,
       "tags": ["admin","security","permissions","roles"]
     },
@@ -316,7 +316,7 @@
       "title": "Case Numbering Configuration",
       "summary": "Setting up automatic case number formats for your organisation.",
       "content_html": "<h4>What is this?</h4><p>Case Numbering lets you define the format for automatically assigned case numbers — e.g. <code>MI-2026-00001</code>.</p><h4>When to use it</h4><p>Configure case numbering when setting up a new organisation or changing your numbering convention.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Case Numbering</strong>.</li><li>Select the case type.</li><li>Set the prefix, year format, separator, and padding.</li><li>Click <strong>Save</strong>.</li></ul><h4>What happens next?</h4><p>New cases created after saving use the new format. Existing case numbers are not changed.</p>",
-      "audience": ["admin","superadmin"],
+      "audience": ["admin","platform_admin"],
       "sort_order": 105,
       "tags": ["admin","case numbering","configuration"]
     },
@@ -326,9 +326,9 @@
       "title": "Organisation Management",
       "summary": "How platform admins create and manage organisations and sites.",
       "content_html": "<h4>What is this?</h4><p>The Organisations section (Admin only) is where new pharmaceutical organisations and their sub-sites are created and managed within MIMS.</p><h4>When to use it</h4><p>Use this when onboarding a new client organisation, adding a site or subsidiary, or deactivating an organisation.</p><h4>How to do it</h4><ul><li>Go to <strong>MIMS Admin → Organizations</strong>.</li><li>Click <strong>+ New Organisation</strong>.</li><li>Enter the name, contact details, and select which modules to enable.</li><li>Add sites under the organisation if needed.</li></ul><h4>What happens next?</h4><p>The organisation is created. You can then set up users, assign admins, and configure module access for the organisation.</p>",
-      "audience": ["superadmin"],
+      "audience": ["platform_admin"],
       "sort_order": 110,
-      "tags": ["admin","organisations","superadmin","sites"]
+      "tags": ["admin","organisations","platform_admin","sites"]
     },
     {
       "feature_key": "admin.content_intelligence",
@@ -336,7 +336,7 @@
       "title": "Content Intelligence — Overview",
       "summary": "Introduction to the four AI-powered content analysis features.",
       "content_html": "<h4>What is this?</h4><p>Content Intelligence is a suite of AI-powered tools in the Admin Console that help you analyse, validate, and manage the quality of your content library.</p><h4>The four features</h4><ul><li><strong>Evidence Chain</strong> — traces the source evidence behind content claims.</li><li><strong>Contradiction Radar</strong> — identifies conflicting statements across documents.</li><li><strong>Digital Twin</strong> — creates a regulatory profile snapshot for a product.</li><li><strong>Adaptive Risk</strong> — scores the regulatory risk of your current content state.</li></ul><h4>When to use it</h4><p>Use Content Intelligence during content audits, before regulatory submissions, or when reviewing newly uploaded materials.</p><h4>What happens next?</h4><p>Each tool generates an analysis report viewable on screen. Results are not automatically acted upon — you review and take action based on the findings.</p>",
-      "audience": ["admin","superadmin"],
+      "audience": ["admin","platform_admin"],
       "sort_order": 120,
       "tags": ["admin","content intelligence","AI","evidence","contradiction","risk"]
     },
@@ -346,7 +346,7 @@
       "title": "Evidence Chain Analysis",
       "summary": "How to trace the scientific evidence behind a content claim.",
       "content_html": "<h4>What is this?</h4><p>Evidence Chain traces how a claim in your approved content is supported by source evidence — clinical studies, product labels, and regulatory documents.</p><h4>When to use it</h4><p>Use Evidence Chain when you need to verify that a claim is backed by current, valid evidence — e.g. before publishing new content or responding to a regulatory query.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Content Intelligence → Evidence Chain</strong>.</li><li>Select the document or enter a content claim.</li><li>Click <strong>Analyse</strong>.</li></ul><h4>What happens next?</h4><p>The system returns a chain of evidence nodes showing supporting sources, confidence levels, and gaps where evidence is missing or weak.</p>",
-      "audience": ["admin","superadmin"],
+      "audience": ["admin","platform_admin"],
       "sort_order": 121,
       "tags": ["admin","content intelligence","evidence chain"]
     },
@@ -356,7 +356,7 @@
       "title": "Policy Graph",
       "summary": "Visualising and managing your medical affairs policy relationships.",
       "content_html": "<h4>What is this?</h4><p>The Policy Graph is a visual map of your medical affairs policies — showing how internal policies, SOPs, regulations, and content interconnect.</p><h4>When to use it</h4><p>Use the Policy Graph to understand the impact of a regulatory change on your existing policies, or to identify policy gaps before an audit.</p><h4>How to do it</h4><ul><li>Go to <strong>Admin → Policy Graph</strong>.</li><li>Click <strong>+ Add Node</strong> to add a policy or regulation.</li><li>Draw connections between related nodes.</li><li>Use <strong>Evaluate</strong> to run an impact analysis from a selected node.</li></ul><h4>What happens next?</h4><p>The graph updates in real-time. The evaluate function returns a risk propagation report showing which downstream policies are affected by a change at the selected node.</p>",
-      "audience": ["admin","superadmin"],
+      "audience": ["admin","platform_admin"],
       "sort_order": 130,
       "tags": ["admin","policy graph","compliance","regulations"]
     }

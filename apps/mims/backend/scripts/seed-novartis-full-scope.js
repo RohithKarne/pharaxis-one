@@ -575,7 +575,7 @@ async function getOrgContext(conn, orgId) {
        FROM users u
        JOIN user_org_access uoa ON uoa.user_id = u.id
       WHERE uoa.org_id = ? AND uoa.is_active = 1 AND u.is_active = 1
-      ORDER BY FIELD(u.role, 'admin', 'agent', 'reviewer', 'content_manager', 'superadmin'), u.id ASC`,
+      ORDER BY FIELD(u.role, 'admin', 'agent', 'reviewer', 'content_manager', 'platform_admin'), u.id ASC`,
     [orgId]
   );
   if (!users.length) throw new Error(`Organisation ${orgId} has no active users.`);

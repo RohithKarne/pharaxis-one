@@ -293,7 +293,7 @@ router.get('/cases', authenticate, requireOrg, async (req, res) => {
     `;
     const params = [];
     const countParams = [];
-    // Org isolation — always scope to req.user.orgId (superadmin has no orgId, sees all)
+    // Org isolation — always scope to req.user.orgId (platform admin has no orgId and sees all)
     if (req.user.orgId) {
       query += ' AND c.org_id = ?'; params.push(req.user.orgId);
       countQuery += ' AND c.org_id = ?'; countParams.push(req.user.orgId);

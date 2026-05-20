@@ -11,7 +11,7 @@ const { authenticate, requireRole, requireOrg } = require('../../middleware/auth
 const { logAudit } = require('../../utils/auditLog');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
-// GET /api/admin/orgs — list all (superadmin sees all; admin sees only their org)
+// GET /api/admin/orgs — list all (platform admin sees all; admin sees only their org)
 router.get('/', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const isSA = hasGlobalAdminScope(req.user);

@@ -137,7 +137,7 @@ const BUILTIN_REPORT_DEFINITIONS = Object.freeze([
     report_key: 'case-by-org',
     dataset_key: 'case-by-org',
     name: 'Cases by Organisation',
-    description: 'SuperAdmin view of case volume per organisation.',
+    description: 'Platform-admin view of case volume per organisation.',
     group_key: 'case_compliance',
     default_filters: {},
     allowed_filters: [],

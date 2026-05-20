@@ -18,7 +18,7 @@ const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 
 const SALT_ROUNDS = 12;
 const PLATFORM_ADMIN_EXCLUSION_SQL =
-  "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module IN ('platform_admin_console','superadmin_console') AND ump.can_access = 1)";
+  "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1)";
 
 function addDays(date, days) {
   const d = new Date(date);
@@ -295,7 +295,7 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
 
   try {
     const [[existing]] = await pool.execute(
-      'SELECT id, role FROM users WHERE id = ? AND role != ?', [req.params.id, 'superadmin']
+      'SELECT id, role FROM users WHERE id = ? AND role != ?', [req.params.id, 'platform_admin']
     );
     if (!existing) return res.status(404).json({ error: 'User not found.' });
 
@@ -361,7 +361,7 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
 router.post('/users/:id/expire-password', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [[user]] = await pool.execute(
-      'SELECT id FROM users WHERE id = ? AND role != ? LIMIT 1', [req.params.id, 'superadmin']
+      'SELECT id FROM users WHERE id = ? AND role != ? LIMIT 1', [req.params.id, 'platform_admin']
     );
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
@@ -390,7 +390,7 @@ router.put('/users/:id/change-password', authenticate, requireRole('admin', 'pla
   try {
     const [[user]] = await pool.execute(
       'SELECT id, network_user_id FROM users WHERE id = ? AND role != ? LIMIT 1',
-      [req.params.id, 'superadmin']
+      [req.params.id, 'platform_admin']
     );
     if (!user) return res.status(404).json({ error: 'User not found.' });
     if (user.network_user_id) {
@@ -443,7 +443,7 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
 
     const [[user]] = await conn.execute(
       'SELECT id, security_group_id FROM users WHERE id = ? AND role != ? LIMIT 1',
-      [req.params.id, 'superadmin']
+      [req.params.id, 'platform_admin']
     );
     if (!user) {
       await conn.rollback();

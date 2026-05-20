@@ -74,7 +74,7 @@ function assert(label, cond, detail) {
 async function run() {
   // Test 1 — Platform Admin login
   let res = await req('POST', '/api/auth/login', {
-    email: 'superadmin',
+    email: 'platform_admin',
     password: '__SET_SMOKE_TEST_PASSWORD__'
   });
   assert('Test 1 status', res.status === 200, 'status=' + res.status);
@@ -90,7 +90,7 @@ async function run() {
   assert('Test 2 token/challengeToken', !!(res.body && (res.body.token || res.body.challengeToken)), JSON.stringify(res.body));
   adminToken = res.body && (res.body.token || res.body.challengeToken);
 
-  // Test 3 — Create vault config (superadmin)
+  // Test 3 — Create vault config (platform admin)
   res = await req(
     'POST',
     '/api/admin/platform/vault-config',
@@ -109,14 +109,14 @@ async function run() {
   assert('Test 3 id', !!(res.body && res.body.id > 0), JSON.stringify(res.body));
   vaultConfigId = res.body && res.body.id;
 
-  // Test 4 — Get vault configs (superadmin)
+  // Test 4 — Get vault configs (platform admin)
   res = await req('GET', '/api/admin/platform/vault-config', null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 4 status', res.status === 200, 'status=' + res.status);
   assert('Test 4 configs array', !!(res.body && Array.isArray(res.body.configs)), JSON.stringify(res.body));
 
-  // Test 5 — Create EMIR config (superadmin)
+  // Test 5 — Create EMIR config (platform admin)
   res = await req(
     'POST',
     '/api/admin/platform/emir-config',
@@ -133,14 +133,14 @@ async function run() {
   assert('Test 5 id', !!(res.body && res.body.id > 0), JSON.stringify(res.body));
   emirConfigId = res.body && res.body.id;
 
-  // Test 6 — Get EMIR configs (superadmin)
+  // Test 6 — Get EMIR configs (platform admin)
   res = await req('GET', '/api/admin/platform/emir-config', null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 6 status', res.status === 200, 'status=' + res.status);
   assert('Test 6 configs array', !!(res.body && Array.isArray(res.body.configs)), JSON.stringify(res.body));
 
-  // Test 7 — Create vault document type mapping (superadmin)
+  // Test 7 — Create vault document type mapping (platform admin)
   res = await req(
     'POST',
     '/api/admin/platform/vault-query-params/26',
@@ -156,7 +156,7 @@ async function run() {
   assert('Test 7 id', !!(res.body && res.body.id > 0), JSON.stringify(res.body));
   typeMapId = res.body && res.body.id;
 
-  // Test 8 — Get vault query params (superadmin)
+  // Test 8 — Get vault query params (platform admin)
   res = await req('GET', '/api/admin/platform/vault-query-params/26', null, {
     Authorization: 'Bearer ' + superadminToken
   });
@@ -208,14 +208,14 @@ async function run() {
   );
   assert('Test 12 status', res.status === 500, 'status=' + res.status + ' body=' + JSON.stringify(res.body));
 
-  // Test 13 — EMIR requests list (superadmin)
+  // Test 13 — EMIR requests list (platform admin)
   res = await req('GET', '/api/admin/platform/emir/requests', null, {
     Authorization: 'Bearer ' + superadminToken
   });
   assert('Test 13 status', res.status === 200, 'status=' + res.status);
   assert('Test 13 requests array', !!(res.body && Array.isArray(res.body.requests)), JSON.stringify(res.body));
 
-  // Test 14 — EMIR audit log (superadmin)
+  // Test 14 — EMIR audit log (platform admin)
   const listForAudit = await req('GET', '/api/admin/platform/emir/requests', null, {
     Authorization: 'Bearer ' + superadminToken
   });
@@ -232,7 +232,7 @@ async function run() {
   assert('Test 14 audit array', !!(res.body && Array.isArray(res.body.audit)), JSON.stringify(res.body));
   assert('Test 14 audit length >= 3', !!(res.body && Array.isArray(res.body.audit) && res.body.audit.length >= 3), JSON.stringify(res.body));
 
-  // Test 15 — Vault poll trigger (superadmin)
+  // Test 15 — Vault poll trigger (platform admin)
   res = await req('GET', '/api/admin/platform/vault/poll-now/26', null, {
     Authorization: 'Bearer ' + superadminToken
   });

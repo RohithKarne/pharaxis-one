@@ -3,8 +3,8 @@
  *
  * Manages tenants (organisations) + sites + per-org 2FA + session timeout + logos.
  * Reuses OrganisationsView from the legacy admin-compatibility folder (will be moved
- * inline once the legacy superadmin module is retired). Canonical backend route
- * is `/api/admin/platform/orgs*`, with legacy compatibility still mounted.
+ * inline once the platform admin module cleanup is complete). Canonical backend route
+ * is `/api/admin/platform/orgs*`.
  */
 
 import { useState, useMemo, useEffect } from 'react'

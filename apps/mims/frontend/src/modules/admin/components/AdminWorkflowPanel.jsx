@@ -267,9 +267,9 @@ export default function AdminWorkflowPanel({ H, flash }) {
 
   return (
     <>
-      <SectionHeader title="Workflow Setup" desc="View case workflow states and activity triggers. Changes are managed by SuperAdmin." />
+      <SectionHeader title="Workflow Setup" desc="View case workflow states and activity triggers. Changes are managed by platform admins." />
       <div style={{ padding: '8px 14px', marginBottom: 12, background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 6, fontSize: 12, color: '#7a5c00' }}>
-        Workflow configuration is controlled by SuperAdmin only. Contact your platform admin to add or modify workflow states and triggers.
+        Workflow configuration is controlled by platform admins only. Contact your platform admin to add or modify workflow states and triggers.
       </div>
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>

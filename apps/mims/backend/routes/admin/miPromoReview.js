@@ -15,7 +15,7 @@ const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 
-const PROMO_REVIEWER = ['admin', 'superadmin', 'medical_director', 'compliance_officer'];
+const PROMO_REVIEWER = ['admin', 'platform_admin', 'medical_director', 'compliance_officer'];
 
 router.get('/mi/tabs/:tabId/classification', authenticate, async (req, res) => {
   try {

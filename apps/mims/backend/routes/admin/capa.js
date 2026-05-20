@@ -19,7 +19,7 @@ const router  = express.Router();
 const { authenticate, requireRole } = require('../../middleware/auth');
 const capa = require('../../services/capaService');
 
-const QA_OR_ADMIN = ['admin','superadmin','qa'];
+const QA_OR_ADMIN = ['admin','platform_admin','qa'];
 
 router.get('/capa/meta/status-flow', authenticate, (_req, res) => {
   res.json({ flow: capa.STATUS_FLOW });

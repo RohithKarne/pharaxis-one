@@ -469,7 +469,7 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     const [[existing]] = await pool.execute('SELECT id, email, role FROM users WHERE id = ?', [id]);
     if (!existing) return res.status(404).json({ error: 'User not found.' });
 
-    const validRoles = ['admin', 'agent', 'reviewer', 'content_manager', 'superadmin'];
+    const validRoles = ['admin', 'agent', 'reviewer', 'content_manager', 'platform_admin'];
     const newRole = role && validRoles.includes(role) ? role : existing.role;
 
     await pool.execute(

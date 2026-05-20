@@ -89,9 +89,9 @@ async function loginAdmin() {
   return 'fail';
 }
 
-async function loginSuperadmin() {
+async function loginPlatformAdmin() {
   const r = await req('POST', '/api/auth/login', {
-    email: 'superadmin@mims.io',
+    email: 'platform_admin@mims.io',
     password: '__SET_SMOKE_TEST_PASSWORD__',
   });
 
@@ -224,9 +224,9 @@ async function run() {
   }
 
   console.log('\n--- SA Reports Access (SA-4) ---');
-  await loginSuperadmin();
+  await loginPlatformAdmin();
   await checkGet('GET /api/admin/platform/reports/orgs returns 200', '/api/admin/platform/reports/orgs', superadminToken, {
-    skipReason: superadminAuthReason || 'superadmin auth unavailable',
+    skipReason: superadminAuthReason || 'platform-admin auth unavailable',
   });
 
   summary();

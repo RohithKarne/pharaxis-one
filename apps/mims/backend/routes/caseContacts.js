@@ -235,7 +235,7 @@ async function syncBackToMaster(contactId, fields, req) {
     }
   }
   if (updates.length) {
-    if (req?.user?.role === 'superadmin') {
+    if (req?.user?.role === 'platform_admin') {
       params.push(contactId);
       await pool.execute(
         `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`,

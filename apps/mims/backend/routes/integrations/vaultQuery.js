@@ -47,7 +47,7 @@ function buildAllowedVaultQuery(queryKey, queryParams = {}) {
   }
 }
 
-router.get(['/admin/platform/vault-query-params/:org_id', '/superadmin/vault-query-params/:org_id'], authenticate, requireRole('platform_admin'), async (req, res) => {
+router.get(['/admin/platform/vault-query-params/:org_id', '/admin/platform/vault-query-params/:org_id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM org_vault_config WHERE org_id = ? LIMIT 1', [req.params.org_id]);
     return res.json({ params: rows[0] || null });
@@ -56,7 +56,7 @@ router.get(['/admin/platform/vault-query-params/:org_id', '/superadmin/vault-que
   }
 });
 
-router.post(['/admin/platform/vault-query-params/:org_id', '/superadmin/vault-query-params/:org_id'], authenticate, requireRole('platform_admin'), async (req, res) => {
+router.post(['/admin/platform/vault-query-params/:org_id', '/admin/platform/vault-query-params/:org_id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { vault_type, vault_subtype, vault_classification, mims_cm_category } = req.body;
 
@@ -71,7 +71,7 @@ router.post(['/admin/platform/vault-query-params/:org_id', '/superadmin/vault-qu
   }
 });
 
-router.delete(['/admin/platform/vault-query-params/:id', '/superadmin/vault-query-params/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
+router.delete(['/admin/platform/vault-query-params/:id', '/admin/platform/vault-query-params/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     await pool.query('DELETE FROM vault_document_type_map WHERE id = ?', [req.params.id]);
     return res.json({ message: 'Deleted' });

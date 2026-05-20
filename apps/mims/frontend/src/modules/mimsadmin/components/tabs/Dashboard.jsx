@@ -2,8 +2,8 @@
  * Dashboard.jsx — MIMS Admin home / landing tab
  *
  * Platform-level KPIs + readiness + recent audit/login activity.
- * Migrated from the legacy superadmin dashboard. Canonical backend endpoint
- * is `/api/admin/platform/dashboard`, with legacy compatibility still mounted.
+ * Platform admin dashboard. Canonical backend endpoint
+ * is `/api/admin/platform/dashboard`.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'

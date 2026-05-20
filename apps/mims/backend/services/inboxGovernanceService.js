@@ -288,7 +288,7 @@ async function resolveAssignedUserIds(orgId, assignedTo, fallbackCaseOwnerId = n
        LEFT JOIN user_org_access uoa ON uoa.user_id = u.id
        WHERE u.is_active = 1
          AND u.name = ?
-         AND (uoa.org_id = ? OR u.role = 'superadmin')`,
+         AND (uoa.org_id = ? OR u.role = 'platform_admin')`,
       [assignee, orgId]
     );
     rows.forEach((row) => ids.push(Number(row.id)));

@@ -9,7 +9,7 @@
  *
  * Placeholder items live in field_setup under section '__customize_placeholder__'.
  *
- * All routes: admin + superadmin. No requireOrg — admin is global.
+ * All routes: admin + platform admin. No requireOrg — admin is global.
  */
 
 const express = require('express');

@@ -43,7 +43,7 @@ export default function TwoFactorConfigView({ H, flash, apiBase = '/api/admin/tw
         smtp_from_email: configData.config?.smtp_from_email || '',
         smtp_from_name: configData.config?.smtp_from_name || 'MIMS Platform',
       }))
-      setSessionTimeoutMinutes(Number(configData.config?.platform_admin_session_timeout_minutes ?? configData.config?.superadmin_session_timeout_minutes) || 60)
+      setSessionTimeoutMinutes(Number(configData.config?.platform_admin_session_timeout_minutes) || 60)
       setOrgSecurityForms(
         (orgData.orgs || []).reduce((acc, org) => {
           acc[org.id] = {

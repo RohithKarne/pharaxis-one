@@ -104,7 +104,7 @@ function extractAllFields(sections) {
 
 async function loginAndGetToken() {
   const loginCandidates = [
-    { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
+    { email: 'platform_admin', password: '__SET_SMOKE_TEST_PASSWORD__' },
   ];
 
   const failures = [];

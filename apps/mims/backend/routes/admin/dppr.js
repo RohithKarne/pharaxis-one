@@ -197,7 +197,7 @@ router.post('/dppr/run-now', authenticate, requireRole('admin', 'platform_admin'
     const { org_id } = req.body;
     const scope = orgScope(req);
     const targetOrg = scope ?? (org_id ? parseInt(org_id, 10) : null);
-    if (!targetOrg) return res.status(400).json({ error: 'org_id required for superadmin manual run.' });
+    if (!targetOrg) return res.status(400).json({ error: 'org_id required for platform admin manual run.' });
 
     const results = await applyDpprRules(targetOrg, 'manual', req.user.userId);
     res.json({ message: 'DPPR run complete.', results });

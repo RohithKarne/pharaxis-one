@@ -160,9 +160,7 @@ async function getSystemConfig() {
 
 function getPlatformAdminSessionTimeout(config = {}) {
   return parseInt(
-    config.platform_admin_session_timeout_minutes
-      || config.superadmin_session_timeout_minutes
-      || '60',
+    config.platform_admin_session_timeout_minutes || '60',
     10
   );
 }
@@ -1375,11 +1373,11 @@ const authController = {
           userName: user.email,
           role: user.role,
           status: 'failed',
-          failReason: '2FA locked. Contact SuperAdmin for reset.',
+          failReason: '2FA locked. Contact your platform admin for reset.',
           authEvent: '2fa_locked',
           metadata: { orgId: context.orgId },
         });
-        return res.status(423).json({ error: '2FA is locked after 3 failed attempts. Contact SuperAdmin for reset.' });
+        return res.status(423).json({ error: '2FA is locked after 3 failed attempts. Contact your platform admin for reset.' });
       }
 
       if (settings?.is_enabled && await isTrustedDevice(user.id, context.orgId, rememberedDeviceToken)) {
@@ -1624,7 +1622,7 @@ const authController = {
           metadata: { orgId: pending.orgId, method: method || 'backup' },
         });
         return res.status(failure.isLocked ? 423 : 401).json({
-          error: failure.isLocked ? '2FA is locked after 3 failed attempts. Contact SuperAdmin for reset.' : 'Invalid verification code.',
+          error: failure.isLocked ? '2FA is locked after 3 failed attempts. Contact your platform admin for reset.' : 'Invalid verification code.',
           locked: failure.isLocked,
         });
       }

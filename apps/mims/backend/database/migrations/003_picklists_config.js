@@ -120,7 +120,7 @@ async function up(conn) {
       default_value    VARCHAR(500),
       is_sensitive     TINYINT(1) NOT NULL DEFAULT 0,
       masking_pattern  VARCHAR(30) NOT NULL DEFAULT 'partial',
-      unmask_roles     VARCHAR(255) NOT NULL DEFAULT 'admin,superadmin',
+      unmask_roles     VARCHAR(255) NOT NULL DEFAULT 'admin,platform_admin',
       org_id           INT,
       sort_order       INT NOT NULL DEFAULT 0,
       updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -137,7 +137,7 @@ async function up(conn) {
     `ALTER TABLE field_setup ADD COLUMN default_value VARCHAR(500) AFTER max_length`,
     `ALTER TABLE field_setup ADD COLUMN is_sensitive TINYINT(1) NOT NULL DEFAULT 0 AFTER default_value`,
     `ALTER TABLE field_setup ADD COLUMN masking_pattern VARCHAR(30) NOT NULL DEFAULT 'partial' AFTER is_sensitive`,
-    `ALTER TABLE field_setup ADD COLUMN unmask_roles VARCHAR(255) NOT NULL DEFAULT 'admin,superadmin' AFTER masking_pattern`,
+    `ALTER TABLE field_setup ADD COLUMN unmask_roles VARCHAR(255) NOT NULL DEFAULT 'admin,platform_admin' AFTER masking_pattern`,
     `ALTER TABLE field_setup ADD COLUMN org_id INT`,
   ];
   for (const sql of fieldSetupAlters) { try { await conn.execute(sql); } catch (_) {} }

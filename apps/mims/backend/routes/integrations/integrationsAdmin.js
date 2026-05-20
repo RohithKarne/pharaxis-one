@@ -7,7 +7,7 @@ const pool = require('../../database/db');
 const router = express.Router();
 
 // Platform Admin routes
-router.get(['/admin/platform/integrations', '/superadmin/integrations'], authenticate, requireRole("platform_admin"), async (_req, res) => {
+router.get(['/admin/platform/integrations', '/admin/platform/integrations'], authenticate, requireRole("platform_admin"), async (_req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT oi.*, o.name as org_name
@@ -30,7 +30,7 @@ router.get(['/admin/platform/integrations', '/superadmin/integrations'], authent
   }
 });
 
-router.post(['/admin/platform/integrations', '/superadmin/integrations'], authenticate, requireRole("platform_admin"), async (req, res) => {
+router.post(['/admin/platform/integrations', '/admin/platform/integrations'], authenticate, requireRole("platform_admin"), async (req, res) => {
   try {
     const {
       org_id,
@@ -67,7 +67,7 @@ router.post(['/admin/platform/integrations', '/superadmin/integrations'], authen
   }
 });
 
-router.put(['/admin/platform/integrations/:id', '/superadmin/integrations/:id'], authenticate, requireRole("platform_admin"), async (req, res) => {
+router.put(['/admin/platform/integrations/:id', '/admin/platform/integrations/:id'], authenticate, requireRole("platform_admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const { endpoint_url, api_key, enabled, event_triggers, org_override_allowed } = req.body;
@@ -109,7 +109,7 @@ router.put(['/admin/platform/integrations/:id', '/superadmin/integrations/:id'],
   }
 });
 
-router.delete(['/admin/platform/integrations/:id', '/superadmin/integrations/:id'], authenticate, requireRole("platform_admin"), async (req, res) => {
+router.delete(['/admin/platform/integrations/:id', '/admin/platform/integrations/:id'], authenticate, requireRole("platform_admin"), async (req, res) => {
   try {
     const { id } = req.params;
 

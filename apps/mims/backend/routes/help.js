@@ -42,7 +42,7 @@ module.exports.cacheBust = cacheBust;
  */
 function audienceClause(user) {
   const roles = hasGlobalAdminScope(user)
-    ? ['admin', 'platform_admin', 'superadmin']
+    ? ['admin', 'platform_admin']
     : [user?.role || 'agent'];
   const clause = [
     `JSON_CONTAINS(audience, '"all"')`,

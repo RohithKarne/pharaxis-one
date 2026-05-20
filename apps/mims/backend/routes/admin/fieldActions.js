@@ -19,7 +19,7 @@ const { authenticate, requireRole } = require('../../middleware/auth');
 const fieldActions = require('../../services/fieldActionsService');
 
 const ADMIN = ['admin', 'platform_admin'];
-const QA_OR_ADMIN = ['admin', 'superadmin', 'qa'];
+const QA_OR_ADMIN = ['admin', 'platform_admin', 'qa'];
 
 router.get('/field-actions/status-flow', authenticate, (_req, res) => {
   res.json({ flow: fieldActions.STATUS_FLOW });

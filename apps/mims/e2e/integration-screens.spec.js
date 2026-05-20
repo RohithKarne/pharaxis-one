@@ -261,12 +261,12 @@ test.describe('Phase 3 — Integration Screens', () => {
       const { session, failures } = await resolveLoginSession(
         request,
         [
-          { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
-          { email: 'superadmin', password: 'Test@1234' },
-          { email: 'superadmin@mims.io', password: '__SET_SMOKE_TEST_PASSWORD__' },
-          { email: 'superadmin@mims.io', password: 'Test@1234' },
+          { email: 'platform_admin', password: '__SET_SMOKE_TEST_PASSWORD__' },
+          { email: 'platform_admin', password: 'Test@1234' },
+          { email: 'platform_admin@mims.io', password: '__SET_SMOKE_TEST_PASSWORD__' },
+          { email: 'platform_admin@mims.io', password: 'Test@1234' },
         ],
-        'superadmin',
+        'platform_admin',
         ['platform_admin_console']
       )
       superSession = session

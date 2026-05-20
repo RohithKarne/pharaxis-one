@@ -51,12 +51,12 @@ async function loginForToken(makeRequest, email, password) {
 }
 
 async function createTemporaryPlatformAdmin(makeRequest) {
-  const email = `${uniqueName('regression-superadmin').toLowerCase()}@example.com`
+  const email = `${uniqueName('regression-platform-admin').toLowerCase()}@example.com`
   const password = 'TempPlatformAdmin@123'
   const hash = await bcrypt.hash(password, 10)
   const [insert] = await pool.execute(
     `INSERT INTO users (name, email, password, role, is_active, email_verified)
-     VALUES (?, ?, ?, 'superadmin', 1, 1)`,
+     VALUES (?, ?, ?, 'platform_admin', 1, 1)`,
     ['Regression Platform Admin', email, hash]
   )
   const userId = Number(insert.insertId || 0)
@@ -65,7 +65,7 @@ async function createTemporaryPlatformAdmin(makeRequest) {
 }
 
 async function createTemporaryOrgScopedPlatformAdmin(makeRequest, orgId, siteId) {
-  const email = `${uniqueName('regression-org-superadmin').toLowerCase()}@example.com`
+  const email = `${uniqueName('regression-org-platform-admin').toLowerCase()}@example.com`
   const password = 'TempOrgPlatformAdmin@123'
   const hash = await bcrypt.hash(password, 10)
   const [insert] = await pool.execute(
@@ -76,7 +76,7 @@ async function createTemporaryOrgScopedPlatformAdmin(makeRequest, orgId, siteId)
   const userId = Number(insert.insertId || 0)
   await pool.execute(
     `INSERT INTO user_org_access (user_id, org_id, primary_site_id, role_at_org, site_permission, is_active, last_accessed_at)
-     VALUES (?, ?, ?, 'superadmin', 'all', 1, NOW())`,
+     VALUES (?, ?, ?, 'platform_admin', 'all', 1, NOW())`,
     [userId, orgId, siteId || null]
   )
   const login = await loginForToken(makeRequest, email, password)
@@ -394,7 +394,7 @@ module.exports = [
     }
   },
   {
-    name: 'Admin org routes cover read paths and superadmin-only write guards',
+    name: 'Admin org routes cover read paths and platform-admin-only write guards',
     module: 'Admin — Orgs and Sites',
     covers: [
       'GET /api/admin/orgs',
@@ -1108,7 +1108,7 @@ module.exports = [
           confirmation_text: 'CONFIRM SAFE OPS',
         }, scopedPlatformAdmin.token)
         const reject = await makeRequest('POST', `/api/admin/process-logs/ops/requests/${rejectRequestId}/reject`, {
-          reason: 'Regression rejection approved by superadmin',
+          reason: 'Regression rejection approved by platform admin',
         }, scopedPlatformAdmin.token)
 
         const requestsAfter = await makeRequest('GET', '/api/admin/process-logs/ops/requests?status=all', null, token)
@@ -1148,7 +1148,7 @@ module.exports = [
     }
   },
   {
-    name: 'Admin copy division routes cover superadmin org preview and execute flow',
+    name: 'Admin copy division routes cover platform admin org preview and execute flow',
     module: 'Admin — Copy Division',
     covers: [
       'GET /api/admin/copy-division/orgs',
@@ -1161,10 +1161,10 @@ module.exports = [
       let targetOrgId = null
       let tempPlatformAdminUserId = null
       try {
-        const superadmin = await createTemporaryPlatformAdmin(makeRequest)
-        tempPlatformAdminUserId = superadmin.userId
-        if (superadmin.status !== 200 || !superadmin.token) {
-          return { pass: false, details: `superadminLogin=${superadmin.status}` }
+        const platformAdmin = await createTemporaryPlatformAdmin(makeRequest)
+        tempPlatformAdminUserId = platformAdmin.userId
+        if (platformAdmin.status !== 200 || !platformAdmin.token) {
+          return { pass: false, details: `platformAdminLogin=${platformAdmin.status}` }
         }
 
         const sourceOrgName = uniqueName('Regression Copy Source')
@@ -1180,18 +1180,18 @@ module.exports = [
         )
         targetOrgId = Number(targetInsert.insertId || 0)
 
-        const orgs = await makeRequest('GET', '/api/admin/copy-division/orgs', null, superadmin.token)
-        const categories = await makeRequest('GET', '/api/admin/copy-division/categories', null, superadmin.token)
+        const orgs = await makeRequest('GET', '/api/admin/copy-division/orgs', null, platformAdmin.token)
+        const categories = await makeRequest('GET', '/api/admin/copy-division/categories', null, platformAdmin.token)
         const preview = await makeRequest('POST', '/api/admin/copy-division/preview', {
           source_org_id: sourceOrgId,
           categories: ['products'],
-        }, superadmin.token)
+        }, platformAdmin.token)
         const execute = await makeRequest('POST', '/api/admin/copy-division/execute', {
           source_org_id: sourceOrgId,
           target_org_id: targetOrgId,
           categories: ['products'],
           overwrite: false,
-        }, superadmin.token)
+        }, platformAdmin.token)
 
         const listedOrgs = Array.isArray(orgs.body?.orgs) ? orgs.body.orgs : []
         const categoryRows = Array.isArray(categories.body?.categories) ? categories.body.categories : []
@@ -1207,7 +1207,7 @@ module.exports = [
             Object.prototype.hasOwnProperty.call(productsPreview, 'products') &&
             execute.status === 200 &&
             execute.body?.ok === true,
-          details: `superadminLogin=${superadmin.status}, orgs=${orgs.status}, categories=${categories.status}, preview=${preview.status}, execute=${execute.status}`,
+          details: `platformAdminLogin=${platformAdmin.status}, orgs=${orgs.status}, categories=${categories.status}, preview=${preview.status}, execute=${execute.status}`,
         }
       } finally {
         if (targetOrgId) await pool.execute(`DELETE FROM audit_logs WHERE entity = 'org_config_copy' AND entity_id = ?`, [targetOrgId]).catch(() => {})

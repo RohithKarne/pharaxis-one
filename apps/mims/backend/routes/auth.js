@@ -37,16 +37,13 @@ async function resolveSessionTimeoutMinutes(req) {
   try {
     if (hasGlobalAdminScope(req.user)) {
       const [rows] = await pool.execute(
-        "SELECT config_key, config_value FROM system_config WHERE config_key IN ('platform_admin_session_timeout_minutes', 'superadmin_session_timeout_minutes')"
+        "SELECT config_key, config_value FROM system_config WHERE config_key = 'platform_admin_session_timeout_minutes'"
       );
       const config = rows.reduce((acc, row) => {
         acc[row.config_key] = row.config_value;
         return acc;
       }, {});
-      return Math.max(15, toNumber(
-        config.platform_admin_session_timeout_minutes ?? config.superadmin_session_timeout_minutes,
-        60
-      ));
+      return Math.max(15, toNumber(config.platform_admin_session_timeout_minutes, 60));
     }
 
     if (!req.user.orgId) return 30;

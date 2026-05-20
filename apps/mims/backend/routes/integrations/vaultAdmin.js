@@ -6,7 +6,7 @@ const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { getVaultSession } = require('../../services/vaultService');
 
-router.get(['/admin/platform/vault-config', '/superadmin/vault-config'], authenticate, requireRole('platform_admin'), async (_req, res) => {
+router.get(['/admin/platform/vault-config', '/admin/platform/vault-config'], authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT v.*, o.name as org_name
@@ -21,7 +21,7 @@ router.get(['/admin/platform/vault-config', '/superadmin/vault-config'], authent
   }
 });
 
-router.post(['/admin/platform/vault-config', '/superadmin/vault-config'], authenticate, requireRole('platform_admin'), async (req, res) => {
+router.post(['/admin/platform/vault-config', '/admin/platform/vault-config'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const {
       org_id,
@@ -54,7 +54,7 @@ router.post(['/admin/platform/vault-config', '/superadmin/vault-config'], authen
   }
 });
 
-router.put(['/admin/platform/vault-config/:id', '/superadmin/vault-config/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
+router.put(['/admin/platform/vault-config/:id', '/admin/platform/vault-config/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -87,7 +87,7 @@ router.put(['/admin/platform/vault-config/:id', '/superadmin/vault-config/:id'],
   }
 });
 
-router.delete(['/admin/platform/vault-config/:id', '/superadmin/vault-config/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
+router.delete(['/admin/platform/vault-config/:id', '/admin/platform/vault-config/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { id } = req.params;
 

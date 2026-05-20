@@ -90,7 +90,7 @@ async function up(conn) {
   for (const sql of [
     `ALTER TABLE field_setup ADD COLUMN is_sensitive TINYINT(1) NOT NULL DEFAULT 0 AFTER default_value`,
     `ALTER TABLE field_setup ADD COLUMN masking_pattern VARCHAR(30) NOT NULL DEFAULT 'partial' AFTER is_sensitive`,
-    `ALTER TABLE field_setup ADD COLUMN unmask_roles VARCHAR(255) NOT NULL DEFAULT 'admin,superadmin' AFTER masking_pattern`,
+    `ALTER TABLE field_setup ADD COLUMN unmask_roles VARCHAR(255) NOT NULL DEFAULT 'admin,platform_admin' AFTER masking_pattern`,
   ]) { try { await conn.execute(sql); } catch (_) {} }
   try { await conn.execute(`ALTER TABLE field_setup DROP INDEX uq_field_section_name`); } catch (_) {}
   try { await conn.execute(`ALTER TABLE field_setup ADD UNIQUE KEY uq_field_section_org (section_name, field_name, org_id)`); } catch (_) {}

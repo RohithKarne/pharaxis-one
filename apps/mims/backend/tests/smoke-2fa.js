@@ -30,7 +30,7 @@ function assert(condition, message) {
 
   const superLogin = await req('/api/auth/login', {
     method: 'POST',
-    body: { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
+    body: { email: 'platform_admin', password: '__SET_SMOKE_TEST_PASSWORD__' },
   });
   assert(superLogin.res.ok, `Platform Admin login failed: ${JSON.stringify(superLogin.data)}`);
   const superToken = superLogin.data.token;

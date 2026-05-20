@@ -187,7 +187,7 @@ router.post('/cases/:id/qa-override', authenticate, requireOrg, validate(schemas
       if (caseRow) {
         // Find manager-level users for this org
         const [managers] = await pool.execute(
-          `SELECT id FROM users WHERE org_id = ? AND role IN ('admin','superadmin') AND is_active = 1`,
+          `SELECT id FROM users WHERE org_id = ? AND role IN ('admin','platform_admin') AND is_active = 1`,
           [caseRow.org_id]
         );
         for (const mgr of managers) {

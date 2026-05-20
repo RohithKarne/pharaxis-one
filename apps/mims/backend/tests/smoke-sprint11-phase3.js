@@ -43,7 +43,7 @@ function run() {
 
   try {
     const saLogin = runCurl('POST', '/api/auth/login', {
-      body: { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
+      body: { email: 'platform_admin', password: '__SET_SMOKE_TEST_PASSWORD__' },
     });
 
     if (saLogin.status !== 200 || !saLogin.body || !saLogin.body.token) {

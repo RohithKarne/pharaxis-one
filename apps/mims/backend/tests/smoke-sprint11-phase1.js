@@ -44,7 +44,7 @@ function run() {
 
   try {
     const saLogin = runCurl('POST', '/api/auth/login', {
-      body: { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
+      body: { email: 'platform_admin', password: '__SET_SMOKE_TEST_PASSWORD__' },
     });
 
     if (saLogin.status !== 200 || !saLogin.body || !saLogin.body.token) {
@@ -153,7 +153,7 @@ function run() {
       },
     },
     {
-      name: 'TEST 9 — created veeva_vault integration appears in superadmin list',
+      name: 'TEST 9 — created veeva_vault integration appears in platform admin list',
       run: () => {
         const res = runCurl('GET', '/api/admin/platform/integrations', { token: saToken });
         const list = res.body && Array.isArray(res.body.integrations) ? res.body.integrations : [];

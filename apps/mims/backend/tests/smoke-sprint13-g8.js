@@ -52,7 +52,7 @@ async function run() {
   check('Response has logo_url field', 'logo_url' in r1.data, JSON.stringify(r1.data).slice(0, 80));
 
   // Platform Admin login to test logo upload endpoint exists
-  const saLogin = await req('POST', '/api/auth/login', { email: 'superadmin', password: 'Test@1234' });
+  const saLogin = await req('POST', '/api/auth/login', { email: 'platform_admin', password: 'Test@1234' });
   const saToken = saLogin.data.token || saLogin.data.challengeToken;
   check('Platform Admin login for logo test (or skip if creds not set)', true);
 

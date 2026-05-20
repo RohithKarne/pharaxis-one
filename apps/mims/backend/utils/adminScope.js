@@ -1,8 +1,7 @@
 'use strict';
 
 const PRIMARY_PLATFORM_ADMIN_MODULE = 'platform_admin_console';
-const LEGACY_PLATFORM_ADMIN_MODULE = 'superadmin_console';
-const PLATFORM_ADMIN_MODULE_KEYS = [PRIMARY_PLATFORM_ADMIN_MODULE, LEGACY_PLATFORM_ADMIN_MODULE];
+const PLATFORM_ADMIN_MODULE_KEYS = [PRIMARY_PLATFORM_ADMIN_MODULE];
 
 function normalizeRole(subject) {
   if (typeof subject === 'string') return String(subject || '').trim().toLowerCase();
@@ -25,7 +24,7 @@ function hasPlatformAdminModule(subject) {
 
 function isPlatformAdmin(subject) {
   if (subject?.platformAdmin === true) return true;
-  return normalizeRole(subject) === 'superadmin' || hasPlatformAdminModule(subject);
+  return normalizeRole(subject) === 'platform_admin' || hasPlatformAdminModule(subject);
 }
 
 function isTenantAdmin(subject) {
@@ -46,7 +45,6 @@ function getDisplayRole(subject) {
 
 module.exports = {
   PRIMARY_PLATFORM_ADMIN_MODULE,
-  LEGACY_PLATFORM_ADMIN_MODULE,
   PLATFORM_ADMIN_MODULE_KEYS,
   normalizeRole,
   normalizeModules,

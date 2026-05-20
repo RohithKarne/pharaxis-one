@@ -92,7 +92,7 @@ function run() {
   let emirSenderRuleId = null;
   let scheduledExportId = null;
 
-  const superadminCreds = { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' };
+  const superadminCreds = { email: 'platform_admin', password: '__SET_SMOKE_TEST_PASSWORD__' };
   const adminCredsPrimary = { email: 'vanaja_admin@reviewco.com', password: '__SET_SMOKE_TEST_PASSWORD__' };
   const adminCredsFallback = { email: 'admin@novartis.com', password: '__SET_SMOKE_TEST_PASSWORD__' };
 
@@ -511,7 +511,7 @@ function run() {
     return { pass, detail: `exists=${exists}, hasReactHooks=${hasReactHooks}` };
   });
 
-  runTest('Scheduler accessible by superadmin', () => {
+  runTest('Scheduler accessible by platform admin', () => {
     const res = runCurl('GET', '/api/admin/scheduler/jobs', { token: saToken });
     const pass = res.status === 200;
     return { pass, detail: `status=${res.status}` };

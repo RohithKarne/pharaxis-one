@@ -11,7 +11,7 @@
  *   /admin-console/:section         — AdminConsolePage (picklists, field-setup, user-security, case-contacts, company-reps)
  *   /content                        — ContentPage (tabs: documents, faqs, merge-reports, templates)
  *
- * Credentials: superadmin / __SET_SMOKE_TEST_PASSWORD__
+ * Credentials: platform admin / __SET_SMOKE_TEST_PASSWORD__
  */
 
 const puppeteer = require('puppeteer-core');
@@ -19,7 +19,7 @@ const puppeteer = require('puppeteer-core');
 const CHROME  = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const BASE    = 'http://localhost:5173';
 const API     = 'http://localhost:3000';
-const CREDS   = { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' };
+const CREDS   = { email: 'platform_admin', password: '__SET_SMOKE_TEST_PASSWORD__' };
 
 const results = [];
 let   passed  = 0;
@@ -154,13 +154,13 @@ async function clickTab(page, tabText, section) {
   let earlyToken = '', earlyUser = null, earlyModules = [];
   try {
     const loginRes = execSyncEarly(
-      `curl -s -X POST ${API}/api/auth/login -H "Content-Type: application/json" -d '{"email":"superadmin","password":"__SET_SMOKE_TEST_PASSWORD__"}'`
+      `curl -s -X POST ${API}/api/auth/login -H "Content-Type: application/json" -d '{"email":"platform_admin","password":"__SET_SMOKE_TEST_PASSWORD__"}'`
     ).toString();
     const parsed = JSON.parse(loginRes);
     earlyToken   = parsed.token || '';
     earlyUser    = parsed.user  || null;
     earlyModules = parsed.modules || [];
-    log('Login', 'API login (superadmin / __SET_SMOKE_TEST_PASSWORD__)', earlyToken ? 'PASS' : 'FAIL', earlyToken ? 'Token received' : parsed.error || 'No token');
+    log('Login', 'API login (platform_admin / __SET_SMOKE_TEST_PASSWORD__)', earlyToken ? 'PASS' : 'FAIL', earlyToken ? 'Token received' : parsed.error || 'No token');
   } catch (e) {
     log('Login', 'API login', 'FAIL', e.message.slice(0, 100));
   }
@@ -259,7 +259,7 @@ async function clickTab(page, tabText, section) {
   let token = '';
   try {
     const loginRes = execSync(
-      `curl -s -X POST ${API}/api/auth/login -H "Content-Type: application/json" -d '{"email":"superadmin","password":"__SET_SMOKE_TEST_PASSWORD__"}'`
+      `curl -s -X POST ${API}/api/auth/login -H "Content-Type: application/json" -d '{"email":"platform_admin","password":"__SET_SMOKE_TEST_PASSWORD__"}'`
     ).toString();
     token = JSON.parse(loginRes).token || '';
     log('API', 'Auth token obtained', token ? 'PASS' : 'FAIL');

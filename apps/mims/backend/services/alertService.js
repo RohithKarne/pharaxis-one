@@ -120,7 +120,7 @@ async function passesCooldown(ruleId, cooldownMinutes) {
   if (!cooldown) return true;
   const [[row]] = await pool.execute(
     `SELECT id
-     FROM superadmin_alert_events
+     FROM platform_admin_alert_events
      WHERE rule_id = ?
        AND created_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)
      ORDER BY id DESC
@@ -135,7 +135,7 @@ async function createNotificationsForPlatformAdmins({ title, message, linkUrl = 
   for (const user of users) {
     await pool.execute(
       `INSERT INTO notifications (user_id, category, title, message, link_url, metadata)
-       VALUES (?, 'superadmin_alert', ?, ?, ?, ?)`,
+       VALUES (?, 'platform_admin_alert', ?, ?, ?, ?)`,
       [user.id, title, message || null, linkUrl, metadata ? JSON.stringify(metadata) : null]
     );
   }
@@ -168,7 +168,7 @@ async function sendAlertEmail({ recipients, title, message, metadata }) {
 async function emitPlatformAdminAlert(eventType, payload = {}) {
   const [rules] = await pool.execute(
     `SELECT *
-     FROM superadmin_alert_rules
+     FROM platform_admin_alert_rules
      WHERE event_type = ?
        AND is_active = 1
      ORDER BY id`,
@@ -187,7 +187,7 @@ async function emitPlatformAdminAlert(eventType, payload = {}) {
     const metadataJson = payload.metadata ? JSON.stringify(payload.metadata) : null;
 
     const [result] = await pool.execute(
-      `INSERT INTO superadmin_alert_events
+      `INSERT INTO platform_admin_alert_events
        (rule_id, event_type, severity, title, message, metadata, email_status, in_app_status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -227,14 +227,14 @@ async function emitPlatformAdminAlert(eventType, payload = {}) {
         const details = parseJson(metadataJson, {}) || {};
         details.emailError = delivery.error;
         await pool.execute(
-          'UPDATE superadmin_alert_events SET metadata = ? WHERE id = ?',
+          'UPDATE platform_admin_alert_events SET metadata = ? WHERE id = ?',
           [JSON.stringify(details), result.insertId]
         );
       }
     }
 
     await pool.execute(
-      'UPDATE superadmin_alert_events SET email_status = ?, in_app_status = ? WHERE id = ?',
+      'UPDATE platform_admin_alert_events SET email_status = ?, in_app_status = ? WHERE id = ?',
       [emailStatus, inAppStatus, result.insertId]
     );
 

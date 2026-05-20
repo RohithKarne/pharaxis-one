@@ -13,7 +13,7 @@ async function getSmtpConfig() {
 async function getAdminEmails(orgId) {
   try {
     const [rows] = await pool.execute(
-      "SELECT DISTINCT u.email FROM users u JOIN user_org_access uoa ON uoa.user_id = u.id WHERE uoa.org_id = ? AND u.role IN ('admin', 'superadmin') AND u.is_active = 1",
+      "SELECT DISTINCT u.email FROM users u JOIN user_org_access uoa ON uoa.user_id = u.id WHERE uoa.org_id = ? AND u.role IN ('admin', 'platform_admin') AND u.is_active = 1",
       [orgId]
     );
     return rows.map(r => r.email).filter(Boolean);

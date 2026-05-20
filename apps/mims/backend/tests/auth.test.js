@@ -12,8 +12,8 @@ let app
 function getLoginCandidates() {
   const raw = [
     {
-      email: process.env.BOOTSTRAP_SUPERADMIN_EMAIL || 'superadmin',
-      password: process.env.BOOTSTRAP_SUPERADMIN_PASSWORD || '',
+      email: process.env.BOOTSTRAP_PLATFORM_ADMIN_EMAIL || 'platform_admin',
+      password: process.env.BOOTSTRAP_PLATFORM_ADMIN_PASSWORD || '',
     },
     {
       email: process.env.REGRESSION_FALLBACK_EMAIL || '',
@@ -88,7 +88,7 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns 200 + token for valid superadmin credentials', async () => {
+  it('returns 200 + token for valid platform admin credentials', async () => {
     const res = await loginWithCandidates()
     expect(res.status).toBe(200)
     expect(res.body).toHaveProperty('token')

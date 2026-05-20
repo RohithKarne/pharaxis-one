@@ -1282,7 +1282,7 @@ export default function FlowDiagram({ flow: rawFlow, flowKey, logEntry, authHead
             {(opsRequests || []).slice(0, 12).map((r) => (
               <div key={r.id} style={{ fontSize: 10, color: '#E2E8F0', padding: '3px 0', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>
                 #{r.id} · {r.action_type} · {r.status}
-                {String(sqlPolicy?.role || '').toLowerCase() === 'superadmin' && String(r.status || '').includes('pending') && (
+                {String(sqlPolicy?.role || '').toLowerCase() === 'platform_admin' && String(r.status || '').includes('pending') && (
                   <span style={{ marginLeft: 6, display: 'inline-flex', gap: 4 }}>
                     <button
                       onClick={() => approveOpsRequest(r.id)}

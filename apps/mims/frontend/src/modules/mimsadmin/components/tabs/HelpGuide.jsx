@@ -9,7 +9,7 @@ const AUDIENCE_OPTIONS = [
   { value: 'agent',      label: 'Case Agent' },
   { value: 'cm_admin',   label: 'CM Admin' },
   { value: 'admin',      label: 'Org Admin' },
-  { value: 'superadmin', label: 'Platform Admin' },
+  { value: 'platform_admin', label: 'Platform Admin' },
 ]
 
 const BLANK_ARTICLE = {

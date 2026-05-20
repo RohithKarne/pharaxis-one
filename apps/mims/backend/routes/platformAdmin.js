@@ -1,5 +1,5 @@
 /**
- * routes/platformAdmin.js — Platform admin API (legacy superadmin alias)
+ * routes/platformAdmin.js — Platform admin API
  * Platform admin manages organisations, users, sites, and per-user module access.
  * Clients cannot self-provision any billing-affecting resource.
  */
@@ -26,7 +26,7 @@ const ALLOWED_MODULES = ['mims_core', 'admin_console', 'content_mgmt', 'data_vis
 const ASSIGNABLE_ROLES = ['admin', 'agent', 'reviewer', 'content_manager'];
 const THRESHOLD_ALERT_EVENTS = new Set(['failed_login_spike', 'two_factor_lockout', 'service_error_threshold']);
 const PLATFORM_ADMIN_EXCLUSION_SQL =
-  "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module IN ('platform_admin_console', 'superadmin_console') AND ump.can_access = 1)";
+  "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1)";
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -108,7 +108,7 @@ async function getDashboardSummary() {
                   FROM users
                   WHERE id NOT IN (
                     SELECT user_id FROM user_module_permissions
-                    WHERE module IN ('platform_admin_console', 'superadmin_console') AND can_access = 1
+                    WHERE module = 'platform_admin_console' AND can_access = 1
                   )`),
     pool.execute(`SELECT COUNT(*) AS count
                   FROM login_audit
@@ -130,9 +130,9 @@ async function getDashboardSummary() {
     pool.execute(`SELECT COUNT(*) AS count
                   FROM notifications n
                   JOIN user_module_permissions ump ON ump.user_id = n.user_id
-                  WHERE ump.module IN ('platform_admin_console', 'superadmin_console') AND ump.can_access = 1 AND n.is_read = 0`),
+                  WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1 AND n.is_read = 0`),
     pool.execute(`SELECT COUNT(*) AS count
-                  FROM superadmin_alert_events
+                  FROM platform_admin_alert_events
                   WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`),
   ]);
 
@@ -160,7 +160,7 @@ async function getDashboardSummary() {
   };
 }
 
-// GET /api/admin/platform/users — list users with current module overrides (excludes superadmin system account)
+// GET /api/admin/platform/users — list users with current module overrides (excludes platform admin system account)
 router.get('/users', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [users] = await pool.execute(
@@ -344,7 +344,7 @@ router.get('/orgs/:id/readiness', authenticate, requireRole('admin', 'platform_a
 router.post('/orgs/:id/bootstrap', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const readiness = await bootstrapOrg(Number(req.params.id), req.user.userId);
-    await audit(req.user.userId, req.user.email, 'BOOTSTRAP', 'organisation', Number(req.params.id), { source: 'superadmin' });
+    await audit(req.user.userId, req.user.email, 'BOOTSTRAP', 'organisation', Number(req.params.id), { source: 'platform_admin' });
     res.json({ message: 'Organisation bootstrap completed.', readiness });
   } catch (err) {
     if (String(err.message || '').includes('Organisation not found')) {
@@ -357,7 +357,7 @@ router.post('/orgs/:id/bootstrap', authenticate, requireRole('admin', 'platform_
 router.post('/orgs/:id/repair', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const readiness = await repairOrgData(Number(req.params.id));
-    await audit(req.user.userId, req.user.email, 'REPAIR', 'organisation', Number(req.params.id), { source: 'superadmin' });
+    await audit(req.user.userId, req.user.email, 'REPAIR', 'organisation', Number(req.params.id), { source: 'platform_admin' });
     res.json({ message: 'Organisation data repair completed.', readiness });
   } catch (err) {
     if (String(err.message || '').includes('Organisation not found')) {
@@ -367,14 +367,11 @@ router.post('/orgs/:id/repair', authenticate, requireRole('admin', 'platform_adm
   }
 });
 
-// GET legacy/admin-platform config — get system config (e.g. platform admin timeout)
+// GET /api/admin/platform/config — get system config (e.g. platform admin timeout)
 router.get('/config', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const config = rows.reduce((acc, r) => { acc[r.config_key] = r.config_value; return acc; }, {});
-    if (config.platform_admin_session_timeout_minutes === undefined && config.superadmin_session_timeout_minutes !== undefined) {
-      config.platform_admin_session_timeout_minutes = config.superadmin_session_timeout_minutes;
-    }
     const sensitiveKeyPattern = /(password|secret|token|api[_-]?key)/i;
     for (const [key, value] of Object.entries(config)) {
       if (!sensitiveKeyPattern.test(key)) continue;
@@ -385,12 +382,11 @@ router.get('/config', authenticate, requireRole('admin', 'platform_admin'), asyn
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// PUT legacy/admin-platform config — update system config
+// PUT /api/admin/platform/config — update system config
 router.put('/config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const {
       platform_admin_session_timeout_minutes,
-      superadmin_session_timeout_minutes,
       smtp_host,
       smtp_port,
       smtp_encryption,
@@ -400,13 +396,12 @@ router.put('/config', authenticate, requireRole('admin', 'platform_admin'), asyn
       smtp_from_name,
     } = req.body;
     const upserts = [];
-    const timeoutValue = platform_admin_session_timeout_minutes ?? superadmin_session_timeout_minutes;
+    const timeoutValue = platform_admin_session_timeout_minutes;
     if (timeoutValue !== undefined) {
       const mins = parseInt(timeoutValue);
       if (isNaN(mins) || mins < 30)
         return res.status(400).json({ error: 'Platform admin session timeout must be at least 30 minutes.' });
       upserts.push(['platform_admin_session_timeout_minutes', String(mins)]);
-      upserts.push(['superadmin_session_timeout_minutes', String(mins)]);
     }
     const configPairs = {
       smtp_host,
@@ -505,7 +500,7 @@ router.post('/config/test-email', authenticate, requireRole('admin', 'platform_a
         from: `"${fromName}" <${fromEmail}>`,
         to: test_email,
         subject: 'MIMS SMTP test email',
-        text: `Hello,\n\nThis is a test email from MIMS SuperAdmin 2FA Configuration.\n\nSMTP host: ${host}\nEncryption: ${encryption}\nSent at: ${new Date().toISOString()}\n`,
+        text: `Hello,\n\nThis is a test email from MIMS Platform Admin 2FA Configuration.\n\nSMTP host: ${host}\nEncryption: ${encryption}\nSent at: ${new Date().toISOString()}\n`,
       });
       await audit(req.user.userId, req.user.email, 'TEST_SMTP_SEND', 'system_config', null, {
         smtp_host: host,
@@ -583,7 +578,7 @@ router.put('/sites/:id', authenticate, requireRole('admin', 'platform_admin'), a
 
 // ── USERS ────────────────────────────────────────────────────────────────────
 
-// GET /api/admin/platform/all-users — full user list with org assignment (excludes the legacy platform-admin account)
+// GET /api/admin/platform/all-users — full user list with org assignment (excludes the platform-admin account)
 router.get('/all-users', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [users] = await pool.execute(`
@@ -753,7 +748,7 @@ router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), a
          SET password_reset_required = 1, updated_at = NOW()
          WHERE id IN (?) AND id NOT IN (
            SELECT user_id FROM user_module_permissions
-           WHERE module IN ('platform_admin_console', 'superadmin_console') AND can_access = 1
+           WHERE module = 'platform_admin_console' AND can_access = 1
          )`,
         [ids]
       );
@@ -763,7 +758,7 @@ router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), a
          SET is_active = ?, updated_at = NOW()
          WHERE id IN (?) AND id NOT IN (
            SELECT user_id FROM user_module_permissions
-           WHERE module IN ('platform_admin_console', 'superadmin_console') AND can_access = 1
+           WHERE module = 'platform_admin_console' AND can_access = 1
          )`,
         [action === 'activate' ? 1 : 0, ids]
       );
@@ -819,7 +814,7 @@ router.get('/audit', authenticate, requireRole('platform_admin'), async (req, re
     );
     const mapped = rows.map(r => ({ ...r, details: tryParse(r.details) }));
     if (req.query.export === 'csv') {
-      return sendCsv(res, 'superadmin-audit.csv', mapped.map(log => ({
+      return sendCsv(res, 'platform-admin-audit.csv', mapped.map(log => ({
         time: log.created_at,
         user: log.user_name,
         action: log.action,
@@ -872,7 +867,7 @@ router.get('/login-audit', authenticate, requireRole('platform_admin'), async (r
       params
     );
     if (req.query.export === 'csv') {
-      return sendCsv(res, 'superadmin-login-audit.csv', rows.map(log => ({
+      return sendCsv(res, 'platform-admin-login-audit.csv', rows.map(log => ({
         login_time: log.login_time,
         user: log.user_name,
         role: log.role || '',
@@ -891,7 +886,7 @@ router.get('/login-audit', authenticate, requireRole('platform_admin'), async (r
 router.get('/alerts/rules', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [rules] = await pool.execute(
-      'SELECT * FROM superadmin_alert_rules ORDER BY is_active DESC, name ASC'
+      'SELECT * FROM platform_admin_alert_rules ORDER BY is_active DESC, name ASC'
     );
     res.json({ rules });
   } catch (err) {
@@ -904,7 +899,7 @@ router.post('/alerts/rules', authenticate, requireRole('platform_admin'), async 
     const payload = normalizeAlertRulePayload(req.body || {});
     if (!payload.name || !payload.event_type) return res.status(400).json({ error: 'name and event_type are required.' });
     const [result] = await pool.execute(
-      `INSERT INTO superadmin_alert_rules
+      `INSERT INTO platform_admin_alert_rules
        (name, event_type, severity, channels, recipient_emails, threshold_value, window_minutes, cooldown_minutes, is_active, created_by, updated_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -921,7 +916,7 @@ router.post('/alerts/rules', authenticate, requireRole('platform_admin'), async 
         req.user.userId,
       ]
     );
-    await audit(req.user.userId, req.user.email, 'CREATE', 'superadmin_alert_rule', result.insertId, payload);
+    await audit(req.user.userId, req.user.email, 'CREATE', 'platform_admin_alert_rule', result.insertId, payload);
     res.status(201).json({ message: 'Alert rule created.', id: result.insertId });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
@@ -930,11 +925,11 @@ router.post('/alerts/rules', authenticate, requireRole('platform_admin'), async 
 
 router.put('/alerts/rules/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
-    const [[existing]] = await pool.execute('SELECT * FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
+    const [[existing]] = await pool.execute('SELECT * FROM platform_admin_alert_rules WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
     const payload = normalizeAlertRulePayload(req.body || {}, existing);
     await pool.execute(
-      `UPDATE superadmin_alert_rules
+      `UPDATE platform_admin_alert_rules
        SET name = ?, event_type = ?, severity = ?, channels = ?, recipient_emails = ?,
            threshold_value = ?, window_minutes = ?, cooldown_minutes = ?, is_active = ?, updated_by = ?, updated_at = NOW()
        WHERE id = ?`,
@@ -952,7 +947,7 @@ router.put('/alerts/rules/:id', authenticate, requireRole('platform_admin'), asy
         req.params.id,
       ]
     );
-    await audit(req.user.userId, req.user.email, 'UPDATE', 'superadmin_alert_rule', Number(req.params.id), payload);
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'platform_admin_alert_rule', Number(req.params.id), payload);
     res.json({ message: 'Alert rule updated.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
@@ -961,11 +956,11 @@ router.put('/alerts/rules/:id', authenticate, requireRole('platform_admin'), asy
 
 router.delete('/alerts/rules/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
-    const [[existing]] = await pool.execute('SELECT * FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
+    const [[existing]] = await pool.execute('SELECT * FROM platform_admin_alert_rules WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
 
-    await pool.execute('DELETE FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
-    await audit(req.user.userId, req.user.email, 'DELETE', 'superadmin_alert_rule', Number(req.params.id), {
+    await pool.execute('DELETE FROM platform_admin_alert_rules WHERE id = ?', [req.params.id]);
+    await audit(req.user.userId, req.user.email, 'DELETE', 'platform_admin_alert_rule', Number(req.params.id), {
       name: existing.name,
       event_type: existing.event_type,
     });
@@ -992,8 +987,8 @@ router.get('/alerts/events', authenticate, requireRole('platform_admin'), async 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const [rows] = await pool.execute(
       `SELECT e.*, r.name AS rule_name
-       FROM superadmin_alert_events e
-       LEFT JOIN superadmin_alert_rules r ON r.id = e.rule_id
+       FROM platform_admin_alert_events e
+       LEFT JOIN platform_admin_alert_rules r ON r.id = e.rule_id
        ${where}
        ORDER BY e.created_at DESC
        LIMIT ${limit} OFFSET ${offset}`,
@@ -1001,7 +996,7 @@ router.get('/alerts/events', authenticate, requireRole('platform_admin'), async 
     );
     const [[{ cnt: total }]] = await pool.execute(
       `SELECT COUNT(*) AS cnt
-       FROM superadmin_alert_events e
+       FROM platform_admin_alert_events e
        ${where}`,
       params
     );

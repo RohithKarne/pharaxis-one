@@ -134,7 +134,6 @@ function requireRole(...roles) {
     const allowed =
       requestedRoles.includes(userRole) ||
       (requestedRoles.includes('platform_admin') && hasGlobalAdminScope(req.user)) ||
-      (requestedRoles.includes('superadmin') && hasGlobalAdminScope(req.user)) ||
       (requestedRoles.includes('admin') && isAdminUser(req.user));
     if (!allowed) {
       return res.status(403).json({
@@ -149,7 +148,7 @@ function requireRole(...roles) {
 
 /**
  * requireOrg — blocks requests where orgId is null (non-platform-admin must have an active org)
- * Global platform admin compatibility remains exempt during migration.
+ * Global platform admins remain exempt because they operate without org scoping.
  */
 function requireOrg(req, res, next) {
   if (hasGlobalAdminScope(req.user)) return next();

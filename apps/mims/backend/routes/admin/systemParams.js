@@ -5,7 +5,7 @@
  * Platform-wide configuration. Stored in `system_config` (key/value, global).
  *
  * Tabs: General (password rules), Themes, Others (placeholder).
- * All routes: admin + superadmin. No requireOrg — platform-wide.
+ * All routes: admin + platform admin. No requireOrg — platform-wide.
  */
 
 const express = require('express');

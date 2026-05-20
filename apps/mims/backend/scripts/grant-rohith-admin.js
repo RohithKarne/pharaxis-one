@@ -37,7 +37,7 @@ const MODULES = [
       console.error(`❌ User not found: ${TARGET_EMAIL}`);
       console.error(`   Available admin candidates (top 10):`);
       const [rows] = await pool.execute(
-        `SELECT id, email, role FROM users WHERE role IN ('admin','superadmin') OR email LIKE '%rohith%' ORDER BY id LIMIT 10`
+        `SELECT id, email, role FROM users WHERE role IN ('admin','platform_admin') OR email LIKE '%rohith%' ORDER BY id LIMIT 10`
       );
       console.table(rows);
       process.exit(1);

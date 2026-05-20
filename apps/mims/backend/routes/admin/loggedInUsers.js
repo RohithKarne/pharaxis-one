@@ -25,7 +25,7 @@ function decodeSessionToken(token) {
 
 function deriveApplication(role) {
   const normalized = String(role || '').toLowerCase();
-  return normalized === 'admin' || normalized === 'superadmin' ? 'Admin' : 'MIMS';
+  return normalized === 'admin' || normalized === 'platform_admin' ? 'Admin' : 'MIMS';
 }
 
 router.get('/logged-in-users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {

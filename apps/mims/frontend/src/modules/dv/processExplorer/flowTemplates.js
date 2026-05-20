@@ -300,7 +300,7 @@ function inferMimsPageFile(path = '') {
   if (p.includes('/cases') || p.includes('/case')) return 'mims/frontend/src/modules/cases/pages/CaseFormPage.jsx'
   if (p.includes('/picklist')) return 'mims/frontend/src/modules/admin/pages/AdminConsolePage.jsx'
   if (p.includes('/process-logs') || p.includes('/process-explorer')) return 'mims/frontend/src/modules/dv/pages/ProcessExplorerPage.jsx'
-  if (p.includes('/superadmin') || p.includes('/mims-admin')) return 'mims/frontend/src/modules/mimsadmin/pages/MIMSAdminPage.jsx'
+  if (p.includes('/admin/platform') || p.includes('/mims-admin')) return 'mims/frontend/src/modules/mimsadmin/pages/MIMSAdminPage.jsx'
   if (p.includes('/cm/')) return 'mims/frontend/src/modules/content/pages/ContentPage.jsx'
   return 'mims/frontend/src/modules/max/pages/DashboardPage.jsx'
 }

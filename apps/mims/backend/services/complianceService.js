@@ -70,7 +70,7 @@ async function isFieldLocked({ orgId, section, field, status, userRole = 'user' 
   const locks = await _loadLocks(orgId);
   const hit = locks.find(l => l.section_name === section && l.field_name === field && l.status === status);
   if (!hit) return { locked: false };
-  if (hit.lock_mode === 'admin_only' && (userRole === 'admin' || userRole === 'superadmin')) {
+  if (hit.lock_mode === 'admin_only' && (userRole === 'admin' || userRole === 'platform_admin')) {
     return { locked: false, mode: hit.lock_mode, reason: hit.reason, overridden_by_role: userRole };
   }
   return { locked: true, mode: hit.lock_mode, reason: hit.reason };

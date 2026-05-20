@@ -415,7 +415,7 @@ router.get('/summary', authenticate, async (req, res) => {
   try {
     const { where, params, scope } = await buildInboxOrgScope(req, 'i', req.query?.org_id ?? null);
     const scopeToken = hasPlatformAdminScope(req)
-      ? `superadmin:${scope.requestedOrgId || 'all'}`
+      ? `platform_admin:${scope.requestedOrgId || 'all'}`
       : (scope.requestedOrgId
         ? `user:${req.user.userId}:org:${scope.requestedOrgId}`
         : `user:${req.user.userId}:orgs:${scope.orgIds.slice().sort((a, b) => a - b).join(',')}`);

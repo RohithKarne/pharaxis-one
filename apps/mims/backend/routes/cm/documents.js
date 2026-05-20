@@ -1287,7 +1287,7 @@ router.get('/documents/:id/file', authenticate, async (req, res) => {
     );
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
 
-    // Org scope check (superadmin bypasses)
+    // Org scope check (platform-admin bypasses)
     const isSA = hasGlobalAdminScope(req.user);
     if (!isSA && doc.org_id !== req.user.orgId) return res.status(403).json({ error: 'Forbidden.' });
 

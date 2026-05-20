@@ -24,8 +24,8 @@ const PATCHES = [
   },
 
   // ── Broaden cm.* to include agent ─────────────────────────────────────────
-  { title: 'Content Folders',                audience: ['agent','cm_admin','admin','superadmin'] },
-  { title: 'Managing Documents',             audience: ['agent','cm_admin','admin','superadmin'] },
+  { title: 'Content Folders',                audience: ['agent','cm_admin','admin','platform_admin'] },
+  { title: 'Managing Documents',             audience: ['agent','cm_admin','admin','platform_admin'] },
   { title: 'Document Versioning & Checkout', audience: ['agent','cm_admin','admin'] },
   { title: 'Bulk Document Actions',          audience: ['cm_admin','admin'] }, // agents don't bulk-manage
   { title: 'Content Modules',               audience: ['agent','cm_admin','admin'] },
@@ -37,16 +37,16 @@ const PATCHES = [
   { title: 'Content Reviews',               audience: ['agent','cm_admin','admin'] },
 
   // ── Broaden admin.* to include cm_admin ──────────────────────────────────
-  { title: 'Managing Picklists',            audience: ['cm_admin','admin','superadmin'] },
-  { title: 'Field Setup & Custom Fields',   audience: ['cm_admin','admin','superadmin'] },
-  { title: 'Workflow Activities',           audience: ['cm_admin','admin','superadmin'] },
-  { title: 'Product Dictionary',            audience: ['cm_admin','admin','superadmin'] },
+  { title: 'Managing Picklists',            audience: ['cm_admin','admin','platform_admin'] },
+  { title: 'Field Setup & Custom Fields',   audience: ['cm_admin','admin','platform_admin'] },
+  { title: 'Workflow Activities',           audience: ['cm_admin','admin','platform_admin'] },
+  { title: 'Product Dictionary',            audience: ['cm_admin','admin','platform_admin'] },
   { title: 'Security Groups & Permissions', audience: ['admin', 'platform_admin'] },
   { title: 'Case Numbering Configuration', audience: ['admin', 'platform_admin'] },
-  { title: 'Organisation Management',      audience: ['superadmin'] },
-  { title: 'Content Intelligence — Overview', audience: ['cm_admin','admin','superadmin'] },
-  { title: 'Evidence Chain Analysis',       audience: ['cm_admin','admin','superadmin'] },
-  { title: 'Policy Graph',                  audience: ['cm_admin','admin','superadmin'] },
+  { title: 'Organisation Management',      audience: ['platform_admin'] },
+  { title: 'Content Intelligence — Overview', audience: ['cm_admin','admin','platform_admin'] },
+  { title: 'Evidence Chain Analysis',       audience: ['cm_admin','admin','platform_admin'] },
+  { title: 'Policy Graph',                  audience: ['cm_admin','admin','platform_admin'] },
 ];
 
 async function main() {

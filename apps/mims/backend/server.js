@@ -352,9 +352,7 @@ function mountRoutes(r, prefix = '') {
   r.use(prefix || '/', require('./routes/admin/miPromoReview'));   // #16 off-label + promo review
   r.use(prefix || '/', require('./routes/admin/aiAssistant'));
 
-  // Legacy superadmin compatibility + canonical platform-admin alias
-  r.use(`${prefix}/superadmin`, require('./routes/platformAdmin'));
-  r.use(`${prefix}/superadmin`, require('./routes/platformAdmin/reportsAccess'));
+  // Canonical platform-admin endpoints
   r.use(`${prefix}/admin/platform`, require('./routes/platformAdmin'));
   r.use(`${prefix}/admin/platform`, require('./routes/platformAdmin/reportsAccess'));
 

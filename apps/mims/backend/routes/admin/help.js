@@ -34,7 +34,7 @@ try {
 
 // ── Role guard middleware ─────────────────────────────────────────────────────
 function adminOnly(req, res, next) {
-  if (!['admin', 'superadmin', 'cm_admin'].includes(req.user?.role) && !hasGlobalAdminScope(req.user)) {
+  if (!['admin', 'platform_admin', 'cm_admin'].includes(req.user?.role) && !hasGlobalAdminScope(req.user)) {
     return res.status(403).json({ error: 'Admin access required.' });
   }
   next();

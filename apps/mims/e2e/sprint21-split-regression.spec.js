@@ -27,8 +27,8 @@ function appPath(path = '/') {
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || 'vanaja_admin@reviewco.com'
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || 'Test@1234'
 const ALT_PASSWORD = process.env.E2E_ALT_PASSWORD || '__SET_SMOKE_TEST_PASSWORD__'
-const SUPERADMIN_EMAIL = process.env.E2E_SUPERADMIN_EMAIL || ''
-const SUPERADMIN_PASSWORD = process.env.E2E_SUPERADMIN_PASSWORD || ''
+const PLATFORM_ADMIN_EMAIL = process.env.E2E_PLATFORM_ADMIN_EMAIL || ''
+const PLATFORM_ADMIN_PASSWORD = process.env.E2E_PLATFORM_ADMIN_PASSWORD || ''
 
 function adminCandidates() {
   return [
@@ -37,16 +37,16 @@ function adminCandidates() {
   ]
 }
 
-function superadminCandidates() {
+function platformAdminCandidates() {
   const candidates = []
-  if (SUPERADMIN_EMAIL && SUPERADMIN_PASSWORD) {
-    candidates.push({ email: SUPERADMIN_EMAIL, password: SUPERADMIN_PASSWORD })
+  if (PLATFORM_ADMIN_EMAIL && PLATFORM_ADMIN_PASSWORD) {
+    candidates.push({ email: PLATFORM_ADMIN_EMAIL, password: PLATFORM_ADMIN_PASSWORD })
   }
   candidates.push(
-    { email: 'superadmin', password: ALT_PASSWORD },
-    { email: 'superadmin', password: 'Test@1234' },
-    { email: 'superadmin@mims.io', password: ALT_PASSWORD },
-    { email: 'superadmin@mims.io', password: 'Test@1234' },
+    { email: 'platform_admin', password: ALT_PASSWORD },
+    { email: 'platform_admin', password: 'Test@1234' },
+    { email: 'platform_admin@mims.io', password: ALT_PASSWORD },
+    { email: 'platform_admin@mims.io', password: 'Test@1234' },
   )
   return candidates
 }
@@ -510,8 +510,8 @@ test.describe('Platform Admin — sidebar navigation', () => {
   test.beforeAll(async ({ request }) => {
     const result = await resolveLoginSession(
       request,
-      superadminCandidates(),
-      'superadmin'
+      platformAdminCandidates(),
+      'platform_admin'
     )
     session = result.session
     authErr = JSON.stringify(result.failures)

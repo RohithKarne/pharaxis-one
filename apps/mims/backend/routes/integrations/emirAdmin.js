@@ -5,7 +5,7 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 
-router.get(['/admin/platform/emir-config', '/superadmin/emir-config'], authenticate, requireRole('platform_admin'), async (req, res) => {
+router.get(['/admin/platform/emir-config', '/admin/platform/emir-config'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.query(
       'SELECT e.*, o.name as org_name FROM org_emir_config e JOIN organisations o ON e.org_id = o.id ORDER BY o.name'
@@ -16,7 +16,7 @@ router.get(['/admin/platform/emir-config', '/superadmin/emir-config'], authentic
   }
 });
 
-router.post(['/admin/platform/emir-config', '/superadmin/emir-config'], authenticate, requireRole('platform_admin'), async (req, res) => {
+router.post(['/admin/platform/emir-config', '/admin/platform/emir-config'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { org_id, inbound_email, sender_whitelist, ack_template, enabled } = req.body;
     const senderWhitelistValue = Array.isArray(sender_whitelist)
@@ -34,7 +34,7 @@ router.post(['/admin/platform/emir-config', '/superadmin/emir-config'], authenti
   }
 });
 
-router.put(['/admin/platform/emir-config/:id', '/superadmin/emir-config/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
+router.put(['/admin/platform/emir-config/:id', '/admin/platform/emir-config/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { inbound_email, sender_whitelist, ack_template, enabled } = req.body;
     const senderWhitelistValue = Array.isArray(sender_whitelist)
@@ -52,7 +52,7 @@ router.put(['/admin/platform/emir-config/:id', '/superadmin/emir-config/:id'], a
   }
 });
 
-router.delete(['/admin/platform/emir-config/:id', '/superadmin/emir-config/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
+router.delete(['/admin/platform/emir-config/:id', '/admin/platform/emir-config/:id'], authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     await pool.query('DELETE FROM org_emir_config WHERE id=?', [req.params.id]);
     res.json({ message: 'Deleted' });

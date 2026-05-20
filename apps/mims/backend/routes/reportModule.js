@@ -68,7 +68,7 @@ function parseMaybeJson(value, fallback = {}) {
 
 function requireReportManager(req, res, next) {
   if (!canManageReports(req)) {
-    return res.status(403).json({ error: 'Admin or SuperAdmin access required.' });
+    return res.status(403).json({ error: 'Admin or platform admin access required.' });
   }
   return next();
 }

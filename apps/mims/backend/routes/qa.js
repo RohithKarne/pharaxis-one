@@ -179,10 +179,10 @@ router.patch('/qa/feedback/:id', authenticate, requireRole('admin'), async (req,
     if (status === 'confirmed') {
       try {
         const [[report]] = await pool.execute(`SELECT * FROM qa_feedback WHERE id = ?`, [id]);
-        const orgCond    = hasGlobalAdminScope(req.user) ? '' : 'AND role IN (\'admin\',\'superadmin\') AND org_id = ?';
+        const orgCond    = hasGlobalAdminScope(req.user) ? '' : 'AND role IN (\'admin\',\'platform_admin\') AND org_id = ?';
         const orgParams  = hasGlobalAdminScope(req.user) ? [] : [req.user.orgId];
         const [admins]   = await pool.execute(
-          `SELECT id FROM users WHERE is_active = 1 AND role IN ('admin','superadmin') ${orgCond}`,
+          `SELECT id FROM users WHERE is_active = 1 AND role IN ('admin','platform_admin') ${orgCond}`,
           orgParams
         );
         const adminIds = admins.map(a => a.id).filter(uid => uid !== req.user.userId);

@@ -9,7 +9,7 @@ const { getRouteServiceCatalog } = require('../../services/routeCatalogService')
 const { emitPlatformAdminAlert } = require('../../services/alertService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
-const FULL_VIEW_HINTS = String(process.env.PROCESS_EXPLORER_FULL_VIEW_EMAILS || 'superadmin,rohith,rohithkarne')
+const FULL_VIEW_HINTS = String(process.env.PROCESS_EXPLORER_FULL_VIEW_EMAILS || 'platform_admin,rohith,rohithkarne')
   .split(',')
   .map(s => s.trim().toLowerCase())
   .filter(Boolean);
@@ -1179,8 +1179,8 @@ router.put('/sql/saved/:id', authenticate, requireRole('admin', 'platform_admin'
     );
     if (!existing) return res.status(404).json({ error: 'Saved query not found.' });
     if ((existing.org_id || 0) !== (req.user.orgId || 0)) return res.status(403).json({ error: 'Cross-org update blocked.' });
-    if (String(req.user.role || '').toLowerCase() !== 'superadmin' && Number(existing.created_by_user_id || 0) !== Number(req.user.userId || 0)) {
-      return res.status(403).json({ error: 'Only owner or superadmin can update this query.' });
+    if (String(req.user.role || '').toLowerCase() !== 'platform_admin' && Number(existing.created_by_user_id || 0) !== Number(req.user.userId || 0)) {
+      return res.status(403).json({ error: 'Only owner or platform admin can update this query.' });
     }
 
     await pool.execute(
@@ -1217,8 +1217,8 @@ router.delete('/sql/saved/:id', authenticate, requireRole('admin', 'platform_adm
     );
     if (!existing) return res.status(404).json({ error: 'Saved query not found.' });
     if ((existing.org_id || 0) !== (req.user.orgId || 0)) return res.status(403).json({ error: 'Cross-org delete blocked.' });
-    if (String(req.user.role || '').toLowerCase() !== 'superadmin' && Number(existing.created_by_user_id || 0) !== Number(req.user.userId || 0)) {
-      return res.status(403).json({ error: 'Only owner or superadmin can delete this query.' });
+    if (String(req.user.role || '').toLowerCase() !== 'platform_admin' && Number(existing.created_by_user_id || 0) !== Number(req.user.userId || 0)) {
+      return res.status(403).json({ error: 'Only owner or platform admin can delete this query.' });
     }
 
     await pool.execute(
@@ -1436,7 +1436,7 @@ router.post('/flow-map', authenticate, requireRole('admin', 'platform_admin'), a
       }
       const pathParts = String(ev.path_pattern || '').split('/').filter(Boolean);
       const tail = pathParts[pathParts.length - 1];
-      if (tail && /^[a-z_]+$/i.test(tail) && !['api', 'admin', 'superadmin'].includes(tail)) {
+      if (tail && /^[a-z_]+$/i.test(tail) && !['api', 'admin', 'platform_admin'].includes(tail)) {
         eventTableCandidates.add(tail);
       }
     }
@@ -1667,7 +1667,7 @@ router.post('/ops/requests/:id/approve', authenticate, requireRole('platform_adm
     }
 
     if (needsTwoLevel && String(row.status || '') === 'pending_approval_l2' && firstApprover && firstApprover === Number(req.user.userId || 0)) {
-      return res.status(400).json({ error: 'Second-level approval must be done by a different superadmin user.' });
+      return res.status(400).json({ error: 'Second-level approval must be done by a different platform admin user.' });
     }
 
     await pool.execute(

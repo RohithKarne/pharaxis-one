@@ -11,7 +11,7 @@
  *   /browse            → browse
  *   /admin             → admin
  *   /admin?section=*   → admin.<section>
- *   /superadmin        → admin (legacy alias; platform admin uses the same articles)
+ *   /admin/platform        → admin (platform admin uses the same articles)
  *   /reports           → reports
  *   /inbox             → inbox
  *   /login             → general
@@ -99,7 +99,7 @@ function deriveKey(pathname, search) {
       return { featureKey: key, featureGroup: 'admin' }
     }
 
-    case 'superadmin':
+    case 'platform_admin':
     case 'mims-admin':
       return { featureKey: 'admin', featureGroup: 'admin' }
 

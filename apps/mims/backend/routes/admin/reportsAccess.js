@@ -4,9 +4,9 @@
  * admin/reportsAccess.js — MIMS Admin > System > Reports Access
  *
  * Manage which reports each tenant + user can access. Migrated from
- * the superadmin module — admin role now has access (admin is global).
+ * the platform admin module — admin role now has access (admin is global).
  *
- * All routes: admin + superadmin. No requireOrg.
+ * All routes: admin + platform admin. No requireOrg.
  */
 
 const express = require('express');

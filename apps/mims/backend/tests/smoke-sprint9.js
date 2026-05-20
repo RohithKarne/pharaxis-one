@@ -78,7 +78,7 @@ function printResults(summary, testEmail, testUserId) {
   try {
     const { res, data } = await req('/api/auth/login', {
       method: 'POST',
-      body: { email: 'superadmin', password: '__SET_SMOKE_TEST_PASSWORD__' },
+      body: { email: 'platform_admin', password: '__SET_SMOKE_TEST_PASSWORD__' },
     });
     assert(res.ok && data.token, `Platform Admin login failed: ${JSON.stringify(data)}`);
     superToken = data.token;
@@ -266,7 +266,7 @@ function printResults(summary, testEmail, testUserId) {
     pass('T12 — Login audit: ip_address + location columns present', summary);
   } catch (e) { fail('T12 — Login audit: ip_address + location columns', summary, e.message); }
 
-  // ─── 13. User search — SuperAdmin users list ─────────────────────────────
+  // ─── 13. User search — platform-admin users list ─────────────────────────
   try {
     const { res, data } = await req('/api/admin/platform/all-users?search=Sprint9', { token: superToken });
     assert(res.ok, `User search failed: ${JSON.stringify(data)}`);
@@ -351,13 +351,13 @@ function printResults(summary, testEmail, testUserId) {
     pass('T17 — Alert email template PUT + persist + restore', summary);
   } catch (e) { fail('T17 — Alert email template PUT + persist', summary, e.message); }
 
-  // ─── 18. Org logo endpoint — accessible by non-superadmin ────────────────
+  // ─── 18. Org logo endpoint — accessible by non-platform-admin ────────────────
   try {
     const { res, data } = await req('/api/auth/org-logo', { token: mainToken });
     assert(res.ok, `org-logo endpoint failed: status ${res.status}, body: ${JSON.stringify(data)}`);
     assert(data.hasOwnProperty('logo_url'), `logo_url key missing: ${JSON.stringify(data)}`);
-    pass('T18 — Org logo endpoint accessible to non-superadmin user', summary);
-  } catch (e) { fail('T18 — Org logo endpoint accessible to non-superadmin', summary, e.message); }
+    pass('T18 — Org logo endpoint accessible to non-platform-admin user', summary);
+  } catch (e) { fail('T18 — Org logo endpoint accessible to non-platform-admin', summary, e.message); }
 
   // ─── 19. Org logo endpoint — 401 without token ───────────────────────────
   try {

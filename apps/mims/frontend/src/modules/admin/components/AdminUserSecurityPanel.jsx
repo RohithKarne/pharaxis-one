@@ -51,9 +51,9 @@ export default function AdminUserSecurityPanel({ H }) {
 
   return (
     <>
-      <SectionHeader title="User Security Groups" desc="View role-to-module permissions. Changes are managed by SuperAdmin." />
+      <SectionHeader title="User Security Groups" desc="View role-to-module permissions. Changes are managed by platform admins." />
       <div style={{ padding: '8px 14px', marginBottom: 12, background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 6, fontSize: 12, color: '#7a5c00' }}>
-        Security group permissions are controlled by SuperAdmin only. Contact your platform admin to modify role access.
+        Security group permissions are controlled by platform admins only. Contact your platform admin to modify role access.
       </div>
       <div className="card">
         <div className="card-header"><h3>Role Permission Matrix</h3></div>

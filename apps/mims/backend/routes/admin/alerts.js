@@ -48,7 +48,7 @@ async function audit(userId, userName, action, entity, entityId, details) {
 router.get('/alerts/rules', ...adminAlertAuth, async (_req, res) => {
   try {
     const [rules] = await pool.execute(
-      'SELECT * FROM superadmin_alert_rules ORDER BY is_active DESC, name ASC'
+      'SELECT * FROM platform_admin_alert_rules ORDER BY is_active DESC, name ASC'
     );
     return res.json({ rules });
   } catch (err) {
@@ -62,7 +62,7 @@ router.post('/alerts/rules', ...adminAlertAuth, async (req, res) => {
     const payload = normalizeAlertRulePayload(req.body || {});
     if (!payload.name || !payload.event_type) return res.status(400).json({ error: 'name and event_type are required.' });
     const [result] = await pool.execute(
-      `INSERT INTO superadmin_alert_rules
+      `INSERT INTO platform_admin_alert_rules
        (name, event_type, severity, channels, recipient_emails, threshold_value, window_minutes, cooldown_minutes, is_active, created_by, updated_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -79,7 +79,7 @@ router.post('/alerts/rules', ...adminAlertAuth, async (req, res) => {
         req.user.userId,
       ]
     );
-    await audit(req.user.userId, req.user.email, 'CREATE', 'superadmin_alert_rule', result.insertId, {
+    await audit(req.user.userId, req.user.email, 'CREATE', 'platform_admin_alert_rule', result.insertId, {
       ...payload,
       source: 'mims_admin_system_setup',
     });
@@ -92,11 +92,11 @@ router.post('/alerts/rules', ...adminAlertAuth, async (req, res) => {
 // PUT /api/admin/alerts/rules/:id
 router.put('/alerts/rules/:id', ...adminAlertAuth, async (req, res) => {
   try {
-    const [[existing]] = await pool.execute('SELECT * FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
+    const [[existing]] = await pool.execute('SELECT * FROM platform_admin_alert_rules WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
     const payload = normalizeAlertRulePayload(req.body || {}, existing);
     await pool.execute(
-      `UPDATE superadmin_alert_rules
+      `UPDATE platform_admin_alert_rules
        SET name = ?, event_type = ?, severity = ?, channels = ?, recipient_emails = ?,
            threshold_value = ?, window_minutes = ?, cooldown_minutes = ?, is_active = ?, updated_by = ?, updated_at = NOW()
        WHERE id = ?`,
@@ -114,7 +114,7 @@ router.put('/alerts/rules/:id', ...adminAlertAuth, async (req, res) => {
         req.params.id,
       ]
     );
-    await audit(req.user.userId, req.user.email, 'UPDATE', 'superadmin_alert_rule', Number(req.params.id), {
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'platform_admin_alert_rule', Number(req.params.id), {
       ...payload,
       source: 'mims_admin_system_setup',
     });
@@ -127,10 +127,10 @@ router.put('/alerts/rules/:id', ...adminAlertAuth, async (req, res) => {
 // DELETE /api/admin/alerts/rules/:id
 router.delete('/alerts/rules/:id', ...adminAlertAuth, async (req, res) => {
   try {
-    const [[existing]] = await pool.execute('SELECT * FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
+    const [[existing]] = await pool.execute('SELECT * FROM platform_admin_alert_rules WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
-    await pool.execute('DELETE FROM superadmin_alert_rules WHERE id = ?', [req.params.id]);
-    await audit(req.user.userId, req.user.email, 'DELETE', 'superadmin_alert_rule', Number(req.params.id), {
+    await pool.execute('DELETE FROM platform_admin_alert_rules WHERE id = ?', [req.params.id]);
+    await audit(req.user.userId, req.user.email, 'DELETE', 'platform_admin_alert_rule', Number(req.params.id), {
       name: existing.name,
       event_type: existing.event_type,
       source: 'mims_admin_system_setup',
@@ -159,8 +159,8 @@ router.get('/alerts/events', ...adminAlertAuth, async (req, res) => {
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const [rows] = await pool.execute(
       `SELECT e.*, r.name AS rule_name
-       FROM superadmin_alert_events e
-       LEFT JOIN superadmin_alert_rules r ON r.id = e.rule_id
+       FROM platform_admin_alert_events e
+       LEFT JOIN platform_admin_alert_rules r ON r.id = e.rule_id
        ${where}
        ORDER BY e.created_at DESC
        LIMIT ${limit} OFFSET ${offset}`,
@@ -168,7 +168,7 @@ router.get('/alerts/events', ...adminAlertAuth, async (req, res) => {
     );
     const [[{ cnt: total }]] = await pool.execute(
       `SELECT COUNT(*) AS cnt
-       FROM superadmin_alert_events e
+       FROM platform_admin_alert_events e
        ${where}`,
       params
     );

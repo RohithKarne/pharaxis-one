@@ -372,7 +372,7 @@ async function runRegressionSuite({ runByUserId, app } = {}) {
   const tokenPayload = decodeJwtPayload(token);
   const tokenRole = String(tokenPayload.role || '').toLowerCase();
   const tokenOrgId = Number(tokenPayload.orgId ?? tokenPayload.org_id ?? 0);
-  if (tokenRole !== 'superadmin' && !tokenOrgId) {
+  if (tokenRole !== 'platform_admin' && !tokenOrgId) {
     const report = {
       startedAt: startedAt.toISOString(),
       completedAt: completedAtOnEarlyExit.toISOString(),
