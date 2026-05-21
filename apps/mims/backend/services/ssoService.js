@@ -364,7 +364,9 @@ async function buildAuthorizationUrl(orgId, providerKey, stateToken, returnTo, e
   if (provider.key === 'google') {
     params.set('access_type', 'online');
     params.set('include_granted_scopes', 'true');
-    params.set('prompt', 'select_account');
+    // No `prompt` param: a single, already-consented Google account flows
+    // straight through. Google still shows the account chooser automatically
+    // when it's genuinely needed (multiple sessions or first-time consent).
   } else if (provider.key === 'microsoft') {
     params.set('response_mode', 'query');
     params.set('prompt', 'select_account');
