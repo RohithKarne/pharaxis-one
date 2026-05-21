@@ -182,22 +182,6 @@ export default function OrganisationsView({ H, flash }) {
     load()
   }
 
-  async function toggleProcessExplorer(org) {
-    const res = await guardedFetch(`${API_BASE}/orgs/${org.id}`, {
-      method: 'PUT',
-      headers: H,
-      body: JSON.stringify({
-        name: org.name,
-        is_active: org.is_active,
-        session_timeout_minutes: org.session_timeout_minutes || 30,
-        process_explorer_enabled: org.process_explorer_enabled ? 0 : 1,
-      }),
-    })
-    if (!res.ok) return flash('Failed to update Process Explorer setting.', 'error')
-    flash(`Process Explorer ${org.process_explorer_enabled ? 'disabled' : 'enabled'} for ${org.name}.`)
-    load()
-  }
-
   async function runOrgAction(orgId, action, successMessage) {
     setPendingOrgAction(`${action}-${orgId}`)
     try {
@@ -307,9 +291,6 @@ export default function OrganisationsView({ H, flash }) {
               </span>
               <span style={{ fontSize: 11, marginLeft: 8, color: org.two_factor_enabled ? '#155724' : 'var(--text-muted)' }}>
                 🔐 2FA {org.two_factor_enabled ? 'On' : 'Off'}
-              </span>
-              <span style={{ fontSize: 11, marginLeft: 8, color: org.process_explorer_enabled ? '#155724' : 'var(--text-muted)' }}>
-                🧭 Process Explorer {org.process_explorer_enabled ? 'On' : 'Off'}
               </span>
             </div>
             </div>
@@ -538,20 +519,6 @@ export default function OrganisationsView({ H, flash }) {
                   </button>
                 )}
               </div>
-              <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Process Explorer:</span>
-                <span style={{
-                  fontSize: 11, padding: '1px 7px', borderRadius: 10,
-                  background: org.process_explorer_enabled ? '#d4edda' : '#f8d7da',
-                  color: org.process_explorer_enabled ? '#155724' : '#721c24',
-                }}>
-                  {org.process_explorer_enabled ? 'Enabled' : 'Disabled'}
-                </span>
-                <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={() => toggleProcessExplorer(org)}>
-                  {org.process_explorer_enabled ? 'Disable' : 'Enable'}
-                </button>
-              </div>
-
               {showSiteForm === org.id ? (
                 <form onSubmit={createSite} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   <div>

@@ -7,7 +7,7 @@ vi.mock('../shared/context/AuthContext', () => ({ useAuth: () => ({ token: 'test
 vi.mock('../shared/components/MIMSLayout', () => ({ default: ({ children }) => <div>{children}</div> }))
 
 beforeEach(() => {
-  global.fetch = vi.fn((url) => {
+  globalThis.fetch = vi.fn((url) => {
     if (String(url).endsWith('/xml')) return Promise.resolve(new Response('<xml />', { status: 200 }))
     return Promise.resolve(new Response(JSON.stringify({ report: { id: 1, case_id: 22, sender_safety_report_id: 'ORG1-2026-000001', receiver_id: 'FDA', status: 'draft' }, reactions: [], drugs: [], tests: [], history: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
   })

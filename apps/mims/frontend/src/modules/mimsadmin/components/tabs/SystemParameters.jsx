@@ -99,7 +99,7 @@ export default function SystemParameters() {
             flash={flash}
           />
         )}
-        {tab === 'others' && <OthersTab />}
+        {tab === 'others' && <OthersTab general={general} theme={theme} />}
       </div>
     </div>
   )
@@ -320,14 +320,35 @@ function ThemesTab({ initial, H, onSaved, onError, flash }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Others Tab — placeholder
+// Others Tab — operational overview
 // ─────────────────────────────────────────────────────────────────────────────
-function OthersTab() {
+function OthersTab({ general, theme }) {
   return (
-    <div className="ma-sp-placeholder">
-      <div className="ma-sp-placeholder-icon">🚧</div>
-      <div className="ma-sp-placeholder-title">Coming Soon</div>
-      <div style={{ fontSize: 13 }}>Additional system parameters will be available here in a future release.</div>
+    <div className="ma-sp-placeholder" style={{ alignItems: 'stretch', textAlign: 'left' }}>
+      <div className="ma-sp-placeholder-title" style={{ marginBottom: 12 }}>Operational Summary</div>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+        Review the currently active system-wide controls without switching tabs.
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: '#fff' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Theme</div>
+          <div style={{ marginTop: 6, fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{String(theme || 'blue').toUpperCase()}</div>
+        </div>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: '#fff' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Password Expiry</div>
+          <div style={{ marginTop: 6, fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{general?.password_expiry_days || 0} days</div>
+        </div>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: '#fff' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Special Characters</div>
+          <div style={{ marginTop: 6, fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>
+            {general?.password_require_special_chars ? 'Required' : 'Optional'}
+          </div>
+        </div>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: '#fff' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Password History</div>
+          <div style={{ marginTop: 6, fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{general?.password_history_count || 0} versions</div>
+        </div>
+      </div>
     </div>
   )
 }

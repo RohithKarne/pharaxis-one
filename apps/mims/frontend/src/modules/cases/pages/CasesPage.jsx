@@ -5,7 +5,7 @@
  * CSS namespace: cf- (case form)
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -38,8 +38,11 @@ function SlaBadge({ slaDue }) {
 export default function CasesPage() {
   const navigate        = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { token, user } = useAuth()
-  const headers         = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const { token, user, hasCapability } = useAuth()
+  const headers         = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   const [activeTab, setActiveTab]   = useState('my')       // my | unassigned | deleted
   const [cases, setCases]           = useState([])
@@ -55,9 +58,7 @@ export default function CasesPage() {
   const [modalOpen, setModalOpen]     = useState(false)
   const [modalStep, setModalStep]     = useState(1) // 1=Org/Site/Type, 2=Reporter+Patient, 3=Type-specific
   const [orgs, setOrgs]               = useState([])
-  const [sites, setSites]             = useState([])
-  const [newCase, setNewCase]         = useState({ org_id: '', site_id: '', case_type: '' })
-  const [selectedSiteId, setSelectedSiteId] = useState('')
+  const [newCase, setNewCase]         = useState({ org_id: '', case_type: '' })
   const [creating, setCreating]       = useState(false)
   // Reporter fields
   const [reporter, setReporter]       = useState({ first_name: '', last_name: '', email: '', phone: '', reporter_type: 'HCP', country: '', organisation: '' })
@@ -121,7 +122,7 @@ export default function CasesPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeTab, search, searchScope, token])
+  }, [activeTab, headers, search, searchScope])
 
   useEffect(() => { loadCases() }, [loadCases])
 
@@ -138,7 +139,7 @@ export default function CasesPage() {
     } finally {
       setViewsLoading(false)
     }
-  }, [token])
+  }, [headers, token])
 
   useEffect(() => { loadSavedViews() }, [loadSavedViews])
 
@@ -233,9 +234,7 @@ export default function CasesPage() {
   // ── New case modal helpers ────────────────────────────────────────────────
 
   async function openModal() {
-    setNewCase({ org_id: '', site_id: '', case_type: '' })
-    setSelectedSiteId('')
-    setSites([])
+    setNewCase({ org_id: '', case_type: '' })
     setModalStep(1)
     setReporter({ first_name: '', last_name: '', email: '', phone: '', reporter_type: 'HCP', country: '', organisation: '' })
     setPatient({ initials: '', age: '', age_unit: 'years', gender: '', weight_kg: '' })
@@ -252,29 +251,16 @@ export default function CasesPage() {
     } catch { setOrgs([]) }
   }
 
-  async function selectOrg(orgId) {
-    setNewCase(p => ({ ...p, org_id: orgId, site_id: '' }))
-    setSelectedSiteId('')
-    setSites([])
-    if (!orgId) return
-    try {
-      const res  = await httpFetch(`${API}/admin/orgs/${orgId}/sites`, { headers })
-      const data = await res.json()
-      const list = Array.isArray(data) ? data : (Array.isArray(data.sites) ? data.sites : [])
-      setSites(list.filter(s => s.is_active))
-    } catch { setSites([]) }
+  function selectOrg(orgId) {
+    // Site concept retired — selecting an org no longer loads/asks for a site.
+    setNewCase(p => ({ ...p, org_id: orgId }))
   }
 
-  function handleSiteChange(siteId) {
-    setSelectedSiteId(siteId)
-    setNewCase(p => ({ ...p, site_id: siteId }))
-  }
-
-  function step1Valid() { return newCase.org_id && newCase.site_id && newCase.case_type }
+  function step1Valid() { return newCase.org_id && newCase.case_type }
   function step2Valid() { return reporter.first_name && reporter.last_name }
 
   async function createCase() {
-    if (!newCase.org_id || !newCase.site_id || !newCase.case_type) return
+    if (!newCase.org_id || !newCase.case_type) return
     setCreating(true)
     try {
       let candidates = dupCandidates
@@ -297,7 +283,6 @@ export default function CasesPage() {
 
       const body = {
         org_id: newCase.org_id,
-        site_id: newCase.site_id,
         case_type: newCase.case_type,
         intake_channel: 'manual',
         reporter,
@@ -370,7 +355,7 @@ export default function CasesPage() {
       <div className="cf-cases-header">
         <div className="cf-cases-title-row">
           <h1 className="cf-cases-title">Case Management</h1>
-          <button className="cf-new-case-btn" onClick={openModal}>+ New Case</button>
+          {hasCapability('case.create') && <button className="cf-new-case-btn" onClick={openModal}>+ New Case</button>}
         </div>
 
         {/* Tabs */}
@@ -469,7 +454,6 @@ export default function CasesPage() {
                 <th>Case #</th>
                 <th>Type</th>
                 <th>Organisation</th>
-                <th>Site</th>
                 <th>Status</th>
                 <th>Priority</th>
                 <th>SLA</th>
@@ -493,7 +477,6 @@ export default function CasesPage() {
                     </span>
                   </td>
                   <td>{c.org_name  || '—'}</td>
-                  <td>{c.site_name || '—'}</td>
                   <td>{c.status_name || <span className="cf-no-status">New</span>}</td>
                   <td>
                     <span style={{ color: PRIORITY_COLORS[c.priority] || '#6b7280', fontWeight: 600 }}>
@@ -545,13 +528,6 @@ export default function CasesPage() {
                     <select className="cf-modal-select" value={newCase.org_id} onChange={e => selectOrg(e.target.value)}>
                       <option value="">— Select Organisation —</option>
                       {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="cf-form-field">
-                    <label className="cf-modal-label">Site *</label>
-                    <select className="cf-modal-select" value={selectedSiteId} onChange={e => handleSiteChange(e.target.value)} disabled={!newCase.org_id}>
-                      <option value="">— Select Site —</option>
-                      {sites.map(s => <option key={s.id} value={s.id}>{s.name}{s.country ? ` — ${s.country}` : ''}</option>)}
                     </select>
                   </div>
                   <div className="cf-form-field">

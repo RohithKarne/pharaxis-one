@@ -34,7 +34,7 @@
     "extra-org-daily-simulation": "/mims-admin",
     "login-audit-archive": "/mims-admin",
     "session-cleanup": "/session-management",
-    "dppr-enforcement": "/dppr",
+    "dppr-enforcement": "/mims-admin?tab=system&system=sys-setup-data-protect",
     "email-worker": "/mims-admin?system=sys-setup-email-accounts"
   }
 }

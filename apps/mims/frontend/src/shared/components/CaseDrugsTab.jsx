@@ -6,7 +6,8 @@ const blank = { role: 'suspect', drug_name_verbatim: '', whodrug_code: '', dose_
 export default function CaseDrugsTab({ caseId, headers }) {
   const [rows, setRows] = useState([]); const [form, setForm] = useState(blank)
   async function load() { const res = await httpFetch(`/api/cases/${caseId}/drugs`, { headers }); const data = await res.json(); setRows(data.rows || []) }
-  useEffect(() => { if (caseId) load() }, [caseId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
+  useEffect(() => { if (caseId) load() }, [caseId])
   async function add(e) { e.preventDefault(); const res = await httpFetch(`/api/cases/${caseId}/drugs`, { method: 'POST', headers, body: JSON.stringify(form) }); const data = await res.json(); if (res.ok) { setRows(data.rows || []); setForm(blank) } }
   async function del(id) { const res = await httpFetch(`/api/cases/${caseId}/drugs/${id}`, { method: 'DELETE', headers }); if (res.ok) setRows(rows.filter(r => r.id !== id)) }
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))

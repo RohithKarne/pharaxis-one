@@ -50,7 +50,7 @@ export default function SavedViews({ screenKey, currentFilter, onApply }) {
     try {
       await httpFetch(`/api/admin/user-preferences/views/${id}`, { method: 'DELETE', headers: H })
       load()
-    } catch {}
+    } catch { /* ignore bad saved view payload */ }
   }
 
   return (

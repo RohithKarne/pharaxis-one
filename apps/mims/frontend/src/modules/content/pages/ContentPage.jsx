@@ -24,65 +24,102 @@ export default function ContentPage() {
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
   const flash = () => {}
 
-  const tabs = [
-    { key: 'documents', label: 'Documents' },
-    { key: 'modules', label: 'Modular Documents' },
-    { key: 'faqs', label: 'FAQs' },
-    { key: 'merge-reports', label: 'Merge Reports' },
-    { key: 'templates', label: 'Templates' },
-    { key: 'browse', label: 'Browse Content' },
-    { key: 'settings', label: '⚙ Settings' },
-    { key: 'mi-categories', label: 'MI Categories' },
-    { key: 'policy-graph', label: 'Policy Graph Engine' },
-    { key: 'evidence-chain-compiler', label: 'Evidence Chain Compiler' },
-    { key: 'contradiction-radar', label: 'Contradiction Radar' },
-    { key: 'digital-twin-release-simulator', label: 'Digital Twin Release Simulator' },
-    { key: 'adaptive-risk-workflow', label: 'Adaptive Risk Workflow' },
+  const tabGroups = [
+    {
+      key: 'authoring',
+      label: 'Authoring',
+      description: 'Create and maintain controlled content assets.',
+      items: [
+        { key: 'documents', label: 'Documents', description: 'Controlled source content and approval-ready assets.' },
+        { key: 'modules', label: 'Modular Documents', description: 'Reusable modules for high-volume content assembly.' },
+        { key: 'faqs', label: 'FAQs', description: 'Trusted answer sets for recurring medical information needs.' },
+        { key: 'templates', label: 'Templates', description: 'Reusable starting points for structured content creation.' },
+        { key: 'merge-reports', label: 'Merge Reports', description: 'Output packages and merge-driven reporting assets.' },
+      ],
+    },
+    {
+      key: 'delivery',
+      label: 'Delivery & Governance',
+      description: 'Publish, browse, and govern what users can trust.',
+      items: [
+        { key: 'browse', label: 'Browse Content', description: 'The consumer-facing approved content library.' },
+        { key: 'settings', label: 'Settings', description: 'Module settings, review controls, and CM behaviors.' },
+      ],
+    },
+    {
+      key: 'intelligence',
+      label: 'Intelligence',
+      description: 'Higher-order policy, evidence, and risk tooling.',
+      items: [
+        { key: 'mi-categories', label: 'MI Categories', description: 'Taxonomy and inquiry framing for content operations.' },
+        { key: 'policy-graph', label: 'Policy Graph Engine', description: 'Map policy structure and connected rules.' },
+        { key: 'evidence-chain-compiler', label: 'Evidence Chain Compiler', description: 'Link evidence trails before publication.' },
+        { key: 'contradiction-radar', label: 'Contradiction Radar', description: 'Spot conflicts across controlled content.' },
+        { key: 'digital-twin-release-simulator', label: 'Digital Twin Release Simulator', description: 'Test release impact before publishing.' },
+        { key: 'adaptive-risk-workflow', label: 'Adaptive Risk Workflow', description: 'Route higher-risk content through tighter control.' },
+      ],
+    },
   ]
-
+  const allTabs = tabGroups.flatMap((group) => group.items)
+  const activeTabMeta = allTabs.find((tab) => tab.key === activeTab) || allTabs[0]
+  const activeGroup = tabGroups.find((group) => group.items.some((tab) => tab.key === activeTab)) || tabGroups[0]
   const content = (
-      <div className="cm-page">
-        {/* Page Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>Content Management</h2>
-          <button className="cm-folder-btn" onClick={() => setShowFolders(true)}>📁 Manage Folders</button>
-        </div>
-
-        {/* Top Tabs */}
-        <div className="cm-top-tabs">
-          {tabs.map(tab => (
-            <button
-              key={tab.key}
-              className={`cm-top-tab ${activeTab === tab.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              {tab.label}
-            </button>
+    <div className="workspace-page workspace-page--content">
+      <div className="workspace-main-grid workspace-main-grid--content">
+        <aside className="workspace-rail">
+          {tabGroups.map((group) => (
+            <section key={group.key} className="workspace-rail-group">
+              <div className="workspace-rail-title">{group.label}</div>
+              <div className="workspace-rail-copy">{group.description}</div>
+              <div className="workspace-rail-stack">
+                {group.items.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    className={`workspace-rail-button ${activeTab === tab.key ? 'active' : ''}`}
+                    onClick={() => setActiveTab(tab.key)}
+                  >
+                    <strong>{tab.label}</strong>
+                    <span>{tab.description}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
           ))}
-        </div>
+        </aside>
 
-        {/* Section Content */}
-        <div className="cm-content">
-          {activeTab === 'documents' && <DocumentsSection token={token} user={user} />}
-          {activeTab === 'modules' && <ModulesSection token={token} />}
-          {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
-          {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}
-          {activeTab === 'templates' && <TemplatesSection token={token} />}
-          {activeTab === 'browse' && <BrowseSection token={token} />}
-          {activeTab === 'settings' && <CMSettingsSection token={token} />}
-          {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
-          {activeTab === 'policy-graph' && <AdminPolicyGraphSection H={H} flash={flash} />}
-          {activeTab === 'evidence-chain-compiler' && <AdminContentIntelligenceSection contentSection="evidence-chain-compiler" H={H} flash={flash} />}
-          {activeTab === 'contradiction-radar' && <AdminContentIntelligenceSection contentSection="contradiction-radar" H={H} flash={flash} />}
-          {activeTab === 'digital-twin-release-simulator' && <AdminContentIntelligenceSection contentSection="digital-twin-release-simulator" H={H} flash={flash} />}
-          {activeTab === 'adaptive-risk-workflow' && <AdminContentIntelligenceSection contentSection="adaptive-risk-workflow" H={H} flash={flash} />}
-        </div>
+        <section className="workspace-panel workspace-panel--content">
+          <div className="workspace-panel-head">
+            <div>
+              <div className="workspace-panel-kicker">{activeGroup.label}</div>
+              <h2>{activeTabMeta.label}</h2>
+              <p>{activeTabMeta.description}</p>
+            </div>
+            <button className="btn btn-outline" onClick={() => setShowFolders(true)}>Folder Manager</button>
+          </div>
 
-        {/* Folder Manager */}
-        {showFolders && (
-          <FolderManager show={showFolders} onClose={() => setShowFolders(false)} token={token} />
-        )}
+          <div className="cm-content workspace-panel-body">
+            {activeTab === 'documents' && <DocumentsSection token={token} user={user} />}
+            {activeTab === 'modules' && <ModulesSection token={token} />}
+            {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
+            {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}
+            {activeTab === 'templates' && <TemplatesSection token={token} />}
+            {activeTab === 'browse' && <BrowseSection token={token} />}
+            {activeTab === 'settings' && <CMSettingsSection token={token} />}
+            {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
+            {activeTab === 'policy-graph' && <AdminPolicyGraphSection H={H} flash={flash} />}
+            {activeTab === 'evidence-chain-compiler' && <AdminContentIntelligenceSection contentSection="evidence-chain-compiler" H={H} flash={flash} />}
+            {activeTab === 'contradiction-radar' && <AdminContentIntelligenceSection contentSection="contradiction-radar" H={H} flash={flash} />}
+            {activeTab === 'digital-twin-release-simulator' && <AdminContentIntelligenceSection contentSection="digital-twin-release-simulator" H={H} flash={flash} />}
+            {activeTab === 'adaptive-risk-workflow' && <AdminContentIntelligenceSection contentSection="adaptive-risk-workflow" H={H} flash={flash} />}
+          </div>
+        </section>
       </div>
+
+      {showFolders && (
+        <FolderManager show={showFolders} onClose={() => setShowFolders(false)} token={token} />
+      )}
+    </div>
   )
 
   if (standalone) {

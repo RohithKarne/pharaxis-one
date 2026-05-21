@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../../shared/context/AuthContext'
 import { setAuthIssueHandler, setSessionExpiryHandler } from '../../shared/api/httpFetch'
 import ProtectedRoute from '../../shared/components/ProtectedRoute'
@@ -30,20 +30,11 @@ import ResetPasswordPage    from '../../pages/ResetPasswordPage'
 const ChatPage                 = lazy(() => import('./pages/ChatPage'))
 const ContentPage              = lazy(() => import('../content/pages/ContentPage'))
 const AnalyticsPage            = lazy(() => import('../dv/pages/AnalyticsPage'))
-const ProcessExplorerPage      = lazy(() => import('../dv/pages/ProcessExplorerPage'))
 const ReportsPage              = lazy(() => import('../reports/pages/ReportsPage'))
 const ExceptionLogsPage        = lazy(() => import('./pages/ExceptionLogsPage'))
-const RegressionPage           = lazy(() => import('../regression/pages/RegressionPage'))
 const TransmissionsPage        = lazy(() => import('../transmissions/pages/TransmissionsPage'))
 const BrowseContentPage        = lazy(() => import('../browse/pages/BrowseContentPage'))
 const ResponseLogPage          = lazy(() => import('../responselog/pages/ResponseLogPage'))
-const CaseAuditTrailPage       = lazy(() => import('../audittrail/pages/CaseAuditTrailPage'))
-const CMAuditTrailPage         = lazy(() => import('../audittrail/pages/CMAuditTrailPage'))
-const ResponseErrorLogPage     = lazy(() => import('../responselog/pages/ResponseErrorLogPage'))
-const TransmissionErrorLogPage = lazy(() => import('../transmissions/pages/TransmissionErrorLogPage'))
-const TransmissionAuditTrailPage = lazy(() => import('../transmissions/pages/TransmissionAuditTrailPage'))
-const CopyDivisionPage         = lazy(() => import('../admin/pages/CopyDivisionPage'))
-const DPPRPage                 = lazy(() => import('../admin/pages/DPPRPage'))
 const MIMSAdminPage            = lazy(() => import('../mimsadmin/pages/MIMSAdminPage'))
 const DeveloperPortalPage      = lazy(() => import('../devportal/DeveloperPortalPage'))
 
@@ -148,12 +139,25 @@ function buildAuthIssuePresentation(detail, canOpenAdmin) {
   }
 }
 
+function isPublicAuthPath(pathname) {
+  if (!pathname) return false
+  return (
+    pathname === '/login' ||
+    pathname === '/mims-admin/login' ||
+    pathname === '/content/login' ||
+    pathname === '/reports/login' ||
+    pathname === '/auth/sso-complete'
+  )
+}
+
 function AppRoutes() {
   const { user, sessionTimeout, logout, hasModuleAccess } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [showWarning, setShowWarning]     = useState(false)
   const [warnSeconds, setWarnSeconds]     = useState(120)
   const [authIssue, setAuthIssue]         = useState(null)
+  const onPublicAuthRoute = isPublicAuthPath(location.pathname)
 
   useEffect(() => {
     setSessionExpiryHandler(async () => {
@@ -161,6 +165,7 @@ function AppRoutes() {
       navigate('/login', { replace: true })
     })
     setAuthIssueHandler((detail) => {
+      if (isPublicAuthPath(window.location.pathname)) return
       const presentation = buildAuthIssuePresentation(detail, hasModuleAccess?.('admin_console'))
       setAuthIssue({
         url: detail?.url || '',
@@ -191,12 +196,12 @@ function AppRoutes() {
 
   return (
     <>
-      <SessionTimeoutModal visible={showWarning} remainingSeconds={warnSeconds} onStay={handleStay} />
+      {showWarning ? <SessionTimeoutModal visible={showWarning} remainingSeconds={warnSeconds} onStay={handleStay} /> : null}
       <ToastContainer />
       <ConfirmModal />
       <ExceptionToast />
       <AuthIssueBanner
-        issue={authIssue}
+        issue={onPublicAuthRoute ? null : authIssue}
         onDismiss={() => setAuthIssue(null)}
         onAction={authIssue?.actionTo ? () => {
           navigate(authIssue.actionTo)
@@ -268,13 +273,6 @@ function AppRoutes() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
-          <Route path="/process-explorer" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="mims_core">
-                <ProcessExplorerPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
-          } />
           <Route path="/cases" element={
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
@@ -327,9 +325,7 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
           <Route path="/regression" element={
-            <ProtectedRoute>
-              <RegressionPage />
-            </ProtectedRoute>
+            <Navigate to="/mims-admin?tab=system&system=sys-uat-regression" replace />
           } />
           <Route path="/response-log" element={
             <ProtectedRoute>
@@ -339,53 +335,25 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
           <Route path="/case-audit-trail" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="admin_console">
-                <CaseAuditTrailPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
+            <Navigate to="/mims-admin?tab=system&system=sys-view-data&audit=case" replace />
           } />
           <Route path="/cm-audit-trail" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="admin_console">
-                <CMAuditTrailPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
+            <Navigate to="/mims-admin?tab=system&system=sys-view-data&audit=cm" replace />
           } />
           <Route path="/response-error-log" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="admin_console">
-                <ResponseErrorLogPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
+            <Navigate to="/mims-admin?tab=service-log&service=response-error-log" replace />
           } />
           <Route path="/transmission-error-log" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="admin_console">
-                <TransmissionErrorLogPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
+            <Navigate to="/mims-admin?tab=service-log&service=transmission-error-log" replace />
           } />
           <Route path="/transmission-audit-trail" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="admin_console">
-                <TransmissionAuditTrailPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
+            <Navigate to="/mims-admin?tab=system&system=sys-view-data&audit=transmission" replace />
           } />
           <Route path="/copy-division" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="admin_console">
-                <CopyDivisionPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
+            <Navigate to="/mims-admin?tab=system&system=sys-maint-copy-division" replace />
           } />
           <Route path="/dppr" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="admin_console">
-                <DPPRPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
+            <Navigate to="/mims-admin?tab=system&system=sys-setup-data-protect" replace />
           } />
           <Route path="/transmissions" element={
             <ProtectedRoute>

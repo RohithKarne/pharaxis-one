@@ -31,6 +31,7 @@ export default function AttachmentTagPicker({ attachmentId, onClose, onChanged }
     setSourceForRows(safeJson(a.source_for_json) || [])
   }, [attachmentId, H])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (attachmentId) load() }, [attachmentId, load])
 
   async function setDocumentType(id) {

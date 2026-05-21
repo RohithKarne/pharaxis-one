@@ -30,7 +30,7 @@ export default function TypeaheadInput({
 
   useEffect(() => {
     if (!source) return
-    if (q.length < 1) { setMs([]); return }
+    if (q.length < 1) return
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       const ms = await (lookup ? lookup(source, q, filter) : [])
@@ -58,7 +58,7 @@ export default function TypeaheadInput({
         autoFocus={autoFocus}
         value={q}
         placeholder={placeholder}
-        onChange={e => setQ(e.target.value)}
+        onChange={e => { const next = e.target.value; setQ(next); if (next.length < 1) setMs([]) }}
         onFocus={() => matches.length && setOpen(true)}
         onBlur={() => { blurRef.current = setTimeout(() => setOpen(false), 120) }}
         onKeyDown={onKeyDown}

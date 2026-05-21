@@ -51,7 +51,7 @@ export function useSmartFields(section, { onPatch } = {}) {
         })
         const d = await r.json()
         if (d.patch && Object.keys(d.patch).length) onPatch?.(d.patch)
-      } catch {}
+      } catch { /* ignore recalc errors */ }
     }, 200)
   }, [schema, section, token, onPatch])
 

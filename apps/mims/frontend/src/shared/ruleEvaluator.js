@@ -27,7 +27,7 @@ export function compareCondition(condition, formData) {
   if (op === 'IN') return Array.isArray(right) ? right.map(String).includes(String(left)) : false
   if (op === 'NOT_IN') return Array.isArray(right) ? !right.map(String).includes(String(left)) : true
   if (op === 'REGEX') {
-    try { return new RegExp(String(right || '')).test(String(left ?? '')) } catch (_) { return false }
+    try { return new RegExp(String(right || '')).test(String(left ?? '')) } catch { return false }
   }
 
   const a = coerceComparable(left)
@@ -51,7 +51,7 @@ export function evaluateCondition(condition, formData) {
 function parseMaybeJson(value, fallback = {}) {
   if (!value) return fallback
   if (typeof value === 'object') return value
-  try { return JSON.parse(value) } catch (_) { return fallback }
+  try { return JSON.parse(value) } catch { return fallback }
 }
 
 export function evaluateRule(rule, formData) {

@@ -1,21 +1,23 @@
 'use strict'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 /**
  * SessionTimeoutModal — warns user before auto-logout.
  * Shows a countdown. "Stay Logged In" resets the idle timer.
  */
 export default function SessionTimeoutModal({ visible, remainingSeconds, onStay }) {
-  const [countdown, setCountdown] = useState(remainingSeconds)
+  const [startedAt] = useState(() => Date.now())
+  const [now, setNow] = useState(() => Date.now())
+  const elapsed = visible ? Math.floor((now - startedAt) / 1000) : 0
+  const countdown = Math.max(0, remainingSeconds - elapsed)
 
   useEffect(() => {
     if (!visible) return
-    setCountdown(remainingSeconds)
     const interval = setInterval(() => {
-      setCountdown(prev => (prev <= 1 ? 0 : prev - 1))
+      setNow(Date.now())
     }, 1000)
     return () => clearInterval(interval)
-  }, [visible, remainingSeconds])
+  }, [visible])
 
   if (!visible) return null
 

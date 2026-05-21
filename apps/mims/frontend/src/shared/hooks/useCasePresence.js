@@ -62,7 +62,7 @@ export function useCasePresence(caseId) {
       try {
         wsRef.current?.send(JSON.stringify({ type: 'leave', caseId }))
         wsRef.current?.close()
-      } catch {}
+      } catch { /* ignore close errors */ }
       setState(EMPTY); setReady(false)
     }
   }, [enabled, caseId, token])

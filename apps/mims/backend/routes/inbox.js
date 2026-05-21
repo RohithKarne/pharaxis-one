@@ -6,7 +6,7 @@
 const express = require('express');
 const fs = require('fs');
 const router = express.Router();
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requireCapability } = require('../middleware/auth');
 const pool = require('../database/db');
 const { emitDataSync } = require('../services/appRealtimeService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
@@ -570,7 +570,7 @@ router.get('/templates', authenticate, async (_req, res) => {
 });
 
 // POST /api/inbox/templates — create reply template
-router.post('/templates', authenticate, async (req, res) => {
+router.post('/templates', authenticate, requireCapability('inbox.configure'), async (req, res) => {
   try {
     const { name, subject, body } = req.body;
     if (!name || !body) return res.status(400).json({ error: 'name and body are required.' });
@@ -584,7 +584,7 @@ router.post('/templates', authenticate, async (req, res) => {
 });
 
 // PATCH /api/inbox/templates/:tid — update reply template
-router.patch('/templates/:tid', authenticate, async (req, res) => {
+router.patch('/templates/:tid', authenticate, requireCapability('inbox.configure'), async (req, res) => {
   try {
     const { tid } = req.params;
     const existing = await getScopedReplyTemplate(req, tid, 'rt.id');
@@ -604,7 +604,7 @@ router.patch('/templates/:tid', authenticate, async (req, res) => {
 });
 
 // DELETE /api/inbox/templates/:tid — soft-delete reply template
-router.delete('/templates/:tid', authenticate, async (req, res) => {
+router.delete('/templates/:tid', authenticate, requireCapability('inbox.configure'), async (req, res) => {
   try {
     const existing = await getScopedReplyTemplate(req, req.params.tid, 'rt.id');
     if (!existing) return res.status(404).json({ error: 'Template not found.' });
@@ -701,7 +701,7 @@ router.post('/fetch', authenticate, requireRole('admin', 'platform_admin'), asyn
 });
 
 // POST /api/inbox/bulk-update — apply operational updates across multiple inbox items
-router.post('/bulk-update', authenticate, async (req, res) => {
+router.post('/bulk-update', authenticate, requireCapability('inbox.bulk'), async (req, res) => {
   try {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((value) => Number(value)).filter(Boolean) : [];
     if (ids.length === 0) return res.status(400).json({ error: 'ids are required.' });
@@ -1086,7 +1086,7 @@ async function insertSentItem({ from, to, subject, body, sourceTag, originalId, 
 }
 
 // POST /api/inbox/:id/reply — send reply via SMTP, move inquiry to processed, log to Sent
-router.post('/:id/reply', authenticate, async (req, res) => {
+router.post('/:id/reply', authenticate, requireCapability('inbox.reply'), async (req, res) => {
   try {
     const { id } = req.params;
     const { to, subject, body } = req.body;
@@ -1129,7 +1129,7 @@ router.post('/:id/reply', authenticate, async (req, res) => {
 });
 
 // POST /api/inbox/:id/forward — send forward via SMTP (status unchanged), log to Sent
-router.post('/:id/forward', authenticate, async (req, res) => {
+router.post('/:id/forward', authenticate, requireCapability('inbox.forward'), async (req, res) => {
   try {
     const { id } = req.params;
     const { to, subject, body } = req.body;

@@ -149,7 +149,6 @@ module.exports = [
             two_factor_enabled: false,
             two_factor_methods: 'totp,email',
             two_factor_remember_days: 7,
-            process_explorer_enabled: true,
           }, platformAdmin.token)
           : { status: 0 };
         const createSite = createdOrgId

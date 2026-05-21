@@ -131,7 +131,7 @@ export default function RealtimeChatPanel({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load users.')
       setOrgUsers(Array.isArray(data) ? data : [])
-    } catch (_) {
+    } catch {
       setOrgUsers([])
     }
   }

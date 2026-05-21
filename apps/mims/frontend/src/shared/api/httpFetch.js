@@ -14,13 +14,13 @@ async function readResponseDetail(response) {
   try {
     const data = await response.clone().json()
     if (data && typeof data === 'object') return data
-  } catch (_) {
+  } catch {
     // ignore JSON parse failures
   }
   try {
     const text = await response.clone().text()
     return text ? { error: text } : {}
-  } catch (_) {
+  } catch {
     return {}
   }
 }

@@ -45,6 +45,7 @@ export function CaseFieldProvider({
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useCaseFieldContext() { return useContext(CaseFieldCtx) }
 
 // ── Shared label + chrome row ────────────────────────────────────────────────

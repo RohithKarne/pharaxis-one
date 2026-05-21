@@ -7,7 +7,8 @@ export default function AdminSourceTypesPanel({ H, flash }) {
   const [sourceTypes, setSourceTypes] = useState([])
   const [srcForm, setSrcForm] = useState({ name: '' })
 
-  useEffect(() => { loadSourceTypes() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/immutability, react-hooks/exhaustive-deps
+  useEffect(() => { loadSourceTypes() }, [])
 
   async function loadSourceTypes() {
     try { const d = await httpFetch('/api/admin/source-types', { headers: H }).then(r => r.json()); setSourceTypes(d.sources || []) }

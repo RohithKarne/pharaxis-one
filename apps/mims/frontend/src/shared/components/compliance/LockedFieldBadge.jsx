@@ -21,7 +21,7 @@ export default function LockedFieldBadge({ section, field, caseStatus, onLockCha
   const [info, setInfo] = useState({ locked: false })
 
   useEffect(() => {
-    if (!enabled || !section || !field || !caseStatus) { setInfo({ locked: false }); return }
+    if (!enabled || !section || !field || !caseStatus) return
     httpFetch('/api/compliance/field-locks/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -32,7 +32,7 @@ export default function LockedFieldBadge({ section, field, caseStatus, onLockCha
       .catch(() => setInfo({ locked: false }))
   }, [enabled, section, field, caseStatus, token, onLockChange])
 
-  if (!enabled || !info.locked) return null
+  if (!enabled || !section || !field || !caseStatus || !info.locked) return null
   return (
     <span title={info.reason || 'Locked by compliance rule'} style={{
       display: 'inline-flex', alignItems: 'center', gap: 3,

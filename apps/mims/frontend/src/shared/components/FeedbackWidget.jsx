@@ -8,7 +8,7 @@
  * Owned by: Saad (Frontend)
  */
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -38,7 +38,7 @@ function getBrowserInfo() {
     const w  = window.innerWidth
     const h  = window.innerHeight
     return `${ua} | ${w}×${h}`
-  } catch (_) { return '' }
+  } catch { return '' }
 }
 
 const overlayStyle = {

@@ -34,8 +34,27 @@ export default function DocumentTypesAdmin() {
     setTypes(d.types || [])
   }, [H])
 
-  useEffect(() => { loadCats() }, [loadCats])
-  useEffect(() => { if (selectedCat) loadTypes(selectedCat.id); else setTypes([]) }, [selectedCat, loadTypes])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const d = await httpFetch('/api/admin/document-type-categories', { headers: H }).then(r => r.json())
+      if (!cancelled) setCategories(d.categories || [])
+    })()
+    return () => { cancelled = true }
+  }, [H])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!selectedCat) {
+        setTypes([])
+        return
+      }
+      const url = `/api/admin/document-types?category_id=${selectedCat.id}`
+      const d = await httpFetch(url, { headers: H }).then(r => r.json())
+      if (!cancelled) setTypes(d.types || [])
+    })()
+    return () => { cancelled = true }
+  }, [H, selectedCat])
 
   async function saveCat() {
     if (!editCat?.code || !editCat?.label) { showFlash('code + label required', 'error'); return }

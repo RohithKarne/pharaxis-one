@@ -14,7 +14,7 @@ const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const { simpleParser } = require('mailparser')
-const { emitProcessEvent } = require('./processExplorerService')
+const { emitTelemetryEvent } = require('./telemetryService')
 const { logger } = require('./logger')
 const { classifyInquiry } = require('./ai/inboxClassifierService')
 
@@ -291,7 +291,7 @@ function startPoller() {
                 last_poll_at: runEndedAt,
               },
             })
-            await emitProcessEvent({
+            await emitTelemetryEvent({
               orgId: account.org_id || null,
               sourceModule: 'Background Jobs',
               method: 'JOB',
@@ -327,7 +327,7 @@ function startPoller() {
                 last_poll_at: runEndedAt,
               },
             })
-            await emitProcessEvent({
+            await emitTelemetryEvent({
               orgId: account.org_id || null,
               sourceModule: 'Background Jobs',
               method: 'JOB',

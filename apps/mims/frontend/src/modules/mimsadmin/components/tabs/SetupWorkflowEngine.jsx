@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch'
 
@@ -36,19 +36,28 @@ export default function SetupWorkflowEngine() {
   const [trace, setTrace] = useState([])
   const [msg, setMsg] = useState('')
   const [hook, setHook] = useState('case.created')
+  const idCounter = useRef(0)
 
   const selectedNode = graph.nodes.find((node) => node.id === selectedId) || graph.nodes[0]
   const json = JSON.stringify(graph, null, 2)
 
-  async function load() {
+  const load = useCallback(async () => {
     const r = await httpFetch('/api/admin/workflow-definitions', { headers })
     const d = await r.json().catch(() => ({ rows: [] }))
-    setDefs(d.rows || [])
-  }
-  useEffect(() => { load() }, [])
+    return d.rows || []
+  }, [headers])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const rows = await load()
+      if (!cancelled) setDefs(rows)
+    })()
+    return () => { cancelled = true }
+  }, [load])
 
   function addNode(type) {
-    const id = `${type}_${Date.now().toString(36)}`
+    idCounter.current += 1
+    const id = `${type}_${idCounter.current.toString(36)}`
     setGraph((current) => ({
       ...current,
       nodes: [...current.nodes, { id, type, data: { label: `${type[0].toUpperCase()}${type.slice(1)} Node` } }],
@@ -65,7 +74,8 @@ export default function SetupWorkflowEngine() {
 
   function connectTo(target) {
     if (!selectedNode?.id || !target || selectedNode.id === target) return
-    const id = `e_${selectedNode.id}_${target}_${Date.now().toString(36)}`
+    idCounter.current += 1
+    const id = `e_${selectedNode.id}_${target}_${idCounter.current.toString(36)}`
     setGraph((current) => ({ ...current, edges: [...current.edges, { id, source: selectedNode.id, target }] }))
   }
 
@@ -77,7 +87,7 @@ export default function SetupWorkflowEngine() {
     const res = await httpFetch('/api/admin/workflow-definitions', { method: 'POST', headers, body: JSON.stringify({ name, scope: 'case', graph_json: graph }) })
     const d = await res.json().catch(() => ({}))
     setMsg(res.ok ? `Saved workflow #${d.id}` : JSON.stringify(d))
-    load()
+    setDefs(await load())
   }
 
   async function simulate(id) {
@@ -88,7 +98,7 @@ export default function SetupWorkflowEngine() {
 
   async function publish(id) {
     await httpFetch(`/api/admin/workflow-definitions/${id}/publish`, { method: 'POST', headers })
-    load()
+    setDefs(await load())
   }
 
   async function registerHook(definitionId) {

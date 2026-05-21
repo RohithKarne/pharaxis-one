@@ -3,6 +3,7 @@ import { useAuth } from '../../../../shared/context/AuthContext'
 import AdminQASection from '../../../admin/components/AdminQASection'
 import AdminUATPanel from '../../../admin/components/AdminUATPanel'
 import CopyDivision from './CopyDivision'
+import DivisionParameters from './DivisionParameters'
 import CustomizeForms from './CustomizeForms'
 import ExceptionLog from './ExceptionLog'
 import FeatureFlags from './FeatureFlags'
@@ -18,7 +19,8 @@ import LotMasterAdmin from './LotMasterAdmin'
 import FieldActionsAdmin from './FieldActionsAdmin'
 import CapaAdmin from './CapaAdmin'
 import PiiRedactionRules from './PiiRedactionRules'
-import GroupSecurity from './GroupSecurity'
+// import GroupSecurity from './GroupSecurity' // legacy nav-key version — kept on disk for rollback
+import CapabilityGroupSecurity from './CapabilityGroupSecurity'
 import LoggedInUsers from './LoggedInUsers'
 import ReportsAccess from './ReportsAccess'
 import SetupAlerts from './SetupAlerts'
@@ -34,15 +36,18 @@ import DeveloperApiAdmin from './DeveloperApiAdmin'
 import SystemParameters from './SystemParameters'
 import Users from './Users'
 import ViewData from './ViewData'
+import DPPRPage from '../../../admin/pages/DPPRPage'
+import RegressionPage from '../../../regression/pages/RegressionPage'
 
-export default function System({ selectedItem }) {
+export default function System({ selectedItem, auditItem = 'admin' }) {
   const { token } = useAuth()
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   if (selectedItem === 'sys-maint-copy-division')   return <CopyDivision />
+  if (selectedItem === 'sys-division-params')       return <DivisionParameters H={H} />
   if (selectedItem === 'sys-setup-customize-forms') return <CustomizeForms />
   if (selectedItem === 'sys-exception-log')         return <ExceptionLog />
-  if (selectedItem === 'sys-sec-group')             return <GroupSecurity />
+  if (selectedItem === 'sys-sec-group')             return <CapabilityGroupSecurity />
   if (selectedItem === 'sys-sec-logged-in')         return <LoggedInUsers />
   if (selectedItem === 'sys-sec-users')             return <Users />
   if (selectedItem === 'sys-sec-auth-policy')       return <SetupAuthPolicy />
@@ -67,12 +72,14 @@ export default function System({ selectedItem }) {
   if (selectedItem === 'sys-setup-field-actions')   return <FieldActionsAdmin />
   if (selectedItem === 'sys-setup-capa')            return <CapaAdmin />
   if (selectedItem === 'sys-setup-pii-redaction')   return <PiiRedactionRules />
+  if (selectedItem === 'sys-setup-data-protect')    return <DPPRPage embedded />
   if (selectedItem?.startsWith('sys-setup-int-'))   return <SetupIntegrations selectedItem={selectedItem} />
   if (selectedItem === 'sys-system-params')         return <SystemParameters />
   if (selectedItem === 'sys-reports-access')        return <ReportsAccess />
-  if (selectedItem === 'sys-view-data')             return <ViewData />
+  if (selectedItem === 'sys-view-data')             return <ViewData selectedItem={auditItem} />
   if (selectedItem === 'sys-uat-bugs')              return <AdminUATPanel initialTab="bugs" />
   if (selectedItem === 'sys-uat-features')          return <AdminUATPanel initialTab="features" />
+  if (selectedItem === 'sys-uat-regression')        return <RegressionPage embedded />
   if (selectedItem === 'sys-ai-qa-reports')         return <AdminQASection contentSection="qa-reports" H={H} />
   if (selectedItem === 'sys-ai-qa-rules')           return <AdminQASection contentSection="qa-rules" H={H} />
   if (selectedItem === 'sys-ai-qa-overrides')       return <AdminQASection contentSection="qa-overrides" H={H} />

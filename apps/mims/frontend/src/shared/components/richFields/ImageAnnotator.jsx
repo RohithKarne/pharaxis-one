@@ -9,7 +9,7 @@
  *   { attachment_id, strokes: [{points:[[x,y],...], color}], comments: [{x,y,text}], width, height }
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export default function ImageAnnotator({
   value = {}, onChange, label, readOnly, baseImageUrl, attachmentId,
@@ -24,19 +24,24 @@ export default function ImageAnnotator({
   const [comments, setComments] = useState(value.comments || [])
   const [current, setCurrent]   = useState(null)
 
-  // load base image
-  useEffect(() => {
-    if (!baseImageUrl) return
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => { imgRef.current = img; redraw() }
-    img.src = baseImageUrl
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseImageUrl])
+  const drawStroke = useCallback((ctx, s) => {
+    if (!s.points?.length) return
+    ctx.strokeStyle = s.color || '#d33'; ctx.lineWidth = 2; ctx.lineCap = 'round'
+    ctx.beginPath()
+    s.points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))
+    ctx.stroke()
+  }, [])
 
-  useEffect(() => { redraw() /* eslint-disable-next-line */ }, [strokes, comments, current])
+  const drawPin = useCallback((ctx, c, n) => {
+    ctx.fillStyle = '#1a4f9c'; ctx.strokeStyle = '#fff'
+    ctx.beginPath(); ctx.arc(c.x, c.y, 11, 0, Math.PI * 2); ctx.fill()
+    ctx.lineWidth = 2; ctx.stroke()
+    ctx.fillStyle = '#fff'; ctx.font = '700 11px sans-serif'
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(String(n), c.x, c.y)
+  }, [])
 
-  function redraw() {
+  const redraw = useCallback(() => {
     const cnv = cnvRef.current; if (!cnv) return
     const ctx = cnv.getContext('2d')
     ctx.clearRect(0, 0, cnv.width, cnv.height)
@@ -44,22 +49,18 @@ export default function ImageAnnotator({
     for (const s of strokes) drawStroke(ctx, s)
     if (current) drawStroke(ctx, current)
     comments.forEach((c, i) => drawPin(ctx, c, i + 1))
-  }
-  function drawStroke(ctx, s) {
-    if (!s.points?.length) return
-    ctx.strokeStyle = s.color || '#d33'; ctx.lineWidth = 2; ctx.lineCap = 'round'
-    ctx.beginPath()
-    s.points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))
-    ctx.stroke()
-  }
-  function drawPin(ctx, c, n) {
-    ctx.fillStyle = '#1a4f9c'; ctx.strokeStyle = '#fff'
-    ctx.beginPath(); ctx.arc(c.x, c.y, 11, 0, Math.PI * 2); ctx.fill()
-    ctx.lineWidth = 2; ctx.stroke()
-    ctx.fillStyle = '#fff'; ctx.font = '700 11px sans-serif'
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText(String(n), c.x, c.y)
-  }
+  }, [comments, current, drawPin, drawStroke, strokes])
+
+  // load base image
+  useEffect(() => {
+    if (!baseImageUrl) return
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => { imgRef.current = img; redraw() }
+    img.src = baseImageUrl
+  }, [baseImageUrl, redraw])
+
+  useEffect(() => { redraw() }, [redraw])
   function pt(e) {
     const c = cnvRef.current.getBoundingClientRect()
     return { x: e.clientX - c.left, y: e.clientY - c.top }

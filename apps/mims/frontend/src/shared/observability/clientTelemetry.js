@@ -34,7 +34,7 @@ export function sendClientError(payload = {}) {
       keepalive: true,
     }).catch(() => {});
     return exceptionId;
-  } catch (_) {
+  } catch {
     // best effort only
     return null;
   }
@@ -63,7 +63,7 @@ export function initClientObservability({ app = 'mims' } = {}) {
         let body = null;
         try {
           body = await response.clone().json();
-        } catch (_) {
+        } catch {
           body = null;
         }
         const exceptionId = body?.exception_id || response.headers.get('X-Exception-Id') || null;

@@ -31,7 +31,7 @@ export default function LotMasterAdmin() {
     const d = await httpFetch(url, { headers: H }).then(r => r.json())
     setLots(d.lots || [])
   }, [H, q])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   async function save() {
     if (!edit?.product_id || !edit?.lot_number) { showFlash('product_id + lot_number required', 'error'); return }

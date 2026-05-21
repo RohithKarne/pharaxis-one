@@ -38,7 +38,7 @@ export default function ExceptionLogsPage() {
       await navigator.clipboard.writeText(id);
       setCopiedId(id);
       setTimeout(() => setCopiedId(''), 1400);
-    } catch (_) {
+    } catch {
       setCopiedId('');
     }
   }

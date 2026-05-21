@@ -21,6 +21,8 @@ export default function useCaseForm(id, token) {
   })
   const [reassignForm,   setReassignForm]   = useState({ new_owner_id: '', reason: '' })
   const [reassignSaving, setReassignSaving] = useState(false)
+  const [escalateForm,   setEscalateForm]   = useState({ reason: '' })
+  const [escalateSaving, setEscalateSaving] = useState(false)
   const [dynFieldValues, setDynFieldValues] = useState({})
   const [dynFieldSaving, setDynFieldSaving] = useState(false)
   const [dynFieldErrors, setDynFieldErrors] = useState({})
@@ -197,6 +199,24 @@ export default function useCaseForm(id, token) {
     }
   }
 
+  async function escalateCase() {
+    if (escalateSaving) return
+    setEscalateSaving(true)
+    try {
+      const payload = { reason: escalateForm.reason.trim() || undefined }
+      const res  = await httpFetch(`${API}/cases/${id}/escalate`, { method: 'POST', headers, body: JSON.stringify(payload) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to escalate case.')
+      setEscalateForm({ reason: '' })
+      setSavedMsg('Case escalated')
+      setTimeout(() => setSavedMsg(''), 2500)
+    } catch (err) {
+      toast.error(err.message || 'Failed to escalate case.')
+    } finally {
+      setEscalateSaving(false)
+    }
+  }
+
   async function loadDynFields() {
     try {
       const res  = await httpFetch(`${API}/cases/${id}/dynamic-fields`, { headers })
@@ -275,9 +295,10 @@ export default function useCaseForm(id, token) {
     statuses, users, formConfig,
     infoForm, setInfoForm,
     reassignForm, setReassignForm, reassignSaving,
+    escalateForm, setEscalateForm, escalateSaving,
     dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
     draftStatus,
-    autoSaveTimer, loadCase, saveInfo, scheduleAutoSave, reassignCase,
+    autoSaveTimer, loadCase, saveInfo, scheduleAutoSave, reassignCase, escalateCase,
     loadDynFields, saveDynFields,
     getFieldConfig, getSectionVisible, getPicklistOptions,
     headers,

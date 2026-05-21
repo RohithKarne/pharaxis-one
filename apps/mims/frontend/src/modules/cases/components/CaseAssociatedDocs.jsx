@@ -6,15 +6,20 @@ export default function CaseAssociatedDocs({ miTab, token }) {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!miTab?.document_id) { setDocs([]); return }
-    setLoading(true)
-    httpFetch(`/api/cm/documents/${miTab.document_id}/relations`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => r.ok ? r.json() : { relations: [] })
-      .then(d => setDocs(d.relations || []))
-      .catch(() => setDocs([]))
-      .finally(() => setLoading(false))
+    if (!miTab?.document_id) return
+    ;(async () => {
+      setLoading(true)
+      try {
+        const d = await httpFetch(`/api/cm/documents/${miTab.document_id}/relations`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).then(r => r.ok ? r.json() : { relations: [] })
+        setDocs(d.relations || [])
+      } catch {
+        setDocs([])
+      } finally {
+        setLoading(false)
+      }
+    })()
   }, [miTab?.document_id, token])
 
   if (!miTab?.document_id) return <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No primary document linked to this MI response.</span>

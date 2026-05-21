@@ -312,7 +312,7 @@ export default function AdminCaseImportPanel({ H }) {
                       try {
                         await httpFetch(`/api/admin/exports/scheduled/${cfg.id}`, { method: 'DELETE', headers: H })
                         setScheduledExports(prev => prev.filter((_, idx) => idx !== i))
-                      } catch (_e) {}
+                      } catch { /* ignore delete failure after local row removal */ }
                     }}>Delete</button>
                   </td>
                 </tr>

@@ -11,6 +11,26 @@ import { formatAdminRoleLabel, hasGlobalAdminScope } from '../utils/adminScope.j
 
 const AuthContext = createContext(null)
 
+function createUnrestrictedSecurityAccess() {
+  return { resolved: true, unrestricted: true, system_options: null, case_options: null }
+}
+
+function createUnresolvedSecurityAccess() {
+  return { resolved: false, unrestricted: false, system_options: {}, case_options: {} }
+}
+
+function isPublicAuthPath() {
+  if (typeof window === 'undefined') return false
+  const path = window.location.pathname || ''
+  return (
+    path.endsWith('/login') ||
+    path.endsWith('/mims-admin/login') ||
+    path.endsWith('/content/login') ||
+    path.endsWith('/reports/login') ||
+    path.includes('/auth/sso-complete')
+  )
+}
+
 export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPrefixes = [] }) {
   const KEY = storageKeyPrefix
   const disableFallbackKey = `${KEY}_disable_fallback`
@@ -51,7 +71,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   const [orgName,  setOrgName]  = useState(() => initState('orgName'))
   const [siteName, setSiteName] = useState(() => initState('siteName'))
   const [allOrgs,       setAllOrgs]       = useState(() => initState('allOrgs'))
-  const [securityAccess, setSecurityAccess] = useState(() => ({ unrestricted: true, system_options: null, case_options: null }))
+  const [securityAccess, setSecurityAccess] = useState(() => createUnresolvedSecurityAccess())
   const [sessionTimeout, setSessionTimeout] = useState(() => {
     const saved = localStorage.getItem(`${KEY}_session_timeout`)
     return saved ? parseInt(saved) : 30
@@ -68,6 +88,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     setSiteName(sname)
     setAllOrgs(all)
     setSessionTimeout(timeout)
+    setSecurityAccess(createUnresolvedSecurityAccess())
     localStorage.setItem(`${KEY}_user`,            JSON.stringify(userData))
     localStorage.setItem(`${KEY}_token`,           authToken ?? '')
     localStorage.setItem(`${KEY}_modules`,         JSON.stringify(allowedModules))
@@ -84,7 +105,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     try {
       await httpFetch('/api/auth/logout', { method: 'POST' })
     } catch { /* silent */ }
-    setUser(null); setToken(null); setModules([]); setOrgId(null); setSiteId(null); setOrgName(null); setSiteName(null); setAllOrgs([]); setSecurityAccess({ unrestricted: true, system_options: null, case_options: null }); setSessionTimeout(30)
+    setUser(null); setToken(null); setModules([]); setOrgId(null); setSiteId(null); setOrgName(null); setSiteName(null); setAllOrgs([]); setSecurityAccess(createUnrestrictedSecurityAccess()); setSessionTimeout(30)
     ;[`${KEY}_user`,`${KEY}_token`,`${KEY}_modules`,`${KEY}_org_id`,`${KEY}_site_id`,`${KEY}_org_name`,`${KEY}_site_name`,`${KEY}_all_orgs`,`${KEY}_session_timeout`]
       .forEach(k => localStorage.removeItem(k))
     if (fallbackPrefixes.length > 0) localStorage.setItem(disableFallbackKey, '1')
@@ -110,7 +131,6 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     window.location.reload()
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const refreshOrgAccess = useCallback(async () => {
     if (hasGlobalAdminScope({ ...user, modules })) return
 
@@ -145,15 +165,19 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     localStorage.setItem(`${KEY}_all_orgs`,        JSON.stringify(switched.allOrgs || []))
     localStorage.setItem(`${KEY}_session_timeout`, String(switched.sessionTimeout ?? 30))
     window.location.reload()
-  }, [KEY, modules, user]) // stable enough for auth changes and storage refresh
+  }, [KEY, modules, user])
 
   const refreshSecurityAccess = useCallback(async () => {
+    if (isPublicAuthPath()) {
+      setSecurityAccess(createUnrestrictedSecurityAccess())
+      return
+    }
     if (!token || !user) {
-      setSecurityAccess({ unrestricted: true, system_options: null, case_options: null })
+      setSecurityAccess(createUnrestrictedSecurityAccess())
       return
     }
     if (hasGlobalAdminScope({ ...user, modules })) {
-      setSecurityAccess({ unrestricted: true, system_options: null, case_options: null })
+      setSecurityAccess(createUnrestrictedSecurityAccess())
       return
     }
     try {
@@ -162,11 +186,11 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
       })
       if (!res.ok) throw new Error('security access unavailable')
       const data = await res.json()
-      setSecurityAccess(data || { unrestricted: true, system_options: null, case_options: null })
+      setSecurityAccess({ resolved: true, ...(data || createUnresolvedSecurityAccess()) })
     } catch {
-      setSecurityAccess({ unrestricted: true, system_options: null, case_options: null })
+      setSecurityAccess(createUnresolvedSecurityAccess())
     }
-  }, [token, user])
+  }, [modules, token, user])
 
   useEffect(() => {
     refreshSecurityAccess()
@@ -195,6 +219,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   function hasSecurityOption(scope, section, option) {
     if (!user) return false
     if (hasGlobalAdminScope({ ...user, modules })) return true
+    if (securityAccess?.resolved === false) return false
     if (securityAccess?.unrestricted) return true
     const matrix = securityAccess?.[scope]
     if (!matrix) return true
@@ -209,14 +234,26 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     return hasSecurityOption('case_options', section, option)
   }
 
+  // New capability model: hasCapability('case.close') etc. Superadmin / unrestricted
+  // / null privileges all pass; otherwise check the effective capability keys.
+  function hasCapability(key) {
+    if (!user) return false
+    if (hasGlobalAdminScope({ ...user, modules })) return true
+    if (securityAccess?.unrestricted) return true
+    const privs = securityAccess?.privileges
+    if (privs == null) return true // null = unrestricted; not yet resolved → don't hide
+    return privs.includes(key)
+  }
+
   return (
     <AuthContext.Provider value={{
       user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, securityAccess,
-      login, logout, switchOrg, refreshOrgAccess, refreshSecurityAccess, getInitials, formatRole, hasModuleAccess, hasSystemOption, hasCaseOption
+      login, logout, switchOrg, refreshOrgAccess, refreshSecurityAccess, getInitials, formatRole, hasModuleAccess, hasSystemOption, hasCaseOption, hasCapability
     }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() { return useContext(AuthContext) }

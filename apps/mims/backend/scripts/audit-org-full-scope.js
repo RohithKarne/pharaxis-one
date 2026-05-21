@@ -35,7 +35,7 @@ async function main() {
 
   try {
     const [[org]] = await conn.execute(
-      'SELECT id, name, is_active, process_explorer_enabled, two_factor_enabled, session_timeout_minutes FROM organisations WHERE id = ? LIMIT 1',
+      'SELECT id, name, is_active, two_factor_enabled, session_timeout_minutes FROM organisations WHERE id = ? LIMIT 1',
       [orgId]
     );
     if (!org) {

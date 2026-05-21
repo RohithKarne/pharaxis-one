@@ -12,7 +12,7 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const pool = require('../database/db');
-const { normalizePath } = require('./processExplorerService');
+const { normalizePath } = require('./telemetryService');
 const { getRouteServiceCatalog } = require('./routeCatalogService');
 
 const TESTS_DIR = path.join(__dirname, '../regression-tests');

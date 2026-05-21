@@ -5,7 +5,7 @@
  * CSS namespace: tx- (transmissions)
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -50,9 +50,12 @@ function StatusBadge({ status }) {
 }
 
 export default function TransmissionsPage() {
-  const { token, user } = useAuth()
+  const { token } = useAuth()
   const navigate        = useNavigate()
-  const headers         = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers         = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   const [entries,    setEntries]    = useState([])
   const [total,      setTotal]      = useState(0)
@@ -70,7 +73,7 @@ export default function TransmissionsPage() {
 
   useEffect(() => {
     logScreenEvent(token, 'PAGE_VIEW', {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token])
 
   const fetchEntries = useCallback(async () => {
     setLoading(true)
@@ -98,12 +101,12 @@ export default function TransmissionsPage() {
       }
       setEntries(rows)
       setTotal(data.total || 0)
-    } catch (e) {
+    } catch {
       setError('Network error.')
     } finally {
       setLoading(false)
     }
-  }, [page, system, status, fromDate, toDate, search, token])
+  }, [fromDate, headers, page, search, status, system, toDate])
 
   useEffect(() => { fetchEntries() }, [fetchEntries])
 

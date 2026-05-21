@@ -20,9 +20,9 @@ function mapSsoError(code) {
 }
 
 const TARGET_CONFIG = {
-  admin: { moduleKey: 'admin_console', destination: '/mims-admin?standalone=1', loginPath: '/mims-admin/login', label: 'MIMS Admin' },
-  content: { moduleKey: 'content_mgmt', destination: '/content?standalone=1', loginPath: '/content/login', label: 'Content Management' },
-  reports: { moduleKey: 'reports', destination: '/reports?standalone=1', loginPath: '/reports/login', label: 'Reports' },
+  admin: { moduleKey: 'admin_console', destination: '/mims-admin', loginPath: '/mims-admin/login', label: 'MIMS Admin' },
+  content: { moduleKey: 'content_mgmt', destination: '/content', loginPath: '/content/login', label: 'Content Management' },
+  reports: { moduleKey: 'reports', destination: '/reports', loginPath: '/reports/login', label: 'Reports' },
 }
 
 export default function SsoCompletePage() {

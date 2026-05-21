@@ -4,6 +4,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { formatAdminRoleLabel, isAdminUser } from '../../../shared/utils/adminScope.js'
+import MentionsInbox from '../../../shared/components/collab/MentionsInbox'
 
 const API = '/api'
 const DASHBOARD_SECTION_DEFAULTS = Object.freeze({
@@ -126,7 +127,7 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const { token, user, orgName, siteName } = useAuth()
+  const { token, user, orgName, siteName, hasModuleAccess } = useAuth()
   const canSeeObservability = isAdminUser(user)
   const headers = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
@@ -249,6 +250,56 @@ export default function DashboardPage() {
   const roleName = roleLabel(user?.role)
   const primaryStats = buildPrimaryStats({ user, summary, sessions })
   const focusCards = buildFocusCards({ user, summary, sessions, canSeeObservability })
+  const canAccessModule = (moduleKey) => (hasModuleAccess ? hasModuleAccess(moduleKey) : false)
+  const moduleLaunchers = [
+    {
+      key: 'cases',
+      title: 'Case Management',
+      body: 'Triage, assign, and progress operational case work from one queue.',
+      to: '/cases',
+      enabled: canAccessModule('mims_core') || canAccessModule('case_mgmt'),
+    },
+    {
+      key: 'inbox',
+      title: 'Inbox',
+      body: 'Stay close to inbound requests, assignments, and coordination updates.',
+      to: '/inbox',
+      enabled: canAccessModule('mims_core'),
+    },
+    {
+      key: 'browse',
+      title: 'Browse Content',
+      body: 'Find approved knowledge assets without leaving the main operating flow.',
+      to: '/browse-content',
+      enabled: canAccessModule('browse_content') || canAccessModule('content_mgmt'),
+    },
+    {
+      key: 'content',
+      title: 'Content Management',
+      body: 'Author, govern, and publish controlled content in the same product shell.',
+      to: '/content',
+      enabled: canSeeObservability && canAccessModule('content_mgmt'),
+    },
+    {
+      key: 'reports',
+      title: 'Reports Workspace',
+      body: 'Move from dashboards to governed exports and scheduled delivery cleanly.',
+      to: '/reports',
+      enabled: canSeeObservability && canAccessModule('reports'),
+    },
+    {
+      key: 'admin',
+      title: 'MIMS Admin',
+      body: 'Manage access, configuration, service oversight, and audit-ready controls.',
+      to: '/mims-admin',
+      enabled: canSeeObservability && canAccessModule('admin_console'),
+    },
+  ].filter((item) => item.enabled)
+  const collaborationSignals = [
+    { label: 'Needs triage', value: Number(summary.stats.unassigned_cases || 0), hint: 'Cases still waiting for an owner' },
+    { label: 'Pending approvals', value: Number(summary.mi_stats.pending_approval || 0), hint: 'Responses waiting for sign-off' },
+    { label: 'Active sessions', value: Number(sessions.activeSessionCount || 0), hint: 'Current logged-in user sessions' },
+  ]
   const visibleOptionalSections =
     Number(sectionPrefs.miResponseActivity) +
     Number(sectionPrefs.observabilitySnapshot && canSeeObservability) +
@@ -301,6 +352,50 @@ export default function DashboardPage() {
               </button>
             </article>
           ))}
+        </section>
+
+        <section className="mims-workbench-grid" aria-label="Workspace launchpad">
+          <article className="card mims-workbench-panel">
+            <div className="card-header">
+              <h3>Workspace Launchpad</h3>
+              <span className="mims-workbench-panel-note">One operating system across cases, content, reports, and admin</span>
+            </div>
+            <div className="card-body">
+              <div className="mims-workbench-card-grid">
+                {moduleLaunchers.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className="mims-workbench-card"
+                    onClick={() => navigate(item.to)}
+                  >
+                    <strong>{item.title}</strong>
+                    <span>{item.body}</span>
+                    <small>Open workspace</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </article>
+
+          <article className="card mims-workbench-panel">
+            <div className="card-header">
+              <h3>Collaboration Pulse</h3>
+              <span className="mims-workbench-panel-note">Mentions, ownership, and approvals kept in view</span>
+            </div>
+            <div className="card-body mims-workbench-collab">
+              <div className="mims-workbench-signal-grid">
+                {collaborationSignals.map((item) => (
+                  <div key={item.label} className="mims-workbench-signal">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                    <small>{item.hint}</small>
+                  </div>
+                ))}
+              </div>
+              <MentionsInbox onOpen={(mention) => navigate(`/cases/${mention.case_id}`)} />
+            </div>
+          </article>
         </section>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -19,7 +19,6 @@ function scoreBg(score) {
 
 function ScoreMeter({ score }) {
   const color = scoreColor(score)
-  const bg = scoreBg(score)
   const label = score >= 90 ? 'Healthy' : score >= 70 ? 'Degraded' : 'Critical'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -33,7 +32,7 @@ function ScoreMeter({ score }) {
           <span style={{ fontSize: 15, fontWeight: 800, color, lineHeight: 1 }}>{score}%</span>
         </div>
       </div>
-      <div>
+      <div style={{ padding: '8px 10px', borderRadius: 10, background: scoreBg(score) }}>
         <div style={{ fontSize: 20, fontWeight: 800, color }}>{label}</div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Overall Health Score</div>
       </div>
@@ -428,7 +427,7 @@ function HistoryTab({ token }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function RegressionPage() {
+export default function RegressionPage({ embedded = false } = {}) {
   const { token } = useAuth()
   const [activeTab, setActiveTab] = useState('overview')
   const [report, setReport] = useState(null)
@@ -464,8 +463,8 @@ export default function RegressionPage() {
     { key: 'history', label: '📜 History' },
   ]
 
-  return (
-    <MIMSLayout>
+  const content = (
+    <>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
@@ -509,6 +508,9 @@ export default function RegressionPage() {
           {activeTab === 'history' && <HistoryTab token={token} />}
         </div>
       </div>
-    </MIMSLayout>
+    </>
   )
+
+  if (embedded) return content
+  return <MIMSLayout>{content}</MIMSLayout>
 }

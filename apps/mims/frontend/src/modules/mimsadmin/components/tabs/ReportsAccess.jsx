@@ -26,6 +26,8 @@ export default function ReportsAccess() {
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState('')
   const [flash,    setFlash]    = useState(null)
+  const [selectedReportsOrgId, setSelectedReportsOrgId] = useState(null)
+  const [selectedUsersOrgId, setSelectedUsersOrgId] = useState(null)
 
   useEffect(() => { loadOrgs() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -48,6 +50,15 @@ export default function ReportsAccess() {
     const q = search.toLowerCase()
     return orgs.filter(o => o.name.toLowerCase().includes(q))
   }, [orgs, search])
+
+  useEffect(() => {
+    if (selectedReportsOrgId && !filteredOrgs.some((org) => org.id === selectedReportsOrgId)) {
+      setSelectedReportsOrgId(null)
+    }
+    if (selectedUsersOrgId && !filteredOrgs.some((org) => org.id === selectedUsersOrgId)) {
+      setSelectedUsersOrgId(null)
+    }
+  }, [filteredOrgs, selectedReportsOrgId, selectedUsersOrgId])
 
   return (
     <div className="ma-ra-page">
@@ -89,13 +100,34 @@ export default function ReportsAccess() {
               {!loading && filteredOrgs.map(o => (
                 <OrgItem
                   key={o.id} org={o}
-                  active={false}
-                  onClick={() => {}}
+                  active={tab === 'org-reports' ? selectedReportsOrgId === o.id : selectedUsersOrgId === o.id}
+                  onClick={() => {
+                    if (tab === 'org-reports') setSelectedReportsOrgId(o.id)
+                    if (tab === 'org-users') setSelectedUsersOrgId(o.id)
+                  }}
                 />
               ))}
             </div>
-            {tab === 'org-reports' && <OrgReportsPane orgs={filteredOrgs} H={H} onFlash={showFlash} loading={loading} />}
-            {tab === 'org-users'   && <OrgUsersPane   orgs={filteredOrgs} H={H} onFlash={showFlash} loading={loading} />}
+            {tab === 'org-reports' && (
+              <OrgReportsPane
+                orgs={filteredOrgs}
+                H={H}
+                onFlash={showFlash}
+                loading={loading}
+                selectedOrgId={selectedReportsOrgId}
+                onSelectedOrgChange={setSelectedReportsOrgId}
+              />
+            )}
+            {tab === 'org-users' && (
+              <OrgUsersPane
+                orgs={filteredOrgs}
+                H={H}
+                onFlash={showFlash}
+                loading={loading}
+                selectedOrgId={selectedUsersOrgId}
+                onSelectedOrgChange={setSelectedUsersOrgId}
+              />
+            )}
           </>
         )}
         {tab === 'requests' && <RequestsPane H={H} onFlash={showFlash} />}
@@ -119,18 +151,30 @@ function OrgItem({ org, active, onClick }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Tab 1 — Org Reports
 // ─────────────────────────────────────────────────────────────────────────────
-function OrgReportsPane({ orgs, H, onFlash, loading }) {
-  const [selectedOrg, setSelectedOrg] = useState(null)
+function OrgReportsPane({ orgs, H, onFlash, loading, selectedOrgId, onSelectedOrgChange }) {
   const [reports,     setReports]     = useState([])
   const [busy,        setBusy]        = useState(false)
+  const selectedOrg = useMemo(
+    () => orgs.find((org) => org.id === selectedOrgId) || null,
+    [orgs, selectedOrgId]
+  )
 
   useEffect(() => {
-    if (!selectedOrg) { setReports([]); return }
-    setBusy(true)
-    httpFetch(`${API}/org/${selectedOrg.id}`, { headers: H })
-      .then(r => r.json()).then(d => setReports(d.reports || []))
-      .catch(() => setReports([]))
-      .finally(() => setBusy(false))
+    if (!selectedOrg) {
+      setReports([])
+      return
+    }
+    ;(async () => {
+      setBusy(true)
+      try {
+        const d = await httpFetch(`${API}/org/${selectedOrg.id}`, { headers: H }).then(r => r.json())
+        setReports(d.reports || [])
+      } catch {
+        setReports([])
+      } finally {
+        setBusy(false)
+      }
+    })()
   }, [selectedOrg, H])
 
   async function toggleReport(report_key, enabled) {
@@ -150,12 +194,12 @@ function OrgReportsPane({ orgs, H, onFlash, loading }) {
       {!selectedOrg && (
         <>
           <div className="ma-ra-section-title">Select a tenant</div>
-          <div className="ma-ra-grid">
-            {orgs.map(o => (
-              <div key={o.id} className="ma-ra-report-card" onClick={() => setSelectedOrg(o)} style={{ cursor: 'pointer' }}>
-                <div>
-                  <div className="ma-ra-report-label">{o.name}</div>
-                  <div className="ma-ra-org-meta">{o.reports_enabled || 0} enabled</div>
+            <div className="ma-ra-grid">
+              {orgs.map(o => (
+                <div key={o.id} className="ma-ra-report-card" onClick={() => onSelectedOrgChange(o.id)} style={{ cursor: 'pointer' }}>
+                  <div>
+                    <div className="ma-ra-report-label">{o.name}</div>
+                    <div className="ma-ra-org-meta">{o.reports_enabled || 0} enabled</div>
                 </div>
                 <span style={{ color: 'var(--accent)' }}>→</span>
               </div>
@@ -166,7 +210,7 @@ function OrgReportsPane({ orgs, H, onFlash, loading }) {
 
       {selectedOrg && (
         <>
-          <span className="ma-ra-back-link" onClick={() => setSelectedOrg(null)}>← Back to tenants</span>
+          <span className="ma-ra-back-link" onClick={() => onSelectedOrgChange(null)}>← Back to tenants</span>
           <div className="ma-ra-section-title">{selectedOrg.name} — Reports ({reports.filter(r => r.is_enabled).length} of {reports.length} enabled)</div>
           {busy && <div className="ma-ra-loading">Loading…</div>}
           {!busy && (
@@ -197,12 +241,20 @@ function OrgReportsPane({ orgs, H, onFlash, loading }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Tab 2 — Org Users
 // ─────────────────────────────────────────────────────────────────────────────
-function OrgUsersPane({ orgs, H, onFlash, loading }) {
-  const [selectedOrg,  setSelectedOrg]  = useState(null)
+function OrgUsersPane({ orgs, H, onFlash, loading, selectedOrgId, onSelectedOrgChange }) {
   const [users,        setUsers]        = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
   const [userReports,  setUserReports]  = useState([])
   const [busy,         setBusy]         = useState(false)
+  const selectedOrg = useMemo(
+    () => orgs.find((org) => org.id === selectedOrgId) || null,
+    [orgs, selectedOrgId]
+  )
+
+  useEffect(() => {
+    setSelectedUser(null)
+    setUserReports([])
+  }, [selectedOrgId])
 
   // Load users when org selected
   const loadUsers = useCallback(async () => {
@@ -244,9 +296,9 @@ function OrgUsersPane({ orgs, H, onFlash, loading }) {
       {!selectedOrg && (
         <>
           <div className="ma-ra-section-title">Select a tenant</div>
-          <div className="ma-ra-grid">
-            {orgs.map(o => (
-              <div key={o.id} className="ma-ra-report-card" onClick={() => setSelectedOrg(o)} style={{ cursor: 'pointer' }}>
+            <div className="ma-ra-grid">
+              {orgs.map(o => (
+              <div key={o.id} className="ma-ra-report-card" onClick={() => onSelectedOrgChange(o.id)} style={{ cursor: 'pointer' }}>
                 <span className="ma-ra-report-label">{o.name}</span>
                 <span style={{ color: 'var(--accent)' }}>→</span>
               </div>
@@ -257,7 +309,7 @@ function OrgUsersPane({ orgs, H, onFlash, loading }) {
 
       {selectedOrg && !selectedUser && (
         <>
-          <span className="ma-ra-back-link" onClick={() => { setSelectedOrg(null); setUsers([]) }}>← Back to tenants</span>
+          <span className="ma-ra-back-link" onClick={() => { onSelectedOrgChange(null); setUsers([]) }}>← Back to tenants</span>
           <div className="ma-ra-section-title">{selectedOrg.name} — Users</div>
           {busy && <div className="ma-ra-loading">Loading users…</div>}
           {!busy && users.length === 0 && <div className="ma-ra-empty">No users in this tenant.</div>}

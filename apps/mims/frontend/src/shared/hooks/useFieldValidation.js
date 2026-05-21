@@ -47,7 +47,7 @@ export function useFieldValidation(section) {
   }, [schema])
 
   // ── Pure client-side rule check (mirrors validationEngine.js) ───────────
-  const validate = useCallback((field, value, payload = {}) => {
+  const validate = useCallback((field, value) => {
     if (!schema?.enabled) return null
     const r = byField.get(field)
     if (!r) return null

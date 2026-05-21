@@ -5,7 +5,7 @@
  * CSS namespace: rl-
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -70,7 +70,10 @@ function DetailModal({ resp, onClose }) {
 export default function ResponseLogPage() {
   const { token } = useAuth()
   const navigate  = useNavigate()
-  const headers   = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers   = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   const [responses, setResponses] = useState([])
   const [total,     setTotal]     = useState(0)
@@ -101,7 +104,7 @@ export default function ResponseLogPage() {
       setTotal(data.total || 0)
     } catch { setError('Network error.') }
     finally { setLoading(false) }
-  }, [page, status, fromDate, toDate, search, token])
+  }, [fromDate, headers, page, search, status, toDate])
 
   useEffect(() => { fetchLog() }, [fetchLog])
 

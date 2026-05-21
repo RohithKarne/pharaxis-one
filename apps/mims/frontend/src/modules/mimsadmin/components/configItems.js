@@ -73,17 +73,54 @@ export const SYSTEM_NAV = [
       { label: 'Add / Edit Users', value: 'sys-sec-users'    },
       { label: 'Group Security',   value: 'sys-sec-group'    },
       { label: 'Auth Policy',      value: 'sys-sec-auth-policy' },
+      { label: '2FA Configuration', value: 'sys-setup-2fa-config' },
       { label: 'Logged In Users',  value: 'sys-sec-logged-in'},
       { label: 'Security Log',     value: 'sys-sec-log'      },
     ],
   },
   {
     label: 'Setup', value: 'sys-setup', children: [
-      { label: 'Business Rules',              value: 'sys-setup-business-rules' },
-      { label: '2FA Configuration',           value: 'sys-setup-2fa-config'     },
-      { label: 'Alerts',                      value: 'sys-setup-alerts'         },
+      // Reorganized into 6 logical groups (was a flat 29-item list).
+      // Leaf `value`s are unchanged — only grouping changed. 2FA moved to Security.
       {
-        label: 'Integrations', value: 'sys-setup-integrations', children: [
+        label: 'Forms & Fields', value: 'sys-setup-grp-forms', children: [
+          { label: 'Customize Forms',                  value: 'sys-setup-customize-forms' },
+          { label: 'Smart Field Rules',                value: 'sys-setup-smart-fields'    },
+          { label: 'Validation Rules',                 value: 'sys-setup-validation'      },
+          { label: 'Grid Section Templates',           value: 'sys-setup-grid-templates'  },
+          { label: 'Case Actions (Templates/Macros)',  value: 'sys-setup-case-actions'    },
+          { label: 'Case Hyperlinks',                  value: 'sys-setup-case-hyperlinks' },
+        ],
+      },
+      {
+        label: 'Workflow & Rules', value: 'sys-setup-grp-workflow', children: [
+          { label: 'Business Rules',    value: 'sys-setup-business-rules'  },
+          { label: 'Workflow Setup',    value: 'sys-setup-workflow'        },
+          { label: 'Workflow Engine',   value: 'sys-setup-workflow-engine' },
+          { label: 'CAPA Workflow',     value: 'sys-setup-capa'            },
+          { label: 'Change Approvals',  value: 'sys-setup-change-approvals'},
+          { label: 'Alerts',            value: 'sys-setup-alerts'          },
+        ],
+      },
+      {
+        label: 'Safety Reference Data', value: 'sys-setup-grp-safety', children: [
+          { label: 'Document Types',          value: 'sys-setup-document-types' },
+          { label: 'Complaint Codes',         value: 'sys-setup-complaint-codes'},
+          { label: 'Lot Master',              value: 'sys-setup-lot-master'     },
+          { label: 'Field Actions / Recalls', value: 'sys-setup-field-actions'  },
+        ],
+      },
+      {
+        label: 'Data Protection & Compliance', value: 'sys-setup-grp-compliance', children: [
+          { label: 'PII Redaction Rules',         value: 'sys-setup-pii-redaction' },
+          { label: 'Data Protection Rules',       value: 'sys-setup-data-protect'  },
+          { label: 'Individual Protection Rules', value: 'sys-setup-indiv-protect' },
+          { label: 'Compliance Hardening',        value: 'sys-setup-compliance'    },
+          { label: 'PDF Security',                value: 'sys-setup-pdf-security'  },
+        ],
+      },
+      {
+        label: 'Integrations & Platform', value: 'sys-setup-grp-platform', children: [
           { label: 'Contacts Integration',          value: 'sys-setup-int-contacts'     },
           { label: 'MIR Integration',               value: 'sys-setup-int-mir'          },
           { label: 'CRM Integration Notification',  value: 'sys-setup-int-crm'          },
@@ -91,37 +128,21 @@ export const SYSTEM_NAV = [
           { label: 'EMIR Integration',              value: 'sys-setup-int-emir'         },
           { label: 'Case Import',                   value: 'sys-setup-int-case-import'  },
           { label: 'Transmission Setup',            value: 'sys-setup-int-transmission' },
+          { label: 'Developer API Clients',         value: 'sys-setup-developer-api'    },
+          { label: 'Email Accounts',                value: 'sys-setup-email-accounts'   },
+          { label: 'AI Configuration',              value: 'sys-setup-ai-config'        },
         ],
       },
-      { label: 'Customize Forms',             value: 'sys-setup-customize-forms'},
-      { label: 'Workflow Setup',              value: 'sys-setup-workflow'       },
-      { label: 'Workflow Engine',             value: 'sys-setup-workflow-engine'},
-      { label: 'AI Configuration',            value: 'sys-setup-ai-config'      },
-      { label: 'Developer API Clients',       value: 'sys-setup-developer-api'  },
-      { label: 'Email Accounts',              value: 'sys-setup-email-accounts' },
+      {
+        label: 'System Reference', value: 'sys-setup-grp-system', children: [
+          { label: 'Feature Flags',           value: 'sys-setup-feature-flags' },
+          { label: 'Table Names Definitions', value: 'sys-setup-table-names'   },
+          { label: 'Language Mapping',        value: 'sys-setup-lang-mapping'  },
+        ],
+      },
       // Picklist Definitions / Field Configuration / Case Form Definition retired —
       // folded into Tables > General (Picklists Table → Manage Schema) and
       // System > Setup > Customize Forms (⚙ More + Add Field per section).
-      { label: 'Change Approvals',            value: 'sys-setup-change-approvals'},
-      { label: 'Feature Flags',               value: 'sys-setup-feature-flags'  },
-      { label: 'Smart Field Rules',           value: 'sys-setup-smart-fields'   },
-      { label: 'Validation Rules',            value: 'sys-setup-validation'     },
-      { label: 'Grid Section Templates',      value: 'sys-setup-grid-templates' },
-      { label: 'Case Actions (Templates/Macros)', value: 'sys-setup-case-actions' },
-      { label: 'Compliance Hardening',        value: 'sys-setup-compliance'     },
-      // Sprint 2 Week 1 — PV operational depth
-      { label: 'Document Types',              value: 'sys-setup-document-types' },
-      { label: 'Complaint Codes',             value: 'sys-setup-complaint-codes'},
-      { label: 'Lot Master',                  value: 'sys-setup-lot-master'     },
-      { label: 'Field Actions / Recalls',     value: 'sys-setup-field-actions'  },
-      { label: 'CAPA Workflow',               value: 'sys-setup-capa'           },
-      { label: 'PII Redaction Rules',         value: 'sys-setup-pii-redaction'  },
-      { label: 'Data Protection Rules',       value: 'sys-setup-data-protect'   },
-      { label: 'Individual Protection Rules', value: 'sys-setup-indiv-protect'  },
-      { label: 'PDF Security',                value: 'sys-setup-pdf-security'   },
-      { label: 'Table Names Definitions',     value: 'sys-setup-table-names'    },
-      { label: 'Language Mapping',            value: 'sys-setup-lang-mapping'   },
-      { label: 'Case Hyperlinks',             value: 'sys-setup-case-hyperlinks'},
     ],
   },
   {
@@ -156,6 +177,7 @@ export const SYSTEM_NAV = [
     label: 'UAT & QA', value: 'sys-uat-qa', children: [
       { label: 'Bug Reports',      value: 'sys-uat-bugs'     },
       { label: 'Feature Requests', value: 'sys-uat-features' },
+      { label: 'Regression Testing', value: 'sys-uat-regression' },
     ],
   },
   {

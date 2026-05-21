@@ -49,7 +49,7 @@ function FieldLocksPane() {
     const d = await httpFetch('/api/admin/field-locks', { headers: H }).then(r => r.json())
     setItems(d.locks || [])
   }, [H])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   async function save() {
     if (!edit?.section_name || !edit?.field_name || !edit?.status) {

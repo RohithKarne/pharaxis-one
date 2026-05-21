@@ -26,7 +26,7 @@ export function AdminTenantProvider({ token, children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!token) { setLoading(false); return }
+    if (!token) return
     const H = { Authorization: `Bearer ${token}` }
     httpFetch('/api/admin/users/orgs', { headers: H })
       .then(r => r.json())
@@ -38,22 +38,23 @@ export function AdminTenantProvider({ token, children }) {
         if (!isValid && list.length) {
           const fallback = String(list[0].id)
           setTenantIdState(fallback)
-          try { localStorage.setItem(KEY, fallback) } catch {}
+          try { localStorage.setItem(KEY, fallback) } catch { /* localStorage unavailable */ }
         }
       })
       .catch(() => setTenants([]))
       .finally(() => setLoading(false))
-  }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tenantId, token])
 
   const setTenantId = useCallback((id) => {
     setTenantIdState(String(id))
-    try { localStorage.setItem(KEY, String(id)) } catch {}
+    try { localStorage.setItem(KEY, String(id)) } catch { /* localStorage unavailable */ }
   }, [])
 
-  const value = useMemo(() => ({ tenantId, tenants, setTenantId, loading }), [tenantId, tenants, setTenantId, loading])
+  const value = useMemo(() => ({ tenantId, tenants, setTenantId, loading: token ? loading : false }), [tenantId, tenants, setTenantId, loading, token])
   return <AdminTenantCtx.Provider value={value}>{children}</AdminTenantCtx.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAdminTenant() {
   return useContext(AdminTenantCtx)
 }

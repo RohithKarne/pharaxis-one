@@ -9,7 +9,7 @@ import { httpFetch } from '../../../shared/api/httpFetch.js'
 const INTEGRATION_SECTIONS = ['mir-int', 'crm-int', 'content-int', 'emir-int', 'case-import']
 const INTEGRATION_TYPES = ['mir', 'crm', 'content', 'emir', 'case_import']
 
-export default function AdminIntegrationSection({ contentSection, H, flash }) {
+export default function AdminIntegrationSection({ contentSection, H }) {
   const [integrationConfig, setIntegrationConfig] = useState({})
   const [integrationStatus, setIntegrationStatus] = useState({})
 

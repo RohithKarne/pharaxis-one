@@ -12,7 +12,7 @@
  * CSS namespace: ma-help-hint-
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { httpFetch } from '../api/httpFetch.js'
 

@@ -8,7 +8,8 @@ export default function CausalityMatrix({ caseId, headers }) {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ company: 'possible', reporter: 'possible', narrative: '' })
   async function load() { const res = await httpFetch(`/api/cases/${caseId}/causality`, { headers }); setData(await res.json()) }
-  useEffect(() => { if (caseId) load() }, [caseId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
+  useEffect(() => { if (caseId) load() }, [caseId])
   async function save() {
     if (!editing) return
     for (const assessor of ['company', 'reporter']) {

@@ -17,6 +17,7 @@ export function IntegrationSectionHeader({ title }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useIntegrationHelpers(config, setConfig) {
   function renderConfigField(field, label, placeholder, helpText) {
     return (

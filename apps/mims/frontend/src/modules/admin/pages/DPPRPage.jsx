@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -32,9 +32,9 @@ function fmtDate(dt) {
   return new Date(dt).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
 }
 
-export default function DPPRPage() {
+export default function DPPRPage({ embedded = false } = {}) {
   const { token, user } = useAuth()
-  const H = { Authorization: `Bearer ${token}` }
+  const H = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const isAdmin = isAdminUser(user)
 
   const [tab, setTab]               = useState('rules')
@@ -59,8 +59,8 @@ export default function DPPRPage() {
     try {
       const data = await httpFetch('/api/admin/dppr/domains', { headers: H }).then(r => r.json())
       setDomains(data.domains || [])
-    } catch (_) {}
-  }, [token])
+    } catch { /* silent on optional domain bootstrap */ }
+  }, [H])
 
   const fetchRules = useCallback(async (p = page) => {
     setLoading(true)
@@ -70,19 +70,19 @@ export default function DPPRPage() {
       setTotal(data.total || 0)
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }, [token, page])
+  }, [H, page])
 
   const fetchLog = useCallback(async (p = logPage) => {
     try {
       const data = await httpFetch(`/api/admin/dppr/execution-log?page=${p}&limit=${LIMIT}`, { headers: H }).then(r => r.json())
       setExecLog(data.logs || [])
       setLogTotal(data.total || 0)
-    } catch (_) {}
-  }, [token, logPage])
+    } catch { /* keep current list until next refresh */ }
+  }, [H, logPage])
 
   useEffect(() => { fetchDomains() }, [fetchDomains])
-  useEffect(() => { fetchRules(page) }, [page])
-  useEffect(() => { if (tab === 'log') fetchLog(logPage) }, [tab, logPage])
+  useEffect(() => { fetchRules(page) }, [fetchRules, page])
+  useEffect(() => { if (tab === 'log') fetchLog(logPage) }, [fetchLog, logPage, tab])
 
   function openAdd() {
     setForm(BLANK_RULE)
@@ -126,7 +126,7 @@ export default function DPPRPage() {
     try {
       await httpFetch(`/api/admin/dppr/${rule.id}/toggle`, { method: 'PATCH', headers: H })
       fetchRules(page)
-    } catch (_) {}
+    } catch { /* keep current rule list until next refresh */ }
   }
 
   async function deleteRule(rule) {
@@ -155,8 +155,7 @@ export default function DPPRPage() {
   const deleteRules   = rules.filter(r => r.action === 'Delete' && r.is_active)
   const anonRules     = rules.filter(r => r.action === 'Anonymize' && r.is_active)
 
-  return (
-    <MIMSLayout showStatStrip={false}>
+  const content = (
     <div className="dp-page">
       {/* Header */}
       <div className="dp-header">
@@ -438,6 +437,8 @@ export default function DPPRPage() {
         </div>
       )}
     </div>
-    </MIMSLayout>
   )
+
+  if (embedded) return content
+  return <MIMSLayout showStatStrip={false}>{content}</MIMSLayout>
 }

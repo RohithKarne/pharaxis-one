@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
@@ -7,7 +7,10 @@ import { VersionHistoryModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
-  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const authHeaders = useMemo(
+    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
+    [token]
+  )
   const isEdit = !!template?.id
   const [form, setForm] = useState({
     type: template?.type || 'Response',
@@ -26,7 +29,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
   const [caseSearching, setCaseSearching] = useState(false)
 
   useEffect(() => {
-    if (caseSearch.trim().length < 2) { setCaseResults([]); return }
+    if (caseSearch.trim().length < 2) return
     const timer = setTimeout(async () => {
       setCaseSearching(true)
       try {
@@ -36,7 +39,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
       setCaseSearching(false)
     }, 300)
     return () => clearTimeout(timer)
-  }, [caseSearch]) // eslint-disable-line
+  }, [authHeaders, caseSearch])
 
   async function handleSave() {
     if (!form.name.trim()) return toast.warn('Template name is required.')
@@ -188,7 +191,10 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
 }
 
 export default function TemplatesSection({ token }) {
-  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const authHeaders = useMemo(
+    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
+    [token]
+  )
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({ type: '', status: '', folder_id: '' })
@@ -196,25 +202,31 @@ export default function TemplatesSection({ token }) {
   const [showDrawer, setShowDrawer] = useState(false)
   const [editTemplate, setEditTemplate] = useState(null)
   const [historyTemplate, setHistoryTemplate] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     httpFetch('/api/cm/folders', { headers: authHeaders })
       .then(r => r.json())
       .then(d => setFolders(d.folders || []))
       .catch(() => {})
-  }, [token]) // eslint-disable-line
+  }, [authHeaders])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)))
-      const res = await httpFetch(`/api/cm/templates?${params}`, { headers: authHeaders })
-      if (res.ok) setTemplates((await res.json()).templates || [])
-    } catch { /* silent */ }
-    setLoading(false)
-  }, [token, filters]) // eslint-disable-line
-
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)))
+        const res = await httpFetch(`/api/cm/templates?${params}`, { headers: authHeaders })
+        if (!cancelled && res.ok) setTemplates((await res.json()).templates || [])
+      } catch {
+        /* silent */
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [authHeaders, filters, refreshKey])
 
   async function toggleStatus(t) {
     const newStatus = t.status === 'Active' ? 'Inactive' : 'Active'
@@ -222,7 +234,7 @@ export default function TemplatesSection({ token }) {
       const res = await httpFetch(`/api/cm/templates/${t.id}/status`, {
         method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: newStatus })
       })
-      if (res.ok) load()
+      if (res.ok) setRefreshKey(key => key + 1)
       else { const d = await res.json(); toast.error(d.error || 'Failed to update status.') }
     } catch { toast.error('Network error.') }
   }
@@ -251,7 +263,7 @@ export default function TemplatesSection({ token }) {
           <option value="">All Folders</option>
           {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
         </select>
-        <button className="cm-btn cm-btn-secondary" onClick={load}>Filter</button>
+        <button className="cm-btn cm-btn-secondary" onClick={() => setRefreshKey(key => key + 1)}>Filter</button>
       </div>
       {loading ? (
         <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading templates…</p>
@@ -294,7 +306,7 @@ export default function TemplatesSection({ token }) {
         </table>
       )}
       {showDrawer && (
-        <TemplateDrawer template={editTemplate} token={token} folders={folders} onClose={() => { setShowDrawer(false); setEditTemplate(null) }} onSaved={load} />
+        <TemplateDrawer template={editTemplate} token={token} folders={folders} onClose={() => { setShowDrawer(false); setEditTemplate(null) }} onSaved={() => setRefreshKey(key => key + 1)} />
       )}
       {historyTemplate && (
         <VersionHistoryModal entityType="template" entityId={historyTemplate.id} entityName={historyTemplate.name} token={token} onClose={() => setHistoryTemplate(null)} />

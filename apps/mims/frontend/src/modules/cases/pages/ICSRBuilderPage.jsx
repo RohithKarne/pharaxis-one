@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { useAuth } from '../../../shared/context/AuthContext'
@@ -11,7 +11,10 @@ export default function ICSRBuilderPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { token } = useAuth()
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
   const [active, setActive] = useState(0)
   const [data, setData] = useState(null)
   const [xml, setXml] = useState('')
@@ -27,7 +30,15 @@ export default function ICSRBuilderPage() {
     const res = await httpFetch(`/api/admin/icsr/${id}`, { headers })
     setData(await res.json())
   }
-  useEffect(() => { load() }, [id])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const res = await httpFetch(`/api/admin/icsr/${id}`, { headers })
+      const nextData = await res.json()
+      if (!cancelled) setData(nextData)
+    })()
+    return () => { cancelled = true }
+  }, [id, headers])
 
   async function previewXml() {
     const [rawRes, redRes] = await Promise.all([

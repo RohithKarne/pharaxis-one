@@ -44,8 +44,10 @@ export function FeatureFlagsProvider({ children }) {
   return <Ctx.Provider value={{ flags, ready, refresh }}>{children}</Ctx.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useFeatureFlags() { return useContext(Ctx) }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useFeatureFlag(key) {
   const { flags } = useContext(Ctx)
   return !!flags?.[key]

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { httpFetch } from '../../api/httpFetch.js'
 
 export default function MedDRACoder({ caseId, headers }) {
@@ -8,21 +8,38 @@ export default function MedDRACoder({ caseId, headers }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [message, setMessage] = useState('')
-  async function load() {
+  const load = useCallback(async () => {
     const res = await httpFetch(`/api/cases/${caseId}/meddra`, { headers })
     const data = await res.json()
     setEvents(data.events || [])
     setCodes(data.codes || [])
     setSelected((data.events || [])[0] || null)
-  }
-  useEffect(() => { if (caseId) load() }, [caseId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [caseId, headers])
   useEffect(() => {
-    if (!query || query.length < 3) { setResults([]); return }
+    if (!caseId) return
+    let cancelled = false
+    ;(async () => {
+      const res = await httpFetch(`/api/cases/${caseId}/meddra`, { headers })
+      const data = await res.json()
+      if (cancelled) return
+      setEvents(data.events || [])
+      setCodes(data.codes || [])
+      setSelected((data.events || [])[0] || null)
+    })()
+    return () => { cancelled = true }
+  }, [caseId, headers])
+  useEffect(() => {
+    if (!query || query.length < 3) return
+    let cancelled = false
     const t = setTimeout(async () => {
       const res = await httpFetch(`/api/meddra/search?q=${encodeURIComponent(query)}&level=PT`, { headers })
-      const data = await res.json(); setResults(data.results || [])
+      const data = await res.json()
+      if (!cancelled) setResults(data.results || [])
     }, 200)
-    return () => clearTimeout(t)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
   }, [query, headers])
   async function approve(term) {
     if (!selected || !term) return
@@ -34,7 +51,7 @@ export default function MedDRACoder({ caseId, headers }) {
     <aside>{events.map(e => <button key={e.id} type="button" className={selected?.id === e.id ? 'active' : ''} onClick={() => { setSelected(e); setQuery(e.event_description || '') }}>{e.event_description || `Event #${e.id}`}</button>)}</aside>
     <main>
       <h3>MedDRA Coding</h3>
-      <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Type 3+ chars to search PT terms" />
+      <input value={query} onChange={e => { const next = e.target.value; setQuery(next); if (!next || next.length < 3) setResults([]) }} placeholder="Type 3+ chars to search PT terms" />
       <div className="cf-meddra-results">{results.map(r => <button key={r.id} type="button" onClick={() => approve(r)}><strong>{r.term}</strong><span>{r.code} · {r.level}</span></button>)}</div>
       {message && <div className="cf-inline-note">{message}</div>}
       <h4>Approved Coding</h4>

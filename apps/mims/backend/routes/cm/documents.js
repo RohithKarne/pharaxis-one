@@ -9,7 +9,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const pool = require('../../database/db');
-const { authenticate, requireRole } = require('../../middleware/auth');
+const { authenticate, requireRole, requireCapability } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
 const bcrypt = require('bcrypt');
 const { logger } = require('../../services/logger');
@@ -739,7 +739,7 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
 });
 
 // POST /api/cm/documents/:id/approve — approve (requires password + reason)
-router.post('/documents/:id/approve', authenticate, async (req, res) => {
+router.post('/documents/:id/approve', authenticate, requireCapability('content.approve'), async (req, res) => {
   try {
     const { id } = req.params;
     const { password, reason } = req.body;
@@ -771,7 +771,7 @@ router.post('/documents/:id/approve', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents/:id/publish — publish (requires password + reason, auto-archive previous)
-router.post('/documents/:id/publish', authenticate, async (req, res) => {
+router.post('/documents/:id/publish', authenticate, requireCapability('content.publish'), async (req, res) => {
   try {
     const { id } = req.params;
     const { password, reason } = req.body;
@@ -845,7 +845,7 @@ router.post('/documents/:id/publish', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/documents/:id/archive — manually archive
-router.post('/documents/:id/archive', authenticate, async (req, res) => {
+router.post('/documents/:id/archive', authenticate, requireCapability('content.publish'), async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;

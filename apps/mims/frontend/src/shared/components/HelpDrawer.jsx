@@ -24,13 +24,10 @@ function useToken() {
       const t = localStorage.getItem(k)
       if (t) return t
     }
-  } catch (_) {}
+  } catch {
+    /* localStorage unavailable */
+  }
   return null
-}
-
-function stripHtml(html) {
-  if (!html) return ''
-  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 // ── Single Article accordion item ────────────────────────────────────────────
@@ -118,7 +115,7 @@ export default function HelpDrawer({ open, onClose }) {
         })
         const data = await res.json()
         setSearchResults(data.articles || [])
-      } catch (_) {
+      } catch {
         setSearchResults([])
       } finally {
         setSearchLoading(false)

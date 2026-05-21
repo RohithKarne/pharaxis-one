@@ -1,5 +1,5 @@
 import toast from '../../../shared/utils/toast'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -7,7 +7,7 @@ import { httpFetch } from '../../../shared/api/httpFetch.js'
 const RELATION_TYPES = ['Supports', 'Supersedes', 'Translated From', 'Referenced By']
 
 export function AssociatedDocsPanel({ docId, token }) {
-  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const H = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token])
   const [relations, setRelations] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -18,16 +18,30 @@ export function AssociatedDocsPanel({ docId, token }) {
   const [adding, setAdding] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
 
-  const load = useCallback(async () => {
+  async function refreshRelations() {
     setLoading(true)
     try {
       const res = await httpFetch(`/api/cm/documents/${docId}/relations`, { headers: H })
       if (res.ok) setRelations((await res.json()).relations || [])
     } catch { /* silent */ }
     setLoading(false)
-  }, [docId, token]) // eslint-disable-line
+  }
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const res = await httpFetch(`/api/cm/documents/${docId}/relations`, { headers: H })
+        if (!cancelled && res.ok) setRelations((await res.json()).relations || [])
+      } catch {
+        /* silent */
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [docId, H])
 
   async function doSearch(q) {
     setSearch(q)
@@ -52,7 +66,7 @@ export function AssociatedDocsPanel({ docId, token }) {
         method: 'POST', headers: H,
         body: JSON.stringify({ related_doc_id: selectedDoc.id, relation_type: relationType }),
       })
-      if (res.ok) { setShowSearch(false); setSelectedDoc(null); setSearch(''); setSearchResults([]); load() }
+      if (res.ok) { setShowSearch(false); setSelectedDoc(null); setSearch(''); setSearchResults([]); refreshRelations() }
       else { const d = await res.json(); toast.error(d.error || 'Failed to link.') }
     } catch { toast.error('Network error.') }
     setAdding(false)
@@ -62,7 +76,7 @@ export function AssociatedDocsPanel({ docId, token }) {
     if (!await confirm('Remove this linked document?')) return
     try {
       await httpFetch(`/api/cm/documents/${docId}/relations/${relId}`, { method: 'DELETE', headers: H })
-      load()
+      refreshRelations()
     } catch { toast.error('Network error.') }
   }
 
@@ -157,7 +171,7 @@ export function AssociatedDocsPanel({ docId, token }) {
 }
 
 export function VersionDiffPanel({ docId, token }) {
-  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const H = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token])
   const [versions, setVersions] = useState([])
   const [loading, setLoading] = useState(true)
   const [v1, setV1] = useState('')
@@ -167,13 +181,21 @@ export function VersionDiffPanel({ docId, token }) {
   const [diffError, setDiffError] = useState('')
 
   useEffect(() => {
-    setLoading(true)
-    httpFetch(`/api/cm/documents/${docId}/versions?limit=20`, { headers: H })
-      .then(r => r.ok ? r.json() : { versions: [] })
-      .then(d => setVersions(d.versions || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [docId]) // eslint-disable-line
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const res = await httpFetch(`/api/cm/documents/${docId}/versions?limit=20`, { headers: H })
+        const data = res.ok ? await res.json() : { versions: [] }
+        if (!cancelled) setVersions(data.versions || [])
+      } catch {
+        if (!cancelled) setVersions([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [docId, H])
 
   async function fetchDiff() {
     if (!v1 || !v2) return
@@ -245,7 +267,7 @@ export function VersionDiffPanel({ docId, token }) {
 }
 
 export function VersionAlertsPanel({ docId, token }) {
-  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const H = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token])
   const [config, setConfig] = useState({ alert_days: [], alert_email_account_id: '' })
   const [subscribers, setSubscribers] = useState([])
   const [emailAccounts, setEmailAccounts] = useState([])
@@ -256,7 +278,7 @@ export function VersionAlertsPanel({ docId, token }) {
   const [addingUser, setAddingUser] = useState(false)
   const [selectedUser, setSelectedUser] = useState('')
 
-  const load = useCallback(async () => {
+  async function refreshAlertData() {
     setLoading(true)
     try {
       const [cfgRes, emailRes, usersRes] = await Promise.all([
@@ -273,9 +295,35 @@ export function VersionAlertsPanel({ docId, token }) {
       if (usersRes.ok) setUsers(await usersRes.json())
     } catch { /* silent */ }
     setLoading(false)
-  }, [docId, token]) // eslint-disable-line
+  }
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const [cfgRes, emailRes, usersRes] = await Promise.all([
+          httpFetch(`/api/cm/documents/${docId}/alert-config`, { headers: H }),
+          httpFetch('/api/admin/email-accounts', { headers: H }),
+          httpFetch('/api/users', { headers: H }),
+        ])
+        if (cancelled) return
+        if (cfgRes.ok) {
+          const d = await cfgRes.json()
+          if (cancelled) return
+          setConfig({ alert_days: d.alert_days || [], alert_email_account_id: d.alert_email_account_id || '' })
+          setSubscribers(d.subscribers || [])
+        }
+        if (emailRes.ok && !cancelled) setEmailAccounts((await emailRes.json()).accounts || [])
+        if (usersRes.ok && !cancelled) setUsers(await usersRes.json())
+      } catch {
+        /* silent */
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [docId, H])
 
   function addDay() {
     const d = Number(newDay)
@@ -308,7 +356,7 @@ export function VersionAlertsPanel({ docId, token }) {
       const res = await httpFetch(`/api/cm/documents/${docId}/alert-subs`, {
         method: 'POST', headers: H, body: JSON.stringify({ user_id: Number(selectedUser) }),
       })
-      if (res.ok) { setSelectedUser(''); load() }
+      if (res.ok) { setSelectedUser(''); refreshAlertData() }
       else { const d = await res.json(); toast.error(d.error || 'Failed.') }
     } catch { toast.error('Network error.') }
     setAddingUser(false)
@@ -317,7 +365,7 @@ export function VersionAlertsPanel({ docId, token }) {
   async function removeSub(subId) {
     try {
       await httpFetch(`/api/cm/documents/${docId}/alert-subs/${subId}`, { method: 'DELETE', headers: H })
-      load()
+      refreshAlertData()
     } catch { toast.error('Network error.') }
   }
 

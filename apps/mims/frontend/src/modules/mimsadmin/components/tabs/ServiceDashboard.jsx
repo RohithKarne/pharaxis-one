@@ -36,7 +36,7 @@ export default function ServiceDashboard() {
 
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true)

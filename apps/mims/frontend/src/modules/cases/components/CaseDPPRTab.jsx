@@ -46,7 +46,7 @@ export default function CaseDPPRTab({ id, headers }) {
         forms[o.domain] = { action: o.action, retention_days: o.retention_days, override_reason: o.override_reason || '' }
       })
       setDpprForms(forms)
-    } catch {}
+    } catch { /* keep current DPPR state until next refresh */ }
     finally { setDpprLoading(false) }
   }
 
@@ -74,7 +74,7 @@ export default function CaseDPPRTab({ id, headers }) {
       await httpFetch(`${API}/admin/dppr/cases/${id}/overrides/${domain}`, { method: 'DELETE', headers })
       setDpprMsg(p => ({ ...p, [domain]: 'Override removed.' }))
       loadDpprOverrides()
-    } catch {}
+    } catch { /* ignore delete failure; user can retry */ }
   }
 
   return (

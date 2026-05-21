@@ -147,6 +147,32 @@ function requireRole(...roles) {
 }
 
 /**
+ * requireCapability(privilegeKey) — restrict a route to users whose security
+ * group grants the given capability (feature.action, e.g. 'case.close').
+ * Superadmin bypasses; falls back to the privilege's default_allowed_roles.
+ * Builds on the existing access_* framework (accessConfigurationService).
+ */
+function requireCapability(privilegeKey) {
+  return async (req, res, next) => {
+    try {
+      // Lazy require to avoid a circular dependency (service → db → middleware).
+      const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
+      const allowed = await userHasActivityPrivilege(req.user, privilegeKey);
+      if (!allowed) {
+        return res.status(403).json({
+          error: 'You do not have permission to perform this action.',
+          error_code: 'CAPABILITY_FORBIDDEN',
+          should_logout: false,
+        });
+      }
+      next();
+    } catch (_) {
+      return res.status(500).json({ error: 'Permission check failed.', error_code: 'CAPABILITY_CHECK_ERROR' });
+    }
+  };
+}
+
+/**
  * requireOrg — blocks requests where orgId is null (non-platform-admin must have an active org)
  * Global platform admins remain exempt because they operate without org scoping.
  */
@@ -182,4 +208,4 @@ async function requireAccessNotExpired(req, res, next) {
   }
 }
 
-module.exports = { authenticate, requireRole, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate };
+module.exports = { authenticate, requireRole, requireCapability, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate };

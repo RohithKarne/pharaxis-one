@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { hasGlobalAdminScope, isAdminUser as isAdminRole } from '../../../shared/utils/adminScope.js'
@@ -21,32 +21,26 @@ const MODULE_LOGIN_CONFIG = {
   },
   admin: {
     moduleKey: 'admin_console',
-    destination: '/mims-admin?standalone=1',
+    destination: '/mims-admin',
     target: 'admin',
     title: 'Administration Console',
     message: 'Use this admin login only if your account has MIMS Admin access.',
   },
   content: {
     moduleKey: 'content_mgmt',
-    destination: '/content?standalone=1',
+    destination: '/content',
     target: 'content',
     title: 'Content Management Console',
     message: 'Use this CM login only if your account has admin access to Content Management.',
   },
   reports: {
     moduleKey: 'reports',
-    destination: '/reports?standalone=1',
+    destination: '/reports',
     target: 'reports',
     title: 'Reports Console',
     message: 'Use this Reports login only if your account has admin access to Reports.',
   },
 }
-
-const LOGIN_SWITCHES = [
-  { key: 'admin', label: 'Admin', to: '/mims-admin/login' },
-  { key: 'content', label: 'CM', to: '/content/login' },
-  { key: 'reports', label: 'Reports', to: '/reports/login' },
-]
 
 const LOGIN_PROGRESS_STEPS = [
   { key: 'identify', label: 'Identify' },
@@ -480,19 +474,11 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
         <div className="login-card-header">
           <div className="login-brand-row">
             <div className="app-name">MIMS</div>
-            <div className="login-mode-switches">
-              {activeMode !== 'app' && (
-                <Link className="login-mode-switch" to="/login">MIMS App</Link>
-              )}
-              {LOGIN_SWITCHES.filter(item => item.key !== activeMode).map(item => (
-                <Link key={item.key} className="login-mode-switch" to={item.to}>{item.label}</Link>
-              ))}
-            </div>
           </div>
           <div className="app-tagline">
             {modeConfig.title}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+          <div className="login-status-row">
             <span>{today}</span>
             <span style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ width: 8, height: 8, borderRadius: 999, background: '#1f9d55', marginRight: 6 }} />

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -19,7 +19,10 @@ function formatDateTime(value) {
 export default function CaseQueryPage() {
   const navigate = useNavigate()
   const { token } = useAuth()
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   const [rows, setRows] = useState([])
   const [total, setTotal] = useState(0)
@@ -69,7 +72,7 @@ export default function CaseQueryPage() {
     } finally {
       setLoading(false)
     }
-  }, [filters, token, page, pageSize, sortBy, sortDir])
+  }, [filters, headers, page, pageSize, sortBy, sortDir])
 
   useEffect(() => { loadRows() }, [loadRows])
   useEffect(() => { setPage(1) }, [filters, pageSize, sortBy, sortDir])

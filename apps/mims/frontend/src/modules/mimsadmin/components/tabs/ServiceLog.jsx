@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
 import { fmtDateIST } from '../../../admin/components/AdminShared'
+import ResponseErrorLogPage from '../../../responselog/pages/ResponseErrorLogPage'
+import TransmissionErrorLogPage from '../../../transmissions/pages/TransmissionErrorLogPage'
 
 const STATUS_COLORS = {
   success: { bg: '#e6f4ee', color: '#007a5a', label: 'Success' },
@@ -9,7 +11,7 @@ const STATUS_COLORS = {
   warning: { bg: '#fdf3d0', color: '#b8860b', label: 'Warning' },
 }
 
-export default function ServiceLog() {
+function ServiceLogTable() {
   const { token } = useAuth()
 
   const [logs,        setLogs]        = useState([])
@@ -21,11 +23,12 @@ export default function ServiceLog() {
   const [totalPages,  setTotalPages]  = useState(1)
   const [loading,     setLoading]     = useState(false)
 
-  const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const H = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
-  useEffect(() => { load() }, [])
-
-  async function load(overrides = {}) {
+  const load = useCallback(async (overrides = {}) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -44,7 +47,9 @@ export default function ServiceLog() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [H, filter, page, pageSize])
+
+  useEffect(() => { load() }, [load])
 
   function handleFilterChange(patch) {
     setFilter(prev => ({ ...prev, ...patch }))
@@ -204,4 +209,10 @@ export default function ServiceLog() {
       )}
     </div>
   )
+}
+
+export default function ServiceLog({ selectedItem = '' }) {
+  if (selectedItem === 'response-error-log') return <ResponseErrorLogPage embedded />
+  if (selectedItem === 'transmission-error-log') return <TransmissionErrorLogPage embedded />
+  return <ServiceLogTable />
 }

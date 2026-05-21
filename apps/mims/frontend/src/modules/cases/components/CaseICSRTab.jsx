@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { httpFetch } from '../../../shared/api/httpFetch'
 import PvSignalPanel from './PvSignalPanel'
@@ -8,15 +8,15 @@ export default function CaseICSRTab({ id, headers, setSavedMsg }) {
   const [reports, setReports] = useState([])
   const [busy, setBusy] = useState(false)
 
-  async function load() {
+  const load = useCallback(async () => {
     // B9 — server-side case_id filter avoids pulling the whole tenant's ICSR list.
     const res = await httpFetch(`/api/admin/icsr?case_id=${encodeURIComponent(id)}`, { headers })
     const data = await res.json().catch(() => ({ rows: [] }))
     // Backstop client-side filter in case the API ignores case_id (older deploys).
     setReports((data.rows || []).filter(r => String(r.case_id) === String(id)))
-  }
+  }, [headers, id])
 
-  useEffect(() => { load() }, [id])
+  useEffect(() => { load() }, [load])
 
   async function createReport() {
     setBusy(true)

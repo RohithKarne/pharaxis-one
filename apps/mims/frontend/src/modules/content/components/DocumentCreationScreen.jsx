@@ -65,8 +65,6 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
   const [docCategories, setDocCategories] = useState([])
   const [microsoftProvider, setMicrosoftProvider] = useState(null)
 
-  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-
   useEffect(() => {
     httpFetch('/api/cm/folders', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : { folders: [] })
@@ -91,12 +89,19 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
 
   useEffect(() => {
     if (form.response_doc_type === 'Module') {
-      setModulesLoading(true)
-      httpFetch('/api/cm/modules?status=Published&include_expired=false', { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.json())
-        .then(d => setAvailableModules(d.modules || []))
-        .catch(() => setAvailableModules([]))
-        .finally(() => setModulesLoading(false))
+      let cancelled = false
+      ;(async () => {
+        setModulesLoading(true)
+        try {
+          const d = await httpFetch('/api/cm/modules?status=Published&include_expired=false', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+          if (!cancelled) setAvailableModules(d.modules || [])
+        } catch {
+          if (!cancelled) setAvailableModules([])
+        } finally {
+          if (!cancelled) setModulesLoading(false)
+        }
+      })()
+      return () => { cancelled = true }
     } else {
       setModuleSearch('')
     }

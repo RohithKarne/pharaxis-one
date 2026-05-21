@@ -427,6 +427,7 @@ export function DocumentRelationsModal({ doc, token, onClose }) {
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
+  const visibleSearchResults = search.trim().length < 2 ? [] : searchResults
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -438,7 +439,7 @@ export function DocumentRelationsModal({ doc, token, onClose }) {
   }, [doc.id]) // eslint-disable-line
 
   useEffect(() => {
-    if (search.trim().length < 2) { setSearchResults([]); return }
+    if (search.trim().length < 2) return
     const t = setTimeout(async () => {
       setSearching(true)
       try {
@@ -480,12 +481,12 @@ export function DocumentRelationsModal({ doc, token, onClose }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-muted)' }}>×</button>
         </div>
         <div style={{ marginBottom: 16, position: 'relative' }}>
-          <input className="cm-form-input" placeholder="Search documents to link…" value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%' }} />
-          {(searching || searchResults.length > 0) && (
+          <input className="cm-form-input" placeholder="Search documents to link…" value={search} onChange={e => { const next = e.target.value; setSearch(next); if (next.trim().length < 2) setSearchResults([]) }} style={{ width: '100%' }} />
+          {(searching || visibleSearchResults.length > 0) && (
             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 4, zIndex: 10, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,.1)' }}>
               {searching ? (
                 <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>Searching…</div>
-              ) : searchResults.map(r => (
+              ) : visibleSearchResults.map(r => (
                 <div key={r.id}
                   onClick={() => linkDoc(r)}
                   style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}

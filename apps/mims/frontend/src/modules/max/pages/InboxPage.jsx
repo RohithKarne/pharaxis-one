@@ -5,7 +5,7 @@
  *          F8 (advanced filters), F9 (saved views), F12 (reply thread)
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -142,9 +142,9 @@ export default function InboxPage() {
   const VIEWS_KEY   = `mims_inbox_views_${user?.id || 'guest'}`
   const DENSITY_KEY = `mims_inbox_density_${user?.id || 'guest'}`
 
-  function saveInquiries(data) {
+  const saveInquiries = useCallback((data) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  }
+  }, [STORAGE_KEY])
 
   function updateInquiries(updaterFn) {
     setInquiries(prev => {
@@ -217,43 +217,10 @@ export default function InboxPage() {
     results: [],
   })
 
-  useEffect(() => {
-    try { setSavedViews(JSON.parse(localStorage.getItem(VIEWS_KEY) || '[]')) } catch { /* ignore */ }
-  }, [VIEWS_KEY])
-
-  useEffect(() => {
-    localStorage.setItem(DENSITY_KEY, compactMode ? 'compact' : 'comfort')
-  }, [compactMode, DENSITY_KEY])
-
-  useEffect(() => {
-    // C3 FIX: single load on mount — serves cache first, then silently refreshes in background
-    // without triggering a second loading spinner
-    loadInquiries()
-    loadUsers()
-    loadTemplates()
-  }, [])
-
-  // C3 FIX: background refresh after cache serve — runs once after mount, no loading spinner
-  useEffect(() => {
-    const timer = setTimeout(() => loadInquiries({ force: true, background: true }), 800)
-    return () => clearTimeout(timer)
-  }, [])
-
-  useEffect(() => {
-    const reportFilters = location.state?.reportFilters
-    if (!reportFilters) return
-    setAdvFilters(prev => ({
-      ...prev,
-      assignee: reportFilters.assignee || '',
-      triageState: reportFilters.triageState || '',
-      queueName: reportFilters.queueName || '',
-      firstTouchSla: reportFilters.firstTouchSla || '',
-      responseSla: reportFilters.responseSla || '',
-    }))
-    setPage(1)
-  }, [location.state])
-
-  const AUTH_H = { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('mims_token')}` }
+  const AUTH_H = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('mims_token')}` }),
+    []
+  )
 
   // ── Data loaders ──────────────────────────────────────────────
 
@@ -271,7 +238,7 @@ export default function InboxPage() {
     })
   }
 
-  async function loadInquiries(opts = {}) {
+  const loadInquiries = useCallback(async (opts = {}) => {
     const { force = false, background = false } = opts
     // M3 FIX: guard against writing to 'guest' key before user identity is known
     if (!user?.id) return
@@ -302,11 +269,11 @@ export default function InboxPage() {
       console.error('[Inbox] Failed to load inquiries:', err)
       setLoadError('Failed to refresh inbox. Showing cached data.')
     } finally { setLoading(false) }
-  }
+  }, [AUTH_H, STORAGE_KEY, saveInquiries, tenantFilterOrgId, user?.id])
 
   const USERS_KEY = `mims_inbox_users_${user?.id || 'guest'}`
 
-  async function loadUsers() {
+  const loadUsers = useCallback(async () => {
     // Load from cache immediately so the dropdown is never empty on restart
     const cached = localStorage.getItem(USERS_KEY)
     if (cached) {
@@ -323,14 +290,50 @@ export default function InboxPage() {
         localStorage.setItem(USERS_KEY, JSON.stringify(list))
       }
     } catch { /* silently keep cached list */ }
-  }
+  }, [AUTH_H, USERS_KEY, tenantFilterOrgId])
 
-  async function loadTemplates() {
+  const loadTemplates = useCallback(async () => {
     try {
       const res = await httpFetch('/api/inbox/templates', { headers: AUTH_H })
       if (res.ok) { const d = await res.json(); setTemplates(d.templates || []) }
     } catch { /* ignore */ }
-  }
+  }, [AUTH_H])
+
+  useEffect(() => {
+    try { setSavedViews(JSON.parse(localStorage.getItem(VIEWS_KEY) || '[]')) } catch { /* ignore */ }
+  }, [VIEWS_KEY])
+
+  useEffect(() => {
+    localStorage.setItem(DENSITY_KEY, compactMode ? 'compact' : 'comfort')
+  }, [compactMode, DENSITY_KEY])
+
+  useEffect(() => {
+    // C3 FIX: single load on mount — serves cache first, then silently refreshes in background
+    // without triggering a second loading spinner
+    loadInquiries()
+    loadUsers()
+    loadTemplates()
+  }, [loadInquiries, loadTemplates, loadUsers])
+
+  // C3 FIX: background refresh after cache serve — runs once after mount, no loading spinner
+  useEffect(() => {
+    const timer = setTimeout(() => loadInquiries({ force: true, background: true }), 800)
+    return () => clearTimeout(timer)
+  }, [loadInquiries])
+
+  useEffect(() => {
+    const reportFilters = location.state?.reportFilters
+    if (!reportFilters) return
+    setAdvFilters(prev => ({
+      ...prev,
+      assignee: reportFilters.assignee || '',
+      triageState: reportFilters.triageState || '',
+      queueName: reportFilters.queueName || '',
+      firstTouchSla: reportFilters.firstTouchSla || '',
+      responseSla: reportFilters.responseSla || '',
+    }))
+    setPage(1)
+  }, [location.state])
 
   async function loadAttachments(inquiryId) {
     // H5 FIX: track loading state separately so "Loading…" doesn't show forever on failure
@@ -409,7 +412,7 @@ export default function InboxPage() {
     if (!selectInquiryId || inquiries.length === 0) return
     const target = inquiries.find(item => Number(item.id) === selectInquiryId)
     if (target) selectInquiry(target)
-  }, [location.state, inquiries])
+  }, [location.state, inquiries]) // eslint-disable-line react-hooks/exhaustive-deps -- selectInquiry intentionally hydrates related panels for route-driven selection
 
   useEffect(() => {
     setPage(1)

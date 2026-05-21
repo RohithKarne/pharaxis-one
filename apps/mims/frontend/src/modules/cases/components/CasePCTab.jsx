@@ -60,7 +60,7 @@ export default function CasePCTab({
       const res  = await httpFetch(`${API}/cases/pc/versions/${versionId}/${tabKey}`, { headers })
       const data = await res.json()
       setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
-    } catch {}
+    } catch { /* ignore tab fetch errors */ }
     finally { setPcTabLoading(false) }
   }
 

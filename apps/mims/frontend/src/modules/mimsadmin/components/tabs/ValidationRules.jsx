@@ -43,7 +43,7 @@ function PhaseRequiredPane() {
     const d = await httpFetch('/api/admin/phase-required', { headers: H }).then(r => r.json())
     setRules(d.rules || [])
   }, [H])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
   function showFlash(msg, type='success') { setFlash({ msg, type }); setTimeout(() => setFlash(null), 2500) }
 
   async function save() {

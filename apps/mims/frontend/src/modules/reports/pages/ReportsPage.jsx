@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useState } from 'react'
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
@@ -136,7 +136,10 @@ export default function ReportsPage() {
   const { token, user } = useAuth()
   const standalone = new URLSearchParams(location.search || '').get('standalone') === '1'
   const isManager = isAdminUser(user)
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   const [section, setSection] = useState('overview')
   const [summary, setSummary] = useState({ total_reports: 0, total_dashboards: 0, total_schedules: 0, failed_runs_last_7_days: 0 })
@@ -203,7 +206,7 @@ export default function ReportsPage() {
   const deferredReportSearch = useDeferredValue(reportSearch)
   const deferredDashboardSearch = useDeferredValue(dashboardSearch)
 
-  async function apiJson(url, options = {}) {
+  const apiJson = useCallback(async (url, options = {}) => {
     const response = await httpFetch(url, {
       ...options,
       headers: options.headers || headers,
@@ -213,9 +216,9 @@ export default function ReportsPage() {
       throw new Error(payload.error || 'Request failed.')
     }
     return payload
-  }
+  }, [headers])
 
-  async function loadModuleData() {
+  const loadModuleData = useCallback(async () => {
     if (!token) return
     setLoading(true)
     setError('')
@@ -310,7 +313,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [apiJson, editingScheduleId, isManager, selectedDashboardId, selectedReportId, token])
 
   async function loadHistory() {
     if (!token) return
@@ -328,9 +331,21 @@ export default function ReportsPage() {
     }
   }
 
+  const pushSection = useCallback((nextSection, extraParams = {}) => {
+    const params = new URLSearchParams(location.search || '')
+    params.set('section', nextSection)
+    if (standalone) params.set('standalone', '1')
+    Object.entries(extraParams).forEach(([key, value]) => {
+      if (value) params.set(key, value)
+      else params.delete(key)
+    })
+    navigate({ pathname: '/reports', search: `?${params.toString()}` }, { replace: false })
+    setSection(nextSection)
+  }, [location.search, navigate, standalone])
+
   useEffect(() => {
     loadModuleData()
-  }, [token, isManager])
+  }, [loadModuleData])
 
   useEffect(() => {
     const params = new URLSearchParams(location.search || '')
@@ -344,7 +359,7 @@ export default function ReportsPage() {
     if (!isManager && (section === 'schedules' || section === 'configuration' || section === 'governance')) {
       pushSection('overview')
     }
-  }, [isManager, section])
+  }, [isManager, pushSection, section])
 
   useEffect(() => {
     if (!definitions.length) return
@@ -352,7 +367,10 @@ export default function ReportsPage() {
     const reportKey = params.get('reportKey')
     if (reportKey) {
       const match = definitions.find((item) => item.report_key === reportKey)
-      if (match) setSelectedReportId(match.id)
+      if (match) {
+        setSelectedReportId(match.id)
+        setSection('reports')
+      }
     }
 
     if (location.state?.activeReport) {
@@ -370,20 +388,12 @@ export default function ReportsPage() {
     const dashboardKey = params.get('dashboardKey')
     if (dashboardKey) {
       const match = dashboards.find((item) => item.dashboard_key === dashboardKey)
-      if (match) setSelectedDashboardId(match.id)
+      if (match) {
+        setSelectedDashboardId(match.id)
+        setSection('dashboards')
+      }
     }
   }, [dashboards, location.search])
-
-  function pushSection(nextSection, extraParams = {}) {
-    const params = new URLSearchParams(location.search || '')
-    params.set('section', nextSection)
-    Object.entries(extraParams).forEach(([key, value]) => {
-      if (value) params.set(key, value)
-      else params.delete(key)
-    })
-    navigate({ pathname: '/reports', search: `?${params.toString()}` }, { replace: false })
-    setSection(nextSection)
-  }
 
   function openReportEditor(definition = null) {
     if (definition) {
@@ -434,6 +444,32 @@ export default function ReportsPage() {
 
   const selectedReport = definitions.find((item) => Number(item.id) === Number(selectedReportId)) || null
   const selectedDashboard = dashboards.find((item) => Number(item.id) === Number(selectedDashboardId)) || null
+  const sectionGroups = [
+    {
+      label: 'Operate',
+      items: [
+        { key: 'overview', label: 'Overview' },
+        { key: 'history', label: 'Run History' },
+        ...(isManager ? [{ key: 'schedules', label: 'Schedulers' }] : []),
+      ],
+    },
+    {
+      label: 'Build',
+      items: [
+        { key: 'reports', label: 'Reports' },
+        { key: 'dashboards', label: 'Dashboards' },
+      ],
+    },
+    ...(isManager
+      ? [{
+          label: 'Govern',
+          items: [
+            { key: 'governance', label: 'Governance' },
+            { key: 'configuration', label: 'Configuration' },
+          ],
+        }]
+      : []),
+  ]
 
   function isFavorite(targetType, targetId) {
     return favorites.some((item) => item.target_type === targetType && Number(item.target_id) === Number(targetId))
@@ -1907,43 +1943,43 @@ export default function ReportsPage() {
   }
 
   const content = (
-      <div style={{ display: 'grid', gridTemplateRows: 'auto auto 1fr', height: '100%', overflow: 'hidden' }}>
-        <div style={{ padding: '18px 24px 12px', borderBottom: '1px solid var(--border)', background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 28, lineHeight: 1.1 }}>Reports Workspace</h1>
-              <div style={{ marginTop: 6, fontSize: 14, color: 'var(--text-muted)' }}>
-                Stable Release 1 surface for report library, dashboards, schedulers, run history, and reporting configuration.
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button onClick={() => pushSection('overview')} style={pillButtonStyle(section === 'overview')}>Overview</button>
-              <button onClick={() => pushSection('reports')} style={pillButtonStyle(section === 'reports')}>Reports</button>
-              <button onClick={() => pushSection('dashboards')} style={pillButtonStyle(section === 'dashboards')}>Dashboards</button>
-              {isManager && <button onClick={() => pushSection('schedules')} style={pillButtonStyle(section === 'schedules')}>Schedulers</button>}
-              <button onClick={() => pushSection('history')} style={pillButtonStyle(section === 'history')}>Run History</button>
-              {isManager && <button onClick={() => pushSection('governance')} style={pillButtonStyle(section === 'governance')}>Governance</button>}
-              {isManager && <button onClick={() => pushSection('configuration')} style={pillButtonStyle(section === 'configuration')}>Configuration</button>}
+    <div className="workspace-page workspace-page--reports">
+      <section className="workspace-nav-board">
+        {sectionGroups.map((group) => (
+          <div key={group.label} className="workspace-nav-group">
+            <div className="workspace-nav-group-title">{group.label}</div>
+            <div className="workspace-nav-group-items">
+              {group.items.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`workspace-nav-button ${section === item.key ? 'active' : ''}`}
+                  onClick={() => pushSection(item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
+        ))}
+      </section>
 
-        {error && (
-          <div style={{ margin: '12px 24px 0', padding: '10px 12px', borderRadius: 10, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
-            {error}
-          </div>
-        )}
-
-        <div style={{ padding: 24, overflow: 'auto', background: '#f4f7fb' }}>
-          {section === 'overview' && renderOverview()}
-          {section === 'reports' && renderReportsSection()}
-          {section === 'dashboards' && renderDashboardsSection()}
-          {section === 'schedules' && isManager && renderSchedulesSection()}
-          {section === 'history' && renderHistorySection()}
-          {section === 'governance' && isManager && renderGovernanceSection()}
-          {section === 'configuration' && isManager && renderConfigurationSection()}
+      {error && (
+        <div className="workspace-error-banner">
+          {error}
         </div>
+      )}
+
+      <div className="workspace-content-stage">
+        {section === 'overview' && renderOverview()}
+        {section === 'reports' && renderReportsSection()}
+        {section === 'dashboards' && renderDashboardsSection()}
+        {section === 'schedules' && isManager && renderSchedulesSection()}
+        {section === 'history' && renderHistorySection()}
+        {section === 'governance' && isManager && renderGovernanceSection()}
+        {section === 'configuration' && isManager && renderConfigurationSection()}
       </div>
+    </div>
   )
 
   if (standalone) {

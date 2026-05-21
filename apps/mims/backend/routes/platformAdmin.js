@@ -269,7 +269,6 @@ router.put('/orgs/:id', authenticate, requireRole('admin', 'platform_admin'), as
       two_factor_enabled,
       two_factor_methods,
       two_factor_remember_days,
-      process_explorer_enabled,
     } = req.body;
     const [[existing]] = await pool.execute('SELECT * FROM organisations WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Organisation not found.' });
@@ -296,7 +295,6 @@ router.put('/orgs/:id', authenticate, requireRole('admin', 'platform_admin'), as
       `UPDATE organisations
        SET name = ?, is_active = ?, session_timeout_minutes = ?,
            two_factor_enabled = ?, two_factor_methods = ?, two_factor_remember_days = ?,
-           process_explorer_enabled = ?,
            updated_at = NOW()
        WHERE id = ?`,
       [
@@ -306,15 +304,12 @@ router.put('/orgs/:id', authenticate, requireRole('admin', 'platform_admin'), as
         two_factor_enabled !== undefined ? (two_factor_enabled ? 1 : 0) : existing.two_factor_enabled,
         two_factor_methods ?? existing.two_factor_methods ?? 'email,totp',
         two_factor_remember_days ?? existing.two_factor_remember_days ?? 7,
-        process_explorer_enabled !== undefined
-          ? (process_explorer_enabled ? 1 : 0)
-          : (existing.process_explorer_enabled ?? 0),
         req.params.id,
       ]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'organisation', req.params.id, {
       name, is_active, session_timeout_minutes, two_factor_enabled, two_factor_methods,
-      two_factor_remember_days, process_explorer_enabled,
+      two_factor_remember_days,
     });
     if (existing.is_active && is_active === 0) {
       await emitPlatformAdminAlert('organization_deactivated', {

@@ -7,12 +7,15 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { httpFetch } from '../api/httpFetch.js'
-import { hasGlobalAdminScope, isAdminUser } from '../utils/adminScope.js'
+import { isAdminUser } from '../utils/adminScope.js'
 
-const CASE_MGMT_ROUTES = { 'My Cases': '/cases?tab=my', 'Unassigned Cases': '/cases?tab=unassigned', 'Deleted Cases': '/cases?tab=deleted' }
-const CASE_MGMT_ITEMS  = ['My Cases', 'Unassigned Cases', 'Deleted Cases']
-const COMING_SOON      = ['CDR Log', 'Schedule CDR', 'Non Relevant Emails']
+const CASE_MGMT_ROUTES = {
+  'My Cases': '/cases?tab=my',
+  'Unassigned Cases': '/cases?tab=unassigned',
+  'Deleted Cases': '/cases?tab=deleted',
+  'Response Log': '/response-log',
+}
+const CASE_MGMT_ITEMS  = ['My Cases', 'Unassigned Cases', 'Deleted Cases', 'Response Log']
 
 function NavItem({ to, icon, label, active, disabled, onClick, collapsed }) {
   const cls = `mims-sidenav-item${active ? ' active' : ''}${disabled ? ' disabled' : ''}`
@@ -39,49 +42,27 @@ function NavSection({ title, collapsed }) {
 export default function MIMSNavbar({ collapsed, onToggle }) {
   const navigate  = useNavigate()
   const location  = useLocation()
-  const { hasModuleAccess, hasSystemOption, hasCaseOption, user, token } = useAuth()
+  const { hasModuleAccess, hasCaseOption, user } = useAuth()
 
   const [caseMgmtOpen,  setCaseMgmtOpen]  = useState(false)
-  const [utilitiesOpen, setUtilitiesOpen] = useState(false)
-  const [processExplorerEnabled, setProcessExplorerEnabled] = useState(hasGlobalAdminScope(user))
   const userRole = user?.role
-  const userId = user?.id
-  const userEmail = user?.email
 
   // Close accordions when sidebar collapses
   useEffect(() => {
     if (!collapsed) return
     const frame = requestAnimationFrame(() => {
       setCaseMgmtOpen(false)
-      setUtilitiesOpen(false)
     })
     return () => cancelAnimationFrame(frame)
   }, [collapsed])
 
-  useEffect(() => {
-    let alive = true
-    async function load() {
-      if (!token || !userRole) return
-      if (hasGlobalAdminScope(userRole)) { if (alive) setProcessExplorerEnabled(true); return }
-      try {
-        const res = await httpFetch('/api/admin/process-logs/config', { headers: { Authorization: `Bearer ${token}` } })
-        if (!alive) return
-        setProcessExplorerEnabled(res.ok ? !!(await res.json()).allowed : false)
-      } catch { if (alive) setProcessExplorerEnabled(false) }
-    }
-    load()
-    return () => { alive = false }
-  }, [token, userRole, userId, userEmail])
-
   function isActive(path)  { return location.pathname === path }
-  function isCasesActive() { return location.pathname === '/cases' || location.pathname.startsWith('/cases/') }
-  function isUtilitiesActive() {
-    return ['/session-management', '/process-explorer', '/regression', '/response-log', '/response-error-log', '/case-audit-trail', '/cm-audit-trail', '/transmission-error-log', '/transmission-audit-trail', '/copy-division', '/dppr'].some(p => location.pathname === p)
+  function isCasesActive() {
+    return location.pathname === '/cases' || location.pathname.startsWith('/cases/') || location.pathname === '/response-log'
   }
 
   function canAccess(k)         { return hasModuleAccess(k) }
   function canAccessAny(...ks)  { return ks.some(k => hasModuleAccess(k)) }
-  function canUseSystem(section, option) { return hasSystemOption ? hasSystemOption(section, option) : true }
   function canUseCase(section, option) { return hasCaseOption ? hasCaseOption(section, option) : true }
   const isAdmin = isAdminUser(userRole)
   const canCreateCase = canAccessAny('mims_core', 'case_mgmt') && canUseCase('case_entry_options', 'add_new_case')
@@ -114,7 +95,14 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       {/* Case Management — accordion */}
       <div className={`mims-sidenav-item${isCasesActive() ? ' active' : ''}${!canAccessAny('mims_core', 'case_mgmt') ? ' disabled' : ''}`}
         title={collapsed ? 'Case Management' : undefined}
-        onClick={() => !collapsed && canAccessAny('mims_core', 'case_mgmt') && setCaseMgmtOpen(o => !o)}>
+        onClick={() => {
+          if (!canAccessAny('mims_core', 'case_mgmt')) return
+          if (collapsed) {
+            navigate('/cases?tab=my')
+            return
+          }
+          setCaseMgmtOpen(o => !o)
+        }}>
         <span className="mims-sidenav-icon">📁</span>
         {!collapsed && <span className="mims-sidenav-label">Case Management</span>}
         {!collapsed && canAccessAny('mims_core', 'case_mgmt') && (
@@ -152,82 +140,23 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
 
       {/* Content Management */}
       {(isAdmin && canAccess('content_mgmt')) && (
-        <a
-          href="/mims/content?standalone=1"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mims-sidenav-item"
-          title={collapsed ? 'Content Management' : undefined}
-          style={{ textDecoration: 'none' }}
-        >
-          <span className="mims-sidenav-icon">📄</span>
-          {!collapsed && <span className="mims-sidenav-label">Content Management</span>}
-          {!collapsed && <span className="mims-external-mark">↗</span>}
-        </a>
+        <NavItem collapsed={collapsed} to="/content" icon="📄" label="Content Management"
+          active={isActive('/content')}
+        />
       )}
 
       {/* Reports */}
       {(isAdmin && canAccess('reports')) && (
-        <a
-          href="/mims/reports?standalone=1"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mims-sidenav-item"
-          title={collapsed ? 'Reports' : undefined}
-          style={{ textDecoration: 'none' }}
-        >
-          <span className="mims-sidenav-icon">📈</span>
-          {!collapsed && <span className="mims-sidenav-label">Reports</span>}
-          {!collapsed && <span className="mims-external-mark">↗</span>}
-        </a>
-      )}
-
-      <NavSection collapsed={collapsed} title="Control" />
-
-      <div className={`mims-sidenav-item${isUtilitiesActive() ? ' active' : ''}`}
-        title={collapsed ? 'Control Tools' : undefined}
-        onClick={() => !collapsed && setUtilitiesOpen(o => !o)}>
-        <span className="mims-sidenav-icon">🔧</span>
-        {!collapsed && <span className="mims-sidenav-label">Control Tools</span>}
-        {!collapsed && <span className="mims-sidenav-arrow">{utilitiesOpen ? '▴' : '▾'}</span>}
-      </div>
-      {utilitiesOpen && !collapsed && (
-        <div className="mims-sidenav-sub">
-          {canAccess('mims_core') && <Link to="/session-management" className={`mims-sidenav-sub-item${isActive('/session-management') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Session Management</Link>}
-          {canAccess('mims_core') && <Link to="/response-log" className={`mims-sidenav-sub-item${isActive('/response-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>📋 Response Log</Link>}
-          {isAdmin && canUseSystem('general', 'service_configurations') && <Link to="/response-error-log" className={`mims-sidenav-sub-item${isActive('/response-error-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Response Error Log</Link>}
-          {isAdmin && canUseSystem('general', 'service_configurations') && (processExplorerEnabled
-            ? <Link to="/process-explorer" className={`mims-sidenav-sub-item${isActive('/process-explorer') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Process Explorer</Link>
-            : <div className="mims-sidenav-sub-item coming-soon">Process Explorer <span className="mims-coming-tag">Off</span></div>
-          )}
-          {isAdmin && canUseSystem('general', 'service_configurations') && <Link to="/regression" className={`mims-sidenav-sub-item${isActive('/regression') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>🧪 Regression Testing</Link>}
-          {isAdmin && canUseSystem('general', 'view_data') && <Link to="/case-audit-trail" className={`mims-sidenav-sub-item${isActive('/case-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Case Audit Trail</Link>}
-          {isAdmin && canUseSystem('general', 'view_data') && <Link to="/cm-audit-trail" className={`mims-sidenav-sub-item${isActive('/cm-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>CM Audit Trail</Link>}
-          {isAdmin && canUseSystem('general', 'view_data') && <Link to="/transmission-error-log" className={`mims-sidenav-sub-item${isActive('/transmission-error-log') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Transmission Error Log</Link>}
-          {isAdmin && canUseSystem('general', 'view_data') && <Link to="/transmission-audit-trail" className={`mims-sidenav-sub-item${isActive('/transmission-audit-trail') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Transmission Audit Trail</Link>}
-          {hasGlobalAdminScope(userRole) && canUseSystem('maintenance', 'copy_division') && <Link to="/copy-division" className={`mims-sidenav-sub-item${isActive('/copy-division') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>Copy Division</Link>}
-          {isAdmin && canUseSystem('setup', 'data_protection_rules') && <Link to="/dppr" className={`mims-sidenav-sub-item${isActive('/dppr') ? ' active' : ''}`} onClick={() => setUtilitiesOpen(false)}>🔒 Data Privacy (DPPR)</Link>}
-          <div className="mims-sidenav-sub-divider" />
-          {COMING_SOON.map(item => (
-            <div key={item} className="mims-sidenav-sub-item coming-soon">{item} <span className="mims-coming-tag">Soon</span></div>
-          ))}
-        </div>
+        <NavItem collapsed={collapsed} to="/reports" icon="📈" label="Reports"
+          active={isActive('/reports')}
+        />
       )}
 
       {/* MIMS Admin */}
       {(isAdmin && canAccess('admin_console')) && (
-        <a
-          href="/mims/mims-admin?standalone=1"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mims-sidenav-item"
-          title={collapsed ? 'MIMS Admin' : undefined}
-          style={{ textDecoration: 'none' }}
-        >
-          <span className="mims-sidenav-icon">🛡️</span>
-          {!collapsed && <span className="mims-sidenav-label">MIMS Admin</span>}
-          {!collapsed && <span className="mims-external-mark">↗</span>}
-        </a>
+        <NavItem collapsed={collapsed} to="/mims-admin" icon="🛡️" label="MIMS Admin"
+          active={isActive('/mims-admin')}
+        />
       )}
 
       {/* Spacer */}

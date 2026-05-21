@@ -163,7 +163,6 @@ test.describe('Admin Console — tab navigation', () => {
     { label: 'System → Customize Forms', path: appPath(adminRouteMap.adminEntryRoutes.customizeForms) },
     { label: 'System → MIR Integration', path: appPath(adminRouteMap.adminEntryRoutes.mirIntegration) },
     { label: 'System → View Data', path: appPath(adminRouteMap.adminEntryRoutes.viewData) },
-    { label: 'Process Explorer', path: appPath('/process-explorer') },
   ]
 
   for (const tab of ADMIN_TABS) {
@@ -534,7 +533,6 @@ test.describe('Platform Admin — sidebar navigation', () => {
     'Alerts',
     'Notifications',
     'Copy Division',
-    'Process Explorer',
     'Help Content',
     'Reports',
   ]

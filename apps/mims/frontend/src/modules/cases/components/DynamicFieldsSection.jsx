@@ -388,7 +388,7 @@ export default function DynamicFieldsSection({
                 old_value: pendingReason.oldValue, new_value: pendingReason.newValue, reason,
               }),
             }).catch(() => {})
-          } catch {}
+          } catch { /* best-effort history note */ }
         }}
         field={pendingReason?.field}
         oldValue={pendingReason?.oldValue}

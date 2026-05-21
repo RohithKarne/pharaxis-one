@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext'
 import { httpFetch } from '../api/httpFetch.js'
 
 export default function MIMSHeader({ onBellClick, onHelpClick }) {
-  const { user, token, orgName, orgId, siteName, allOrgs, switchOrg, refreshOrgAccess, logout, getInitials } = useAuth()
+  const { user, token, orgName, orgId, allOrgs, switchOrg, refreshOrgAccess, logout, getInitials } = useAuth()
   const navigate = useNavigate()
 
   const [orgLogoUrl, setOrgLogoUrl] = useState(null)
@@ -134,6 +134,12 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
               </div>
               <div className="mims-dropdown-item" onClick={() => {
                 setUserOpen(false)
+                navigate('/session-management')
+              }}>
+                ⏱ Session Management
+              </div>
+              <div className="mims-dropdown-item" onClick={() => {
+                setUserOpen(false)
                 setPasswordOpen(true)
                 setPasswordMsg({ type: '', text: '' })
               }}>
@@ -175,11 +181,7 @@ export default function MIMSHeader({ onBellClick, onHelpClick }) {
           )}
         </div>
 
-        {/* Primary Site */}
-        <div className="mims-header-meta">
-          <span className="mims-meta-label">Primary Site</span>
-          <span className="mims-meta-value">{siteName || 'Global'}</span>
-        </div>
+        {/* Primary Site removed — site concept retired from the application. */}
 
         <div className="mims-header-divider" />
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader, StatusPill } from './AdminShared'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -19,7 +19,7 @@ function WorkflowDiagram({ states, rules }) {
       const angle = (2 * Math.PI * i) / activeStates.length - Math.PI / 2
       return { ...s, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }
     })
-  }, [activeStates.length]) // eslint-disable-line
+  }, [activeStates])
 
   const nodeMap = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes])
 
@@ -195,40 +195,39 @@ export default function AdminWorkflowPanel({ H, flash }) {
   const [depCheckModal, setDepCheckModal] = useState(null)
   const [depCheckProceedFn, setDepCheckProceedFn] = useState(null)
 
-  useEffect(() => { // eslint-disable-line react-hooks/exhaustive-deps
-    loadWorkflowStates()
-    loadWfActivities()
-    loadWfTriggers()
-  }, [])
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (wfTab === 'rules' || wfTab === 'diagram') loadWfRules()
-  }, [wfTab])
-
-  useEffect(() => { depProceedRef.current = depCheckProceedFn }, [depCheckProceedFn])
-
-  async function loadWorkflowStates() {
+  const loadWorkflowStates = useCallback(async () => {
     try { const d = await httpFetch('/api/admin/workflow-states', { headers: H }).then(r => r.json()); setWorkflowStates(d.states || []) }
     catch { setWorkflowStates([]) }
-  }
+  }, [H])
 
-  async function loadWfRules() {
+  const loadWfRules = useCallback(async () => {
     setWfRulesLoading(true)
     try { const d = await httpFetch('/api/admin/workflow-rules', { headers: H }).then(r => r.json()); setWfRules(d.rules || []) }
     catch { setWfRules([]) } finally { setWfRulesLoading(false) }
-  }
+  }, [H])
 
-  async function loadWfActivities() {
+  const loadWfActivities = useCallback(async () => {
     try { const d = await httpFetch('/api/admin/workflow-activities', { headers: H }).then(r => r.json()); setWfActivities(d.activities || []) }
     catch { /* silent */ }
-  }
+  }, [H])
 
-  async function loadWfTriggers() {
+  const loadWfTriggers = useCallback(async () => {
     setTriggersLoading(true)
     try { const d = await httpFetch('/api/admin/workflow-activity-triggers', { headers: H }).then(r => r.json()); setWfTriggers(d.triggers || []) }
     catch { /* silent */ } finally { setTriggersLoading(false) }
-  }
+  }, [H])
+
+  useEffect(() => {
+    loadWorkflowStates()
+    loadWfActivities()
+    loadWfTriggers()
+  }, [loadWfActivities, loadWfTriggers, loadWorkflowStates])
+
+  useEffect(() => {
+    if (wfTab === 'rules' || wfTab === 'diagram') loadWfRules()
+  }, [loadWfRules, wfTab])
+
+  useEffect(() => { depProceedRef.current = depCheckProceedFn }, [depCheckProceedFn])
 
   async function saveTrigger(e) {
     e.preventDefault()

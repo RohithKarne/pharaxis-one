@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import ReactDOM from 'react-dom'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
 import Dashboard        from './tabs/Dashboard'
-import Organizations    from './tabs/Organizations'
+// import Organizations from './tabs/Organizations' // retired — see TABS note (Division Parameters replaces it)
 import ServiceLog       from './tabs/ServiceLog'
 import SystemActivity   from './tabs/SystemActivity'
 import ServiceDashboard from './tabs/ServiceDashboard'
@@ -15,10 +16,31 @@ import Tables           from './tabs/Tables'
 import System           from './tabs/System'
 import Help             from './tabs/Help'
 import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV } from './configItems'
-import { SYSTEM_NAV_PERMISSION_BY_VALUE } from './groupSecurityConfig'
+// Legacy nav-key permission map retired — admin gating is now capability-based.
+// groupSecurityConfig kept on disk for rollback. (import removed)
 import { AdminTenantProvider, useAdminTenant } from '../utils/AdminTenantContext'
 import HelpHint from '../../../shared/components/HelpHint'
 import { helpKeyFor, helpLabelFor } from '../utils/helpKeys'
+
+function createResolvedAdminAccess(data = {}) {
+  return { resolved: true, unrestricted: false, system_options: null, ...data }
+}
+
+function createUnresolvedAdminAccess() {
+  return { resolved: false, unrestricted: false, system_options: {} }
+}
+
+function findFirstLeafValue(nav, predicate = () => true) {
+  for (const item of nav) {
+    if (item.children?.length) {
+      const child = findFirstLeafValue(item.children, predicate)
+      if (child) return child
+      continue
+    }
+    if (item.value && predicate(item.value)) return item.value
+  }
+  return ''
+}
 
 function AdminTenantPicker() {
   const { tenants, tenantId, setTenantId, loading } = useAdminTenant()
@@ -45,7 +67,8 @@ function AdminTenantPicker() {
 
 const TABS = [
   { key: 'dashboard',         label: 'Dashboard',         component: Dashboard        },
-  { key: 'organizations',     label: 'Organizations',     component: Organizations    },
+  // Organizations retired — replaced by System > Division Parameters (division-only model).
+  // Component file kept for rollback; remove import + file once parity is fully confirmed.
   { key: 'service-log',       label: 'Service Log',       component: ServiceLog       },
   { key: 'system-activity',   label: 'System Activity',   component: SystemActivity   },
   { key: 'service-dashboard', label: 'Service Dashboard', component: ServiceDashboard },
@@ -57,31 +80,54 @@ const TABS = [
   { key: 'help',              label: 'Help',              component: Help             },
 ]
 
-function hasSystemPermission(systemOptions, value) {
-  const mapping = SYSTEM_NAV_PERMISSION_BY_VALUE[value]
-  if (!mapping) return false
-  return Boolean(systemOptions?.[mapping.section]?.[mapping.option])
-}
+const SERVICE_LOG_NAV = [
+  { label: 'Service Log Overview', value: 'service-log-overview' },
+  { label: 'Response Error Log', value: 'response-error-log' },
+  { label: 'Transmission Error Log', value: 'transmission-error-log' },
+]
 
-function hasSystemSectionPermission(systemOptions, section, option) {
-  if (!systemOptions) return false
-  return Boolean(systemOptions?.[section]?.[option])
+const SYSTEM_ACTIVITY_NAV = [
+  { label: 'System Activity Overview', value: 'system-activity-overview' },
+]
+
+// ── Capability-based admin gating (replaces legacy nav-key system_options) ──
+// Coarse map: admin nav value → capability key. Anything UNMAPPED fails OPEN
+// (stays visible) — combined with the unrestricted/unresolved fail-open in
+// effHasCap, this guarantees an admin can never be locked out of the console.
+const SYSTEM_VALUE_CAP = {
+  'sys-division-params': 'admin.division_parameters',
+  'sys-view-data':       'admin.view_data',
+  'sys-system-params':   'admin.system_parameters',
+  'sys-reports-access':  'admin.system_parameters',
+  'sys-license-admin':   'admin.system_parameters',
+  'sys-sec-users':       'admin.users',
+  'sys-sec-group':       'admin.security_groups',
+  'sys-sec-auth-policy': 'admin.auth_policy',
+  'sys-exception-log':   'admin.exception_log',
+}
+function capForSystemValue(value) {
+  if (!value) return null
+  if (value.startsWith('sys-setup-')) return 'admin.setup'
+  return SYSTEM_VALUE_CAP[value] || null
+}
+// Fail-open: no mapping, unrestricted (superadmin), or privileges not yet
+// resolved → allowed. Only an explicitly-resolved list lacking the cap hides it.
+function effHasCap(effectiveAccess, cap) {
+  if (!cap) return true
+  if (!effectiveAccess || effectiveAccess.unrestricted) return true
+  if (effectiveAccess.privileges == null) return true
+  return Array.isArray(effectiveAccess.privileges) && effectiveAccess.privileges.includes(cap)
 }
 
 function isSystemItemAllowed(effectiveAccess, value) {
   if (!value) return true
-  if (effectiveAccess?.unrestricted || !effectiveAccess?.system_options) return true
-  return hasSystemPermission(effectiveAccess.system_options, value)
+  return effHasCap(effectiveAccess, capForSystemValue(value))
 }
 
+// Admin tabs stay visible; granular control lives at the System sub-item level.
 function isAdminTabAllowed(tabKey, effectiveAccess) {
-  if (effectiveAccess?.unrestricted || !effectiveAccess?.system_options) return true
-  const options = effectiveAccess.system_options
   if (tabKey === 'dashboard' || tabKey === 'help') return true
-  if (tabKey === 'service-log' || tabKey === 'system-activity' || tabKey === 'service-dashboard') {
-    return hasSystemSectionPermission(options, 'general', 'service_configurations')
-  }
-  if (tabKey === 'system') return true
+  if (!effectiveAccess || effectiveAccess.unrestricted || effectiveAccess.privileges == null) return true
   return true
 }
 
@@ -99,28 +145,30 @@ function AdminAccessDenied({ label = 'this admin screen' }) {
   )
 }
 
-function filterSystemNav(nav, systemOptions) {
+function filterSystemNav(nav, effectiveAccess) {
   return nav.reduce((acc, item) => {
     if (item.children) {
-      const children = filterSystemNav(item.children, systemOptions)
+      const children = filterSystemNav(item.children, effectiveAccess)
       if (children.length) acc.push({ ...item, children })
       return acc
     }
-    if (hasSystemPermission(systemOptions, item.value)) acc.push(item)
+    if (isSystemItemAllowed(effectiveAccess, item.value)) acc.push(item)
     return acc
   }, [])
 }
 
+function getAnchorPosition(anchorEl, direction = 'bottom') {
+  if (!anchorEl) return null
+  const rect = anchorEl.getBoundingClientRect()
+  if (direction === 'right') {
+    return { top: rect.top, left: rect.right + 2 }
+  }
+  return { top: rect.bottom + 2, left: rect.left }
+}
+
 // ── Flyout submenu rendered via portal ───────────────────────────────────────
 function FlyoutMenu({ items, anchorEl, onSelect, onClose }) {
-  const [pos, setPos] = useState(null)
-
-  useEffect(() => {
-    if (!anchorEl) return
-    const r = anchorEl.getBoundingClientRect()
-    setPos({ top: r.top, left: r.right + 2 })
-  }, [anchorEl])
-
+  const pos = getAnchorPosition(anchorEl, 'right')
   if (!pos) return null
 
   return ReactDOM.createPortal(
@@ -158,12 +206,22 @@ function FlyoutMenu({ items, anchorEl, onSelect, onClose }) {
 function DropdownRow({ item, onSelect, onCloseAll }) {
   const rowRef  = useRef(null)
   const [showFlyout, setShowFlyout] = useState(false)
+  const [flyoutAnchor, setFlyoutAnchor] = useState(null)
   const closeTimer = useRef(null)
 
   const hasChildren = !!item.children
 
-  function openFlyout()  { clearTimeout(closeTimer.current); setShowFlyout(true) }
-  function closeFlyout() { closeTimer.current = setTimeout(() => setShowFlyout(false), 120) }
+  function openFlyout()  {
+    clearTimeout(closeTimer.current)
+    setFlyoutAnchor(rowRef.current)
+    setShowFlyout(true)
+  }
+  function closeFlyout() {
+    closeTimer.current = setTimeout(() => {
+      setShowFlyout(false)
+      setFlyoutAnchor(null)
+    }, 120)
+  }
 
   return (
     <div
@@ -190,9 +248,9 @@ function DropdownRow({ item, onSelect, onCloseAll }) {
       {hasChildren && showFlyout && (
         <FlyoutMenu
           items={item.children}
-          anchorEl={rowRef.current}
+          anchorEl={flyoutAnchor}
           onSelect={onSelect}
-          onClose={() => { setShowFlyout(false); onCloseAll() }}
+          onClose={() => { setShowFlyout(false); setFlyoutAnchor(null); onCloseAll() }}
         />
       )}
     </div>
@@ -201,14 +259,7 @@ function DropdownRow({ item, onSelect, onCloseAll }) {
 
 // ── Main config dropdown rendered via portal ──────────────────────────────────
 function ConfigDropdown({ anchorEl, onSelect, onClose }) {
-  const [pos, setPos] = useState(null)
-
-  useEffect(() => {
-    if (!anchorEl) return
-    const r = anchorEl.getBoundingClientRect()
-    setPos({ top: r.bottom + 2, left: r.left })
-  }, [anchorEl])
-
+  const pos = getAnchorPosition(anchorEl)
   if (!pos) return null
 
   return ReactDOM.createPortal(
@@ -244,14 +295,7 @@ function ConfigDropdown({ anchorEl, onSelect, onClose }) {
 
 // ── Tables dropdown rendered via portal (uses DropdownRow for Shift flyout) ───
 function TablesDropdown({ anchorEl, onSelect, onClose }) {
-  const [pos, setPos] = useState(null)
-
-  useEffect(() => {
-    if (!anchorEl) return
-    const r = anchorEl.getBoundingClientRect()
-    setPos({ top: r.bottom + 2, left: r.left })
-  }, [anchorEl])
-
+  const pos = getAnchorPosition(anchorEl)
   if (!pos) return null
 
   return ReactDOM.createPortal(
@@ -289,10 +333,20 @@ function TablesDropdown({ anchorEl, onSelect, onClose }) {
 function TablesTab({ isActive, onTabClick, onSelect }) {
   const btnRef  = useRef(null)
   const [open, setOpen] = useState(false)
+  const [menuAnchor, setMenuAnchor] = useState(null)
   const closeTimer = useRef(null)
 
-  function openMenu()  { clearTimeout(closeTimer.current); setOpen(true) }
-  function closeMenu() { closeTimer.current = setTimeout(() => setOpen(false), 150) }
+  function openMenu()  {
+    clearTimeout(closeTimer.current)
+    setMenuAnchor(btnRef.current)
+    setOpen(true)
+  }
+  function closeMenu() {
+    closeTimer.current = setTimeout(() => {
+      setOpen(false)
+      setMenuAnchor(null)
+    }, 150)
+  }
 
   return (
     <div
@@ -310,7 +364,7 @@ function TablesTab({ isActive, onTabClick, onSelect }) {
 
       {open && (
         <TablesDropdown
-          anchorEl={btnRef.current}
+          anchorEl={menuAnchor}
           onSelect={(value) => { onSelect(value); setOpen(false) }}
           onClose={closeMenu}
         />
@@ -321,14 +375,7 @@ function TablesTab({ isActive, onTabClick, onSelect }) {
 
 // ── Documents dropdown rendered via portal ────────────────────────────────────
 function DocumentsDropdown({ anchorEl, onSelect, onClose }) {
-  const [pos, setPos] = useState(null)
-
-  useEffect(() => {
-    if (!anchorEl) return
-    const r = anchorEl.getBoundingClientRect()
-    setPos({ top: r.bottom + 2, left: r.left })
-  }, [anchorEl])
-
+  const pos = getAnchorPosition(anchorEl)
   if (!pos) return null
 
   return ReactDOM.createPortal(
@@ -369,10 +416,20 @@ function DocumentsDropdown({ anchorEl, onSelect, onClose }) {
 function DocumentsTab({ isActive, onTabClick, onSelect }) {
   const btnRef  = useRef(null)
   const [open, setOpen] = useState(false)
+  const [menuAnchor, setMenuAnchor] = useState(null)
   const closeTimer = useRef(null)
 
-  function openMenu()  { clearTimeout(closeTimer.current); setOpen(true) }
-  function closeMenu() { closeTimer.current = setTimeout(() => setOpen(false), 150) }
+  function openMenu()  {
+    clearTimeout(closeTimer.current)
+    setMenuAnchor(btnRef.current)
+    setOpen(true)
+  }
+  function closeMenu() {
+    closeTimer.current = setTimeout(() => {
+      setOpen(false)
+      setMenuAnchor(null)
+    }, 150)
+  }
 
   return (
     <div
@@ -390,7 +447,7 @@ function DocumentsTab({ isActive, onTabClick, onSelect }) {
 
       {open && (
         <DocumentsDropdown
-          anchorEl={btnRef.current}
+          anchorEl={menuAnchor}
           onSelect={(value) => { onSelect(value); setOpen(false) }}
           onClose={closeMenu}
         />
@@ -401,14 +458,7 @@ function DocumentsTab({ isActive, onTabClick, onSelect }) {
 
 // ── Escalation dropdown rendered via portal ───────────────────────────────────
 function EscalationDropdown({ anchorEl, onSelect, onClose }) {
-  const [pos, setPos] = useState(null)
-
-  useEffect(() => {
-    if (!anchorEl) return
-    const r = anchorEl.getBoundingClientRect()
-    setPos({ top: r.bottom + 2, left: r.left })
-  }, [anchorEl])
-
+  const pos = getAnchorPosition(anchorEl)
   if (!pos) return null
 
   return ReactDOM.createPortal(
@@ -449,10 +499,20 @@ function EscalationDropdown({ anchorEl, onSelect, onClose }) {
 function EscalationTab({ isActive, onTabClick, onSelect }) {
   const btnRef  = useRef(null)
   const [open, setOpen] = useState(false)
+  const [menuAnchor, setMenuAnchor] = useState(null)
   const closeTimer = useRef(null)
 
-  function openMenu()  { clearTimeout(closeTimer.current); setOpen(true) }
-  function closeMenu() { closeTimer.current = setTimeout(() => setOpen(false), 150) }
+  function openMenu()  {
+    clearTimeout(closeTimer.current)
+    setMenuAnchor(btnRef.current)
+    setOpen(true)
+  }
+  function closeMenu() {
+    closeTimer.current = setTimeout(() => {
+      setOpen(false)
+      setMenuAnchor(null)
+    }, 150)
+  }
 
   return (
     <div
@@ -470,7 +530,7 @@ function EscalationTab({ isActive, onTabClick, onSelect }) {
 
       {open && (
         <EscalationDropdown
-          anchorEl={btnRef.current}
+          anchorEl={menuAnchor}
           onSelect={(value) => { onSelect(value); setOpen(false) }}
           onClose={closeMenu}
         />
@@ -481,14 +541,7 @@ function EscalationTab({ isActive, onTabClick, onSelect }) {
 
 // ── Generic portal dropdown (leaf + nested via DropdownRow) ──────────────────
 function NavDropdown({ nav, anchorEl, onSelect, onClose }) {
-  const [pos, setPos] = useState(null)
-
-  useEffect(() => {
-    if (!anchorEl) return
-    const r = anchorEl.getBoundingClientRect()
-    setPos({ top: r.bottom + 2, left: r.left })
-  }, [anchorEl])
-
+  const pos = getAnchorPosition(anchorEl)
   if (!pos) return null
 
   return ReactDOM.createPortal(
@@ -526,10 +579,20 @@ function NavDropdown({ nav, anchorEl, onSelect, onClose }) {
 function HoverTab({ label, nav, isActive, onTabClick, onSelect }) {
   const btnRef     = useRef(null)
   const [open, setOpen] = useState(false)
+  const [menuAnchor, setMenuAnchor] = useState(null)
   const closeTimer = useRef(null)
 
-  function openMenu()  { clearTimeout(closeTimer.current); setOpen(true) }
-  function closeMenu() { closeTimer.current = setTimeout(() => setOpen(false), 150) }
+  function openMenu()  {
+    clearTimeout(closeTimer.current)
+    setMenuAnchor(btnRef.current)
+    setOpen(true)
+  }
+  function closeMenu() {
+    closeTimer.current = setTimeout(() => {
+      setOpen(false)
+      setMenuAnchor(null)
+    }, 150)
+  }
 
   return (
     <div style={{ position: 'relative' }} onMouseEnter={openMenu} onMouseLeave={closeMenu}>
@@ -544,7 +607,7 @@ function HoverTab({ label, nav, isActive, onTabClick, onSelect }) {
       {open && (
         <NavDropdown
           nav={nav}
-          anchorEl={btnRef.current}
+          anchorEl={menuAnchor}
           onSelect={(value) => { onSelect(value); setOpen(false) }}
           onClose={closeMenu}
         />
@@ -557,10 +620,20 @@ function HoverTab({ label, nav, isActive, onTabClick, onSelect }) {
 function ConfigTab({ isActive, onTabClick, onSelect }) {
   const btnRef     = useRef(null)
   const [open, setOpen] = useState(false)
+  const [menuAnchor, setMenuAnchor] = useState(null)
   const closeTimer = useRef(null)
 
-  function openMenu()  { clearTimeout(closeTimer.current); setOpen(true) }
-  function closeMenu() { closeTimer.current = setTimeout(() => setOpen(false), 150) }
+  function openMenu()  {
+    clearTimeout(closeTimer.current)
+    setMenuAnchor(btnRef.current)
+    setOpen(true)
+  }
+  function closeMenu() {
+    closeTimer.current = setTimeout(() => {
+      setOpen(false)
+      setMenuAnchor(null)
+    }, 150)
+  }
 
   return (
     <div
@@ -578,7 +651,7 @@ function ConfigTab({ isActive, onTabClick, onSelect }) {
 
       {open && (
         <ConfigDropdown
-          anchorEl={btnRef.current}
+          anchorEl={menuAnchor}
           onSelect={(value) => { onSelect(value); setOpen(false) }}
           onClose={closeMenu}
         />
@@ -600,32 +673,47 @@ export default function MIMSAdminShell() {
 function MIMSAdminShellInner() {
   const { token, user } = useAuth()
   const location = useLocation()
-  const initialTablesItem = new URLSearchParams(location.search).get('tables') || ''
-  const initialSystemItem = new URLSearchParams(location.search).get('system') || ''
-  const [activeTab,      setActiveTab]      = useState(initialSystemItem ? 'system' : initialTablesItem ? 'tables' : 'dashboard')
-  const [configItem,     setConfigItem]     = useState('')
-  const [escalationItem, setEscalationItem] = useState('')
-  const [documentsItem,  setDocumentsItem]  = useState('')
+  const navigate = useNavigate()
+  const initialParams = new URLSearchParams(location.search)
+  const initialServiceItem = initialParams.get('service') || ''
+  const initialActivityItem = initialParams.get('activity') || ''
+  const initialTablesItem = initialParams.get('tables') || ''
+  const initialSystemItem = initialParams.get('system') || ''
+  const initialAuditItem = initialParams.get('audit') || 'admin'
+  const [activeTab,      setActiveTab]      = useState(
+    initialParams.get('tab')
+      || (initialSystemItem ? 'system' : initialTablesItem ? 'tables' : initialServiceItem ? 'service-log' : initialActivityItem ? 'system-activity' : 'dashboard')
+  )
+  const [configItem,     setConfigItem]     = useState(initialParams.get('config') || '')
+  const [escalationItem, setEscalationItem] = useState(initialParams.get('escalation') || '')
+  const [documentsItem,  setDocumentsItem]  = useState(initialParams.get('documents') || '')
+  const [serviceItem,    setServiceItem]    = useState(initialServiceItem)
+  const [activityItem,   setActivityItem]   = useState(initialActivityItem)
   const [tablesItem,     setTablesItem]     = useState(initialTablesItem)
   const [systemItem,     setSystemItem]     = useState(initialSystemItem)
-  const [helpItem,       setHelpItem]       = useState('')
-  const [effectiveAccess, setEffectiveAccess] = useState({ unrestricted: true, system_options: null })
+  const [auditItem,      setAuditItem]      = useState(initialAuditItem)
+  const [helpItem,       setHelpItem]       = useState(initialParams.get('help') || '')
+  const [effectiveAccess, setEffectiveAccess] = useState(() => createUnresolvedAdminAccess())
 
   const loadEffectiveAccess = useCallback(async () => {
     if (!token || !user) return
+    if (hasGlobalAdminScope(user)) {
+      setEffectiveAccess(createResolvedAdminAccess({ unrestricted: true, system_options: null }))
+      return
+    }
     try {
       const res = await httpFetch('/api/admin/security-groups/effective', {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!res.ok) throw new Error('security access unavailable')
       const data = await res.json()
-      if (res.ok) setEffectiveAccess(data)
+      setEffectiveAccess(createResolvedAdminAccess(data))
     } catch {
-      setEffectiveAccess({ unrestricted: true, system_options: null })
+      setEffectiveAccess(createUnresolvedAdminAccess())
     }
   }, [token, user])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadEffectiveAccess()
   }, [loadEffectiveAccess])
 
@@ -636,97 +724,285 @@ function MIMSAdminShellInner() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
+    const nextServiceItem = params.get('service') || ''
+    const nextActivityItem = params.get('activity') || ''
+    const nextTab = params.get('tab')
+      || (params.get('system') ? 'system' : params.get('tables') ? 'tables' : nextServiceItem ? 'service-log' : nextActivityItem ? 'system-activity' : 'dashboard')
+    const nextConfigItem = params.get('config') || ''
+    const nextEscalationItem = params.get('escalation') || ''
+    const nextDocumentsItem = params.get('documents') || ''
+    const nextHelpItem = params.get('help') || ''
     const nextSystemItem = params.get('system') || ''
     const nextTablesItem = params.get('tables') || ''
-    if (nextSystemItem) {
-      setSystemItem(nextSystemItem)
-      setActiveTab('system')
-      return
-    }
-    if (nextTablesItem) {
-      setTablesItem(nextTablesItem)
-      setActiveTab('tables')
-    }
+    const nextAuditItem = params.get('audit') || 'admin'
+    setActiveTab(nextTab)
+    setConfigItem(nextConfigItem)
+    setEscalationItem(nextEscalationItem)
+    setDocumentsItem(nextDocumentsItem)
+    setServiceItem(nextServiceItem)
+    setActivityItem(nextActivityItem)
+    setHelpItem(nextHelpItem)
+    setSystemItem(nextSystemItem)
+    setTablesItem(nextTablesItem)
+    setAuditItem(nextAuditItem)
   }, [location.search])
 
+  // Capability-based filtering with fail-open: unresolved / unrestricted / no
+  // resolved privilege list → show full nav (never lock an admin out).
+  const systemNav = (!effectiveAccess || effectiveAccess.resolved === false || effectiveAccess.unrestricted || effectiveAccess.privileges == null)
+    ? SYSTEM_NAV
+    : filterSystemNav(SYSTEM_NAV, effectiveAccess)
+  const defaultConfigItem = findFirstLeafValue(CONFIG_NAV)
+  const defaultEscalationItem = findFirstLeafValue(ESCALATION_NAV)
+  const defaultDocumentsItem = findFirstLeafValue(DOCUMENTS_NAV)
+  const defaultServiceItem = 'service-log-overview'
+  const defaultActivityItem = 'system-activity-overview'
+  const defaultTablesItem = findFirstLeafValue(TABLES_NAV)
+  const defaultSystemItem = findFirstLeafValue(systemNav, value => isSystemItemAllowed(effectiveAccess, value))
+  const defaultHelpItem = findFirstLeafValue(HELP_NAV)
+
+  const syncAdminState = useCallback((nextState) => {
+    const params = new URLSearchParams(location.search)
+    const {
+      tab = activeTab,
+      config = configItem,
+      escalation = escalationItem,
+      documents = documentsItem,
+      service = serviceItem,
+      activity = activityItem,
+      tables = tablesItem,
+      system = systemItem,
+      audit = auditItem,
+      help = helpItem,
+    } = nextState
+
+    const values = { tab, config, escalation, documents, service, activity, tables, system, audit, help }
+    Object.entries(values).forEach(([key, value]) => {
+      if (key === 'audit' && system !== 'sys-view-data') {
+        params.delete(key)
+      } else if (value) params.set(key, value)
+      else params.delete(key)
+    })
+    navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true })
+  }, [
+    activeTab,
+    configItem,
+    documentsItem,
+    escalationItem,
+    helpItem,
+    location.pathname,
+    location.search,
+    navigate,
+    serviceItem,
+    activityItem,
+    systemItem,
+    auditItem,
+    tablesItem,
+  ])
+
+  const activateTab = useCallback((nextTab, nextItemKey = null, nextItemValue = '') => {
+    if (nextTab === 'service-log') {
+      const value = nextItemKey === 'service' ? nextItemValue : (serviceItem || defaultServiceItem)
+      setServiceItem(value)
+      setActiveTab(nextTab)
+      syncAdminState({ tab: nextTab, service: value })
+      return
+    }
+    if (nextTab === 'system-activity') {
+      const value = nextItemKey === 'activity' ? nextItemValue : (activityItem || defaultActivityItem)
+      setActivityItem(value)
+      setActiveTab(nextTab)
+      syncAdminState({ tab: nextTab, activity: value })
+      return
+    }
+    if (nextTab === 'configuration') {
+      const value = nextItemKey === 'config' ? nextItemValue : (configItem || defaultConfigItem)
+      setConfigItem(value)
+      setActiveTab(nextTab)
+      syncAdminState({ tab: nextTab, config: value })
+      return
+    }
+    if (nextTab === 'escalation') {
+      const value = nextItemKey === 'escalation' ? nextItemValue : (escalationItem || defaultEscalationItem)
+      setEscalationItem(value)
+      setActiveTab(nextTab)
+      syncAdminState({ tab: nextTab, escalation: value })
+      return
+    }
+    if (nextTab === 'documents') {
+      const value = nextItemKey === 'documents' ? nextItemValue : (documentsItem || defaultDocumentsItem)
+      setDocumentsItem(value)
+      setActiveTab(nextTab)
+      syncAdminState({ tab: nextTab, documents: value })
+      return
+    }
+    if (nextTab === 'tables') {
+      const value = nextItemKey === 'tables' ? nextItemValue : (tablesItem || defaultTablesItem)
+      setTablesItem(value)
+      setActiveTab(nextTab)
+      syncAdminState({ tab: nextTab, tables: value })
+      return
+    }
+    if (nextTab === 'system') {
+      const value = nextItemKey === 'system' ? nextItemValue : (systemItem && isSystemItemAllowed(effectiveAccess, systemItem) ? systemItem : defaultSystemItem)
+      setSystemItem(value)
+      setActiveTab(nextTab)
+      syncAdminState({ tab: nextTab, system: value })
+      return
+    }
+    if (nextTab === 'help') {
+      const value = nextItemKey === 'help' ? nextItemValue : (helpItem || defaultHelpItem)
+      setHelpItem(value)
+      setActiveTab(nextTab)
+      syncAdminState({ tab: nextTab, help: value })
+      return
+    }
+    setActiveTab(nextTab)
+    syncAdminState({ tab: nextTab })
+  }, [
+    activityItem,
+    configItem,
+    defaultActivityItem,
+    defaultConfigItem,
+    defaultDocumentsItem,
+    defaultEscalationItem,
+    defaultHelpItem,
+    defaultServiceItem,
+    defaultSystemItem,
+    defaultTablesItem,
+    documentsItem,
+    escalationItem,
+    helpItem,
+    serviceItem,
+    syncAdminState,
+    systemItem,
+    tablesItem,
+    effectiveAccess,
+  ])
+
   function handleConfigSelect(value) {
-    setConfigItem(value)
-    setActiveTab('configuration')
+    activateTab('configuration', 'config', value)
+  }
+
+  function handleServiceSelect(value) {
+    activateTab('service-log', 'service', value)
+  }
+
+  function handleSystemActivitySelect(value) {
+    activateTab('system-activity', 'activity', value)
   }
 
   function handleEscalationSelect(value) {
-    setEscalationItem(value)
-    setActiveTab('escalation')
+    activateTab('escalation', 'escalation', value)
   }
 
   function handleDocumentsSelect(value) {
-    setDocumentsItem(value)
-    setActiveTab('documents')
+    activateTab('documents', 'documents', value)
   }
 
   function handleTablesSelect(value) {
-    setTablesItem(value)
-    setActiveTab('tables')
+    activateTab('tables', 'tables', value)
   }
 
   function handleSystemSelect(value) {
-    setSystemItem(value)
-    setActiveTab('system')
+    activateTab('system', 'system', value)
   }
 
   function handleHelpSelect(value) {
-    setHelpItem(value)
-    setActiveTab('help')
+    activateTab('help', 'help', value)
   }
 
   const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || Dashboard
-  const systemNav = effectiveAccess?.unrestricted || !effectiveAccess?.system_options
-    ? SYSTEM_NAV
-    : filterSystemNav(SYSTEM_NAV, effectiveAccess.system_options)
   const visibleTabs = TABS.filter(t => {
     if (t.key === 'system') return systemNav.length > 0
     return isAdminTabAllowed(t.key, effectiveAccess)
   })
+  useEffect(() => {
+    if (activeTab === 'system' && systemNav.length === 0) activateTab('dashboard')
+  }, [activeTab, activateTab, systemNav.length])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (activeTab === 'system' && systemNav.length === 0) setActiveTab('dashboard')
-  }, [activeTab, systemNav.length])
+    if (!visibleTabs.some(t => t.key === activeTab)) activateTab('dashboard')
+  }, [activeTab, activateTab, visibleTabs])
 
   useEffect(() => {
-    if (!visibleTabs.some(t => t.key === activeTab)) setActiveTab('dashboard')
-  }, [activeTab, visibleTabs])
+    if (activeTab === 'service-log' && !serviceItem) activateTab('service-log', 'service', defaultServiceItem)
+    if (activeTab === 'system-activity' && !activityItem) activateTab('system-activity', 'activity', defaultActivityItem)
+    if (activeTab === 'configuration' && !configItem && defaultConfigItem) activateTab('configuration', 'config', defaultConfigItem)
+    if (activeTab === 'escalation' && !escalationItem && defaultEscalationItem) activateTab('escalation', 'escalation', defaultEscalationItem)
+    if (activeTab === 'documents' && !documentsItem && defaultDocumentsItem) activateTab('documents', 'documents', defaultDocumentsItem)
+    if (activeTab === 'tables' && !tablesItem && defaultTablesItem) activateTab('tables', 'tables', defaultTablesItem)
+    if (activeTab === 'system' && !systemItem && defaultSystemItem) activateTab('system', 'system', defaultSystemItem)
+    if (activeTab === 'help' && !helpItem && defaultHelpItem) activateTab('help', 'help', defaultHelpItem)
+  }, [
+    activeTab,
+    activityItem,
+    activateTab,
+    configItem,
+    defaultConfigItem,
+    defaultDocumentsItem,
+    defaultEscalationItem,
+    defaultHelpItem,
+    defaultActivityItem,
+    defaultServiceItem,
+    defaultSystemItem,
+    defaultTablesItem,
+    documentsItem,
+    escalationItem,
+    helpItem,
+    serviceItem,
+    systemItem,
+    tablesItem,
+  ])
 
   return (
     <div className="mims-admin-shell">
       <div className="mims-admin-topnav">
         {visibleTabs.map(t =>
-          t.key === 'configuration' ? (
+          t.key === 'service-log' ? (
+            <HoverTab
+              key="service-log"
+              label="Service Log"
+              nav={SERVICE_LOG_NAV}
+              isActive={activeTab === 'service-log'}
+              onTabClick={() => activateTab('service-log')}
+              onSelect={handleServiceSelect}
+            />
+          ) : t.key === 'system-activity' ? (
+            <HoverTab
+              key="system-activity"
+              label="System Activity"
+              nav={SYSTEM_ACTIVITY_NAV}
+              isActive={activeTab === 'system-activity'}
+              onTabClick={() => activateTab('system-activity')}
+              onSelect={handleSystemActivitySelect}
+            />
+          ) : t.key === 'configuration' ? (
             <ConfigTab
               key="configuration"
               isActive={activeTab === 'configuration'}
-              onTabClick={() => setActiveTab('configuration')}
+              onTabClick={() => activateTab('configuration')}
               onSelect={handleConfigSelect}
             />
           ) : t.key === 'escalation' ? (
             <EscalationTab
               key="escalation"
               isActive={activeTab === 'escalation'}
-              onTabClick={() => setActiveTab('escalation')}
+              onTabClick={() => activateTab('escalation')}
               onSelect={handleEscalationSelect}
             />
           ) : t.key === 'documents' ? (
             <DocumentsTab
               key="documents"
               isActive={activeTab === 'documents'}
-              onTabClick={() => setActiveTab('documents')}
+              onTabClick={() => activateTab('documents')}
               onSelect={handleDocumentsSelect}
             />
           ) : t.key === 'tables' ? (
             <TablesTab
               key="tables"
               isActive={activeTab === 'tables'}
-              onTabClick={() => setActiveTab('tables')}
+              onTabClick={() => activateTab('tables')}
               onSelect={handleTablesSelect}
             />
           ) : t.key === 'system' ? (
@@ -735,7 +1011,7 @@ function MIMSAdminShellInner() {
               label="System"
               nav={systemNav}
               isActive={activeTab === 'system'}
-              onTabClick={() => setActiveTab('system')}
+              onTabClick={() => activateTab('system')}
               onSelect={handleSystemSelect}
             />
           ) : t.key === 'help' ? (
@@ -744,14 +1020,14 @@ function MIMSAdminShellInner() {
               label="Help"
               nav={HELP_NAV}
               isActive={activeTab === 'help'}
-              onTabClick={() => setActiveTab('help')}
+              onTabClick={() => activateTab('help')}
               onSelect={handleHelpSelect}
             />
           ) : (
             <button
               key={t.key}
               className={`mims-admin-tab${activeTab === t.key ? ' active' : ''}`}
-              onClick={() => setActiveTab(t.key)}
+              onClick={() => activateTab(t.key)}
             >
               {t.label}
             </button>
@@ -772,20 +1048,24 @@ function MIMSAdminShellInner() {
           ? <AdminAccessDenied label={helpLabelFor({ activeTab, systemItem }) || 'this system option'} />
           : activeTab !== 'system' && !isAdminTabAllowed(activeTab, effectiveAccess)
           ? <AdminAccessDenied label={TABS.find(t => t.key === activeTab)?.label || 'this admin tab'} />
+          : activeTab === 'service-log'
+          ? <ServiceLog selectedItem={serviceItem} />
+          : activeTab === 'system-activity'
+          ? <SystemActivity selectedItem={activityItem} />
           : activeTab === 'configuration'
-          ? <Configuration selectedItem={configItem} />
+          ? <Configuration selectedItem={configItem} onSelect={(value) => activateTab('configuration', 'config', value)} />
           : activeTab === 'escalation'
-          ? <Escalation selectedItem={escalationItem} />
+          ? <Escalation selectedItem={escalationItem} onSelect={(value) => activateTab('escalation', 'escalation', value)} />
           : activeTab === 'documents'
-          ? <Documents selectedItem={documentsItem} />
+          ? <Documents selectedItem={documentsItem} onSelect={(value) => activateTab('documents', 'documents', value)} />
           : activeTab === 'tables'
-          ? <Tables selectedItem={tablesItem} />
+          ? <Tables selectedItem={tablesItem} onSelect={(value) => activateTab('tables', 'tables', value)} />
           : activeTab === 'system'
-          ? <System selectedItem={systemItem} />
+          ? <System selectedItem={systemItem} auditItem={auditItem} />
           : activeTab === 'help'
-          ? <Help selectedItem={helpItem} />
+          ? <Help selectedItem={helpItem} onSelect={(value) => activateTab('help', 'help', value)} />
           : activeTab === 'dashboard'
-          ? <Dashboard onNavigateTab={setActiveTab} />
+          ? <Dashboard onNavigateTab={activateTab} />
           : <ActiveComponent />
         }
       </div>

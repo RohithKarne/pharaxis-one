@@ -18,7 +18,7 @@ try {
   bcrypt = require('bcrypt');
 }
 const pool    = require('../database/db');
-const { authenticate, requireRole, requireOrg } = require('../middleware/auth');
+const { authenticate, requireRole, requireOrg, requireCapability } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validate');
 const { checkTransitionAllowed } = require('../services/workflowEngine');
 const { logger } = require('../services/logger');
@@ -27,6 +27,7 @@ const { emitDataSync } = require('../services/appRealtimeService');
 const { fireIntegrationEvent } = require('../services/integrationEngine');
 const { fireWorkflowEvent } = require('../services/workflow/eventHookService');
 const { resolveDefaultWorkflowStateId } = require('../services/orgBootstrapService');
+const changeControl = require('../services/changeControlService');
 const {
   calculateAeDueDate,
   calculatePcDueDate,
@@ -967,7 +968,7 @@ router.get('/cases/:id/intake-schema-snapshot', authenticate, async (req, res) =
 // ─── CREATE CASE (F-13) ───────────────────────────────────────────────────────
 
 // POST /api/cases — create new case with intake fields captured at creation time (CF-E1–E5)
-router.post('/cases', authenticate, requireOrg, validate(schemas.createCase), async (req, res) => {
+router.post('/cases', authenticate, requireOrg, requireCapability('case.create'), validate(schemas.createCase), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -986,9 +987,20 @@ router.post('/cases', authenticate, requireOrg, validate(schemas.createCase), as
     } = req.body;
 
     const org_id = req.user.orgId;
-    if (!org_id || !site_id) {
+    if (!org_id) {
       await conn.rollback(); conn.release();
-      return res.status(400).json({ error: 'org_id and site_id are required' });
+      return res.status(400).json({ error: 'org_id is required' });
+    }
+    // Site concept retired from the UI. Users no longer pick a site, so resolve
+    // the org's default (primary) site behind the scenes to keep site-scoped
+    // data and queries intact.
+    let resolvedSiteId = site_id || null;
+    if (!resolvedSiteId) {
+      const [[defSite]] = await conn.execute(
+        'SELECT id FROM sites WHERE org_id = ? AND is_active = 1 ORDER BY is_primary DESC, id ASC LIMIT 1',
+        [org_id]
+      );
+      resolvedSiteId = defSite?.id || null;
     }
     if (case_type && !['MI', 'AE', 'PC'].includes(case_type)) {
       await conn.rollback(); conn.release();
@@ -1047,14 +1059,14 @@ router.post('/cases', authenticate, requireOrg, validate(schemas.createCase), as
       [result] = await conn.execute(
         `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [org_id, site_id, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId]
+        [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId]
       );
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY' && String(err.message || '').includes('case_number')) {
         [result] = await conn.execute(
           `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [org_id, site_id, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId]
+          [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId]
         );
       } else { throw err; }
     }
@@ -1344,13 +1356,20 @@ router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
 });
 
 // POST /api/cases/:id/reassign — dedicated reassignment flow with audit + notifications
-router.post('/cases/:id/reassign', authenticate, async (req, res) => {
+router.post('/cases/:id/reassign', authenticate, requireCapability('case.assign'), async (req, res) => {
   try {
     const owned = await verifyCaseOrg(req.params.id, req);
     if (!owned) return res.status(403).json({ error: 'Access denied' });
 
     const reason = String(req.body?.reason || '').trim();
     if (reason.length > 1000) return res.status(400).json({ error: 'reason must be <= 1000 chars.' });
+
+    // Division change-control: require a reason to refer/reassign a case (if enabled).
+    const ccRules = await changeControl.getRules(req.user.orgId);
+    const ccErr = changeControl.requireReasons(ccRules, reason, [
+      { flag: 'cc_reason_refer_case', label: 'referring a case' },
+    ]);
+    if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
 
     let newOwnerId = req.body?.new_owner_id;
     if (newOwnerId === '' || newOwnerId === undefined) {
@@ -1462,7 +1481,7 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
 
     const [[currentCase]] = await pool.execute(
       `SELECT id, org_id, site_id, status_id, case_owner_id, case_number, priority, date_received,
-              awareness_date, learn_of_validity_date, follow_up_received_date,
+              awareness_date, learn_of_validity_date, follow_up_received_date, case_type,
               description, internal_notes, intake_channel, version_stamp
        FROM cases
        WHERE id = ? AND is_deleted = 0
@@ -1479,6 +1498,15 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
         current_version_stamp: currentCase.version_stamp,
       });
     }
+
+    // Division change-control: reason-required guards (all default OFF per org).
+    const ccRules = await changeControl.getRules(currentCase.org_id);
+    const ccErr = changeControl.requireReasons(ccRules, body.reason, [
+      { flag: 'cc_reason_change_case', label: 'any change to a case record' },
+      { flag: 'cc_reason_change_date_received', when: hasOwn(body, 'date_received'), label: 'a change to date received' },
+      { flag: 'cc_reason_change_first_response', when: hasOwn(body, 'response_date'), label: 'a change to first response date' },
+    ]);
+    if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
 
     let nextStatusId = currentCase.status_id;
     let statusTransitionRule = null;
@@ -1516,6 +1544,29 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
           const [[userWithHash]] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.user.userId]);
           const valid = userWithHash?.password ? await bcrypt.compare(password, userWithHash.password) : false;
           if (!valid) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
+        }
+
+        // Division change-control: close-password and reopen-reason rules.
+        // "Closed" is detected by workflow state name (matches caseGovernanceService).
+        const [[oldState]] = await pool.execute('SELECT name FROM workflow_states WHERE id = ?', [currentCase.status_id]);
+        const [[newState]] = await pool.execute('SELECT name FROM workflow_states WHERE id = ?', [nextStatusId]);
+        const oldName = oldState?.name || '', newName = newState?.name || '';
+        const isClose = newName === 'Closed' && oldName !== 'Closed';
+        const isReopen = oldName === 'Closed' && newName !== 'Closed';
+        const isAE = currentCase.case_type === 'AE', isPC = currentCase.case_type === 'PC';
+        if (isClose) {
+          const needPwd = ccRules.cc_password_close_case || (isAE && ccRules.cc_password_close_ae) || (isPC && ccRules.cc_password_close_pc);
+          if (needPwd && !(await changeControl.verifyPassword(req.user.userId, body.password))) {
+            return res.status(401).json({ error: 'Password (electronic signature) required to close this case.', code: 'PASSWORD_REQUIRED' });
+          }
+        }
+        if (isReopen) {
+          const reopenErr = changeControl.requireReasons(ccRules, body.reason, [
+            { flag: 'cc_reason_reopen_case', label: 'reopening a case' },
+            { flag: 'cc_reason_reopen_ae', when: isAE, label: 'reopening an adverse event' },
+            { flag: 'cc_reason_reopen_pc', when: isPC, label: 'reopening a product complaint' },
+          ]);
+          if (reopenErr) return res.status(reopenErr.status).json({ error: reopenErr.error, code: reopenErr.code });
         }
       }
     }
@@ -1945,6 +1996,8 @@ router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
          r.response_date AS responded_at,
          r.follow_up_required,
          r.response_status,
+         r.supersedes_response_id,
+         r.superseded_by_id,
          r.draft_saved_at,
          r.approved_by,
          approver.name AS approved_by_name,
@@ -2088,6 +2141,14 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     }
     const reason = String(req.body?.reason || '').trim();
     const password = String(req.body?.password || '');
+    // Division change-control: require a reason for any change to a letter record (if enabled).
+    {
+      const ccRules = await changeControl.getRules(req.user.orgId);
+      const ccErr = changeControl.requireReasons(ccRules, reason, [
+        { flag: 'cc_reason_change_letter', label: 'any change to a letter record' },
+      ]);
+      if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
+    }
     const allowedTransitions = {
       DRAFT: new Set(['READY']),
       READY: new Set(['APPROVED']),
@@ -2254,6 +2315,14 @@ router.patch('/cases/:id/mi-responses/:responseId/discard', authenticate, async 
     if (!existing) return res.status(404).json({ error: 'Response not found.' });
     if (existing.response_status !== 'DRAFT') {
       return res.status(400).json({ error: `Only DRAFT responses can be discarded. Current status: ${existing.response_status}.` });
+    }
+    // Division change-control: require a reason for any change to a letter record (if enabled).
+    {
+      const ccRules = await changeControl.getRules(req.user.orgId);
+      const ccErr = changeControl.requireReasons(ccRules, req.body?.reason, [
+        { flag: 'cc_reason_change_letter', label: 'any change to a letter record' },
+      ]);
+      if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
     }
     const reason = String(req.body?.reason || '').trim() || 'Discarded by user';
     await pool.execute(
@@ -2610,6 +2679,15 @@ router.put('/cases/:id/intake', authenticate, async (req, res) => {
   try {
     const owned = await verifyCaseOrg(req.params.id, req);
     if (!owned) return res.status(403).json({ error: 'Access denied' });
+
+    // Division change-control: require a reason for AE/PC record changes (if enabled).
+    const ccRules = await changeControl.getRules(req.user.orgId);
+    const ccErr = changeControl.requireReasons(ccRules, req.body?.reason, [
+      { flag: 'cc_reason_change_ae', when: !!req.body?.ae_intake, label: 'a change to an adverse event record' },
+      { flag: 'cc_reason_change_pc', when: !!req.body?.pc_intake, label: 'a change to a product complaint record' },
+    ]);
+    if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
+
     const { reporter, patient, ae_intake, pc_intake } = req.body;
     const caseId = req.params.id;
     const validationDate = toDateOnlyOrNull(new Date());
@@ -2728,10 +2806,19 @@ router.put('/cases/:id/intake', authenticate, async (req, res) => {
 // ─── SOFT DELETE ──────────────────────────────────────────────────────────────
 
 // DELETE /api/cases/:id — soft delete (admin/platform admin only)
-router.delete('/cases/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.delete('/cases/:id', authenticate, requireRole('admin', 'platform_admin'), requireCapability('case.delete'), async (req, res) => {
   try {
     const owned = await verifyCaseOrg(req.params.id, req);
     if (!owned) return res.status(403).json({ error: 'Access denied' });
+
+    // Division change-control: require a reason to delete a record / AE case (if enabled).
+    const [[delCase]] = await pool.execute('SELECT case_type FROM cases WHERE id = ?', [req.params.id]);
+    const ccRules = await changeControl.getRules(req.user.orgId);
+    const ccErr = changeControl.requireReasons(ccRules, req.body?.reason, [
+      { flag: 'cc_reason_delete_record', label: 'deleting a record' },
+      { flag: 'cc_reason_delete_ae', when: delCase?.case_type === 'AE', label: 'deleting an AE case' },
+    ]);
+    if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
 
     await pool.execute('UPDATE cases SET is_deleted = 1 WHERE id = ?', [req.params.id]);
     logger.warn({ case_id: req.params?.id, user_id: req.user?.userId }, 'Case soft deleted');
@@ -2740,6 +2827,72 @@ router.delete('/cases/:id', authenticate, requireRole('admin', 'platform_admin')
     logger.error({ err, route: '/api/cases/:id', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to soft delete case');
     res.status(500).json({ error: err.message });
   }
+});
+
+// POST /api/cases/:id/escalate — manual case escalation (enables cc_reason_escalation)
+router.post('/cases/:id/escalate', authenticate, requireCapability('case.escalate'), async (req, res) => {
+  try {
+    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    const reason = String(req.body?.reason || '').trim();
+    const ccRules = await changeControl.getRules(req.user.orgId);
+    const ccErr = changeControl.requireReasons(ccRules, reason, [
+      { flag: 'cc_reason_escalation', label: 'escalation' },
+    ]);
+    if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
+    await pool.execute(
+      `UPDATE cases SET escalated_at = NOW(), escalation_level = COALESCE(escalation_level, 0) + 1, escalation_reason = ?
+       WHERE id = ? AND is_deleted = 0`,
+      [reason || null, req.params.id]
+    );
+    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'CASE_ESCALATED', 'escalation', null, reason || 'escalated');
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/cases/:id/mi-responses/:responseId/supersede — compliant letter "reopen"
+// Creates a new amended DRAFT version; the finalized original is preserved intact
+// (21 CFR Part 11 immutability). Enables cc_reason_reopen_letter.
+router.post('/cases/:id/mi-responses/:responseId/supersede', authenticate, async (req, res) => {
+  try {
+    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    const [[original]] = await pool.execute(
+      `SELECT * FROM case_mi_responses WHERE id = ? AND case_id = ?`,
+      [req.params.responseId, req.params.id]
+    );
+    if (!original) return res.status(404).json({ error: 'Response not found.' });
+    if (!original.is_finalized) {
+      return res.status(400).json({ error: 'Only a finalized letter can be superseded. Edit the draft directly instead.' });
+    }
+    if (original.superseded_by_id) return res.status(409).json({ error: 'This letter has already been superseded.' });
+
+    const reason = String(req.body?.reason || '').trim();
+    const ccRules = await changeControl.getRules(req.user.orgId);
+    const ccErr = changeControl.requireReasons(ccRules, reason, [
+      { flag: 'cc_reason_reopen_letter', label: 'reopening a letter' },
+    ]);
+    if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [ins] = await conn.execute(
+        `INSERT INTO case_mi_responses
+           (case_id, mi_tab_id, response_text, response_channel, response_date, follow_up_required,
+            response_status, is_finalized, cm_document_id, cm_document_name, author_id, author_name, supersedes_response_id)
+         VALUES (?, ?, ?, ?, ?, ?, 'DRAFT', 0, ?, ?, ?, ?, ?)`,
+        [original.case_id, original.mi_tab_id, original.response_text, original.response_channel, original.response_date,
+         original.follow_up_required, original.cm_document_id, original.cm_document_name,
+         req.user.userId, req.user.name || req.user.email || null, original.id]
+      );
+      await conn.execute(
+        `UPDATE case_mi_responses SET superseded_by_id = ?, superseded_at = NOW() WHERE id = ?`,
+        [ins.insertId, original.id]
+      );
+      await conn.commit();
+      await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_SUPERSEDED', 'mi_response', String(original.id), String(ins.insertId));
+      res.status(201).json({ id: ins.insertId, supersedes_response_id: original.id, response_status: 'DRAFT' });
+    } catch (e) { await conn.rollback(); throw e; } finally { conn.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

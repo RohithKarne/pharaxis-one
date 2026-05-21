@@ -65,7 +65,7 @@ export default function CaseAETab({
       const res  = await httpFetch(`${API}/cases/ae/versions/${versionId}/${tabKey}`, { headers })
       const data = await res.json()
       setAeTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
-    } catch {}
+    } catch { /* ignore tab fetch errors */ }
     finally { setAeTabLoading(false) }
   }
 

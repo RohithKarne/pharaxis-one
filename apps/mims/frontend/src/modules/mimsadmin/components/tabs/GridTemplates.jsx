@@ -28,7 +28,7 @@ export default function GridTemplates() {
       setItems(d.templates || [])
     } catch { setItems([]) }
   }, [H, filterSection])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   async function save() {
     if (!edit?.section_name || !edit?.name) { showFlash('Section and name required', 'error'); return }

@@ -38,7 +38,7 @@ function deriveEntity(pathname) {
   return parts[parts.length - 1];
 }
 
-function shouldCaptureBusinessEvent(req, res) {
+function shouldCaptureTelemetryEvent(req, res) {
   const method = String(req.method || '').toUpperCase();
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
   if (res.statusCode >= 500) return false;
@@ -50,7 +50,7 @@ function shouldCaptureBusinessEvent(req, res) {
   return true;
 }
 
-async function emitProcessEvent({
+async function emitTelemetryEvent({
   orgId = null,
   sourceModule = 'Core',
   method = 'POST',
@@ -88,7 +88,7 @@ async function emitProcessEvent({
       ]
     );
   } catch (_) {
-    // Explorer logging is best-effort.
+    // Telemetry logging is best-effort.
   }
 }
 
@@ -97,6 +97,6 @@ module.exports = {
   inferModule,
   deriveEventType,
   deriveEntity,
-  shouldCaptureBusinessEvent,
-  emitProcessEvent,
+  shouldCaptureTelemetryEvent,
+  emitTelemetryEvent,
 };

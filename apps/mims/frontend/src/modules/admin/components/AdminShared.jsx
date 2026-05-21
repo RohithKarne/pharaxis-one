@@ -1,3 +1,4 @@
+// eslint-disable-next-line react-refresh/only-export-components
 export function parseUtcDate(s) {
   if (!s) return null
   const str = String(s).trim()
@@ -11,6 +12,7 @@ export function parseUtcDate(s) {
   return isNaN(d) ? null : d
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function fmtDateIST(s) {
   const d = parseUtcDate(s)
   if (!d) return s || '—'
@@ -21,6 +23,7 @@ export function fmtDateIST(s) {
   return `${pad(ist.getUTCDate())} ${months[ist.getUTCMonth()]} ${ist.getUTCFullYear()}, ${pad(ist.getUTCHours())}:${pad(ist.getUTCMinutes())}:${pad(ist.getUTCSeconds())} IST`
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function exportCSV(data, filename) {
   if (!data.length) return
   const keys = Object.keys(data[0])

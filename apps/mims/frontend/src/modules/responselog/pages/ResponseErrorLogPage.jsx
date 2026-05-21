@@ -4,7 +4,7 @@
  * CSS namespace: rel-
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -31,7 +31,7 @@ function ErrorTypeBadge({ errorType }) {
 function DetailModal({ entry, onClose }) {
   if (!entry) return null
   let details = {}
-  try { details = typeof entry.details === 'string' ? JSON.parse(entry.details) : (entry.details || {}) } catch {}
+  try { details = typeof entry.details === 'string' ? JSON.parse(entry.details) : (entry.details || {}) } catch { /* ignore malformed detail JSON */ }
   return (
     <div className="rel-overlay" onClick={onClose}>
       <div className="rel-modal" onClick={e => e.stopPropagation()}>
@@ -72,10 +72,13 @@ function DetailModal({ entry, onClose }) {
   )
 }
 
-export default function ResponseErrorLogPage() {
+export default function ResponseErrorLogPage({ embedded = false } = {}) {
   const { token } = useAuth()
   const navigate  = useNavigate()
-  const headers   = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers   = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   const [entries,   setEntries]   = useState([])
   const [total,     setTotal]     = useState(0)
@@ -106,7 +109,7 @@ export default function ResponseErrorLogPage() {
       setTotal(data.total || 0)
     } catch { setError('Network error.') }
     finally { setLoading(false) }
-  }, [page, caseId, errorType, fromDate, toDate, token])
+  }, [caseId, errorType, fromDate, headers, page, toDate])
 
   useEffect(() => { fetchEntries() }, [fetchEntries])
 
@@ -115,8 +118,8 @@ export default function ResponseErrorLogPage() {
 
   function clearFilters() { setCaseId(''); setErrorType(''); setFromDate(''); setToDate(''); setPage(1) }
 
-  return (
-    <MIMSLayout activeNav="response_error_log">
+  const content = (
+    <>
       <div className="rel-page">
         <div className="rel-header">
           <div>
@@ -189,6 +192,9 @@ export default function ResponseErrorLogPage() {
         )}
       </div>
       <DetailModal entry={detail} onClose={() => setDetail(null)} />
-    </MIMSLayout>
+    </>
   )
+
+  if (embedded) return content
+  return <MIMSLayout activeNav="response_error_log">{content}</MIMSLayout>
 }

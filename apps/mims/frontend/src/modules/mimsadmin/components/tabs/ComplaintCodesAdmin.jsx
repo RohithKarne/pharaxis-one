@@ -33,7 +33,7 @@ export default function ComplaintCodesAdmin() {
     setCodes(c.codes || [])
     if (!activeFamily && (f.families || []).length) setActiveFamily(f.families[0])
   }, [H, activeFamily])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   async function save() {
     if (!edit?.code || !edit?.label || !edit?.family_id) { showFlash('family + code + label required', 'error'); return }

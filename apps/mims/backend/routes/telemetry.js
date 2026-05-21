@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { logService } = require('../services/serviceLogger');
 const { logger } = require('../services/logger');
-const { emitProcessEvent } = require('../services/processExplorerService');
+const { emitTelemetryEvent } = require('../services/telemetryService');
 
 function safeText(value, limit = 1000) {
   const text = String(value || '');
@@ -35,7 +35,7 @@ router.post('/client-error', async (req, res) => {
       },
     });
 
-    await emitProcessEvent({
+    await emitTelemetryEvent({
       orgId: null,
       sourceModule: 'Frontend',
       method: 'CLIENT',

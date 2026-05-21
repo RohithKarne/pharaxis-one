@@ -1,7 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
-const { emitProcessEvent } = require('./processExplorerService');
+const { emitTelemetryEvent } = require('./telemetryService');
 
 let timer = null;
 const MAX_SCHEMA_SNAPSHOTS = parseInt(process.env.MIMS_SCHEMA_SNAPSHOT_RETENTION || '100', 10);
@@ -108,7 +108,7 @@ async function runSchemaScan() {
       'INSERT INTO mims_schema_snapshots (snapshot_json) VALUES (?)',
       [JSON.stringify(current)]
     );
-    await emitProcessEvent({
+    await emitTelemetryEvent({
       sourceModule: 'Schema Tracker',
       method: 'SCHEMA',
       path: '/schema/bootstrap',
@@ -134,7 +134,7 @@ async function runSchemaScan() {
   }
 
   for (const change of changes) {
-    await emitProcessEvent({
+    await emitTelemetryEvent({
       sourceModule: 'Schema Tracker',
       method: 'SCHEMA',
       path: `/schema/${change.entityId}`,

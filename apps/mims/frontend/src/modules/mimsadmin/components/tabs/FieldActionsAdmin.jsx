@@ -35,7 +35,7 @@ export default function FieldActionsAdmin() {
     const d = await httpFetch(url, { headers: H }).then(r => r.json())
     setRecords(d.records || [])
   }, [H, filterStatus])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   async function loadDetails(id) {
     const d = await httpFetch(`/api/field-actions/${id}`, { headers: H }).then(r => r.json())

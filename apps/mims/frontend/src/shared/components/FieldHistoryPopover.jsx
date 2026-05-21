@@ -22,17 +22,22 @@ export default function FieldHistoryPopover({ entityType, entityId, field, label
 
   useEffect(() => {
     if (!open) return
-    setBusy(true)
     const H = { Authorization: `Bearer ${token}` }
     const params = new URLSearchParams({
       entity_type: entityType, entity_id: String(entityId),
     })
     if (field) params.set('field', field)
-    httpFetch(`/api/field-history?${params}`, { headers: H })
-      .then(r => r.json())
-      .then(d => setRows(d.history || []))
-      .catch(() => setRows([]))
-      .finally(() => setBusy(false))
+    ;(async () => {
+      setBusy(true)
+      try {
+        const d = await httpFetch(`/api/field-history?${params}`, { headers: H }).then(r => r.json())
+        setRows(d.history || [])
+      } catch {
+        setRows([])
+      } finally {
+        setBusy(false)
+      }
+    })()
   }, [open, entityType, entityId, field, token])
 
   useEffect(() => {

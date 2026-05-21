@@ -73,7 +73,7 @@ export default function NotificationOverlay({ open, onClose }) {
       if (!res.ok) return
       setRows(prev => prev.map(n => (n.id === id ? { ...n, is_read: 1, read_at: n.read_at || new Date().toISOString() } : n)))
       setUnread(prev => Math.max(0, prev - 1))
-    } catch (_) {
+    } catch {
       // no-op
     }
   }
@@ -84,7 +84,7 @@ export default function NotificationOverlay({ open, onClose }) {
       if (!res.ok) return
       setRows(prev => prev.map(n => ({ ...n, is_read: 1, read_at: n.read_at || new Date().toISOString() })))
       setUnread(0)
-    } catch (_) {
+    } catch {
       // no-op
     }
   }
@@ -105,7 +105,7 @@ export default function NotificationOverlay({ open, onClose }) {
       )))
       setUnread(prev => Math.max(0, prev - 1))
       setAckPending(prev => Math.max(0, prev - 1))
-    } catch (_) {
+    } catch {
       // no-op
     }
   }
@@ -128,7 +128,7 @@ export default function NotificationOverlay({ open, onClose }) {
           : n
       )))
       setFailedDelivery(prev => Math.max(0, prev - 1))
-    } catch (_) {
+    } catch {
       // no-op
     } finally {
       setRetryingId(null)
@@ -141,7 +141,7 @@ export default function NotificationOverlay({ open, onClose }) {
       const res = await httpFetch(`${API}/notifications/retry-failed`, { method: 'POST', headers })
       if (!res.ok) return
       await loadNotifications()
-    } catch (_) {
+    } catch {
       // no-op
     } finally {
       setRetryingAll(false)

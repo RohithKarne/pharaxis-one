@@ -47,7 +47,7 @@ function TemplatesPane() {
     const d = await httpFetch(url, { headers: H }).then(r => r.json())
     setItems(d.templates || [])
   }, [H, typeFilter])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   async function open(t) {
     const d = await httpFetch(`/api/case-templates/${t.id}`, { headers: H }).then(r => r.json())

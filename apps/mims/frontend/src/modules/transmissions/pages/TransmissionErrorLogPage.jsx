@@ -4,7 +4,7 @@
  * CSS namespace: tel-
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -32,7 +32,7 @@ function ErrorTypeBadge({ errorType }) {
 function DetailModal({ entry, onClose }) {
   if (!entry) return null
   let details = {}
-  try { details = typeof entry.details === 'string' ? JSON.parse(entry.details) : (entry.details || {}) } catch {}
+  try { details = typeof entry.details === 'string' ? JSON.parse(entry.details) : (entry.details || {}) } catch { /* ignore malformed detail JSON */ }
   return (
     <div className="tel-overlay" onClick={onClose}>
       <div className="tel-modal" onClick={e => e.stopPropagation()}>
@@ -74,10 +74,13 @@ function DetailModal({ entry, onClose }) {
   )
 }
 
-export default function TransmissionErrorLogPage() {
+export default function TransmissionErrorLogPage({ embedded = false } = {}) {
   const { token } = useAuth()
   const navigate  = useNavigate()
-  const headers   = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers   = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   const [entries,      setEntries]      = useState([])
   const [total,        setTotal]        = useState(0)
@@ -110,7 +113,7 @@ export default function TransmissionErrorLogPage() {
       setTotal(data.total || 0)
     } catch { setError('Network error.') }
     finally { setLoading(false) }
-  }, [page, caseId, targetSystem, errorType, fromDate, toDate, token])
+  }, [caseId, errorType, fromDate, headers, page, targetSystem, toDate])
 
   useEffect(() => { fetchEntries() }, [fetchEntries])
 
@@ -119,8 +122,8 @@ export default function TransmissionErrorLogPage() {
 
   function clearFilters() { setCaseId(''); setTargetSystem(''); setErrorType(''); setFromDate(''); setToDate(''); setPage(1) }
 
-  return (
-    <MIMSLayout activeNav="transmission_error_log">
+  const content = (
+    <>
       <div className="tel-page">
         <div className="tel-header">
           <div>
@@ -196,6 +199,9 @@ export default function TransmissionErrorLogPage() {
         )}
       </div>
       <DetailModal entry={detail} onClose={() => setDetail(null)} />
-    </MIMSLayout>
+    </>
   )
+
+  if (embedded) return content
+  return <MIMSLayout activeNav="transmission_error_log">{content}</MIMSLayout>
 }

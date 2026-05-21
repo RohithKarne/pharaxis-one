@@ -9,7 +9,7 @@ export default function PiiRedactionRules() {
   const [rows, setRows] = useState([])
   const [form, setForm] = useState(blank)
   async function load() { const res = await httpFetch('/api/admin/pii-redaction-rules', { headers }); const data = await res.json(); setRows(data.rows || []) }
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void (async () => { await load() })() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   async function save(e) { e.preventDefault(); const res = await httpFetch('/api/admin/pii-redaction-rules', { method: 'POST', headers, body: JSON.stringify(form) }); if (res.ok) { setForm(blank); load() } }
   async function remove(id) { const res = await httpFetch(`/api/admin/pii-redaction-rules/${id}`, { method: 'DELETE', headers }); if (res.ok) load() }
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))

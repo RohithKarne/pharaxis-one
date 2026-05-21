@@ -54,7 +54,19 @@ function ClassificationCard({ miTabId, H, onChange }) {
     } catch { /* tolerate */ }
   }, [miTabId, H])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await httpFetch(`/api/mi/tabs/${miTabId}/classification`, { headers: H })
+        const d = await r.json()
+        if (!cancelled) setState(d)
+      } catch {
+        /* tolerate */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [miTabId, H])
 
   async function save(patch) {
     try {
@@ -153,7 +165,19 @@ function ApprovalCard({ responseId, H, onChange }) {
     } catch { /* tolerate */ }
   }, [responseId, H])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await httpFetch(`/api/mi-responses/${responseId}/approval-state`, { headers: H })
+        const d = await r.json()
+        if (!cancelled) setState(d)
+      } catch {
+        /* tolerate */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [responseId, H])
 
   async function sign() {
     if (!password) { setFlash('Password required'); return }
@@ -245,7 +269,7 @@ function ApprovalCard({ responseId, H, onChange }) {
   )
 }
 
-function SignerSlot({ title, subtitle, signed, status, showSignBtn, requiredRole, onSign }) {
+function SignerSlot({ title, subtitle, signed, showSignBtn, requiredRole, onSign }) {
   return (
     <div style={{
       padding: 10, borderRadius: 6, border: '1px solid var(--border)',

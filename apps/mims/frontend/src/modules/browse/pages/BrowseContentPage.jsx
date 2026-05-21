@@ -6,7 +6,7 @@
  * CSS namespace: bc- (browse content)
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../browse.css'
@@ -49,7 +49,7 @@ function DetailSidebar({ doc, token, onClose }) {
   const [fileLoading, setFileLoading] = useState(false)
   const [fileError, setFileError] = useState('')
   // Reset to details tab when doc changes
-  useEffect(() => { setActiveTab('details') }, [doc?.id])
+  useEffect(() => { setActiveTab('details') }, [doc])
 
   const hasHtml    = !!(doc?.content_html || doc?.assembled_html)
   const hasFile    = !!(doc?.file_path && doc?.file_mime)
@@ -80,7 +80,7 @@ function DetailSidebar({ doc, token, onClose }) {
           return
         }
         setFileBlobUrl(blobUrl)
-      } catch (_) {
+      } catch {
         if (active) setFileError('Unable to load secure file preview.')
       } finally {
         if (active) setFileLoading(false)
@@ -91,7 +91,7 @@ function DetailSidebar({ doc, token, onClose }) {
       active = false
       if (blobUrl) URL.revokeObjectURL(blobUrl)
     }
-  }, [doc?.id, fileUrl, hasFile, token])
+  }, [doc, fileUrl, hasFile, token])
 
   if (!doc) return null
 
@@ -355,7 +355,10 @@ function ModuleSidebar({ mod, onClose }) {
 
 export default function BrowseContentPage() {
   const { token } = useAuth()
-  const headers   = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers   = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   // ── Content type tab ────────────────────────────────────────────
   const [contentTab, setContentTab] = useState('documents') // 'documents' | 'modules'
@@ -393,10 +396,10 @@ export default function BrowseContentPage() {
         const res  = await httpFetch(`${API}/cm/folders`, { headers })
         const data = await res.json()
         if (res.ok) setFolders(data.folders || [])
-      } catch (_) {}
+      } catch { /* silent */ }
     }
     load()
-  }, [token])
+  }, [headers])
 
   // ── Fetch documents ──────────────────────────────────────────────
   const fetchDocs = useCallback(async () => {
@@ -414,7 +417,7 @@ export default function BrowseContentPage() {
       setTotal(data.total || 0)
     } catch { setError('Network error.') }
     finally { setLoading(false) }
-  }, [page, folderId, status, docType, search, token])
+  }, [docType, folderId, headers, page, search, status])
 
   useEffect(() => { if (contentTab === 'documents') fetchDocs() }, [fetchDocs, contentTab])
 
@@ -433,7 +436,7 @@ export default function BrowseContentPage() {
       setModTotal((data.modules || []).length)
     } catch { setModError('Network error.') }
     finally { setModLoading(false) }
-  }, [modStatus, modFolderId, modSearch, token])
+  }, [headers, modFolderId, modSearch, modStatus])
 
   useEffect(() => { if (contentTab === 'modules') fetchModules() }, [fetchModules, contentTab])
 

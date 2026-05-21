@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -52,19 +52,19 @@ export default function ChatPage() {
     },
   })
 
-  async function loadUsers() {
+  const loadUsers = useCallback(async () => {
     try {
       const res = await httpFetch(`${API}/users`, { headers })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load users.')
       const list = Array.isArray(data) ? data : []
       setUsers(list.filter((item) => Number(item.id) !== Number(currentUserId)))
-    } catch (_) {
+    } catch {
       setUsers([])
     }
-  }
+  }, [currentUserId, headers])
 
-  async function loadConversations(preferredId = null) {
+  const loadConversations = useCallback(async (preferredId = null) => {
     setLoadingList(true)
     setListError('')
     try {
@@ -88,14 +88,13 @@ export default function ChatPage() {
     } finally {
       setLoadingList(false)
     }
-  }
+  }, [conversationParam, headers, selectedConversationId])
 
   useEffect(() => {
     if (!token) return
     loadUsers()
     loadConversations()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, currentUserId])
+  }, [loadConversations, loadUsers, token])
 
   useEffect(() => {
     if (!selectedConversationId) return
@@ -104,7 +103,6 @@ export default function ChatPage() {
       next.set('conversation', selectedConversationId)
       return next
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversationId, setSearchParams])
 
   function toggleParticipant(userId) {

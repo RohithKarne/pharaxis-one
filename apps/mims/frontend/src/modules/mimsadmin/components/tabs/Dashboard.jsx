@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
 import MentionsInbox from '../../../../shared/components/collab/MentionsInbox'
@@ -15,6 +16,7 @@ import PcSignalsWidget from '../../../../shared/components/PcSignalsWidget'
 
 export default function Dashboard({ onNavigateTab }) {
   const { token } = useAuth()
+  const navigate = useNavigate()
   const H = useMemo(() => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }), [token])
 
   const [summary, setSummary] = useState(null)
@@ -58,15 +60,20 @@ export default function Dashboard({ onNavigateTab }) {
 
   // Each card optionally navigates to another tab when clicked
   const cards = [
-    { label: 'Organisations',        value: kpis.organisations?.total || 0, note: `${kpis.organisations?.active || 0} active`, tab: 'organizations' },
+    { label: 'Organisations',        value: kpis.organisations?.total || 0, note: `${kpis.organisations?.active || 0} active`, tab: 'system', systemItem: 'sys-division-params' },
     { label: 'Users',                value: kpis.users?.total || 0,         note: `${kpis.users?.active || 0} active`,         tab: null },
     { label: 'Failed Logins 24h',    value: kpis.failedLogins24h || 0,      note: 'Security watch',                            tab: null },
     { label: 'Locked 2FA Users',     value: kpis.lockedUsers || 0,          note: 'Needs review',                              tab: null },
     { label: 'Unread Notifications', value: kpis.unreadNotifications || 0,  note: 'In-app queue',                              tab: null },
     { label: 'Alert Events 24h',     value: kpis.alertEvents24h || 0,       note: 'Platform alerts',                           tab: null },
-    { label: 'Ready Orgs',           value: readiness.readyOrgs || 0,       note: `${readiness.attentionOrgs || 0} need attention`, tab: 'organizations' },
-    { label: 'Average Readiness',    value: `${readiness.averageScore || 0}%`, note: `${readiness.totalBlockers || 0} active blockers`, tab: 'organizations' },
+    { label: 'Ready Orgs',           value: readiness.readyOrgs || 0,       note: `${readiness.attentionOrgs || 0} need attention`, tab: 'system', systemItem: 'sys-division-params' },
+    { label: 'Average Readiness',    value: `${readiness.averageScore || 0}%`, note: `${readiness.totalBlockers || 0} active blockers`, tab: 'system', systemItem: 'sys-division-params' },
   ]
+
+  function openCase(caseId) {
+    if (!caseId) return
+    navigate(`/cases/${caseId}`)
+  }
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '24px 28px' }}>
@@ -90,7 +97,7 @@ export default function Dashboard({ onNavigateTab }) {
             {cards.map(card => (
               <div
                 key={card.label}
-                onClick={() => card.tab && onNavigateTab?.(card.tab)}
+                onClick={() => card.tab && onNavigateTab?.(card.tab, card.systemItem ? 'system' : null, card.systemItem || '')}
                 style={{
                   border: '1px solid var(--border)', borderRadius: 10, padding: 16,
                   background: 'var(--surface)',
@@ -118,8 +125,8 @@ export default function Dashboard({ onNavigateTab }) {
 
       {/* Wave 4 + Sprint 2 widgets — mentions inbox, recent/pinned cases, PC signals */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <MentionsInbox onOpen={(m) => window.location.assign(`#/case/${m.case_id}`)} />
-        <RecentPinnedWidget onOpen={(cid) => window.location.assign(`#/case/${cid}`)} />
+        <MentionsInbox onOpen={(m) => openCase(m.case_id)} />
+        <RecentPinnedWidget onOpen={(cid) => openCase(cid)} />
         <PcSignalsWidget />
       </div>
 

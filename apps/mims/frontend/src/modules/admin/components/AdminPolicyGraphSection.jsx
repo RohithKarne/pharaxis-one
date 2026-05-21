@@ -7,7 +7,7 @@ function safeParseJson(label, raw) {
   if (!text) return { ok: true, value: {} }
   try {
     return { ok: true, value: JSON.parse(text) }
-  } catch (_) {
+  } catch {
     return { ok: false, error: `${label} must be valid JSON.` }
   }
 }
@@ -19,7 +19,7 @@ function toArray(value) {
 function prettyJson(value) {
   try {
     return JSON.stringify(value ?? {}, null, 2)
-  } catch (_) {
+  } catch {
     return '{}'
   }
 }
@@ -130,10 +130,10 @@ export default function AdminPolicyGraphSection({ H, flash }) {
   const actorNodes = useMemo(() => nodes.filter((node) => node.node_scope === 'actor'), [nodes])
   const contentNodes = useMemo(() => nodes.filter((node) => node.node_scope === 'content'), [nodes])
 
-  function withOrg(path) {
+  const withOrg = useCallback((path) => {
     if (!orgIdNum) return path
     return `${path}${path.includes('?') ? '&' : '?'}org_id=${orgIdNum}`
-  }
+  }, [orgIdNum])
 
   const loadOrgs = useCallback(async () => {
     try {
@@ -143,7 +143,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
       const nextOrgs = toArray(body.orgs).length > 0 ? toArray(body.orgs) : toArray(body.organisations)
       setOrgs(nextOrgs)
       if (!orgId && nextOrgs.length > 0) setOrgId(String(nextOrgs[0].id))
-    } catch (_) {
+    } catch {
       // Silent fallback
     }
   }, [H, orgId])
@@ -166,7 +166,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
     } finally {
       setLoadingRules(false)
     }
-  }, [H, flash, orgIdNum])
+  }, [H, flash, withOrg])
 
   const loadDecisionLogs = useCallback(async () => {
     setLogsLoading(true)
@@ -180,7 +180,7 @@ export default function AdminPolicyGraphSection({ H, flash }) {
     } finally {
       setLogsLoading(false)
     }
-  }, [H, flash, logsLimit, orgIdNum])
+  }, [H, flash, logsLimit, withOrg])
 
   useEffect(() => {
     loadOrgs()

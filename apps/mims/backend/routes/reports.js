@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireCapability } = require('../middleware/auth');
 const pool = require('../database/db');
 const {
   getDailyCaseOpenings,
@@ -792,7 +792,7 @@ router.get('/presets', authenticate, async (req, res) => {
 });
 
 // POST /api/reports/presets
-router.post('/presets', authenticate, async (req, res) => {
+router.post('/presets', authenticate, requireCapability('reports.manage'), async (req, res) => {
   try {
     const { name, group_key, report_key, filters } = req.body;
     if (!name || !group_key || !report_key) return res.status(400).json({ error: 'name, group_key, report_key are required.' });
@@ -810,7 +810,7 @@ router.post('/presets', authenticate, async (req, res) => {
 });
 
 // DELETE /api/reports/presets/:id
-router.delete('/presets/:id', authenticate, async (req, res) => {
+router.delete('/presets/:id', authenticate, requireCapability('reports.manage'), async (req, res) => {
   try {
     await pool.execute(
       `DELETE FROM user_report_presets WHERE id = ? AND user_id = ? AND org_id = ?`,

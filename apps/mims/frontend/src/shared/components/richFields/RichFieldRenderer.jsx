@@ -60,7 +60,7 @@ export default function RichFieldRenderer({
           method: 'PUT', headers: H,
           body: JSON.stringify({ value_type: fieldType, value: next }),
         })
-      } catch {}
+      } catch { /* ignore autosave errors */ }
     }, 600)
   }, [externallyControlled, extOnChange, enabled, entityType, entityId, section, field, fieldType, token])
 

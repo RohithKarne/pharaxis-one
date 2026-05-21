@@ -15,10 +15,6 @@ function parseIngredients(text) {
   return String(text || '').split(',').map(item => item.trim()).filter(Boolean)
 }
 
-function optionLabel(item, fallback) {
-  return item?.name || item?.trade_name || item?.member_label || item?.target_label || fallback
-}
-
 function groupTypeLabel(types, key) {
   return types.find(item => item.key === key)?.label || key
 }

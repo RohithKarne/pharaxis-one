@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 
 import { apiClient, tokenFromH } from '../../../shared/api/apiClient'
@@ -13,7 +13,7 @@ const __apiClientToResponse = (ok, status, payload) => ({
 
 const __apiClientParseBody = (body) => {
   if (typeof body !== 'string') return body
-  try { return JSON.parse(body) } catch (_) { return body }
+  try { return JSON.parse(body) } catch { return body }
 }
 
 async function apiFetch(url, options = {}) {
@@ -82,9 +82,12 @@ function ScoreBadge({ score }) {
 }
 
 // ─── Retrospective QA Reports Panel ──────────────────────────────────────────
-function QAReportsPanel({ H }) {
+function QAReportsPanel() {
   const { token } = useAuth()
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   const [reports,      setReports]      = useState([])
   const [loading,      setLoading]      = useState(false)
@@ -103,7 +106,7 @@ function QAReportsPanel({ H }) {
       setReports(data.reports || [])
     } catch { setReports([]) }
     finally { setLoading(false) }
-  }, [token])
+  }, [headers])
 
   useEffect(() => { load() }, [load])
 
@@ -294,9 +297,12 @@ function QAReportsPanel({ H }) {
 }
 
 // ─── QA Rules Config Panel ────────────────────────────────────────────────────
-function QARulesPanel({ H }) {
+function QARulesPanel() {
   const { token } = useAuth()
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   const [rules,   setRules]   = useState([])
   const [loading, setLoading] = useState(false)
@@ -311,7 +317,7 @@ function QARulesPanel({ H }) {
       setRules(data.rules || [])
     } catch { setRules([]) }
     finally { setLoading(false) }
-  }, [token])
+  }, [headers])
 
   useEffect(() => { load() }, [load])
 
@@ -323,7 +329,7 @@ function QARulesPanel({ H }) {
         body: JSON.stringify({ is_active: rule.is_active ? 0 : 1 }),
       })
       setRules(prev => prev.map(r => r.id === rule.id ? { ...r, is_active: r.is_active ? 0 : 1 } : r))
-    } catch (err) {
+    } catch {
       setMsg('Failed to update rule.')
     } finally {
       setSaving(p => ({ ...p, [rule.id]: false }))
@@ -417,9 +423,12 @@ function QARulesPanel({ H }) {
 }
 
 // ─── Manager Override Dashboard Panel ────────────────────────────────────────
-function QAOverridesPanel({ H }) {
+function QAOverridesPanel() {
   const { token } = useAuth()
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const headers = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
   const [overrides, setOverrides] = useState([])
   const [loading,   setLoading]   = useState(false)
@@ -439,7 +448,7 @@ function QAOverridesPanel({ H }) {
       setTotal(data.total || 0)
     } catch { setOverrides([]) }
     finally { setLoading(false) }
-  }, [token, page, filter])
+  }, [headers, page, filter])
 
   useEffect(() => { load() }, [load])
 

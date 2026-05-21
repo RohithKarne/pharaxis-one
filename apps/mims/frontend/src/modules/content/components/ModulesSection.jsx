@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import StatusBadge from './StatusBadge'
@@ -164,7 +164,10 @@ function ModuleDrawer({ moduleDoc, folders, token, onClose, onSaved }) {
 }
 
 export default function ModulesSection({ token }) {
-  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const authHeaders = useMemo(
+    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
+    [token]
+  )
   const [modules, setModules] = useState([])
   const [folders, setFolders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -172,26 +175,37 @@ export default function ModulesSection({ token }) {
   const [showDrawer, setShowDrawer] = useState(false)
   const [editModule, setEditModule] = useState(null)
   const [usageModule, setUsageModule] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const loadFolders = useCallback(async () => {
-    try {
-      const res = await httpFetch('/api/cm/folders', { headers: authHeaders })
-      if (res.ok) setFolders((await res.json()).folders || [])
-    } catch { /* silent */ }
-  }, [token]) // eslint-disable-line
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await httpFetch('/api/cm/folders', { headers: authHeaders })
+        if (!cancelled && res.ok) setFolders((await res.json()).folders || [])
+      } catch {
+        /* silent */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [authHeaders])
 
-  const loadModules = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)))
-      const res = await httpFetch(`/api/cm/modules?${params}`, { headers: authHeaders })
-      if (res.ok) setModules((await res.json()).modules || [])
-    } catch { /* silent */ }
-    setLoading(false)
-  }, [token, filters]) // eslint-disable-line
-
-  useEffect(() => { loadFolders() }, [loadFolders])
-  useEffect(() => { loadModules() }, [loadModules])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)))
+        const res = await httpFetch(`/api/cm/modules?${params}`, { headers: authHeaders })
+        if (!cancelled && res.ok) setModules((await res.json()).modules || [])
+      } catch {
+        /* silent */
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [authHeaders, filters, refreshKey])
 
   async function handleArchive(moduleDoc) {
     if (!await confirm(`Archive module "${moduleDoc.name}"? Linked documents using this module will also be archived.`)) return
@@ -202,7 +216,7 @@ export default function ModulesSection({ token }) {
         if (d.archived_linked_documents > 0) {
           toast.info(`Module archived. ${d.archived_linked_documents} linked document(s) were auto-archived.`)
         }
-        loadModules()
+        setRefreshKey(key => key + 1)
       } else {
         const d = await res.json()
         toast.error(d.error || 'Archive failed.')
@@ -234,7 +248,7 @@ export default function ModulesSection({ token }) {
           <option>Archived</option>
         </select>
         <input className="cm-form-input" style={{ width: 250 }} value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} placeholder="Search by module name, ID, tags…" />
-        <button className="cm-btn cm-btn-secondary" onClick={loadModules}>Filter</button>
+        <button className="cm-btn cm-btn-secondary" onClick={() => setRefreshKey(key => key + 1)}>Filter</button>
       </div>
 
       {loading ? (
@@ -288,7 +302,7 @@ export default function ModulesSection({ token }) {
           folders={folders}
           token={token}
           onClose={() => { setShowDrawer(false); setEditModule(null) }}
-          onSaved={loadModules}
+          onSaved={() => setRefreshKey(key => key + 1)}
         />
       )}
       {usageModule && (

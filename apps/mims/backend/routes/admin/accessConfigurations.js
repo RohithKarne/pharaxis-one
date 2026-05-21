@@ -79,9 +79,24 @@ router.get('/access-config/groups/:id/privileges', authenticate, requireAccessAd
 router.put('/access-config/groups/:id/privileges', authenticate, requireAccessAdmin, requireActivityPrivilege('admin.access.manage'), async (req, res) => {
   try {
     const orgId = resolveOrgId(req, req.body || {});
+    const keys = req.body?.privilege_keys || req.body?.privileges || [];
+    // P3 Segregation of Duties: reject saving a group that would hold BOTH sides
+    // of a 'block'-severity conflict (e.g. draft + approve the same letter).
+    // 'warning' severity is allowed through (surfaced by /access-config/validate).
+    const keySet = new Set(keys);
+    const sodRules = await accessService.getSodRules(orgId);
+    const blocked = (sodRules || []).find(r =>
+      r.is_active && String(r.severity || '').toLowerCase() === 'block' &&
+      keySet.has(r.first_privilege) && keySet.has(r.conflicting_privilege));
+    if (blocked) {
+      return res.status(422).json({
+        error: `Segregation of Duties conflict: a group cannot hold both "${blocked.first_privilege}" and "${blocked.conflicting_privilege}".`,
+        code: 'SOD_CONFLICT',
+      });
+    }
     const result = await accessService.setGroupPrivileges({
       groupId: Number(req.params.id),
-      privilegeKeys: req.body?.privilege_keys || req.body?.privileges || [],
+      privilegeKeys: keys,
       userId: req.user.userId,
       orgId,
       allowGlobal: hasGlobalAdminScope(req.user),

@@ -59,7 +59,7 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
               <td style={{ padding: '6px 8px' }}>{rule.value}</td>
               <td style={{ padding: '6px 8px' }}>{rule.action}</td>
               <td style={{ padding: '6px 8px' }}><button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={async () => {
-                if (rule.id) { try { await httpFetch(`/api/admin/emir/sender-rules/${rule.id}`, { method: 'DELETE', headers: H }) } catch (_e) {} }
+                if (rule.id) { try { await httpFetch(`/api/admin/emir/sender-rules/${rule.id}`, { method: 'DELETE', headers: H }) } catch { /* ignore remote delete failure while removing local draft row */ } }
                 setEmirSenderRules(prev => prev.filter((_, i) => i !== idx))
               }}>Remove</button></td>
             </tr>
@@ -86,7 +86,7 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
               setEmirSenderRules(prev => [...prev, { ...emirSenderForm, id: d.id }])
               setEmirSenderForm({ rule_type: 'whitelist', match_type: 'domain', value: '', action: 'reject_silently' })
             }
-          } catch (_e) {}
+          } catch { /* ignore remote save failure until user retries */ }
         }}>+ Add Rule</button>
       </div>
 
@@ -132,7 +132,7 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
               <td style={{ padding: '6px 8px' }}>{rule.case_type}</td>
               <td style={{ padding: '6px 8px' }}>{rule.default_priority}</td>
               <td style={{ padding: '6px 8px' }}><button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={async () => {
-                if (rule.id) { try { await httpFetch(`/api/admin/emir/routing-rules/${rule.id}`, { method: 'DELETE', headers: H }) } catch (_e) {} }
+                if (rule.id) { try { await httpFetch(`/api/admin/emir/routing-rules/${rule.id}`, { method: 'DELETE', headers: H }) } catch { /* ignore remote delete failure while removing local draft row */ } }
                 setEmirRoutingRules(prev => prev.filter((_, i) => i !== idx))
               }}>Remove</button></td>
             </tr>
@@ -173,7 +173,7 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
               setEmirRoutingRules(prev => [...prev, { ...emirRouteForm, id: d.id }])
               setEmirRouteForm({ rule_name: '', match_field: 'subject', match_type: 'contains', match_value: '', case_type: 'MI', default_priority: 'normal' })
             }
-          } catch (_e) {}
+          } catch { /* ignore remote save failure until user retries */ }
         }}>+ Add Rule</button>
       </div>
 

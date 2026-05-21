@@ -26,15 +26,14 @@ const cors = require('cors');
 const path = require('path');
 const pool = require('./database/db');
 const { authenticate } = require('./middleware/auth');
-const { router: processExplorerRouter } = require('./routes/admin/processExplorer');
 const { hasGlobalAdminScope } = require('./utils/adminScope');
 const {
   inferModule,
   deriveEntity,
   deriveEventType,
-  shouldCaptureBusinessEvent,
-  emitProcessEvent,
-} = require('./services/processExplorerService');
+  shouldCaptureTelemetryEvent,
+  emitTelemetryEvent,
+} = require('./services/telemetryService');
 const { logger } = require('./services/logger');
 const { requestContext, attachRequestIdHeader } = require('./middleware/requestContext');
 const { captureApiExceptions } = require('./middleware/exceptionCapture');
@@ -140,7 +139,7 @@ app.use('/api', inputSecurityMiddleware);
 app.use('/api', apiRateLimiter);
 app.use('/api', auditAutoCapture());
 
-// ── Fix 13: Process Explorer telemetry — batched flush (500ms) ───────────────
+// ── Telemetry capture — batched flush (500ms) ────────────────────────────────
 // Previously wrote one DB row per API response (unbounded write pressure).
 // Now events are buffered in-process and flushed in bulk every 500ms.
 // Purge of old logs moved to the scheduler (daily job) — not per-request.
@@ -152,7 +151,7 @@ async function _flushTelemetry() {
   const batch = _telemetryBuffer.splice(0, _telemetryBuffer.length);
   try {
     for (const event of batch) {
-      await emitProcessEvent(event);
+      await emitTelemetryEvent(event);
     }
   } catch (_) { /* best-effort only */ }
 }
@@ -160,8 +159,6 @@ async function _flushTelemetry() {
 setInterval(_flushTelemetry, TELEMETRY_FLUSH_MS).unref();
 
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/admin/process-logs')) return next();
-
   const start = Date.now();
   let capturedErrorMessage = null;
   const originalJson = res.json.bind(res);
@@ -174,7 +171,7 @@ app.use('/api', (req, res, next) => {
 
   res.on('finish', () => {
     try {
-      if (!shouldCaptureBusinessEvent(req, res)) return;
+      if (!shouldCaptureTelemetryEvent(req, res)) return;
       const pathOnly = req.originalUrl.split('?')[0];
       const payload  = req.body && typeof req.body === 'object' && Object.keys(req.body).length
         ? req.body : null;
@@ -287,6 +284,7 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/responseErrorLog'));
   r.use(`${prefix}/admin`, require('./routes/admin/transmissionAuditTrail'));
   r.use(`${prefix}/admin`, require('./routes/admin/copyDivision'));
+  r.use(`${prefix}/admin`, require('./routes/admin/divisionParameters'));
   r.use(`${prefix}/admin`, require('./routes/admin/dppr'));
   r.use(`${prefix}/admin`, require('./routes/admin/rtbf'));
   r.use(`${prefix}/admin`, require('./routes/admin/consent'));
@@ -304,7 +302,6 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/observability'));
   r.use(`${prefix}/admin`, require('./routes/admin/config'));
   r.use(`${prefix}/admin/orgs`, require('./routes/admin/orgs'));
-  r.use(`${prefix}/admin/process-logs`, processExplorerRouter);
   r.use(`${prefix}/admin`, require('./routes/admin/reportAccessRequests'));
   r.use(`${prefix}/admin`, changeApprovals);
   r.use(`${prefix}/admin`, dependencyCheck);

@@ -30,7 +30,8 @@ export default function SlaChip({ caseId }) {
   }, [caseId, token])
 
   useEffect(() => {
-    load()
+    const run = async () => { await load() }
+    run()
     const id = setInterval(load, 60_000)
     return () => clearInterval(id)
   }, [load])

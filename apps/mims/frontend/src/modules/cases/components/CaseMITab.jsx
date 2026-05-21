@@ -100,7 +100,7 @@ export default function CaseMITab({
         setMiRespForm(prev => ({ ...prev, ...parsed }))
       }
     } catch { /* no-op */ }
-  }, [miRespModal, miDraftStorageKey, activeMiTabId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [miRespModal, miDraftStorageKey, activeMiTabId])
 
   useEffect(() => {
     if (!miRespModal) return
@@ -429,6 +429,22 @@ export default function CaseMITab({
     } catch (err) { toast.error(err.message) }
   }
 
+  // Compliant "reopen" of a finalized letter: creates a new editable version
+  // that supersedes the original. The original stays intact (21 CFR Part 11).
+  async function amendSentResponse(responseId) {
+    const reason = window.prompt('Amend this finalized letter — creates a new editable version; the original is preserved in the record.\n\nReason for amendment:')
+    if (reason === null) return // cancelled
+    try {
+      const res  = await httpFetch(`${API}/cases/${id}/mi-responses/${responseId}/supersede`, {
+        method: 'POST', headers, body: JSON.stringify({ reason: reason.trim() || undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to amend letter.')
+      setSavedMsg('Amended draft created from finalized letter'); setTimeout(() => setSavedMsg(''), 2500)
+      loadMiResponses()
+    } catch (err) { toast.error(err.message) }
+  }
+
   const documents = builderContext?.documents || []
   const modules = builderContext?.modules || []
   const templates = builderContext?.templates || []
@@ -564,7 +580,14 @@ export default function CaseMITab({
                   {st === 'APPROVED' && <button className="cf-mi-trans-btn cf-mi-trans-send"    onClick={() => advanceMiStatus(r.id, 'SENT')}>Send Response (e-sign required)</button>}
                 </div>
               )}
-              {isSent && <div className="cf-mi-final-badge">Sent - Record Immutable</div>}
+              {isSent && (
+                <div className="cf-mi-transition-row">
+                  <span className="cf-mi-final-badge">Sent - Record Immutable</span>
+                  {r.superseded_by_id
+                    ? <span className="cf-mi-final-badge">Superseded</span>
+                    : <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => amendSentResponse(r.id)}>Amend (new version)</button>}
+                </div>
+              )}
               {isVoided && <div className="cf-mi-voided-label">Discarded</div>}
             </div>
           )

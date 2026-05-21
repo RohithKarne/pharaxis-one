@@ -14,7 +14,19 @@ export default function PvSignalPanel({ headers }) {
     setSignals((await sRes.json().catch(() => ({ rows: [] }))).rows || [])
     setPeriodic((await pRes.json().catch(() => ({ rows: [] }))).rows || [])
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const [sRes, pRes] = await Promise.all([
+        httpFetch('/api/admin/pv/signals', { headers }),
+        httpFetch('/api/admin/pv/periodic-reports', { headers }),
+      ])
+      if (cancelled) return
+      setSignals((await sRes.json().catch(() => ({ rows: [] }))).rows || [])
+      setPeriodic((await pRes.json().catch(() => ({ rows: [] }))).rows || [])
+    })()
+    return () => { cancelled = true }
+  }, [headers])
 
   async function runSignals() {
     const res = await httpFetch('/api/admin/pv/signals/run', { method: 'POST', headers, body: JSON.stringify({}) })

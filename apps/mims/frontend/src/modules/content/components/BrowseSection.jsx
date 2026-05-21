@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import DOMPurify from 'dompurify'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
@@ -10,7 +10,7 @@ function authoringSourceLabel(item) {
 }
 
 export default function BrowseSection({ token }) {
-  const authHeaders = { Authorization: `Bearer ${token}` }
+  const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const [contentType, setContentType] = useState('documents')
   const [search, setSearch] = useState('')
   const [items, setItems] = useState([])
@@ -21,14 +21,14 @@ export default function BrowseSection({ token }) {
   const [bookmarks, setBookmarks] = useState([])
   const [folders, setFolders] = useState([])
   const [selectedFolderId, setSelectedFolderId] = useState(null)
-  const authHeadersJson = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const authHeadersJson = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token])
 
-  async function loadBookmarks() {
+  const loadBookmarks = useCallback(async () => {
     try {
       const res = await httpFetch('/api/cm/folders/bookmarks', { headers: authHeaders })
       if (res.ok) setBookmarks((await res.json()).bookmarks || [])
     } catch { /* silent */ }
-  }
+  }, [authHeaders])
 
   async function toggleBookmark(item) {
     const entityType = contentType === 'documents' ? 'document' : 'faq'
@@ -38,34 +38,46 @@ export default function BrowseSection({ token }) {
     } else {
       await httpFetch('/api/cm/folders/bookmarks', { method: 'POST', headers: authHeadersJson, body: JSON.stringify({ entity_type: entityType, entity_id: item.id }) }).catch(() => {})
     }
-    loadBookmarks()
+    await loadBookmarks()
   }
 
-  useEffect(() => { loadBookmarks() }, [token]) // eslint-disable-line
+  function isBookmarked(item) {
+    const entityType = contentType === 'documents' ? 'document' : 'faq'
+    return bookmarks.some(b => b.entity_type === entityType && b.entity_id === item.id)
+  }
+
+  useEffect(() => { loadBookmarks() }, [loadBookmarks])
 
   useEffect(() => {
     httpFetch('/api/cm/folders', { headers: authHeaders })
       .then(r => r.json())
       .then(d => setFolders(d.folders || []))
       .catch(() => {})
-  }, [token]) // eslint-disable-line
+  }, [authHeaders])
 
   useEffect(() => {
-    setSelectedItem(null)
-    setItems([])
-    setLoading(true)
-    const params = new URLSearchParams({ status: 'Published', limit: '50' })
-    if (search) params.set('search', search)
-    if (selectedFolderId) params.set('folder_id', String(selectedFolderId))
-    const endpoint = contentType === 'documents'
-      ? `/api/cm/documents?${params}`
-      : `/api/cm/faqs?${params}`
-    httpFetch(endpoint, { headers: authHeaders })
-      .then(r => r.json())
-      .then(d => setItems(d.documents || d.faqs || []))
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false))
-  }, [contentType, search, selectedFolderId])
+    let cancelled = false
+    ;(async () => {
+      setSelectedItem(null)
+      setItems([])
+      setLoading(true)
+      const params = new URLSearchParams({ status: 'Published', limit: '50' })
+      if (search) params.set('search', search)
+      if (selectedFolderId) params.set('folder_id', String(selectedFolderId))
+      const endpoint = contentType === 'documents'
+        ? `/api/cm/documents?${params}`
+        : `/api/cm/faqs?${params}`
+      try {
+        const d = await httpFetch(endpoint, { headers: authHeaders }).then(r => r.json())
+        if (!cancelled) setItems(d.documents || d.faqs || [])
+      } catch {
+        if (!cancelled) setItems([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [authHeaders, contentType, search, selectedFolderId])
 
   async function openItem(item) {
     setDetailLoading(true)
@@ -177,8 +189,8 @@ export default function BrowseSection({ token }) {
                 })()}
                 </div>
                 <button onClick={e => { e.stopPropagation(); toggleBookmark(item) }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: bookmarks.find(b => b.entity_id === item.id) ? 'var(--warning, #f59e0b)' : 'var(--border)', flexShrink: 0, alignSelf: 'center' }}>
-                  {bookmarks.find(b => b.entity_id === item.id) ? '★' : '☆'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: isBookmarked(item) ? 'var(--warning, #f59e0b)' : 'var(--border)', flexShrink: 0, alignSelf: 'center' }}>
+                  {isBookmarked(item) ? '★' : '☆'}
                 </button>
               </div>
             ))

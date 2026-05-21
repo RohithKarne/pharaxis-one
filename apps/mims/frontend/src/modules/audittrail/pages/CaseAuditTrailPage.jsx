@@ -4,7 +4,7 @@
  * CSS namespace: cat-
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './CaseAuditTrailPage.css'
@@ -102,23 +102,31 @@ function VersionCard({ version, index, total }) {
 }
 
 function RightPanel({ caseItem, token }) {
-  const headers = { Authorization: `Bearer ${token}` }
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const [versions, setVersions] = useState([])
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
 
   useEffect(() => {
     if (!caseItem) return
-    setLoading(true); setError(null); setVersions([])
-    httpFetch(`${API}/admin/case-audit-trail?case_id=${caseItem.case_id}&limit=500&page=1`, { headers })
-      .then(r => r.json())
-      .then(data => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      setError(null)
+      setVersions([])
+      try {
+        const data = await httpFetch(`${API}/admin/case-audit-trail?case_id=${caseItem.case_id}&limit=500&page=1`, { headers }).then(r => r.json())
+        if (cancelled) return
         if (data.error) { setError(data.error); return }
         setVersions(groupIntoVersions(data.entries || []))
-      })
-      .catch(() => setError('Network error.'))
-      .finally(() => setLoading(false))
-  }, [caseItem?.case_id])
+      } catch {
+        if (!cancelled) setError('Network error.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [caseItem, headers])
 
   if (!caseItem) {
     return (
@@ -157,9 +165,9 @@ function RightPanel({ caseItem, token }) {
   )
 }
 
-export default function CaseAuditTrailPage() {
+export default function CaseAuditTrailPage({ embedded = false } = {}) {
   const { token } = useAuth()
-  const headers   = { Authorization: `Bearer ${token}` }
+  const headers   = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
 
   const [cases,       setCases]       = useState([])
   const [total,       setTotal]       = useState(0)
@@ -182,7 +190,7 @@ export default function CaseAuditTrailPage() {
       setTotal(data.total || 0)
     } catch { setLeftError('Network error.') }
     finally { setLeftLoading(false) }
-  }, [page, search, token])
+  }, [headers, page, search])
 
   useEffect(() => { fetchCases() }, [fetchCases])
 
@@ -190,8 +198,8 @@ export default function CaseAuditTrailPage() {
 
   function handleSearch(val) { setSearch(val); setPage(1); setSelected(null) }
 
-  return (
-    <MIMSLayout activeNav="case_audit_trail">
+  const content = (
+    <>
       <div className="cat-page">
         <div className="cat-top">
           <div>
@@ -252,6 +260,9 @@ export default function CaseAuditTrailPage() {
           <RightPanel caseItem={selected} token={token} />
         </div>
       </div>
-    </MIMSLayout>
+    </>
   )
+
+  if (embedded) return content
+  return <MIMSLayout activeNav="case_audit_trail">{content}</MIMSLayout>
 }

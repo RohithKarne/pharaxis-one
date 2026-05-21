@@ -1,10 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
 export default function FolderManager({ show, onClose, token }) {
-  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const authHeaders = useMemo(
+    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
+    [token]
+  )
   const [folders, setFolders] = useState([])
   const [products, setProducts] = useState([])
   const [sites, setSites] = useState([])
@@ -20,7 +23,7 @@ export default function FolderManager({ show, onClose, token }) {
   const [permGroupId, setPermGroupId] = useState('')
   const [permLevel, setPermLevel] = useState('read')
 
-  const load = useCallback(async () => {
+  async function refreshFolders() {
     setLoading(true)
     try {
       const [fRes, pRes, sRes] = await Promise.all([
@@ -33,7 +36,7 @@ export default function FolderManager({ show, onClose, token }) {
       if (sRes.ok) setSites((await sRes.json()).sites || [])
     } catch { /* silent */ }
     setLoading(false)
-  }, [token]) // eslint-disable-line
+  }
 
   async function loadPermissions(folderId) {
     setPermLoading(true)
@@ -68,7 +71,29 @@ export default function FolderManager({ show, onClose, token }) {
     } catch { toast.error('Network error.') }
   }
 
-  useEffect(() => { if (show) load() }, [show, load])
+  useEffect(() => {
+    if (!show) return
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const [fRes, pRes, sRes] = await Promise.all([
+          httpFetch('/api/cm/folders', { headers: authHeaders }),
+          httpFetch('/api/admin/products-full', { headers: authHeaders }),
+          httpFetch('/api/admin/sites', { headers: authHeaders }),
+        ])
+        if (cancelled) return
+        if (fRes.ok) setFolders((await fRes.json()).folders || [])
+        if (pRes.ok) setProducts((await pRes.json()).products || [])
+        if (sRes.ok) setSites((await sRes.json()).sites || [])
+      } catch {
+        /* silent */
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [authHeaders, show])
 
   function openAdd() {
     setEditFolder(null)
@@ -89,7 +114,7 @@ export default function FolderManager({ show, onClose, token }) {
       const url = editFolder ? `/api/cm/folders/${editFolder.id}` : '/api/cm/folders'
       const method = editFolder ? 'PUT' : 'POST'
       const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify(form) })
-      if (res.ok) { setShowForm(false); load() }
+      if (res.ok) { setShowForm(false); refreshFolders() }
       else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
     } catch { toast.error('Network error.') }
     setSaving(false)

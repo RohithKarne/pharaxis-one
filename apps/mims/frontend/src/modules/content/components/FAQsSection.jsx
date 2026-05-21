@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
@@ -82,8 +82,11 @@ function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
   )
 }
 
-export default function FAQsSection({ token, user }) {
-  const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+export default function FAQsSection({ token }) {
+  const authHeaders = useMemo(
+    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
+    [token]
+  )
   const [faqs, setFaqs] = useState([])
   const [folders, setFolders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -100,27 +103,34 @@ export default function FAQsSection({ token, user }) {
   const [faqEsignReason, setFaqEsignReason] = useState('')
   const [faqEsignErr, setFaqEsignErr] = useState('')
   const [faqEsignLoading, setFaqEsignLoading] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const loadFaqs = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)))
-      const [fRes, folRes] = await Promise.all([
-        httpFetch(`/api/cm/faqs?${params}`, { headers: authHeaders }),
-        httpFetch('/api/cm/folders', { headers: authHeaders }),
-      ])
-      if (fRes.ok) setFaqs((await fRes.json()).faqs || [])
-      if (folRes.ok) setFolders((await folRes.json()).folders || [])
-    } catch { /* silent */ }
-    setLoading(false)
-  }, [token, filters]) // eslint-disable-line
-
-  useEffect(() => { loadFaqs() }, [loadFaqs])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)))
+        const [fRes, folRes] = await Promise.all([
+          httpFetch(`/api/cm/faqs?${params}`, { headers: authHeaders }),
+          httpFetch('/api/cm/folders', { headers: authHeaders }),
+        ])
+        if (cancelled) return
+        if (fRes.ok) setFaqs((await fRes.json()).faqs || [])
+        if (folRes.ok) setFolders((await folRes.json()).folders || [])
+      } catch {
+        /* silent */
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [authHeaders, filters, refreshKey])
 
   async function handleCheckOut(faq) {
     try {
       const res = await httpFetch(`/api/cm/faqs/${faq.id}/checkout`, { method: 'POST', headers: authHeaders })
-      if (res.ok) loadFaqs()
+      if (res.ok) setRefreshKey(key => key + 1)
       else { const d = await res.json(); toast.error(d.error || 'Check out failed.') }
     } catch { toast.error('Network error.') }
   }
@@ -129,7 +139,7 @@ export default function FAQsSection({ token, user }) {
     setCheckInLoading(true)
     try {
       const res = await httpFetch(`/api/cm/faqs/${checkInFaq.id}/checkin`, { method: 'POST', headers: authHeaders })
-      if (res.ok) { setCheckInFaq(null); loadFaqs() }
+      if (res.ok) { setCheckInFaq(null); setRefreshKey(key => key + 1) }
       else { const d = await res.json(); toast.error(d.error || 'Check in failed.') }
     } catch { toast.error('Network error.') }
     setCheckInLoading(false)
@@ -156,7 +166,7 @@ export default function FAQsSection({ token, user }) {
         body: JSON.stringify({ password: faqEsignPw, reason: faqEsignReason }),
       })
       const d = await res.json()
-      if (res.ok) { setFaqEsign({ open: false, faq: null, action: null }); loadFaqs() }
+      if (res.ok) { setFaqEsign({ open: false, faq: null, action: null }); setRefreshKey(key => key + 1) }
       else setFaqEsignErr(d.error || `${endpoint} failed.`)
     } catch { setFaqEsignErr('Network error.') }
     setFaqEsignLoading(false)
@@ -165,7 +175,7 @@ export default function FAQsSection({ token, user }) {
   async function handleClone(faq) {
     try {
       const res = await httpFetch(`/api/cm/faqs/${faq.id}/clone`, { method: 'POST', headers: authHeaders })
-      if (res.ok) { toast.success('FAQ cloned as Draft.'); loadFaqs() }
+      if (res.ok) { toast.success('FAQ cloned as Draft.'); setRefreshKey(key => key + 1) }
       else { const d = await res.json(); toast.error(d.error || 'Clone failed.') }
     } catch { toast.error('Network error.') }
   }
@@ -216,7 +226,7 @@ export default function FAQsSection({ token, user }) {
               <button className="cm-btn cm-btn-primary" onClick={async () => {
                 const tags = bulkTagInput.split(',').map(t => t.trim()).filter(Boolean)
                 const res = await httpFetch('/api/cm/faqs/bulk-tags', { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ ids: selectedFaqIds, tags }) })
-                if (res.ok) { loadFaqs(); setSelectedFaqIds([]); setShowBulkTag(false); setBulkTagInput('') }
+                if (res.ok) { setRefreshKey(key => key + 1); setSelectedFaqIds([]); setShowBulkTag(false); setBulkTagInput('') }
                 else toast.error('Bulk tag failed.')
               }}>Apply Tags</button>
             </div>
@@ -234,7 +244,7 @@ export default function FAQsSection({ token, user }) {
         </select>
         <input className="cm-form-input" style={{ width: 160 }} placeholder="Category…" value={filters.category} onChange={e => setFilters(p => ({ ...p, category: e.target.value }))} />
         <input className="cm-form-input" style={{ width: 200 }} placeholder="Search FAQs…" value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} />
-        <button className="cm-btn cm-btn-secondary" onClick={loadFaqs}>Filter</button>
+        <button className="cm-btn cm-btn-secondary" onClick={() => setRefreshKey(key => key + 1)}>Filter</button>
       </div>
       {loading ? (
         <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading FAQs…</p>
@@ -273,7 +283,7 @@ export default function FAQsSection({ token, user }) {
         </table>
       )}
       {showDrawer && (
-        <FAQDrawer faq={editFaq} folders={folders} token={token} onClose={() => { setShowDrawer(false); setEditFaq(null) }} onSaved={loadFaqs} />
+        <FAQDrawer faq={editFaq} folders={folders} token={token} onClose={() => { setShowDrawer(false); setEditFaq(null) }} onSaved={() => setRefreshKey(key => key + 1)} />
       )}
       {checkInFaq && (
         <CheckInModal item={checkInFaq} onClose={() => setCheckInFaq(null)} onConfirm={handleCheckIn} loading={checkInLoading} />

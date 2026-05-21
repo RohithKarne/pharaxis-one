@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
 import { fmtDateIST } from '../../../admin/components/AdminShared'
@@ -21,11 +21,12 @@ export default function SystemActivity() {
   const [totalPages, setTotalPages] = useState(1)
   const [loading,    setLoading]    = useState(false)
 
-  const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  const H = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
 
-  useEffect(() => { load() }, [])
-
-  async function load(overrides = {}) {
+  const load = useCallback(async (overrides = {}) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -44,7 +45,9 @@ export default function SystemActivity() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [H, filter, page, pageSize])
+
+  useEffect(() => { load() }, [load])
 
   function handleFilterChange(patch) {
     setFilter(prev => ({ ...prev, ...patch }))

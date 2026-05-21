@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { StatusPill } from './AdminShared'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -40,35 +40,35 @@ export default function AdminSitesPanel({ H, flash }) {
   const [siteAlertForm, setSiteAlertForm] = useState({ alert_type: 'Case Volume Spike', threshold_value: 10, notify_emails: '' })
   const [siteTabLoading, setSiteTabLoading] = useState(false)
 
-  useEffect(() => { // eslint-disable-line react-hooks/exhaustive-deps
-    loadAllSites()
-    loadOrgs()
-    loadEmailAccounts()
-  }, [])
-
   async function readJson(res) {
     const text = await res.text()
     try { return JSON.parse(text) } catch { return { error: text || `HTTP ${res.status}` } }
   }
 
-  async function loadOrgs() {
+  const loadOrgs = useCallback(async () => {
     try { const d = await httpFetch('/api/admin/orgs', { headers: H }).then(r => r.json()); setOrgs(d.orgs || []) }
     catch { setOrgs([]) }
-  }
+  }, [H])
 
-  async function loadEmailAccounts() {
+  const loadEmailAccounts = useCallback(async () => {
     try {
       const res = await httpFetch('/api/admin/email-accounts', { headers: H })
       const d = await readJson(res)
       setEmailAccounts(res.ok ? (d.accounts || []) : [])
     } catch { setEmailAccounts([]) }
-  }
+  }, [H])
 
-  async function loadAllSites() {
+  const loadAllSites = useCallback(async () => {
     setSitesLoading(true)
     try { const d = await httpFetch('/api/admin/sites', { headers: H }).then(r => r.json()); setSitesList(d.sites || []) }
     catch { flash('Failed to load sites.', 'error') } finally { setSitesLoading(false) }
-  }
+  }, [H, flash])
+
+  useEffect(() => {
+    loadAllSites()
+    loadOrgs()
+    loadEmailAccounts()
+  }, [loadAllSites, loadEmailAccounts, loadOrgs])
 
   async function createNewSite(e) {
     e.preventDefault()

@@ -1,5 +1,5 @@
 import toast from '../../../shared/utils/toast'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
@@ -12,8 +12,7 @@ const CM_FIELD_TYPES = [
 ]
 
 function CMOrgAlertsSettings({ token }) {
-  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const [settings, setSettings] = useState({})
+  const H = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token])
   const [emailAccounts, setEmailAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState({})
@@ -33,7 +32,6 @@ function CMOrgAlertsSettings({ token }) {
         if (sRes.ok) {
           const d = await sRes.json()
           const s = d.settings || {}
-          setSettings(s)
           setAlertDays(Array.isArray(s.default_alert_days) ? s.default_alert_days : [])
           setDefaultEmail(s.default_alert_email_account_id || '')
           setDefaultRoles(Array.isArray(s.default_alert_roles) ? s.default_alert_roles : [])
@@ -43,7 +41,7 @@ function CMOrgAlertsSettings({ token }) {
       setLoading(false)
     }
     load()
-  }, [token]) // eslint-disable-line
+  }, [H])
 
   async function saveSetting(key, value) {
     setSaving(p => ({ ...p, [key]: true }))
@@ -153,19 +151,36 @@ export default function CMSettingsSection({ token }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const H = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token])
 
-  const loadPicklists = useCallback(async (fieldType) => {
+  async function refreshPicklists(fieldType) {
     setLoading(true)
     try {
       const res = await httpFetch(`/api/cm/picklists?field_type=${fieldType}`, { headers: H })
       if (res.ok) setPicklists((await res.json()).picklists || [])
       else setPicklists([])
-    } catch { setPicklists([]) }
+    } catch {
+      setPicklists([])
+    }
     setLoading(false)
-  }, [token]) // eslint-disable-line
+  }
 
-  useEffect(() => { loadPicklists(activeField) }, [activeField, loadPicklists])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const res = await httpFetch(`/api/cm/picklists?field_type=${activeField}`, { headers: H })
+        const nextPicklists = res.ok ? (await res.json()).picklists || [] : []
+        if (!cancelled) setPicklists(nextPicklists)
+      } catch {
+        if (!cancelled) setPicklists([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [H, activeField])
 
   function openAdd() {
     setEditing(null)
@@ -189,7 +204,7 @@ export default function CMSettingsSection({ token }) {
       const method = editing ? 'PUT' : 'POST'
       const body = { ...form, field_type: activeField }
       const res = await httpFetch(url, { method, headers: H, body: JSON.stringify(body) })
-      if (res.ok) { setShowForm(false); loadPicklists(activeField) }
+      if (res.ok) { setShowForm(false); refreshPicklists(activeField) }
       else { const d = await res.json(); setError(d.error || 'Save failed.') }
     } catch { setError('Network error.') }
     setSaving(false)
@@ -202,7 +217,7 @@ export default function CMSettingsSection({ token }) {
         headers: H,
         body: JSON.stringify({ ...item, is_active: item.is_active ? 0 : 1 }),
       })
-      loadPicklists(activeField)
+      refreshPicklists(activeField)
     } catch { /* silent */ }
   }
 
@@ -210,7 +225,7 @@ export default function CMSettingsSection({ token }) {
     if (!await confirm(`Delete "${item.label}"? This cannot be undone.`)) return
     try {
       const res = await httpFetch(`/api/cm/picklists/${item.id}`, { method: 'DELETE', headers: H })
-      if (res.ok) loadPicklists(activeField)
+      if (res.ok) refreshPicklists(activeField)
       else { const d = await res.json(); toast.error(d.error || 'Delete failed.') }
     } catch { toast.error('Network error.') }
   }

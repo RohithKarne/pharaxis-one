@@ -4,7 +4,7 @@
  * CSS namespace: cmat-
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './CMAuditTrailPage.css'
@@ -146,24 +146,32 @@ function VersionCard({ version, index, total }) {
 }
 
 function RightPanel({ entityItem, token }) {
-  const headers = { Authorization: `Bearer ${token}` }
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const [versions, setVersions] = useState([])
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
 
   useEffect(() => {
     if (!entityItem) return
-    setLoading(true); setError(null); setVersions([])
-    const p = new URLSearchParams({ entity: entityItem.entity, entity_id: entityItem.entity_id, limit: 500, page: 1 })
-    httpFetch(`${API}/admin/cm-audit-trail?${p}`, { headers })
-      .then(r => r.json())
-      .then(data => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      setError(null)
+      setVersions([])
+      try {
+        const p = new URLSearchParams({ entity: entityItem.entity, entity_id: entityItem.entity_id, limit: 500, page: 1 })
+        const data = await httpFetch(`${API}/admin/cm-audit-trail?${p}`, { headers }).then(r => r.json())
+        if (cancelled) return
         if (data.error) { setError(data.error); return }
         setVersions(groupIntoVersions(data.entries || []))
-      })
-      .catch(() => setError('Network error.'))
-      .finally(() => setLoading(false))
-  }, [entityItem?.entity, entityItem?.entity_id])
+      } catch {
+        if (!cancelled) setError('Network error.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [entityItem, headers])
 
   if (!entityItem) {
     return (
@@ -202,9 +210,9 @@ function RightPanel({ entityItem, token }) {
   )
 }
 
-export default function CMAuditTrailPage() {
+export default function CMAuditTrailPage({ embedded = false } = {}) {
   const { token } = useAuth()
-  const headers   = { Authorization: `Bearer ${token}` }
+  const headers   = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
 
   const [entities,    setEntities]    = useState([])
   const [total,       setTotal]       = useState(0)
@@ -227,7 +235,7 @@ export default function CMAuditTrailPage() {
       setTotal(data.total || 0)
     } catch { setLeftError('Network error.') }
     finally { setLeftLoading(false) }
-  }, [page, entityFilter, token])
+  }, [entityFilter, headers, page])
 
   useEffect(() => { fetchEntities() }, [fetchEntities])
 
@@ -235,8 +243,8 @@ export default function CMAuditTrailPage() {
 
   function handleFilter(val) { setEntityFilter(val); setPage(1); setSelected(null) }
 
-  return (
-    <MIMSLayout activeNav="cm_audit_trail">
+  const content = (
+    <>
       <div className="cmat-page">
         <div className="cmat-top">
           <div>
@@ -301,6 +309,9 @@ export default function CMAuditTrailPage() {
           <RightPanel entityItem={selected} token={token} />
         </div>
       </div>
-    </MIMSLayout>
+    </>
   )
+
+  if (embedded) return content
+  return <MIMSLayout activeNav="cm_audit_trail">{content}</MIMSLayout>
 }

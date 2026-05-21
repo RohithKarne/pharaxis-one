@@ -207,7 +207,8 @@ router.get('/security-groups/options', authenticate, requireRole('admin', 'platf
 router.get('/security-groups/effective', authenticate, requireOrg, async (req, res) => {
   try {
     if (hasGlobalAdminScope(req.user)) {
-      return res.json({ unrestricted: true, groups: [], system_options: null });
+      // null privileges = unrestricted (capability checks pass for everything).
+      return res.json({ unrestricted: true, groups: [], system_options: null, privileges: null });
     }
 
     const [groups] = await pool.execute(
@@ -224,11 +225,31 @@ router.get('/security-groups/effective', authenticate, requireOrg, async (req, r
     const hasSystemOptions = hasConfiguredOptionSet(visibleGroups, 'system_options');
     const hasCaseOptions = hasConfiguredOptionSet(visibleGroups, 'case_options');
 
+    // New capability model: surface the user's EFFECTIVE capability keys so the
+    // frontend can hide/disable actions/menus they lack (server still enforces).
+    // Must mirror backend userHasActivityPrivilege(): union of explicit group
+    // grants AND capabilities whose default_allowed_roles include the user's role.
+    // Without the role-default merge, role-based admins would be wrongly hidden.
+    let privileges = [];
+    try {
+      const { resolveEffectivePrivileges, getPrivilegeCatalog } = require('../../services/accessConfigurationService');
+      const eff = await resolveEffectivePrivileges(req.user.userId, req.user.orgId);
+      const set = new Set(eff?.privileges || []);
+      const catalog = await getPrivilegeCatalog(req.user.orgId);
+      const role = String(req.user.role || '').toLowerCase();
+      for (const cap of catalog) {
+        const roles = (cap.default_allowed_roles || []).map(r => String(r).toLowerCase());
+        if (roles.includes(role)) set.add(cap.privilege_key);
+      }
+      privileges = Array.from(set);
+    } catch (_) { privileges = []; }
+
     res.json({
       unrestricted: visibleGroups.length === 0,
       groups: visibleGroups.map(group => ({ id: group.id, name: group.name })),
       system_options: hasSystemOptions ? mergeSystemOptions(visibleGroups) : null,
       case_options: hasCaseOptions ? mergeCaseOptions(visibleGroups) : null,
+      privileges,
     });
   } catch (err) {
     console.error('GET /security-groups/effective error:', err);

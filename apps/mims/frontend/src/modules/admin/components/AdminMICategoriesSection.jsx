@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import toast from '../../../shared/utils/toast'
 import { confirm } from '../../../shared/utils/confirm'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -12,16 +12,30 @@ export default function AdminMICategoriesSection({ H }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const load = useCallback(async () => {
+  async function refreshCategories() {
     setLoading(true)
     try {
       const res = await httpFetch('/api/admin/mi-categories', { headers: H })
       if (res.ok) setCategories((await res.json()).categories || [])
     } catch { /* silent */ }
     setLoading(false)
-  }, []) // eslint-disable-line
+  }
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      try {
+        const res = await httpFetch('/api/admin/mi-categories', { headers: H })
+        if (!cancelled && res.ok) setCategories((await res.json()).categories || [])
+      } catch {
+        /* silent */
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [H])
 
   function openAdd() {
     setEditing(null)
@@ -49,7 +63,7 @@ export default function AdminMICategoriesSection({ H }) {
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
-      if (res.ok) { setShowForm(false); load() }
+      if (res.ok) { setShowForm(false); refreshCategories() }
       else { const d = await res.json(); setError(d.error || 'Save failed.') }
     } catch { setError('Network error.') }
     setSaving(false)
@@ -62,7 +76,7 @@ export default function AdminMICategoriesSection({ H }) {
         headers: { ...H, 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...cat, is_active: cat.is_active ? 0 : 1 }),
       })
-      load()
+      refreshCategories()
     } catch { /* silent */ }
   }
 
@@ -70,7 +84,7 @@ export default function AdminMICategoriesSection({ H }) {
     if (!await confirm(`Delete "${cat.name}"? This cannot be undone.`)) return
     try {
       const res = await httpFetch(`/api/admin/mi-categories/${cat.id}`, { method: 'DELETE', headers: H })
-      if (res.ok) load()
+      if (res.ok) refreshCategories()
       else { const d = await res.json(); toast.error(d.error || 'Delete failed.') }
     } catch { toast.error('Network error.') }
   }

@@ -2,10 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
 import { fmtDateIST } from '../../../admin/components/AdminShared'
+import CaseAuditTrailPage from '../../../audittrail/pages/CaseAuditTrailPage'
+import CMAuditTrailPage from '../../../audittrail/pages/CMAuditTrailPage'
+import TransmissionAuditTrailPage from '../../../transmissions/pages/TransmissionAuditTrailPage'
 
 const VIEW_OPTIONS = [
   { key: 'admin', label: 'Admin Audit Trail', description: 'System configuration and data changes' },
   { key: 'login', label: 'Login Audit Trail', description: 'Login, logout, and authentication events' },
+  { key: 'case', label: 'Case Audit Trail', description: 'Field-level change history across medical cases' },
+  { key: 'cm', label: 'CM Audit Trail', description: 'Document and content-governance change history' },
+  { key: 'transmission', label: 'Transmission Audit Trail', description: 'Outbound transmission history by case and target system' },
 ]
 
 const ACTIONS = ['CREATE', 'UPDATE', 'DELETE', 'ESIG']
@@ -117,9 +123,9 @@ function FullModal({ type, row, onClose }) {
   )
 }
 
-export default function ViewData() {
+export default function ViewData({ selectedItem = 'admin' }) {
   const { token } = useAuth()
-  const [activeView, setActiveView] = useState('admin')
+  const [activeView, setActiveView] = useState(selectedItem || 'admin')
   const [adminRows, setAdminRows] = useState([])
   const [loginRows, setLoginRows] = useState([])
   const [adminFilter, setAdminFilter] = useState({ from: '', to: '', user: '', action: '', search: '' })
@@ -138,6 +144,10 @@ export default function ViewData() {
   const rows = activeView === 'admin' ? adminRows : loginRows
   const meta = activeView === 'admin' ? adminMeta : loginMeta
   const page = activeView === 'admin' ? adminPage : loginPage
+
+  useEffect(() => {
+    if (selectedItem && selectedItem !== activeView) setActiveView(selectedItem)
+  }, [activeView, selectedItem])
 
   useEffect(() => {
     loadAdmin(1, adminFilter, pageSize)
@@ -213,6 +223,14 @@ export default function ViewData() {
     else loadLogin(1, loginFilter, nextPageSize)
   }
 
+  const embeddedView = activeView === 'case'
+    ? <CaseAuditTrailPage embedded />
+    : activeView === 'cm'
+      ? <CMAuditTrailPage embedded />
+      : activeView === 'transmission'
+        ? <TransmissionAuditTrailPage embedded />
+        : null
+
   const start = Math.max(1, page - 2)
   const end = Math.min(meta.total_pages || 1, page + 2)
   const pages = []
@@ -238,6 +256,21 @@ export default function ViewData() {
       </aside>
 
       <section style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        {embeddedView ? (
+          <>
+            <div style={{ padding: '16px 20px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>View Data</div>
+                <h1 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>{activeOption.label}</h1>
+                <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>{activeOption.description}.</p>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              {embeddedView}
+            </div>
+          </>
+        ) : (
+          <>
         <div style={{ padding: '16px 20px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>View Data</div>
@@ -328,6 +361,8 @@ export default function ViewData() {
             <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 6 }}>Page {page} of {meta.total_pages || 1}</span>
           </div>
         </div>
+          </>
+        )}
       </section>
 
       <FullModal type={selected?.type} row={selected?.row} onClose={() => setSelected(null)} />

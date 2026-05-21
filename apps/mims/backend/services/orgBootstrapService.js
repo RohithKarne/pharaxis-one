@@ -510,9 +510,6 @@ async function getOrgReadinessWithConnection(conn, orgId) {
 
   const blockers = checks.filter((check) => !check.ok).map((check) => check.detail);
   const warnings = [];
-  if (!org.process_explorer_enabled) {
-    warnings.push('Process Explorer is disabled for this organisation.');
-  }
   if (counts.helpCoverage > 0 && counts.helpCoverage < counts.helpTotal) {
     warnings.push(`Help coverage is partial at ${counts.helpCoverage}/${counts.helpTotal}.`);
   }
@@ -533,7 +530,6 @@ async function getOrgReadinessWithConnection(conn, orgId) {
     warnings,
     checks,
     config: {
-      process_explorer_enabled: !!org.process_explorer_enabled,
       two_factor_enabled: !!org.two_factor_enabled,
       session_timeout_minutes: Number(org.session_timeout_minutes || 30),
     },

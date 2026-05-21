@@ -349,7 +349,7 @@ export default function CustomizeForms() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.fields.map((f, idx) => (
+                      {data.fields.map((f) => (
                         <tr
                           key={f.key}
                           draggable={!f.is_placeholder}

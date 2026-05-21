@@ -1,35 +1,48 @@
-import { findHelpLabel } from '../configItems'
+import { HELP_NAV, findHelpLabel } from '../configItems'
 import HelpGuide from './HelpGuide'
 
-export default function Help({ selectedItem }) {
+export default function Help({ selectedItem, onSelect }) {
   if (selectedItem === 'help-guide') return <HelpGuide />
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
-      {!selectedItem ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60%', color: 'var(--text-muted)', gap: 12 }}>
-          <div style={{ fontSize: 36 }}>❓</div>
-          <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-            Hover over <strong>Help</strong> in the top nav and select an item.
+      <div style={{ maxWidth: 960, display: 'grid', gap: 20 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: 'var(--text-primary)' }}>Help & Adoption</h2>
+          <div style={{ marginTop: 6, fontSize: 14, color: 'var(--text-muted)' }}>
+            Start from the embedded guide or review the support overview below. This tab no longer falls back to a placeholder.
           </div>
         </div>
-      ) : (
-        <div style={{ maxWidth: 560 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-            <span style={{ fontSize: 20 }}>❓</span>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-              {findHelpLabel(selectedItem)}
-            </h2>
+
+        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+            {findHelpLabel(selectedItem || 'help-about')}
           </div>
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '32px 28px', textAlign: 'center' }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🚧</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Under Development</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              <strong>{findHelpLabel(selectedItem)}</strong> is coming soon.
-            </div>
+          <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+            Use the guide for administrator instructions, policy-aware help content, and search-driven adoption support.
+          </div>
+          <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {HELP_NAV.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => onSelect?.(item.value)}
+                style={{
+                  border: selectedItem === item.value ? '1px solid var(--primary)' : '1px solid var(--border)',
+                  background: selectedItem === item.value ? 'rgba(var(--primary-rgb, 79,70,229),0.08)' : '#fff',
+                  color: selectedItem === item.value ? 'var(--primary)' : 'var(--text-primary)',
+                  borderRadius: 999,
+                  padding: '8px 14px',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

@@ -3,7 +3,7 @@
  * Header top full-width. Below: left sidebar nav + content area.
  */
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import MIMSHeader from './MIMSHeader'
 import MIMSNavbar from './MIMSNavbar'
 import MIMSStatStrip from './MIMSStatStrip'

@@ -41,7 +41,7 @@ export default function CaseContactsTab({ id, headers, onCountChange }) {
       setContactHits(Array.isArray(data) ? data : [])
     } catch { setContactHits([]) }
     finally { setSearchLoading(false) }
-  }, [headers]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [headers])
 
   function pickContact(c) {
     setAddContactForm(p => ({

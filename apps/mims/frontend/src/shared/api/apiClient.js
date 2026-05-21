@@ -20,7 +20,7 @@ export function apiClient(token) {
   async function request(url, options = {}) {
     const res = await httpFetch(url, { ...options, headers: { ...authHeaders, ...options.headers } })
     let json
-    try { json = await res.json() } catch (_) { json = {} }
+    try { json = await res.json() } catch { json = {} }
     if (!res.ok) {
       const err = new Error(json.message || json.error || res.statusText || 'Request failed')
       err.status = res.status

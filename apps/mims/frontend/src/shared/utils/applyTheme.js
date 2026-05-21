@@ -23,7 +23,7 @@ export function getCachedTheme() {
   try {
     const cached = localStorage.getItem(STORAGE_KEY)
     return ALLOWED.includes(cached) ? cached : DEFAULT
-  } catch (_) {
+  } catch {
     return DEFAULT
   }
 }
@@ -31,7 +31,9 @@ export function getCachedTheme() {
 export function setCachedTheme(theme) {
   try {
     if (ALLOWED.includes(theme)) localStorage.setItem(STORAGE_KEY, theme)
-  } catch (_) {}
+  } catch {
+    /* localStorage unavailable */
+  }
 }
 
 /**
@@ -48,7 +50,7 @@ export async function bootTheme() {
       applyThemeToDOM(data.ui_theme)
       setCachedTheme(data.ui_theme)
     }
-  } catch (_) { /* offline or backend down — keep cached theme */ }
+  } catch { /* offline or backend down — keep cached theme */ }
 }
 
 /**

@@ -8,7 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireCapability } = require('../../middleware/auth');
 const bcrypt = require('bcrypt');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
@@ -114,7 +114,7 @@ router.get('/faqs', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/faqs — create FAQ (status=Draft)
-router.post('/faqs', authenticate, async (req, res) => {
+router.post('/faqs', authenticate, requireCapability('content.faq.manage'), async (req, res) => {
   try {
     const { folder_id, question, answer_html, category, approval_required, expiry_date } = req.body;
     if (!folder_id || !question) return res.status(400).json({ error: 'folder_id and question are required.' });

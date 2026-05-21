@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -30,6 +30,7 @@ export default function CaseFormPage() {
     statuses, users, formConfig,
     infoForm, setInfoForm,
     reassignForm, setReassignForm, reassignSaving,
+    escalateForm, setEscalateForm, escalateSaving, escalateCase,
     dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
     draftStatus,
     saveInfo, scheduleAutoSave, reassignCase, saveDynFields,
@@ -37,8 +38,15 @@ export default function CaseFormPage() {
     headers,
   } = useCaseForm(id, token)
 
-  const [activeTab,  setActiveTab]  = useState('info')
+  const routeActiveTab = useMemo(() => {
+    const params = new URLSearchParams(location.search || '')
+    const targetSection = params.get('section')
+    const valid = ['info', 'comments', 'contacts', 'correspondence', 'mi', 'ae', 'pc', 'dppr', 'icsr']
+    return targetSection && valid.includes(targetSection) ? targetSection : null
+  }, [location.search])
+  const [activeTab,  setActiveTab]  = useState(routeActiveTab || 'info')
   const [tabCounts,  setTabCounts]  = useState({})
+  const currentTab = routeActiveTab || activeTab
 
   // B19 — unsaved-changes guard. `draftStatus` is set by useCaseForm whenever
   // there's an in-flight autosave; we treat that as the canonical "dirty" signal.
@@ -46,18 +54,24 @@ export default function CaseFormPage() {
   useEffect(() => { guard.setDirty(!!draftStatus && draftStatus !== 'Saved') },
     [draftStatus, guard])
 
+  function syncTabInUrl(next) {
+    const params = new URLSearchParams(location.search || '')
+    params.set('section', next)
+    navigate(
+      {
+        pathname: location.pathname,
+        search: params.toString() ? `?${params.toString()}` : '',
+      },
+      { replace: true, state: location.state }
+    )
+  }
+
   function safeSetActiveTab(next) {
     if (guard.isDirty.current &&
         !window.confirm('You have unsaved changes. Switch tabs and lose them?')) return
     setActiveTab(next)
+    syncTabInUrl(next)
   }
-
-  useEffect(() => {
-    const params        = new URLSearchParams(location.search || '')
-    const targetSection = params.get('section')
-    const valid = ['info', 'comments', 'contacts', 'correspondence', 'mi', 'ae', 'pc', 'dppr', 'icsr']
-    if (targetSection && valid.includes(targetSection)) setActiveTab(targetSection)
-  }, [location.search])
 
   function handleBackNavigation() {
     const from = location.state?.from
@@ -98,8 +112,6 @@ export default function CaseFormPage() {
             </span>
           )}
           <span className="cf-form-org">{caseData.org_name}</span>
-          <span className="cf-form-sep">›</span>
-          <span className="cf-form-site">{caseData.site_name}</span>
         </div>
         <div className="cf-form-header-right">
           {draftStatus && <span className="cf-draft-save-chip">{draftStatus}</span>}
@@ -112,7 +124,7 @@ export default function CaseFormPage() {
 
       <div className="cf-tabbar">
         {TABS.map(t => (
-          <button key={t.key} className={`cf-tabbar-btn${activeTab === t.key ? ' active' : ''}`} onClick={() => safeSetActiveTab(t.key)}>
+          <button key={t.key} className={`cf-tabbar-btn${currentTab === t.key ? ' active' : ''}`} onClick={() => safeSetActiveTab(t.key)}>
             {t.label}
             {t.badge != null && <span className="cf-tabbar-badge">{t.badge}</span>}
           </button>
@@ -130,18 +142,19 @@ export default function CaseFormPage() {
         dueLabel="Action required"
         transitions={[]}
         onTransition={() => { /* Wired by future workflow engine */ }}
-        onCloned={(newId) => navigate(`/case/${newId}`)}
+        onCloned={(newId) => navigate(`/cases/${newId}`)}
         onValidityNavigate={(key) => {
           if (key === 'reporter' || key === 'patient') safeSetActiveTab('contacts')
           else if (key === 'product' || key === 'event') safeSetActiveTab('ae')
         }}
       >
       <div className="cf-tab-content">
-        {activeTab === 'info' && (
+        {currentTab === 'info' && (
           <CaseInfoTab
             infoForm={infoForm} setInfoForm={setInfoForm}
             statuses={statuses} users={users}
             reassignForm={reassignForm} setReassignForm={setReassignForm} reassignSaving={reassignSaving}
+            escalateForm={escalateForm} setEscalateForm={setEscalateForm} escalateSaving={escalateSaving} escalateCase={escalateCase}
             dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues} dynFieldSaving={dynFieldSaving}
             dynFieldErrors={dynFieldErrors}
             formConfig={formConfig}
@@ -149,25 +162,25 @@ export default function CaseFormPage() {
             caseType={caseData?.case_type}
           />
         )}
-        {activeTab === 'comments' && (
+        {currentTab === 'comments' && (
           <CaseCommentsTab
             id={id} headers={headers} token={token} currentUserId={user?.id || user?.userId || null}
             onCountChange={n => setTabCounts(p => ({ ...p, comments: n }))}
           />
         )}
-        {activeTab === 'contacts' && (
+        {currentTab === 'contacts' && (
           <CaseContactsTab
             id={id} headers={headers}
             onCountChange={n => setTabCounts(p => ({ ...p, contacts: n }))}
           />
         )}
-        {activeTab === 'correspondence' && (
+        {currentTab === 'correspondence' && (
           <CaseCorrespondenceTab
             id={id} headers={headers} setSavedMsg={setSavedMsg}
             onCountChange={n => setTabCounts(p => ({ ...p, correspondence: n }))}
           />
         )}
-        {activeTab === 'mi' && (
+        {currentTab === 'mi' && (
           <CaseMITab
             id={id} token={token} headers={headers} setSavedMsg={setSavedMsg}
             onCountChange={n => setTabCounts(p => ({ ...p, mi: n }))}
@@ -178,7 +191,7 @@ export default function CaseFormPage() {
             caseType={caseData?.case_type}
           />
         )}
-        {activeTab === 'ae' && (
+        {currentTab === 'ae' && (
           <CaseAETab
             id={id} headers={headers} setSavedMsg={setSavedMsg}
             users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
@@ -190,10 +203,10 @@ export default function CaseFormPage() {
             caseType={caseData?.case_type}
           />
         )}
-        {activeTab === 'icsr' && (
+        {currentTab === 'icsr' && (
           <CaseICSRTab id={id} headers={headers} setSavedMsg={setSavedMsg} />
         )}
-        {activeTab === 'pc' && (
+        {currentTab === 'pc' && (
           <CasePCTab
             id={id} headers={headers} setSavedMsg={setSavedMsg}
             users={users} getPicklistOptions={getPicklistOptions}
@@ -205,7 +218,7 @@ export default function CaseFormPage() {
             caseType={caseData?.case_type}
           />
         )}
-        {activeTab === 'dppr' && (
+        {currentTab === 'dppr' && (
           <CaseDPPRTab id={id} headers={headers} />
         )}
       </div>

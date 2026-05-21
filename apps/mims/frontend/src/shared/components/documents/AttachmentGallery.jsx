@@ -115,7 +115,7 @@ export default function AttachmentGallery({
   )
 }
 
-function Thumb({ attachment, token }) {
+function Thumb({ attachment }) {
   const mt = (attachment.mime_type || '').toLowerCase()
   const isImg = mt.startsWith('image/')
   const isPdf = mt === 'application/pdf'
