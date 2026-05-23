@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { isAdminUser } from '../utils/adminScope.js'
+import Icon from './Icon'
 
 const CASE_MGMT_ROUTES = {
   'My Cases': '/cases?tab=my',
@@ -71,8 +72,8 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
     <nav className={`mims-sidenav${collapsed ? ' collapsed' : ''}`}>
 
       {/* Toggle button */}
-      <button className="mims-sidenav-toggle" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-        <span className="mims-sidenav-icon">{collapsed ? '›' : '‹'}</span>
+      <button className="mims-sidenav-toggle" onClick={onToggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+        <span className="mims-sidenav-icon"><Icon name={collapsed ? 'chevron-right' : 'chevron-left'} size={18} /></span>
         {!collapsed && <span className="mims-sidenav-label" style={{ fontSize: 11, opacity: 0.7 }}>Collapse</span>}
       </button>
 
@@ -80,15 +81,15 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
 
       {/* Home */}
       <NavSection collapsed={collapsed} title="Work" />
-      <NavItem collapsed={collapsed} to="/dashboard" icon="⊞" label="Overview" active={isActive('/dashboard')} />
+      <NavItem collapsed={collapsed} to="/dashboard" icon={<Icon name="overview" />} label="Overview" active={isActive('/dashboard')} />
 
       {/* Inbox */}
-      <NavItem collapsed={collapsed} to="/inbox" icon="📥" label="Inbox"
+      <NavItem collapsed={collapsed} to="/inbox" icon={<Icon name="inbox" />} label="Inbox"
         active={isActive('/inbox')}
         disabled={!canAccess('mims_core')} />
 
       {/* Chat */}
-      <NavItem collapsed={collapsed} to="/chat" icon="💬" label="Chat"
+      <NavItem collapsed={collapsed} to="/chat" icon={<Icon name="chat" />} label="Chat"
         active={isActive('/chat')}
         disabled={!canAccess('mims_core')} />
 
@@ -103,10 +104,10 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
           }
           setCaseMgmtOpen(o => !o)
         }}>
-        <span className="mims-sidenav-icon">📁</span>
+        <span className="mims-sidenav-icon"><Icon name="folder" /></span>
         {!collapsed && <span className="mims-sidenav-label">Case Management</span>}
         {!collapsed && canAccessAny('mims_core', 'case_mgmt') && (
-          <span className="mims-sidenav-arrow">{caseMgmtOpen ? '▴' : '▾'}</span>
+          <span className="mims-sidenav-arrow"><Icon name={caseMgmtOpen ? 'chevron-up' : 'chevron-down'} size={14} /></span>
         )}
       </div>
       {caseMgmtOpen && !collapsed && (
@@ -122,39 +123,39 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       )}
 
       {/* Case Query */}
-      <NavItem collapsed={collapsed} to="/case-query" icon="🔍" label="Case Query"
+      <NavItem collapsed={collapsed} to="/case-query" icon={<Icon name="search" />} label="Case Query"
         active={isActive('/case-query')}
         disabled={!canAccess('mims_core')} />
 
       {/* Utilities — accordion */}
-      <NavItem collapsed={collapsed} to="/transmissions" icon="📤" label="Transmissions"
+      <NavItem collapsed={collapsed} to="/transmissions" icon={<Icon name="transmissions" />} label="Transmissions"
         active={isActive('/transmissions')}
         disabled={!canAccess('transmissions')} />
 
       <NavSection collapsed={collapsed} title="Knowledge" />
 
       {/* Browse Content */}
-      <NavItem collapsed={collapsed} to="/browse-content" icon="📚" label="Browse Content"
+      <NavItem collapsed={collapsed} to="/browse-content" icon={<Icon name="browse" />} label="Browse Content"
         active={isActive('/browse-content')}
         disabled={!canAccessAny('browse_content', 'content_mgmt')} />
 
       {/* Content Management */}
       {(isAdmin && canAccess('content_mgmt')) && (
-        <NavItem collapsed={collapsed} to="/content" icon="📄" label="Content Management"
+        <NavItem collapsed={collapsed} to="/content" icon={<Icon name="content" />} label="Content Management"
           active={isActive('/content')}
         />
       )}
 
       {/* Reports */}
       {(isAdmin && canAccess('reports')) && (
-        <NavItem collapsed={collapsed} to="/reports" icon="📈" label="Reports"
+        <NavItem collapsed={collapsed} to="/reports" icon={<Icon name="reports" />} label="Reports"
           active={isActive('/reports')}
         />
       )}
 
       {/* MIMS Admin */}
       {(isAdmin && canAccess('admin_console')) && (
-        <NavItem collapsed={collapsed} to="/mims-admin" icon="🛡️" label="MIMS Admin"
+        <NavItem collapsed={collapsed} to="/mims-admin" icon={<Icon name="admin" />} label="MIMS Admin"
           active={isActive('/mims-admin')}
         />
       )}
@@ -167,8 +168,9 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
         <button className="mims-new-case-btn" style={{ width: collapsed ? 36 : '100%', padding: collapsed ? '6px 0' : '6px 16px', fontSize: collapsed ? 16 : 13 }}
           onClick={() => canCreateCase && navigate('/cases')}
           disabled={!canCreateCase}
+          aria-label="Create new case"
           title={!canCreateCase ? 'Your security group does not allow Add New Case.' : undefined}>
-          {collapsed ? '+' : '+ New Case'}
+          {collapsed ? <Icon name="plus" size={16} /> : <><Icon name="plus" size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />New Case</>}
         </button>
       </div>
 

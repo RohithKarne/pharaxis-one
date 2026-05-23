@@ -68,7 +68,7 @@ router.get('/cases/:id/contacts', authenticate, async (req, res) => {
 // POST /api/cases/:id/contacts — add a contact to the case
 router.post('/cases/:id/contacts', authenticate, async (req, res) => {
   try {
-    if (!await verifyCaseOrg(req.params.id, req)) {
+    if (!await verifyCaseOrg(req.params.id, req, 'case.update')) {
       return res.status(403).json({ error: 'Access denied' });
     }
     const {

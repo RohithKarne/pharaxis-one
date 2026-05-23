@@ -28,7 +28,7 @@ function getThreadRootId(item) {
   return item?.original_inquiry_id || item?.id
 }
 
-export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCountChange }) {
+export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCountChange, showCaseAttachments = true }) {
   const [correspondence, setCorrespondence] = useState([])
   const [corrLoading,    setCorrLoading]    = useState(false)
   const [corrError,      setCorrError]      = useState('')
@@ -163,7 +163,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
   const [uploadKey, setUploadKey] = useState(0)
   return (
     <div id="tab-correspondence" className="cf-tab-pane">
-      {t6 && (
+      {showCaseAttachments && t6 && (
         <div style={{
           margin: '0 0 14px', padding: 14, borderRadius: 8,
           background: 'var(--surface,#fff)', border: '1px solid var(--border)',

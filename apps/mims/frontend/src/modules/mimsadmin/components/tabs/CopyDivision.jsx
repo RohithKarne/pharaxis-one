@@ -122,14 +122,14 @@ export default function CopyDivision() {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
           <div style={{ fontWeight:700, fontSize:13, color:'#0f172a' }}>Step 2 — Select Categories</div>
           <div style={{ display:'flex', gap:12 }}>
-            <button onClick={() => { const s={}; categories.forEach(c=>{s[c.key]=true}); setSelected(s) }} style={{ background:'none', border:'none', color:'#6366f1', fontSize:12, fontWeight:600, cursor:'pointer' }}>Select all</button>
-            <button onClick={() => { const s={}; categories.forEach(c=>{s[c.key]=false}); setSelected(s) }} style={{ background:'none', border:'none', color:'#6366f1', fontSize:12, fontWeight:600, cursor:'pointer' }}>Clear all</button>
+            <button onClick={() => { const s={}; categories.forEach(c=>{s[c.key]=true}); setSelected(s) }} style={{ background:'none', border:'none', color:'var(--primary)', fontSize:12, fontWeight:600, cursor:'pointer' }}>Select all</button>
+            <button onClick={() => { const s={}; categories.forEach(c=>{s[c.key]=false}); setSelected(s) }} style={{ background:'none', border:'none', color:'var(--primary)', fontSize:12, fontWeight:600, cursor:'pointer' }}>Clear all</button>
           </div>
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px,1fr))', gap:10 }}>
           {categories.map(cat => (
-            <label key={cat.key} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 12px', border:`1.5px solid ${selected[cat.key]?'#6366f1':'#e2e8f0'}`, borderRadius:8, cursor:'pointer', background: selected[cat.key]?'#f5f3ff':'#fff' }}>
-              <input type="checkbox" checked={!!selected[cat.key]} style={{ marginTop:2, accentColor:'#6366f1' }}
+            <label key={cat.key} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 12px', border:`1.5px solid ${selected[cat.key]?'var(--primary)':'#e2e8f0'}`, borderRadius:8, cursor:'pointer', background: selected[cat.key]?'#f5f3ff':'#fff' }}>
+              <input type="checkbox" checked={!!selected[cat.key]} style={{ marginTop:2, accentColor:'var(--primary)' }}
                 onChange={e => { setSelected(s=>({...s,[cat.key]:e.target.checked})); setPreview(null); setConfirmed(false) }} />
               <span style={{ fontSize:16 }}>{COPY_CATEGORY_ICONS[cat.key]||'📦'}</span>
               <span>
@@ -162,7 +162,7 @@ export default function CopyDivision() {
                   {Object.entries(tables).map(([tbl,n]) => (
                     <div key={tbl} style={{ display:'flex', justifyContent:'space-between', fontSize:11, padding:'2px 0', borderTop:'1px solid #f1f5f9' }}>
                       <span style={{ color:'#64748b', fontFamily:'monospace' }}>{tbl}</span>
-                      <span style={{ color:'#6366f1', fontWeight:700 }}>{n}</span>
+                      <span style={{ color:'var(--primary)', fontWeight:700 }}>{n}</span>
                     </div>
                   ))}
                 </div>
@@ -171,7 +171,7 @@ export default function CopyDivision() {
           </div>
           {totalRows > 0 && (
             <label style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'12px 14px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:8, cursor:'pointer', fontSize:13, color:'#334155' }}>
-              <input type="checkbox" checked={confirmed} style={{ marginTop:2, accentColor:'#6366f1' }} onChange={e => setConfirmed(e.target.checked)} />
+              <input type="checkbox" checked={confirmed} style={{ marginTop:2, accentColor:'var(--primary)' }} onChange={e => setConfirmed(e.target.checked)} />
               <span>I confirm copying <strong>{totalRows} rows</strong> from <strong>{sourceOrgName}</strong> to <strong>{targetOrgName}</strong>{overwrite?' (overwrite mode)':''}.</span>
             </label>
           )}
@@ -188,7 +188,7 @@ export default function CopyDivision() {
           <button
             onClick={handleExecute}
             disabled={!confirmed || executing}
-            style={{ padding:'10px 22px', background:'#6366f1', color:'#fff', border:'none', borderRadius:8, fontSize:14, fontWeight:700, cursor: confirmed&&!executing?'pointer':'not-allowed', opacity: confirmed&&!executing?1:.5 }}
+            style={{ padding:'10px 22px', background:'var(--primary)', color:'#fff', border:'none', borderRadius:8, fontSize:14, fontWeight:700, cursor: confirmed&&!executing?'pointer':'not-allowed', opacity: confirmed&&!executing?1:.5 }}
           >{executing ? 'Copying…' : `▶ Execute Copy (${totalRows} rows)`}</button>
         )}
       </div>

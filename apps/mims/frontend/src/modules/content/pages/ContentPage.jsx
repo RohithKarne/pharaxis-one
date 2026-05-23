@@ -14,6 +14,7 @@ import MergeReportsSection from '../components/MergeReportsSection'
 import TemplatesSection from '../components/TemplatesSection'
 import BrowseSection from '../components/BrowseSection'
 import CMSettingsSection from '../components/CMSettingsSection'
+import ContentOperationsSection from '../components/ContentOperationsSection'
 
 export default function ContentPage() {
   const { user, token } = useAuth()
@@ -42,6 +43,7 @@ export default function ContentPage() {
       label: 'Delivery & Governance',
       description: 'Publish, browse, and govern what users can trust.',
       items: [
+        { key: 'operations', label: 'Operations Dashboard', description: 'Work queues, expiring content, and CM follow-up items.' },
         { key: 'browse', label: 'Browse Content', description: 'The consumer-facing approved content library.' },
         { key: 'settings', label: 'Settings', description: 'Module settings, review controls, and CM behaviors.' },
       ],
@@ -104,6 +106,7 @@ export default function ContentPage() {
             {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
             {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}
             {activeTab === 'templates' && <TemplatesSection token={token} />}
+            {activeTab === 'operations' && <ContentOperationsSection token={token} onNavigate={setActiveTab} />}
             {activeTab === 'browse' && <BrowseSection token={token} />}
             {activeTab === 'settings' && <CMSettingsSection token={token} />}
             {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}

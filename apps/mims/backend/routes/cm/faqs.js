@@ -38,6 +38,16 @@ function hasPlatformAdminScope(req) {
   return hasGlobalAdminScope(req.user);
 }
 
+function decorateFaqRow(faq) {
+  if (!faq) return faq;
+  return {
+    ...faq,
+    answer: faq.answer_html ?? '',
+    tags: faq.search_tags ?? '',
+    version: `${faq.version_major || 1}.${faq.version_minor || 0}`,
+  };
+}
+
 async function getScopedFaq(req, faqId) {
   const [rows] = await pool.execute(
     hasPlatformAdminScope(req)
@@ -67,7 +77,7 @@ async function getScopedFolder(req, folderId) {
 // GET /api/cm/faqs — list with filters
 router.get('/faqs', authenticate, async (req, res) => {
   try {
-    const { status, folder_id, search, page = 1, limit = 50, include_expired = 'false' } = req.query;
+    const { status, folder_id, search, category, page = 1, limit = 50, include_expired = 'false' } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let query = `
@@ -93,8 +103,12 @@ router.get('/faqs', authenticate, async (req, res) => {
       params.push(folder_id);
     }
     if (search) {
-      query += ' AND (f.question LIKE ? OR f.category LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      query += ' AND (f.question LIKE ? OR f.category LIKE ? OR f.search_tags LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    if (category) {
+      query += ' AND f.category = ?';
+      params.push(category);
     }
     if (include_expired !== 'true') {
       query += ' AND (f.expiry_date IS NULL OR f.expiry_date >= CURDATE())';
@@ -106,7 +120,7 @@ router.get('/faqs', authenticate, async (req, res) => {
     query += ` ORDER BY f.updated_at DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
 
     const [faqs] = await pool.execute(query, params);
-    res.json({ faqs, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
+    res.json({ faqs: faqs.map(decorateFaqRow), total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
   } catch (err) {
     console.error('GET /cm/faqs error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -116,23 +130,35 @@ router.get('/faqs', authenticate, async (req, res) => {
 // POST /api/cm/faqs — create FAQ (status=Draft)
 router.post('/faqs', authenticate, requireCapability('content.faq.manage'), async (req, res) => {
   try {
-    const { folder_id, question, answer_html, category, approval_required, expiry_date } = req.body;
+    const {
+      folder_id,
+      question,
+      answer_html,
+      answer,
+      category,
+      approval_required,
+      expiry_date,
+      search_tags,
+      tags,
+    } = req.body;
     if (!folder_id || !question) return res.status(400).json({ error: 'folder_id and question are required.' });
     const scopedFolder = await getScopedFolder(req, folder_id);
     if (!scopedFolder) return res.status(404).json({ error: 'Folder not found for active organisation.' });
+    const resolvedAnswerHtml = answer_html !== undefined ? answer_html : (answer !== undefined ? answer : null);
+    const resolvedSearchTags = Array.isArray(tags) ? tags.join(',') : (search_tags !== undefined ? search_tags : tags || null);
 
     const [result] = await pool.execute(
-      `INSERT INTO cm_faqs (folder_id, question, answer_html, category, approval_required, expiry_date, status, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, 'Draft', ?)`,
+      `INSERT INTO cm_faqs (folder_id, question, answer_html, category, approval_required, expiry_date, search_tags, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'Draft', ?)`,
       [
-        folder_id, question.trim(), answer_html || null, category || null,
+        folder_id, question.trim(), resolvedAnswerHtml || null, category || null,
         approval_required !== undefined ? (approval_required ? 1 : 0) : 1,
-        expiry_date || null, req.user.userId,
+        expiry_date || null, resolvedSearchTags || null, req.user.userId,
       ]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_faq', result.insertId, { folder_id, category });
     const [[created]] = await pool.execute('SELECT * FROM cm_faqs WHERE id = ?', [result.insertId]);
-    res.status(201).json({ message: 'FAQ created.', id: result.insertId, faq: created });
+    res.status(201).json({ message: 'FAQ created.', id: result.insertId, faq: decorateFaqRow(created) });
   } catch (err) {
     console.error('POST /cm/faqs error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -167,7 +193,7 @@ router.get('/faqs/:id', authenticate, async (req, res) => {
       [req.params.id]
     );
 
-    res.json({ faq, versions });
+    res.json({ faq: decorateFaqRow(faq), versions });
   } catch (err) {
     console.error('GET /cm/faqs/:id error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -185,15 +211,32 @@ router.put('/faqs/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'FAQ can only be updated when in Draft status or checked out by you.' });
     }
 
-    const { question, answer_html, category, approval_required, expiry_date } = req.body;
+    const {
+      folder_id,
+      question,
+      answer_html,
+      answer,
+      category,
+      approval_required,
+      expiry_date,
+      search_tags,
+      tags,
+    } = req.body;
+    if (folder_id && Number(folder_id) !== Number(faq.folder_id)) {
+      const scopedFolder = await getScopedFolder(req, folder_id);
+      if (!scopedFolder) return res.status(404).json({ error: 'Folder not found for active organisation.' });
+    }
+    const resolvedAnswerHtml = answer_html !== undefined ? answer_html : (answer !== undefined ? answer : faq.answer_html);
+    const resolvedSearchTags = Array.isArray(tags) ? tags.join(',') : (search_tags !== undefined ? search_tags : (tags !== undefined ? tags : faq.search_tags));
     await pool.execute(
-      `UPDATE cm_faqs SET question = ?, answer_html = ?, category = ?, approval_required = ?, expiry_date = ?,
+      `UPDATE cm_faqs SET folder_id = ?, question = ?, answer_html = ?, category = ?, approval_required = ?, expiry_date = ?, search_tags = ?,
          updated_by = ?, updated_at = NOW()
        WHERE id = ?`,
       [
-        question || faq.question, answer_html !== undefined ? answer_html : faq.answer_html,
+        folder_id || faq.folder_id,
+        question || faq.question, resolvedAnswerHtml,
         category || faq.category, approval_required !== undefined ? (approval_required ? 1 : 0) : faq.approval_required,
-        expiry_date || faq.expiry_date || null, req.user.userId, id,
+        expiry_date || faq.expiry_date || null, resolvedSearchTags || null, req.user.userId, id,
       ]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_faq', Number(id), {});
@@ -277,7 +320,7 @@ router.post('/faqs/:id/checkin', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/faqs/:id/approve — approve
-router.post('/faqs/:id/approve', authenticate, async (req, res) => {
+router.post('/faqs/:id/approve', authenticate, requireCapability('content.approve'), async (req, res) => {
   try {
     const { id } = req.params;
     const { password, reason } = req.body;
@@ -308,7 +351,7 @@ router.post('/faqs/:id/approve', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/faqs/:id/publish — publish
-router.post('/faqs/:id/publish', authenticate, async (req, res) => {
+router.post('/faqs/:id/publish', authenticate, requireCapability('content.publish'), async (req, res) => {
   try {
     const { id } = req.params;
     const { password, reason } = req.body;

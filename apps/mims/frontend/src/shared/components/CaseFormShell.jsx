@@ -47,6 +47,7 @@ import HaClockBar from './HaClockBar'
 import SlaChip from './SlaChip'                       // Sprint 2 #11
 import CaseTimelineDrawer from './CaseTimelineDrawer' // Sprint 2 #13
 import CaseValidityPanel from './CaseValidityPanel'
+import Icon from './Icon'
 
 export default function CaseFormShell({
   caseId, caseStatus, caseType,
@@ -111,7 +112,7 @@ export default function CaseFormShell({
         </div>
         {/* Sprint 2 #13 — chronology drawer toggle */}
         <button onClick={() => setTimelineOpen(o => !o)} style={ghostBtn} title="View case chronology">
-          🕘 Timeline
+          <Icon name="clock" size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />Timeline
         </button>
         {t5 && presence.enabled && <PresenceIndicator users={presence.users} />}
         {t5 && <WatchersButton caseId={caseId} />}
@@ -124,7 +125,7 @@ export default function CaseFormShell({
         ))}
         {t5 && (
           <button onClick={() => setCommentsOpen(o => !o)} style={ghostBtn}>
-            💬 {commentsOpen ? 'Hide' : 'Comments'}
+            <Icon name="message" size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />{commentsOpen ? 'Hide' : 'Comments'}
           </button>
         )}
       </div>
@@ -188,7 +189,7 @@ function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : '' }
 function caseTypeColor(t) {
   const c = String(t || '').toLowerCase()
   if (c === 'ae') return '#dc2626'; if (c === 'pc') return '#d97706'; if (c === 'mi') return '#2563eb'
-  return '#7a3a8a'
+  return 'var(--primary)'
 }
 function chip(color) { return { padding: '2px 8px', borderRadius: 10, color: '#fff', background: color, fontWeight: 700 } }
 
@@ -202,7 +203,7 @@ const drawer = {
   display: 'flex', flexDirection: 'column',
 }
 const primaryBtn = { padding: '6px 12px', fontSize: 12, fontWeight: 600,
-  background: '#1a4f9c', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }
+  background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }
 const ghostBtn = { padding: '6px 12px', fontSize: 12, fontWeight: 600,
   background: 'transparent', color: 'var(--text-secondary)',
   border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer' }

@@ -172,6 +172,27 @@ function requireCapability(privilegeKey) {
   };
 }
 
+function requireScopedCapability(privilegeKey) {
+  return async (req, res, next) => {
+    try {
+      const { resolveActivityScope } = require('../services/accessConfigurationService');
+      const scope = await resolveActivityScope(req.user, privilegeKey);
+      if (scope === 'none') {
+        return res.status(403).json({
+          error: 'You do not have permission to perform this action.',
+          error_code: 'CAPABILITY_FORBIDDEN',
+          should_logout: false,
+        });
+      }
+      req.activityScope = { ...(req.activityScope || {}), [privilegeKey]: scope };
+      return next();
+    } catch (err) {
+      console.error(`requireScopedCapability(${privilegeKey}) failed:`, err);
+      return res.status(500).json({ error: 'Permission check failed.', error_code: 'CAPABILITY_CHECK_ERROR' });
+    }
+  };
+}
+
 /**
  * requireOrg — blocks requests where orgId is null (non-platform-admin must have an active org)
  * Global platform admins remain exempt because they operate without org scoping.
@@ -208,4 +229,4 @@ async function requireAccessNotExpired(req, res, next) {
   }
 }
 
-module.exports = { authenticate, requireRole, requireCapability, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate };
+module.exports = { authenticate, requireRole, requireCapability, requireScopedCapability, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate };

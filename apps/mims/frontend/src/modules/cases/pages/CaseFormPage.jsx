@@ -4,15 +4,12 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
 import useCaseForm from '../hooks/useCaseForm'
-import CaseInfoTab          from '../components/CaseInfoTab'
-import CaseCommentsTab      from '../components/CaseCommentsTab'
 import CaseContactsTab      from '../components/CaseContactsTab'
-import CaseCorrespondenceTab from '../components/CaseCorrespondenceTab'
+import CaseOverviewTab      from '../components/CaseOverviewTab'
+import CaseCommunicationsWorkspace from '../components/CaseCommunicationsWorkspace'
 import CaseMITab            from '../components/CaseMITab'
 import CaseAETab            from '../components/CaseAETab'
 import CasePCTab            from '../components/CasePCTab'
-import CaseDPPRTab          from '../components/CaseDPPRTab'
-import CaseICSRTab          from '../components/CaseICSRTab'
 import AiAssistantPanel     from '../components/AiAssistantPanel'
 import CaseFormShell        from '../../../shared/components/CaseFormShell'
 import useUnsavedChangesGuard from '../../../shared/hooks/useUnsavedChangesGuard'
@@ -38,15 +35,28 @@ export default function CaseFormPage() {
     headers,
   } = useCaseForm(id, token)
 
-  const routeActiveTab = useMemo(() => {
+  const routeTarget = useMemo(() => {
     const params = new URLSearchParams(location.search || '')
     const targetSection = params.get('section')
-    const valid = ['info', 'comments', 'contacts', 'correspondence', 'mi', 'ae', 'pc', 'dppr', 'icsr']
-    return targetSection && valid.includes(targetSection) ? targetSection : null
+    const sectionMap = {
+      overview: { tab: 'overview' },
+      info: { tab: 'overview' },
+      people: { tab: 'people' },
+      contacts: { tab: 'people' },
+      communications: { tab: 'communications' },
+      comments: { tab: 'communications', communicationsPane: 'threads' },
+      correspondence: { tab: 'communications', communicationsPane: 'correspondence' },
+      mi: { tab: 'mi' },
+      ae: { tab: 'ae' },
+      pc: { tab: 'pc' },
+      icsr: { tab: 'overview', regulatoryPane: 'icsr' },
+      dppr: { tab: 'overview', regulatoryPane: 'privacy' },
+    }
+    return sectionMap[targetSection] || null
   }, [location.search])
-  const [activeTab,  setActiveTab]  = useState(routeActiveTab || 'info')
+  const [activeTab,  setActiveTab]  = useState(routeTarget?.tab || 'overview')
   const [tabCounts,  setTabCounts]  = useState({})
-  const currentTab = routeActiveTab || activeTab
+  const currentTab = routeTarget?.tab || activeTab
 
   // B19 — unsaved-changes guard. `draftStatus` is set by useCaseForm whenever
   // there's an in-flight autosave; we treat that as the canonical "dirty" signal.
@@ -85,15 +95,12 @@ export default function CaseFormPage() {
   if (!caseData) return <div className="cf-form-error">Case not found. <button onClick={handleBackNavigation}>Back</button></div>
 
   const TABS = [
-    { key: 'info',           label: 'Case Information' },
-    { key: 'comments',       label: 'Comments / Notes',  badge: countFor('comments') },
-    { key: 'contacts',       label: 'Contacts',          badge: countFor('contacts') },
-    { key: 'correspondence', label: 'Correspondence',    badge: countFor('correspondence') },
-    { key: 'mi',             label: 'MI Component',      badge: countFor('mi') },
-    { key: 'ae',             label: 'AE Component',      badge: countFor('ae') },
-    { key: 'icsr',           label: 'ICSR / Regulatory', badge: countFor('icsr') },
-    { key: 'pc',             label: 'PC Component',      badge: countFor('pc') },
-    { key: 'dppr',           label: 'Privacy (DPPR)',    badge: countFor('dppr') },
+    { key: 'overview',       label: 'Overview' },
+    { key: 'people',         label: 'People',           badge: countFor('contacts') },
+    { key: 'communications', label: 'Communications',   badge: countFor('correspondence') || countFor('comments') },
+    { key: 'mi',             label: 'MI Workspace',     badge: countFor('mi') },
+    { key: 'ae',             label: 'AE Workspace',     badge: countFor('ae') },
+    { key: 'pc',             label: 'PC Workspace',     badge: countFor('pc') },
   ]
 
   return (
@@ -144,40 +151,59 @@ export default function CaseFormPage() {
         onTransition={() => { /* Wired by future workflow engine */ }}
         onCloned={(newId) => navigate(`/cases/${newId}`)}
         onValidityNavigate={(key) => {
-          if (key === 'reporter' || key === 'patient') safeSetActiveTab('contacts')
+          if (key === 'reporter' || key === 'patient') safeSetActiveTab('people')
           else if (key === 'product' || key === 'event') safeSetActiveTab('ae')
         }}
       >
       <div className="cf-tab-content">
-        {currentTab === 'info' && (
-          <CaseInfoTab
-            infoForm={infoForm} setInfoForm={setInfoForm}
-            statuses={statuses} users={users}
-            reassignForm={reassignForm} setReassignForm={setReassignForm} reassignSaving={reassignSaving}
-            escalateForm={escalateForm} setEscalateForm={setEscalateForm} escalateSaving={escalateSaving} escalateCase={escalateCase}
-            dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues} dynFieldSaving={dynFieldSaving}
-            dynFieldErrors={dynFieldErrors}
+        {currentTab === 'overview' && (
+          <CaseOverviewTab
+            key={routeTarget?.regulatoryPane || 'overview'}
+            id={id}
+            headers={headers}
+            caseData={caseData}
+            users={users}
+            statuses={statuses}
+            infoForm={infoForm}
+            setInfoForm={setInfoForm}
             formConfig={formConfig}
-            scheduleAutoSave={scheduleAutoSave} reassignCase={reassignCase} saveDynFields={saveDynFields}
+            dynFieldValues={dynFieldValues}
+            setDynFieldValues={setDynFieldValues}
+            dynFieldSaving={dynFieldSaving}
+            dynFieldErrors={dynFieldErrors}
+            scheduleAutoSave={scheduleAutoSave}
+            saveDynFields={saveDynFields}
             caseType={caseData?.case_type}
+            reassignForm={reassignForm}
+            setReassignForm={setReassignForm}
+            reassignSaving={reassignSaving}
+            reassignCase={reassignCase}
+            escalateForm={escalateForm}
+            setEscalateForm={setEscalateForm}
+            escalateSaving={escalateSaving}
+            escalateCase={escalateCase}
+            setSavedMsg={setSavedMsg}
+            onNavigateToTab={safeSetActiveTab}
+            routeRegulatoryPane={routeTarget?.regulatoryPane || ''}
           />
         )}
-        {currentTab === 'comments' && (
-          <CaseCommentsTab
-            id={id} headers={headers} token={token} currentUserId={user?.id || user?.userId || null}
-            onCountChange={n => setTabCounts(p => ({ ...p, comments: n }))}
-          />
-        )}
-        {currentTab === 'contacts' && (
+        {currentTab === 'people' && (
           <CaseContactsTab
             id={id} headers={headers}
             onCountChange={n => setTabCounts(p => ({ ...p, contacts: n }))}
           />
         )}
-        {currentTab === 'correspondence' && (
-          <CaseCorrespondenceTab
-            id={id} headers={headers} setSavedMsg={setSavedMsg}
-            onCountChange={n => setTabCounts(p => ({ ...p, correspondence: n }))}
+        {currentTab === 'communications' && (
+          <CaseCommunicationsWorkspace
+            key={routeTarget?.communicationsPane || 'communications'}
+            id={id}
+            headers={headers}
+            token={token}
+            currentUserId={user?.id || user?.userId || null}
+            setSavedMsg={setSavedMsg}
+            routePane={routeTarget?.communicationsPane || ''}
+            onCommentCount={n => setTabCounts(p => ({ ...p, comments: n }))}
+            onCorrespondenceCount={n => setTabCounts(p => ({ ...p, correspondence: n }))}
           />
         )}
         {currentTab === 'mi' && (
@@ -203,9 +229,6 @@ export default function CaseFormPage() {
             caseType={caseData?.case_type}
           />
         )}
-        {currentTab === 'icsr' && (
-          <CaseICSRTab id={id} headers={headers} setSavedMsg={setSavedMsg} />
-        )}
         {currentTab === 'pc' && (
           <CasePCTab
             id={id} headers={headers} setSavedMsg={setSavedMsg}
@@ -218,13 +241,10 @@ export default function CaseFormPage() {
             caseType={caseData?.case_type}
           />
         )}
-        {currentTab === 'dppr' && (
-          <CaseDPPRTab id={id} headers={headers} />
-        )}
       </div>
       </CaseFormShell>
 
-      <AiAssistantPanel caseId={id} headers={headers} />
+      <AiAssistantPanel caseId={id} headers={headers} activeTab={currentTab} />
 
     </div>
     </MIMSLayout>

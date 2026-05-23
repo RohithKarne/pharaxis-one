@@ -70,16 +70,6 @@ export default function AETabPanel({
         </div>
       )}
 
-      {tabKey === 'ae-flex-fields' && (
-        <div>
-          <h3 className="cf-subsection-title">AE Flex Fields</h3>
-          <p className="cf-form-help-note">
-            Add admin-configured AE fields via <strong>System &rsaquo; Setup &rsaquo; Customize Forms</strong>.
-            Configured fields render automatically inside the AE Component tab under <em>Additional Fields</em>.
-          </p>
-        </div>
-      )}
-
       {tabKey === 'events' && (
         <AEMultiRowTab
           tabKey="events"
@@ -141,7 +131,7 @@ export default function AETabPanel({
         </div>
       )}
 
-      {!locked && !['events','drugs','meddra-coding','causality','lab-results','medical-history','product-info','ae-flex-fields'].includes(tabKey) && (
+      {!locked && !['events','drugs','meddra-coding','causality','lab-results','medical-history','product-info'].includes(tabKey) && (
         <div className="cf-form-actions">
           {/* B12 — label includes scope so the operator knows exactly what saves */}
           <button className="cf-save-btn" onClick={onSave} disabled={saving}

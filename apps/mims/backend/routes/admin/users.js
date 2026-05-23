@@ -13,6 +13,7 @@ const router   = express.Router();
 const bcrypt   = require('bcrypt');
 const pool     = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 
@@ -83,7 +84,7 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
 router.get('/users/security-groups', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     const [groups] = await pool.execute(
-      `SELECT id, name, description, is_active FROM security_groups WHERE is_active = 1 ORDER BY name ASC`
+      `SELECT id, name, description, is_active FROM security_groups WHERE is_active = 1 AND is_template = 0 ORDER BY name ASC`
     );
     res.json({ groups });
   } catch (err) {
@@ -294,8 +295,14 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
   } = req.body;
 
   try {
+    // Platform-admin accounts are protected from edits by regular admins, but a
+    // superadmin (global scope) may edit superadmin accounts (incl. their own).
+    const canTouchPlatformAdmin = hasGlobalAdminScope(req.user);
     const [[existing]] = await pool.execute(
-      'SELECT id, role FROM users WHERE id = ? AND role != ?', [req.params.id, 'platform_admin']
+      canTouchPlatformAdmin
+        ? 'SELECT id, role FROM users WHERE id = ?'
+        : 'SELECT id, role FROM users WHERE id = ? AND role != ?',
+      canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
     );
     if (!existing) return res.status(404).json({ error: 'User not found.' });
 
@@ -441,9 +448,12 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
   try {
     await conn.beginTransaction();
 
+    const canTouchPlatformAdmin = hasGlobalAdminScope(req.user);
     const [[user]] = await conn.execute(
-      'SELECT id, security_group_id FROM users WHERE id = ? AND role != ? LIMIT 1',
-      [req.params.id, 'platform_admin']
+      canTouchPlatformAdmin
+        ? 'SELECT id, security_group_id FROM users WHERE id = ? LIMIT 1'
+        : 'SELECT id, security_group_id FROM users WHERE id = ? AND role != ? LIMIT 1',
+      canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
     );
     if (!user) {
       await conn.rollback();

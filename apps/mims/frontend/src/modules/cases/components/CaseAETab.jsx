@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from '../../../shared/utils/toast'
 import AETabPanel from './AETabPanel'
+import StickySectionNav from '../../../shared/components/StickySectionNav'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
@@ -9,7 +10,6 @@ const API = import.meta.env.VITE_API_URL || '/api'
 
 const AE_TABS = [
   { key: 'general',         label: 'General' },
-  { key: 'ae-flex-fields',  label: 'AE Flex Fields' },
   { key: 'events',          label: 'Events' },
   { key: 'drugs',           label: 'Drugs' },
   { key: 'meddra-coding',   label: 'Reactions Coding' },
@@ -224,31 +224,32 @@ export default function CaseAETab({
             <div className="cf-locked-notice">This version is locked (read-only). Create a new version to continue editing.</div>
           )}
 
-          <div className="cf-tab-bar">
-            {AE_TABS.map(t => (
-              <button key={t.key} className={`cf-tab-btn ${activeAeTab === t.key ? 'active' : ''}`} onClick={() => switchAETab(t.key)}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {aeTabLoading ? (
-            <div className="cf-tab-loading">Loading…</div>
-          ) : (
-            <AETabPanel
-              tabKey={activeAeTab}
-              data={aeTabData[`${activeAeVer?.id}_${activeAeTab}`] || {}}
-              onChange={d => setAeTabData(prev => ({ ...prev, [`${activeAeVer?.id}_${activeAeTab}`]: d }))}
-              locked={isLocked(activeAeVer)}
-              getFieldConfig={getFieldConfig}
-              getPicklistOptions={getPicklistOptions}
-              versionId={activeAeVer?.id}
-              headers={headers}
-              caseId={id}
-              onSave={saveAETab}
-              saving={aeTabSaving}
+          <div className="cf-ae-workspace" style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            <StickySectionNav
+              sections={AE_TABS.map(t => ({ id: t.key, label: t.label }))}
+              activeId={activeAeTab}
+              onSelect={switchAETab}
             />
-          )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {aeTabLoading ? (
+                <div className="cf-tab-loading">Loading…</div>
+              ) : (
+                <AETabPanel
+                  tabKey={activeAeTab}
+                  data={aeTabData[`${activeAeVer?.id}_${activeAeTab}`] || {}}
+                  onChange={d => setAeTabData(prev => ({ ...prev, [`${activeAeVer?.id}_${activeAeTab}`]: d }))}
+                  locked={isLocked(activeAeVer)}
+                  getFieldConfig={getFieldConfig}
+                  getPicklistOptions={getPicklistOptions}
+                  versionId={activeAeVer?.id}
+                  headers={headers}
+                  caseId={id}
+                  onSave={saveAETab}
+                  saving={aeTabSaving}
+                />
+              )}
+            </div>
+          </div>
         </>
       )}
 
@@ -309,22 +310,26 @@ export default function CaseAETab({
 
       {/* B1 fix — admin-configured AE fields render here, scoped to displayTab='ae' */}
       {formConfig && Array.isArray(formConfig.sections) && (
-        <DynamicFieldsSection
-          sections={formConfig.sections}
-          values={dynFieldValues || {}}
-          onChange={setDynFieldValues || (() => {})}
-          onSave={saveDynFields || (() => {})}
-          saving={dynFieldSaving}
-          rules={formConfig.rules || []}
-          errors={dynFieldErrors || {}}
-          caseId={ctx?.caseId}
-          caseStatus={ctx?.caseStatus}
-          caseSection="ae"
-          presence={ctx?.presence}
-          currentUserId={ctx?.currentUserId}
-          caseType={caseType}
-          displayTab="ae"
-        />
+        <div className="cf-overview-card">
+          <div className="cf-overview-kicker">Additional Fields</div>
+          <h3>AE Configured Fields</h3>
+          <DynamicFieldsSection
+            sections={formConfig.sections}
+            values={dynFieldValues || {}}
+            onChange={setDynFieldValues || (() => {})}
+            onSave={saveDynFields || (() => {})}
+            saving={dynFieldSaving}
+            rules={formConfig.rules || []}
+            errors={dynFieldErrors || {}}
+            caseId={ctx?.caseId}
+            caseStatus={ctx?.caseStatus}
+            caseSection="ae"
+            presence={ctx?.presence}
+            currentUserId={ctx?.currentUserId}
+            caseType={caseType}
+            displayTab="ae"
+          />
+        </div>
       )}
     </div>
   )

@@ -16,7 +16,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
     type: template?.type || 'Response',
     name: template?.name || '',
     subject: template?.subject || '',
-    body: template?.body || '',
+    body_html: template?.body_html || template?.body || '',
     status: template?.status || 'Active',
     folder_id: template?.folder_id || '',
   })
@@ -43,7 +43,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
 
   async function handleSave() {
     if (!form.name.trim()) return toast.warn('Template name is required.')
-    if (!form.body || form.body === '<p></p>') return toast.warn('Body is required.')
+    if (!form.body_html || form.body_html === '<p></p>') return toast.warn('Body is required.')
     setSaving(true)
     try {
       const url = isEdit ? `/api/cm/templates/${template.id}` : '/api/cm/templates'
@@ -108,7 +108,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Body <span className="required">*</span></label>
-            <RichTextEditor value={form.body} onChange={v => setForm(p => ({ ...p, body: v }))} />
+            <RichTextEditor value={form.body_html} onChange={v => setForm(p => ({ ...p, body_html: v }))} />
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Status</label>
@@ -197,7 +197,7 @@ export default function TemplatesSection({ token }) {
   )
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ type: '', status: '', folder_id: '' })
+  const [filters, setFilters] = useState({ type: '', status: '', folder_id: '', search: '' })
   const [folders, setFolders] = useState([])
   const [showDrawer, setShowDrawer] = useState(false)
   const [editTemplate, setEditTemplate] = useState(null)
@@ -259,6 +259,7 @@ export default function TemplatesSection({ token }) {
           <option>Active</option>
           <option>Inactive</option>
         </select>
+        <input className="cm-form-input" style={{ width: 220 }} value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} placeholder="Search name or subject…" />
         <select className="cm-form-select" style={{ width: 180 }} value={filters.folder_id} onChange={e => setFilters(p => ({ ...p, folder_id: e.target.value }))}>
           <option value="">All Folders</option>
           {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}

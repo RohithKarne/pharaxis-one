@@ -4,6 +4,7 @@ import StatusBadge from './StatusBadge'
 import DocumentCreationScreen from './DocumentCreationScreen'
 import { CheckInModal, InitiateReviewModal, ApproveModal, PublishModal, ReviewStatusModal, VersionHistoryModal, ContentUsageModal, DocumentRelationsModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { useAuth } from '../../../shared/context/AuthContext'
 
 function ReviewRowWithMode({ r, authHeaders, onOpen }) {
   const [mode, setMode] = useState(r.review_mode || null)
@@ -61,6 +62,7 @@ function getAuthoringSourceLabel(doc) {
 }
 
 export default function DocumentsSection({ token, user }) {
+  const { hasCapability } = useAuth()
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   const [subTab, setSubTab] = useState('all')
   const [checkedInDocs, setCheckedInDocs] = useState([])
@@ -69,7 +71,15 @@ export default function DocumentsSection({ token, user }) {
   const [reviews, setReviews] = useState([])
   const [folders, setFolders] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ folder_id: '', doc_type: '', status: '', search: '' })
+  const [filters, setFilters] = useState({
+    folder_id: '',
+    doc_type: '',
+    status: '',
+    search: '',
+    category: '',
+    authoring_source: '',
+    include_expired: false,
+  })
   const [ftQuery, setFtQuery] = useState('')
   const [ftResults, setFtResults] = useState(null)
   const [ftSearching, setFtSearching] = useState(false)
@@ -79,19 +89,34 @@ export default function DocumentsSection({ token, user }) {
 
   const [selectedDocIds, setSelectedDocIds] = useState([])
   const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkModal, setBulkModal] = useState({ open: false, action: null, password: '', reason: '' })
 
   async function handleBulkAction(action) {
     if (selectedDocIds.length === 0) return
-    if (!confirm(`${action === 'publish' ? 'Publish' : 'Archive'} ${selectedDocIds.length} document(s)?`)) return
+    setBulkModal({ open: true, action, password: '', reason: '' })
+  }
+
+  async function submitBulkAction() {
+    if (!bulkModal.action) return
+    if (bulkModal.action === 'publish' && (!bulkModal.password || !bulkModal.reason.trim())) {
+      toast.warn('Password and reason are required for bulk publish.')
+      return
+    }
     setBulkLoading(true)
     try {
       const res = await httpFetch('/api/cm/documents/bulk', {
         method: 'POST', headers: authHeaders,
-        body: JSON.stringify({ action, ids: selectedDocIds }),
+        body: JSON.stringify({
+          action: bulkModal.action,
+          ids: selectedDocIds,
+          password: bulkModal.password,
+          reason: bulkModal.reason.trim() || undefined,
+        }),
       })
       const d = await res.json()
       if (res.ok) {
         setSelectedDocIds([])
+        setBulkModal({ open: false, action: null, password: '', reason: '' })
         loadDocs()
         if (d.failed?.length > 0) toast.error(`${d.success} succeeded. ${d.failed.length} failed:\n${d.failed.map(f => `ID ${f.id}: ${f.reason}`).join('\n')}`)
       } else toast.error(d.error || 'Bulk action failed.')
@@ -114,7 +139,8 @@ export default function DocumentsSection({ token, user }) {
   const loadDocs = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ page, limit: LIMIT, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) })
+      const filterPayload = Object.fromEntries(Object.entries(filters).filter(([, value]) => value && value !== false))
+      const params = new URLSearchParams({ page, limit: LIMIT, ...filterPayload })
       const res = await httpFetch(`/api/cm/documents?${params}`, { headers: authHeaders })
       if (res.ok) {
         const d = await res.json()
@@ -221,19 +247,19 @@ export default function DocumentsSection({ token, user }) {
       btns.push(<button key="ci" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setCheckInDoc(doc)}>Check In</button>)
     } else if (s === 'Pending') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
-      btns.push(<button key="ir" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setReviewDoc(doc)}>Initiate Review</button>)
-      btns.push(<button key="approve" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setApproveDoc(doc)}>Approve</button>)
+      if (hasCapability('content.review')) btns.push(<button key="ir" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setReviewDoc(doc)}>Initiate Review</button>)
+      if (hasCapability('content.approve')) btns.push(<button key="approve" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setApproveDoc(doc)}>Approve</button>)
     } else if (s === 'Under Review') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
-      btns.push(<button key="approve" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setApproveDoc(doc)}>Approve</button>)
+      if (hasCapability('content.approve')) btns.push(<button key="approve" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setApproveDoc(doc)}>Approve</button>)
     } else if (s === 'Approved') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
-      btns.push(<button key="pub" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setPublishDoc(doc)}>Publish</button>)
+      if (hasCapability('content.publish')) btns.push(<button key="pub" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setPublishDoc(doc)}>Publish</button>)
     } else if (s === 'Published') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
       btns.push(<button key="co" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(doc)}>Check Out</button>)
       btns.push(<button key="usage" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setUsageDoc(doc)}>Usage</button>)
-      btns.push(<button key="arch" className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(doc)}>Archive</button>)
+      if (hasCapability('content.publish')) btns.push(<button key="arch" className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(doc)}>Archive</button>)
     } else if (s === 'Archived') {
       btns.push(<button key="view" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(doc); setShowDrawer(true) }}>View</button>)
     }
@@ -265,7 +291,7 @@ export default function DocumentsSection({ token, user }) {
     <div>
       <div className="cm-section-header">
         <h2 className="cm-section-title">Documents</h2>
-        <button className="cm-btn cm-btn-primary" onClick={() => { setEditDoc(null); setShowDrawer(true) }}>+ New Document</button>
+        {hasCapability('content.author') && <button className="cm-btn cm-btn-primary" onClick={() => { setEditDoc(null); setShowDrawer(true) }}>+ New Document</button>}
       </div>
 
       <div className="cm-sub-tabs">
@@ -296,7 +322,19 @@ export default function DocumentsSection({ token, user }) {
               <option value="">All Statuses</option>
               <option>Draft</option><option>Pending</option><option>Under Review</option><option>Approved</option><option>Published</option><option>Archived</option>
             </select>
+            <select className="cm-form-select" style={{ width: 170 }} value={filters.authoring_source} onChange={e => { setFilters(p => ({ ...p, authoring_source: e.target.value })); setPage(1) }}>
+              <option value="">All Authoring</option>
+              <option value="upload">Uploaded</option>
+              <option value="internal">Internal</option>
+              <option value="microsoft365">Microsoft 365</option>
+              <option value="module">Module</option>
+            </select>
+            <input className="cm-form-input" style={{ width: 180 }} placeholder="Category…" value={filters.category} onChange={e => { setFilters(p => ({ ...p, category: e.target.value })); setPage(1) }} />
             <input className="cm-form-input" style={{ width: 220 }} placeholder="Search documents…" value={filters.search} onChange={e => { setFilters(p => ({ ...p, search: e.target.value })); setPage(1) }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
+              <input type="checkbox" checked={filters.include_expired} onChange={e => { setFilters(p => ({ ...p, include_expired: e.target.checked })); setPage(1) }} />
+              Include expired
+            </label>
             <button className="cm-btn cm-btn-secondary" onClick={loadDocs}>Filter</button>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
@@ -349,8 +387,8 @@ export default function DocumentsSection({ token, user }) {
           {selectedDocIds.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--primary-light, #eff6ff)', borderRadius: 6, marginBottom: 10, border: '1px solid var(--primary-border, #bfdbfe)' }}>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{selectedDocIds.length} selected</span>
-              <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handleBulkAction('publish')} disabled={bulkLoading}>Bulk Publish</button>
-              <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleBulkAction('archive')} disabled={bulkLoading}>Bulk Archive</button>
+              {hasCapability('content.publish') && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handleBulkAction('publish')} disabled={bulkLoading}>Bulk Publish</button>}
+              {hasCapability('content.publish') && <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleBulkAction('archive')} disabled={bulkLoading}>Bulk Archive</button>}
               <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setSelectedDocIds([])} disabled={bulkLoading}>✕ Clear</button>
             </div>
           )}
@@ -437,7 +475,7 @@ export default function DocumentsSection({ token, user }) {
                   <td>
                     <div className="cm-action-btns">
                       <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditDoc(d); setShowDrawer(true) }}>View</button>
-                      <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setApproveDoc(d)}>Approve</button>
+                      {hasCapability('content.approve') && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => setApproveDoc(d)}>Approve</button>}
                     </div>
                   </td>
                 </tr>
@@ -522,6 +560,45 @@ export default function DocumentsSection({ token, user }) {
 
       {checkInDoc && (
         <CheckInModal item={checkInDoc} onClose={() => setCheckInDoc(null)} onConfirm={handleCheckIn} loading={checkInLoading} />
+      )}
+      {bulkModal.open && (
+        <div className="cm-modal-overlay" onClick={() => !bulkLoading && setBulkModal({ open: false, action: null, password: '', reason: '' })}>
+          <div className="cm-modal" style={{ width: 520, maxWidth: '94vw' }} onClick={e => e.stopPropagation()}>
+            <div className="cm-modal-header">
+              <h3 className="cm-modal-title">{bulkModal.action === 'publish' ? 'Bulk Publish Documents' : 'Bulk Archive Documents'}</h3>
+              <button className="cm-modal-close" onClick={() => !bulkLoading && setBulkModal({ open: false, action: null, password: '', reason: '' })}>✕</button>
+            </div>
+            <div style={{ padding: 20, display: 'grid', gap: 14 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                {selectedDocIds.length} document{selectedDocIds.length === 1 ? '' : 's'} selected.
+              </div>
+              {bulkModal.action === 'publish' && (
+                <>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Password</span>
+                    <input type="password" className="cm-form-input" value={bulkModal.password} onChange={e => setBulkModal(p => ({ ...p, password: e.target.value }))} placeholder="Electronic signature password" />
+                  </label>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Reason</span>
+                    <input className="cm-form-input" value={bulkModal.reason} onChange={e => setBulkModal(p => ({ ...p, reason: e.target.value }))} placeholder="Why these documents are being published" />
+                  </label>
+                </>
+              )}
+              {bulkModal.action === 'archive' && (
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Reason</span>
+                  <input className="cm-form-input" value={bulkModal.reason} onChange={e => setBulkModal(p => ({ ...p, reason: e.target.value }))} placeholder="Optional archive reason" />
+                </label>
+              )}
+            </div>
+            <div className="cm-drawer-footer" style={{ borderTop: '1px solid var(--border)' }}>
+              <button className="cm-btn cm-btn-secondary" onClick={() => setBulkModal({ open: false, action: null, password: '', reason: '' })} disabled={bulkLoading}>Cancel</button>
+              <button className={`cm-btn ${bulkModal.action === 'publish' ? 'cm-btn-primary' : 'cm-btn-danger'}`} onClick={submitBulkAction} disabled={bulkLoading}>
+                {bulkLoading ? 'Submitting…' : bulkModal.action === 'publish' ? 'Publish Selected' : 'Archive Selected'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {reviewDoc && (
         <InitiateReviewModal doc={reviewDoc} token={token} onClose={() => setReviewDoc(null)} onDone={loadDocs} />

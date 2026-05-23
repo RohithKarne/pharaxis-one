@@ -175,6 +175,9 @@ export default function BrowseSection({ token }) {
                 {contentType === 'faqs' && item.tags && (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Tags: {item.tags}</div>
                 )}
+                {contentType === 'faqs' && !item.tags && item.search_tags && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Tags: {item.search_tags}</div>
+                )}
                 {item.expiry_date && (() => {
                   const daysLeft = Math.ceil((new Date(item.expiry_date) - new Date()) / (1000 * 60 * 60 * 24))
                   if (daysLeft <= 0) return (
@@ -268,11 +271,11 @@ export default function BrowseSection({ token }) {
                     </div>
                     <div>
                       <h4 style={{ margin: '0 0 8px', color: 'var(--text-muted)', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }}>Answer</h4>
-                      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedItem.answer || '') }} style={{ lineHeight: 1.7, fontSize: 14 }} />
+                      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedItem.answer_html || selectedItem.answer || '') }} style={{ lineHeight: 1.7, fontSize: 14 }} />
                     </div>
-                    {selectedItem.tags && (
+                    {(selectedItem.tags || selectedItem.search_tags) && (
                       <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
-                        <strong>Tags:</strong> {selectedItem.tags}
+                        <strong>Tags:</strong> {selectedItem.tags || selectedItem.search_tags}
                       </div>
                     )}
                   </>

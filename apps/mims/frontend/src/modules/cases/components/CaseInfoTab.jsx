@@ -10,11 +10,13 @@ export default function CaseInfoTab({
   dynFieldErrors = {},
   formConfig, scheduleAutoSave, reassignCase, saveDynFields,
   caseType,            // 'AE' | 'MI' | 'PC' from caseData.case_type
+  showWorkflowActions = true,
+  embedded = false,
 }) {
   const ctx = useCaseFieldContext()  // provided by CaseFormShell; null when standalone
   const { hasCapability } = useAuth()  // capability gating (server still enforces)
   return (
-    <div id="tab-info" className="cf-tab-pane">
+    <div id="tab-info" className={`cf-tab-pane${embedded ? ' cf-tab-pane--embedded' : ''}`}>
       <div className="cf-form-grid">
         <WiredSelect label="Status" section="case_meta" field="status_id"
           value={infoForm.status_id}
@@ -70,7 +72,7 @@ export default function CaseInfoTab({
         placeholder="Internal notes (not visible externally)…"
         onChange={v => { setInfoForm(p => ({ ...p, internal_notes: v })); scheduleAutoSave() }} />
 
-      {hasCapability('case.assign') && (
+      {showWorkflowActions && hasCapability('case.assign') && (
       <div className="cf-reassign-panel">
         <div className="cf-reassign-title">Case Reassignment</div>
         <div className="cf-reassign-grid">
@@ -91,7 +93,7 @@ export default function CaseInfoTab({
       </div>
       )}
 
-      {escalateCase && hasCapability('case.escalate') && (
+      {showWorkflowActions && escalateCase && hasCapability('case.escalate') && (
         <div className="cf-reassign-panel">
           <div className="cf-reassign-title">Case Escalation</div>
           <div className="cf-reassign-grid">

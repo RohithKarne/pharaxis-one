@@ -15,7 +15,7 @@ export default function ModuleAccessGuard({ moduleKey, moduleKeys, children }) {
         <p style={{ margin: 0, color: '#666' }}>You don't have permission to access this module.</p>
         <button
           onClick={() => { logout().then(() => { window.location.href = '/mims/login' }) }}
-          style={{ marginTop: 8, padding: '8px 20px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}
+          style={{ marginTop: 8, padding: '8px 20px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}
         >
           Log out
         </button>

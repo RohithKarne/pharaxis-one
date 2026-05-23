@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { httpFetch } from '../../../shared/api/httpFetch'
-import PvSignalPanel from './PvSignalPanel'
 
 export default function CaseICSRTab({ id, headers, setSavedMsg }) {
   const navigate = useNavigate()
@@ -47,7 +46,6 @@ export default function CaseICSRTab({ id, headers, setSavedMsg }) {
           </button>
         ))}
       </div>
-      <PvSignalPanel headers={headers} />
     </div>
   )
 }

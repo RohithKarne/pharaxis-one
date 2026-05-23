@@ -895,6 +895,205 @@
   min-height: 100%;
 }
 
+.cf-tab-pane--embedded {
+  padding: 0;
+  border: none;
+  background: transparent;
+  min-height: auto;
+}
+
+.cf-overview-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cf-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.cf-overview-main,
+.cf-overview-side,
+.cf-workflow-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cf-overview-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.cf-overview-card h3,
+.cf-workspace-header h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.cf-overview-kicker {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1d4ed8;
+}
+
+.cf-overview-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cf-overview-stat {
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.cf-overview-stat span,
+.cf-overview-list-row span,
+.cf-overview-timeline-item span,
+.cf-workflow-link span {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.cf-overview-stat strong,
+.cf-overview-list-row strong,
+.cf-overview-timeline-item strong,
+.cf-workflow-link strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.cf-overview-list,
+.cf-overview-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cf-overview-list-row,
+.cf-overview-timeline-item {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.cf-overview-actions {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cf-workflow-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cf-workflow-link {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.cf-workflow-link:hover,
+.cf-workflow-link.recommended {
+  border-color: #93c5fd;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+.cf-workspace-shell {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.cf-workspace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 18px 20px 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border-bottom: 1px solid var(--border);
+}
+
+.cf-workspace-header p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.cf-workspace-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 12px 16px 0;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.cf-workspace-tab {
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 10px 14px;
+  border-radius: 10px 10px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cf-workspace-tab.active {
+  background: #f8fafc;
+  color: #1d3557;
+  border-color: #dbe4f0;
+}
+
+.cf-workspace-body {
+  padding: 18px;
+  background: #f8fafc;
+}
+
+.cf-workspace-body > .cf-tab-pane {
+  padding: 0;
+  border: none;
+  background: transparent;
+  min-height: auto;
+}
+
+.cf-attachments-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 /* ─── Legacy sidebar selectors (kept for compatibility) ─────── */
 .cf-form-layout { display: flex; flex: 1; overflow: hidden; }
 .cf-form-sidebar { display: none; }
@@ -2870,6 +3069,12 @@
 .cf-validity-item.missing { background: #fff1f2; color: #be123c; border-color: #fecdd3; }
 .cf-regulatory-dates { margin-top: 18px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #f8fafc; }
 .cf-regulatory-dates h3, .cf-drugs-tab h3, .cf-causality-matrix h3 { margin: 0 0 12px; }
+
+@media (max-width: 1100px) {
+  .cf-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .cf-seriousness-box { border: 1px solid #fecaca; border-radius: 12px; padding: 12px; background: #fff7f7; }
 .cf-seriousness-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .cf-seriousness-head span { background: #dc2626; color: #fff; border-radius: 999px; font-size: 11px; font-weight: 800; padding: 3px 8px; }

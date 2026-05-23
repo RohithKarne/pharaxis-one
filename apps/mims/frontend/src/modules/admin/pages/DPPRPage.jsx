@@ -246,7 +246,7 @@ export default function DPPRPage({ embedded = false } = {}) {
                     <tr key={r.id}>
                       <td style={{ fontWeight: 600 }}>{r.rule_name}</td>
                       <td>
-                        <span style={{ fontSize:12, color:'#6366f1', fontWeight:600 }}>
+                        <span style={{ fontSize:12, color:'var(--primary)', fontWeight:600 }}>
                           {domains.find(d => d.key === r.domain)?.label || r.domain}
                         </span>
                       </td>
@@ -328,7 +328,7 @@ export default function DPPRPage({ embedded = false } = {}) {
                       </td>
                       <td>{l.records_scanned}</td>
                       <td style={{ fontWeight: l.records_affected > 0 ? 700 : 400,
-                                   color: l.records_affected > 0 ? '#6366f1' : '#94a3b8' }}>
+                                   color: l.records_affected > 0 ? 'var(--primary)' : '#94a3b8' }}>
                         {l.records_affected}
                       </td>
                       <td style={{ color:'#94a3b8' }}>{l.duration_ms ? `${l.duration_ms}ms` : '—'}</td>

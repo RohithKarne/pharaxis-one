@@ -48,6 +48,15 @@ function hasPlatformAdminScope(req) {
   return hasGlobalAdminScope(req.user);
 }
 
+function decorateMergeReportRow(report) {
+  if (!report) return report;
+  return {
+    ...report,
+    content: report.content_html ?? '',
+    version: `${report.version_major || 1}.${report.version_minor || 0}`,
+  };
+}
+
 async function getScopedFolder(req, folderId) {
   const [rows] = await pool.execute(
     hasPlatformAdminScope(req)
@@ -127,7 +136,7 @@ router.get('/merge-reports', authenticate, async (req, res) => {
     query += ` ORDER BY mr.updated_at DESC LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
 
     const [reports] = await pool.execute(query, params);
-    res.json({ reports, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
+    res.json({ reports: reports.map(decorateMergeReportRow), total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
   } catch (err) {
     console.error('GET /cm/merge-reports error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -137,21 +146,22 @@ router.get('/merge-reports', authenticate, async (req, res) => {
 // POST /api/cm/merge-reports — create merge report
 router.post('/merge-reports', authenticate, upload.single('file'), validateUpload(['doc']), async (req, res) => {
   try {
-    const { folder_id, name, content_html } = req.body;
+    const { folder_id, name, content_html, content } = req.body;
     if (!folder_id || !name) return res.status(400).json({ error: 'folder_id and name are required.' });
     const folder = await getScopedFolder(req, folder_id);
     if (!folder) return res.status(404).json({ error: 'Folder not found for active organisation.' });
 
     const filePath = req.file ? req.file.path : null;
+    const resolvedContentHtml = content_html !== undefined ? content_html : (content !== undefined ? content : null);
 
     const [result] = await pool.execute(
       `INSERT INTO cm_merge_reports (folder_id, name, content_html, file_path, status, created_by)
        VALUES (?, ?, ?, ?, 'Draft', ?)`,
-      [folder_id, name.trim(), content_html || null, filePath, req.user.userId]
+      [folder_id, name.trim(), resolvedContentHtml || null, filePath, req.user.userId]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_merge_report', result.insertId, { name, folder_id });
     const [[created]] = await pool.execute('SELECT * FROM cm_merge_reports WHERE id = ?', [result.insertId]);
-    res.status(201).json({ message: 'Merge report created.', id: result.insertId, report: created });
+    res.status(201).json({ message: 'Merge report created.', id: result.insertId, report: decorateMergeReportRow(created) });
   } catch (err) {
     console.error('POST /cm/merge-reports error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -189,7 +199,7 @@ router.get('/merge-reports/:id', authenticate, async (req, res) => {
       [req.params.id]
     );
 
-    res.json({ report, versions });
+    res.json({ report: decorateMergeReportRow(report), versions });
   } catch (err) {
     console.error('GET /cm/merge-reports/:id error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -207,12 +217,17 @@ router.put('/merge-reports/:id', authenticate, upload.single('file'), validateUp
       return res.status(403).json({ error: 'Merge report can only be updated when in Draft status or checked out by you.' });
     }
 
-    const { folder_id, name, content_html } = req.body;
+    const { folder_id, name, content_html, content } = req.body;
+    if (folder_id && Number(folder_id) !== Number(report.folder_id)) {
+      const folder = await getScopedFolder(req, folder_id);
+      if (!folder) return res.status(404).json({ error: 'Folder not found for active organisation.' });
+    }
     const filePath = req.file ? req.file.path : report.file_path;
+    const resolvedContentHtml = content_html !== undefined ? content_html : (content !== undefined ? content : report.content_html);
 
     await pool.execute(
       'UPDATE cm_merge_reports SET folder_id = ?, name = ?, content_html = ?, file_path = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
-      [folder_id || report.folder_id, name || report.name, content_html !== undefined ? content_html : report.content_html, filePath, req.user.userId, id]
+      [folder_id || report.folder_id, name || report.name, resolvedContentHtml, filePath, req.user.userId, id]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_merge_report', Number(id), { name: name || report.name });
     res.json({ message: 'Merge report updated.' });
@@ -435,6 +450,25 @@ router.post('/merge-reports/:id/schedule', authenticate, async (req, res) => {
     );
     await audit(req.user.userId, req.user.email, 'SET_MERGE_SCHEDULE', 'cm_merge_report', Number(req.params.id), { cron_expression });
     res.json({ success: true, message: 'Merge report schedule saved.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/merge-reports/:id/schedule', authenticate, async (req, res) => {
+  try {
+    const report = await getScopedMergeReport(req, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Merge report not found.' });
+    const orgId = hasPlatformAdminScope(req) ? (report.folder_org_id || null) : req.user.orgId;
+    const jobName = `cm-merge-report-${orgId || 'global'}-${Number(req.params.id)}`;
+    await pool.execute(
+      `DELETE FROM scheduled_jobs
+       WHERE job_name = ?
+         AND job_type = 'cm_merge_report'
+         ${hasPlatformAdminScope(req) ? '' : 'AND org_id = ?'}`,
+      hasPlatformAdminScope(req) ? [jobName] : [jobName, req.user.orgId]
+    );
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

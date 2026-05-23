@@ -53,11 +53,18 @@ const {
 } = require('../services/scheduledExportService');
 const { recordReportRun } = require('../services/reportOpsService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
+const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 
 const router = express.Router();
 
-function canManageReports(req) {
-  return req.user?.role === 'admin' || hasGlobalAdminScope(req.user);
+// Capability-based: mirrors the frontend hasCapability('reports.manage') gate and
+// the presets routes' requireCapability('reports.manage'). Role-only here would
+// reject non-admins who were explicitly granted reports.manage while the UI still
+// shows them the management buttons. userHasActivityPrivilege handles global admin,
+// explicit grants, and role-default fallback.
+async function canManageReports(req) {
+  if (hasGlobalAdminScope(req.user)) return true;
+  return userHasActivityPrivilege(req.user, 'reports.manage');
 }
 
 function parseMaybeJson(value, fallback = {}) {
@@ -66,11 +73,14 @@ function parseMaybeJson(value, fallback = {}) {
   try { return JSON.parse(value); } catch (_) { return fallback; }
 }
 
-function requireReportManager(req, res, next) {
-  if (!canManageReports(req)) {
-    return res.status(403).json({ error: 'Admin or platform admin access required.' });
+async function requireReportManager(req, res, next) {
+  try {
+    if (await canManageReports(req)) return next();
+    return res.status(403).json({ error: 'You do not have permission to manage reports.' });
+  } catch (err) {
+    console.error('requireReportManager failed:', err);
+    return res.status(500).json({ error: 'Permission check failed.' });
   }
-  return next();
 }
 
 async function flagAnomaliesForRun({ orgId, runId, targetType, targetId, rowCount, status, errorMessage }) {
@@ -116,7 +126,7 @@ router.post('/reports/module/datasets/:datasetKey/preview', authenticate, async 
 router.get('/reports/module/definitions', authenticate, async (req, res) => {
   try {
     const definitions = await listReportDefinitions(req.user.orgId, {
-      includeInactive: canManageReports(req),
+      includeInactive: await canManageReports(req),
       productGroupId: req.query.product_group_id || null,
     });
     return res.json({ definitions });
@@ -225,7 +235,7 @@ router.post('/reports/module/definitions/:id/certify', authenticate, requireRepo
 router.get('/reports/module/dashboards', authenticate, async (req, res) => {
   try {
     const dashboards = await listDashboards(req.user.orgId, {
-      includeInactive: canManageReports(req),
+      includeInactive: await canManageReports(req),
     });
     return res.json({ dashboards });
   } catch (err) {

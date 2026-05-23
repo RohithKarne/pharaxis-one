@@ -71,6 +71,15 @@ async function getScopedCase(req, caseId) {
   return rows[0] || null;
 }
 
+function decorateTemplateRow(template) {
+  if (!template) return template;
+  return {
+    ...template,
+    body: template.body_html ?? '',
+    version: `${template.version_major || 1}.${template.version_minor || 0}`,
+  };
+}
+
 // GET /api/cm/templates — list with filters
 router.get('/templates', authenticate, async (req, res) => {
   try {
@@ -119,7 +128,7 @@ router.get('/templates', authenticate, async (req, res) => {
     query += ` ORDER BY t.name LIMIT ${parseInt(limit, 10)} OFFSET ${offset}`;
 
     const [templates] = await pool.execute(query, params);
-    res.json({ templates, total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
+    res.json({ templates: templates.map(decorateTemplateRow), total, page: parseInt(page, 10), limit: parseInt(limit, 10) });
   } catch (err) {
     console.error('GET /cm/templates error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -129,16 +138,17 @@ router.get('/templates', authenticate, async (req, res) => {
 // POST /api/cm/templates — create template
 router.post('/templates', authenticate, async (req, res) => {
   try {
-    const { type, name, subject, body_html, status, folder_id } = req.body;
+    const { type, name, subject, body_html, body, status, folder_id } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
+    const resolvedBodyHtml = body_html !== undefined ? body_html : (body !== undefined ? body : null);
 
     const [result] = await pool.execute(
       'INSERT INTO cm_templates (type, name, subject, body_html, status, folder_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [type || 'Response', name.trim(), subject || null, body_html || null, status || 'Active', folder_id || null, req.user.userId]
+      [type || 'Response', name.trim(), subject || null, resolvedBodyHtml || null, status || 'Active', folder_id || null, req.user.userId]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_template', result.insertId, { name, type: type || 'Response' });
     const created = await getScopedTemplate(req, result.insertId);
-    res.status(201).json({ message: 'Template created.', id: result.insertId, template: created });
+    res.status(201).json({ message: 'Template created.', id: result.insertId, template: decorateTemplateRow(created) });
   } catch (err) {
     console.error('POST /cm/templates error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -180,7 +190,7 @@ router.get('/templates/:id', authenticate, async (req, res) => {
   try {
     const template = await getScopedTemplate(req, req.params.id);
     if (!template) return res.status(404).json({ error: 'Template not found.' });
-    res.json({ template });
+    res.json({ template: decorateTemplateRow(template) });
   } catch (err) {
     console.error('GET /cm/templates/:id error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -194,10 +204,11 @@ router.put('/templates/:id', authenticate, async (req, res) => {
     const existing = await getScopedTemplate(req, id);
     if (!existing) return res.status(404).json({ error: 'Template not found.' });
 
-    const { type, name, subject, body_html, status, folder_id } = req.body;
+    const { type, name, subject, body_html, body, status, folder_id } = req.body;
+    const resolvedBodyHtml = body_html !== undefined ? body_html : (body !== undefined ? body : existing.body_html);
     await pool.execute(
       'UPDATE cm_templates SET type = ?, name = ?, subject = ?, body_html = ?, status = ?, folder_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
-      [type || 'Response', name, subject || null, body_html || null, status || 'Active', folder_id !== undefined ? (folder_id || null) : existing.folder_id, req.user.userId, id]
+      [type || 'Response', name, subject || null, resolvedBodyHtml || null, status || 'Active', folder_id !== undefined ? (folder_id || null) : existing.folder_id, req.user.userId, id]
     );
     await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_template', Number(id), { name, type });
     res.json({ message: 'Template updated.' });

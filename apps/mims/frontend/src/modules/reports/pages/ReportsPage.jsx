@@ -6,6 +6,7 @@ import MIMSLayout from '../../../shared/components/MIMSLayout'
 import StandaloneModuleShell from '../../../shared/components/StandaloneModuleShell'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { isAdminUser } from '../../../shared/utils/adminScope.js'
+import { Button } from '../../../shared/ui'
 
 const SECTION_LABELS = {
   overview: 'Overview',
@@ -133,9 +134,13 @@ function widgetRowsToList(rows) {
 export default function ReportsPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { token, user } = useAuth()
+  const { token, user, hasCapability } = useAuth()
   const standalone = new URLSearchParams(location.search || '').get('standalone') === '1'
   const isManager = isAdminUser(user)
+  // Capability is the authority for report actions (hasCapability returns true for
+  // superadmin / unrestricted / unresolved). Replaces the role-only isManager gate.
+  const canManageReports = hasCapability('reports.manage')
+  const canExportReports = hasCapability('reports.export')
   const headers = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
     [token]
@@ -957,7 +962,9 @@ export default function ReportsPage() {
               <div style={{ fontSize: 18, fontWeight: 800 }}>Report Library</div>
               <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Trusted reports with approved datasets and controlled definitions.</div>
             </div>
-            {isManager && <button onClick={() => openReportEditor(null)} style={pillButtonStyle(false)}>New</button>}
+            <Button variant="primary" size="sm" disabled={!canManageReports}
+              title={!canManageReports ? 'Requires the Manage Reports permission' : undefined}
+              onClick={() => openReportEditor(null)}>New</Button>
           </div>
           <input
             value={reportSearch}
@@ -1022,11 +1029,11 @@ export default function ReportsPage() {
                   <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(true)}>Run Report</button>
                   <button onClick={() => toggleFavorite('report', selectedReport.id)} style={pillButtonStyle(false)}>{isFavorite('report', selectedReport.id) ? 'Unfavorite' : 'Favorite'}</button>
                   <button onClick={() => loadVersions('report', selectedReport.id)} style={pillButtonStyle(false)}>Versions</button>
-                  {isManager && <button onClick={() => duplicateReport(selectedReport.id)} style={pillButtonStyle(false)}>Duplicate</button>}
-                  {isManager && selectedReport.lifecycle_status === 'draft' && <button onClick={() => publishReport(selectedReport.id)} style={pillButtonStyle(false)}>Publish</button>}
-                  {isManager && !selectedReport.is_system && <button onClick={() => certifyReport(selectedReport.id)} style={pillButtonStyle(false)}>Certify</button>}
-                  {isManager && !selectedReport.is_system && <button onClick={() => openReportEditor(selectedReport)} style={pillButtonStyle(false)}>Edit</button>}
-                  {isManager && !selectedReport.is_system && <button onClick={deleteSelectedReport} style={pillButtonStyle(false)}>Delete</button>}
+                  {canManageReports && <button onClick={() => duplicateReport(selectedReport.id)} style={pillButtonStyle(false)}>Duplicate</button>}
+                  {canManageReports && selectedReport.lifecycle_status === 'draft' && <button onClick={() => publishReport(selectedReport.id)} style={pillButtonStyle(false)}>Publish</button>}
+                  {canManageReports && !selectedReport.is_system && <button onClick={() => certifyReport(selectedReport.id)} style={pillButtonStyle(false)}>Certify</button>}
+                  {canManageReports && !selectedReport.is_system && <button onClick={() => openReportEditor(selectedReport)} style={pillButtonStyle(false)}>Edit</button>}
+                  {canManageReports && !selectedReport.is_system && <button onClick={deleteSelectedReport} style={pillButtonStyle(false)}>Delete</button>}
                 </div>
               </div>
               <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
@@ -1228,7 +1235,9 @@ export default function ReportsPage() {
               <div style={{ fontSize: 18, fontWeight: 800 }}>Dashboard Library</div>
               <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Saved decision views for operations, compliance, and observability.</div>
             </div>
-            {isManager && <button onClick={() => openDashboardEditor(null)} style={pillButtonStyle(false)}>New</button>}
+            <Button variant="primary" size="sm" disabled={!canManageReports}
+              title={!canManageReports ? 'Requires the Manage Reports permission' : undefined}
+              onClick={() => openDashboardEditor(null)}>New</Button>
           </div>
           <input
             value={dashboardSearch}
@@ -1291,11 +1300,11 @@ export default function ReportsPage() {
                   <button onClick={() => runSelectedDashboard(selectedDashboard.id)} style={pillButtonStyle(true)}>Run Dashboard</button>
                   <button onClick={() => toggleFavorite('dashboard', selectedDashboard.id)} style={pillButtonStyle(false)}>{isFavorite('dashboard', selectedDashboard.id) ? 'Unfavorite' : 'Favorite'}</button>
                   <button onClick={() => loadVersions('dashboard', selectedDashboard.id)} style={pillButtonStyle(false)}>Versions</button>
-                  {isManager && <button onClick={() => duplicateDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Duplicate</button>}
-                  {isManager && selectedDashboard.lifecycle_status === 'draft' && <button onClick={() => publishDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Publish</button>}
-                  {isManager && !selectedDashboard.is_system && <button onClick={() => saveDashboardTemplate(selectedDashboard.id)} style={pillButtonStyle(false)}>Save Template</button>}
-                  {isManager && !selectedDashboard.is_system && <button onClick={() => openDashboardEditor(selectedDashboard)} style={pillButtonStyle(false)}>Edit</button>}
-                  {isManager && !selectedDashboard.is_system && <button onClick={deleteSelectedDashboard} style={pillButtonStyle(false)}>Delete</button>}
+                  {canManageReports && <button onClick={() => duplicateDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Duplicate</button>}
+                  {canManageReports && selectedDashboard.lifecycle_status === 'draft' && <button onClick={() => publishDashboard(selectedDashboard.id)} style={pillButtonStyle(false)}>Publish</button>}
+                  {canManageReports && !selectedDashboard.is_system && <button onClick={() => saveDashboardTemplate(selectedDashboard.id)} style={pillButtonStyle(false)}>Save Template</button>}
+                  {canManageReports && !selectedDashboard.is_system && <button onClick={() => openDashboardEditor(selectedDashboard)} style={pillButtonStyle(false)}>Edit</button>}
+                  {canManageReports && !selectedDashboard.is_system && <button onClick={deleteSelectedDashboard} style={pillButtonStyle(false)}>Delete</button>}
                 </div>
               </div>
             </div>
@@ -1463,7 +1472,7 @@ export default function ReportsPage() {
                             {widget.display_mode} • {widget.row_count} row{widget.row_count !== 1 ? 's' : ''}
                           </div>
                         </div>
-                        <button onClick={() => exportRowsAsCsv(widget.rows || [], `${widget.report_key || widget.id}.csv`)} style={pillButtonStyle(false)}>Export Widget</button>
+                        {canExportReports && <button onClick={() => exportRowsAsCsv(widget.rows || [], `${widget.report_key || widget.id}.csv`)} style={pillButtonStyle(false)}>Export Widget</button>}
                       </div>
                       <div style={{ marginTop: 14 }}>{renderDashboardWidgetPreview(widget)}</div>
                     </div>
@@ -1707,7 +1716,7 @@ export default function ReportsPage() {
                   <td style={{ padding: '10px 12px' }}>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <button onClick={() => openRunDetail(run.id)} style={pillButtonStyle(false)}>Detail</button>
-                      {isManager && run.status === 'failed' && <button onClick={() => retryRun(run.id)} style={pillButtonStyle(false)}>Retry</button>}
+                      {canManageReports && run.status === 'failed' && <button onClick={() => retryRun(run.id)} style={pillButtonStyle(false)}>Retry</button>}
                     </div>
                   </td>
                 </tr>

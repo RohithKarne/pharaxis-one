@@ -83,6 +83,13 @@ async function addVersionHistory(entityType, entityId, version, status, notes, a
   } catch (_) {}
 }
 
+async function verifyEsignPassword(userId, password) {
+  if (!password) return false;
+  const [[user]] = await pool.execute('SELECT password FROM users WHERE id = ?', [userId]);
+  if (!user?.password) return false;
+  return bcrypt.compare(password, user.password);
+}
+
 async function generateDocId(conn) {
   const [[{ maxId }]] = await conn.execute('SELECT MAX(id) AS maxId FROM cm_documents');
   const nextNum = ((maxId || 0) + 1).toString().padStart(5, '0');
@@ -225,7 +232,7 @@ async function isUserInOrg(userId, orgId) {
 // GET /api/cm/documents — list with filters and pagination
 router.get('/documents', authenticate, async (req, res) => {
   try {
-    const { status, folder_id, doc_type, search, page = 1, limit = 50, include_expired = 'false' } = req.query;
+    const { status, folder_id, doc_type, search, authoring_source, page = 1, limit = 50, include_expired = 'false' } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let query = `
@@ -254,6 +261,10 @@ router.get('/documents', authenticate, async (req, res) => {
     if (doc_type) {
       query += ' AND d.doc_type = ?';
       params.push(doc_type);
+    }
+    if (authoring_source) {
+      query += ' AND d.authoring_source = ?';
+      params.push(authoring_source);
     }
     if (search) {
       query += ' AND (d.name LIKE ? OR d.doc_id LIKE ? OR d.search_tags LIKE ? OR d.document_category LIKE ?)';
@@ -751,8 +762,7 @@ router.post('/documents/:id/approve', authenticate, requireCapability('content.a
       return res.status(400).json({ error: 'Document must be in Pending or Under Review status to approve.' });
     }
 
-    const [[user]] = await pool.execute('SELECT * FROM users WHERE id = ?', [req.user.userId]);
-    const match = await bcrypt.compare(password, user.password);
+    const match = await verifyEsignPassword(req.user.userId, password);
     if (!match) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
 
     const versionStr = `${doc.version_major}.${doc.version_minor}`;
@@ -804,8 +814,7 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
       });
     }
 
-    const [[user]] = await pool.execute('SELECT * FROM users WHERE id = ?', [req.user.userId]);
-    const match = await bcrypt.compare(password, user.password);
+    const match = await verifyEsignPassword(req.user.userId, password);
     if (!match) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
 
     const newMajor = doc.version_major + 1;
@@ -1101,13 +1110,16 @@ router.post('/documents/release-stale-checkouts', authenticate, requireRole('adm
 });
 
 // POST /api/cm/documents/bulk — bulk publish or archive documents
-router.post('/documents/bulk', authenticate, async (req, res) => {
+router.post('/documents/bulk', authenticate, requireCapability('content.publish'), async (req, res) => {
   try {
-    const { action, ids } = req.body;
+    const { action, ids, password, reason } = req.body;
     if (!['publish', 'archive'].includes(action)) return res.status(400).json({ error: 'action must be publish or archive.' });
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array is required.' });
-
-    const newStatus = action === 'publish' ? 'Published' : 'Archived';
+    if (action === 'publish') {
+      if (!password || !reason) return res.status(400).json({ error: 'password and reason are required for bulk publish.' });
+      const match = await verifyEsignPassword(req.user.userId, password);
+      if (!match) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
+    }
     const results = { success: [], failed: [] };
 
     for (const rawId of ids) {
@@ -1118,11 +1130,10 @@ router.post('/documents/bulk', authenticate, async (req, res) => {
       if (!doc) { results.failed.push({ id: docId, reason: 'Not found or access denied' }); continue; }
 
       if (action === 'publish') {
-        const allowedForPublish = ['Approved', 'Under Review'];
-        if (!allowedForPublish.includes(doc.status)) {
+        if (doc.status !== 'Approved') {
           results.failed.push({ id: docId, reason: `Cannot publish from status: ${doc.status}` }); continue;
         }
-        if (doc.owner_user_id && doc.owner_user_id !== req.user.userId && req.user.role !== 'admin' && !hasPlatformAdminScope(req)) {
+        if (doc.owner_user_id && doc.owner_user_id !== req.user.userId) {
           results.failed.push({ id: docId, reason: 'Owner lock — not your document' }); continue;
         }
 
@@ -1142,13 +1153,52 @@ router.post('/documents/bulk', authenticate, async (req, res) => {
           });
           continue;
         }
+
+        const newMajor = Number(doc.version_major || 0) + 1;
+        const versionStr = `${newMajor}.0`;
+        const conn = await pool.getConnection();
+        try {
+          await conn.beginTransaction();
+          await conn.execute(
+            "UPDATE cm_documents SET status = 'Archived', updated_at = NOW() WHERE folder_id = ? AND doc_type = ? AND status = 'Published' AND id != ?",
+            [doc.folder_id, doc.doc_type, docId]
+          );
+          await conn.execute(
+            "UPDATE cm_documents SET status = 'Published', version_major = ?, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+            [newMajor, req.user.userId, req.user.userId, docId]
+          );
+          await conn.commit();
+        } catch (err) {
+          await conn.rollback();
+          throw err;
+        } finally {
+          conn.release();
+        }
+
+        await addVersionHistory('document', Number(docId), versionStr, 'Published', reason, req.user.userId);
+        await audit(req.user.userId, req.user.email, 'PUBLISH', 'cm_document', docId, {
+          bulk: true,
+          doc_id: doc.doc_id,
+          reason,
+          version: versionStr,
+        });
+        results.success.push(docId);
+        continue;
       }
 
+      if (doc.status === 'Archived') {
+        results.failed.push({ id: docId, reason: 'Document is already archived' }); continue;
+      }
       await pool.execute(
         'UPDATE cm_documents SET status = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
-        [newStatus, req.user.userId, docId]
+        ['Archived', req.user.userId, docId]
       );
-      await audit(req.user.userId, req.user.email, action.toUpperCase(), 'cm_document', docId, { bulk: true, status: newStatus });
+      await addVersionHistory('document', Number(docId), `${doc.version_major || 1}.${doc.version_minor || 0}`, 'Archived', reason || 'Bulk archived', req.user.userId);
+      await audit(req.user.userId, req.user.email, action.toUpperCase(), 'cm_document', docId, {
+        bulk: true,
+        status: 'Archived',
+        reason: reason || null,
+      });
       results.success.push(docId);
     }
 

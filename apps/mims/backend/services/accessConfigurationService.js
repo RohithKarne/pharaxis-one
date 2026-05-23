@@ -30,28 +30,28 @@ const GROUP_TEMPLATES = [
     name: 'MIMS Administrator',
     role: 'admin',
     description: 'Tenant administrator with access configuration, reports, content, and case oversight.',
-    privileges: ['admin.access.manage', 'admin.access.approve', 'case.create', 'case.update', 'case.review', 'case.close', 'case.reopen', 'case.assign', 'case.bulk_action', 'case.export', 'case.unmask', 'transmission.create', 'transmission.approve', 'content.author', 'content.review', 'content.approve', 'content.publish', 'reports.view', 'reports.manage', 'reports.export'],
+    privileges: ['admin.access.manage', 'admin.access.approve', 'case.create', 'case.view', 'case.view_all', 'case.update', 'case.update_all', 'case.review', 'case.close', 'case.close_all', 'case.reopen', 'case.assign', 'case.assign_all', 'case.bulk_action', 'case.export', 'case.export_all', 'case.unmask', 'case.unmask_all', 'transmission.create', 'transmission.approve', 'content.author', 'content.review', 'content.approve', 'content.publish', 'reports.view', 'reports.manage', 'reports.export'],
   },
   {
     key: 'mi_agent',
     name: 'MI Agent',
     role: 'agent',
     description: 'Medical information user for intake, case creation, updates, correspondence, and transmission preparation.',
-    privileges: ['case.create', 'case.update', 'case.assign', 'transmission.create', 'reports.view'],
+    privileges: ['case.create', 'case.view', 'case.view_all', 'case.update', 'case.update_all', 'case.assign', 'case.assign_all', 'transmission.create', 'reports.view'],
   },
   {
     key: 'reviewer',
     name: 'Reviewer',
     role: 'reviewer',
     description: 'Reviewer with case review, close, controlled exports, and report visibility.',
-    privileges: ['case.review', 'case.close', 'case.export', 'transmission.approve', 'content.review', 'reports.view', 'reports.export'],
+    privileges: ['case.view', 'case.view_all', 'case.review', 'case.close', 'case.close_all', 'case.export', 'case.export_all', 'transmission.approve', 'content.review', 'reports.view', 'reports.export'],
   },
   {
     key: 'manager',
     name: 'Manager',
     role: 'admin',
     description: 'Operational manager with override, reopen, bulk action, unmask, export, and approval capabilities.',
-    privileges: ['case.review', 'case.close', 'case.reopen', 'case.assign', 'case.bulk_action', 'case.export', 'case.unmask', 'transmission.approve', 'reports.view', 'reports.export'],
+    privileges: ['case.view', 'case.view_all', 'case.review', 'case.close', 'case.close_all', 'case.reopen', 'case.assign', 'case.assign_all', 'case.bulk_action', 'case.export', 'case.export_all', 'case.unmask', 'case.unmask_all', 'transmission.approve', 'reports.view', 'reports.export'],
   },
   {
     key: 'content_manager',
@@ -68,6 +68,15 @@ const GROUP_TEMPLATES = [
     privileges: ['reports.view'],
   },
 ];
+
+const SCOPED_PRIVILEGE_COMPANIONS = Object.freeze({
+  'case.view': 'case.view_all',
+  'case.update': 'case.update_all',
+  'case.close': 'case.close_all',
+  'case.assign': 'case.assign_all',
+  'case.export': 'case.export_all',
+  'case.unmask': 'case.unmask_all',
+});
 
 function parseJson(value, fallback = null) {
   if (value == null || value === '') return fallback;
@@ -652,13 +661,45 @@ async function resolveEffectivePrivileges(userId, orgId) {
   };
 }
 
+function getCompanionPrivilegeKey(privilegeKey) {
+  return SCOPED_PRIVILEGE_COMPANIONS[String(privilegeKey || '').trim()] || null;
+}
+
+async function resolveActivityScope(user, privilegeKey) {
+  if (!user || !privilegeKey) return 'none';
+  if (hasGlobalAdminScope(user)) return 'all';
+  if (!user.orgId) return 'none';
+
+  const normalizedKey = String(privilegeKey).trim();
+  const companionKey = getCompanionPrivilegeKey(normalizedKey);
+  const effective = await resolveEffectivePrivileges(user.userId, user.orgId);
+  const granted = new Set(effective?.privileges || []);
+
+  if (companionKey && granted.has(companionKey)) return 'all';
+  if (granted.has(normalizedKey)) return 'own';
+
+  const catalog = await getPrivilegeCatalog(user.orgId);
+  const privilege = catalog.find((item) => item.privilege_key === normalizedKey);
+  const role = String(user.role || '').toLowerCase();
+  // Role-default fallback mirrors legacy userHasActivityPrivilege, which granted
+  // full (org-wide) access. Returning 'own' here would silently downgrade every
+  // role-default user to their own cases — a regression. Keep it 'all'.
+  if (privilege?.default_allowed_roles?.map((item) => String(item).toLowerCase()).includes(role)) {
+    return 'all';
+  }
+  return 'none';
+}
+
 async function userHasActivityPrivilege(user, privilegeKey) {
   if (!user || !privilegeKey) return false;
   if (hasGlobalAdminScope(user)) return true;
   if (user.role === 'admin' && String(privilegeKey).startsWith('admin.')) return true;
   if (!user.orgId) return false;
   const effective = await resolveEffectivePrivileges(user.userId, user.orgId);
-  if (effective?.privileges?.includes(privilegeKey)) return true;
+  const granted = new Set(effective?.privileges || []);
+  if (granted.has(privilegeKey)) return true;
+  const companionKey = getCompanionPrivilegeKey(privilegeKey);
+  if (companionKey && granted.has(companionKey)) return true;
   const catalog = await getPrivilegeCatalog(user.orgId);
   const privilege = catalog.find((item) => item.privilege_key === privilegeKey);
   return privilege?.default_allowed_roles?.includes(user.role) || false;
@@ -692,6 +733,7 @@ module.exports = {
   createAccessReviewSnapshot,
   listAccessReviewSnapshots,
   getOverview,
+  resolveActivityScope,
   resolveEffectivePrivileges,
   userHasActivityPrivilege,
   auditAccessChange,

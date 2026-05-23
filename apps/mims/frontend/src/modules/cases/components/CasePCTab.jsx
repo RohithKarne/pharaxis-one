@@ -9,7 +9,6 @@ const API = import.meta.env.VITE_API_URL || '/api'
 
 const PC_TABS = [
   { key: 'general',          label: 'General' },
-  { key: 'pc-flex-fields',   label: 'PC Flex Fields' },
   { key: 'patient-info',     label: 'PC Patient Info' },
   { key: 'product-info',     label: 'Product Info' },
   { key: 'return-retrieval', label: 'Return / Retrieval' },
@@ -299,22 +298,26 @@ export default function CasePCTab({
 
       {/* B1 fix — admin-configured PC fields render here, scoped to displayTab='pc' */}
       {formConfig && Array.isArray(formConfig.sections) && (
-        <DynamicFieldsSection
-          sections={formConfig.sections}
-          values={dynFieldValues || {}}
-          onChange={setDynFieldValues || (() => {})}
-          onSave={saveDynFields || (() => {})}
-          saving={dynFieldSaving}
-          rules={formConfig.rules || []}
-          errors={dynFieldErrors || {}}
-          caseId={ctx?.caseId}
-          caseStatus={ctx?.caseStatus}
-          caseSection="pc"
-          presence={ctx?.presence}
-          currentUserId={ctx?.currentUserId}
-          caseType={caseType}
-          displayTab="pc"
-        />
+        <div className="cf-overview-card">
+          <div className="cf-overview-kicker">Additional Fields</div>
+          <h3>PC Configured Fields</h3>
+          <DynamicFieldsSection
+            sections={formConfig.sections}
+            values={dynFieldValues || {}}
+            onChange={setDynFieldValues || (() => {})}
+            onSave={saveDynFields || (() => {})}
+            saving={dynFieldSaving}
+            rules={formConfig.rules || []}
+            errors={dynFieldErrors || {}}
+            caseId={ctx?.caseId}
+            caseStatus={ctx?.caseStatus}
+            caseSection="pc"
+            presence={ctx?.presence}
+            currentUserId={ctx?.currentUserId}
+            caseType={caseType}
+            displayTab="pc"
+          />
+        </div>
       )}
     </div>
   )

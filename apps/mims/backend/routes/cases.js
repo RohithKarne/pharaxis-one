@@ -18,7 +18,7 @@ try {
   bcrypt = require('bcrypt');
 }
 const pool    = require('../database/db');
-const { authenticate, requireRole, requireOrg, requireCapability } = require('../middleware/auth');
+const { authenticate, requireRole, requireOrg, requireCapability, requireScopedCapability } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validate');
 const { checkTransitionAllowed } = require('../services/workflowEngine');
 const { logger } = require('../services/logger');
@@ -49,6 +49,7 @@ const {
   parseJsonSafe, parseStoredJson, uniquePositiveInts, stripHtml, applyMergeFields,
   toDateOnlyOrNull, isValidDateOnly, parseIntSafe, clamp, hasOwn, parseDateForPicklistFilter,
   normalizeRole, parseRolesCsv, canViewSensitiveField, maskStringValue, applySensitiveMask,
+  buildCaseOwnershipClause,
   normalizeFieldOverrides, normalizeAeTransmissionPriority, normalizePcTransmissionPriority,
   buildGlobalCaseSearchClause, logResponseError, writeCaseAudit, writeAuditLog, pushNotification,
   verifyCaseOrg, findActivePicklistEntry, assertActivePicklistValue,
@@ -196,7 +197,7 @@ router.delete('/cases/saved-views/:viewId', authenticate, async (req, res) => {
 // ─── LIST CASES ──────────────────────────────────────────────────────────────
 
 // GET /api/cases — list cases with filters
-router.get('/cases', authenticate, requireOrg, async (req, res) => {
+router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.view'), async (req, res) => {
   try {
     const {
       type, status_id, owner_id, deleted, search,
@@ -298,6 +299,11 @@ router.get('/cases', authenticate, requireOrg, async (req, res) => {
     if (req.user.orgId) {
       query += ' AND c.org_id = ?'; params.push(req.user.orgId);
       countQuery += ' AND c.org_id = ?'; countParams.push(req.user.orgId);
+    }
+    if (req.activityScope?.['case.view'] === 'own') {
+      const ownClause = buildCaseOwnershipClause('c');
+      query += ` AND ${ownClause}`; params.push(req.user.userId, req.user.userId);
+      countQuery += ` AND ${ownClause}`; countParams.push(req.user.userId, req.user.userId);
     }
     if (type)      {
       query += ' AND c.case_type = ?'; params.push(type);
@@ -421,7 +427,7 @@ router.get('/cases/my', authenticate, async (req, res) => {
 });
 
 // GET /api/cases/unassigned
-router.get('/cases/unassigned', authenticate, async (req, res) => {
+router.get('/cases/unassigned', authenticate, requireScopedCapability('case.view'), async (req, res) => {
   try {
     const limit = clamp(parseIntSafe(req.query.limit, 50), 1, 500);
     const offset = Math.max(0, parseIntSafe(req.query.offset, 0));
@@ -431,6 +437,10 @@ router.get('/cases/unassigned', authenticate, async (req, res) => {
     if (!hasGlobalAdminScope(req.user)) {
       orgClause = ' AND c.org_id = ?';
       params.push(req.user.orgId);
+    }
+    if (req.activityScope?.['case.view'] === 'own') {
+      orgClause += ` AND ${buildCaseOwnershipClause('c')}`;
+      params.push(req.user.userId, req.user.userId);
     }
     const [rows] = await pool.execute(
       `SELECT c.*, o.name AS org_name, s.name AS site_name, ws.name AS status_name, u.name AS owner_name,
@@ -454,7 +464,7 @@ router.get('/cases/unassigned', authenticate, async (req, res) => {
 
 
 // GET /api/cases/mi-responses/log — Response log: all MI responses (SENT) across cases (S19-P0)
-router.get('/cases/mi-responses/log', authenticate, async (req, res) => {
+router.get('/cases/mi-responses/log', authenticate, requireScopedCapability('case.view'), async (req, res) => {
   try {
     const { status, from_date, to_date, search, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
@@ -463,6 +473,10 @@ router.get('/cases/mi-responses/log', authenticate, async (req, res) => {
 
     let where = `WHERE 1=1${orgClause}`;
     const params = [...orgParams];
+    if (req.activityScope?.['case.view'] === 'own') {
+      where += ` AND ${buildCaseOwnershipClause('c')}`;
+      params.push(req.user.userId, req.user.userId);
+    }
 
     if (status)    { where += ' AND r.response_status = ?'; params.push(status); }
     if (from_date) { where += ' AND r.created_at >= ?';     params.push(from_date); }
@@ -506,10 +520,16 @@ router.get('/cases/mi-responses/log', authenticate, async (req, res) => {
 });
 
 // GET /api/cases/dashboard-summary — Home dashboard stats/recent/alerts (Sprint 14 G11)
-router.get('/cases/dashboard-summary', authenticate, async (req, res) => {
+router.get('/cases/dashboard-summary', authenticate, requireScopedCapability('case.view'), async (req, res) => {
   try {
     const orgClause = hasGlobalAdminScope(req.user) ? '' : ' AND c.org_id = ?';
     const orgParams = hasGlobalAdminScope(req.user) ? [] : [req.user.orgId];
+    const ownClause = req.activityScope?.['case.view'] === 'own'
+      ? ` AND ${buildCaseOwnershipClause('c')}`
+      : '';
+    const ownParams = req.activityScope?.['case.view'] === 'own'
+      ? [req.user.userId, req.user.userId]
+      : [];
 
     const [countRows] = await pool.execute(
       'SELECT ' +
@@ -520,8 +540,8 @@ router.get('/cases/dashboard-summary', authenticate, async (req, res) => {
       'COALESCE(SUM(CASE WHEN c.is_deleted = 0 AND c.priority IN (\'high\',\'urgent\') THEN 1 ELSE 0 END), 0) AS priority_cases ' +
       'FROM cases c ' +
       'LEFT JOIN workflow_states ws ON ws.id = c.status_id ' +
-      'WHERE 1=1' + orgClause,
-      [req.user.userId, ...orgParams]
+      'WHERE 1=1' + orgClause + ownClause,
+      [req.user.userId, ...orgParams, ...ownParams]
     );
 
     const counts = Array.isArray(countRows) && countRows.length ? countRows[0] : {};
@@ -532,9 +552,9 @@ router.get('/cases/dashboard-summary', authenticate, async (req, res) => {
       'FROM cases c ' +
       'LEFT JOIN workflow_states ws ON ws.id = c.status_id ' +
       'LEFT JOIN users u ON u.id = c.case_owner_id ' +
-      'WHERE c.is_deleted = 0' + orgClause + ' ' +
+      'WHERE c.is_deleted = 0' + orgClause + ownClause + ' ' +
       'ORDER BY c.updated_at DESC, c.id DESC LIMIT 8',
-      [...orgParams]
+      [...orgParams, ...ownParams]
     );
 
     const [alerts] = await pool.execute(
@@ -549,15 +569,15 @@ router.get('/cases/dashboard-summary', authenticate, async (req, res) => {
     const [[miStats]] = await pool.execute(
       `SELECT
         COALESCE(SUM(CASE WHEN r.response_status IN ('DRAFT','READY') THEN 1 ELSE 0 END), 0) AS pending_responses,
-        COALESCE(SUM(CASE WHEN r.response_status = 'APPROVED' THEN 1 ELSE 0 END), 0)         AS pending_approval,
-        COALESCE(SUM(CASE WHEN r.response_status = 'SENT' AND DATE(r.approved_at) = CURDATE() THEN 1 ELSE 0 END), 0) AS sent_today,
-        COALESCE(SUM(CASE WHEN mi.response_required_by IS NOT NULL AND mi.response_required_by < CURDATE()
+       COALESCE(SUM(CASE WHEN r.response_status = 'APPROVED' THEN 1 ELSE 0 END), 0)         AS pending_approval,
+       COALESCE(SUM(CASE WHEN r.response_status = 'SENT' AND DATE(r.approved_at) = CURDATE() THEN 1 ELSE 0 END), 0) AS sent_today,
+       COALESCE(SUM(CASE WHEN mi.response_required_by IS NOT NULL AND mi.response_required_by < CURDATE()
                            AND r.response_status NOT IN ('SENT','VOIDED') THEN 1 ELSE 0 END), 0) AS sla_breached
        FROM case_mi_responses r
        JOIN cases c ON c.id = r.case_id
        JOIN case_mi mi ON mi.id = r.mi_tab_id
-       WHERE c.is_deleted = 0 AND r.response_status != 'VOIDED'${miOrgClause}`,
-      miOrgParams
+       WHERE c.is_deleted = 0 AND r.response_status != 'VOIDED'${miOrgClause}${ownClause}`,
+      [...miOrgParams, ...ownParams]
     );
 
     return res.json({
@@ -763,8 +783,14 @@ router.post('/cases/duplicate-check', authenticate, requireOrg, async (req, res)
       return res.status(400).json({ error: 'case_type must be MI, AE, or PC.' });
     }
 
+    const requestedOrgId = parseInt(req.body?.org_id, 10) || null;
+    const orgId = hasGlobalAdminScope(req.user) ? requestedOrgId : req.user.orgId;
+    if (!orgId) {
+      return res.status(400).json({ error: 'org_id is required' });
+    }
+
     const candidates = await findDuplicateCandidates({
-      orgId: req.user.orgId,
+      orgId,
       caseType,
       reporter: req.body?.reporter || {},
       patient: req.body?.patient || {},
@@ -896,8 +922,13 @@ router.post('/cases/copy-from/:id', authenticate, requireOrg, async (req, res) =
 });
 
 // GET /api/cases/:id — single case detail
-router.get('/cases/:id', authenticate, async (req, res) => {
+router.get('/cases/:id', authenticate, requireScopedCapability('case.view'), async (req, res) => {
   try {
+    const scopedCase = await verifyCaseOrg(req.params.id, req, 'case.view');
+    if (!scopedCase) {
+      const [[existing]] = await pool.execute('SELECT id FROM cases WHERE id = ? LIMIT 1', [req.params.id]);
+      return res.status(existing ? 403 : 404).json({ error: existing ? 'Access denied' : 'Case not found' });
+    }
     const [[c]] = await pool.execute(
       `SELECT c.*,
         o.name  AS org_name,
@@ -913,9 +944,6 @@ router.get('/cases/:id', authenticate, async (req, res) => {
       [req.params.id]
     );
     if (!c) return res.status(404).json({ error: 'Case not found' });
-    if (!hasGlobalAdminScope(req.user) && Number(c.org_id) !== Number(req.user.orgId)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
     res.json(c);
   } catch (err) {
     logger.error({ err, route: '/api/cases/:id', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to fetch case details');
@@ -986,7 +1014,8 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       dynamic_fields,
     } = req.body;
 
-    const org_id = req.user.orgId;
+    const requestedOrgId = parseInt(req.body?.org_id, 10) || null;
+    const org_id = hasGlobalAdminScope(req.user) ? requestedOrgId : req.user.orgId;
     if (!org_id) {
       await conn.rollback(); conn.release();
       return res.status(400).json({ error: 'org_id is required' });
@@ -1356,9 +1385,9 @@ router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
 });
 
 // POST /api/cases/:id/reassign — dedicated reassignment flow with audit + notifications
-router.post('/cases/:id/reassign', authenticate, requireCapability('case.assign'), async (req, res) => {
+router.post('/cases/:id/reassign', authenticate, requireScopedCapability('case.assign'), async (req, res) => {
   try {
-    const owned = await verifyCaseOrg(req.params.id, req);
+    const owned = await verifyCaseOrg(req.params.id, req, 'case.assign');
     if (!owned) return res.status(403).json({ error: 'Access denied' });
 
     const reason = String(req.body?.reason || '').trim();
@@ -1474,9 +1503,9 @@ router.post('/cases/:id/reassign', authenticate, requireCapability('case.assign'
 // ─── UPDATE CASE — F-15 Case Information Section ─────────────────────────────
 
 // PUT /api/cases/:id — update case info fields (also handles auto-save)
-router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req, res) => {
+router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), validate(schemas.updateCase), async (req, res) => {
   try {
-    const owned = await verifyCaseOrg(req.params.id, req);
+    const owned = await verifyCaseOrg(req.params.id, req, 'case.update');
     if (!owned) return res.status(403).json({ error: 'Access denied' });
 
     const [[currentCase]] = await pool.execute(
@@ -1553,6 +1582,9 @@ router.put('/cases/:id', authenticate, validate(schemas.updateCase), async (req,
         const oldName = oldState?.name || '', newName = newState?.name || '';
         const isClose = newName === 'Closed' && oldName !== 'Closed';
         const isReopen = oldName === 'Closed' && newName !== 'Closed';
+        if (isClose && !(await verifyCaseOrg(req.params.id, req, 'case.close'))) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
         const isAE = currentCase.case_type === 'AE', isPC = currentCase.case_type === 'PC';
         if (isClose) {
           const needPwd = ccRules.cc_password_close_case || (isAE && ccRules.cc_password_close_ae) || (isPC && ccRules.cc_password_close_pc);
@@ -1837,7 +1869,7 @@ router.post('/cases/:id/links', authenticate, async (req, res) => {
 
 router.delete('/cases/:id/links/:linkId', authenticate, async (req, res) => {
   try {
-    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    if (!(await verifyCaseOrg(req.params.id, req, 'case.update'))) return res.status(403).json({ error: 'Access denied' });
     await pool.execute('DELETE FROM case_links WHERE id = ? AND case_id = ?', [req.params.linkId, req.params.id]);
     await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'CASE_LINK_REMOVED', 'case_link_id', req.params.linkId, null);
     res.json({ ok: true });
@@ -2569,6 +2601,7 @@ router.patch('/cases/:id/pc-transmissions/:txId', authenticate, async (req, res)
 router.get('/cases/:id/dynamic-fields', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    const allowUnmask = !!(await verifyCaseOrg(req.params.id, req, 'case.unmask'));
     const [rows] = await pool.execute(
       `SELECT
          v.field_id AS field_definition_id,
@@ -2598,7 +2631,8 @@ router.get('/cases/:id/dynamic-fields', authenticate, async (req, res) => {
         req.user?.role,
         row.section_label,
         row.field_name,
-        row.value
+        row.value,
+        allowUnmask
       );
       return {
         ...row,
@@ -2611,9 +2645,9 @@ router.get('/cases/:id/dynamic-fields', authenticate, async (req, res) => {
 });
 
 // POST /api/cases/:id/dynamic-fields — bulk upsert dynamic field values
-router.post('/cases/:id/dynamic-fields', authenticate, async (req, res) => {
+router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('case.update'), async (req, res) => {
   try {
-    if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    if (!(await verifyCaseOrg(req.params.id, req, 'case.update'))) return res.status(403).json({ error: 'Access denied' });
     const { fields } = req.body; // [{field_id, field_value}]
     if (!Array.isArray(fields) || !fields.length) return res.status(400).json({ error: 'fields array required.' });
     for (const f of fields) {
@@ -2642,12 +2676,13 @@ router.get('/cases/:id/intake', authenticate, async (req, res) => {
     const [[pc_intake]] = await pool.execute('SELECT * FROM case_pc_intake WHERE case_id = ?', [caseId]);
 
     const sensitiveMap = await loadSensitiveFieldConfigMap(owned.org_id);
+    const allowUnmask = !!(await verifyCaseOrg(req.params.id, req, 'case.unmask'));
     const maskByField = (payload, sectionName, mappings) => {
       if (!payload) return payload;
       const next = { ...payload };
       for (const [key, fieldName] of Object.entries(mappings)) {
         if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
-        const masked = applySensitiveMask(sensitiveMap, req.user?.role, sectionName, fieldName, next[key]);
+        const masked = applySensitiveMask(sensitiveMap, req.user?.role, sectionName, fieldName, next[key], allowUnmask);
         next[key] = masked.value;
       }
       return next;
@@ -2675,9 +2710,9 @@ router.get('/cases/:id/intake', authenticate, async (req, res) => {
 });
 
 // PUT /api/cases/:id/intake — update intake data post-creation
-router.put('/cases/:id/intake', authenticate, async (req, res) => {
+router.put('/cases/:id/intake', authenticate, requireScopedCapability('case.update'), async (req, res) => {
   try {
-    const owned = await verifyCaseOrg(req.params.id, req);
+    const owned = await verifyCaseOrg(req.params.id, req, 'case.update');
     if (!owned) return res.status(403).json({ error: 'Access denied' });
 
     // Division change-control: require a reason for AE/PC record changes (if enabled).

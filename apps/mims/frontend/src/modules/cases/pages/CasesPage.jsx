@@ -38,7 +38,7 @@ function SlaBadge({ slaDue }) {
 export default function CasesPage() {
   const navigate        = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { token, user, hasCapability } = useAuth()
+  const { token, user, hasCapability, orgId } = useAuth()
   const headers         = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
     [token]
@@ -202,6 +202,7 @@ export default function CasesPage() {
 
   function buildDuplicatePayload() {
     return {
+      org_id: newCase.org_id || orgId || '',
       case_type: newCase.case_type,
       reporter,
       patient,
@@ -234,7 +235,7 @@ export default function CasesPage() {
   // ── New case modal helpers ────────────────────────────────────────────────
 
   async function openModal() {
-    setNewCase({ org_id: '', case_type: '' })
+    setNewCase({ org_id: orgId ? String(orgId) : '', case_type: '' })
     setModalStep(1)
     setReporter({ first_name: '', last_name: '', email: '', phone: '', reporter_type: 'HCP', country: '', organisation: '' })
     setPatient({ initials: '', age: '', age_unit: 'years', gender: '', weight_kg: '' })
@@ -355,7 +356,11 @@ export default function CasesPage() {
       <div className="cf-cases-header">
         <div className="cf-cases-title-row">
           <h1 className="cf-cases-title">Case Management</h1>
-          {hasCapability('case.create') && <button className="cf-new-case-btn" onClick={openModal}>+ New Case</button>}
+          <button className="cf-new-case-btn" onClick={openModal}
+            disabled={!hasCapability('case.create')}
+            title={!hasCapability('case.create') ? 'Your security group does not allow creating cases.' : undefined}>
+            + New Case
+          </button>
         </div>
 
         {/* Tabs */}

@@ -581,7 +581,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                             <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{m.module_id || `MOD-${m.id}`}</span>
                           </span>
                           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.folder_name || '—'}</span>
-                          <button type="button" onClick={() => addModule(m.id)} style={{ padding: '3px 10px', fontSize: 12, cursor: 'pointer', border: '1px solid var(--primary, #4f46e5)', borderRadius: 4, background: 'white', color: 'var(--primary, #4f46e5)', fontWeight: 600 }}>+ Add</button>
+                          <button type="button" onClick={() => addModule(m.id)} style={{ padding: '3px 10px', fontSize: 12, cursor: 'pointer', border: '1px solid var(--primary, #1d3557)', borderRadius: 4, background: 'white', color: 'var(--primary, #1d3557)', fontWeight: 600 }}>+ Add</button>
                         </div>
                       ))}
                     </div>

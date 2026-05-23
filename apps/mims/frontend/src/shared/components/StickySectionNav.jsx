@@ -1,10 +1,13 @@
 /**
- * StickySectionNav — Theme 4 Wave 1.
+ * StickySectionNav — left-side section rail. Two modes:
  *
- * A floating left-side rail listing case form sections. Highlights the
- * currently-visible section while the user scrolls. Click jumps to section.
+ * 1. Scroll-spy (default): highlights the section currently in view via
+ *    IntersectionObserver; click smooth-scrolls to the section anchor.
  *
- * Implementation: IntersectionObserver on each section's anchor div.
+ * 2. Controlled (pass `onSelect`): the rail drives a panel switcher instead of
+ *    scrolling — used where sub-sections are nested tabs (only one mounted at a
+ *    time), e.g. the AE/PC workspaces. Highlight follows `activeId`; click calls
+ *    `onSelect(id)`. No observer is attached.
  *
  * Sections prop:
  *   [{ id: 'reporter', label: 'Reporter', count?: 12, complete?: 8 }, ...]
@@ -12,11 +15,18 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-export default function StickySectionNav({ sections = [], rootMargin = '-30% 0px -60% 0px' }) {
-  const [active, setActive] = useState(sections[0]?.id || null)
+export default function StickySectionNav({ sections = [], rootMargin = '-30% 0px -60% 0px', activeId = null, onSelect = null }) {
+  const controlled = typeof onSelect === 'function'
+  const [active, setActive] = useState(activeId || sections[0]?.id || null)
   const observed = useRef(new Map())
 
+  // In controlled mode, mirror the externally-owned active section.
   useEffect(() => {
+    if (controlled && activeId != null) setActive(activeId)
+  }, [controlled, activeId])
+
+  useEffect(() => {
+    if (controlled) return // no scroll-spy when the rail drives a panel switcher
     if (typeof IntersectionObserver === 'undefined') return
     const obs = new IntersectionObserver((entries) => {
       const visible = entries
@@ -30,9 +40,10 @@ export default function StickySectionNav({ sections = [], rootMargin = '-30% 0px
       if (el) { obs.observe(el); observed.current.set(s.id, el) }
     }
     return () => obs.disconnect()
-  }, [sections, rootMargin])
+  }, [sections, rootMargin, controlled])
 
   function go(id) {
+    if (controlled) { onSelect(id); setActive(id); return }
     const el = document.getElementById(id)
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     setActive(id)
@@ -61,9 +72,9 @@ export default function StickySectionNav({ sections = [], rootMargin = '-30% 0px
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   width: '100%', padding: '7px 10px', textAlign: 'left',
                   fontSize: 12, fontWeight: isActive ? 700 : 500,
-                  color: isActive ? 'var(--accent,#1a4f9c)' : 'var(--text-secondary)',
-                  background: isActive ? 'var(--accent-soft,#eaf2ff)' : 'transparent',
-                  borderLeft: `3px solid ${isActive ? 'var(--accent,#1a4f9c)' : 'transparent'}`,
+                  color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
+                  background: isActive ? 'rgba(var(--primary-rgb,29,53,87),0.08)' : 'transparent',
+                  borderLeft: `3px solid ${isActive ? 'var(--primary)' : 'transparent'}`,
                   border: 'none', cursor: 'pointer', borderRadius: 4,
                 }}
               >

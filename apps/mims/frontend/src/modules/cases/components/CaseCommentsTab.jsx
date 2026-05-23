@@ -16,15 +16,24 @@ import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
-export default function CaseCommentsTab({ id, headers, token, currentUserId, onCountChange }) {
+export default function CaseCommentsTab({
+  id,
+  headers,
+  token,
+  currentUserId,
+  onCountChange,
+  includeThreadedComments = true,
+  includeLiveChat = true,
+}) {
   const [conversationId, setConversationId] = useState('')
   const [conversationError, setConversationError] = useState('')
   const t5 = useFeatureFlag('cf.theme5_realtime_collab')
 
   useEffect(() => {
+    if (!includeLiveChat) return
     initializeConversation()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, includeLiveChat])
 
   async function initializeConversation() {
     setConversationId('')
@@ -45,7 +54,7 @@ export default function CaseCommentsTab({ id, headers, token, currentUserId, onC
   return (
     <div id="tab-comments" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '8px 14px' }}>
       {/* Theme 5 audit-style threaded comments with @-mentions + resolve */}
-      {t5 && (
+      {includeThreadedComments && t5 && (
         <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface,#fff)' }}>
           <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
             <strong style={{ fontSize: 13 }}>Threaded Comments</strong>
@@ -58,11 +67,11 @@ export default function CaseCommentsTab({ id, headers, token, currentUserId, onC
       )}
 
       {/* Live chat with presence + participant management (legacy AC-T14) */}
-      {conversationError && <div className="cf-corr-error">{conversationError}</div>}
-      {!conversationError && !conversationId && (
+      {includeLiveChat && conversationError && <div className="cf-corr-error">{conversationError}</div>}
+      {includeLiveChat && !conversationError && !conversationId && (
         <div className="cf-empty-msg">Opening collaboration thread…</div>
       )}
-      {!conversationError && conversationId && (
+      {includeLiveChat && !conversationError && conversationId && (
         <RealtimeChatPanel
           conversationId={conversationId}
           headers={headers}

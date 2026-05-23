@@ -1,26 +1,27 @@
 /* ============================================================
-   MIMS — Global Stylesheet (Slack-inspired theme)
+   MIMS — Global Stylesheet (Pharaxis navy + orange theme)
    ============================================================ */
 
 /* ─── 1. CSS Variables ─────────────────────────────────────── */
 :root {
-  --primary:        #611f69;
-  --primary-light:  #7c3085;
-  --primary-dark:   #4a154b;
-  --accent:         #007a5a;
-  --accent-hover:   #005e46;
+  --primary:        #1d3557;
+  --primary-rgb:    29,53,87;
+  --primary-light:  #2a4a73;
+  --primary-dark:   #152840;
+  --accent:         #e8890c;
+  --accent-hover:   #c9740a;
   --bg:             #f8f8f8;
   --surface:        #ffffff;
   --border:         #e8e8e8;
   --text-primary:   #1d1c1d;
   --text-secondary: #616061;
-  --text-muted:     #9e9ea6;
+  --text-muted:     #6f7177;
   --success:        #007a5a;
   --warning:        #ecb22e;
   --danger:         #e01e5a;
   --info:           #1264a3;
-  --sidebar-bg:     #4a154b;
-  --sidebar-text:   #d1c4d4;
+  --sidebar-bg:     #1d3557;
+  --sidebar-text:   #c4cede;
   --sidebar-hover:  rgba(255,255,255,0.1);
   --sidebar-active: rgba(255,255,255,0.15);
   --sidebar-width:  240px;
@@ -33,6 +34,26 @@
 
 /* ─── 2. Reset & Base ──────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ─── Accessibility baseline ───────────────────────────────── */
+@keyframes mims-spin { to { transform: rotate(360deg); } }
+
+/* Visible keyboard focus everywhere; mouse clicks stay clean via :focus-visible */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+a, button, [role="button"], input, select, textarea { outline-color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 html, body, #root {
   height: 100%;
@@ -3496,10 +3517,10 @@ a.nav-item { text-decoration: none; color: inherit; }
 
 .mims-home-wrap,
 .mims-session-wrap {
-  padding: 18px;
+  padding: 16px 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .mims-home-hero,
@@ -3507,56 +3528,57 @@ a.nav-item { text-decoration: none; color: inherit; }
   background: linear-gradient(135deg, #1d3557 0%, #2a4a78 65%, #355b92 100%);
   border-radius: 12px;
   color: #fff;
-  padding: 18px;
+  padding: 16px 18px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  box-shadow: 0 10px 24px rgba(20, 34, 56, 0.2);
+  gap: 12px;
+  box-shadow: 0 8px 20px rgba(20, 34, 56, 0.14);
 }
 
 .mims-home-hero h1,
 .mims-session-header h1 {
-  font-size: 22px;
+  font-size: 18px;
   line-height: 1.15;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 .mims-home-eyebrow {
   display: inline-flex;
   align-items: center;
-  padding: 5px 10px;
+  padding: 4px 9px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.18);
   background: rgba(255,255,255,0.12);
   color: #dbeafe;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .mims-home-hero p,
 .mims-session-header p {
-  font-size: 13px;
+  max-width: 560px;
+  font-size: 12px;
   opacity: 0.9;
 }
 .mims-home-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 6px;
+  margin-top: 10px;
 }
 .mims-home-meta-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 5px 9px;
   border-radius: 999px;
   background: rgba(255,255,255,0.12);
   border: 1px solid rgba(255,255,255,0.18);
   color: rgba(255,255,255,0.9);
-  font-size: 12px;
+  font-size: 11px;
 }
 .mims-home-meta-pill.strong {
   background: rgba(250, 204, 21, 0.18);
@@ -3567,20 +3589,20 @@ a.nav-item { text-decoration: none; color: inherit; }
 .mims-home-hero-actions,
 .mims-session-header-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 .mims-home-focus-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(220px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 .mims-home-focus-card {
   background: #fff;
   border: 1px solid #dbe6f2;
   border-radius: 12px;
-  padding: 14px;
-  box-shadow: 0 2px 10px rgba(16, 24, 40, 0.05);
+  padding: 12px 14px;
+  box-shadow: 0 1px 8px rgba(16, 24, 40, 0.04);
 }
 .mims-home-focus-card.accent { border-top: 3px solid #0f766e; }
 .mims-home-focus-card.warning { border-top: 3px solid #d97706; }
@@ -3591,21 +3613,21 @@ a.nav-item { text-decoration: none; color: inherit; }
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .mims-home-focus-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   color: #0f172a;
 }
 .mims-home-focus-body {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 1.5;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.45;
   color: #475569;
 }
 .mims-home-focus-top strong {
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1;
   color: #0f172a;
 }
@@ -3768,60 +3790,60 @@ a.nav-item { text-decoration: none; color: inherit; }
 .mims-workbench-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
-  gap: 16px;
-  margin-bottom: 14px;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .mims-workbench-panel .card-header,
 .mims-workbench-panel .card-body {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .mims-workbench-panel-note {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
 }
 
 .mims-workbench-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+  gap: 10px;
 }
 
 .mims-workbench-card {
   border: 1px solid rgba(14, 116, 144, 0.12);
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(240,249,255,0.96));
-  padding: 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(246,250,255,0.96));
+  padding: 14px;
   text-align: left;
   cursor: pointer;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .mims-workbench-card:hover {
   transform: translateY(-1px);
   border-color: rgba(2, 132, 199, 0.24);
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
 .mims-workbench-card strong {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-primary);
 }
 
 .mims-workbench-card span {
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .mims-workbench-card small {
   color: #0f766e;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;

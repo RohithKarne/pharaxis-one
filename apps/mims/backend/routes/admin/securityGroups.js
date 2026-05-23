@@ -242,7 +242,13 @@ router.get('/security-groups/effective', authenticate, requireOrg, async (req, r
         if (roles.includes(role)) set.add(cap.privilege_key);
       }
       privileges = Array.from(set);
-    } catch (_) { privileges = []; }
+    } catch (err) {
+      // Fail open: null = "not resolved", which the frontend treats as unrestricted
+      // (don't hide actions; the server still enforces each one). An empty array
+      // would instead hide every capability-gated control, including from admins.
+      console.error('GET /security-groups/effective privilege resolution failed:', err);
+      privileges = null;
+    }
 
     res.json({
       unrestricted: visibleGroups.length === 0,
@@ -315,6 +321,36 @@ router.get('/security-groups/:id', authenticate, requireRole('admin', 'platform_
     res.json({ group: parsed, members });
   } catch (err) {
     console.error('GET /security-groups/:id error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/security-groups/:id/audit — recent audit timeline for one group
+router.get('/security-groups/:id/audit', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
+  try {
+    const group = await resolveScopedGroup(req.params.id, req);
+    if (!group) return res.status(404).json({ error: 'Security group not found.' });
+
+    const [rows] = await pool.execute(
+      `SELECT user_name, action, details, created_at
+       FROM audit_logs
+       WHERE entity = 'security_group' AND entity_id = ?
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [group.id]
+    );
+
+    const events = rows.map((row) => {
+      let details = row.details;
+      if (typeof details === 'string') {
+        try { details = JSON.parse(details) } catch (_) {}
+      }
+      return { ...row, details: details || null };
+    });
+
+    res.json({ events });
+  } catch (err) {
+    console.error('GET /security-groups/:id/audit error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });

@@ -73,16 +73,6 @@ export default function PCTabPanel({
         </div>
       )}
 
-      {tabKey === 'pc-flex-fields' && (
-        <div>
-          <h3 className="cf-subsection-title">PC Flex Fields</h3>
-          <p className="cf-form-help-note">
-            Add admin-configured PC fields via <strong>System &rsaquo; Setup &rsaquo; Customize Forms</strong>.
-            Configured fields render automatically inside the PC Component tab under <em>Additional Fields</em>.
-          </p>
-        </div>
-      )}
-
       {tabKey === 'patient-info' && (
         <div className="cf-form-grid">
           {fieldRow('Age',                'age',                 'number')}
@@ -144,7 +134,7 @@ export default function PCTabPanel({
         </div>
       )}
 
-      {!locked && tabKey !== 'pc-flex-fields' && (
+      {!locked && (
         <div className="cf-form-actions">
           {/* B12 — label includes scope so the operator knows exactly what saves */}
           <button className="cf-save-btn" onClick={onSave} disabled={saving}

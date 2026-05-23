@@ -56,7 +56,7 @@ router.get('/cases/:id/mi', authenticate, async (req, res) => {
 // POST /api/cases/:id/mi — add a new MI tab to a case
 router.post('/cases/:id/mi', authenticate, async (req, res) => {
   try {
-    if (!await verifyCaseOrg(req.params.id, req)) {
+    if (!await verifyCaseOrg(req.params.id, req, 'case.update')) {
       return res.status(403).json({ error: 'Access denied' });
     }
     const {

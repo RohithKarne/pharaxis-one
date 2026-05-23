@@ -4,6 +4,17 @@ import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 import { CheckInModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { useAuth } from '../../../shared/context/AuthContext'
+
+function normalizeFaq(faq) {
+  if (!faq) return faq
+  return {
+    ...faq,
+    answer_html: faq.answer_html ?? faq.answer ?? '',
+    search_tags: faq.search_tags ?? faq.tags ?? '',
+    version: faq.version || `${faq.version_major || 1}.${faq.version_minor || 0}`,
+  }
+}
 
 function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -11,24 +22,57 @@ function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
   const [form, setForm] = useState({
     folder_id: faq?.folder_id || '',
     category: faq?.category || '',
+    search_tags: faq?.search_tags || '',
     approval_required: faq?.approval_required !== false,
     question: faq?.question || '',
-    answer: faq?.answer || '',
+    answer_html: faq?.answer_html || '',
   })
   const [saving, setSaving] = useState(false)
+
+  async function runCheckInFlow(targetId, currentStatus) {
+    if (currentStatus !== 'CheckedOut') {
+      const checkoutRes = await httpFetch(`/api/cm/faqs/${targetId}/checkout`, { method: 'POST', headers: authHeaders })
+      if (!checkoutRes.ok) {
+        const err = await checkoutRes.json().catch(() => ({}))
+        throw new Error(err.error || 'FAQ checkout failed.')
+      }
+    }
+    const checkinRes = await httpFetch(`/api/cm/faqs/${targetId}/checkin`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ notes: isEdit ? 'Checked in after FAQ update' : 'Checked in on FAQ creation' }),
+    })
+    if (!checkinRes.ok) {
+      const err = await checkinRes.json().catch(() => ({}))
+      throw new Error(err.error || 'FAQ check-in failed.')
+    }
+  }
 
   async function handleSave(checkIn = false) {
     if (!form.folder_id) return toast.warn('Folder is required.')
     if (!form.question.trim()) return toast.warn('Question is required.')
-    if (!form.answer || form.answer === '<p></p>') return toast.warn('Answer is required.')
+    if (!form.answer_html || form.answer_html === '<p></p>') return toast.warn('Answer is required.')
     setSaving(true)
     try {
       const url = isEdit ? `/api/cm/faqs/${faq.id}` : '/api/cm/faqs'
       const method = isEdit ? 'PUT' : 'POST'
-      const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify({ ...form, check_in: checkIn }) })
-      if (res.ok) { onSaved(); onClose() }
-      else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
-    } catch { toast.error('Network error.') }
+      const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify(form) })
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}))
+        if (checkIn) {
+          const targetId = faq?.id || data.id
+          const currentStatus = faq?.status || data.faq?.status || 'Draft'
+          await runCheckInFlow(targetId, currentStatus)
+        }
+        onSaved()
+        onClose()
+      } else {
+        const d = await res.json()
+        toast.error(d.error || 'Save failed.')
+      }
+    } catch (err) {
+      toast.error(err.message || 'Network error.')
+    }
     setSaving(false)
   }
 
@@ -53,13 +97,17 @@ function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
             <input className="cm-form-input" value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} placeholder="e.g. Dosage, Side Effects…" />
           </div>
           <div className="cm-form-group">
+            <label className="cm-form-label">Tags</label>
+            <input className="cm-form-input" value={form.search_tags} onChange={e => setForm(p => ({ ...p, search_tags: e.target.value }))} placeholder="comma-separated tags" />
+          </div>
+          <div className="cm-form-group">
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
               <input type="checkbox" checked={form.approval_required} onChange={e => setForm(p => ({ ...p, approval_required: e.target.checked }))} />
               Approval Required
             </label>
             {!form.approval_required && (
               <p style={{ fontSize: 12, color: 'var(--info)', marginTop: 6, padding: '6px 10px', background: '#e8f0fb', borderRadius: 4 }}>
-                Note: This FAQ will be published immediately on Check-In.
+                Note: This FAQ will publish immediately when you complete Check-In.
               </p>
             )}
           </div>
@@ -69,7 +117,7 @@ function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Answer <span className="required">*</span></label>
-            <RichTextEditor value={form.answer} onChange={v => setForm(p => ({ ...p, answer: v }))} />
+            <RichTextEditor value={form.answer_html} onChange={v => setForm(p => ({ ...p, answer_html: v }))} />
           </div>
         </div>
         <div className="cm-drawer-footer">
@@ -83,6 +131,7 @@ function FAQDrawer({ faq, folders, token, onClose, onSaved }) {
 }
 
 export default function FAQsSection({ token }) {
+  const { hasCapability } = useAuth()
   const authHeaders = useMemo(
     () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
     [token]
@@ -116,7 +165,7 @@ export default function FAQsSection({ token }) {
           httpFetch('/api/cm/folders', { headers: authHeaders }),
         ])
         if (cancelled) return
-        if (fRes.ok) setFaqs((await fRes.json()).faqs || [])
+        if (fRes.ok) setFaqs((((await fRes.json()).faqs) || []).map(normalizeFaq))
         if (folRes.ok) setFolders((await folRes.json()).folders || [])
       } catch {
         /* silent */
@@ -189,10 +238,10 @@ export default function FAQsSection({ token }) {
       btns.push(<button key="ci" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setCheckInFaq(faq)}>Check In</button>)
     } else if (s === 'Pending') {
       btns.push(<button key="v" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditFaq(faq); setShowDrawer(true) }}>View</button>)
-      btns.push(<button key="ap" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handleApprove(faq)}>Approve</button>)
+      if (hasCapability('content.approve')) btns.push(<button key="ap" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handleApprove(faq)}>Approve</button>)
     } else if (s === 'Approved') {
       btns.push(<button key="v" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditFaq(faq); setShowDrawer(true) }}>View</button>)
-      btns.push(<button key="pub" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handlePublish(faq)}>Publish</button>)
+      if (hasCapability('content.publish')) btns.push(<button key="pub" className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => handlePublish(faq)}>Publish</button>)
     } else {
       btns.push(<button key="v" className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditFaq(faq); setShowDrawer(true) }}>View</button>)
     }
@@ -212,7 +261,7 @@ export default function FAQsSection({ token }) {
               🏷 Bulk Tag ({selectedFaqIds.length})
             </button>
           )}
-          <button className="cm-btn cm-btn-primary" onClick={() => { setEditFaq(null); setShowDrawer(true) }}>+ New FAQ</button>
+          {hasCapability('content.author') && <button className="cm-btn cm-btn-primary" onClick={() => { setEditFaq(null); setShowDrawer(true) }}>+ New FAQ</button>}
         </div>
       </div>
       {showBulkTag && (
@@ -243,7 +292,7 @@ export default function FAQsSection({ token }) {
           <option>Draft</option><option>Pending</option><option>Approved</option><option>Published</option><option>Archived</option>
         </select>
         <input className="cm-form-input" style={{ width: 160 }} placeholder="Category…" value={filters.category} onChange={e => setFilters(p => ({ ...p, category: e.target.value }))} />
-        <input className="cm-form-input" style={{ width: 200 }} placeholder="Search FAQs…" value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} />
+        <input className="cm-form-input" style={{ width: 220 }} placeholder="Search question, category, tags…" value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} />
         <button className="cm-btn cm-btn-secondary" onClick={() => setRefreshKey(key => key + 1)}>Filter</button>
       </div>
       {loading ? (
@@ -257,6 +306,7 @@ export default function FAQsSection({ token }) {
               <th><input type="checkbox" checked={faqs.length > 0 && faqs.every(f => selectedFaqIds.includes(f.id))} onChange={e => setSelectedFaqIds(e.target.checked ? faqs.map(f => f.id) : [])} /></th>
               <th>Question</th>
               <th>Category</th>
+              <th>Tags</th>
               <th>Folder</th>
               <th>Views</th>
               <th>Version</th>
@@ -272,6 +322,7 @@ export default function FAQsSection({ token }) {
                   {f.question?.length > 60 ? f.question.slice(0, 60) + '…' : f.question}
                 </td>
                 <td>{f.category || '—'}</td>
+                <td style={{ maxWidth: 180, fontSize: 12, color: 'var(--text-muted)' }}>{f.search_tags || '—'}</td>
                 <td>{f.folder_name || '—'}</td>
                 <td style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>{f.view_count || 0}</td>
                 <td style={{ textAlign: 'center' }}>{f.version || '1.0'}</td>

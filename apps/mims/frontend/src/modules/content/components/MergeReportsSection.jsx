@@ -4,6 +4,7 @@ import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
 import { CheckInModal } from './ContentModals'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { useAuth } from '../../../shared/context/AuthContext'
 
 function MergeReportDrawer({ report, folders, token, onClose, onSaved }) {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -11,9 +12,28 @@ function MergeReportDrawer({ report, folders, token, onClose, onSaved }) {
   const [form, setForm] = useState({
     folder_id: report?.folder_id || '',
     name: report?.name || '',
-    content: report?.content || '',
+    content_html: report?.content_html || report?.content || '',
   })
   const [saving, setSaving] = useState(false)
+
+  async function runCheckInFlow(targetId, currentStatus) {
+    if (currentStatus !== 'CheckedOut') {
+      const checkoutRes = await httpFetch(`/api/cm/merge-reports/${targetId}/checkout`, { method: 'POST', headers: authHeaders })
+      if (!checkoutRes.ok) {
+        const err = await checkoutRes.json().catch(() => ({}))
+        throw new Error(err.error || 'Merge report checkout failed.')
+      }
+    }
+    const checkinRes = await httpFetch(`/api/cm/merge-reports/${targetId}/checkin`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ notes: isEdit ? 'Checked in after merge report update' : 'Checked in on merge report creation' }),
+    })
+    if (!checkinRes.ok) {
+      const err = await checkinRes.json().catch(() => ({}))
+      throw new Error(err.error || 'Merge report check-in failed.')
+    }
+  }
 
   async function handleSave(checkIn = false) {
     if (!form.folder_id) return toast.warn('Folder is required.')
@@ -22,10 +42,23 @@ function MergeReportDrawer({ report, folders, token, onClose, onSaved }) {
     try {
       const url = isEdit ? `/api/cm/merge-reports/${report.id}` : '/api/cm/merge-reports'
       const method = isEdit ? 'PUT' : 'POST'
-      const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify({ ...form, check_in: checkIn }) })
-      if (res.ok) { onSaved(); onClose() }
-      else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
-    } catch { toast.error('Network error.') }
+      const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify(form) })
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}))
+        if (checkIn) {
+          const targetId = report?.id || data.id
+          const currentStatus = report?.status || data.report?.status || 'Draft'
+          await runCheckInFlow(targetId, currentStatus)
+        }
+        onSaved()
+        onClose()
+      } else {
+        const d = await res.json()
+        toast.error(d.error || 'Save failed.')
+      }
+    } catch (err) {
+      toast.error(err.message || 'Network error.')
+    }
     setSaving(false)
   }
 
@@ -52,7 +85,7 @@ function MergeReportDrawer({ report, folders, token, onClose, onSaved }) {
           <div className="cm-form-group">
             <label className="cm-form-label">Content</label>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Use merge fields like {'{{patient_name}}'}, {'{{product_name}}'}, {'{{case_id}}'}.</p>
-            <RichTextEditor value={form.content} onChange={v => setForm(p => ({ ...p, content: v }))} />
+            <RichTextEditor value={form.content_html} onChange={v => setForm(p => ({ ...p, content_html: v }))} />
           </div>
         </div>
         <div className="cm-drawer-footer">
@@ -66,14 +99,19 @@ function MergeReportDrawer({ report, folders, token, onClose, onSaved }) {
 }
 
 export default function MergeReportsSection({ token }) {
+  const { hasCapability } = useAuth()
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   const [reports, setReports] = useState([])
   const [folders, setFolders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [filters, setFilters] = useState({ status: '', folder_id: '', search: '' })
   const [showDrawer, setShowDrawer] = useState(false)
   const [editReport, setEditReport] = useState(null)
   const [checkInReport, setCheckInReport] = useState(null)
   const [checkInLoading, setCheckInLoading] = useState(false)
+  const [scheduleTarget, setScheduleTarget] = useState(null)
+  const [scheduleDraft, setScheduleDraft] = useState({ cron_expression: '', email_recipients: '', is_active: true })
+  const [scheduleLoading, setScheduleLoading] = useState(false)
 
   const [generateTarget, setGenerateTarget] = useState(null)
   const [genCaseId, setGenCaseId] = useState('')
@@ -84,15 +122,16 @@ export default function MergeReportsSection({ token }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
+      const params = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, value]) => value)))
       const [rRes, fRes] = await Promise.all([
-        httpFetch('/api/cm/merge-reports', { headers: authHeaders }),
+        httpFetch(`/api/cm/merge-reports?${params}`, { headers: authHeaders }),
         httpFetch('/api/cm/folders', { headers: authHeaders }),
       ])
       if (rRes.ok) setReports((await rRes.json()).reports || [])
       if (fRes.ok) setFolders((await fRes.json()).folders || [])
     } catch { /* silent */ }
     setLoading(false)
-  }, [token]) // eslint-disable-line
+  }, [filters, token]) // eslint-disable-line
 
   useEffect(() => { load() }, [load])
 
@@ -128,6 +167,80 @@ export default function MergeReportsSection({ token }) {
     setGenCaseId('')
     setGenResult(null)
     setGenError(null)
+  }
+
+  async function openScheduleManager(report) {
+    setScheduleTarget(report)
+    setScheduleLoading(true)
+    try {
+      const res = await httpFetch(`/api/cm/merge-reports/${report.id}/schedule`, { headers: authHeaders })
+      const data = await res.json().catch(() => ({}))
+      const schedule = data.schedule || null
+      const jobConfig = schedule?.job_config && typeof schedule.job_config === 'string'
+        ? JSON.parse(schedule.job_config)
+        : (schedule?.job_config || {})
+      setScheduleDraft({
+        cron_expression: schedule?.cron_expression || schedule?.schedule_cron || '',
+        email_recipients: Array.isArray(jobConfig.email_recipients)
+          ? jobConfig.email_recipients.join(', ')
+          : '',
+        is_active: schedule ? schedule.is_active !== 0 : true,
+      })
+    } catch {
+      setScheduleDraft({ cron_expression: '', email_recipients: '', is_active: true })
+    }
+    setScheduleLoading(false)
+  }
+
+  async function saveSchedule() {
+    if (!scheduleTarget) return
+    if (!scheduleDraft.cron_expression.trim()) {
+      toast.warn('Cron expression is required.')
+      return
+    }
+    setScheduleLoading(true)
+    try {
+      const res = await httpFetch(`/api/cm/merge-reports/${scheduleTarget.id}/schedule`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          cron_expression: scheduleDraft.cron_expression.trim(),
+          email_recipients: scheduleDraft.email_recipients.split(',').map((email) => email.trim()).filter(Boolean),
+          is_active: scheduleDraft.is_active,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'Schedule save failed.')
+        return
+      }
+      toast.success('Schedule saved.')
+      setScheduleTarget(null)
+    } catch {
+      toast.error('Schedule save failed.')
+    }
+    setScheduleLoading(false)
+  }
+
+  async function removeSchedule() {
+    if (!scheduleTarget) return
+    setScheduleLoading(true)
+    try {
+      const res = await httpFetch(`/api/cm/merge-reports/${scheduleTarget.id}/schedule`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'Schedule remove failed.')
+        return
+      }
+      toast.success('Schedule removed.')
+      setScheduleTarget(null)
+    } catch {
+      toast.error('Schedule remove failed.')
+    }
+    setScheduleLoading(false)
   }
 
   async function handleGenerate() {
@@ -192,7 +305,21 @@ ${genResult.generated_html}
     <div>
       <div className="cm-section-header">
         <h2 className="cm-section-title">Merge Reports</h2>
-        <button className="cm-btn cm-btn-primary" onClick={() => { setEditReport(null); setShowDrawer(true) }}>+ New Merge Report</button>
+        {hasCapability('content.author') && <button className="cm-btn cm-btn-primary" onClick={() => { setEditReport(null); setShowDrawer(true) }}>+ New Merge Report</button>}
+      </div>
+      <div className="cm-filters">
+        <select className="cm-form-select" style={{ width: 180 }} value={filters.status} onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
+          <option value="">All Statuses</option>
+          <option>Draft</option>
+          <option>CheckedOut</option>
+          <option>Archived</option>
+        </select>
+        <select className="cm-form-select" style={{ width: 180 }} value={filters.folder_id} onChange={e => setFilters(p => ({ ...p, folder_id: e.target.value }))}>
+          <option value="">All Folders</option>
+          {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+        <input className="cm-form-input" style={{ width: 240 }} value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} placeholder="Search merge reports…" />
+        <button className="cm-btn cm-btn-secondary" onClick={load}>Filter</button>
       </div>
       {loading ? (
         <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Loading merge reports…</p>
@@ -226,13 +353,7 @@ ${genResult.generated_html}
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => handleCheckOut(r)}>Check Out</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setCheckInReport(r)}>Check In</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" style={{ color: '#7c3aed', borderColor: '#7c3aed' }} onClick={() => openGenerate(r)}>⚡ Generate</button>
-                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={async () => {
-                      const cron = prompt('Set schedule (cron expression):\ne.g. "0 9 * * 1" = every Monday 9am\nLeave blank to remove schedule:')
-                      if (cron === null) return
-                      const emails = prompt('Email recipients (comma-separated, leave blank for none):') || ''
-                      const res = await httpFetch(`/api/cm/merge-reports/${r.id}/schedule`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ cron_expression: cron, email_recipients: emails.split(',').map(e => e.trim()).filter(Boolean), is_active: !!cron }) })
-                      if (res.ok) toast.info(cron ? 'Schedule saved.' : 'Schedule removed.') ; else toast.info('Schedule save failed.')
-                    }}>⏱ Schedule</button>
+                    <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => openScheduleManager(r)}>⏱ Schedule</button>
                     <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => handleArchive(r)}>Archive</button>
                   </div>
                 </td>
@@ -246,6 +367,44 @@ ${genResult.generated_html}
       )}
       {checkInReport && (
         <CheckInModal item={checkInReport} onClose={() => setCheckInReport(null)} onConfirm={handleCheckIn} loading={checkInLoading} />
+      )}
+      {scheduleTarget && (
+        <div className="cm-modal-overlay" onClick={() => !scheduleLoading && setScheduleTarget(null)}>
+          <div className="cm-modal" style={{ width: 560, maxWidth: '94vw' }} onClick={e => e.stopPropagation()}>
+            <div className="cm-modal-header">
+              <h3 className="cm-modal-title">Schedule Merge Report</h3>
+              <button className="cm-modal-close" onClick={() => !scheduleLoading && setScheduleTarget(null)}>✕</button>
+            </div>
+            <div style={{ padding: 20, display: 'grid', gap: 14 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Report</div>
+                <div style={{ fontWeight: 600 }}>{scheduleTarget.name}</div>
+              </div>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Cron Expression</span>
+                <input className="cm-form-input" value={scheduleDraft.cron_expression} onChange={e => setScheduleDraft(p => ({ ...p, cron_expression: e.target.value }))} placeholder="e.g. 0 9 * * 1" />
+              </label>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Email Recipients</span>
+                <input className="cm-form-input" value={scheduleDraft.email_recipients} onChange={e => setScheduleDraft(p => ({ ...p, email_recipients: e.target.value }))} placeholder="qa@example.com, lead@example.com" />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                <input type="checkbox" checked={scheduleDraft.is_active} onChange={e => setScheduleDraft(p => ({ ...p, is_active: e.target.checked }))} />
+                Schedule active
+              </label>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Examples: `0 9 * * 1` for every Monday at 9:00, `0 8 * * *` for every day at 8:00.
+              </div>
+            </div>
+            <div className="cm-drawer-footer" style={{ borderTop: '1px solid var(--border)' }}>
+              <button className="cm-btn cm-btn-danger" onClick={removeSchedule} disabled={scheduleLoading}>Remove</button>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                <button className="cm-btn cm-btn-secondary" onClick={() => setScheduleTarget(null)} disabled={scheduleLoading}>Cancel</button>
+                <button className="cm-btn cm-btn-primary" onClick={saveSchedule} disabled={scheduleLoading}>{scheduleLoading ? 'Saving…' : 'Save Schedule'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {generateTarget && (

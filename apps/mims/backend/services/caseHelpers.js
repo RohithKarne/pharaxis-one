@@ -16,6 +16,7 @@ const { emitDataSync }   = require('./appRealtimeService');
 const { fireIntegrationEvent } = require('./integrationEngine');
 const { resolveProductGroups } = require('./productGroupService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
+const { resolveActivityScope } = require('./accessConfigurationService');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -115,7 +116,8 @@ function parseRolesCsv(value) {
   return source.split(',').map((item) => normalizeRole(item)).filter(Boolean);
 }
 
-function canViewSensitiveField(role, unmaskRoles) {
+function canViewSensitiveField(role, unmaskRoles, allowUnmask = false) {
+  if (allowUnmask) return true;
   const normalizedRole = normalizeRole(role);
   if (!normalizedRole) return false;
   return parseRolesCsv(unmaskRoles).includes(normalizedRole);
@@ -135,11 +137,11 @@ function maskStringValue(value, pattern = 'partial') {
   return `${text[0]}${'*'.repeat(Math.max(1, text.length - 2))}${text[text.length - 1]}`;
 }
 
-function applySensitiveMask(configMap, role, sectionName, fieldName, value) {
+function applySensitiveMask(configMap, role, sectionName, fieldName, value, allowUnmask = false) {
   const key = `${sectionName}::${fieldName}`;
   const cfg = configMap.get(key);
   if (!cfg) return { value, masked: false };
-  if (canViewSensitiveField(role, cfg.unmask_roles)) return { value, masked: false };
+  if (canViewSensitiveField(role, cfg.unmask_roles, allowUnmask)) return { value, masked: false };
   return { value: maskStringValue(value, cfg.masking_pattern), masked: true };
 }
 
@@ -304,15 +306,27 @@ async function pushNotification(userId, { category = 'general', title, message, 
 
 // ── Org isolation ─────────────────────────────────────────────────────────────
 
-async function verifyCaseOrg(caseId, req) {
+function buildCaseOwnershipClause(tableAlias = 'c') {
+  return `(${tableAlias}.case_owner_id = ? OR ${tableAlias}.created_by = ?)`;
+}
+
+function hasCaseScopeAccess(caseRow, userId, scope) {
+  if (scope === 'all') return true;
+  if (scope !== 'own') return false;
+  return Number(caseRow?.case_owner_id || 0) === Number(userId)
+    || Number(caseRow?.created_by || 0) === Number(userId);
+}
+
+async function verifyCaseOrg(caseId, req, privilegeKey = 'case.view') {
   const [[c]] = await pool.execute(
-    'SELECT id, org_id, site_id, case_type, case_number, case_owner_id, status_id FROM cases WHERE id = ?',
+    'SELECT id, org_id, site_id, case_type, case_number, case_owner_id, status_id, created_by FROM cases WHERE id = ?',
     [caseId]
   );
   if (!c) return null;
   if (hasGlobalAdminScope(req.user)) return c;
   if (Number(c.org_id) !== Number(req.user.orgId)) return null;
-  return c;
+  const scope = req?.activityScope?.[privilegeKey] || await resolveActivityScope(req.user, privilegeKey);
+  return hasCaseScopeAccess(c, req.user.userId, scope) ? c : null;
 }
 
 // ── Picklist validation ───────────────────────────────────────────────────────
@@ -603,6 +617,8 @@ module.exports = {
   writeAuditLog,
   pushNotification,
   // Org isolation
+  buildCaseOwnershipClause,
+  hasCaseScopeAccess,
   verifyCaseOrg,
   // Picklist
   findActivePicklistEntry,

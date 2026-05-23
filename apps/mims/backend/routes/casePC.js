@@ -60,7 +60,7 @@ router.get('/cases/:id/pc/versions', authenticate, async (req, res) => {
 router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
   const conn = await pool.getConnection();
   try {
-    if (!await verifyCaseOrg(req.params.id, req)) {
+    if (!await verifyCaseOrg(req.params.id, req, 'case.update')) {
       conn.release();
       return res.status(403).json({ error: 'Access denied' });
     }
