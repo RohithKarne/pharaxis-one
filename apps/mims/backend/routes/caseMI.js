@@ -63,7 +63,7 @@ router.post('/cases/:id/mi', authenticate, async (req, res) => {
       mi_category, subcategory, product_id,
       question_summary, detailed_question,
       response_required_by, response_provided, response_date,
-      response_channel, status = 'Open'
+      response_channel, status = 'Open', literature_reference
     } = req.body;
 
     // Auto-assign next tab index
@@ -77,14 +77,14 @@ router.post('/cases/:id/mi', authenticate, async (req, res) => {
       `INSERT INTO case_mi
         (case_id, tab_index, mi_category, subcategory, product_id,
          question_summary, detailed_question, response_required_by,
-         response_provided, response_date, response_channel, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         response_provided, response_date, response_channel, status, literature_reference)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.params.id, tabIndex,
         mi_category || null, subcategory || null, product_id || null,
         question_summary || null, detailed_question || null,
         response_required_by || null, response_provided || null,
-        response_date || null, response_channel || null, status
+        response_date || null, response_channel || null, status, literature_reference || null
       ]
     );
 
@@ -108,7 +108,7 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
       mi_category, subcategory, product_id,
       question_summary, detailed_question,
       response_required_by, response_provided, response_date,
-      response_channel, status
+      response_channel, status, literature_reference
     } = req.body;
 
     await pool.execute(
@@ -122,7 +122,8 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
         response_provided    = COALESCE(?, response_provided),
         response_date        = COALESCE(?, response_date),
         response_channel     = COALESCE(?, response_channel),
-        status               = COALESCE(?, status)
+        status               = COALESCE(?, status),
+        literature_reference = COALESCE(?, literature_reference)
        WHERE id = ?`,
       [
         mi_category          || null,
@@ -135,6 +136,7 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
         response_date        || null,
         response_channel     || null,
         status               || null,
+        literature_reference || null,
         req.params.miId
       ]
     );

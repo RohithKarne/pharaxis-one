@@ -66,3 +66,38 @@
 .tat-tx-label { font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; min-width:110px; flex-shrink:0; padding-top:1px; }
 .tat-tx-val   { font-size:13px; color:#1e293b; word-break:break-word; }
 .tat-tx-payload { background:#f8fafc; border:1px solid #e2e8f0; border-radius:7px; padding:10px 14px; font-size:12px; color:#334155; font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto; }
+
+/* Premium Ops convergence */
+
+.tat-page {
+  gap: 12px;
+  padding: 16px;
+  background: transparent;
+}
+
+.tat-top,
+.tat-left,
+.tat-right {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #dbe3ef;
+  border-radius: 20px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+}
+
+.tat-top {
+  padding: 16px 18px;
+}
+
+.tat-title {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.tat-panels {
+  gap: 16px;
+}
+
+.tat-tx,
+.tat-case-item {
+  border-radius: 16px;
+}

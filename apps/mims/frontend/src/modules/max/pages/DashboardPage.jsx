@@ -108,6 +108,9 @@ export default function DashboardPage() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showWebauthnBanner, setShowWebauthnBanner] = useState(false)
+  const [webauthnSetupLoading, setWebauthnSetupLoading] = useState(false)
+  const [webauthnSetupError, setWebauthnSetupError] = useState('')
 
   const loadDashboard = useCallback(async () => {
     if (token == null) return
@@ -154,6 +157,75 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboard()
   }, [loadDashboard])
+
+  // Touch ID setup banner — shown when the user has no passkey on this device.
+  // "Not now" snoozes for the current session only (sessionStorage), so the
+  // nudge returns next login until they actually set it up. We intentionally do
+  // NOT use a permanent localStorage flag — that hid the banner forever before.
+  useEffect(() => {
+    async function checkWebauthnSetup() {
+      if (!token) return
+      if (typeof window.PublicKeyCredential === 'undefined') return
+      if (sessionStorage.getItem('mims_webauthn_snoozed')) return
+      try {
+        const res = await httpFetch('/api/auth/webauthn/credentials', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const data = await res.json().catch(() => ({}))
+        if (!Array.isArray(data.credentials) || data.credentials.length === 0) {
+          setShowWebauthnBanner(true)
+        }
+      } catch { /* non-critical — swallow */ }
+    }
+    checkWebauthnSetup()
+  }, [token])
+
+  async function handleSetupTouchId() {
+    setWebauthnSetupLoading(true)
+    setWebauthnSetupError('')
+    try {
+      const startRes = await httpFetch('/api/auth/webauthn/register/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      })
+      const startData = await startRes.json().catch(() => ({}))
+      if (!startRes.ok) throw new Error(startData.error || 'Could not start Touch ID setup.')
+
+      const { startRegistration } = await import('@simplewebauthn/browser')
+      const regResponse = await startRegistration({ optionsJSON: startData.options })
+
+      const finishRes = await httpFetch('/api/auth/webauthn/register/finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          registrationResponse: regResponse,
+          deviceName: `${navigator.platform || 'Mac'} — Touch ID`,
+        }),
+      })
+      const finishData = await finishRes.json().catch(() => ({}))
+      if (!finishRes.ok) throw new Error(finishData.error || 'Touch ID registration failed.')
+
+      // Credential now exists — banner won't show again (credential check skips it)
+      setShowWebauthnBanner(false)
+    } catch (err) {
+      if (err?.name === 'NotAllowedError') {
+        // User cancelled the Touch ID prompt — snooze for this session
+        sessionStorage.setItem('mims_webauthn_snoozed', '1')
+        setShowWebauthnBanner(false)
+      } else {
+        // Surface the real reason so it's not a silent failure
+        setWebauthnSetupError(err.message || 'Touch ID setup failed. Please try again.')
+      }
+    } finally {
+      setWebauthnSetupLoading(false)
+    }
+  }
+
+  function dismissWebauthnBanner() {
+    sessionStorage.setItem('mims_webauthn_snoozed', '1')
+    setShowWebauthnBanner(false)
+  }
 
   const firstName = user?.name?.split(' ')[0] || 'there'
   const roleName = roleLabel(user?.role)
@@ -205,8 +277,48 @@ export default function DashboardPage() {
   ].filter((item) => item.enabled)
 
   return (
-    <MIMSLayout showStatStrip={false} bodyClassName="mims-home-page-body">
+    <MIMSLayout showStatStrip={false} bodyClassName="mims-home-page-body" surfaceVariant="workspace" compact>
       <div className="mims-home-wrap">
+
+        {showWebauthnBanner && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 16px', marginBottom: 16,
+            background: 'var(--bg)', border: '1px solid var(--border)',
+            borderRadius: 10, gap: 12, flexWrap: 'wrap',
+          }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>Set up Touch ID for faster sign-in</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                Sign in to MIMS with your fingerprint instead of a password on this device.
+              </div>
+              {webauthnSetupError && (
+                <div style={{ fontSize: 12, color: 'var(--danger, #c0392b)', marginTop: 6, fontWeight: 500 }}>
+                  {webauthnSetupError}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 13 }}
+                disabled={webauthnSetupLoading}
+                onClick={handleSetupTouchId}
+              >
+                {webauthnSetupLoading ? 'Setting up…' : 'Set Up Touch ID'}
+              </button>
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: 13 }}
+                disabled={webauthnSetupLoading}
+                onClick={dismissWebauthnBanner}
+              >
+                Not now
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mims-home-hero">
           <div className="mims-home-hero-copy">
             <div className="mims-home-eyebrow">{roleName} Workspace</div>

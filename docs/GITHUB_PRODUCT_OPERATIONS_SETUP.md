@@ -13,11 +13,23 @@ This repo now operates as one engineering monorepo with five separately sold pro
 - `cp-portal`
 - `ai-agent`
 
-The workflows are already split by app. This document defines the GitHub settings that must exist outside the repo so the split works correctly in production.
+The workflows are already split by app. This document defines the GitHub settings that remain useful now that Pharaxis apps are local-only.
 
-## Environments To Create
+## Local-Only Status
 
-Create these GitHub environments in the repository settings:
+The AWS/EC2 Pharaxis host has been deleted. GitHub Actions must not attempt remote deployment, SSH, SCP, server-side `git pull`, `/var/www/pharaxis` publishing, or PM2 restarts.
+
+Current GitHub usage:
+
+- CI workflows validate app builds and tests.
+- Release workflows produce validation artifacts from tagged releases.
+- Label, PR, CODEOWNERS, Dependabot, and branch-protection automation remain active.
+- Runtime checks happen on local services, not a GitHub-hosted deploy target.
+- Manual deploy workflow runs fail intentionally so they cannot be mistaken for a completed deployment.
+
+## Production Environments
+
+Do not create or maintain production deploy environments unless a new hosting target is approved. The old environment names are retained here only as historical references.
 
 | Environment | Product | Deploy workflow |
 | --- | --- | --- |
@@ -36,7 +48,7 @@ After `gh auth login` is working on an admin machine, these scripts can apply mo
 
 ## Minimum Environment Rules
 
-Apply these rules to each production environment:
+If remote hosting is reintroduced later, apply these rules to each production environment before enabling deployment:
 
 | Rule | Recommended setting |
 | --- | --- |
@@ -53,21 +65,20 @@ Note:
 
 ## Secret Model
 
-If all products still deploy to the same EC2 host, the same host/user/key values can be repeated into each environment.  
-Do not rely on repository-wide shared secrets long-term.
+No EC2 deployment transport secrets are currently required. Remove or ignore old `EC2_*` environment secrets because there is no active AWS host.
 
-### Shared deployment transport secrets per environment
+### Retired deployment transport secrets
 
 | Secret | Meaning |
 | --- | --- |
-| `EC2_HOST` | Target deployment host |
-| `EC2_SSH_PORT` | SSH port, usually `22` |
-| `EC2_USER` | SSH user |
-| `EC2_SSH_KEY` | Private deploy key |
+| `EC2_HOST` | Retired target deployment host |
+| `EC2_SSH_PORT` | Retired SSH port |
+| `EC2_USER` | Retired SSH user |
+| `EC2_SSH_KEY` | Retired private deploy key |
 
 ### Product runtime secrets to manage outside GitHub
 
-These are not consumed directly by GitHub Actions today, but each product must still own them separately in its runtime environment.
+These are not consumed directly by GitHub Actions today, but each product must still own them separately in local `.env` files or the next approved runtime environment.
 
 | Product | Secret families to isolate |
 | --- | --- |
@@ -127,12 +138,9 @@ Use:
 
 ## Manual Setup Checklist
 
-- [ ] Create all five production environments
-- [ ] Copy deploy transport secrets into each environment
-- [ ] Decide approvers per product
-- [ ] Enable deployment branch restriction to `main`
 - [ ] Run label sync once
 - [ ] Confirm PR labeler has permission to write labels
 - [ ] Start using app-specific release tags
 - [ ] Apply branch protection with the exact required GitHub check names
 - [ ] If branch protection is blocked by plan, either upgrade GitHub plan or apply the closest available UI protections manually
+- [ ] Keep deploy workflows manual-only and intentionally failing until a new hosting target is approved

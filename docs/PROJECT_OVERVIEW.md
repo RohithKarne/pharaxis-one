@@ -33,6 +33,7 @@ Pharaxis-One groups medical-affairs and platform products into a single engineer
 - Frontend stack: React + Vite (MIMS / CP Portal / AI-Agent / Vault), Vue + Vite + Tailwind (QMS)
 - Database: MySQL (MIMS, CP Portal, AI-Agent, Vault) + PostgreSQL (QMS)
 - CI: GitHub Actions
+- Runtime availability: local-only; the previous AWS/EC2 host has been deleted
 - Dependency management: npm + Dependabot
 
 ## Team and Process Artifacts
@@ -46,4 +47,4 @@ Pharaxis-One groups medical-affairs and platform products into a single engineer
 1. Start with root `README.md`.
 2. Read `docs/ARCHITECTURE.md` and `docs/DB_DETAILS.md`.
 3. Move to app-specific folders under `apps/`.
-4. Use `.github/workflows/ci-*.yml`, `.github/workflows/deploy-*.yml`, and `.github/workflows/release-*.yml` to understand the per-product delivery model.
+4. Use `.github/workflows/ci-*.yml` and `.github/workflows/release-*.yml` to understand the per-product validation model. The `deploy-*.yml` workflows are manual-only disabled notices that fail intentionally until a new hosting target exists.

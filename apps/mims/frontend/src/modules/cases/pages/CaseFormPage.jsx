@@ -104,7 +104,7 @@ export default function CaseFormPage() {
   ]
 
   return (
-    <MIMSLayout bodyClassName="no-scroll">
+    <MIMSLayout showStatStrip={false} bodyClassName="no-scroll mims-ops-page-body" surfaceVariant="workspace" compact>
     <div className="cf-form-page">
 
       <div className="cf-form-header">
@@ -143,6 +143,7 @@ export default function CaseFormPage() {
         caseStatus={caseData?.status}
         caseType={caseData?.case_type}
         sections={TABS.map(t => ({ id: `tab-${t.key}`, label: t.label, count: t.badge, complete: t.badge }))}
+        showHeader={false}
         requiredFields={[]}
         payload={infoForm || {}}
         dueAt={caseData?.due_at || null}
@@ -164,6 +165,7 @@ export default function CaseFormPage() {
             caseData={caseData}
             users={users}
             statuses={statuses}
+            getPicklistOptions={getPicklistOptions}
             infoForm={infoForm}
             setInfoForm={setInfoForm}
             formConfig={formConfig}
@@ -190,6 +192,9 @@ export default function CaseFormPage() {
         {currentTab === 'people' && (
           <CaseContactsTab
             id={id} headers={headers}
+            formConfig={formConfig}
+            getFieldConfig={getFieldConfig}
+            getPicklistOptions={getPicklistOptions}
             onCountChange={n => setTabCounts(p => ({ ...p, contacts: n }))}
           />
         )}
@@ -211,6 +216,7 @@ export default function CaseFormPage() {
             id={id} token={token} headers={headers} setSavedMsg={setSavedMsg}
             onCountChange={n => setTabCounts(p => ({ ...p, mi: n }))}
             formConfig={formConfig}
+            getPicklistOptions={getPicklistOptions}
             dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}
             dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
             saveDynFields={saveDynFields}
@@ -232,7 +238,7 @@ export default function CaseFormPage() {
         {currentTab === 'pc' && (
           <CasePCTab
             id={id} headers={headers} setSavedMsg={setSavedMsg}
-            users={users} getPicklistOptions={getPicklistOptions}
+            users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
             onCountChange={n => setTabCounts(p => ({ ...p, pc: n }))}
             formConfig={formConfig}
             dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}

@@ -181,16 +181,28 @@ router.put('/cases/ae/versions/:versionId/general', authenticate, async (req, re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { report_type, date_of_onset, date_of_report, reporter_awareness_date, additional_info } = req.body;
+    const {
+      report_type,
+      ae_status,
+      date_of_awareness,
+      date_of_onset,
+      date_of_report,
+      reporter_awareness_date,
+      regulatory_reportability,
+      additional_info,
+      general__additional_info,
+    } = req.body;
+    const resolvedAdditionalInfo = general__additional_info ?? additional_info;
     await pool.execute(
-      `INSERT INTO case_ae_general (version_id, report_type, date_of_onset, date_of_report, reporter_awareness_date, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO case_ae_general (version_id, report_type, ae_status, date_of_awareness, date_of_onset, date_of_report, reporter_awareness_date, regulatory_reportability, additional_info)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-        report_type = VALUES(report_type), date_of_onset = VALUES(date_of_onset),
+        report_type = VALUES(report_type), ae_status = VALUES(ae_status),
+        date_of_awareness = VALUES(date_of_awareness), date_of_onset = VALUES(date_of_onset),
         date_of_report = VALUES(date_of_report), reporter_awareness_date = VALUES(reporter_awareness_date),
-        additional_info = VALUES(additional_info)`,
-      [req.params.versionId, report_type || null, date_of_onset || null,
-       date_of_report || null, reporter_awareness_date || null, additional_info || null]
+        regulatory_reportability = VALUES(regulatory_reportability), additional_info = VALUES(additional_info)`,
+      [req.params.versionId, report_type || null, ae_status || null, date_of_awareness || null, date_of_onset || null,
+       date_of_report || null, reporter_awareness_date || null, regulatory_reportability || null, resolvedAdditionalInfo || null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_general WHERE version_id = ?', [req.params.versionId]
@@ -217,7 +229,7 @@ router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, re
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const {
-      event_description, outcome, start_date, end_date,
+      event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
       is_serious = 0, is_death = 0, is_life_threatening = 0,
       is_hospitalization = 0, is_disability = 0,
       is_congenital_anomaly = 0, is_other_medically_important = 0,
@@ -227,12 +239,12 @@ router.post('/cases/ae/versions/:versionId/events', authenticate, async (req, re
       is_congenital_anomaly || is_other_medically_important || is_required_intervention || is_lab_abnormality;
     const [result] = await pool.execute(
       `INSERT INTO case_ae_events
-        (version_id, event_description, outcome, start_date, end_date,
+        (version_id, event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
          is_serious, is_death, is_life_threatening, is_hospitalization,
          is_disability, is_congenital_anomaly, is_other_medically_important,
          is_required_intervention, is_lab_abnormality)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.params.versionId, event_description || null, outcome || null,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.params.versionId, event_description || null, meddra_term || null, outcome || null, reported_causality || null, frequency || null, causality_assessment || null, seriousness || null,
        start_date || null, end_date || null,
        serious ? 1 : 0, is_death ? 1 : 0, is_life_threatening ? 1 : 0,
        is_hospitalization ? 1 : 0, is_disability ? 1 : 0,
@@ -250,7 +262,7 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
   try {
     await ensureAeChildAccess('case_ae_events', req.params.eventId, req, { requireUnlocked: true });
     const {
-      event_description, outcome, start_date, end_date,
+      event_description, meddra_term, outcome, reported_causality, frequency, causality_assessment, seriousness, start_date, end_date,
       is_serious, is_death, is_life_threatening, is_hospitalization,
       is_disability, is_congenital_anomaly, is_other_medically_important,
       is_required_intervention, is_lab_abnormality
@@ -262,7 +274,12 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
     await pool.execute(
       `UPDATE case_ae_events SET
         event_description          = COALESCE(?, event_description),
+        meddra_term                = COALESCE(?, meddra_term),
         outcome                    = COALESCE(?, outcome),
+        reported_causality         = COALESCE(?, reported_causality),
+        frequency                  = COALESCE(?, frequency),
+        causality_assessment       = COALESCE(?, causality_assessment),
+        seriousness                = COALESCE(?, seriousness),
         start_date                 = COALESCE(?, start_date),
         end_date                   = COALESCE(?, end_date),
         is_death                   = COALESCE(?, is_death),
@@ -276,7 +293,7 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
         is_serious                 = CASE WHEN ? = 1 THEN 1 ELSE is_serious END
        WHERE id = ?`,
       [
-        event_description ?? null, outcome ?? null,
+        event_description ?? null, meddra_term ?? null, outcome ?? null, reported_causality ?? null, frequency ?? null, causality_assessment ?? null, seriousness ?? null,
         start_date ?? null, end_date ?? null,
         is_death ?? null, is_life_threatening ?? null,
         is_hospitalization ?? null, is_disability ?? null,
@@ -314,19 +331,24 @@ router.put('/cases/ae/versions/:versionId/patient-info', authenticate, async (re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { age, age_unit, sex, weight_kg, height_cm, ethnicity, pregnant, last_menstrual_date, additional_info } = req.body;
+    const {
+      patient_initials, date_of_birth, age, age_unit, sex, weight_kg, height_cm,
+      ethnicity, pregnant, patient_country, last_menstrual_date, additional_info, 'patient-info__additional_info': patient_info_additional_info,
+    } = req.body;
+    const resolvedAdditionalInfo = patient_info_additional_info ?? additional_info;
     await pool.execute(
       `INSERT INTO case_ae_patient_info
-        (version_id, age, age_unit, sex, weight_kg, height_cm, ethnicity, pregnant, last_menstrual_date, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, patient_initials, date_of_birth, age, age_unit, sex, weight_kg, height_cm, ethnicity, pregnant, patient_country, last_menstrual_date, additional_info)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
+        patient_initials = VALUES(patient_initials), date_of_birth = VALUES(date_of_birth),
         age = VALUES(age), age_unit = VALUES(age_unit), sex = VALUES(sex),
         weight_kg = VALUES(weight_kg), height_cm = VALUES(height_cm),
         ethnicity = VALUES(ethnicity), pregnant = VALUES(pregnant),
-        last_menstrual_date = VALUES(last_menstrual_date), additional_info = VALUES(additional_info)`,
-      [req.params.versionId, age || null, age_unit || null, sex || null,
+        patient_country = VALUES(patient_country), last_menstrual_date = VALUES(last_menstrual_date), additional_info = VALUES(additional_info)`,
+      [req.params.versionId, patient_initials || null, date_of_birth || null, age || null, age_unit || null, sex || null,
        weight_kg || null, height_cm || null, ethnicity || null,
-       pregnant ?? null, last_menstrual_date || null, additional_info || null]
+       pregnant ?? null, patient_country || null, last_menstrual_date || null, resolvedAdditionalInfo || null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_patient_info WHERE version_id = ?', [req.params.versionId]
@@ -352,10 +374,10 @@ router.post('/cases/ae/versions/:versionId/lab-results', authenticate, async (re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { test_name, result, unit, normal_range, test_date } = req.body;
+    const { lab_name, test_name, result, unit, normal_range, test_date } = req.body;
     const [ins] = await pool.execute(
-      'INSERT INTO case_ae_lab_results (version_id, test_name, result, unit, normal_range, test_date) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.params.versionId, test_name || null, result || null, unit || null, normal_range || null, test_date || null]
+      'INSERT INTO case_ae_lab_results (version_id, lab_name, test_name, result, unit, normal_range, test_date) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [req.params.versionId, lab_name || null, test_name || null, result || null, unit || null, normal_range || null, test_date || null]
     );
     const [[row]] = await pool.execute('SELECT * FROM case_ae_lab_results WHERE id = ?', [ins.insertId]);
     res.status(201).json(row);
@@ -386,11 +408,11 @@ router.put('/cases/ae/versions/:versionId/lab-notes', authenticate, async (req, 
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { notes } = req.body;
+    const { notes, 'lab-notes__notes': namespacedNotes } = req.body;
     await pool.execute(
       `INSERT INTO case_ae_lab_notes (version_id, notes) VALUES (?, ?)
        ON DUPLICATE KEY UPDATE notes = VALUES(notes)`,
-      [req.params.versionId, notes || null]
+      [req.params.versionId, namespacedNotes ?? notes ?? null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_lab_notes WHERE version_id = ?', [req.params.versionId]
@@ -450,11 +472,11 @@ router.put('/cases/ae/versions/:versionId/medical-notes', authenticate, async (r
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { notes } = req.body;
+    const { notes, 'medical-notes__notes': namespacedNotes } = req.body;
     await pool.execute(
       `INSERT INTO case_ae_medical_notes (version_id, notes) VALUES (?, ?)
        ON DUPLICATE KEY UPDATE notes = VALUES(notes)`,
-      [req.params.versionId, notes || null]
+      [req.params.versionId, namespacedNotes ?? notes ?? null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_ae_medical_notes WHERE version_id = ?', [req.params.versionId]
@@ -485,18 +507,20 @@ router.post('/cases/ae/versions/:versionId/product-info', authenticate, async (r
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
     const {
-      product_id, product_name, dose, dose_unit, route_of_admin,
+      product_id, product_name, product_type, product_category, batch_lot_number, dose, dose_unit, route_of_admin,
       frequency, start_date, end_date, indication,
-      is_suspect = 1, is_concomitant = 0
+      action_taken, dechallenge, rechallenge, is_suspect = 1, is_concomitant = 0
     } = req.body;
     const [ins] = await pool.execute(
       `INSERT INTO case_ae_product_info
-        (version_id, product_id, product_name, dose, dose_unit, route_of_admin,
-         frequency, start_date, end_date, indication, is_suspect, is_concomitant)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (version_id, product_id, product_name, product_type, product_category, batch_lot_number, dose, dose_unit, route_of_admin,
+         frequency, start_date, end_date, indication, action_taken, dechallenge, rechallenge, is_suspect, is_concomitant)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [req.params.versionId, product_id || null, product_name || null,
+       product_type || null, product_category || null, batch_lot_number || null,
        dose || null, dose_unit || null, route_of_admin || null,
        frequency || null, start_date || null, end_date || null, indication || null,
+       action_taken || null, dechallenge || null, rechallenge || null,
        is_suspect ? 1 : 0, is_concomitant ? 1 : 0]
     );
     const [[row]] = await pool.execute(

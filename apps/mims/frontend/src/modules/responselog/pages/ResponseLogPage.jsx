@@ -116,7 +116,7 @@ export default function ResponseLogPage() {
   const hasFilters = search || status !== 'All' || fromDate || toDate
 
   return (
-    <MIMSLayout activeNav="response_log">
+    <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
       <div className="rl-page">
         {/* Header */}
         <div className="rl-header">

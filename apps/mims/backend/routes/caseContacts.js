@@ -75,7 +75,10 @@ router.post('/cases/:id/contacts', authenticate, async (req, res) => {
       contact_id, contact_role = 'reporter',
       do_not_update_master = 0, is_primary = 0,
       first_name, last_name, contact_type,
-      specialty, institution, phone, email, address
+      prefix, reporter_type, source, consent_status,
+      specialty, institution, country, country_of_reporter,
+      qualification, preferred_contact_method, language_preference,
+      phone, email, address
     } = req.body;
 
     if (contact_id && !await verifyMasterContactOrg(contact_id, req)) {
@@ -85,13 +88,17 @@ router.post('/cases/:id/contacts', authenticate, async (req, res) => {
     const [result] = await pool.execute(
       `INSERT INTO case_contacts
         (case_id, contact_id, contact_role, do_not_update_master, is_primary,
-         first_name, last_name, contact_type, specialty, institution, phone, email, address)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         first_name, last_name, contact_type, prefix, reporter_type, source, consent_status,
+         specialty, institution, country, country_of_reporter, qualification,
+         preferred_contact_method, language_preference, phone, email, address)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.params.id, contact_id || null, contact_role,
         do_not_update_master ? 1 : 0, is_primary ? 1 : 0,
         first_name || null, last_name || null, contact_type || null,
-        specialty || null, institution || null,
+        prefix || null, reporter_type || null, source || null, consent_status || null,
+        specialty || null, institution || null, country || null, country_of_reporter || null,
+        qualification || null, preferred_contact_method || null, language_preference || null,
         phone || null, email || null, address || null
       ]
     );
@@ -120,7 +127,10 @@ router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
     const {
       contact_role, do_not_update_master, is_primary,
       first_name, last_name, contact_type,
-      specialty, institution, phone, email, address
+      prefix, reporter_type, source, consent_status,
+      specialty, institution, country, country_of_reporter,
+      qualification, preferred_contact_method, language_preference,
+      phone, email, address
     } = req.body;
 
     await pool.execute(
@@ -131,8 +141,17 @@ router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
         first_name           = COALESCE(?, first_name),
         last_name            = COALESCE(?, last_name),
         contact_type         = COALESCE(?, contact_type),
+        prefix               = COALESCE(?, prefix),
+        reporter_type        = COALESCE(?, reporter_type),
+        source               = COALESCE(?, source),
+        consent_status       = COALESCE(?, consent_status),
         specialty            = COALESCE(?, specialty),
         institution          = COALESCE(?, institution),
+        country              = COALESCE(?, country),
+        country_of_reporter  = COALESCE(?, country_of_reporter),
+        qualification        = COALESCE(?, qualification),
+        preferred_contact_method = COALESCE(?, preferred_contact_method),
+        language_preference  = COALESCE(?, language_preference),
         phone                = COALESCE(?, phone),
         email                = COALESCE(?, email),
         address              = COALESCE(?, address)
@@ -144,8 +163,17 @@ router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
         first_name           ?? null,
         last_name            ?? null,
         contact_type         ?? null,
+        prefix               ?? null,
+        reporter_type        ?? null,
+        source               ?? null,
+        consent_status       ?? null,
         specialty            ?? null,
         institution          ?? null,
+        country              ?? null,
+        country_of_reporter  ?? null,
+        qualification        ?? null,
+        preferred_contact_method ?? null,
+        language_preference  ?? null,
         phone                ?? null,
         email                ?? null,
         address              ?? null,

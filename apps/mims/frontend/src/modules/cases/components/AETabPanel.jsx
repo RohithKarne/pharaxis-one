@@ -48,6 +48,25 @@ export default function AETabPanel({
     )
   }
 
+  const selectRow = (label, key, sectionName, fieldName = label, { fullWidth = false } = {}) => {
+    const options = getPicklistOptions(sectionName, fieldName)
+    return (
+      <div key={key} className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}`}>
+        <label>{(sectionName && getFieldConfig(sectionName, label)?.custom_label) || label}</label>
+        {Array.isArray(options) && options.length > 0 ? (
+          <select value={d[key] ?? ''} disabled={locked} onChange={e => set(key, e.target.value)}>
+            <option value="">— Select —</option>
+            {options.map((option, index) => (
+              <option key={`${key}-${option.value ?? index}`} value={option.value}>{option.label || option.value}</option>
+            ))}
+          </select>
+        ) : (
+          <div className="cf-picklist-empty"><em>No options configured for this picklist.</em></div>
+        )}
+      </div>
+    )
+  }
+
   // Namespaced variant (used by additional_info / notes inputs).
   const nsFieldRow = (label, baseKey, type = 'text', { fullWidth = false } = {}) => (
     <div key={baseKey} className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}`}>
@@ -62,7 +81,10 @@ export default function AETabPanel({
     <div className="cf-tab-panel">
       {tabKey === 'general' && (
         <div className="cf-form-grid">
-          {fieldRow('Report Type',               'report_type')}
+          {selectRow('AE Status',                'ae_status',                 'AE — General')}
+          {fieldRow('Date of Awareness',         'date_of_awareness',         'date', { sectionName: 'AE — General' })}
+          {selectRow('Report Type',              'report_type',               'AE — General')}
+          {selectRow('Regulatory Reportability', 'regulatory_reportability',  'AE — General')}
           {fieldRow('Date of Onset',             'date_of_onset',           'date')}
           {fieldRow('Date of Report',            'date_of_report',          'date')}
           {fieldRow('Reporter Awareness Date',   'reporter_awareness_date', 'date')}
@@ -77,6 +99,7 @@ export default function AETabPanel({
           locked={locked}
           versionId={versionId}
           headers={headers}
+          getPicklistOptions={getPicklistOptions}
           onRowsChange={onChange}
         />
       )}
@@ -95,9 +118,11 @@ export default function AETabPanel({
 
       {tabKey === 'patient-info' && (
         <div className="cf-form-grid">
+          {fieldRow('Patient Initials',    'patient_initials', 'text', { sectionName: 'AE — Patient Information' })}
+          {fieldRow('Date of Birth',       'date_of_birth',    'date', { sectionName: 'AE — Patient Information' })}
           {fieldRow('Age',                 'age',       'number')}
-          {fieldRow('Age Unit',            'age_unit')}
-          {fieldRow('Sex',                 'sex')}
+          {selectRow('Age Unit',           'age_unit',         'AE — Patient Information')}
+          {selectRow('Gender',             'sex',              'AE — Patient Information')}
           {fieldRow('Weight (kg)',         'weight_kg', 'number')}
           {fieldRow('Height (cm)',         'height_cm', 'number')}
           {fieldRow('Ethnicity',           'ethnicity')}
@@ -107,6 +132,13 @@ export default function AETabPanel({
             value={d.pregnant ?? ''}
             onChange={v => set('pregnant', v === '' ? null : parseInt(v))}
             options={getPicklistOptions('AE — Patient Information', 'Pregnant')}
+            locked={locked}
+          />
+          <PicklistRow
+            label="Patient Country"
+            value={d.patient_country ?? ''}
+            onChange={v => set('patient_country', v)}
+            options={getPicklistOptions('AE — Patient Information', 'Patient Country')}
             locked={locked}
           />
           {nsFieldRow('Additional Info', 'additional_info', 'textarea', { fullWidth: true })}
@@ -120,6 +152,7 @@ export default function AETabPanel({
           locked={locked}
           versionId={versionId}
           headers={headers}
+          getPicklistOptions={getPicklistOptions}
           onRowsChange={onChange}
         />
       )}

@@ -36,8 +36,8 @@ router.get('/mi-responses/:id/approval-state', authenticate, async (req, res) =>
               mr.approver_id, mr.approver_name, mr.approved_at,
               t.is_off_label
          FROM case_mi_responses mr
-         JOIN case_mi_tabs t ON t.id = mr.mi_tab_id
-         JOIN cases       c ON c.id = t.case_id
+         JOIN case_mi      t ON t.id = mr.mi_tab_id
+         JOIN cases        c ON c.id = t.case_id
         WHERE mr.id = ? AND c.org_id = ?`,
       [req.params.id, req.user.orgId]
     );

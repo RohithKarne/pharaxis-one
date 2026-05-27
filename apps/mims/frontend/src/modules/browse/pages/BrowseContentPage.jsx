@@ -458,7 +458,7 @@ export default function BrowseContentPage() {
   }
 
   return (
-    <MIMSLayout activeNav="browse_content">
+    <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
       <div className="bc-page">
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="bc-header">

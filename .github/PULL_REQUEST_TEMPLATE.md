@@ -27,7 +27,7 @@ Closes #<!-- issue number -->
 - [ ] No regressions on existing features
 
 ## Release Impact
-- [ ] Requires production deploy
+- [ ] Requires local runtime verification
 - [ ] Requires environment or secret change
 - [ ] Requires DB migration
 - [ ] No production impact

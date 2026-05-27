@@ -20,6 +20,7 @@
     "test:sprint14:full": "npm run test:smoke:sprint14:g12 && npm run test:smoke:sprint14:g13"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^13.3.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "cron-parser": "^5.5.0",

@@ -3,6 +3,8 @@ import CaseInfoTab from './CaseInfoTab'
 import CaseWorkflowPanel from './CaseWorkflowPanel'
 import CaseRegulatoryWorkspace from './CaseRegulatoryWorkspace'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import StickySectionNav from '../../../shared/components/StickySectionNav'
+import { useAuth } from '../../../shared/context/AuthContext'
 
 function formatDateTime(value) {
   if (!value) return 'Not available'
@@ -16,11 +18,23 @@ function formatDateOnly(value) {
   return Number.isNaN(dt.getTime()) ? String(value) : dt.toLocaleDateString()
 }
 
+function isFilled(value) {
+  return value !== undefined && value !== null && !(typeof value === 'string' && value.trim() === '')
+}
+
+function summarizeFields(values) {
+  return {
+    count: values.length,
+    complete: values.reduce((total, value) => total + (isFilled(value) ? 1 : 0), 0),
+  }
+}
+
 export default function CaseOverviewTab({
   id,
   headers,
   caseData,
   users = [],
+  getPicklistOptions,
   infoForm,
   setInfoForm,
   statuses,
@@ -44,6 +58,7 @@ export default function CaseOverviewTab({
   onNavigateToTab,
   routeRegulatoryPane = '',
 }) {
+  const { hasCapability } = useAuth()
   const [contacts, setContacts] = useState([])
   const [correspondence, setCorrespondence] = useState([])
   const [timeline, setTimeline] = useState([])
@@ -100,12 +115,91 @@ export default function CaseOverviewTab({
     return !(source.includes('reply') || source.includes('forward') || source.includes('sent') || source.includes('transmission'))
   }).length
   const outboundCount = correspondence.length - inboundCount
+  const overviewSections = useMemo(() => {
+    const lcCaseType = String(caseType || '').toLowerCase()
+    const dynamicInfoFields = (formConfig?.sections || [])
+      .flatMap(section => (section?.fields || []).filter(field => {
+        const scope = String(field.case_type_scope || 'shared').toLowerCase()
+        const tab = field.display_tab || null
+        if (section?.is_visible === 0) return false
+        if (lcCaseType && scope !== 'shared' && scope !== lcCaseType) return false
+        return tab === null || tab === 'info'
+      }))
+    const requiredDynamicInfoFields = dynamicInfoFields.filter(field => field.is_required)
+    // Case-info base fields are not modeled in the dynamic form config, so their completion falls back to the fields the panel renders.
+    const infoSummary = summarizeFields([
+      infoForm.status_id,
+      infoForm.case_owner_id,
+      infoForm.priority,
+      infoForm.intake_channel,
+      infoForm.date_received,
+      infoForm.awareness_date,
+      infoForm.learn_of_validity_date,
+      infoForm.follow_up_received_date,
+      infoForm.description,
+      infoForm.internal_notes,
+      ...(requiredDynamicInfoFields.length > 0 ? requiredDynamicInfoFields : dynamicInfoFields).map(field => dynFieldValues?.[field.id]),
+    ])
+    const snapshotSummary = summarizeFields([
+      infoForm.status_id || caseData?.status_id || caseData?.status,
+      infoForm.case_owner_id || caseData?.case_owner_id,
+      infoForm.priority,
+      caseData?.due_at,
+    ])
+    const peopleSummary = summarizeFields([
+      reporter ? `${reporter.first_name || ''}${reporter.last_name || ''}${reporter.email || ''}` : '',
+      patient ? `${patient.first_name || ''}${patient.last_name || ''}${patient.email || ''}` : '',
+    ])
+    const communicationsSummary = summarizeFields([
+      correspondence.length > 0 ? correspondence.length : '',
+      inboundCount > 0 ? inboundCount : '',
+      timeline.length > 0 ? timeline.length : '',
+    ])
+    const workflowFields = [
+      ...(hasCapability('case.assign') ? [reassignForm?.new_owner_id, reassignForm?.reason] : []),
+      ...(hasCapability('case.escalate') && escalateCase ? [escalateForm?.reason] : []),
+    ]
+    const workflowSummary = workflowFields.length > 0 ? summarizeFields(workflowFields) : null
+    const regulatorySummary = summarizeFields([
+      infoForm.awareness_date,
+      infoForm.learn_of_validity_date,
+      infoForm.follow_up_received_date,
+    ])
+    return [
+      { id: 'ov-case-info', label: 'Case Information', ...infoSummary },
+      { id: 'ov-snapshot', label: 'Case Snapshot', ...snapshotSummary },
+      { id: 'ov-people', label: 'People Snapshot', ...peopleSummary },
+      { id: 'ov-communications', label: 'Latest Activity', ...communicationsSummary },
+      { id: 'ov-workflow', label: 'Workflow Actions', count: workflowSummary?.count, complete: workflowSummary?.complete },
+      { id: 'ov-regulatory', label: 'Regulatory And Compliance', ...regulatorySummary },
+    ]
+  }, [
+    caseData?.case_owner_id,
+    caseData?.due_at,
+    caseData?.status,
+    caseData?.status_id,
+    caseType,
+    correspondence.length,
+    dynFieldValues,
+    escalateCase,
+    escalateForm?.reason,
+    formConfig,
+    hasCapability,
+    inboundCount,
+    infoForm,
+    patient,
+    reassignForm?.new_owner_id,
+    reassignForm?.reason,
+    reporter,
+    timeline.length,
+  ])
 
   return (
-    <div className="cf-overview-layout">
-      <div className="cf-overview-grid">
-        <div className="cf-overview-main">
-          <div className="cf-overview-card">
+    <div className="cf-case-workspace cf-overview-workspace">
+      <StickySectionNav sections={overviewSections} />
+      <div className="cf-case-workspace-main">
+        <div className="cf-overview-layout">
+          <section id="ov-case-info" className="cf-overview-card">
             <div className="cf-overview-kicker">Case Overview</div>
             <h3>Core Case Information</h3>
             <CaseInfoTab
@@ -113,6 +207,7 @@ export default function CaseOverviewTab({
               setInfoForm={setInfoForm}
               statuses={statuses}
               users={users}
+              getPicklistOptions={getPicklistOptions}
               reassignForm={reassignForm}
               setReassignForm={setReassignForm}
               reassignSaving={reassignSaving}
@@ -132,11 +227,9 @@ export default function CaseOverviewTab({
               showWorkflowActions={false}
               embedded
             />
-          </div>
-        </div>
+          </section>
 
-        <div className="cf-overview-side">
-          <div className="cf-overview-card">
+          <section id="ov-snapshot" className="cf-overview-card">
             <div className="cf-overview-kicker">Snapshot</div>
             <h3>Case Status At A Glance</h3>
             <div className="cf-overview-stat-grid">
@@ -157,9 +250,9 @@ export default function CaseOverviewTab({
                 <strong>{formatDateOnly(caseData?.due_at)}</strong>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="cf-overview-card">
+          <section id="ov-people" className="cf-overview-card">
             <div className="cf-overview-kicker">People</div>
             <h3>Reporter And Patient Snapshot</h3>
             <div className="cf-overview-list">
@@ -179,9 +272,9 @@ export default function CaseOverviewTab({
             <div className="cf-overview-actions">
               <button type="button" className="cf-open-btn" onClick={() => onNavigateToTab?.('people')}>Open People Workspace</button>
             </div>
-          </div>
+          </section>
 
-          <div className="cf-overview-card">
+          <section id="ov-communications" className="cf-overview-card">
             <div className="cf-overview-kicker">Communications</div>
             <h3>Latest Activity</h3>
             <div className="cf-overview-list">
@@ -206,25 +299,33 @@ export default function CaseOverviewTab({
             <div className="cf-overview-actions">
               <button type="button" className="cf-open-btn" onClick={() => onNavigateToTab?.('communications')}>Open Communications Workspace</button>
             </div>
-          </div>
+          </section>
 
-          <CaseWorkflowPanel
-            caseType={caseType}
-            users={users}
-            reassignForm={reassignForm}
-            setReassignForm={setReassignForm}
-            reassignSaving={reassignSaving}
-            reassignCase={reassignCase}
-            escalateForm={escalateForm}
-            setEscalateForm={setEscalateForm}
-            escalateSaving={escalateSaving}
-            escalateCase={escalateCase}
-            onNavigateToTab={onNavigateToTab}
-          />
+          <section id="ov-workflow">
+            <div className="cf-overview-card" style={{ marginBottom: 18 }}>
+              <div className="cf-overview-kicker">Workflow</div>
+              <h3>Workflow Actions</h3>
+            </div>
+            <CaseWorkflowPanel
+              caseType={caseType}
+              users={users}
+              reassignForm={reassignForm}
+              setReassignForm={setReassignForm}
+              reassignSaving={reassignSaving}
+              reassignCase={reassignCase}
+              escalateForm={escalateForm}
+              setEscalateForm={setEscalateForm}
+              escalateSaving={escalateSaving}
+              escalateCase={escalateCase}
+              onNavigateToTab={onNavigateToTab}
+            />
+          </section>
+          <section id="ov-regulatory">
+            <CaseRegulatoryWorkspace key={routeRegulatoryPane || 'icsr'} id={id} headers={headers} setSavedMsg={setSavedMsg} routePane={routeRegulatoryPane} />
+          </section>
         </div>
-      </div>
 
-      <CaseRegulatoryWorkspace key={routeRegulatoryPane || 'icsr'} id={id} headers={headers} setSavedMsg={setSavedMsg} routePane={routeRegulatoryPane} />
+      </div>
     </div>
   )
 }

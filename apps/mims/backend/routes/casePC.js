@@ -156,11 +156,15 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { complaint_description, pc_status, pc_category, pc_classification, date_of_complaint, date_received, severity, additional_info } = req.body;
+    const {
+      complaint_description, pc_status, pc_category, pc_classification,
+      date_of_complaint, date_received, severity, root_cause,
+      additional_info, additional_info_general,
+    } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_general
-        (version_id, complaint_description, pc_status, pc_category, pc_classification, date_of_complaint, date_received, severity, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, complaint_description, pc_status, pc_category, pc_classification, date_of_complaint, date_received, severity, root_cause, additional_info)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         complaint_description = VALUES(complaint_description),
         pc_status = VALUES(pc_status),
@@ -169,10 +173,11 @@ router.put('/cases/pc/versions/:versionId/general', authenticate, async (req, re
         date_of_complaint = VALUES(date_of_complaint),
         date_received = VALUES(date_received),
         severity = VALUES(severity),
+        root_cause = VALUES(root_cause),
         additional_info = VALUES(additional_info)`,
       [req.params.versionId, complaint_description || null, pc_status || null,
        pc_category || null, pc_classification || null,
-       date_of_complaint || null, date_received || null, severity || null, additional_info || null]
+       date_of_complaint || null, date_received || null, severity || null, root_cause || null, additional_info_general ?? additional_info ?? null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_general WHERE version_id = ?', [req.params.versionId]
@@ -197,20 +202,25 @@ router.put('/cases/pc/versions/:versionId/patient-info', authenticate, async (re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { age, age_unit, sex, weight_kg, therapy_start_date, therapy_end_date, indication, injury_experienced, additional_info } = req.body;
+    const {
+      patient_name, date_of_birth, age, age_unit, sex, weight_kg,
+      therapy_start_date, therapy_end_date, indication, injury_experienced,
+      additional_info, additional_info_patient,
+    } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_patient_info
-        (version_id, age, age_unit, sex, weight_kg, therapy_start_date, therapy_end_date, indication, injury_experienced, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, patient_name, date_of_birth, age, age_unit, sex, weight_kg, therapy_start_date, therapy_end_date, indication, injury_experienced, additional_info)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
+        patient_name = VALUES(patient_name), date_of_birth = VALUES(date_of_birth),
         age = VALUES(age), age_unit = VALUES(age_unit), sex = VALUES(sex),
         weight_kg = VALUES(weight_kg), therapy_start_date = VALUES(therapy_start_date),
         therapy_end_date = VALUES(therapy_end_date), indication = VALUES(indication),
         injury_experienced = VALUES(injury_experienced),
         additional_info = VALUES(additional_info)`,
-      [req.params.versionId, age || null, age_unit || null, sex || null,
+      [req.params.versionId, patient_name || null, date_of_birth || null, age || null, age_unit || null, sex || null,
        weight_kg || null, therapy_start_date || null, therapy_end_date || null,
-       indication || null, injury_experienced || null, additional_info || null]
+       indication || null, injury_experienced || null, additional_info_patient ?? additional_info ?? null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_patient_info WHERE version_id = ?', [req.params.versionId]
@@ -239,19 +249,25 @@ router.put('/cases/pc/versions/:versionId/product-info', authenticate, async (re
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { product_id, product_name, lot_number, expiry_date, quantity_available, storage_conditions, additional_info } = req.body;
+    const {
+      product_id, product_name, product_type, product_category, lot_number,
+      expiry_date, manufacturing_date, pack_size, quantity_available,
+      storage_conditions, additional_info, additional_info_product,
+    } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_product_info
-        (version_id, product_id, product_name, lot_number, expiry_date, quantity_available, storage_conditions, additional_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, product_id, product_name, product_type, product_category, lot_number, expiry_date, manufacturing_date, pack_size, quantity_available, storage_conditions, additional_info)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         product_id = VALUES(product_id), product_name = VALUES(product_name),
+        product_type = VALUES(product_type), product_category = VALUES(product_category),
         lot_number = VALUES(lot_number), expiry_date = VALUES(expiry_date),
+        manufacturing_date = VALUES(manufacturing_date), pack_size = VALUES(pack_size),
         quantity_available = VALUES(quantity_available),
         storage_conditions = VALUES(storage_conditions), additional_info = VALUES(additional_info)`,
       [req.params.versionId, product_id || null, product_name || null,
-       lot_number || null, expiry_date || null,
-       quantity_available ? 1 : 0, storage_conditions || null, additional_info || null]
+       product_type || null, product_category || null, lot_number || null, expiry_date || null,
+       manufacturing_date || null, pack_size || null, quantity_available ? 1 : 0, storage_conditions || null, additional_info_product ?? additional_info ?? null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_product_info WHERE version_id = ?', [req.params.versionId]
@@ -276,20 +292,20 @@ router.put('/cases/pc/versions/:versionId/return-retrieval', authenticate, async
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { return_requested, return_date, return_method, retrieval_requested, retrieval_date, retrieval_method, tracking_number, notes } = req.body;
+    const { return_requested, return_date, return_address, return_method, retrieval_requested, retrieval_date, retrieval_method, tracking_number, notes, notes_return } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_return_retrieval
-        (version_id, return_requested, return_date, return_method, retrieval_requested, retrieval_date, retrieval_method, tracking_number, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, return_requested, return_date, return_address, return_method, retrieval_requested, retrieval_date, retrieval_method, tracking_number, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         return_requested = VALUES(return_requested), return_date = VALUES(return_date),
-        return_method = VALUES(return_method), retrieval_requested = VALUES(retrieval_requested),
+        return_address = VALUES(return_address), return_method = VALUES(return_method), retrieval_requested = VALUES(retrieval_requested),
         retrieval_date = VALUES(retrieval_date), retrieval_method = VALUES(retrieval_method),
         tracking_number = VALUES(tracking_number), notes = VALUES(notes)`,
       [req.params.versionId,
-       return_requested ? 1 : 0, return_date || null, return_method || null,
+       return_requested ? 1 : 0, return_date || null, return_address || null, return_method || null,
        retrieval_requested ? 1 : 0, retrieval_date || null, retrieval_method || null,
-       tracking_number || null, notes || null]
+       tracking_number || null, notes_return ?? notes ?? null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_return_retrieval WHERE version_id = ?', [req.params.versionId]
@@ -314,7 +330,7 @@ router.put('/cases/pc/versions/:versionId/replacement', authenticate, async (req
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { replacement_requested, replacement_approved, replacement_date, replacement_product, quantity, notes } = req.body;
+    const { replacement_requested, replacement_approved, replacement_date, replacement_product, quantity, notes, notes_replacement } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_replacement
         (version_id, replacement_requested, replacement_approved, replacement_date, replacement_product, quantity, notes)
@@ -328,7 +344,7 @@ router.put('/cases/pc/versions/:versionId/replacement', authenticate, async (req
       [req.params.versionId,
        replacement_requested ? 1 : 0, replacement_approved ? 1 : 0,
        replacement_date || null, replacement_product || null,
-       quantity || null, notes || null]
+       quantity || null, notes_replacement ?? notes ?? null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_replacement WHERE version_id = ?', [req.params.versionId]
@@ -353,20 +369,21 @@ router.put('/cases/pc/versions/:versionId/refund-credit', authenticate, async (r
   try {
     if (!await verifyVersionOrg(req.params.versionId, req)) return res.status(403).json({ error: 'Access denied' });
     await guardLocked(req.params.versionId);
-    const { refund_requested, refund_approved, refund_amount, credit_requested, credit_approved, credit_amount, notes } = req.body;
+    const { refund_requested, refund_approved, refund_amount, credit_requested, credit_approved, credit_amount, credit_note_number, notes, notes_refund } = req.body;
     await pool.execute(
       `INSERT INTO case_pc_refund_credit
-        (version_id, refund_requested, refund_approved, refund_amount, credit_requested, credit_approved, credit_amount, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (version_id, refund_requested, refund_approved, refund_amount, credit_requested, credit_approved, credit_amount, credit_note_number, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
         refund_requested = VALUES(refund_requested), refund_approved = VALUES(refund_approved),
         refund_amount = VALUES(refund_amount), credit_requested = VALUES(credit_requested),
         credit_approved = VALUES(credit_approved), credit_amount = VALUES(credit_amount),
+        credit_note_number = VALUES(credit_note_number),
         notes = VALUES(notes)`,
       [req.params.versionId,
        refund_requested ? 1 : 0, refund_approved ? 1 : 0, refund_amount || null,
        credit_requested ? 1 : 0, credit_approved ? 1 : 0, credit_amount || null,
-       notes || null]
+       credit_note_number || null, notes_refund ?? notes ?? null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_refund_credit WHERE version_id = ?', [req.params.versionId]

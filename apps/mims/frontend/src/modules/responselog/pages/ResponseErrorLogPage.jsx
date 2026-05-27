@@ -196,5 +196,5 @@ export default function ResponseErrorLogPage({ embedded = false } = {}) {
   )
 
   if (embedded) return content
-  return <MIMSLayout activeNav="response_error_log">{content}</MIMSLayout>
+  return <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>{content}</MIMSLayout>
 }

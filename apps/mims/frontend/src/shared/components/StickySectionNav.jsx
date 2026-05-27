@@ -15,15 +15,17 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-export default function StickySectionNav({ sections = [], rootMargin = '-30% 0px -60% 0px', activeId = null, onSelect = null }) {
+export default function StickySectionNav({
+  sections = [],
+  rootMargin = '-30% 0px -60% 0px',
+  activeId = null,
+  onSelect = null,
+  className = '',
+}) {
   const controlled = typeof onSelect === 'function'
   const [active, setActive] = useState(activeId || sections[0]?.id || null)
   const observed = useRef(new Map())
-
-  // In controlled mode, mirror the externally-owned active section.
-  useEffect(() => {
-    if (controlled && activeId != null) setActive(activeId)
-  }, [controlled, activeId])
+  const currentActive = controlled && activeId != null ? activeId : active
 
   useEffect(() => {
     if (controlled) return // no scroll-spy when the rail drives a panel switcher
@@ -50,40 +52,23 @@ export default function StickySectionNav({ sections = [], rootMargin = '-30% 0px
   }
 
   return (
-    <nav style={{
-      position: 'sticky', top: 90, alignSelf: 'flex-start',
-      width: 200, padding: '10px 8px', fontSize: 13,
-      borderRight: '1px solid var(--border)',
-    }}>
-      <div style={{
-        fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
-        textTransform: 'uppercase', color: 'var(--text-muted)',
-        padding: '4px 8px',
-      }}>Sections</div>
-      <ul style={{ listStyle: 'none', padding: 0, margin: '4px 0' }}>
+    <nav className={`cf-sticky-nav${controlled ? ' cf-sticky-nav--controlled' : ''}${className ? ` ${className}` : ''}`}>
+      <div className="cf-sticky-nav-title">Sections</div>
+      <ul className="cf-sticky-nav-list">
         {sections.map(s => {
-          const isActive = active === s.id
+          const isActive = currentActive === s.id
           const pct = s.count ? Math.round((s.complete / s.count) * 100) : null
+          const pctTone = pct == null ? '' : pct === 100 ? ' cf-sticky-nav-pct--complete' : pct >= 50 ? ' cf-sticky-nav-pct--warn' : ' cf-sticky-nav-pct--critical'
           return (
             <li key={s.id}>
               <button
                 onClick={() => go(s.id)}
-                style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  width: '100%', padding: '7px 10px', textAlign: 'left',
-                  fontSize: 12, fontWeight: isActive ? 700 : 500,
-                  color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
-                  background: isActive ? 'rgba(var(--primary-rgb,29,53,87),0.08)' : 'transparent',
-                  borderLeft: `3px solid ${isActive ? 'var(--primary)' : 'transparent'}`,
-                  border: 'none', cursor: 'pointer', borderRadius: 4,
-                }}
+                type="button"
+                className={`cf-sticky-nav-btn${isActive ? ' active' : ''}`}
               >
                 <span>{s.label}</span>
                 {pct != null && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 600,
-                    color: pct === 100 ? '#1a7a3f' : pct >= 50 ? '#c08300' : '#b91c1c',
-                  }}>{pct}%</span>
+                  <span className={`cf-sticky-nav-pct${pctTone}`}>{pct}%</span>
                 )}
               </button>
             </li>

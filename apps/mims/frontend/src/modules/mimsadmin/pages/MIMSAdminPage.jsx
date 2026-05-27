@@ -10,7 +10,7 @@ export default function MIMSAdminPage() {
 
   if (!standalone) {
     return (
-      <MIMSLayout showStatStrip={false} bodyClassName="no-scroll mims-admin-page-body">
+      <MIMSLayout showStatStrip={false} bodyClassName="no-scroll mims-admin-page-body" surfaceVariant="admin" compact>
         <MIMSAdminShell />
       </MIMSLayout>
     )

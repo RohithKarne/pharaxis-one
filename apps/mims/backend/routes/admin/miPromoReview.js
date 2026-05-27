@@ -25,7 +25,7 @@ router.get('/mi/tabs/:tabId/classification', authenticate, async (req, res) => {
               t.promo_review_requested_at, t.promo_review_decided_at,
               t.promo_review_decided_by, t.promo_review_notes,
               c.org_id
-         FROM case_mi_tabs t
+         FROM case_mi t
          JOIN cases c ON c.id = t.case_id
         WHERE t.id = ? AND c.org_id = ?`,
       [req.params.tabId, req.user.orgId]
@@ -39,7 +39,7 @@ router.put('/mi/tabs/:tabId/classification', authenticate, async (req, res) => {
   try {
     const { is_off_label, is_solicited, off_label_indication } = req.body || {};
     await pool.execute(
-      `UPDATE case_mi_tabs t
+      `UPDATE case_mi t
          JOIN cases c ON c.id = t.case_id
           SET t.is_off_label = COALESCE(?, t.is_off_label),
               t.is_solicited = COALESCE(?, t.is_solicited),
@@ -60,7 +60,7 @@ router.post('/mi/tabs/:tabId/promo-review/request', authenticate, async (req, re
   try {
     const { assigned_to } = req.body || {};
     await pool.execute(
-      `UPDATE case_mi_tabs t
+      `UPDATE case_mi t
          JOIN cases c ON c.id = t.case_id
           SET t.promo_review_status = 'pending',
               t.promo_review_assigned_to = ?,
@@ -79,7 +79,7 @@ router.post('/mi/tabs/:tabId/promo-review/decide', authenticate, requireRole(...
       return res.status(400).json({ error: 'decision must be approved or rejected' });
     }
     await pool.execute(
-      `UPDATE case_mi_tabs t
+      `UPDATE case_mi t
          JOIN cases c ON c.id = t.case_id
           SET t.promo_review_status = ?,
               t.promo_review_decided_at = NOW(),
@@ -98,7 +98,7 @@ router.get('/mi/promo-reviews/pending', authenticate, requireRole(...PROMO_REVIE
       `SELECT t.id AS mi_tab_id, t.case_id, t.is_off_label, t.off_label_indication,
               t.promo_review_requested_at, t.promo_review_assigned_to,
               u.name AS assigned_to_name, c.case_number
-         FROM case_mi_tabs t
+         FROM case_mi t
          JOIN cases c ON c.id = t.case_id
          LEFT JOIN users u ON u.id = t.promo_review_assigned_to
         WHERE c.org_id = ? AND t.promo_review_status = 'pending'

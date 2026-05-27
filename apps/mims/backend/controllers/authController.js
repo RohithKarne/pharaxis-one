@@ -23,6 +23,7 @@ const {
   sendEmailOtp,
 } = require('../services/twoFactorService');
 const { emitPlatformAdminAlert } = require('../services/alertService');
+const webauthnService = require('../services/webauthnService');
 const {
   buildAuthorizationUrl,
   exchangeCodeForTokens,
@@ -319,6 +320,31 @@ async function getActiveOrgRowsForUser(userId) {
     [userId]
   );
   return orgRows;
+}
+
+async function resolvePlatformAdminContext(user, requestedOrgId = null) {
+  const orgRows = await getActiveOrgRowsForUser(user.id);
+  const allOrgs = orgRows.map((row) => ({
+    orgId: row.org_id,
+    orgName: row.org_name,
+    siteId: row.primary_site_id,
+    siteName: row.site_name,
+    roleAtOrg: row.role_at_org || user.role,
+  }));
+
+  const selected = requestedOrgId
+    ? orgRows.find((row) => Number(row.org_id) === Number(requestedOrgId)) || null
+    : orgRows[0] || null;
+
+  return {
+    orgRows,
+    allOrgs,
+    selected,
+    orgId: selected?.org_id ?? null,
+    siteId: selected?.primary_site_id ?? null,
+    orgName: selected?.org_name ?? null,
+    siteName: selected?.site_name ?? null,
+  };
 }
 
 function parsePositiveInt(value) {
@@ -897,6 +923,10 @@ const authController = {
         return res.status(200).json({ outcome: 'denied', error: genericError });
       }
 
+      // Touch ID / passkey is a parallel fast-path available regardless of
+      // whether the account normally signs in via SSO or local password.
+      const webauthnAvailable = await webauthnService.hasCredentialForUser(user.id);
+
       const privileges = await resolveUserRuntimePrivileges(user);
       const isPlatformAdminUser = privileges.platformAdmin;
 
@@ -923,7 +953,7 @@ const authController = {
           metadata: auditMeta,
           req,
         });
-        return res.status(200).json({ outcome: 'local_password' });
+        return res.status(200).json({ outcome: 'local_password', webauthnAvailable });
       }
 
       const ssoProfiles = profiles
@@ -939,7 +969,7 @@ const authController = {
         const selected = ssoProfiles[0];
         const provider = selectProviderForEmail(selected.eligibleProviders, email);
         if (!provider?.key) {
-          return res.status(200).json({ outcome: 'choice_required', options: [] });
+          return res.status(200).json({ outcome: 'choice_required', options: [], webauthnAvailable });
         }
 
         const redirectUrl = await buildLoginStartSsoRedirect({
@@ -962,6 +992,7 @@ const authController = {
         return res.status(200).json({
           outcome: 'sso_redirect',
           redirect_url: redirectUrl,
+          webauthnAvailable,
           org: {
             id: selected.row.org_id,
             name: selected.row.org_name,
@@ -983,7 +1014,7 @@ const authController = {
           metadata: { ...auditMeta, orgId: localProfile.row.org_id },
           req,
         });
-        return res.status(200).json({ outcome: 'local_password' });
+        return res.status(200).json({ outcome: 'local_password', webauthnAvailable });
       }
 
       await logLoginAudit({
@@ -1331,16 +1362,17 @@ const authController = {
       }
 
       if (privileges.platformAdmin) {
+        const modules = await getUserModules(user.id);
+        const platformContext = await resolvePlatformAdminContext(user, requestedOrgId);
         const token = issueToken({
           userId: user.id,
           email: user.email,
           role: user.role,
-          orgId: null,
-          siteId: null,
+          orgId: platformContext.orgId,
+          siteId: platformContext.siteId,
           platformAdmin: true,
         });
         await trackSessionToken(user.id, token);
-        const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
         const config = await getSystemConfig();
         const sessionTimeout = getPlatformAdminSessionTimeout(config);
         attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
@@ -1349,9 +1381,12 @@ const authController = {
           message: 'Login successful.',
           token,
           user: toRuntimeUser(user, privileges),
-          modules: distRows.map(r => r.module),
-          orgId: null,
-          siteId: null,
+          modules,
+          orgId: platformContext.orgId,
+          siteId: platformContext.siteId,
+          orgName: platformContext.orgName,
+          siteName: platformContext.siteName,
+          allOrgs: platformContext.allOrgs,
           sessionTimeout,
         });
       }
@@ -1693,18 +1728,46 @@ const authController = {
     res.set('Cache-Control', 'no-store');
     const user = await userModel.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
+    const runtimePrivileges = await resolveUserRuntimePrivileges(user);
+    if (runtimePrivileges.platformAdmin && !hasGlobalAdminScope(req.user)) {
+      const platformContext = await resolvePlatformAdminContext(user, req.user.orgId);
+      const token = issueToken({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        orgId: platformContext.orgId,
+        siteId: platformContext.siteId,
+        platformAdmin: true,
+      });
+      await trackSessionToken(user.id, token);
+      const config = await getSystemConfig();
+      const sessionTimeout = getPlatformAdminSessionTimeout(config);
+      attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
+      return res.status(200).json({
+        user: toRuntimeUser(user, { platformAdmin: true }),
+        token,
+        modules: await getUserModules(user.id),
+        allOrgs: platformContext.allOrgs,
+        orgId: platformContext.orgId,
+        siteId: platformContext.siteId,
+        orgName: platformContext.orgName,
+        siteName: platformContext.siteName,
+        sessionTimeout,
+      });
+    }
     if (hasGlobalAdminScope(req.user)) {
-      const [distRows] = await pool.execute('SELECT DISTINCT module FROM role_permissions');
+      const modules = await getUserModules(user.id);
+      const platformContext = await resolvePlatformAdminContext(user, req.user.orgId);
       const config = await getSystemConfig();
       return res.status(200).json({
         user: toRuntimeUser(user, { platformAdmin: true }),
         token: req.user.token,
-        modules: distRows.map((row) => row.module),
-        allOrgs: [],
-        orgId: null,
-        siteId: null,
-        orgName: null,
-        siteName: null,
+        modules,
+        allOrgs: platformContext.allOrgs,
+        orgId: platformContext.orgId,
+        siteId: platformContext.siteId,
+        orgName: platformContext.orgName,
+        siteName: platformContext.siteName,
         sessionTimeout: getPlatformAdminSessionTimeout(config),
       });
     }
@@ -1769,9 +1832,10 @@ const authController = {
       const token = issueToken({
         userId: req.user.userId,
         email: req.user.email,
-        role: roleForOrg,
+        role: hasGlobalAdminScope(req.user) ? 'platform_admin' : roleForOrg,
         orgId: Number(orgId),
         siteId,
+        ...(hasGlobalAdminScope(req.user) ? { platformAdmin: true } : {}),
       });
       await trackSessionToken(req.user.userId, token);
       attachAuthCookie(res, token, Number(access.session_timeout_minutes || 30) * 60 * 1000);
@@ -2030,6 +2094,177 @@ const authController = {
       return res.json({ message: 'Password updated successfully.' });
     } catch (err) {
       console.error('changePassword error:', err);
+      return res.status(500).json({ error: 'Server error.' });
+    }
+  },
+
+
+  // ── WebAuthn / Passkey (Touch ID) ────────────────────────────────────────────
+
+  async webAuthnRegisterStart(req, res) {
+    try {
+      const user = await userModel.findById(req.user.userId);
+      if (!user) return res.status(404).json({ error: 'User not found.' });
+
+      const options = await webauthnService.generateRegistrationOptionsForUser(user);
+      return res.status(200).json({ options });
+    } catch (err) {
+      console.error('webAuthnRegisterStart error:', err);
+      const status = err.message?.includes('temporarily unavailable') ? 503 : 500;
+      return res.status(status).json({ error: err.message || 'Server error.' });
+    }
+  },
+
+  async webAuthnRegisterFinish(req, res) {
+    try {
+      const { registrationResponse, deviceName } = req.body || {};
+      if (!registrationResponse) return res.status(400).json({ error: 'Registration response is required.' });
+
+      const user = await userModel.findById(req.user.userId);
+      if (!user) return res.status(404).json({ error: 'User not found.' });
+
+      const credential = await webauthnService.verifyAndStoreRegistration(user, registrationResponse, deviceName);
+
+      await logLoginAudit({
+        userId: user.id,
+        userName: user.email,
+        role: user.role,
+        status: 'success',
+        authEvent: 'webauthn_credential_registered',
+        metadata: { credentialId: credential.credential_id, deviceName: credential.device_name },
+        req,
+      });
+
+      return res.status(200).json({
+        success: true,
+        credentialId: credential.credential_id,
+        deviceName: credential.device_name,
+      });
+    } catch (err) {
+      console.error('webAuthnRegisterFinish error:', err);
+      const status = err.code === 'CHALLENGE_EXPIRED' ? 400 : err.code === 'VERIFICATION_FAILED' ? 400 : 500;
+      return res.status(status).json({ error: err.message || 'Server error.' });
+    }
+  },
+
+  async webAuthnLoginStart(req, res) {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+    try {
+      const user = await findUserByLoginIdentifier(email);
+      // Return same shape for unknown/inactive user to prevent enumeration
+      if (!user || !user.is_active) {
+        return res.status(200).json({ webauthnAvailable: false });
+      }
+
+      await logLoginAudit({
+        userId: user.id,
+        userName: user.email,
+        role: user.role,
+        status: 'pending',
+        authEvent: 'webauthn_login_started',
+        metadata: { userId: user.id },
+        req,
+      });
+
+      const options = await webauthnService.generateAuthenticationOptionsForUser(user.id);
+      if (!options) {
+        return res.status(200).json({ webauthnAvailable: false });
+      }
+
+      return res.status(200).json({ webauthnAvailable: true, options });
+    } catch (err) {
+      console.error('webAuthnLoginStart error:', err);
+      const status = err.message?.includes('temporarily unavailable') ? 503 : 500;
+      return res.status(status).json({ error: err.message || 'Server error.' });
+    }
+  },
+
+  async webAuthnLoginFinish(req, res) {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const { authenticationResponse } = req.body || {};
+
+    if (!email || !authenticationResponse) {
+      return res.status(400).json({ error: 'Email and authentication response are required.' });
+    }
+
+    try {
+      const user = await findUserByLoginIdentifier(email);
+      if (!user || !user.is_active) {
+        return res.status(401).json({ error: 'Touch ID login failed.' });
+      }
+
+      // Check account lockout (same as password login)
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        return res.status(401).json({ error: 'Account is temporarily locked. Please try again later.' });
+      }
+
+      await webauthnService.verifyAuthentication(user.id, authenticationResponse);
+
+      await logLoginAudit({
+        userId: user.id,
+        userName: user.email,
+        role: user.role,
+        status: 'success',
+        authEvent: 'webauthn_login_success',
+        req,
+      });
+
+      // Resolve login context and issue session — same path as password login
+      const context = await resolveRegularLoginContext(user, null);
+      return finalizeRegularLogin({ res, req, user, context, authEvent: 'webauthn_login_success' });
+    } catch (err) {
+      console.error('webAuthnLoginFinish error:', err);
+
+      // Log failure for audit
+      const userForAudit = await findUserByLoginIdentifier(email).catch(() => null);
+      if (userForAudit) {
+        await logLoginAudit({
+          userId: userForAudit.id,
+          userName: userForAudit.email,
+          role: userForAudit.role,
+          status: 'failed',
+          failReason: err.message,
+          authEvent: 'webauthn_login_failed',
+          req,
+        }).catch(() => {});
+      }
+
+      const status = err.code === 'CHALLENGE_EXPIRED' ? 400 : 401;
+      return res.status(status).json({ error: err.message || 'Touch ID verification failed.' });
+    }
+  },
+
+  async listWebAuthnCredentials(req, res) {
+    try {
+      const credentials = await webauthnService.listCredentialsForUser(req.user.userId);
+      return res.status(200).json({ credentials });
+    } catch (err) {
+      console.error('listWebAuthnCredentials error:', err);
+      return res.status(500).json({ error: 'Server error.' });
+    }
+  },
+
+  async deleteWebAuthnCredential(req, res) {
+    try {
+      const credId = req.params.credId;
+      if (!credId) return res.status(400).json({ error: 'Credential ID is required.' });
+
+      const deleted = await webauthnService.deleteCredential(credId, req.user.userId);
+      if (!deleted) return res.status(404).json({ error: 'Credential not found.' });
+
+      await logLoginAudit({
+        userId: req.user.userId,
+        status: 'success',
+        authEvent: 'webauthn_credential_removed',
+        metadata: { credentialId: credId },
+        req,
+      });
+
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('deleteWebAuthnCredential error:', err);
       return res.status(500).json({ error: 'Server error.' });
     }
   },

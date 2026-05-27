@@ -236,4 +236,17 @@ router.get('/org-logo', authenticate, async (req, res) => {
   }
 });
 
+// ── WebAuthn / Passkey (Touch ID) ────────────────────────────────────────────
+// Registration (requires authenticated session — happens after first password login)
+router.post('/webauthn/register/start',  authenticate, authController.webAuthnRegisterStart);
+router.post('/webauthn/register/finish', authenticate, authController.webAuthnRegisterFinish);
+
+// Login (public — replaces password for registered devices)
+router.post('/webauthn/login/start',  loginRateLimiter, authController.webAuthnLoginStart);
+router.post('/webauthn/login/finish', loginRateLimiter, authController.webAuthnLoginFinish);
+
+// Credential management (protected)
+router.get('/webauthn/credentials',             authenticate, authController.listWebAuthnCredentials);
+router.delete('/webauthn/credentials/:credId',  authenticate, authController.deleteWebAuthnCredential);
+
 module.exports = router;

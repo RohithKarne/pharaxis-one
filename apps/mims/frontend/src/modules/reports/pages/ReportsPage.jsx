@@ -1945,7 +1945,7 @@ export default function ReportsPage() {
       )
     }
     return (
-      <MIMSLayout>
+      <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
         {loadingContent}
       </MIMSLayout>
     )
@@ -2000,7 +2000,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <MIMSLayout>
+    <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
       {content}
     </MIMSLayout>
   )

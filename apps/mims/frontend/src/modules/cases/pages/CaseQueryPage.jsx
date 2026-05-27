@@ -80,7 +80,7 @@ export default function CaseQueryPage() {
   const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize))
 
   return (
-    <MIMSLayout>
+    <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
     <div className="cf-cases-page">
       <div className="cf-cases-header">
         <div className="cf-cases-title-row">

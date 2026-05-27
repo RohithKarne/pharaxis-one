@@ -1,14 +1,10 @@
-name: Deploy CP Portal
+name: CP Portal Remote Deploy Disabled
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/cp-portal/**'
   workflow_dispatch:
 
 jobs:
-  deploy:
+  local-only-status:
     uses: ./.github/workflows/_app-deploy.yml
     secrets: inherit
     with:
@@ -17,6 +13,6 @@ jobs:
       app_root: apps/cp-portal
       frontend_dir: apps/cp-portal/frontend
       frontend_lockfile: apps/cp-portal/frontend/package-lock.json
-      publish_dir: /var/www/pharaxis/cp-portal
-      pm2_name: cp-portal
-      environment_name: cp-portal-prod
+      publish_dir: local-only-disabled
+      pm2_name: local-only-disabled
+      environment_name: local-only-disabled

@@ -234,5 +234,5 @@ export default function TransmissionAuditTrailPage({ embedded = false } = {}) {
   )
 
   if (embedded) return content
-  return <MIMSLayout activeNav="utilities">{content}</MIMSLayout>
+  return <MIMSLayout showStatStrip={false} bodyClassName="no-scroll mims-ops-page-body" surfaceVariant="workspace" compact>{content}</MIMSLayout>
 }

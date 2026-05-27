@@ -81,11 +81,11 @@ export default function ICSRBuilderPage() {
     else setMessage(data.error || 'Lifecycle action failed')
   }
 
-  if (!data) return <MIMSLayout><div className="cf-form-loading">Loading ICSR...</div></MIMSLayout>
+  if (!data) return <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact><div className="cf-form-loading">Loading ICSR...</div></MIMSLayout>
   const report = data.report || {}
 
   return (
-    <MIMSLayout bodyClassName="no-scroll">
+    <MIMSLayout showStatStrip={false} bodyClassName="no-scroll mims-ops-page-body" surfaceVariant="workspace" compact>
       <div className="icsr-builder-page">
         <header className="icsr-builder-header">
           <button type="button" onClick={() => navigate(`/cases/${report.case_id}?section=icsr`)}>Back to Case</button>

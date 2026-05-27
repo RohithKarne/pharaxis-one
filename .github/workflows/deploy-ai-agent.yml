@@ -1,14 +1,10 @@
-name: Deploy AI-Agent
+name: AI-Agent Remote Deploy Disabled
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/ai-agent/**'
   workflow_dispatch:
 
 jobs:
-  deploy:
+  local-only-status:
     uses: ./.github/workflows/_app-deploy.yml
     secrets: inherit
     with:
@@ -17,6 +13,6 @@ jobs:
       app_root: apps/ai-agent
       frontend_dir: apps/ai-agent/frontend
       frontend_lockfile: apps/ai-agent/frontend/package-lock.json
-      publish_dir: /var/www/pharaxis/ai-agent
-      pm2_name: ai-agent
-      environment_name: ai-agent-prod
+      publish_dir: local-only-disabled
+      pm2_name: local-only-disabled
+      environment_name: local-only-disabled

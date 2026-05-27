@@ -4,6 +4,10 @@ Effective date: 2026-04-30
 Owner: Engineering
 Purpose: remove raw-IP production coupling and standardize deploy-time environment values.
 
+## Current Hosting Status
+
+Pharaxis apps are local-only as of 2026-05-27. The previous AWS/EC2 host has been deleted. This contract is retained for the next approved hosting target and must not be treated as an active deployment instruction today.
+
 ## Rule
 
 Production frontend builds must use same-origin path contracts or domain-based env injection.
@@ -22,9 +26,9 @@ Frontend production envs should resolve like this:
 | MIMS | `/mims/` | `/mims/api` |
 | AI Agent | `/ai-agent/` | `/ai-agent` then app appends `/api/v1/agent/*` |
 
-## Nginx Contract
+## Future Nginx Contract
 
-Nginx must serve:
+When remote hosting is restored, Nginx or the selected edge proxy must serve:
 
 - static app shell from `/var/www/pharaxis/<app>/`
 - backend reverse proxy for `/<app>/api/*`
@@ -76,11 +80,11 @@ Not allowed:
 
 ## Release Check
 
-Before production deploy:
+Before production deploy after hosting is restored:
 
 - [ ] DNS points to active load balancer or server
 - [ ] TLS certificate valid
 - [ ] Nginx path routing matches table above
 - [ ] frontend production envs use same-origin paths
 - [ ] backend CORS allowlists match production domains
-- [ ] `ops/scripts/bootstrap-nginx-tls.sh <domain> <email>` executed on EC2
+- [ ] TLS/bootstrap script executed on the approved host

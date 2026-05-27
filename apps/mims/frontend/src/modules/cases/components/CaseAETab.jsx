@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import AETabPanel from './AETabPanel'
 import StickySectionNav from '../../../shared/components/StickySectionNav'
@@ -21,6 +21,159 @@ const AE_TABS = [
   { key: 'medical-notes',   label: 'Medical Notes' },
   { key: 'product-info',    label: 'Product Info' },
 ]
+
+const AE_COMPLETION_DEFS = {
+  general: {
+    type: 'flat',
+    sectionName: 'AE — General',
+    fields: [
+      { label: 'AE Status', key: 'ae_status' },
+      { label: 'Date of Awareness', key: 'date_of_awareness' },
+      { label: 'Report Type', key: 'report_type' },
+      { label: 'Regulatory Reportability', key: 'regulatory_reportability' },
+      { label: 'Date of Onset', key: 'date_of_onset' },
+      { label: 'Date of Report', key: 'date_of_report' },
+      { label: 'Reporter Awareness Date', key: 'reporter_awareness_date' },
+      { label: 'Additional Info', read: data => data?.general__additional_info ?? data?.additional_info ?? '' },
+    ],
+  },
+  events: {
+    type: 'rows',
+    sectionName: 'AE — Events & Seriousness',
+    fields: [
+      { label: 'Event Description', key: 'event_description' },
+      { label: 'MedDRA Term', key: 'meddra_term' },
+      { label: 'Outcome', key: 'outcome' },
+      { label: 'Reported Causality', key: 'reported_causality' },
+      { label: 'Frequency', key: 'frequency' },
+      { label: 'Causality Assessment', key: 'causality_assessment' },
+      { label: 'Start Date', key: 'start_date' },
+      { label: 'End Date', key: 'end_date' },
+      { label: 'Serious', key: 'is_serious' },
+      { label: 'Death', key: 'is_death' },
+      { label: 'Life Threatening', key: 'is_life_threatening' },
+      { label: 'Hospitalization', key: 'is_hospitalization' },
+      { label: 'Disability', key: 'is_disability' },
+      { label: 'Congenital Anomaly', key: 'is_congenital_anomaly' },
+      { label: 'Other Medically Important', key: 'is_other_medically_important' },
+      { label: 'Required Intervention', key: 'is_required_intervention' },
+      { label: 'Lab Abnormality', key: 'is_lab_abnormality' },
+    ],
+  },
+  'patient-info': {
+    type: 'flat',
+    sectionName: 'AE — Patient Information',
+    fields: [
+      { label: 'Patient Initials', key: 'patient_initials' },
+      { label: 'Date of Birth', key: 'date_of_birth' },
+      { label: 'Age', key: 'age' },
+      { label: 'Age Unit', key: 'age_unit' },
+      { label: 'Gender', key: 'sex' },
+      { label: 'Weight (kg)', key: 'weight_kg' },
+      { label: 'Height (cm)', key: 'height_cm' },
+      { label: 'Ethnicity', key: 'ethnicity' },
+      { label: 'Last Menstrual Date', key: 'last_menstrual_date' },
+      { label: 'Pregnant', key: 'pregnant' },
+      { label: 'Patient Country', key: 'patient_country' },
+      { label: 'Additional Info', read: data => data?.['patient-info__additional_info'] ?? data?.additional_info ?? '' },
+    ],
+  },
+  'lab-results': {
+    type: 'rows',
+    sectionName: 'AE — Lab Results',
+    fields: [
+      { label: 'Lab Name', key: 'lab_name' },
+      { label: 'Test Name', key: 'test_name' },
+      { label: 'Result Value', key: 'result' },
+      { label: 'Unit', key: 'unit' },
+      { label: 'Normal Range', key: 'normal_range' },
+      { label: 'Test Date', key: 'test_date' },
+    ],
+  },
+  'lab-notes': {
+    type: 'flat',
+    sectionName: 'AE — Lab Notes',
+    fields: [
+      { label: 'Lab Notes', read: data => data?.['lab-notes__notes'] ?? data?.notes ?? '' },
+    ],
+  },
+  'medical-history': {
+    type: 'rows',
+    sectionName: 'AE — Medical History',
+    fields: [
+      { label: 'Medical History', key: 'condition_name' },
+      { label: 'Start Date', key: 'start_date' },
+      { label: 'End Date', key: 'end_date' },
+      { label: 'Ongoing', key: 'is_ongoing' },
+      { label: 'Relevant History', key: 'notes' },
+    ],
+  },
+  'medical-notes': {
+    type: 'flat',
+    sectionName: 'AE — Medical Notes',
+    fields: [
+      { label: 'Medical Notes', read: data => data?.['medical-notes__notes'] ?? data?.notes ?? '' },
+    ],
+  },
+  'product-info': {
+    type: 'rows',
+    sectionName: 'AE — Product Information',
+    fields: [
+      { label: 'Product Name', key: 'product_name' },
+      { label: 'Product Type', key: 'product_type' },
+      { label: 'Product Category', key: 'product_category' },
+      { label: 'Batch / Lot Number', key: 'batch_lot_number' },
+      { label: 'Dose', key: 'dose' },
+      { label: 'Dose Unit', key: 'dose_unit' },
+      { label: 'Route of Administration', key: 'route_of_admin' },
+      { label: 'Frequency', key: 'frequency' },
+      { label: 'Start Date', key: 'start_date' },
+      { label: 'Stop Date', key: 'end_date' },
+      { label: 'Indication', key: 'indication' },
+      { label: 'Action Taken', key: 'action_taken' },
+      { label: 'Dechallenge', key: 'dechallenge' },
+      { label: 'Rechallenge', key: 'rechallenge' },
+      { label: 'Suspect', key: 'is_suspect' },
+      { label: 'Concomitant Medications', key: 'is_concomitant' },
+    ],
+  },
+}
+
+function isFilled(value) {
+  return value !== undefined && value !== null && !(typeof value === 'string' && value.trim() === '')
+}
+
+function getTrackedAeFields(fields, getFieldConfig, sectionName) {
+  if (!Array.isArray(fields) || fields.length === 0) return []
+  const requiredFields = fields.filter(field => getFieldConfig?.(sectionName, field.label)?.is_required)
+  // Prefer admin-configured required fields when present; otherwise fall back to the fields this tab actually renders.
+  return requiredFields.length > 0 ? requiredFields : fields
+}
+
+function readAeFieldValue(field, data) {
+  return typeof field.read === 'function' ? field.read(data || {}) : data?.[field.key]
+}
+
+function computeAeFlatCompletion(data, fields, getFieldConfig, sectionName) {
+  if (!data || Array.isArray(data)) return null
+  const trackedFields = getTrackedAeFields(fields, getFieldConfig, sectionName)
+  if (trackedFields.length === 0) return null
+  return {
+    count: trackedFields.length,
+    complete: trackedFields.reduce((total, field) => total + (isFilled(readAeFieldValue(field, data)) ? 1 : 0), 0),
+  }
+}
+
+function computeAeRowCompletion(rows, fields, getFieldConfig, sectionName) {
+  if (!Array.isArray(rows)) return null
+  const trackedFields = getTrackedAeFields(fields, getFieldConfig, sectionName)
+  if (trackedFields.length === 0) return null
+  if (rows.length === 0) return { count: trackedFields.length, complete: 0 }
+  return rows.reduce((summary, row) => ({
+    count: summary.count + trackedFields.length,
+    complete: summary.complete + trackedFields.reduce((total, field) => total + (isFilled(readAeFieldValue(field, row)) ? 1 : 0), 0),
+  }), { count: 0, complete: 0 })
+}
 
 export default function CaseAETab({
   id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
@@ -47,6 +200,46 @@ export default function CaseAETab({
   const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
   const latestAeVersion = aeVersions.length > 0 ? aeVersions[aeVersions.length - 1] : null
   const canCreateAeVersion = !latestAeVersion || isClosed(latestAeVersion)
+  const aeCompletionByTab = useMemo(() => {
+    const versionId = activeAeVer?.id
+    if (!versionId) return {}
+    return Object.fromEntries(
+      AE_TABS.map(tab => {
+        const def = AE_COMPLETION_DEFS[tab.key]
+        if (!def) return [tab.key, null]
+        const payload = aeTabData[`${versionId}_${tab.key}`]
+        if (payload === undefined) return [tab.key, null]
+        const summary = def.type === 'rows'
+          ? computeAeRowCompletion(payload, def.fields, getFieldConfig, def.sectionName)
+          : computeAeFlatCompletion(payload, def.fields, getFieldConfig, def.sectionName)
+        return [tab.key, summary]
+      }),
+    )
+  }, [activeAeVer?.id, aeTabData, getFieldConfig])
+
+  useEffect(() => {
+    const versionId = activeAeVer?.id
+    if (!versionId) return
+    const draftKey = `mims_case_${id}_ae_${versionId}_${activeAeTab}`
+    try {
+      const raw = localStorage.getItem(draftKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (parsed !== null && parsed !== undefined) {
+        setAeTabData(prev => ({ ...prev, [`${versionId}_${activeAeTab}`]: parsed }))
+      }
+    } catch {
+      // no-op
+    }
+  }, [activeAeTab, activeAeVer?.id, id])
+
+  useEffect(() => {
+    const versionId = activeAeVer?.id
+    if (!versionId) return
+    const payload = aeTabData[`${versionId}_${activeAeTab}`]
+    if (payload === undefined) return
+    try { localStorage.setItem(`mims_case_${id}_ae_${versionId}_${activeAeTab}`, JSON.stringify(payload)) } catch { /* no-op */ }
+  }, [activeAeTab, activeAeVer?.id, aeTabData, id])
 
   async function loadAEVersions() {
     try {
@@ -129,6 +322,7 @@ export default function CaseAETab({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setAeTabData(prev => ({ ...prev, [`${activeAeVer.id}_${activeAeTab}`]: data }))
+      localStorage.removeItem(`mims_case_${id}_ae_${activeAeVer.id}_${activeAeTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) { toast.error(err.message) }
     finally { setAeTabSaving(false) }
@@ -224,13 +418,18 @@ export default function CaseAETab({
             <div className="cf-locked-notice">This version is locked (read-only). Create a new version to continue editing.</div>
           )}
 
-          <div className="cf-ae-workspace" style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+          <div className="cf-case-workspace cf-ae-workspace">
             <StickySectionNav
-              sections={AE_TABS.map(t => ({ id: t.key, label: t.label }))}
+              sections={AE_TABS.map(t => ({
+                id: t.key,
+                label: t.label,
+                count: aeCompletionByTab[t.key]?.count,
+                complete: aeCompletionByTab[t.key]?.complete,
+              }))}
               activeId={activeAeTab}
               onSelect={switchAETab}
             />
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="cf-case-workspace-main">
               {aeTabLoading ? (
                 <div className="cf-tab-loading">Loading…</div>
               ) : (

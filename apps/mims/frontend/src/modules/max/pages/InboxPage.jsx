@@ -5,7 +5,7 @@
  *          F8 (advanced filters), F9 (saved views), F12 (reply thread)
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -139,8 +139,8 @@ export default function InboxPage() {
   const { user, siteId, orgId, allOrgs } = useAuth()
 
   const STORAGE_KEY = `mims_inbox_${user?.id || 'guest'}`
-  const VIEWS_KEY   = `mims_inbox_views_${user?.id || 'guest'}`
   const DENSITY_KEY = `mims_inbox_density_${user?.id || 'guest'}`
+  const SAVED_VIEWS_SCREEN_KEY = 'inbox'  // server-side saved views via /api/admin/user-preferences
 
   const saveInquiries = useCallback((data) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -192,13 +192,18 @@ export default function InboxPage() {
     color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '',
   })
   const [showAdvFilters, setShowAdvFilters] = useState(false)
+  const [selectionMode, setSelectionMode]   = useState(false)
   const [savedViews, setSavedViews]         = useState([])   // F9
   const [saveViewName, setSaveViewName]     = useState('')
+  const [showSaveViewModal, setShowSaveViewModal] = useState(false)
+  const [viewNotice, setViewNotice]         = useState(null) // F9: stale-value / limit messages
+  const defaultViewAppliedRef               = useRef(false)  // F9: auto-apply default only once per mount
   const [notes, setNotes]                   = useState([])   // F5
   const [newNote, setNewNote]               = useState('')
   const [notesLoading, setNotesLoading]     = useState(false)
   const [savingNote, setSavingNote]         = useState(false)
   const [insightPanel, setInsightPanel] = useState(null) // notes | history | recommendations | receipts | null
+  const [showUtilityMenu, setShowUtilityMenu] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [recommendationsLoading, setRecommendationsLoading] = useState(false)
   const [readReceiptsLoading, setReadReceiptsLoading] = useState(false)
@@ -299,9 +304,35 @@ export default function InboxPage() {
     } catch { /* ignore */ }
   }, [AUTH_H])
 
+  // F9: load saved views from the shared user-preferences API (server-side, cross-device)
+  const loadViews = useCallback(async () => {
+    try {
+      const res = await httpFetch(`/api/admin/user-preferences/views?screen_key=${SAVED_VIEWS_SCREEN_KEY}`, { headers: AUTH_H })
+      if (!res.ok) return undefined
+      const d = await res.json()
+      const views = (d.views || []).map(v => ({
+        id: v.id,
+        name: v.view_name,
+        isDefault: !!v.is_default,
+        ...(v.filter_json || {}),
+      }))
+      setSavedViews(views)
+      return views
+    } catch { return undefined }
+  }, [AUTH_H])
+
   useEffect(() => {
-    try { setSavedViews(JSON.parse(localStorage.getItem(VIEWS_KEY) || '[]')) } catch { /* ignore */ }
-  }, [VIEWS_KEY])
+    if (!user?.id) return
+    let cancelled = false
+    loadViews().then(views => {
+      // Auto-apply the default view once per mount, after views load
+      if (cancelled || !Array.isArray(views) || defaultViewAppliedRef.current) return
+      const def = views.find(v => v.isDefault)
+      if (def) { defaultViewAppliedRef.current = true; applyView(def) }
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, loadViews])
 
   useEffect(() => {
     localStorage.setItem(DENSITY_KEY, compactMode ? 'compact' : 'comfort')
@@ -418,6 +449,7 @@ export default function InboxPage() {
     setPage(1)
     setSelected(null)
     setBulkSelected(new Set())
+    setSelectionMode(false)
     loadUsers()
     loadInquiries({ force: true, background: true })
   }, [tenantFilterOrgId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -436,6 +468,7 @@ export default function InboxPage() {
   function selectInquiry(inq) {
     setSelected(inq)
     setInsightPanel(null)
+    setShowUtilityMenu(false)
     if (inq.attachments_count > 0) loadAttachments(inq.id)
     else { setAttachments([]); setAttachmentsLoading(false) }
     if (!inq.read_at) {
@@ -683,18 +716,6 @@ export default function InboxPage() {
     }
   }
 
-  function toggleLock(id, e) {
-    e.stopPropagation()
-    updateInquiries(prev => prev.map(inq => {
-      if (inq.id !== id) return inq
-      if (inq.locked_by && inq.locked_by !== user?.name) return inq
-      const newLocked = !inq.is_locked
-      const newLockedBy = newLocked ? user?.name : null
-      patchInquiry(id, { is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? inq.color : null })
-      return { ...inq, is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? inq.color : null }
-    }))
-  }
-
   function setColor(id, color) {
     patchInquiry(id, { color })
     updateInquiries(prev => prev.map(inq => inq.id === id ? { ...inq, color } : inq))
@@ -782,29 +803,80 @@ export default function InboxPage() {
     finally { setSavingNote(false) }
   }
 
-  // ── Saved Views (F9) ──────────────────────────────────────────
+  // ── Saved Views (F9) — server-side, cross-device via /api/admin/user-preferences ──
 
-  function saveCurrentView(name) {
-    if (!name.trim()) return
-    const view = { name: name.trim(), search, filterFrom, filterTo, tenantFilterOrgId, advFilters }
-    const next = [...savedViews.filter(v => v.name !== name.trim()), view].slice(-5)
-    setSavedViews(next)
-    localStorage.setItem(VIEWS_KEY, JSON.stringify(next))
+  const EMPTY_ADV = { color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '' }
+
+  // Persist a view (create or overwrite by name). Server clears other defaults when asDefault.
+  async function persistView(name, filterJson, asDefault) {
+    const res = await httpFetch('/api/admin/user-preferences/views', {
+      method: 'POST',
+      headers: AUTH_H,
+      body: JSON.stringify({
+        screen_key: SAVED_VIEWS_SCREEN_KEY,
+        view_name: name,
+        filter_json: filterJson,
+        is_default: asDefault ? 1 : 0,
+      }),
+    })
+    return res.ok
   }
 
+  async function saveCurrentView(name) {
+    const trimmed = (name || '').trim()
+    if (!trimmed) return
+    const isExisting = savedViews.some(v => v.name === trimmed)
+    if (!isExisting && savedViews.length >= 5) {
+      setViewNotice('You have reached the limit of 5 saved views. Delete one before saving a new view.')
+      return
+    }
+    const filterJson = { search, filterFrom, filterTo, tenantFilterOrgId, advFilters }
+    try {
+      const ok = await persistView(trimmed, filterJson, false)
+      if (ok) { setViewNotice(null); await loadViews() }
+      else setViewNotice('Could not save the view. Please try again.')
+    } catch { setViewNotice('Could not save the view. Please try again.') }
+  }
+
+  // Apply a view, silently dropping filter values the user no longer has access to.
   function applyView(view) {
+    const dropped = []
+    let tenant = view.tenantFilterOrgId || ''
+    if (tenant && tenantOptions.length && !tenantOptions.some(o => String(o.id) === String(tenant))) {
+      tenant = ''; dropped.push('tenant')
+    }
+    const adv = { ...EMPTY_ADV, ...(view.advFilters || {}) }
+    if (adv.assignee && adv.assignee !== '__UNASSIGNED__' && users.length && !users.some(u => u.name === adv.assignee)) {
+      adv.assignee = ''; dropped.push('assignee')
+    }
     setSearch(view.search || '')
     setFilterFrom(view.filterFrom || '')
     setFilterTo(view.filterTo || '')
-    setTenantFilterOrgId(view.tenantFilterOrgId || '')
-    setAdvFilters(view.advFilters || { color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '' })
+    setTenantFilterOrgId(tenant)
+    setAdvFilters(adv)
     setPage(1)
+    setViewNotice(dropped.length
+      ? `Some filters in "${view.name}" were reset because your access changed.`
+      : null)
   }
 
-  function deleteView(idx) {
-    const next = savedViews.filter((_, i) => i !== idx)
-    setSavedViews(next)
-    localStorage.setItem(VIEWS_KEY, JSON.stringify(next))
+  // Toggle a view as the user's default (auto-applies on next inbox open).
+  async function toggleDefaultView(view) {
+    try {
+      const ok = await persistView(view.name, {
+        search: view.search, filterFrom: view.filterFrom, filterTo: view.filterTo,
+        tenantFilterOrgId: view.tenantFilterOrgId, advFilters: view.advFilters,
+      }, !view.isDefault)
+      if (ok) await loadViews()
+    } catch { /* keep current state on failure */ }
+  }
+
+  async function deleteView(view) {
+    if (!view?.id) return
+    try {
+      const res = await httpFetch(`/api/admin/user-preferences/views/${view.id}`, { method: 'DELETE', headers: AUTH_H })
+      if (res.ok) await loadViews()
+    } catch { /* ignore */ }
   }
 
   // ── Computed state ────────────────────────────────────────────
@@ -935,15 +1007,61 @@ export default function InboxPage() {
 
   const colorBarClass = { red: 'color-bar-red', yellow: 'color-bar-yellow', green: 'color-bar-green', blue: 'color-bar-blue' }
   const dotClass      = { red: 'dot-red', yellow: 'dot-yellow', green: 'dot-green', blue: 'dot-blue' }
-  function renderAiChip(inquiry) {
+  const heroMetrics = useMemo(() => ([
+    {
+      label: 'Open work',
+      value: inquiries.filter(item => ['inbox', 'pending', 'non_processed'].includes(item.status)).length,
+    },
+    {
+      label: 'Unassigned',
+      value: inquiries.filter(item => !item.assigned_to && ['inbox', 'pending', 'non_processed'].includes(item.status)).length,
+    },
+    {
+      label: 'My queue',
+      value: inquiries.filter(item => item.assigned_to === user?.name && ['inbox', 'pending', 'non_processed'].includes(item.status)).length,
+    },
+    {
+      label: 'SLA risk',
+      value: inquiries.filter(item => item.first_touch_sla_status === 'breached' || item.response_sla_status === 'breached').length,
+    },
+  ]), [inquiries, user?.name])
+
+  const activeFilterChips = useMemo(() => {
+    const chips = []
+    const tenantName = tenantOptions.find(org => String(org.id) === String(tenantFilterOrgId))?.name
+
+    if (search) chips.push({ key: 'search', label: `Search: ${search}` })
+    if (tenantFilterOrgId && tenantName) chips.push({ key: 'tenant', label: `Tenant: ${tenantName}` })
+    if (filterFrom) chips.push({ key: 'from', label: `From: ${filterFrom}` })
+    if (filterTo) chips.push({ key: 'to', label: `To: ${filterTo}` })
+    if (advFilters.color) chips.push({ key: 'color', label: `Color: ${advFilters.color}` })
+    if (advFilters.priority) chips.push({ key: 'priority', label: `Priority: ${advFilters.priority}` })
+    if (advFilters.readStatus) chips.push({ key: 'readStatus', label: advFilters.readStatus === 'unread' ? 'Unread only' : 'Read only' })
+    if (advFilters.isLocked) chips.push({ key: 'isLocked', label: advFilters.isLocked === 'locked' ? 'Locked only' : 'Unlocked only' })
+    if (advFilters.assignee) chips.push({ key: 'assignee', label: advFilters.assignee === '__UNASSIGNED__' ? 'Unassigned only' : `Assignee: ${advFilters.assignee}` })
+    if (advFilters.triageState) chips.push({ key: 'triageState', label: `State: ${advFilters.triageState.replace(/_/g, ' ')}` })
+    if (advFilters.queueName) chips.push({ key: 'queueName', label: `Queue: ${advFilters.queueName}` })
+    if (advFilters.firstTouchSla) chips.push({ key: 'firstTouchSla', label: `First Touch: ${advFilters.firstTouchSla.replace(/_/g, ' ')}` })
+    if (advFilters.responseSla) chips.push({ key: 'responseSla', label: `Response: ${advFilters.responseSla.replace(/_/g, ' ')}` })
+
+    return chips
+  }, [search, tenantFilterOrgId, tenantOptions, filterFrom, filterTo, advFilters])
+
+  function getAiChipLabel(inquiry) {
     const type = String(inquiry?.ai_suggested_type || '').toUpperCase()
-    if (!type) return null
+    if (!type) return ''
     let payload = inquiry.ai_suggested_payload
     if (typeof payload === 'string') {
       try { payload = JSON.parse(payload) } catch { payload = {} }
     }
     const urgency = payload?.urgency ? ` / ${payload.urgency}` : ''
-    return <span className="ai-inbox-chip">AI: {type}{urgency}</span>
+    return `AI: ${type}${urgency}`
+  }
+
+  function renderAiChip(inquiry) {
+    const label = getAiChipLabel(inquiry)
+    if (!label) return null
+    return <span className="ai-inbox-chip">{label}</span>
   }
 
   // H2 FIX: map all SLA statuses to correct badge classes instead of defaulting everything to yellow
@@ -953,12 +1071,108 @@ export default function InboxPage() {
     return ''
   }
 
+  function getRowChips(inquiry) {
+    const chips = []
+    const aiLabel = getAiChipLabel(inquiry)
+    const dueStatus = dueDateStatus(inquiry.due_date)
+
+    if (inquiry.priority) chips.push({ label: inquiry.priority, tone: inquiry.priority })
+    if (inquiry.queue_name) chips.push({ label: inquiry.queue_name, tone: 'neutral' })
+    if (inquiry.triage_state) chips.push({ label: inquiry.triage_state.replace(/_/g, ' '), tone: 'neutral' })
+    if (aiLabel) chips.push({ label: aiLabel, tone: 'ai' })
+    if (dueStatus === 'overdue') chips.push({ label: 'Overdue', tone: 'risk' })
+    if (dueStatus === 'today') chips.push({ label: 'Due today', tone: 'warning' })
+    if (inquiry.first_touch_sla_status === 'breached' && !inquiry.first_touched_at) chips.push({ label: 'First Touch SLA', tone: 'risk' })
+    if (inquiry.response_sla_status === 'breached' && inquiry.first_touched_at && !inquiry.first_response_at) chips.push({ label: 'Response SLA', tone: 'risk' })
+    if (inquiry.assigned_to) chips.push({ label: inquiry.assigned_to, tone: 'neutral' })
+
+    return chips
+  }
+
+  function clearAllFilters() {
+    setSearch('')
+    setFilterFrom('')
+    setFilterTo('')
+    setTenantFilterOrgId('')
+    setAdvFilters(EMPTY_ADV)
+    setPage(1)
+  }
+
+  function clearFilterChip(key) {
+    if (key === 'search') setSearch('')
+    if (key === 'tenant') setTenantFilterOrgId('')
+    if (key === 'from') setFilterFrom('')
+    if (key === 'to') setFilterTo('')
+    if (key in advFilters) {
+      setAdvFilters(prev => ({ ...prev, [key]: '' }))
+    }
+    setPage(1)
+  }
+
+  function toggleSelectionMode() {
+    setSelectionMode(prev => {
+      const next = !prev
+      if (!next) {
+        setBulkSelected(new Set())
+        setBulkTriageState('')
+        setBulkAssignee('')
+        setBulkPriority('')
+        setBulkSnoozeUntil('')
+      }
+      return next
+    })
+  }
+
+  async function saveViewAndClose() {
+    const trimmed = saveViewName.trim()
+    if (!trimmed) return
+    await saveCurrentView(trimmed)
+    setSaveViewName('')
+    setShowSaveViewModal(false)
+  }
+
   // ── Render ────────────────────────────────────────────────────
 
   return (
-    <MIMSLayout>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div className={`inbox-wrapper ${compactMode ? 'compact-mode' : 'comfort-mode'}`}>
+    <MIMSLayout showStatStrip={false} bodyClassName="no-scroll mims-inbox-page-body" surfaceVariant="workspace" compact>
+      <div className={`inbox-page-shell ${compactMode ? 'compact-mode' : 'comfort-mode'}`}>
+        <section className="inbox-hero">
+          <div className="inbox-hero-top">
+            <div className="inbox-hero-copy">
+              <span className="inbox-hero-kicker">Shared inbox workspace</span>
+              <h1 className="inbox-hero-title">Inbox</h1>
+              <p className="inbox-hero-description">A calmer triage surface for medical affairs communication, routing, and case creation.</p>
+            </div>
+            <div className="inbox-hero-actions">
+              <button className="btn btn-outline inbox-toolbar-btn" onClick={() => setShowAdvFilters(a => !a)}>
+                {showAdvFilters ? 'Hide filters' : 'Filters'}
+              </button>
+              <button className="btn btn-outline inbox-toolbar-btn" onClick={toggleSelectionMode}>
+                {selectionMode ? 'Done selecting' : 'Select'}
+              </button>
+              <button className="btn btn-outline inbox-toolbar-btn" onClick={() => setShowSaveViewModal(true)}>
+                Save view
+              </button>
+              <button className="btn btn-outline inbox-toolbar-btn" onClick={exportCSV} title="Export current view to CSV">
+                Export CSV
+              </button>
+              <button className="btn btn-primary inbox-toolbar-btn" onClick={fetchEmails} disabled={fetching || loading}>
+                {fetching ? 'Fetching…' : 'Fetch mail'}
+              </button>
+            </div>
+          </div>
+
+          <div className="inbox-hero-metrics">
+            {heroMetrics.map(metric => (
+              <div key={metric.label} className="inbox-hero-metric">
+                <span className="inbox-hero-metric-value">{metric.value}</span>
+                <span className="inbox-hero-metric-label">{metric.label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="inbox-wrapper">
 
             {/* ── LEFT PANEL: List ── */}
             <div className="inbox-list-panel">
@@ -967,7 +1181,7 @@ export default function InboxPage() {
               <div className="inbox-tabs">
                 {TABS.map(tab => (
                   <button key={tab} className={`inbox-tab ${activeTab === tab ? 'active' : ''}`}
-                    onClick={() => { setActiveTab(tab); setPage(1); setSelected(null) }}>
+                    onClick={() => { setActiveTab(tab); setPage(1); setSelected(null); setSelectionMode(false) }}>
                     {tab}
                     {tabCounts[tab] > 0 && <span className="inbox-tab-count">{tabCounts[tab]}</span>}
                   </button>
@@ -976,30 +1190,44 @@ export default function InboxPage() {
 
               <div className="inbox-layout-controls">
                 <div className="inbox-density-switch" role="group" aria-label="Inbox density">
-                  <button
-                    className={`density-option ${compactMode ? 'active' : ''}`}
-                    onClick={() => setCompactMode(true)}
-                  >
+                  <button className={`density-option ${compactMode ? 'active' : ''}`} onClick={() => setCompactMode(true)}>
                     Compact
                   </button>
-                  <button
-                    className={`density-option ${!compactMode ? 'active' : ''}`}
-                    onClick={() => setCompactMode(false)}
-                  >
+                  <button className={`density-option ${!compactMode ? 'active' : ''}`} onClick={() => setCompactMode(false)}>
                     Comfort
                   </button>
                 </div>
+                <div className="inbox-layout-summary">
+                  <span>{activeTab} triage</span>
+                  <span>{filtered.length} in current view</span>
+                </div>
               </div>
 
-              {/* F9: Saved Views chips */}
-              {savedViews.length > 0 && (
-                <div className="saved-views-bar">
-                  {savedViews.map((v, idx) => (
-                    <span key={idx} className="saved-view-chip">
-                      <button className="chip-label" onClick={() => applyView(v)}>{v.name}</button>
-                      <button className="chip-delete" onClick={() => deleteView(idx)}>✕</button>
-                    </span>
-                  ))}
+              <div className="saved-views-bar">
+                <span className="saved-views-label">Saved views</span>
+                {savedViews.length === 0 && (
+                  <span className="saved-views-empty">
+                    No saved views yet. Save your current filters from the header.
+                  </span>
+                )}
+                {savedViews.map((v) => (
+                  <span key={v.id} className={`saved-view-chip${v.isDefault ? ' is-default' : ''}`}>
+                    <button className="chip-label" onClick={() => applyView(v)}>
+                      {v.isDefault ? '★ ' : ''}{v.name}
+                    </button>
+                    <button
+                      className="chip-default"
+                      title={v.isDefault ? 'Remove as default' : 'Set as default'}
+                      onClick={() => toggleDefaultView(v)}
+                    >{v.isDefault ? '★' : '☆'}</button>
+                    <button className="chip-delete" title="Delete view" onClick={() => deleteView(v)}>✕</button>
+                  </span>
+                ))}
+              </div>
+              {viewNotice && (
+                <div className="saved-views-notice">
+                  <span>{viewNotice}</span>
+                  <button className="chip-delete" onClick={() => setViewNotice(null)}>✕</button>
                 </div>
               )}
 
@@ -1009,50 +1237,50 @@ export default function InboxPage() {
                   value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
               </div>
 
-              {/* Date range filter (F7) */}
-              <div className="inbox-date-filter">
-                {tenantOptions.length > 0 && (
-                  <>
-                    <span className="date-filter-label">Tenant</span>
-                    <select
-                      value={tenantFilterOrgId}
-                      onChange={e => { setTenantFilterOrgId(e.target.value); setPage(1) }}
-                      className="inbox-tenant-select"
-                    >
-                      <option value="">All Assigned Tenants</option>
-                      {tenantOptions.map(org => (
-                        <option key={org.id} value={String(org.id)}>{org.name}</option>
-                      ))}
-                    </select>
-                  </>
-                )}
-                <span className="date-filter-label">From</span>
-                <input type="date" value={filterFrom}
-                  onChange={e => { setFilterFrom(e.target.value); setPage(1) }} />
-                <span className="date-filter-label">To</span>
-                <input type="date" value={filterTo}
-                  onChange={e => { setFilterTo(e.target.value); setPage(1) }} />
-                {(filterFrom || filterTo) && (
-                  <button className="inbox-sort-btn" onClick={() => { setFilterFrom(''); setFilterTo('') }}>✕</button>
-                )}
-              </div>
-
-              {/* F8: Advanced filter toggle + panel */}
               <div className="inbox-adv-filter-toggle">
-                <button className={`inbox-sort-btn ${hasAdvFilters ? 'adv-active' : ''}`}
-                  onClick={() => setShowAdvFilters(a => !a)}>
-                  🔍 Filters {hasAdvFilters ? '●' : (showAdvFilters ? '▾' : '▸')}
+                <button className={`inbox-sort-btn ${hasAdvFilters ? 'adv-active' : ''}`} onClick={() => setShowAdvFilters(a => !a)}>
+                  Filters {hasAdvFilters ? '●' : (showAdvFilters ? '▾' : '▸')}
                 </button>
                 {hasAdvFilters && (
-                  <button className="inbox-sort-btn" style={{ fontSize: 11 }}
-                    onClick={() => setAdvFilters({ color: '', priority: '', readStatus: '', isLocked: '', assignee: '', triageState: '', queueName: '', firstTouchSla: '', responseSla: '' })}>
+                  <button className="inbox-sort-btn" style={{ fontSize: 11 }} onClick={clearAllFilters}>
                     Clear
                   </button>
                 )}
               </div>
 
+              {activeFilterChips.length > 0 && (
+                <div className="inbox-active-filters">
+                  {activeFilterChips.map(chip => (
+                    <button key={chip.key} className="inbox-active-filter-chip" onClick={() => clearFilterChip(chip.key)}>
+                      {chip.label} <span>✕</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {showAdvFilters && (
                 <div className="inbox-adv-filter-panel">
+                  <div className="inbox-date-filter">
+                    {tenantOptions.length > 0 && (
+                      <>
+                        <span className="date-filter-label">Tenant</span>
+                        <select
+                          value={tenantFilterOrgId}
+                          onChange={e => { setTenantFilterOrgId(e.target.value); setPage(1) }}
+                          className="inbox-tenant-select"
+                        >
+                          <option value="">All Assigned Tenants</option>
+                          {tenantOptions.map(org => (
+                            <option key={org.id} value={String(org.id)}>{org.name}</option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+                    <span className="date-filter-label">From</span>
+                    <input type="date" value={filterFrom} onChange={e => { setFilterFrom(e.target.value); setPage(1) }} />
+                    <span className="date-filter-label">To</span>
+                    <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }} />
+                  </div>
                   <div className="adv-filter-row">
                     <select value={advFilters.color}
                       onChange={e => { setAdvFilters(f => ({ ...f, color: e.target.value })); setPage(1) }}>
@@ -1109,21 +1337,12 @@ export default function InboxPage() {
                       <option value="met">Met</option>
                     </select>
                   </div>
-                  {/* F9: Save current view */}
-                  <div className="adv-save-view-row">
-                    <input className="save-view-input" placeholder="Name this view…"
-                      value={saveViewName} onChange={e => setSaveViewName(e.target.value)} />
-                    <button className="inbox-sort-btn"
-                      disabled={!saveViewName.trim() || savedViews.length >= 5}
-                      onClick={() => { saveCurrentView(saveViewName); setSaveViewName('') }}>
-                      Save View
-                    </button>
-                  </div>
+                  {/* F9: Save current view moved to the always-visible Saved Views bar above for discoverability */}
                 </div>
               )}
 
               {/* Bulk action bar (F13) */}
-              {bulkSelected.size > 0 && (
+              {selectionMode && (
                 <div className="inbox-bulk-bar">
                   <span className="bulk-count">{bulkSelected.size} selected</span>
                   <select value={bulkTriageState} onChange={e => setBulkTriageState(e.target.value)} className="meta-select" style={{ minWidth: 130 }}>
@@ -1140,9 +1359,9 @@ export default function InboxPage() {
                     {PRIORITIES.map(priority => <option key={priority} value={priority}>{priority}</option>)}
                   </select>
                   <input type="date" value={bulkSnoozeUntil} onChange={e => setBulkSnoozeUntil(e.target.value)} className="meta-date-input" />
-                  <button className="inbox-sort-btn" onClick={() => applyBulkUpdates()}>Apply</button>
-                  <button className="inbox-sort-btn" onClick={() => applyBulkUpdates({ status: 'processed', triage_state: 'closed', closed_at: new Date().toISOString() })}>Close</button>
-                  <button className="inbox-sort-btn" onClick={() => setBulkSelected(new Set())}>Cancel</button>
+                  <button className="inbox-bulk-action" disabled={bulkSelected.size === 0} onClick={() => applyBulkUpdates()}>Apply</button>
+                  <button className="inbox-bulk-action" disabled={bulkSelected.size === 0} onClick={() => applyBulkUpdates({ status: 'processed', triage_state: 'closed', closed_at: new Date().toISOString() })}>Close</button>
+                  <button className="inbox-bulk-action inbox-bulk-action-ghost" onClick={toggleSelectionMode}>Done</button>
                 </div>
               )}
 
@@ -1160,12 +1379,8 @@ export default function InboxPage() {
                   )}
                 </span>
                 <div className="inbox-sort-actions">
-                  <button className="inbox-sort-btn" onClick={fetchEmails} disabled={fetching || loading}>
-                    {fetching ? 'Fetching…' : '⬇ Fetch'}
-                  </button>
-                  <button className="inbox-sort-btn" onClick={exportCSV} title="Export current view to CSV">⬇ CSV</button>
                   <button className="inbox-sort-btn" onClick={() => setSortAsc(a => !a)}>
-                    Sort: {sortAsc ? '↑ Oldest' : '↓ Newest'}
+                    {sortAsc ? 'Oldest first' : 'Newest first'}
                   </button>
                   <button className="inbox-sort-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>◀</button>
                   <button className="inbox-sort-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>▶</button>
@@ -1186,55 +1401,42 @@ export default function InboxPage() {
                     <div key={group}>
                       <div className="inbox-date-group">{group}</div>
                       {grouped[group].map(inq => {
-                        const dueStatus = dueDateStatus(inq.due_date)
                         const bodyPreview = compactEmailBodyText(inq.body).replace(/\s+/g, ' ')
+                        const rowChips = getRowChips(inq)
+                        const visibleChips = rowChips.slice(0, 3)
+                        const overflowCount = rowChips.length - visibleChips.length
                         return (
                           <div key={inq.id}
                             className={`inbox-row ${selected?.id === inq.id ? 'selected' : ''} ${!inq.is_read ? 'unread' : ''}`}
                             onClick={() => selectInquiry(inq)}>
-                            {/* Bulk checkbox (F13) */}
-                            <input type="checkbox" className="inbox-row-checkbox"
-                              checked={bulkSelected.has(inq.id)}
-                              onChange={e => toggleBulk(inq.id, e)}
-                              onClick={e => e.stopPropagation()} />
-                            {/* Color bar */}
+                            {selectionMode && (
+                              <input type="checkbox" className="inbox-row-checkbox"
+                                checked={bulkSelected.has(inq.id)}
+                                onChange={e => toggleBulk(inq.id, e)}
+                                onClick={e => e.stopPropagation()} />
+                            )}
                             <div className={`inbox-row-color ${inq.color ? colorBarClass[inq.color] : ''}`} />
                             <div className="inbox-row-content">
                               <div className="inbox-row-headline">
                                 <div className="inbox-row-sender">
                                   {!inq.is_read && <span className="unread-dot" />}
-                                  {inq.priority && (
-                                    <span className={`priority-dot priority-dot-${inq.priority}`}>
-                                      {PRIORITY_ICON[inq.priority]}
-                                    </span>
-                                  )}
                                   {inq.sender}
                                 </div>
                                 <div className="inbox-row-head-actions">
-                                  <button
-                                    className={`inbox-lock-btn ${inq.is_locked ? 'locked' : ''}`}
-                                    onClick={e => toggleLock(inq.id, e)}
-                                    title={inq.is_locked ? 'Unlock' : 'Lock'}
-                                  >
-                                    {inq.is_locked ? '🔒' : '🔓'}
-                                  </button>
+                                  {inq.is_locked && <span className="inbox-row-lock-state">Locked</span>}
                                   <span className="inbox-row-time">{formatTime(inq.received_at)}</span>
                                 </div>
                               </div>
                               <div className="inbox-row-subject">{inq.subject}</div>
                               <div className="inbox-row-meta-row">
-                                {inq.assigned_to && (
-                                  <span className="assignee-tag">👤 {inq.assigned_to}</span>
-                                )}
-                                {inq.queue_name && <span className="assignee-tag">📥 {inq.queue_name}</span>}
-                                {renderAiChip(inq)}
-                                {inq.triage_state && <span className="assignee-tag">Workflow: {inq.triage_state.replace(/_/g, ' ')}</span>}
-                                {dueStatus === 'overdue' && <span className="due-chip due-overdue-chip">⏰ Overdue</span>}
-                                {dueStatus === 'today'   && <span className="due-chip due-today-chip">⏰ Due Today</span>}
-                                {inq.first_touch_sla_status === 'breached' && !inq.first_touched_at && <span className="due-chip due-overdue-chip">First Touch SLA</span>}
-                                {inq.response_sla_status === 'breached' && inq.first_touched_at && !inq.first_response_at && <span className="due-chip due-overdue-chip">Response SLA</span>}
+                                {visibleChips.map(chip => (
+                                  <span key={`${inq.id}-${chip.label}`} className={`inbox-row-chip inbox-row-chip-${chip.tone}`}>
+                                    {chip.label}
+                                  </span>
+                                ))}
+                                {overflowCount > 0 && <span className="inbox-row-chip inbox-row-chip-overflow">+{overflowCount} more</span>}
                               </div>
-                              {!compactMode && bodyPreview && (
+                              {bodyPreview && (
                                 <div className="inbox-row-preview">{bodyPreview}</div>
                               )}
                             </div>
@@ -1256,44 +1458,80 @@ export default function InboxPage() {
                 </div>
               ) : (
                 <>
-                  {/* Color picker */}
                   <div className="color-picker-bar">
-                    <span className="picker-label">Color:</span>
-                    {COLORS.map(c => (
-                      <div key={c} className={`color-dot ${dotClass[c]} ${selected.color === c ? 'active' : ''}`}
-                        onClick={() => { setColor(selected.id, c); setSelected(s => ({ ...s, color: c })) }}
-                        title={c} />
-                    ))}
-                    <div className={`color-dot dot-none ${!selected.color ? 'active' : ''}`}
-                      onClick={() => { setColor(selected.id, null); setSelected(s => ({ ...s, color: null })) }}
-                      title="Clear color" />
+                    <div className="inbox-detail-primary-actions">
+                      <button className="btn btn-primary inbox-toolbar-btn" onClick={openReply}>Reply</button>
+                      <button className="btn btn-outline inbox-toolbar-btn" onClick={openForward}>Forward</button>
+                      <button className="btn btn-outline inbox-toolbar-btn" onClick={openCreateCaseModal}>Create Case</button>
+                      <button className="btn btn-outline inbox-toolbar-btn" onClick={openAppendCaseModal}>Append to Case</button>
+                    </div>
+                    <div className="inbox-detail-utility-group">
+                      <button className="btn btn-outline inbox-toolbar-btn" onClick={() => setShowUtilityMenu(open => !open)}>
+                        Utilities
+                      </button>
+                      {showUtilityMenu && (
+                        <div className="inbox-utility-menu">
+                          <span className="inbox-utility-label">Color tag</span>
+                          <div className="inbox-color-options">
+                            {COLORS.map(c => (
+                              <button key={c} className={`color-dot ${dotClass[c]} ${selected.color === c ? 'active' : ''}`}
+                                onClick={() => { setColor(selected.id, c); setSelected(s => ({ ...s, color: c })); setShowUtilityMenu(false) }}
+                                title={c} />
+                            ))}
+                            <button className={`color-dot dot-none ${!selected.color ? 'active' : ''}`}
+                              onClick={() => { setColor(selected.id, null); setSelected(s => ({ ...s, color: null })); setShowUtilityMenu(false) }}
+                              title="Clear color" />
+                          </div>
+                          <button className="inbox-utility-action"
+                            onClick={() => {
+                              const newLocked = !selected.is_locked
+                              if (selected.is_locked && selected.locked_by !== user?.name) return
+                              const newLockedBy = newLocked ? user?.name : null
+                              patchInquiry(selected.id, { is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? selected.color : null })
+                              updateInquiries(prev => prev.map(i =>
+                                i.id === selected.id ? { ...i, is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? i.color : null } : i
+                              ))
+                              setSelected(s => ({ ...s, is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? s.color : null }))
+                              setShowUtilityMenu(false)
+                            }}
+                            disabled={selected.is_locked && selected.locked_by !== user?.name}
+                            title={selected.is_locked && selected.locked_by !== user?.name ? `Locked by ${selected.locked_by}` : ''}>
+                            {selected.is_locked ? 'Unlock conversation' : 'Lock conversation'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Email detail header */}
                   <div className="inbox-detail-header">
-                    <div className="inbox-detail-subject">{selected.subject}</div>
-                    {renderAiChip(selected)}
-                    <div className="inbox-timezone-note">Dates displayed in {TIMEZONE}</div>
+                    <div className="inbox-detail-title-row">
+                      <div className="inbox-detail-subject">{selected.subject}</div>
+                      {renderAiChip(selected)}
+                    </div>
                     <div className="inbox-detail-meta">
-                      <div className="inbox-meta-item inbox-meta-item-inline">
+                      <div className="inbox-meta-inline-item">
                         <span className="meta-label">From</span>
                         <span className="meta-value" title={selected.sender}>{selected.sender}</span>
                       </div>
-                      <div className="inbox-meta-item inbox-meta-item-inline">
+                      <div className="inbox-meta-inline-item">
                         <span className="meta-label">To</span>
                         <span className="meta-value" title={selected.recipient}>{selected.recipient}</span>
                       </div>
-                      <div className="inbox-meta-item inbox-meta-item-inline">
+                      <div className="inbox-meta-inline-item">
                         <span className="meta-label">Received</span>
                         <span className="meta-value">{formatFullDate(selected.received_at)}</span>
                       </div>
-                      <div className="inbox-meta-item inbox-meta-item-inline">
+                      <div className="inbox-meta-inline-item">
+                        <span className="meta-label">Timezone</span>
+                        <span className="meta-value">{TIMEZONE}</span>
+                      </div>
+                      <div className="inbox-meta-inline-item">
                         <span className="meta-label">Case</span>
                         <span className="meta-value">
                           {selected.case_id ? (
                             <button
-                              className="btn btn-outline"
-                              style={{ fontSize: 10.5, padding: '2px 8px', whiteSpace: 'nowrap' }}
+                              className="inbox-inline-case-btn"
                               onClick={() => navigate(`/cases/${selected.case_id}`, { state: { from: '/inbox' } })}
                             >
                               Open Case #{selected.case_id}
@@ -1385,18 +1623,6 @@ export default function InboxPage() {
                           ))}
                         </div>
                       </div>
-
-                      <div className="inbox-control-item">
-                        <span className="meta-label">Read Receipt</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <span className="meta-value">{formatReadReceiptSummary(selected)}</span>
-                          <span className="meta-label" style={{ textTransform: 'none' }}>
-                            {selected.read_receipt_count > 0
-                              ? `${selected.read_receipt_count} team member${selected.read_receipt_count === 1 ? '' : 's'} recorded`
-                              : (selected.is_read ? 'Legacy read state only' : 'No receipt yet')}
-                          </span>
-                        </div>
-                      </div>
                     </div>
 
                     <div className="inbox-sla-actions-row">
@@ -1414,6 +1640,7 @@ export default function InboxPage() {
                         {selected.response_due_at && (
                           <span className="inbox-sla-time">due {formatFullDate(selected.response_due_at)}</span>
                         )}
+                        <span className="inbox-sla-read-summary">{formatReadReceiptSummary(selected)}</span>
                       </div>
                       <div className="inbox-insight-toolbar">
                         <button
@@ -1476,47 +1703,9 @@ export default function InboxPage() {
                     )}
 
                   </div>
-
-                  {/* Action buttons */}
-                  <div className="inbox-detail-actions">
-                    <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 14px' }} onClick={openReply}>
-                      ↩ Reply
-                    </button>
-                    <button className="btn btn-outline" style={{ fontSize: 12, padding: '6px 14px' }} onClick={openForward}>
-                      ↗ Forward
-                    </button>
-                    <button
-                      className="btn btn-outline"
-                      style={{ fontSize: 12, padding: '6px 14px' }}
-                      onClick={openCreateCaseModal}
-                    >
-                      ＋ Create Case
-                    </button>
-                    <button
-                      className="btn btn-outline"
-                      style={{ fontSize: 12, padding: '6px 14px' }}
-                      onClick={openAppendCaseModal}
-                    >
-                      🔗 Append to Case
-                    </button>
-                    <button className="btn btn-outline" style={{ fontSize: 12, padding: '6px 14px' }}
-                      onClick={() => {
-                        const newLocked = !selected.is_locked
-                        if (selected.is_locked && selected.locked_by !== user?.name) return
-                        const newLockedBy = newLocked ? user?.name : null
-                        patchInquiry(selected.id, { is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? selected.color : null })
-                        updateInquiries(prev => prev.map(i =>
-                          i.id === selected.id ? { ...i, is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? i.color : null } : i
-                        ))
-                        setSelected(s => ({ ...s, is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? s.color : null }))
-                      }}
-                      title={selected.is_locked && selected.locked_by !== user?.name ? `Locked by ${selected.locked_by}` : ''}>
-                      {selected.is_locked ? '🔒 Unlock' : '🔓 Lock'}
-                    </button>
+                  <div className="inbox-reading-canvas">
+                    <EmailBody body={selected.body} />
                   </div>
-
-                  {/* Email body */}
-                  <EmailBody body={selected.body} />
 
                   {insightPanel && (
                     <button className="inbox-side-drawer-backdrop" onClick={() => setInsightPanel(null)} aria-label="Close panel" />
@@ -1646,6 +1835,40 @@ export default function InboxPage() {
             </div>
           </div>
         </div>
+
+      {showSaveViewModal && (
+        <div className="compose-overlay" onClick={() => setShowSaveViewModal(false)}>
+          <div className="compose-modal inbox-save-view-modal" onClick={e => e.stopPropagation()}>
+            <div className="compose-modal-header">
+              <span>Save current view</span>
+              <button className="compose-close" onClick={() => setShowSaveViewModal(false)}>✕</button>
+            </div>
+            <div className="compose-modal-body">
+              <div className="compose-field">
+                <label>View name</label>
+                <input
+                  type="text"
+                  value={saveViewName}
+                  onChange={e => setSaveViewName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && saveViewName.trim()) void saveViewAndClose() }}
+                  placeholder="For example: Safety queue overdue"
+                />
+              </div>
+              <div className="notes-empty" style={{ paddingTop: 0 }}>
+                This stores the current search, date range, tenant, and advanced filters.
+              </div>
+            </div>
+            <div className="compose-modal-footer">
+              <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={() => void saveViewAndClose()} disabled={!saveViewName.trim()}>
+                Save view
+              </button>
+              <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => setShowSaveViewModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Compose Modal (Reply / Forward) ── */}
       {compose && (

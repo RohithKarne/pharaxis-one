@@ -1,14 +1,10 @@
-name: Deploy QMS
+name: QMS Remote Deploy Disabled
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/qms/**'
   workflow_dispatch:
 
 jobs:
-  deploy:
+  local-only-status:
     uses: ./.github/workflows/_app-deploy.yml
     secrets: inherit
     with:
@@ -17,6 +13,6 @@ jobs:
       app_root: apps/qms
       frontend_dir: apps/qms/frontend
       frontend_lockfile: apps/qms/frontend/package-lock.json
-      publish_dir: /var/www/pharaxis/qms
-      pm2_name: qms
-      environment_name: qms-prod
+      publish_dir: local-only-disabled
+      pm2_name: local-only-disabled
+      environment_name: local-only-disabled

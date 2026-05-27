@@ -65,3 +65,60 @@
 .rel-json-row { display:flex; gap:10px; font-size:12px; }
 .rel-json-key { color:#64748b; font-weight:600; min-width:100px; flex-shrink:0; }
 .rel-json-val { color:#334155; word-break:break-all; }
+
+/* Premium Ops convergence */
+
+.rel-page {
+  gap: 12px;
+  padding: 16px;
+  background: transparent;
+}
+
+.rel-header,
+.rel-filters,
+.rel-stats,
+.rel-table-wrap {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #dbe3ef;
+  border-radius: 20px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+}
+
+.rel-header,
+.rel-filters {
+  padding: 12px 16px;
+}
+
+.rel-title {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.rel-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 10px;
+  gap: 10px;
+}
+
+.rel-stat {
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f7f9fc;
+}
+
+.rel-table thead tr {
+  background: #f6f8fc;
+}
+
+.rel-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.rel-modal {
+  border-radius: 22px;
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.18);
+}

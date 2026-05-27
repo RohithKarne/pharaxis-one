@@ -66,3 +66,60 @@
 .tel-json-row { display:flex; gap:10px; font-size:12px; }
 .tel-json-key { color:#64748b; font-weight:600; min-width:100px; flex-shrink:0; }
 .tel-json-val { color:#334155; word-break:break-all; }
+
+/* Premium Ops convergence */
+
+.tel-page {
+  gap: 12px;
+  padding: 16px;
+  background: transparent;
+}
+
+.tel-header,
+.tel-filters,
+.tel-stats,
+.tel-table-wrap {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #dbe3ef;
+  border-radius: 20px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+}
+
+.tel-header,
+.tel-filters {
+  padding: 12px 16px;
+}
+
+.tel-title {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.tel-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 10px;
+  gap: 10px;
+}
+
+.tel-stat {
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f7f9fc;
+}
+
+.tel-table thead tr {
+  background: #f6f8fc;
+}
+
+.tel-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.tel-modal {
+  border-radius: 22px;
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.18);
+}

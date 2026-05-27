@@ -512,5 +512,5 @@ export default function RegressionPage({ embedded = false } = {}) {
   )
 
   if (embedded) return content
-  return <MIMSLayout>{content}</MIMSLayout>
+  return <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>{content}</MIMSLayout>
 }

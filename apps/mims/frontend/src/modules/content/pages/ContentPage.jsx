@@ -134,7 +134,7 @@ export default function ContentPage() {
   }
 
   return (
-    <MIMSLayout>
+    <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
       {content}
     </MIMSLayout>
   )

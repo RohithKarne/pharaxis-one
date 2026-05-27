@@ -2,8 +2,16 @@ import DynamicFieldsSection from './DynamicFieldsSection'
 import { WiredField, WiredSelect, WiredTextarea, useCaseFieldContext } from '../../../shared/components/WiredField'
 import { useAuth } from '../../../shared/context/AuthContext'
 
+function normalizePicklistValue(options, currentValue) {
+  if (!currentValue || !Array.isArray(options) || options.length === 0) return currentValue
+  const current = String(currentValue).trim().toLowerCase().replace(/[\s_]+/g, '')
+  const match = options.find(option => String(option.value).trim().toLowerCase().replace(/[\s_]+/g, '') === current)
+  return match?.value ?? currentValue
+}
+
 export default function CaseInfoTab({
   infoForm, setInfoForm, statuses, users,
+  getPicklistOptions,
   reassignForm, setReassignForm, reassignSaving,
   escalateForm, setEscalateForm, escalateSaving, escalateCase,
   dynFieldValues, setDynFieldValues, dynFieldSaving,
@@ -15,6 +23,10 @@ export default function CaseInfoTab({
 }) {
   const ctx = useCaseFieldContext()  // provided by CaseFormShell; null when standalone
   const { hasCapability } = useAuth()  // capability gating (server still enforces)
+  const priorityOptions = getPicklistOptions?.('Case Information', 'Priority') || []
+  const intakeChannelOptions = getPicklistOptions?.('Case Information', 'Intake Channel') || []
+  const resolvedPriority = normalizePicklistValue(priorityOptions, infoForm.priority)
+  const resolvedIntakeChannel = normalizePicklistValue(intakeChannelOptions, infoForm.intake_channel)
   return (
     <div id="tab-info" className={`cf-tab-pane${embedded ? ' cf-tab-pane--embedded' : ''}`}>
       <div className="cf-form-grid">
@@ -27,21 +39,25 @@ export default function CaseInfoTab({
           onChange={v => { setInfoForm(p => ({ ...p, case_owner_id: v })); scheduleAutoSave() }}
           options={[{ value: '', label: '— Unassigned —' }, ...users.map(u => ({ value: u.id, label: u.name }))]} />
         <WiredSelect label="Priority" section="case_meta" field="priority"
-          value={infoForm.priority}
+          value={resolvedPriority}
           onChange={v => { setInfoForm(p => ({ ...p, priority: v })); scheduleAutoSave() }}
-          options={[
-            { value: 'normal', label: 'Normal' },
-            { value: 'high',   label: 'High' },
-            { value: 'urgent', label: 'Urgent' },
-          ]} />
+          options={priorityOptions.length
+            ? [{ value: '', label: '— Select —' }, ...priorityOptions.map(option => ({ value: option.value, label: option.label || option.value }))]
+            : [
+              { value: 'normal', label: 'Normal' },
+              { value: 'high',   label: 'High' },
+              { value: 'urgent', label: 'Urgent' },
+            ]} />
         <WiredSelect label="Intake Channel" section="case_meta" field="intake_channel"
-          value={infoForm.intake_channel}
+          value={resolvedIntakeChannel}
           onChange={v => { setInfoForm(p => ({ ...p, intake_channel: v })); scheduleAutoSave() }}
-          options={[
-            { value: 'manual',   label: 'Manual' },
-            { value: 'email',    label: 'Email' },
-            { value: 'web_form', label: 'Web Form' },
-          ]} />
+          options={intakeChannelOptions.length
+            ? [{ value: '', label: '— Select —' }, ...intakeChannelOptions.map(option => ({ value: option.value, label: option.label || option.value }))]
+            : [
+              { value: 'manual',   label: 'Manual' },
+              { value: 'email',    label: 'Email' },
+              { value: 'web_form', label: 'Web Form' },
+            ]} />
         <WiredField label="Date Received" section="case_meta" field="date_received" type="date"
           value={infoForm.date_received}
           onChange={v => { setInfoForm(p => ({ ...p, date_received: v })); scheduleAutoSave() }} />

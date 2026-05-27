@@ -1,14 +1,10 @@
-name: Deploy MIMS
+name: MIMS Remote Deploy Disabled
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/mims/**'
   workflow_dispatch:
 
 jobs:
-  deploy:
+  local-only-status:
     uses: ./.github/workflows/_app-deploy.yml
     secrets: inherit
     with:
@@ -17,6 +13,6 @@ jobs:
       app_root: apps/mims
       frontend_dir: apps/mims/frontend
       frontend_lockfile: apps/mims/frontend/package-lock.json
-      publish_dir: /var/www/pharaxis/mims
-      pm2_name: mims
-      environment_name: mims-prod
+      publish_dir: local-only-disabled
+      pm2_name: local-only-disabled
+      environment_name: local-only-disabled

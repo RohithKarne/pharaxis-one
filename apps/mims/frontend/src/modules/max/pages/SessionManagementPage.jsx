@@ -42,6 +42,9 @@ export default function SessionManagementPage() {
   const [providers, setProviders] = useState([])
   const [linkedAccounts, setLinkedAccounts] = useState([])
   const [busyProviderKey, setBusyProviderKey] = useState('')
+  const [webauthnCredentials, setWebauthnCredentials] = useState([])
+  const [webauthnLoading, setWebauthnLoading] = useState(false)
+  const [removingCredId, setRemovingCredId] = useState(null)
 
   const loadSessions = useCallback(async () => {
     if (token == null) return
@@ -95,6 +98,81 @@ export default function SessionManagementPage() {
     if (token != null) loadSsoData()
     return () => { cancelled = true }
   }, [headers, token])
+
+  // Load WebAuthn / Touch ID credentials
+  useEffect(() => {
+    async function loadWebauthnCredentials() {
+      if (!token) return
+      try {
+        const res = await httpFetch(`${API}/auth/webauthn/credentials`, { headers })
+        if (!res.ok) return
+        const payload = await res.json().catch(() => ({}))
+        setWebauthnCredentials(Array.isArray(payload.credentials) ? payload.credentials : [])
+      } catch { /* non-critical */ }
+    }
+    loadWebauthnCredentials()
+  }, [headers, token])
+
+  async function removeWebauthnCredential(credId) {
+    setRemovingCredId(credId)
+    try {
+      const res = await httpFetch(`${API}/auth/webauthn/credentials/${encodeURIComponent(credId)}`, {
+        method: 'DELETE',
+        headers,
+      })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        setError(payload.error || 'Failed to remove Touch ID device.')
+        return
+      }
+      setWebauthnCredentials(prev => prev.filter(c => c.credential_id !== credId))
+    } catch (err) {
+      setError(err.message || 'Failed to remove Touch ID device.')
+    } finally {
+      setRemovingCredId(null)
+    }
+  }
+
+  async function registerWebauthnDevice() {
+    if (typeof window.PublicKeyCredential === 'undefined') {
+      setError('Your browser does not support Touch ID login.')
+      return
+    }
+    setWebauthnLoading(true)
+    try {
+      const startRes = await httpFetch(`${API}/auth/webauthn/register/start`, { method: 'POST', headers })
+      const startData = await startRes.json().catch(() => ({}))
+      if (!startRes.ok) throw new Error(startData.error || 'Could not start Touch ID setup.')
+
+      const { startRegistration } = await import('@simplewebauthn/browser')
+      const regResponse = await startRegistration({ optionsJSON: startData.options })
+
+      const finishRes = await httpFetch(`${API}/auth/webauthn/register/finish`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          registrationResponse: regResponse,
+          deviceName: `${navigator.platform || 'Mac'} — Touch ID`,
+        }),
+      })
+      const finishData = await finishRes.json().catch(() => ({}))
+      if (!finishRes.ok) throw new Error(finishData.error || 'Touch ID registration failed.')
+
+      // Reload list
+      const listRes = await httpFetch(`${API}/auth/webauthn/credentials`, { headers })
+      if (listRes.ok) {
+        const listData = await listRes.json().catch(() => ({}))
+        setWebauthnCredentials(Array.isArray(listData.credentials) ? listData.credentials : [])
+      }
+      localStorage.setItem('mims_webauthn_setup_dismissed', '1')
+    } catch (err) {
+      if (err?.name !== 'NotAllowedError') {
+        setError(err.message || 'Touch ID setup failed.')
+      }
+    } finally {
+      setWebauthnLoading(false)
+    }
+  }
 
   async function revokeOthers() {
     setRevokingOthers(true)
@@ -162,7 +240,7 @@ export default function SessionManagementPage() {
   const linkSuccess = new URLSearchParams(location.search).get('sso') === 'linked'
 
   return (
-    <MIMSLayout showStatStrip={false} bodyClassName="mims-session-page-body">
+    <MIMSLayout showStatStrip={false} bodyClassName="mims-session-page-body" surfaceVariant="workspace" compact>
       <div className="mims-session-wrap">
         <div className="mims-session-header">
           <div>
@@ -288,6 +366,53 @@ export default function SessionManagementPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+        </section>
+
+        <section className="card" style={{ marginTop: 14 }}>
+          <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3>Touch ID / Passkey Devices</h3>
+            {typeof window.PublicKeyCredential !== 'undefined' && (
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: 13 }}
+                onClick={registerWebauthnDevice}
+                disabled={webauthnLoading}
+              >
+                {webauthnLoading ? 'Setting up…' : '+ Register This Device'}
+              </button>
+            )}
+          </div>
+          <div className="card-body">
+            {webauthnCredentials.length === 0 ? (
+              <div className="mims-session-empty">
+                No Touch ID devices registered.
+                {typeof window.PublicKeyCredential !== 'undefined' && (
+                  <> Click <strong>Register This Device</strong> to enable Touch ID login.</>
+                )}
+              </div>
+            ) : (
+              <ul className="mims-session-activity-list">
+                {webauthnCredentials.map(cred => (
+                  <li key={cred.credential_id} className="mims-session-activity-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <strong>{cred.device_name || 'Unknown device'}</strong>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                        Registered: {formatDateTime(cred.created_at)}
+                        {cred.last_used_at && <> · Last used: {formatDateTime(cred.last_used_at)}</>}
+                      </div>
+                    </div>
+                    <button
+                      className="mims-session-revoke-btn"
+                      onClick={() => removeWebauthnCredential(cred.credential_id)}
+                      disabled={removingCredId === cred.credential_id}
+                    >
+                      {removingCredId === cred.credential_id ? 'Removing…' : 'Remove'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </section>

@@ -349,7 +349,7 @@ export default function CasesPage() {
   const isGlobalSearch = hasSearch && searchScope === 'all'
 
   return (
-    <MIMSLayout>
+    <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
     <div className="cf-cases-page">
 
       {/* Header */}

@@ -15,14 +15,14 @@
  */
 
 export default function PCTabPanel({
-  tabKey, data, onChange, locked, onSave, getPicklistOptions, saving = false,
+  tabKey, data, onChange, locked, onSave, getFieldConfig = () => null, getPicklistOptions, saving = false,
 }) {
   const d = data || {}
   const set = (key, val) => onChange({ ...d, [key]: val })
 
-  const fieldRow = (label, key, type = 'text', { fullWidth = false } = {}) => (
+  const fieldRow = (label, key, type = 'text', { fullWidth = false, sectionName = null } = {}) => (
     <div key={key} className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}`}>
-      <label>{label}</label>
+      <label>{(sectionName && getFieldConfig(sectionName, label)?.custom_label) || label}</label>
       {type === 'textarea'
         ? <textarea rows={3} value={d[key] || ''} disabled={locked} onChange={e => set(key, e.target.value)} />
         : <input type={type} value={d[key] || ''} disabled={locked} onChange={e => set(key, e.target.value)} />}
@@ -41,7 +41,7 @@ export default function PCTabPanel({
     const hasOpts = Array.isArray(opts) && opts.length > 0
     return (
       <div key={key} className="cf-form-field">
-        <label>{label}</label>
+        <label>{getFieldConfig(sectionName, label)?.custom_label || label}</label>
         {hasOpts ? (
           <select value={d[key] ?? ''} disabled={locked} onChange={e => set(key, e.target.value)}>
             <option value="">— Select —</option>
@@ -68,15 +68,18 @@ export default function PCTabPanel({
           {selectRow('PC Classification',    'pc_classification',  'PC — General', 'PC Classification')}
           {fieldRow('Date of Complaint',     'date_of_complaint', 'date')}
           {fieldRow('Date Received',         'date_received',     'date')}
-          {fieldRow('Severity',              'severity')}
+          {selectRow('Severity',             'severity',           'PC — General', 'Severity')}
+          {fieldRow('Root Cause',            'root_cause',        'textarea', { fullWidth: true, sectionName: 'PC — General' })}
           {fieldRow('Additional Info',       'additional_info_general', 'textarea', { fullWidth: true })}
         </div>
       )}
 
       {tabKey === 'patient-info' && (
         <div className="cf-form-grid">
+          {fieldRow('Patient Name',        'patient_name',         'text', { sectionName: 'PC — Patient Information' })}
+          {fieldRow('Date of Birth',       'date_of_birth',        'date', { sectionName: 'PC — Patient Information' })}
           {fieldRow('Age',                'age',                 'number')}
-          {fieldRow('Age Unit',           'age_unit')}
+          {selectRow('Age Unit',          'age_unit',            'PC — Patient Information', 'Age Unit')}
           {selectRow('Gender',            'sex',                 'PC — Patient Information', 'Gender')}
           {fieldRow('Weight (kg)',        'weight_kg',           'number')}
           {fieldRow('Therapy Start Date', 'therapy_start_date',  'date')}
@@ -90,8 +93,12 @@ export default function PCTabPanel({
       {tabKey === 'product-info' && (
         <div className="cf-form-grid">
           {fieldRow('Product Name',    'product_name')}
+          {selectRow('Product Type',   'product_type',          'PC — Product Information', 'Product Type')}
+          {selectRow('Product Category', 'product_category',    'PC — Product Information', 'Product Category')}
           {fieldRow('Lot Number',      'lot_number')}
           {fieldRow('Expiry Date',     'expiry_date', 'date')}
+          {fieldRow('Manufacturing Date', 'manufacturing_date', 'date', { sectionName: 'PC — Product Information' })}
+          {fieldRow('Pack Size',       'pack_size', 'text', { sectionName: 'PC — Product Information' })}
           {boolField('Product Sample Available', 'quantity_available')}
           {fieldRow('Storage Conditions', 'storage_conditions', 'textarea', { fullWidth: true })}
           {fieldRow('Additional Info',    'additional_info_product', 'textarea', { fullWidth: true })}
@@ -102,6 +109,7 @@ export default function PCTabPanel({
         <div className="cf-form-grid">
           {boolField('Return Requested',    'return_requested')}
           {fieldRow('Return Date',          'return_date',    'date')}
+          {fieldRow('Return Address',       'return_address', 'textarea', { fullWidth: true, sectionName: 'PC — Return & Retrieval' })}
           {fieldRow('Return Method',        'return_method')}
           {boolField('Retrieval Requested', 'retrieval_requested')}
           {fieldRow('Retrieval Date',       'retrieval_date', 'date')}
@@ -130,6 +138,7 @@ export default function PCTabPanel({
           {boolField('Credit Requested',  'credit_requested')}
           {boolField('Credit Approved',   'credit_approved')}
           {fieldRow('Credit Amount',      'credit_amount',  'number')}
+          {fieldRow('Credit Note Number', 'credit_note_number', 'text', { sectionName: 'PC — Refund & Credit' })}
           {fieldRow('Notes',              'notes_refund', 'textarea', { fullWidth: true })}
         </div>
       )}

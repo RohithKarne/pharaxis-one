@@ -258,6 +258,111 @@
   font-size: 20px;
 }
 
+/* Premium Ops convergence */
+
+.bc-page {
+  gap: 12px;
+  padding: 16px;
+  background: transparent;
+}
+
+.bc-header,
+.bc-filters,
+.bc-folder-panel,
+.bc-docs-panel,
+.bc-sidebar {
+  border-color: #dbe3ef;
+}
+
+.bc-header,
+.bc-filters {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #dbe3ef;
+  border-radius: 20px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+}
+
+.bc-header {
+  padding: 16px 18px;
+}
+
+.bc-title {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.bc-subtitle {
+  max-width: 72ch;
+}
+
+.bc-total-badge,
+.bc-clear-btn {
+  min-height: 36px;
+  border-radius: 12px;
+}
+
+.bc-filters {
+  padding: 12px;
+}
+
+.bc-search,
+.bc-filter-select {
+  min-height: 40px;
+  border-radius: 12px;
+  border-color: #d7dfeb;
+  background: #fbfcff;
+}
+
+.bc-layout {
+  gap: 16px;
+}
+
+.bc-folder-panel,
+.bc-doc-card,
+.bc-module-card {
+  border-radius: 18px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+}
+
+.bc-folder-heading {
+  background: #f6f8fc;
+}
+
+.bc-doc-card {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.bc-doc-card:hover {
+  border-color: #c4d3e6;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+}
+
+.bc-sidebar {
+  border-radius: 22px 0 0 22px;
+  box-shadow: -16px 0 42px rgba(15, 23, 42, 0.16);
+}
+
+.bc-sidebar-header,
+.bc-sidebar-tabs {
+  border-color: #e5ebf3;
+}
+
+.bc-preview-pane,
+.bc-sidebar-body {
+  background: #fbfcff;
+}
+
+@media (max-width: 960px) {
+  .bc-layout {
+    flex-direction: column;
+  }
+
+  .bc-folder-panel {
+    width: 100%;
+    position: static;
+  }
+}
+
 .bc-doc-name {
   font-size: 14px;
   font-weight: 600;

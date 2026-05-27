@@ -1,32 +1,32 @@
 # AI-Agent Production Runbook
 
+> Status: Remote production hosting is currently inactive. Pharaxis apps are local-only as of 2026-05-27 because the AWS/EC2 host was deleted.
+
 ## Product Summary
 
 | Item | Value |
 | --- | --- |
 | Product | AI-Agent |
 | App path | `apps/ai-agent` |
-| Deploy workflow | `.github/workflows/deploy-ai-agent.yml` |
+| Deploy workflow | `.github/workflows/deploy-ai-agent.yml` manual disabled notice |
 | Release workflow | `.github/workflows/release-ai-agent.yml` |
-| GitHub environment | `ai-agent-prod` |
+| GitHub environment | Retired until new hosting is approved |
 | Runtime | Node/Express + MySQL + React/Vite |
-| PM2 app | `ai-agent` |
+| PM2 app | Retired remote process name: `ai-agent` |
 | Frontend path | `/ai-agent/` |
 | Health endpoint | `/ai-agent/api/v1/agent/health` |
 
-## Predeploy
+## Local Verification
 
 1. Confirm `AI-Agent CI` passed.
-2. Confirm MySQL backup exists.
-3. Confirm provider keys and internal auth token handling are valid.
+2. Run backend and frontend locally.
+3. Confirm provider keys and internal auth token handling are valid in local `.env` files.
 
 ## Deploy
 
-1. Merge to `main`.
-2. GitHub runs `.github/workflows/deploy-ai-agent.yml`.
-3. Approve `ai-agent-prod` if configured.
+No active remote deploy exists. GitHub deploy workflows are manual-only disabled notices that fail intentionally and must not SSH, SCP, publish to `/var/www`, or restart PM2 until a new hosting target is approved.
 
-## Postdeploy Verification
+## Local Runtime Verification
 
 - `GET /ai-agent/api/v1/agent/health`
 - frontend shell at `/ai-agent/`
@@ -35,8 +35,8 @@
 
 ## Rollback
 
-1. Revert or redeploy last good commit.
-2. Restore MySQL only when data or migration issue exists.
+1. Revert the bad commit or switch back to the last good local branch.
+2. Restore local MySQL only when data or migration issue exists.
 
 ## Data Recovery
 

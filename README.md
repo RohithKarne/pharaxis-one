@@ -122,14 +122,14 @@ cd apps/qms/frontend && npm run dev
 - AI-Agent: `GET /api/v1/agent/health` on port `6000`
 - QMS: `GET /api/health` on port `3145`
 
-## CI/CD and Automation
+## GitHub Automation
 
 - Reusable CI workflow: `.github/workflows/_app-ci.yml`
-- Reusable deploy workflow: `.github/workflows/_app-deploy.yml`
 - Per-app CI workflows: `ci-mims.yml`, `ci-qms.yml`, `ci-vault.yml`, `ci-cp-portal.yml`, `ci-ai-agent.yml`
-- Per-app deploy workflows: `deploy-mims.yml`, `deploy-qms.yml`, `deploy-vault.yml`, `deploy-cp-portal.yml`, `deploy-ai-agent.yml`
 - Per-app release workflows: `release-mims.yml`, `release-qms.yml`, `release-vault.yml`, `release-cp-portal.yml`, `release-ai-agent.yml`
 - Dependency updates: `.github/dependabot.yml`
+
+Remote deploy workflows are intentionally disabled for automatic pushes and fail intentionally if run manually. The AWS/EC2 instance that previously hosted Pharaxis apps has been deleted, so GitHub Actions is now used for CI, labels, dependency automation, and release artifact validation only. Runtime verification should be done against local app services.
 
 ## Documentation Index
 

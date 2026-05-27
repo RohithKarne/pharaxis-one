@@ -14,7 +14,7 @@ import CommandPalette from './CommandPalette'
 
 const SIDEBAR_PREF_KEY = 'mims_sidebar_collapsed'
 
-export default function MIMSLayout({ children, showStatStrip = true, bodyClassName = '' }) {
+export default function MIMSLayout({ children, showStatStrip = true, bodyClassName = '', surfaceVariant = 'default', compact = false }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [helpOpen, setHelpOpen]   = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -43,8 +43,13 @@ export default function MIMSLayout({ children, showStatStrip = true, bodyClassNa
   }
 
   const pageBodyClassName = useMemo(
-    () => ['mims-page-body', bodyClassName].filter(Boolean).join(' '),
-    [bodyClassName]
+    () => [
+      'mims-page-body',
+      surfaceVariant ? `mims-page-body--${surfaceVariant}` : '',
+      compact ? 'mims-page-body--compact' : '',
+      bodyClassName,
+    ].filter(Boolean).join(' '),
+    [bodyClassName, compact, surfaceVariant]
   )
 
   return (

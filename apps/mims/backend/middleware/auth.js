@@ -100,7 +100,7 @@ async function validateAccessToken(token) {
  * Platform admin compatibility: orgId = null, siteId = null
  */
 async function authenticate(req, res, next) {
-  const token = readCookie(req, 'mims_token') || readBearer(req);
+  const token = readBearer(req) || readCookie(req, 'mims_token');
   if (!token) {
     return res.status(401).json({
       error: 'Access denied. No token provided.',

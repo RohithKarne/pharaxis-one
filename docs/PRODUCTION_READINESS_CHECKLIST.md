@@ -4,6 +4,10 @@ Effective date: 2026-04-30
 Owner: Engineering + PMO
 Purpose: define minimum release bar for active Pharaxis-One apps before calling any environment production ready.
 
+## Current Hosting Status
+
+Pharaxis apps are local-only as of 2026-05-27. The previous AWS/EC2 host has been deleted, and GitHub remote deployment is disabled. This checklist is retained as a future production-readiness bar, not as evidence that a production environment currently exists.
+
 ## Release Rule
 
 No app is production ready until all gates below are green:
@@ -23,9 +27,10 @@ No app is production ready until all gates below are green:
 - [ ] Frontend build runs in CI for `vault`, `qms`, `cp-portal`, `mims`, `ai-agent`
 - [ ] Backend syntax/startup gate runs in CI for all active apps
 - [ ] Security scan runs per app
-- [ ] Each app has its own deploy workflow and production environment
-- [ ] PM2 deploy path uses reload/startOrReload, not delete-all restart
-- [ ] Postdeploy smoke step exists per app
+- [ ] New hosting target is approved before deploy workflows are re-enabled
+- [ ] Each app has its own deploy workflow and production environment after hosting is restored
+- [ ] PM2 or replacement process manager deploy path uses reload/startOrReload, not delete-all restart
+- [ ] Postdeploy smoke step exists per app after hosting is restored
 - [ ] App-specific release tag and release workflow are defined
 
 ### Security
@@ -77,8 +82,9 @@ No app is production ready until all gates below are green:
 ## Evidence Required Per Release
 
 - CI run URL with all expected jobs green
-- Deploy run URL with changed-app detection output
-- Postdeploy smoke output
+- Deploy run URL with changed-app detection output after hosting is restored
+- Postdeploy smoke output after hosting is restored
+- Local runtime verification notes while apps are local-only
 - QA report with happy path, negative path, regression path
 - Rollback plan and on-call owner
 
@@ -87,5 +93,5 @@ No app is production ready until all gates below are green:
 Changes introduced in this repo now cover:
 
 - repo-level production checklist
-- per-app CI, deploy, and release workflows
+- per-app CI, disabled deploy, and release workflows
 - product-specific operating docs and runbooks

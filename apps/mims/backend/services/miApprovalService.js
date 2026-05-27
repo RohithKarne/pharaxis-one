@@ -40,7 +40,7 @@ async function needsTwoSigners({ orgId, response }) {
     // Check the source MI tab
     if (response?.mi_tab_id) {
       const [[tab]] = await pool.execute(
-        `SELECT is_off_label FROM case_mi_tabs WHERE id = ?`, [response.mi_tab_id]
+        `SELECT is_off_label FROM case_mi WHERE id = ?`, [response.mi_tab_id]
       ).catch(() => [[]]);
       if (tab?.is_off_label) return {
         required: true,
@@ -62,7 +62,7 @@ async function sign({ orgId, responseId, role, userId, userName, password, reaso
   const [[r]] = await pool.execute(
     `SELECT mr.*, c.id AS case_id
        FROM case_mi_responses mr
-       JOIN case_mi_tabs   t ON t.id = mr.mi_tab_id
+       JOIN case_mi        t ON t.id = mr.mi_tab_id
        JOIN cases          c ON c.id = t.case_id
       WHERE mr.id = ? AND c.org_id = ?
       LIMIT 1`,
@@ -116,8 +116,8 @@ async function setRequiresTwoSigners({ orgId, responseId, value }) {
   // Authorize indirectly via case scope
   await pool.execute(
     `UPDATE case_mi_responses mr
-       JOIN case_mi_tabs t ON t.id = mr.mi_tab_id
-       JOIN cases         c ON c.id = t.case_id
+       JOIN case_mi      t ON t.id = mr.mi_tab_id
+       JOIN cases        c ON c.id = t.case_id
         SET mr.requires_two_signers = ?
       WHERE mr.id = ? AND c.org_id = ?`,
     [value ? 1 : 0, responseId, orgId]

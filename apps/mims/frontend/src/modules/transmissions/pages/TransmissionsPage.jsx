@@ -113,7 +113,7 @@ export default function TransmissionsPage() {
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
   return (
-    <MIMSLayout activeNav="transmissions">
+    <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
       <div className="tx-page">
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="tx-header">

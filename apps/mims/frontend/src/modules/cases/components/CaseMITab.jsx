@@ -55,7 +55,7 @@ function emptyMiRespForm(tab = null) {
 
 export default function CaseMITab({
   id, token, headers, setSavedMsg, onCountChange,
-  formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
+  formConfig, getPicklistOptions, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType,
 }) {
   const ctx = useCaseFieldContext()
@@ -119,8 +119,30 @@ export default function CaseMITab({
       response_date:        tab.response_date         ? tab.response_date.slice(0, 10) : '',
       response_channel:     tab.response_channel      || '',
       status:               tab.status               || 'Open',
+      literature_reference: tab.literature_reference || '',
     }
   }
+
+  useEffect(() => {
+    const activeId = miTabs[activeMiTab]?.id
+    if (!activeId) return
+    try {
+      const raw = localStorage.getItem(`mims_case_${id}_mi_form_${activeId}`)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        setMiForm(prev => ({ ...prev, ...parsed }))
+      }
+    } catch {
+      // no-op
+    }
+  }, [activeMiTab, id, miTabs])
+
+  useEffect(() => {
+    const activeId = miTabs[activeMiTab]?.id
+    if (!activeId) return
+    try { localStorage.setItem(`mims_case_${id}_mi_form_${activeId}`, JSON.stringify(miForm)) } catch { /* no-op */ }
+  }, [activeMiTab, id, miForm, miTabs])
 
   async function loadMI() {
     try {
@@ -207,6 +229,7 @@ export default function CaseMITab({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setMiTabs(prev => prev.map((t, i) => i === activeMiTab ? data : t))
+      localStorage.removeItem(`mims_case_${id}_mi_form_${tab.id}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) { toast.error(err.message) }
   }
@@ -450,6 +473,10 @@ export default function CaseMITab({
   const templates = builderContext?.templates || []
   const bundles = builderContext?.bundles || []
   const chosenTemplate = selectedTemplate()
+  const miCategoryOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Category & Product', 'MI Category') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
+  const miSubcategoryOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Category & Product', 'MI Subcategory') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
+  const miStatusOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Response', 'MI Status') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
+  const responseChannelOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Response', 'Response Channel') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
 
   return (
     <div id="tab-mi" className="cf-tab-pane">
@@ -472,7 +499,7 @@ export default function CaseMITab({
           <div className="cf-mi-panel">
             {/* Sprint 2 #16 — off-label / solicited classification + promo review request */}
             {miTabs[activeMiTab]?.id && (
-              <div style={{ marginBottom: 12 }}>
+              <div className="cf-mi-approval-block">
                 <MiApprovalPanel miTabId={miTabs[activeMiTab].id} mode="classification" onChange={loadMI} />
               </div>
             )}
@@ -482,18 +509,32 @@ export default function CaseMITab({
               </div>
             )}
             <div className="cf-form-grid">
-              {[
-                { label: 'MI Category',          key: 'mi_category',           type: 'text' },
-                { label: 'Subcategory',           key: 'subcategory',           type: 'text' },
-                { label: 'Response Required By',  key: 'response_required_by',  type: 'date' },
-                { label: 'Response Date',         key: 'response_date',         type: 'date' },
-                { label: 'Response Channel',      key: 'response_channel',      type: 'text' },
-              ].map(f => (
-                <div key={f.key} className="cf-form-field">
-                  <label>{f.label}</label>
-                  <input type={f.type} value={miForm[f.key] || ''} onChange={e => setMiForm(p => ({ ...p, [f.key]: e.target.value }))} />
-                </div>
-              ))}
+              <div className="cf-form-field">
+                <label>MI Category</label>
+                <select value={miForm.mi_category || ''} onChange={e => setMiForm(p => ({ ...p, mi_category: e.target.value }))}>
+                  {miCategoryOptions.map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
+                </select>
+              </div>
+              <div className="cf-form-field">
+                <label>Subcategory</label>
+                <select value={miForm.subcategory || ''} onChange={e => setMiForm(p => ({ ...p, subcategory: e.target.value }))}>
+                  {miSubcategoryOptions.map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
+                </select>
+              </div>
+              <div className="cf-form-field">
+                <label>Response Required By</label>
+                <input type="date" value={miForm.response_required_by || ''} onChange={e => setMiForm(p => ({ ...p, response_required_by: e.target.value }))} />
+              </div>
+              <div className="cf-form-field">
+                <label>Response Date</label>
+                <input type="date" value={miForm.response_date || ''} onChange={e => setMiForm(p => ({ ...p, response_date: e.target.value }))} />
+              </div>
+              <div className="cf-form-field">
+                <label>Response Channel</label>
+                <select value={miForm.response_channel || ''} onChange={e => setMiForm(p => ({ ...p, response_channel: e.target.value }))}>
+                  {responseChannelOptions.map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
+                </select>
+              </div>
               <div className="cf-form-field">
                 <label>Product</label>
                 <select value={miForm.product_id || ''} onChange={e => setMiForm(p => ({ ...p, product_id: e.target.value || null }))}>
@@ -502,9 +543,9 @@ export default function CaseMITab({
                 </select>
               </div>
               <div className="cf-form-field">
-                <label>Status</label>
+                <label>MI Status</label>
                 <select value={miForm.status || 'Open'} onChange={e => setMiForm(p => ({ ...p, status: e.target.value }))}>
-                  {['Open', 'Pending', 'Closed'].map(s => <option key={s}>{s}</option>)}
+                  {(miStatusOptions.length > 1 ? miStatusOptions : [{ value: 'Open', label: 'Open' }, { value: 'In Progress', label: 'In Progress' }, { value: 'Pending Information', label: 'Pending Information' }, { value: 'Answered', label: 'Answered' }, { value: 'Closed', label: 'Closed' }]).map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
             </div>
@@ -519,6 +560,10 @@ export default function CaseMITab({
             <div className="cf-form-field cf-form-field--full">
               <label>Response Provided</label>
               <textarea rows={4} value={miForm.response_provided || ''} onChange={e => setMiForm(p => ({ ...p, response_provided: e.target.value }))} />
+            </div>
+            <div className="cf-form-field cf-form-field--full">
+              <label>Literature Reference</label>
+              <textarea rows={3} value={miForm.literature_reference || ''} onChange={e => setMiForm(p => ({ ...p, literature_reference: e.target.value }))} />
             </div>
             <div className="cf-form-field cf-form-field--full">
               <label>Linked Documents</label>
@@ -785,22 +830,26 @@ export default function CaseMITab({
 
       {/* B1 fix — admin-configured MI fields render here, scoped to displayTab='mi' */}
       {formConfig && Array.isArray(formConfig.sections) && (
-        <DynamicFieldsSection
-          sections={formConfig.sections}
-          values={dynFieldValues || {}}
-          onChange={setDynFieldValues || (() => {})}
-          onSave={saveDynFields || (() => {})}
-          saving={dynFieldSaving}
-          rules={formConfig.rules || []}
-          errors={dynFieldErrors || {}}
-          caseId={ctx?.caseId}
-          caseStatus={ctx?.caseStatus}
-          caseSection="mi"
-          presence={ctx?.presence}
-          currentUserId={ctx?.currentUserId}
-          caseType={caseType}
-          displayTab="mi"
-        />
+        <div className="cf-overview-card">
+          <div className="cf-overview-kicker">Additional Fields</div>
+          <h3>MI Configured Fields</h3>
+          <DynamicFieldsSection
+            sections={formConfig.sections}
+            values={dynFieldValues || {}}
+            onChange={setDynFieldValues || (() => {})}
+            onSave={saveDynFields || (() => {})}
+            saving={dynFieldSaving}
+            rules={formConfig.rules || []}
+            errors={dynFieldErrors || {}}
+            caseId={ctx?.caseId}
+            caseStatus={ctx?.caseStatus}
+            caseSection="mi"
+            presence={ctx?.presence}
+            currentUserId={ctx?.currentUserId}
+            caseType={caseType}
+            displayTab="mi"
+          />
+        </div>
       )}
     </div>
   )

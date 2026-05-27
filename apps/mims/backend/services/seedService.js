@@ -31,7 +31,6 @@ const FIELD_SETUP_ROWS = [
   ['Case Information', 'Case Status', 'dropdown', 1, 'case_status', null, 5],
   ['Case Information', 'Case Owner', 'lookup', 0, null, 'user', 6],
   ['Case Information', 'Organisation', 'lookup', 1, null, 'org', 7],
-  ['Case Information', 'Site', 'lookup', 0, null, 'site', 8],
   ['Case Information', 'Intake Channel', 'dropdown', 0, 'intake_channel', null, 9],
   ['Case Information', 'Priority', 'dropdown', 0, 'priority', null, 10],
   ['Case Information', 'Description', 'textarea', 0, null, null, 11],

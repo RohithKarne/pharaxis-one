@@ -31,7 +31,6 @@ const DEFAULT_FIELDS = [
   { section_name: 'Case Information', field_name: 'Case Status',          field_type: 'dropdown', is_required: 1, sort_order: 5, picklist_type: 'case_status' },
   { section_name: 'Case Information', field_name: 'Case Owner',           field_type: 'lookup',   is_required: 0, sort_order: 6, lookup_target: 'user' },
   { section_name: 'Case Information', field_name: 'Organisation',         field_type: 'lookup',   is_required: 1, sort_order: 7, lookup_target: 'org' },
-  { section_name: 'Case Information', field_name: 'Site',                 field_type: 'lookup',   is_required: 0, sort_order: 8, lookup_target: 'site' },
   { section_name: 'Case Information', field_name: 'Intake Channel',       field_type: 'dropdown', is_required: 0, sort_order: 9, picklist_type: 'intake_channel' },
   { section_name: 'Case Information', field_name: 'Priority',             field_type: 'dropdown', is_required: 0, sort_order: 10, picklist_type: 'priority' },
   { section_name: 'Case Information', field_name: 'Description',          field_type: 'textarea', is_required: 0, sort_order: 11 },

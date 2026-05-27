@@ -1,32 +1,32 @@
 # QMS Production Runbook
 
+> Status: Remote production hosting is currently inactive. Pharaxis apps are local-only as of 2026-05-27 because the AWS/EC2 host was deleted.
+
 ## Product Summary
 
 | Item | Value |
 | --- | --- |
 | Product | QMS |
 | App path | `apps/qms` |
-| Deploy workflow | `.github/workflows/deploy-qms.yml` |
+| Deploy workflow | `.github/workflows/deploy-qms.yml` manual disabled notice |
 | Release workflow | `.github/workflows/release-qms.yml` |
-| GitHub environment | `qms-prod` |
+| GitHub environment | Retired until new hosting is approved |
 | Runtime | Node/Express + PostgreSQL + Vue/Vite |
-| PM2 app | `qms` |
+| PM2 app | Retired remote process name: `qms` |
 | Frontend path | `/qms/` |
 | Health endpoint | `/qms/api/health` |
 
-## Predeploy
+## Local Verification
 
 1. Confirm `QMS CI` passed.
-2. Confirm PostgreSQL backup exists.
+2. Run backend and frontend locally.
 3. Confirm auth and RBAC-related changes have smoke coverage if touched.
 
 ## Deploy
 
-1. Merge to `main`.
-2. GitHub runs `.github/workflows/deploy-qms.yml`.
-3. Approve `qms-prod` if configured.
+No active remote deploy exists. GitHub deploy workflows are manual-only disabled notices that fail intentionally and must not SSH, SCP, publish to `/var/www`, or restart PM2 until a new hosting target is approved.
 
-## Postdeploy Verification
+## Local Runtime Verification
 
 - `GET /qms/api/health`
 - `GET /qms/api/auth/orgs`
@@ -36,9 +36,8 @@
 
 ## Rollback
 
-1. Revert or redeploy last good commit.
-2. Re-run deploy workflow.
-3. Restore PostgreSQL only when data or migration fault exists.
+1. Revert the bad commit or switch back to the last good local branch.
+2. Restore local PostgreSQL only when data or migration fault exists.
 
 ## Data Recovery
 

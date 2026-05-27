@@ -77,27 +77,56 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     return saved ? parseInt(saved) : 30
   })
 
+  const applyAuthState = useCallback((payload = {}) => {
+    const nextUser = payload.user || null
+    const nextToken = payload.token || null
+    const nextModules = Array.isArray(payload.modules) ? payload.modules : []
+    const nextOrgId = payload.orgId != null && payload.orgId !== '' ? Number(payload.orgId) : null
+    const nextSiteId = payload.siteId != null && payload.siteId !== '' ? Number(payload.siteId) : null
+    const nextOrgName = payload.orgName || null
+    const nextSiteName = payload.siteName || null
+    const nextAllOrgs = Array.isArray(payload.allOrgs) ? payload.allOrgs : []
+    const nextSessionTimeout = Number(payload.sessionTimeout || 30) || 30
+
+    setUser(nextUser)
+    setToken(nextToken)
+    setModules(nextModules)
+    setOrgId(nextOrgId)
+    setSiteId(nextSiteId)
+    setOrgName(nextOrgName)
+    setSiteName(nextSiteName)
+    setAllOrgs(nextAllOrgs)
+    setSessionTimeout(nextSessionTimeout)
+
+    if (nextUser) localStorage.setItem(`${KEY}_user`, JSON.stringify(nextUser))
+    else localStorage.removeItem(`${KEY}_user`)
+
+    if (nextToken) localStorage.setItem(`${KEY}_token`, nextToken)
+    else localStorage.removeItem(`${KEY}_token`)
+
+    localStorage.setItem(`${KEY}_modules`, JSON.stringify(nextModules))
+    localStorage.setItem(`${KEY}_org_id`, nextOrgId ?? '')
+    localStorage.setItem(`${KEY}_site_id`, nextSiteId ?? '')
+    localStorage.setItem(`${KEY}_org_name`, nextOrgName ?? '')
+    localStorage.setItem(`${KEY}_site_name`, nextSiteName ?? '')
+    localStorage.setItem(`${KEY}_all_orgs`, JSON.stringify(nextAllOrgs))
+    localStorage.setItem(`${KEY}_session_timeout`, String(nextSessionTimeout))
+  }, [KEY])
+
   function login(userData, authToken, allowedModules = [], orgData = {}) {
     const { orgId: oid = null, siteId: sid = null, orgName: oname = null, siteName: sname = null, allOrgs: all = [], sessionTimeout: timeout = 30 } = orgData
-    setUser(userData)
-    setToken(authToken)
-    setModules(allowedModules)
-    setOrgId(oid)
-    setSiteId(sid)
-    setOrgName(oname)
-    setSiteName(sname)
-    setAllOrgs(all)
-    setSessionTimeout(timeout)
+    applyAuthState({
+      user: userData,
+      token: authToken,
+      modules: allowedModules,
+      orgId: oid,
+      siteId: sid,
+      orgName: oname,
+      siteName: sname,
+      allOrgs: all,
+      sessionTimeout: timeout,
+    })
     setSecurityAccess(createUnresolvedSecurityAccess())
-    localStorage.setItem(`${KEY}_user`,            JSON.stringify(userData))
-    localStorage.setItem(`${KEY}_token`,           authToken ?? '')
-    localStorage.setItem(`${KEY}_modules`,         JSON.stringify(allowedModules))
-    localStorage.setItem(`${KEY}_org_id`,          oid   ?? '')
-    localStorage.setItem(`${KEY}_site_id`,         sid   ?? '')
-    localStorage.setItem(`${KEY}_org_name`,        oname ?? '')
-    localStorage.setItem(`${KEY}_site_name`,       sname ?? '')
-    localStorage.setItem(`${KEY}_all_orgs`,        JSON.stringify(all))
-    localStorage.setItem(`${KEY}_session_timeout`, String(timeout))
     localStorage.removeItem(disableFallbackKey)
   }
 
@@ -120,16 +149,50 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     })
     if (!res.ok) return
     const data = await res.json()
-    setToken(data.token || null)
-    localStorage.setItem(`${KEY}_token`,           data.token || '')
-    localStorage.setItem(`${KEY}_org_id`,          data.orgId   ?? '')
-    localStorage.setItem(`${KEY}_site_id`,         data.siteId  ?? '')
-    localStorage.setItem(`${KEY}_org_name`,        data.orgName ?? '')
-    localStorage.setItem(`${KEY}_site_name`,       data.siteName ?? '')
-    localStorage.setItem(`${KEY}_all_orgs`,        JSON.stringify(data.allOrgs || []))
-    localStorage.setItem(`${KEY}_session_timeout`, String(data.sessionTimeout ?? 30))
-    window.location.reload()
+    const meRes = await httpFetch('/api/auth/me', {
+      headers: data.token ? { Authorization: `Bearer ${data.token}` } : undefined,
+    })
+    if (meRes.ok) {
+      const meData = await meRes.json()
+      applyAuthState(meData)
+      setSecurityAccess(createUnresolvedSecurityAccess())
+      return
+    }
+    applyAuthState({
+      user,
+      token: data.token || null,
+      modules,
+      orgId: data.orgId,
+      siteId: data.siteId,
+      orgName: data.orgName,
+      siteName: data.siteName,
+      allOrgs: data.allOrgs || [],
+      sessionTimeout: data.sessionTimeout ?? 30,
+    })
+    setSecurityAccess(createUnresolvedSecurityAccess())
   }
+
+  useEffect(() => {
+    if (!token || isPublicAuthPath()) return
+    let cancelled = false
+
+    async function hydrateFromServer() {
+      try {
+        const res = await httpFetch('/api/auth/me', {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        applyAuthState(data)
+      } catch {
+        // Keep the locally-restored state when the network is unavailable.
+      }
+    }
+
+    hydrateFromServer()
+    return () => { cancelled = true }
+  }, [applyAuthState, token])
 
   const refreshOrgAccess = useCallback(async () => {
     if (hasGlobalAdminScope({ ...user, modules })) return

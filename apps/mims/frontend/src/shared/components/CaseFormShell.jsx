@@ -53,6 +53,7 @@ export default function CaseFormShell({
   caseId, caseStatus, caseType,
   sections = [],
   showSectionRail = false,   // B20 — only show StickySectionNav for long-form pages
+  showHeader = true,
   requiredFields = [],
   payload = {},
   dueAt, dueLabel = 'Action required', urgencyMessage,
@@ -96,39 +97,41 @@ export default function CaseFormShell({
         </div>
       )}
 
-      <div style={header}>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <strong style={{ fontSize: 14 }}>Case #{caseId}</strong>
-          {caseType && (
-            <span style={{ ...chip(caseTypeColor(caseType)), fontSize: 11 }}>{String(caseType).toUpperCase()}</span>
+      {showHeader && (
+        <div style={header}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <strong style={{ fontSize: 14 }}>Case #{caseId}</strong>
+            {caseType && (
+              <span style={{ ...chip(caseTypeColor(caseType)), fontSize: 11 }}>{String(caseType).toUpperCase()}</span>
+            )}
+            {caseStatus && (
+              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                background: 'var(--surface-alt,#fafafa)', color: 'var(--text-secondary)' }}>{caseStatus}</span>
+            )}
+            {pvValidity && <CaseValidityPanel caseId={caseId} onNavigate={onValidityNavigate} />}
+            {/* Sprint 2 #11 — workflow SLA chip (current state + remaining time) */}
+            <SlaChip caseId={caseId} />
+          </div>
+          {/* Sprint 2 #13 — chronology drawer toggle */}
+          <button onClick={() => setTimelineOpen(o => !o)} style={ghostBtn} title="View case chronology">
+            <Icon name="clock" size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />Timeline
+          </button>
+          {t5 && presence.enabled && <PresenceIndicator users={presence.users} />}
+          {t5 && <WatchersButton caseId={caseId} />}
+          {t8 && <CloneCaseButton caseId={caseId} variant="ghost" onCloned={onCloned} />}
+          {t8 && <RunMacroButton caseId={caseId} />}
+          {transitions.map(t => (
+            <button key={t} onClick={() => tryTransition(t)} style={primaryBtn}>
+              {t9 ? '✍ ' : ''}{cap(t)}
+            </button>
+          ))}
+          {t5 && (
+            <button onClick={() => setCommentsOpen(o => !o)} style={ghostBtn}>
+              <Icon name="message" size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />{commentsOpen ? 'Hide' : 'Comments'}
+            </button>
           )}
-          {caseStatus && (
-            <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10,
-              background: 'var(--surface-alt,#fafafa)', color: 'var(--text-secondary)' }}>{caseStatus}</span>
-          )}
-          {pvValidity && <CaseValidityPanel caseId={caseId} onNavigate={onValidityNavigate} />}
-          {/* Sprint 2 #11 — workflow SLA chip (current state + remaining time) */}
-          <SlaChip caseId={caseId} />
         </div>
-        {/* Sprint 2 #13 — chronology drawer toggle */}
-        <button onClick={() => setTimelineOpen(o => !o)} style={ghostBtn} title="View case chronology">
-          <Icon name="clock" size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />Timeline
-        </button>
-        {t5 && presence.enabled && <PresenceIndicator users={presence.users} />}
-        {t5 && <WatchersButton caseId={caseId} />}
-        {t8 && <CloneCaseButton caseId={caseId} variant="ghost" onCloned={onCloned} />}
-        {t8 && <RunMacroButton caseId={caseId} />}
-        {transitions.map(t => (
-          <button key={t} onClick={() => tryTransition(t)} style={primaryBtn}>
-            {t9 ? '✍ ' : ''}{cap(t)}
-          </button>
-        ))}
-        {t5 && (
-          <button onClick={() => setCommentsOpen(o => !o)} style={ghostBtn}>
-            <Icon name="message" size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />{commentsOpen ? 'Hide' : 'Comments'}
-          </button>
-        )}
-      </div>
+      )}
 
       {pvHaClocks && (
         <div style={{ padding: '8px 14px 0' }}>

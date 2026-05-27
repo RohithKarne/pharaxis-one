@@ -73,8 +73,18 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   const [loginStage, setLoginStage] = useState('email')
   const [ssoChoices, setSsoChoices] = useState([])
 
-  // Login form state
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  // Login form state — prefill the last-used email so it's always there
+  const [loginForm, setLoginForm] = useState({
+    email: (typeof localStorage !== 'undefined' && localStorage.getItem('mims_last_email')) || '',
+    password: '',
+  })
+
+  // WebAuthn / Touch ID state
+  const [webauthnAvailable, setWebauthnAvailable] = useState(false)
+  const [webauthnLoading, setWebauthnLoading] = useState(false)
+  // When an SSO user has a passkey, we hold the SSO redirect so they can
+  // choose Touch ID instead of being auto-redirected to the IdP.
+  const [pendingSso, setPendingSso] = useState(null) // { redirectUrl, label }
 
   function showAlert(msg, type = 'error') {
     setAlert({ show: true, type, msg })
@@ -157,6 +167,9 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
     if (data.rememberedDeviceToken) {
       localStorage.setItem('mims_2fa_device_token', data.rememberedDeviceToken)
     }
+    // Remember the email so the username field is prefilled next time
+    const signedInEmail = data.user?.email || loginForm.email
+    if (signedInEmail) localStorage.setItem('mims_last_email', signedInEmail)
     login(data.user, data.token, data.modules || [], {
       orgId: data.orgId || null,
       siteId: data.siteId || null,
@@ -201,6 +214,8 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
     setSsoChoices([])
     setLoginForm(f => ({ ...f, password: '' }))
     setAlert({ show: false, type: 'error', msg: '' })
+    setWebauthnAvailable(false)
+    setPendingSso(null)
     resetTwoFactorState()
     resetForgotPasswordState()
   }
@@ -211,6 +226,56 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       return
     }
     window.location.href = url
+  }
+
+  // Returns true if the Touch ID login fully completed (session established),
+  // false on cancel/failure so the caller can fall back to SSO/password.
+  async function handleTouchIdLogin(opts = {}) {
+    const email = String(opts.email || loginForm.email || '').trim()
+    setWebauthnLoading(true)
+    setAlert({ show: false })
+    try {
+      // 1. Get authentication challenge from backend
+      const startRes = await httpFetch('/api/auth/webauthn/login/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const startData = await startRes.json().catch(() => ({}))
+      if (!startRes.ok || !startData.webauthnAvailable) {
+        setWebauthnAvailable(false)
+        return false
+      }
+
+      // 2. Trigger browser WebAuthn — prompts Touch ID on Mac
+      const { startAuthentication } = await import('@simplewebauthn/browser')
+      const authResponse = await startAuthentication({ optionsJSON: startData.options })
+
+      // 3. Send assertion to backend for verification
+      const finishRes = await httpFetch('/api/auth/webauthn/login/finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, authenticationResponse: authResponse }),
+      })
+      const finishData = await finishRes.json().catch(() => ({}))
+      if (!finishRes.ok) {
+        showAlert(finishData.error || 'Touch ID verification failed. Choose another way to sign in.')
+        return false
+      }
+
+      await finishLogin(finishData)
+      return true
+    } catch (err) {
+      // User cancelled the Touch ID prompt, or it failed
+      if (err?.name === 'NotAllowedError') {
+        showAlert('Touch ID was cancelled. Choose another way to sign in below.', 'info')
+      } else {
+        showAlert('Touch ID could not complete. Choose another way to sign in below.')
+      }
+      return false
+    } finally {
+      setWebauthnLoading(false)
+    }
   }
 
   async function handleLogin(e) {
@@ -234,18 +299,51 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
         const data = await res.json().catch(() => ({}))
         if (!res.ok) return showAlert(data.error || 'Could not start sign in.')
 
+        const hasPasskey = !!data.webauthnAvailable && typeof window.PublicKeyCredential !== 'undefined'
+
+        // Sets the right fallback view if Touch ID is cancelled or unavailable.
+        const applyOutcomeFallback = () => {
+          if (data.outcome === 'sso_redirect') {
+            setPendingSso({ redirectUrl: data.redirect_url, label: data.provider?.label || 'SSO' })
+            setSsoChoices([])
+            setLoginStage('choice')
+          } else if (data.outcome === 'choice_required') {
+            setSsoChoices(Array.isArray(data.options) ? data.options : [])
+            setPendingSso(null)
+            setLoginStage('choice')
+          } else if (data.outcome === 'local_password') {
+            setLoginForm(f => ({ ...f, email, password: '' }))
+            setLoginStage('password')
+          } else {
+            showAlert(data.error || 'Unable to start sign in. Contact your administrator.')
+          }
+        }
+
+        // Direct access: if this device has a passkey, fire Touch ID straight
+        // away — no intermediate "Authenticate" choice screen. Fall back to the
+        // normal SSO/password view only if Touch ID is cancelled or fails.
+        if (hasPasskey) {
+          setWebauthnAvailable(true)
+          const ok = await handleTouchIdLogin({ email })
+          if (!ok) applyOutcomeFallback()
+          return
+        }
+
         if (data.outcome === 'sso_redirect') {
           redirectToSso(data.redirect_url)
           return
         }
         if (data.outcome === 'choice_required') {
           setSsoChoices(Array.isArray(data.options) ? data.options : [])
+          setWebauthnAvailable(false)
+          setPendingSso(null)
           setLoginStage('choice')
           return
         }
         if (data.outcome === 'local_password') {
           setLoginStage('password')
           setLoginForm(f => ({ ...f, email, password: '' }))
+          setWebauthnAvailable(false)
           return
         }
         return showAlert(data.error || 'Unable to start sign in. Contact your administrator.')
@@ -536,6 +634,8 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                     if (loginStage !== 'email') {
                       setLoginStage('email')
                       setSsoChoices([])
+                      setWebauthnAvailable(false)
+                      setPendingSso(null)
                       setForgotOpen(false)
                       resetTwoFactorState()
                     }
@@ -581,7 +681,31 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
 
               {loginStage === 'choice' && (
                 <div style={{ marginTop: 12, padding: 14, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg)' }}>
-                  <div style={{ fontWeight: 700, marginBottom: 8 }}>Choose SSO Provider</div>
+                  <div style={{ fontWeight: 700, marginBottom: 8 }}>Choose how to sign in</div>
+
+                  {webauthnAvailable && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-block"
+                      style={{ marginBottom: 8 }}
+                      disabled={webauthnLoading || loading}
+                      onClick={handleTouchIdLogin}
+                    >
+                      {webauthnLoading ? 'Waiting for Touch ID…' : '⬡ Sign in with Touch ID'}
+                    </button>
+                  )}
+
+                  {pendingSso && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-block"
+                      disabled={loading || webauthnLoading}
+                      onClick={() => redirectToSso(pendingSso.redirectUrl)}
+                    >
+                      Continue with {pendingSso.label}
+                    </button>
+                  )}
+
                   {ssoChoices.length > 0 ? (
                     <div style={{ display: 'grid', gap: 8 }}>
                       {ssoChoices.map((choice) => (
@@ -589,19 +713,19 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                           key={`${choice.org_id || choice.org?.id || 'org'}-${choice.provider?.key || choice.provider_key}`}
                           type="button"
                           className="btn btn-secondary btn-block"
-                          disabled={loading}
+                          disabled={loading || webauthnLoading}
                           onClick={() => redirectToSso(choice.redirect_url)}
                         >
                           Continue with {choice.provider?.label || choice.provider_label || 'SSO'}
                         </button>
                       ))}
                     </div>
-                  ) : (
+                  ) : (!pendingSso && !webauthnAvailable) ? (
                     <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                       SSO is not fully configured for this account. Contact your administrator.
                     </div>
-                  )}
-                  <button className="btn btn-outline btn-block mt-8" type="button" onClick={resetAppLoginToEmail} disabled={loading}>
+                  ) : null}
+                  <button className="btn btn-outline btn-block mt-8" type="button" onClick={resetAppLoginToEmail} disabled={loading || webauthnLoading}>
                     Back
                   </button>
                 </div>
@@ -735,8 +859,19 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                 </div>
               )}
 
+              {!twoFactor && loginStage === 'password' && webauthnAvailable && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-block mt-8"
+                  disabled={webauthnLoading || loading}
+                  onClick={handleTouchIdLogin}
+                >
+                  {webauthnLoading ? 'Waiting for Touch ID…' : '⬡ Sign in with Touch ID'}
+                </button>
+              )}
+
               {!twoFactor && loginStage !== 'choice' && (
-                <button className="btn btn-primary btn-block mt-8" type="submit" disabled={loading}>
+                <button className="btn btn-primary btn-block mt-8" type="submit" disabled={loading || webauthnLoading}>
                   {loading ? (loginStage === 'email' ? 'Checking access...' : 'Signing in...') : (loginStage === 'email' ? 'Continue' : 'Sign In')}
                 </button>
               )}

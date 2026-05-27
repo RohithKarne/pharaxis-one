@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import PCTabPanel from './PCTabPanel'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
+import StickySectionNav from '../../../shared/components/StickySectionNav'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -16,8 +17,120 @@ const PC_TABS = [
   { key: 'refund-credit',    label: 'Refund / Credit' },
 ]
 
+const PC_COMPLETION_DEFS = {
+  general: {
+    sectionName: 'PC — General',
+    fields: [
+      { label: 'Complaint Description', key: 'complaint_description' },
+      { label: 'PC Status', key: 'pc_status' },
+      { label: 'PC Category', key: 'pc_category' },
+      { label: 'PC Classification', key: 'pc_classification' },
+      { label: 'Date of Complaint', key: 'date_of_complaint' },
+      { label: 'Date Received', key: 'date_received' },
+      { label: 'Severity', key: 'severity' },
+      { label: 'Root Cause', key: 'root_cause' },
+      { label: 'Additional Info', key: 'additional_info_general' },
+    ],
+  },
+  'patient-info': {
+    sectionName: 'PC — Patient Information',
+    fields: [
+      { label: 'Patient Name', key: 'patient_name' },
+      { label: 'Date of Birth', key: 'date_of_birth' },
+      { label: 'Age', key: 'age' },
+      { label: 'Age Unit', key: 'age_unit' },
+      { label: 'Gender', key: 'sex' },
+      { label: 'Weight (kg)', key: 'weight_kg' },
+      { label: 'Therapy Start Date', key: 'therapy_start_date' },
+      { label: 'Therapy End Date', key: 'therapy_end_date' },
+      { label: 'Indication', key: 'indication' },
+      { label: 'Injury Experienced', key: 'injury_experienced' },
+      { label: 'Additional Info', key: 'additional_info_patient' },
+    ],
+  },
+  'product-info': {
+    sectionName: 'PC — Product Information',
+    fields: [
+      { label: 'Product Name', key: 'product_name' },
+      { label: 'Product Type', key: 'product_type' },
+      { label: 'Product Category', key: 'product_category' },
+      { label: 'Lot Number', key: 'lot_number' },
+      { label: 'Expiry Date', key: 'expiry_date' },
+      { label: 'Manufacturing Date', key: 'manufacturing_date' },
+      { label: 'Pack Size', key: 'pack_size' },
+      { label: 'Product Sample Available', key: 'quantity_available' },
+      { label: 'Storage Conditions', key: 'storage_conditions' },
+      { label: 'Additional Info', key: 'additional_info_product' },
+    ],
+  },
+  'return-retrieval': {
+    sectionName: 'PC — Return & Retrieval',
+    fields: [
+      { label: 'Return Requested', key: 'return_requested' },
+      { label: 'Return Date', key: 'return_date' },
+      { label: 'Return Address', key: 'return_address' },
+      { label: 'Return Method', key: 'return_method' },
+      { label: 'Retrieval Requested', key: 'retrieval_requested' },
+      { label: 'Retrieval Date', key: 'retrieval_date' },
+      { label: 'Retrieval Method', key: 'retrieval_method' },
+      { label: 'Tracking Number', key: 'tracking_number' },
+      { label: 'Notes', key: 'notes_return' },
+    ],
+  },
+  replacement: {
+    sectionName: 'PC — Replacement',
+    fields: [
+      { label: 'Replacement Requested', key: 'replacement_requested' },
+      { label: 'Replacement Approved', key: 'replacement_approved' },
+      { label: 'Replacement Date', key: 'replacement_date' },
+      { label: 'Replacement Product', key: 'replacement_product' },
+      { label: 'Quantity', key: 'quantity' },
+      { label: 'Notes', key: 'notes_replacement' },
+    ],
+  },
+  'refund-credit': {
+    sectionName: 'PC — Refund & Credit',
+    fields: [
+      { label: 'Refund Requested', key: 'refund_requested' },
+      { label: 'Refund Approved', key: 'refund_approved' },
+      { label: 'Refund Amount', key: 'refund_amount' },
+      { label: 'Credit Requested', key: 'credit_requested' },
+      { label: 'Credit Approved', key: 'credit_approved' },
+      { label: 'Credit Amount', key: 'credit_amount' },
+      { label: 'Credit Note Number', key: 'credit_note_number' },
+      { label: 'Notes', key: 'notes_refund' },
+    ],
+  },
+}
+
+function isFilled(value) {
+  return value !== undefined && value !== null && !(typeof value === 'string' && value.trim() === '')
+}
+
+function getPcFieldConfig(formConfig, sectionName, fieldName) {
+  const section = formConfig?.sections?.find(item => item.section_name === sectionName)
+  return section?.fields?.find(field => field.field_name === fieldName) || null
+}
+
+function getTrackedPcFields(fields, formConfig, sectionName) {
+  if (!Array.isArray(fields) || fields.length === 0) return []
+  const requiredFields = fields.filter(field => getPcFieldConfig(formConfig, sectionName, field.label)?.is_required)
+  // Prefer admin-configured required fields when present; otherwise fall back to the fields this tab actually renders.
+  return requiredFields.length > 0 ? requiredFields : fields
+}
+
+function computePcCompletion(data, fields, formConfig, sectionName) {
+  if (!data || Array.isArray(data)) return null
+  const trackedFields = getTrackedPcFields(fields, formConfig, sectionName)
+  if (trackedFields.length === 0) return null
+  return {
+    count: trackedFields.length,
+    complete: trackedFields.reduce((total, field) => total + (isFilled(data?.[field.key]) ? 1 : 0), 0),
+  }
+}
+
 export default function CasePCTab({
-  id, headers, setSavedMsg, users, getPicklistOptions, onCountChange,
+  id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType,
 }) {
@@ -41,6 +154,43 @@ export default function CasePCTab({
   const isClosed = (ver) => String(ver?.status || '').trim().toLowerCase() === 'closed'
   const latestPcVersion = pcVersions.length > 0 ? pcVersions[pcVersions.length - 1] : null
   const canCreatePcVersion = !latestPcVersion || isClosed(latestPcVersion)
+  const pcCompletionByTab = useMemo(() => {
+    const versionId = activePcVer?.id
+    if (!versionId) return {}
+    return Object.fromEntries(
+      PC_TABS.map(tab => {
+        const def = PC_COMPLETION_DEFS[tab.key]
+        if (!def) return [tab.key, null]
+        const payload = pcTabData[`${versionId}_${tab.key}`]
+        if (payload === undefined) return [tab.key, null]
+        return [tab.key, computePcCompletion(payload, def.fields, formConfig, def.sectionName)]
+      }),
+    )
+  }, [activePcVer?.id, pcTabData, formConfig])
+
+  useEffect(() => {
+    const versionId = activePcVer?.id
+    if (!versionId) return
+    const draftKey = `mims_case_${id}_pc_${versionId}_${activePcTab}`
+    try {
+      const raw = localStorage.getItem(draftKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (parsed !== null && parsed !== undefined) {
+        setPcTabData(prev => ({ ...prev, [`${versionId}_${activePcTab}`]: parsed }))
+      }
+    } catch {
+      // no-op
+    }
+  }, [activePcTab, activePcVer?.id, id])
+
+  useEffect(() => {
+    const versionId = activePcVer?.id
+    if (!versionId) return
+    const payload = pcTabData[`${versionId}_${activePcTab}`]
+    if (payload === undefined) return
+    try { localStorage.setItem(`mims_case_${id}_pc_${versionId}_${activePcTab}`, JSON.stringify(payload)) } catch { /* no-op */ }
+  }, [activePcTab, activePcVer?.id, id, pcTabData])
 
   async function loadPCVersions() {
     try {
@@ -121,6 +271,7 @@ export default function CasePCTab({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: data }))
+      localStorage.removeItem(`mims_case_${id}_pc_${activePcVer.id}_${activePcTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) { toast.error(err.message) }
     finally { setPcTabSaving(false) }
@@ -216,29 +367,36 @@ export default function CasePCTab({
             <div className="cf-locked-notice">This version is locked (read-only). Create a new version to continue editing.</div>
           )}
 
-          <div className="cf-tab-bar">
-            {PC_TABS.map(t => (
-              <button key={t.key} className={`cf-tab-btn ${activePcTab === t.key ? 'active' : ''}`} onClick={() => switchPCTab(t.key)}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {pcTabLoading ? (
-            <div className="cf-tab-loading">Loading…</div>
-          ) : (
-            <PCTabPanel
-              tabKey={activePcTab}
-              data={pcTabData[`${activePcVer?.id}_${activePcTab}`] || {}}
-              onChange={d => setPcTabData(prev => ({ ...prev, [`${activePcVer?.id}_${activePcTab}`]: d }))}
-              locked={isLocked(activePcVer)}
-              getPicklistOptions={getPicklistOptions}
-              versionId={activePcVer?.id}
-              headers={headers}
-              onSave={savePCTab}
-              saving={pcTabSaving}
+          <div className="cf-case-workspace cf-pc-workspace">
+            <StickySectionNav
+              sections={PC_TABS.map(t => ({
+                id: t.key,
+                label: t.label,
+                count: pcCompletionByTab[t.key]?.count,
+                complete: pcCompletionByTab[t.key]?.complete,
+              }))}
+              activeId={activePcTab}
+              onSelect={switchPCTab}
             />
-          )}
+            <div className="cf-case-workspace-main">
+              {pcTabLoading ? (
+                <div className="cf-tab-loading">Loading…</div>
+              ) : (
+                <PCTabPanel
+                  tabKey={activePcTab}
+                  data={pcTabData[`${activePcVer?.id}_${activePcTab}`] || {}}
+                  onChange={d => setPcTabData(prev => ({ ...prev, [`${activePcVer?.id}_${activePcTab}`]: d }))}
+                  locked={isLocked(activePcVer)}
+                  getFieldConfig={getFieldConfig}
+                  getPicklistOptions={getPicklistOptions}
+                  versionId={activePcVer?.id}
+                  headers={headers}
+                  onSave={savePCTab}
+                  saving={pcTabSaving}
+                />
+              )}
+            </div>
+          </div>
         </>
       )}
 

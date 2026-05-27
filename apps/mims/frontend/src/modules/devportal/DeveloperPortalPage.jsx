@@ -5,7 +5,7 @@ export default function DeveloperPortalPage() {
   const [spec, setSpec] = useState('')
   useEffect(() => { fetch('/api/openapi.yaml').then(r => r.text()).then(setSpec).catch(() => setSpec('Unable to load OpenAPI spec.')) }, [])
   return (
-    <MIMSLayout>
+    <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
       <div className="developer-portal">
         <h1>MIMS Developer Portal</h1>
         <p>Use OAuth2 client credentials, scoped REST APIs, GraphQL, signed webhooks, and sandbox clients to integrate with MIMS.</p>

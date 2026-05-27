@@ -6,16 +6,21 @@ import SeriousnessChecklist from '../../../shared/components/SeriousnessChecklis
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
-export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, onRowsChange }) {
+function picklistOptions(getPicklistOptions, sectionName, fieldName) {
+  const list = getPicklistOptions?.(sectionName, fieldName) || []
+  return Array.isArray(list) ? list : []
+}
+
+export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, getPicklistOptions, onRowsChange }) {
   const [showForm, setShowForm] = useState(false)
   const [saving,   setSaving]   = useState(false)
   const [deleting, setDeleting] = useState(null)
 
   const blankForm = () => {
-    if (tabKey === 'lab-results')     return { test_name: '', result: '', unit: '', normal_range: '', test_date: '' }
+    if (tabKey === 'lab-results')     return { lab_name: '', test_name: '', result: '', unit: '', normal_range: '', test_date: '' }
     if (tabKey === 'medical-history') return { condition_name: '', start_date: '', end_date: '', is_ongoing: false, notes: '' }
-    if (tabKey === 'product-info')    return { product_name: '', dose: '', dose_unit: '', route_of_admin: '', frequency: '', start_date: '', end_date: '', indication: '', is_suspect: true, is_concomitant: false }
-    if (tabKey === 'events')          return { event_description: '', outcome: 'unknown', start_date: '', end_date: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false, is_required_intervention: false, is_lab_abnormality: false }
+    if (tabKey === 'product-info')    return { product_name: '', product_type: '', product_category: '', batch_lot_number: '', dose: '', dose_unit: '', route_of_admin: '', frequency: '', start_date: '', end_date: '', indication: '', action_taken: '', dechallenge: '', rechallenge: '', is_suspect: true, is_concomitant: false }
+    if (tabKey === 'events')          return { event_description: '', meddra_term: '', outcome: '', reported_causality: '', frequency: '', causality_assessment: '', seriousness: '', start_date: '', end_date: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false, is_required_intervention: false, is_lab_abnormality: false }
     return {}
   }
   const [form, setForm] = useState(blankForm)
@@ -61,6 +66,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
   const safeRows = Array.isArray(rows) ? rows : []
 
   const labCols = [
+    { key: 'lab_name',     label: 'Lab Name' },
     { key: 'test_name',    label: 'Test Name' },
     { key: 'result',       label: 'Result' },
     { key: 'unit',         label: 'Unit' },
@@ -76,6 +82,9 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
   ]
   const piCols = [
     { key: 'product_name',   label: 'Product' },
+    { key: 'product_type',   label: 'Product Type' },
+    { key: 'product_category', label: 'Product Category' },
+    { key: 'batch_lot_number', label: 'Batch / Lot' },
     { key: 'dose',           label: 'Dose' },
     { key: 'dose_unit',      label: 'Unit' },
     { key: 'route_of_admin', label: 'Route' },
@@ -86,7 +95,11 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
   ]
   const eventCols = [
     { key: 'event_description', label: 'Event Description' },
+    { key: 'meddra_term',       label: 'MedDRA Term' },
     { key: 'outcome',           label: 'Outcome' },
+    { key: 'reported_causality', label: 'Reported Causality' },
+    { key: 'frequency',         label: 'Frequency' },
+    { key: 'causality_assessment', label: 'Causality Assessment' },
     { key: 'start_date',        label: 'Start Date' },
     { key: 'end_date',          label: 'End Date' },
     { key: 'is_serious',        label: 'Serious', render: v => v ? '✅' : '—' },
@@ -135,6 +148,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
             <form className="cf-multirow-form" onSubmit={handleAdd}>
               <div className="cf-form-grid">
                 {tabKey === 'lab-results' && <>
+                  <div className="cf-form-field"><label>Lab Name</label><input value={form.lab_name} onChange={e => set('lab_name', e.target.value)} /></div>
                   <div className="cf-form-field"><label>Test Name</label><input value={form.test_name} onChange={e => set('test_name', e.target.value)} /></div>
                   <div className="cf-form-field"><label>Result</label><input value={form.result} onChange={e => set('result', e.target.value)} /></div>
                   <div className="cf-form-field"><label>Unit</label><input value={form.unit} onChange={e => set('unit', e.target.value)} /></div>
@@ -155,9 +169,11 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                 </>}
                 {tabKey === 'events' && <>
                   <div className="cf-form-field cf-form-field--full"><label>Event Description</label><textarea rows={2} value={form.event_description} onChange={e => set('event_description', e.target.value)} /></div>
-                  <div className="cf-form-field"><label>Outcome</label><select value={form.outcome} onChange={e => set('outcome', e.target.value)}>
-                    <option value="recovered">Recovered</option><option value="recovering">Recovering</option><option value="not_recovered">Not recovered</option><option value="recovered_with_sequelae">Recovered with sequelae</option><option value="fatal">Fatal</option><option value="unknown">Unknown</option>
-                  </select></div>
+                  <div className="cf-form-field"><label>MedDRA Term</label><select value={form.meddra_term} onChange={e => set('meddra_term', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'MedDRA Term').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Outcome</label><select value={form.outcome} onChange={e => set('outcome', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Outcome').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Reported Causality</label><select value={form.reported_causality} onChange={e => set('reported_causality', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Reported Causality').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Frequency</label><select value={form.frequency} onChange={e => set('frequency', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Frequency').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Causality Assessment</label><select value={form.causality_assessment} onChange={e => set('causality_assessment', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Events & Seriousness', 'Causality Assessment').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
                   <div className="cf-form-field"><label>Start Date</label><input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></div>
                   <div className="cf-form-field"><label>End Date</label><input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
                   <div className="cf-form-field cf-form-field--full">
@@ -166,13 +182,19 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                 </>}
                 {tabKey === 'product-info' && <>
                   <div className="cf-form-field"><label>Product Name</label><input value={form.product_name} onChange={e => set('product_name', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Product Type</label><select value={form.product_type} onChange={e => set('product_type', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Product Type').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Product Category</label><select value={form.product_category} onChange={e => set('product_category', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Product Category').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Batch / Lot Number</label><input value={form.batch_lot_number} onChange={e => set('batch_lot_number', e.target.value)} /></div>
                   <div className="cf-form-field"><label>Dose</label><input value={form.dose} onChange={e => set('dose', e.target.value)} /></div>
-                  <div className="cf-form-field"><label>Dose Unit</label><input value={form.dose_unit} onChange={e => set('dose_unit', e.target.value)} /></div>
-                  <div className="cf-form-field"><label>Route of Admin</label><input value={form.route_of_admin} onChange={e => set('route_of_admin', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Dose Unit</label><select value={form.dose_unit} onChange={e => set('dose_unit', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Dose Unit').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Route of Admin</label><select value={form.route_of_admin} onChange={e => set('route_of_admin', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Route of Administration').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
                   <div className="cf-form-field"><label>Frequency</label><input value={form.frequency} onChange={e => set('frequency', e.target.value)} /></div>
                   <div className="cf-form-field"><label>Start Date</label><input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></div>
                   <div className="cf-form-field"><label>End Date</label><input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
                   <div className="cf-form-field cf-form-field--full"><label>Indication</label><input value={form.indication} onChange={e => set('indication', e.target.value)} /></div>
+                  <div className="cf-form-field"><label>Action Taken</label><select value={form.action_taken} onChange={e => set('action_taken', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Action Taken').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Dechallenge</label><select value={form.dechallenge} onChange={e => set('dechallenge', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Dechallenge').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
+                  <div className="cf-form-field"><label>Rechallenge</label><select value={form.rechallenge} onChange={e => set('rechallenge', e.target.value)}><option value="">— Select —</option>{picklistOptions(getPicklistOptions, 'AE — Product Information', 'Rechallenge').map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}</select></div>
                   <div className="cf-form-field">
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                       <input type="checkbox" checked={form.is_suspect} onChange={e => set('is_suspect', e.target.checked)} />
