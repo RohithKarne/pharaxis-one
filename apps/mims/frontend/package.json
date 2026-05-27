@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
-    "@tiptap/extension-link": "^3.20.4",
+    "@tiptap/extension-link": "^3.23.6",
     "@tiptap/extension-table": "^3.20.4",
     "@tiptap/extension-underline": "^3.20.4",
     "@tiptap/react": "^3.20.4",
