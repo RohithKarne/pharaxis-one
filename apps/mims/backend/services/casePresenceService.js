@@ -8,7 +8,7 @@
  *   - Theme 9 (compliance) — soft-lock warning when another user is editing a locked field
  *   - Audit chip "currently viewed by" indicator
  *
- * Endpoint: /api/cases/ws?token=<JWT>&caseId=<id>
+ * Endpoint: /api/cases/ws
  * Mirrors the chatRealtimeService pattern (Redis cross-process fanout).
  *
  * Message protocol (client → server):
@@ -28,7 +28,6 @@
  */
 
 const WebSocket = require('ws');
-const { URL }   = require('url');
 const { readCookie, validateAccessToken } = require('../middleware/auth');
 const { logger } = require('./logger');
 const redis = require('./redisClient');
@@ -75,9 +74,9 @@ function broadcastToRoom(caseId, payload, exceptWs = null) {
 }
 
 async function handleSocketAuth(request) {
-  const url   = new URL(request.url, `http://${request.headers.host || '127.0.0.1'}`);
-  const token = url.searchParams.get('token')
-            || readCookie({ headers: { cookie: request.headers.cookie || '' } }, 'mims_token');
+  const authHeader = request.headers.authorization || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  const token = bearerToken || readCookie({ headers: { cookie: request.headers.cookie || '' } }, 'mims_token');
   return validateAccessToken(token);
 }
 

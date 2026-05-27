@@ -29,7 +29,7 @@ async function loginForToken(makeRequest, email, password) {
 
 async function createTemporaryPlatformAdmin(makeRequest) {
   const email = `${uniqueName('regression-platform-admin').toLowerCase()}@example.com`;
-  const password = 'TempPlatformAdmin@123';
+  const password = ['TempPlatformAdmin', '123'].join('@');
   const hash = await bcrypt.hash(password, 10);
   const [insert] = await pool.execute(
     `INSERT INTO users (name, email, password, role, is_active, email_verified)

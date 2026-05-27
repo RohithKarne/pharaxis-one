@@ -1,6 +1,12 @@
 import { buildRealtimeWebSocketUrl } from './api';
 import { AppRealtimeMessage, RealtimeConnectionState } from '../types/mims';
 
+type ReactNativeWebSocketConstructor = new (
+  url: string,
+  protocols?: string | string[] | null,
+  options?: { headers?: Record<string, string> },
+) => WebSocket;
+
 type RealtimeClientOptions = {
   onMessage: (message: AppRealtimeMessage) => void;
   onStatusChange?: (status: RealtimeConnectionState) => void;
@@ -47,7 +53,10 @@ export function connectAppRealtime(options: RealtimeClientOptions): RealtimeClie
   const connect = () => {
     clearReconnectTimer();
     notifyStatus(attempts === 0 ? 'connecting' : 'reconnecting');
-    socket = new WebSocket(buildRealtimeWebSocketUrl(options.token));
+    const RealtimeWebSocket = WebSocket as unknown as ReactNativeWebSocketConstructor;
+    socket = new RealtimeWebSocket(buildRealtimeWebSocketUrl(), undefined, {
+      headers: { Authorization: `Bearer ${options.token}` },
+    });
 
     socket.onopen = () => {
       attempts = 0;

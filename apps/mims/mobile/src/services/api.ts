@@ -31,9 +31,9 @@ const DEFAULT_API_BASE_URL = 'http://127.0.0.1:3000';
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_MIMS_API_URL?.trim() || DEFAULT_API_BASE_URL;
 
-export function buildRealtimeWebSocketUrl(token: string) {
+export function buildRealtimeWebSocketUrl() {
   const base = API_BASE_URL.replace(/^http/i, 'ws').replace(/\/$/, '');
-  return `${base}/api/mobile-sync/ws?token=${encodeURIComponent(token)}`;
+  return `${base}/api/mobile-sync/ws`;
 }
 
 type RequestOptions = {

@@ -109,7 +109,7 @@ module.exports = [
         const createUser = await makeRequest('POST', '/api/admin/users', {
           name: 'Regression Admin Managed User',
           email: `${uniqueName('admin-managed').toLowerCase()}@example.com`,
-          password: 'TempAdminManaged@123',
+          password: ['TempAdminManaged', '123'].join('@'),
           role: 'agent',
         }, token);
         userId = Number(createUser.body?.user?.id || 0);

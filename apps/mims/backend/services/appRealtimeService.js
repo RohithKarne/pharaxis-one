@@ -10,8 +10,6 @@
 // back to in-process delivery only (correct for single-process deployments).
 
 const WebSocket = require('ws');
-const { URL } = require('url');
-
 const { readCookie, validateAccessToken } = require('../middleware/auth');
 const { logger } = require('./logger');
 const redis = require('./redisClient');
@@ -60,9 +58,9 @@ function removeSocketFromIndex(map, key, ws) {
 }
 
 async function handleSocketAuth(request) {
-  const requestUrl  = new URL(request.url, `http://${request.headers.host || '127.0.0.1'}`);
-  const tokenFromQuery = requestUrl.searchParams.get('token');
-  const token = tokenFromQuery || readCookie({ headers: { cookie: request.headers.cookie || '' } }, 'mims_token');
+  const authHeader = request.headers.authorization || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  const token = bearerToken || readCookie({ headers: { cookie: request.headers.cookie || '' } }, 'mims_token');
   return validateAccessToken(token);
 }
 

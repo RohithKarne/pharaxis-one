@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-function buildSocketUrl(token) {
+function buildSocketUrl() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const url = new URL(`${protocol}//${window.location.host}/api/chat/ws`)
-  if (token) url.searchParams.set('token', token)
-  return url.toString()
+  return `${protocol}//${window.location.host}/api/chat/ws`
 }
 
 export default function useChatRealtime({ token, subscription, onEvent }) {
@@ -14,7 +12,7 @@ export default function useChatRealtime({ token, subscription, onEvent }) {
   const closedByClientRef = useRef(false)
   const onEventRef = useRef(onEvent)
   const previousSubscriptionRef = useRef(null)
-  const socketUrl = useMemo(() => buildSocketUrl(token), [token])
+  const socketUrl = useMemo(() => buildSocketUrl(), [])
 
   useEffect(() => {
     onEventRef.current = onEvent
@@ -29,6 +27,10 @@ export default function useChatRealtime({ token, subscription, onEvent }) {
 
   useEffect(() => {
     closedByClientRef.current = false
+    if (!token) {
+      setConnectionState('closed')
+      return
+    }
 
     function connect() {
       setConnectionState((prev) => (prev === 'open' ? 'open' : 'connecting'))
@@ -76,7 +78,7 @@ export default function useChatRealtime({ token, subscription, onEvent }) {
       }
       if (ws && ws.readyState !== WebSocket.CLOSED) ws.close()
     }
-  }, [socketUrl])
+  }, [socketUrl, token])
 
   useEffect(() => {
     if (connectionState !== 'open') return

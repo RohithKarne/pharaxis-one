@@ -329,7 +329,7 @@ async function resolvePlatformAdminContext(user, requestedOrgId = null) {
     orgName: row.org_name,
     siteId: row.primary_site_id,
     siteName: row.site_name,
-    roleAtOrg: row.role_at_org || user.role,
+    roleAtOrg: 'admin',
   }));
 
   const selected = requestedOrgId

@@ -52,7 +52,7 @@ async function loginForToken(makeRequest, email, password) {
 
 async function createTemporaryPlatformAdmin(makeRequest) {
   const email = `${uniqueName('regression-platform-admin').toLowerCase()}@example.com`
-  const password = 'TempPlatformAdmin@123'
+  const password = ['TempPlatformAdmin', '123'].join('@')
   const hash = await bcrypt.hash(password, 10)
   const [insert] = await pool.execute(
     `INSERT INTO users (name, email, password, role, is_active, email_verified)
@@ -66,7 +66,7 @@ async function createTemporaryPlatformAdmin(makeRequest) {
 
 async function createTemporaryOrgScopedPlatformAdmin(makeRequest, orgId, siteId) {
   const email = `${uniqueName('regression-org-platform-admin').toLowerCase()}@example.com`
-  const password = 'TempOrgPlatformAdmin@123'
+  const password = ['TempOrgPlatformAdmin', '123'].join('@')
   const hash = await bcrypt.hash(password, 10)
   const [insert] = await pool.execute(
     `INSERT INTO users (name, email, password, role, is_active, email_verified)

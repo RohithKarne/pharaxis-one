@@ -35,7 +35,7 @@ export function useCasePresence(caseId) {
     function connect() {
       try {
         const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        const ws = new WebSocket(`${proto}://${window.location.host}/api/cases/ws?token=${encodeURIComponent(token)}`)
+        const ws = new WebSocket(`${proto}://${window.location.host}/api/cases/ws`)
         wsRef.current = ws
 
         ws.onopen = () => {
