@@ -44,8 +44,14 @@ apps/**/backend/scripts/novartis-full-scope-backups/
 # Runtime storage/data artifacts
 apps/**/backend/storage/email_attachments/
 apps/**/backend/storage/org_logos/
+apps/**/backend/storage/cm_documents/**
+!apps/**/backend/storage/cm_documents/.gitkeep
 apps/**/backend/storage/documents/**
 !apps/**/backend/storage/documents/.gitkeep
+
+# Generated deliverables / exports
+outputs/
+apps/**/frontend/design-screenshots/
 
 # PM2 ecosystem config — EC2-specific, never overwrite from repo
 ecosystem.config.js

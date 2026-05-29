@@ -1,88 +1,103 @@
+import { lazy, Suspense } from 'react'
 import { findSystemLabel } from '../configItems'
 import { useAuth } from '../../../../shared/context/AuthContext'
-import AdminQASection from '../../../admin/components/AdminQASection'
-import AdminUATPanel from '../../../admin/components/AdminUATPanel'
-import CopyDivision from './CopyDivision'
-import DivisionParameters from './DivisionParameters'
-import CustomizeForms from './CustomizeForms'
-import ExceptionLog from './ExceptionLog'
-import FeatureFlags from './FeatureFlags'
-import SmartFields from './SmartFields'
-import ValidationRules from './ValidationRules'
-import GridTemplates from './GridTemplates'
-import CaseActionsAdmin from './CaseActionsAdmin'
-import ComplianceAdmin from './ComplianceAdmin'
+const AdminQASection = lazy(() => import('../../../admin/components/AdminQASection'))
+const AdminUATPanel = lazy(() => import('../../../admin/components/AdminUATPanel'))
+const CopyDivision = lazy(() => import('./CopyDivision'))
+const DivisionParameters = lazy(() => import('./DivisionParameters'))
+const CustomizeForms = lazy(() => import('./CustomizeForms'))
+const ExceptionLog = lazy(() => import('./ExceptionLog'))
+const FeatureFlags = lazy(() => import('./FeatureFlags'))
+const SmartFields = lazy(() => import('./SmartFields'))
+const ValidationRules = lazy(() => import('./ValidationRules'))
+const GridTemplates = lazy(() => import('./GridTemplates'))
+const CaseActionsAdmin = lazy(() => import('./CaseActionsAdmin'))
+const ComplianceAdmin = lazy(() => import('./ComplianceAdmin'))
 // Sprint 2 Week 1 admin surfaces
-import DocumentTypesAdmin from './DocumentTypesAdmin'
-import ComplaintCodesAdmin from './ComplaintCodesAdmin'
-import LotMasterAdmin from './LotMasterAdmin'
-import FieldActionsAdmin from './FieldActionsAdmin'
-import CapaAdmin from './CapaAdmin'
-import PiiRedactionRules from './PiiRedactionRules'
+const DocumentTypesAdmin = lazy(() => import('./DocumentTypesAdmin'))
+const ComplaintCodesAdmin = lazy(() => import('./ComplaintCodesAdmin'))
+const LotMasterAdmin = lazy(() => import('./LotMasterAdmin'))
+const FieldActionsAdmin = lazy(() => import('./FieldActionsAdmin'))
+const CapaAdmin = lazy(() => import('./CapaAdmin'))
+const PiiRedactionRules = lazy(() => import('./PiiRedactionRules'))
 // import GroupSecurity from './GroupSecurity' // legacy nav-key version — kept on disk for rollback
-import CapabilityGroupSecurity from './CapabilityGroupSecurity'
-import LoggedInUsers from './LoggedInUsers'
-import ReportsAccess from './ReportsAccess'
-import SetupAlerts from './SetupAlerts'
-import SetupAuthPolicy from './SetupAuthPolicy'
-import SetupChangeApprovals from './SetupChangeApprovals'
-import SetupEmailAccounts from './SetupEmailAccounts'
-import SetupIntegrations from './SetupIntegrations'
-import SetupWorkflowEngine from './SetupWorkflowEngine'
-import SetupTwoFactor from './SetupTwoFactor'
-import SetupWorkflow from './SetupWorkflow'
-import AiConfig from './AiConfig'
-import DeveloperApiAdmin from './DeveloperApiAdmin'
-import SystemParameters from './SystemParameters'
-import Users from './Users'
-import ViewData from './ViewData'
-import DPPRPage from '../../../admin/pages/DPPRPage'
-import RegressionPage from '../../../regression/pages/RegressionPage'
+const CapabilityGroupSecurity = lazy(() => import('./CapabilityGroupSecurity'))
+const LoggedInUsers = lazy(() => import('./LoggedInUsers'))
+const ReportsAccess = lazy(() => import('./ReportsAccess'))
+const SetupAlerts = lazy(() => import('./SetupAlerts'))
+const SetupAuthPolicy = lazy(() => import('./SetupAuthPolicy'))
+const SetupChangeApprovals = lazy(() => import('./SetupChangeApprovals'))
+const SetupEmailAccounts = lazy(() => import('./SetupEmailAccounts'))
+const SetupIntegrations = lazy(() => import('./SetupIntegrations'))
+const SetupWorkflowEngine = lazy(() => import('./SetupWorkflowEngine'))
+const SetupTwoFactor = lazy(() => import('./SetupTwoFactor'))
+const SetupWorkflow = lazy(() => import('./SetupWorkflow'))
+const AiConfig = lazy(() => import('./AiConfig'))
+const DeveloperApiAdmin = lazy(() => import('./DeveloperApiAdmin'))
+const SystemParameters = lazy(() => import('./SystemParameters'))
+const Users = lazy(() => import('./Users'))
+const ViewData = lazy(() => import('./ViewData'))
+const DPPRPage = lazy(() => import('../../../admin/pages/DPPRPage'))
+const RegressionPage = lazy(() => import('../../../regression/pages/RegressionPage'))
 
-export default function System({ selectedItem, auditItem = 'admin' }) {
+function SystemSectionLoader() {
+  return (
+    <div style={{ minHeight: 240, display: 'grid', placeItems: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
+      Loading system tool...
+    </div>
+  )
+}
+
+export default function System({ selectedItem, auditItem = 'admin', onAuditSelect }) {
   const { token } = useAuth()
   const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
-  if (selectedItem === 'sys-maint-copy-division')   return <CopyDivision />
-  if (selectedItem === 'sys-division-params')       return <DivisionParameters H={H} />
-  if (selectedItem === 'sys-setup-customize-forms') return <CustomizeForms />
-  if (selectedItem === 'sys-exception-log')         return <ExceptionLog />
-  if (selectedItem === 'sys-sec-group')             return <CapabilityGroupSecurity />
-  if (selectedItem === 'sys-sec-logged-in')         return <LoggedInUsers />
-  if (selectedItem === 'sys-sec-users')             return <Users />
-  if (selectedItem === 'sys-sec-auth-policy')       return <SetupAuthPolicy />
-  if (selectedItem === 'sys-setup-2fa-config')      return <SetupTwoFactor />
-  if (selectedItem === 'sys-setup-alerts')          return <SetupAlerts />
-  if (selectedItem === 'sys-setup-workflow')        return <SetupWorkflow />
-  if (selectedItem === 'sys-setup-workflow-engine') return <SetupWorkflowEngine />
-  if (selectedItem === 'sys-setup-ai-config')       return <AiConfig />
-  if (selectedItem === 'sys-setup-developer-api')    return <DeveloperApiAdmin />
-  if (selectedItem === 'sys-setup-email-accounts')  return <SetupEmailAccounts />
-  if (selectedItem === 'sys-setup-change-approvals') return <SetupChangeApprovals />
-  if (selectedItem === 'sys-setup-feature-flags')   return <FeatureFlags />
-  if (selectedItem === 'sys-setup-smart-fields')    return <SmartFields />
-  if (selectedItem === 'sys-setup-validation')      return <ValidationRules />
-  if (selectedItem === 'sys-setup-grid-templates')  return <GridTemplates />
-  if (selectedItem === 'sys-setup-case-actions')    return <CaseActionsAdmin />
-  if (selectedItem === 'sys-setup-compliance')      return <ComplianceAdmin />
-  // Sprint 2 Week 1 admin surfaces
-  if (selectedItem === 'sys-setup-document-types')  return <DocumentTypesAdmin />
-  if (selectedItem === 'sys-setup-complaint-codes') return <ComplaintCodesAdmin />
-  if (selectedItem === 'sys-setup-lot-master')      return <LotMasterAdmin />
-  if (selectedItem === 'sys-setup-field-actions')   return <FieldActionsAdmin />
-  if (selectedItem === 'sys-setup-capa')            return <CapaAdmin />
-  if (selectedItem === 'sys-setup-pii-redaction')   return <PiiRedactionRules />
-  if (selectedItem === 'sys-setup-data-protect')    return <DPPRPage embedded />
-  if (selectedItem?.startsWith('sys-setup-int-'))   return <SetupIntegrations selectedItem={selectedItem} />
-  if (selectedItem === 'sys-system-params')         return <SystemParameters />
-  if (selectedItem === 'sys-reports-access')        return <ReportsAccess />
-  if (selectedItem === 'sys-view-data')             return <ViewData selectedItem={auditItem} />
-  if (selectedItem === 'sys-uat-bugs')              return <AdminUATPanel initialTab="bugs" />
-  if (selectedItem === 'sys-uat-features')          return <AdminUATPanel initialTab="features" />
-  if (selectedItem === 'sys-uat-regression')        return <RegressionPage embedded />
-  if (selectedItem === 'sys-ai-qa-reports')         return <AdminQASection contentSection="qa-reports" H={H} />
-  if (selectedItem === 'sys-ai-qa-rules')           return <AdminQASection contentSection="qa-rules" H={H} />
-  if (selectedItem === 'sys-ai-qa-overrides')       return <AdminQASection contentSection="qa-overrides" H={H} />
+  const tool = (
+    selectedItem === 'sys-maint-copy-division' ? <CopyDivision />
+    : selectedItem === 'sys-division-params' ? <DivisionParameters H={H} />
+    : selectedItem === 'sys-setup-customize-forms' ? <CustomizeForms />
+    : selectedItem === 'sys-exception-log' ? <ExceptionLog />
+    : selectedItem === 'sys-sec-group' ? <CapabilityGroupSecurity />
+    : selectedItem === 'sys-sec-logged-in' ? <LoggedInUsers />
+    : selectedItem === 'sys-sec-users' ? <Users />
+    : selectedItem === 'sys-sec-auth-policy' ? <SetupAuthPolicy />
+    : selectedItem === 'sys-setup-2fa-config' ? <SetupTwoFactor />
+    : selectedItem === 'sys-setup-alerts' ? <SetupAlerts />
+    : selectedItem === 'sys-setup-workflow' ? <SetupWorkflow />
+    : selectedItem === 'sys-setup-workflow-engine' ? <SetupWorkflowEngine />
+    : selectedItem === 'sys-setup-ai-config' ? <AiConfig />
+    : selectedItem === 'sys-setup-developer-api' ? <DeveloperApiAdmin />
+    : selectedItem === 'sys-setup-email-accounts' ? <SetupEmailAccounts />
+    : selectedItem === 'sys-setup-change-approvals' ? <SetupChangeApprovals />
+    : selectedItem === 'sys-setup-feature-flags' ? <FeatureFlags />
+    : selectedItem === 'sys-setup-smart-fields' ? <SmartFields />
+    : selectedItem === 'sys-setup-validation' ? <ValidationRules />
+    : selectedItem === 'sys-setup-grid-templates' ? <GridTemplates />
+    : selectedItem === 'sys-setup-case-actions' ? <CaseActionsAdmin />
+    : selectedItem === 'sys-setup-compliance' ? <ComplianceAdmin />
+    : selectedItem === 'sys-setup-document-types' ? <DocumentTypesAdmin />
+    : selectedItem === 'sys-setup-complaint-codes' ? <ComplaintCodesAdmin />
+    : selectedItem === 'sys-setup-lot-master' ? <LotMasterAdmin />
+    : selectedItem === 'sys-setup-field-actions' ? <FieldActionsAdmin />
+    : selectedItem === 'sys-setup-capa' ? <CapaAdmin />
+    : selectedItem === 'sys-setup-pii-redaction' ? <PiiRedactionRules />
+    : selectedItem === 'sys-setup-data-protect' ? <DPPRPage embedded />
+    : selectedItem?.startsWith('sys-setup-int-') ? <SetupIntegrations selectedItem={selectedItem} />
+    : selectedItem === 'sys-system-params' ? <SystemParameters />
+    : selectedItem === 'sys-reports-access' ? <ReportsAccess />
+    : selectedItem === 'sys-view-data' ? <ViewData selectedItem={auditItem} onSelect={onAuditSelect} />
+    : selectedItem === 'sys-uat-bugs' ? <AdminUATPanel initialTab="bugs" />
+    : selectedItem === 'sys-uat-features' ? <AdminUATPanel initialTab="features" />
+    : selectedItem === 'sys-uat-regression' ? <RegressionPage embedded />
+    : selectedItem === 'sys-ai-qa-reports' ? <AdminQASection contentSection="qa-reports" H={H} />
+    : selectedItem === 'sys-ai-qa-rules' ? <AdminQASection contentSection="qa-rules" H={H} />
+    : selectedItem === 'sys-ai-qa-overrides' ? <AdminQASection contentSection="qa-overrides" H={H} />
+    : null
+  )
+
+  if (tool) {
+    return <Suspense fallback={<SystemSectionLoader />}>{tool}</Suspense>
+  }
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>

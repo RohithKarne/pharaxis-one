@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { isAdminUser } from '../utils/adminScope.js'
+import { prefetchRoutePath } from '../utils/routePrefetch.js'
 import Icon from './Icon'
 
 const CASE_MGMT_ROUTES = {
@@ -20,6 +21,9 @@ const CASE_MGMT_ITEMS  = ['My Cases', 'Unassigned Cases', 'Deleted Cases', 'Resp
 
 function NavItem({ to, icon, label, active, disabled, onClick, collapsed }) {
   const cls = `mims-sidenav-item${active ? ' active' : ''}${disabled ? ' disabled' : ''}`
+  const handlePrefetch = () => {
+    if (!disabled && to) prefetchRoutePath(to)
+  }
   const content = (
     <>
       <span className="mims-sidenav-icon">{icon}</span>
@@ -27,9 +31,9 @@ function NavItem({ to, icon, label, active, disabled, onClick, collapsed }) {
     </>
   )
   if (disabled) return <div className={cls} title={collapsed ? label : undefined}>{content}</div>
-  if (onClick) return <div className={cls} onClick={onClick} title={collapsed ? label : undefined}>{content}</div>
+  if (onClick) return <div className={cls} onClick={onClick} onMouseEnter={handlePrefetch} onFocus={handlePrefetch} title={collapsed ? label : undefined}>{content}</div>
   return (
-    <Link to={to} className={cls} title={collapsed ? label : undefined}>
+    <Link to={to} className={cls} onMouseEnter={handlePrefetch} onFocus={handlePrefetch} title={collapsed ? label : undefined}>
       {content}
     </Link>
   )
@@ -96,6 +100,8 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       {/* Case Management — accordion */}
       <div className={`mims-sidenav-item${isCasesActive() ? ' active' : ''}${!canAccessAny('mims_core', 'case_mgmt') ? ' disabled' : ''}`}
         title={collapsed ? 'Case Management' : undefined}
+        onMouseEnter={() => canAccessAny('mims_core', 'case_mgmt') && prefetchRoutePath('/cases')}
+        onFocus={() => canAccessAny('mims_core', 'case_mgmt') && prefetchRoutePath('/cases')}
         onClick={() => {
           if (!canAccessAny('mims_core', 'case_mgmt')) return
           if (collapsed) {
@@ -115,6 +121,8 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
           {CASE_MGMT_ITEMS.map(item => (
             <Link key={item} to={CASE_MGMT_ROUTES[item]}
               className={`mims-sidenav-sub-item${location.pathname + location.search === CASE_MGMT_ROUTES[item] ? ' active' : ''}`}
+              onMouseEnter={() => prefetchRoutePath(CASE_MGMT_ROUTES[item])}
+              onFocus={() => prefetchRoutePath(CASE_MGMT_ROUTES[item])}
               onClick={() => setCaseMgmtOpen(false)}>
               {item}
             </Link>
@@ -166,6 +174,8 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
       {/* + New Case */}
       <div className="mims-sidenav-new-case">
         <button className="mims-new-case-btn" style={{ width: collapsed ? 36 : '100%', padding: collapsed ? '6px 0' : '6px 16px', fontSize: collapsed ? 16 : 13 }}
+          onMouseEnter={() => canCreateCase && prefetchRoutePath('/cases')}
+          onFocus={() => canCreateCase && prefetchRoutePath('/cases')}
           onClick={() => canCreateCase && navigate('/cases')}
           disabled={!canCreateCase}
           aria-label="Create new case"

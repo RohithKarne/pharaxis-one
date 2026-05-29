@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
+import VirtualizedTable from '../../../../shared/components/VirtualizedTable.jsx'
 import { fmtDateIST } from '../../../admin/components/AdminShared'
 import CaseAuditTrailPage from '../../../audittrail/pages/CaseAuditTrailPage'
 import CMAuditTrailPage from '../../../audittrail/pages/CMAuditTrailPage'
@@ -123,7 +124,7 @@ function FullModal({ type, row, onClose }) {
   )
 }
 
-export default function ViewData({ selectedItem = 'admin' }) {
+export default function ViewData({ selectedItem = 'admin', onSelect }) {
   const { token } = useAuth()
   const [activeView, setActiveView] = useState(selectedItem || 'admin')
   const [adminRows, setAdminRows] = useState([])
@@ -132,7 +133,8 @@ export default function ViewData({ selectedItem = 'admin' }) {
   const [loginFilter, setLoginFilter] = useState({ from: '', to: '', user: '', status: '', search: '' })
   const [adminPage, setAdminPage] = useState(1)
   const [loginPage, setLoginPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [adminPageSize, setAdminPageSize] = useState(20)
+  const [loginPageSize, setLoginPageSize] = useState(20)
   const [adminMeta, setAdminMeta] = useState({ total: 0, total_pages: 1 })
   const [loginMeta, setLoginMeta] = useState({ total: 0, total_pages: 1 })
   const [loading, setLoading] = useState(false)
@@ -144,15 +146,27 @@ export default function ViewData({ selectedItem = 'admin' }) {
   const rows = activeView === 'admin' ? adminRows : loginRows
   const meta = activeView === 'admin' ? adminMeta : loginMeta
   const page = activeView === 'admin' ? adminPage : loginPage
+  const pageSize = activeView === 'admin' ? adminPageSize : loginPageSize
+  const truncateCellStyle = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
 
   useEffect(() => {
-    if (selectedItem && selectedItem !== activeView) setActiveView(selectedItem)
-  }, [activeView, selectedItem])
+    if (selectedItem) setActiveView(selectedItem)
+  }, [selectedItem])
+
+  function selectView(nextView) {
+    setActiveView(nextView)
+    onSelect?.(nextView)
+  }
 
   useEffect(() => {
-    loadAdmin(1, adminFilter, pageSize)
-    loadLogin(1, loginFilter, pageSize)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (activeView === 'admin' && adminRows.length === 0) {
+      loadAdmin(1, adminFilter, adminPageSize)
+      return
+    }
+    if (activeView === 'login' && loginRows.length === 0) {
+      loadLogin(1, loginFilter, loginPageSize)
+    }
+  }, [activeView, token]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchRows(path, params) {
     const qs = new URLSearchParams(params)
@@ -163,7 +177,7 @@ export default function ViewData({ selectedItem = 'admin' }) {
     return data
   }
 
-  async function loadAdmin(nextPage = adminPage, nextFilter = adminFilter, nextPageSize = pageSize) {
+  async function loadAdmin(nextPage = adminPage, nextFilter = adminFilter, nextPageSize = adminPageSize) {
     if (!token) return
     setLoading(true)
     setError('')
@@ -179,7 +193,7 @@ export default function ViewData({ selectedItem = 'admin' }) {
     }
   }
 
-  async function loadLogin(nextPage = loginPage, nextFilter = loginFilter, nextPageSize = pageSize) {
+  async function loadLogin(nextPage = loginPage, nextFilter = loginFilter, nextPageSize = loginPageSize) {
     if (!token) return
     setLoading(true)
     setError('')
@@ -218,9 +232,13 @@ export default function ViewData({ selectedItem = 'admin' }) {
   }
 
   function changePageSize(nextPageSize) {
-    setPageSize(nextPageSize)
-    if (activeView === 'admin') loadAdmin(1, adminFilter, nextPageSize)
-    else loadLogin(1, loginFilter, nextPageSize)
+    if (activeView === 'admin') {
+      setAdminPageSize(nextPageSize)
+      loadAdmin(1, adminFilter, nextPageSize)
+      return
+    }
+    setLoginPageSize(nextPageSize)
+    loadLogin(1, loginFilter, nextPageSize)
   }
 
   const embeddedView = activeView === 'case'
@@ -242,12 +260,12 @@ export default function ViewData({ selectedItem = 'admin' }) {
         <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>System / View Data</div>
         <h2 style={{ margin: '0 0 14px', fontSize: 18, color: 'var(--text-primary)' }}>Audit Trails</h2>
         <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>Select audit trail</label>
-        <select value={activeView} onChange={e => setActiveView(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text-primary)', marginBottom: 12 }}>
+        <select value={activeView} onChange={e => selectView(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text-primary)', marginBottom: 12 }}>
           {VIEW_OPTIONS.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
         </select>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {VIEW_OPTIONS.map(option => (
-            <button key={option.key} onClick={() => setActiveView(option.key)} style={{ textAlign: 'left', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 9, background: activeView === option.key ? '#eef2ff' : 'var(--surface)', color: 'var(--text-primary)', cursor: 'pointer' }}>
+            <button key={option.key} onClick={() => selectView(option.key)} style={{ textAlign: 'left', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 9, background: activeView === option.key ? '#eef2ff' : 'var(--surface)', color: 'var(--text-primary)', cursor: 'pointer' }}>
               <div style={{ fontSize: 13, fontWeight: 800 }}>{option.label}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{option.description}</div>
             </button>
@@ -305,48 +323,58 @@ export default function ViewData({ selectedItem = 'admin' }) {
 
         {error && <div style={{ margin: '12px 20px 0', padding: '10px 12px', background: '#fee2e2', color: '#b91c1c', borderRadius: 8, fontSize: 13 }}>{error}</div>}
 
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {loading ? (
             <div style={{ padding: 24, color: 'var(--text-muted)' }}>Loading audit data...</div>
           ) : rows.length === 0 ? (
             <div style={{ padding: 34, color: 'var(--text-muted)', textAlign: 'center' }}>No audit records found for the selected filters.</div>
           ) : activeView === 'admin' ? (
-            <table style={{ width: '100%', minWidth: 1050, borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border)' }}>{['Timestamp', 'User', 'Action', 'Entity', 'Summary', 'Details'].map(h => <th key={h} style={{ textAlign: 'left', padding: '10px 12px', color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em' }}>{h}</th>)}</tr></thead>
-              <tbody>{adminRows.map((row, index) => {
+            <VirtualizedTable
+              rows={adminRows}
+              colSpan={6}
+              rowHeight={68}
+              minWidth={1050}
+              tableStyle={{ tableLayout: 'fixed' }}
+              header={<thead><tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border)' }}>{['Timestamp', 'User', 'Action', 'Entity', 'Summary', 'Details'].map(h => <th key={h} style={{ textAlign: 'left', padding: '10px 12px', color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em' }}>{h}</th>)}</tr></thead>}
+              renderRow={(row, index) => {
                 const details = safeJson(row.details)
                 const summary = details.from_status ? `${details.from_status} -> ${details.to_status}` : Object.entries(details).slice(0, 2).map(([k, v]) => `${k}: ${valueText(v)}`).join(' | ') || '-'
                 return (
                   <tr key={row.id} style={{ borderBottom: '1px solid var(--border)', background: index % 2 === 0 ? 'var(--surface)' : 'var(--bg)' }}>
                     <td style={{ padding: '10px 12px', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: 12 }}>{fmtDateIST(row.created_at)}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-primary)' }}>{row.user_name || '-'}</td>
+                    <td title={row.user_name || '-'} style={{ padding: '10px 12px', color: 'var(--text-primary)', ...truncateCellStyle }}>{row.user_name || '-'}</td>
                     <td style={{ padding: '10px 12px' }}><span style={{ padding: '2px 9px', borderRadius: 12, background: '#eef2ff', color: '#3730a3', fontSize: 11, fontWeight: 800 }}>{row.action || '-'}</span></td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-primary)' }}>{row.entity || '-'} {row.entity_id ? `#${row.entity_id}` : ''}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', maxWidth: 440, overflowWrap: 'anywhere' }}>{summary}</td>
+                    <td title={`${row.entity || '-'} ${row.entity_id ? `#${row.entity_id}` : ''}`.trim()} style={{ padding: '10px 12px', color: 'var(--text-primary)', ...truncateCellStyle }}>{row.entity || '-'} {row.entity_id ? `#${row.entity_id}` : ''}</td>
+                    <td title={summary} style={{ padding: '10px 12px', color: 'var(--text-muted)', ...truncateCellStyle }}>{summary}</td>
                     <td style={{ padding: '10px 12px' }}><button onClick={() => setSelected({ type: 'admin', row })} style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', cursor: 'pointer' }}>Open</button></td>
                   </tr>
                 )
-              })}</tbody>
-            </table>
+              }}
+            />
           ) : (
-            <table style={{ width: '100%', minWidth: 1050, borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border)' }}>{['User', 'Role', 'Status', 'Event', 'Login Time', 'Logout Time', 'Reason', 'Details'].map(h => <th key={h} style={{ textAlign: 'left', padding: '10px 12px', color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em' }}>{h}</th>)}</tr></thead>
-              <tbody>{loginRows.map((row, index) => {
+            <VirtualizedTable
+              rows={loginRows}
+              colSpan={8}
+              rowHeight={60}
+              minWidth={1050}
+              tableStyle={{ tableLayout: 'fixed' }}
+              header={<thead><tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border)' }}>{['User', 'Role', 'Status', 'Event', 'Login Time', 'Logout Time', 'Reason', 'Details'].map(h => <th key={h} style={{ textAlign: 'left', padding: '10px 12px', color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em' }}>{h}</th>)}</tr></thead>}
+              renderRow={(row, index) => {
                 const sc = statusColor(row.status)
                 return (
                   <tr key={row.id} style={{ borderBottom: '1px solid var(--border)', background: index % 2 === 0 ? 'var(--surface)' : 'var(--bg)' }}>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-primary)' }}>{row.user_name || '-'}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{row.role || '-'}</td>
+                    <td title={row.user_name || '-'} style={{ padding: '10px 12px', color: 'var(--text-primary)', ...truncateCellStyle }}>{row.user_name || '-'}</td>
+                    <td title={row.role || '-'} style={{ padding: '10px 12px', color: 'var(--text-secondary)', ...truncateCellStyle }}>{row.role || '-'}</td>
                     <td style={{ padding: '10px 12px' }}><span style={{ padding: '2px 9px', borderRadius: 12, background: sc.bg, color: sc.color, fontSize: 11, fontWeight: 800 }}>{row.status || '-'}</span></td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-primary)' }}>{row.auth_event || '-'}</td>
+                    <td title={row.auth_event || '-'} style={{ padding: '10px 12px', color: 'var(--text-primary)', ...truncateCellStyle }}>{row.auth_event || '-'}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: 12 }}>{fmtDateIST(row.login_time)}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: 12 }}>{fmtDateIST(row.logout_time)}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', maxWidth: 360, overflowWrap: 'anywhere' }}>{row.fail_reason || '-'}</td>
+                    <td title={row.fail_reason || '-'} style={{ padding: '10px 12px', color: 'var(--text-muted)', ...truncateCellStyle }}>{row.fail_reason || '-'}</td>
                     <td style={{ padding: '10px 12px' }}><button onClick={() => setSelected({ type: 'login', row })} style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', cursor: 'pointer' }}>Open</button></td>
                   </tr>
                 )
-              })}</tbody>
-            </table>
+              }}
+            />
           )}
         </div>
 

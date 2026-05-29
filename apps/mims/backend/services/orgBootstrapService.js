@@ -546,27 +546,32 @@ async function getOrgReadiness(orgId) {
 }
 
 async function getPlatformReadinessSummary() {
-  const [orgs] = await pool.execute('SELECT id FROM organisations ORDER BY name ASC');
-  const readiness = [];
-  for (const org of orgs) {
-    readiness.push(await getOrgReadiness(org.id));
+  const conn = await pool.getConnection();
+  try {
+    const [orgs] = await conn.execute('SELECT id FROM organisations ORDER BY name ASC');
+    const readiness = [];
+    for (const org of orgs) {
+      readiness.push(await getOrgReadinessWithConnection(conn, org.id));
+    }
+
+    const readyOrgs = readiness.filter((item) => item.ready).length;
+    const attentionOrgs = readiness.length - readyOrgs;
+    const averageScore = readiness.length
+      ? Math.round(readiness.reduce((sum, item) => sum + Number(item.score || 0), 0) / readiness.length)
+      : 100;
+    const totalBlockers = readiness.reduce((sum, item) => sum + item.blockers.length, 0);
+
+    return {
+      total_orgs: readiness.length,
+      ready_orgs: readyOrgs,
+      attention_orgs: attentionOrgs,
+      average_score: averageScore,
+      total_blockers: totalBlockers,
+      orgs: readiness,
+    };
+  } finally {
+    conn.release();
   }
-
-  const readyOrgs = readiness.filter((item) => item.ready).length;
-  const attentionOrgs = readiness.length - readyOrgs;
-  const averageScore = readiness.length
-    ? Math.round(readiness.reduce((sum, item) => sum + Number(item.score || 0), 0) / readiness.length)
-    : 100;
-  const totalBlockers = readiness.reduce((sum, item) => sum + item.blockers.length, 0);
-
-  return {
-    total_orgs: readiness.length,
-    ready_orgs: readyOrgs,
-    attention_orgs: attentionOrgs,
-    average_score: averageScore,
-    total_blockers: totalBlockers,
-    orgs: readiness,
-  };
 }
 
 module.exports = {

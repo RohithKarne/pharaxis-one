@@ -6,13 +6,24 @@
  * is `/api/admin/platform/dashboard`.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { lazy, Suspense, useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
-import MentionsInbox from '../../../../shared/components/collab/MentionsInbox'
-import RecentPinnedWidget from '../../../../shared/components/caseActions/RecentPinnedWidget'
-import PcSignalsWidget from '../../../../shared/components/PcSignalsWidget'
+
+const MentionsInbox = lazy(() => import('../../../../shared/components/collab/MentionsInbox'))
+const RecentPinnedWidget = lazy(() => import('../../../../shared/components/caseActions/RecentPinnedWidget'))
+const PcSignalsWidget = lazy(() => import('../../../../shared/components/PcSignalsWidget'))
+
+function SecondarySectionLoader({ label = 'Loading insights...' }) {
+  return (
+    <div className="card" style={{ minHeight: 168 }}>
+      <div className="card-body" style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 168 }}>
+        {label}
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard({ onNavigateTab }) {
   const { token } = useAuth()
@@ -23,6 +34,7 @@ export default function Dashboard({ onNavigateTab }) {
   const [loading, setLoading] = useState(true)
   const [activity, setActivity] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
+  const [secondaryReady, setSecondaryReady] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -50,10 +62,30 @@ export default function Dashboard({ onNavigateTab }) {
 
   useEffect(() => { load() }, [load])
   useEffect(() => {
+    let cancelled = false
+    const onIdle = () => {
+      if (!cancelled) setSecondaryReady(true)
+    }
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      const idleId = window.requestIdleCallback(onIdle, { timeout: 1200 })
+      return () => {
+        cancelled = true
+        if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId)
+      }
+    }
+    const timeoutId = window.setTimeout(onIdle, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!secondaryReady) return undefined
     loadActivity()
-    const id = setInterval(loadActivity, 30_000)  // refresh every 30s
+    const id = setInterval(loadActivity, 45_000)
     return () => clearInterval(id)
-  }, [loadActivity])
+  }, [loadActivity, secondaryReady])
 
   const kpis      = summary?.kpis      || {}
   const readiness = summary?.readiness || {}
@@ -125,9 +157,19 @@ export default function Dashboard({ onNavigateTab }) {
 
       {/* Wave 4 + Sprint 2 widgets — mentions inbox, recent/pinned cases, PC signals */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <MentionsInbox onOpen={(m) => openCase(m.case_id)} />
-        <RecentPinnedWidget onOpen={(cid) => openCase(cid)} />
-        <PcSignalsWidget />
+        {secondaryReady ? (
+          <Suspense fallback={<><SecondarySectionLoader /><SecondarySectionLoader /><SecondarySectionLoader /></>}>
+            <MentionsInbox onOpen={(m) => openCase(m.case_id)} />
+            <RecentPinnedWidget onOpen={(cid) => openCase(cid)} />
+            <PcSignalsWidget />
+          </Suspense>
+        ) : (
+          <>
+            <SecondarySectionLoader label="Loading mentions..." />
+            <SecondarySectionLoader label="Loading pinned cases..." />
+            <SecondarySectionLoader label="Loading PC signals..." />
+          </>
+        )}
       </div>
 
       {/* Three side-by-side panels */}
@@ -218,9 +260,15 @@ export default function Dashboard({ onNavigateTab }) {
           <h3 style={{ margin: 0, fontSize: 15 }}>
             Recent Platform Activity {activityLoading && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>· refreshing…</span>}
           </h3>
-          <button className="btn btn-outline" style={{ fontSize: 12, padding: '5px 12px' }} onClick={loadActivity}>Refresh</button>
+          <button className="btn btn-outline" style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => {
+            if (!secondaryReady) setSecondaryReady(true)
+            loadActivity()
+          }}>Refresh</button>
         </div>
         <div className="card-body" style={{ maxHeight: 360, overflowY: 'auto', padding: 0 }}>
+          {!secondaryReady && (
+            <div style={{ padding: 18, color: 'var(--text-muted)', fontSize: 13 }}>Secondary activity loads after the main dashboard settles.</div>
+          )}
           {activity.length === 0 && !activityLoading && (
             <div style={{ padding: 18, color: 'var(--text-muted)', fontSize: 13 }}>No activity yet.</div>
           )}

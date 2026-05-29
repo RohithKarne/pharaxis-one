@@ -144,7 +144,10 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   async function switchOrg(newOrgId) {
     const res  = await httpFetch('/api/auth/switch-org', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ orgId: newOrgId })
     })
     if (!res.ok) return
@@ -195,9 +198,11 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   }, [applyAuthState, token])
 
   const refreshOrgAccess = useCallback(async () => {
+    if (!token) return
     if (hasGlobalAdminScope({ ...user, modules })) return
 
-    const res = await httpFetch('/api/auth/me')
+    const authHeaders = { Authorization: `Bearer ${token}` }
+    const res = await httpFetch('/api/auth/me', { headers: authHeaders })
     if (!res.ok) return
     const data = await res.json()
     const nextOrgs = Array.isArray(data.allOrgs) ? data.allOrgs : []
@@ -214,6 +219,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify({ orgId: fallbackOrgId })
     })
@@ -228,7 +234,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     localStorage.setItem(`${KEY}_all_orgs`,        JSON.stringify(switched.allOrgs || []))
     localStorage.setItem(`${KEY}_session_timeout`, String(switched.sessionTimeout ?? 30))
     window.location.reload()
-  }, [KEY, modules, user])
+  }, [KEY, modules, token, user])
 
   const refreshSecurityAccess = useCallback(async () => {
     if (isPublicAuthPath()) {

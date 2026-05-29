@@ -1,20 +1,28 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState, startTransition } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import StandaloneModuleShell from '../../../shared/components/StandaloneModuleShell'
-import AdminContentIntelligenceSection from '../../admin/components/AdminContentIntelligenceSection'
-import AdminMICategoriesSection from '../../admin/components/AdminMICategoriesSection'
-import AdminPolicyGraphSection from '../../admin/components/AdminPolicyGraphSection'
-import FolderManager from '../components/FolderManager'
-import DocumentsSection from '../components/DocumentsSection'
-import ModulesSection from '../components/ModulesSection'
-import FAQsSection from '../components/FAQsSection'
-import MergeReportsSection from '../components/MergeReportsSection'
-import TemplatesSection from '../components/TemplatesSection'
-import BrowseSection from '../components/BrowseSection'
-import CMSettingsSection from '../components/CMSettingsSection'
-import ContentOperationsSection from '../components/ContentOperationsSection'
+const AdminContentIntelligenceSection = lazy(() => import('../../admin/components/AdminContentIntelligenceSection'))
+const AdminMICategoriesSection = lazy(() => import('../../admin/components/AdminMICategoriesSection'))
+const AdminPolicyGraphSection = lazy(() => import('../../admin/components/AdminPolicyGraphSection'))
+const FolderManager = lazy(() => import('../components/FolderManager'))
+const DocumentsSection = lazy(() => import('../components/DocumentsSection'))
+const ModulesSection = lazy(() => import('../components/ModulesSection'))
+const FAQsSection = lazy(() => import('../components/FAQsSection'))
+const MergeReportsSection = lazy(() => import('../components/MergeReportsSection'))
+const TemplatesSection = lazy(() => import('../components/TemplatesSection'))
+const BrowseSection = lazy(() => import('../components/BrowseSection'))
+const CMSettingsSection = lazy(() => import('../components/CMSettingsSection'))
+const ContentOperationsSection = lazy(() => import('../components/ContentOperationsSection'))
+
+function ContentSectionLoader() {
+  return (
+    <div style={{ minHeight: 220, display: 'grid', placeItems: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
+      Loading content workspace...
+    </div>
+  )
+}
 
 export default function ContentPage() {
   const { user, token } = useAuth()
@@ -79,7 +87,7 @@ export default function ContentPage() {
                     key={tab.key}
                     type="button"
                     className={`workspace-rail-button ${activeTab === tab.key ? 'active' : ''}`}
-                    onClick={() => setActiveTab(tab.key)}
+                    onClick={() => startTransition(() => setActiveTab(tab.key))}
                   >
                     <strong>{tab.label}</strong>
                     <span>{tab.description}</span>
@@ -101,26 +109,30 @@ export default function ContentPage() {
           </div>
 
           <div className="cm-content workspace-panel-body">
-            {activeTab === 'documents' && <DocumentsSection token={token} user={user} />}
-            {activeTab === 'modules' && <ModulesSection token={token} />}
-            {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
-            {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}
-            {activeTab === 'templates' && <TemplatesSection token={token} />}
-            {activeTab === 'operations' && <ContentOperationsSection token={token} onNavigate={setActiveTab} />}
-            {activeTab === 'browse' && <BrowseSection token={token} />}
-            {activeTab === 'settings' && <CMSettingsSection token={token} />}
-            {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
-            {activeTab === 'policy-graph' && <AdminPolicyGraphSection H={H} flash={flash} />}
-            {activeTab === 'evidence-chain-compiler' && <AdminContentIntelligenceSection contentSection="evidence-chain-compiler" H={H} flash={flash} />}
-            {activeTab === 'contradiction-radar' && <AdminContentIntelligenceSection contentSection="contradiction-radar" H={H} flash={flash} />}
-            {activeTab === 'digital-twin-release-simulator' && <AdminContentIntelligenceSection contentSection="digital-twin-release-simulator" H={H} flash={flash} />}
-            {activeTab === 'adaptive-risk-workflow' && <AdminContentIntelligenceSection contentSection="adaptive-risk-workflow" H={H} flash={flash} />}
+            <Suspense fallback={<ContentSectionLoader />}>
+              {activeTab === 'documents' && <DocumentsSection token={token} user={user} />}
+              {activeTab === 'modules' && <ModulesSection token={token} />}
+              {activeTab === 'faqs' && <FAQsSection token={token} user={user} />}
+              {activeTab === 'merge-reports' && <MergeReportsSection token={token} />}
+              {activeTab === 'templates' && <TemplatesSection token={token} />}
+              {activeTab === 'operations' && <ContentOperationsSection token={token} onNavigate={(nextTab) => startTransition(() => setActiveTab(nextTab))} />}
+              {activeTab === 'browse' && <BrowseSection token={token} />}
+              {activeTab === 'settings' && <CMSettingsSection token={token} />}
+              {activeTab === 'mi-categories' && <AdminMICategoriesSection H={H} />}
+              {activeTab === 'policy-graph' && <AdminPolicyGraphSection H={H} flash={flash} />}
+              {activeTab === 'evidence-chain-compiler' && <AdminContentIntelligenceSection contentSection="evidence-chain-compiler" H={H} flash={flash} />}
+              {activeTab === 'contradiction-radar' && <AdminContentIntelligenceSection contentSection="contradiction-radar" H={H} flash={flash} />}
+              {activeTab === 'digital-twin-release-simulator' && <AdminContentIntelligenceSection contentSection="digital-twin-release-simulator" H={H} flash={flash} />}
+              {activeTab === 'adaptive-risk-workflow' && <AdminContentIntelligenceSection contentSection="adaptive-risk-workflow" H={H} flash={flash} />}
+            </Suspense>
           </div>
         </section>
       </div>
 
       {showFolders && (
-        <FolderManager show={showFolders} onClose={() => setShowFolders(false)} token={token} />
+        <Suspense fallback={null}>
+          <FolderManager show={showFolders} onClose={() => setShowFolders(false)} token={token} />
+        </Suspense>
       )}
     </div>
   )

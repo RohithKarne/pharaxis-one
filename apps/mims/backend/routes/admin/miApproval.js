@@ -17,6 +17,7 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const miApproval = require('../../services/miApprovalService');
 
 const ADMIN = ['admin', 'platform_admin'];
@@ -30,19 +31,22 @@ function clientMeta(req) {
 
 router.get('/mi-responses/:id/approval-state', authenticate, async (req, res) => {
   try {
+    const globalScope = hasGlobalAdminScope(req.user);
+    const orgClause = globalScope ? '1 = 1' : 'c.org_id = ?';
+    const params = globalScope ? [req.params.id] : [req.params.id, req.user.orgId];
     const [[r]] = await pool.execute(
       `SELECT mr.id, mr.response_status, mr.mi_tab_id, mr.requires_two_signers,
               mr.reviewer_id, mr.reviewer_name, mr.reviewed_at,
               mr.approver_id, mr.approver_name, mr.approved_at,
-              t.is_off_label
+              t.is_off_label, c.org_id
          FROM case_mi_responses mr
          JOIN case_mi      t ON t.id = mr.mi_tab_id
          JOIN cases        c ON c.id = t.case_id
-        WHERE mr.id = ? AND c.org_id = ?`,
-      [req.params.id, req.user.orgId]
+        WHERE mr.id = ? AND ${orgClause}`,
+      params
     );
     if (!r) return res.status(404).json({ error: 'Not found' });
-    const needs = await miApproval.needsTwoSigners({ orgId: req.user.orgId, response: r });
+    const needs = await miApproval.needsTwoSigners({ orgId: r.org_id || req.user.orgId, response: r });
     res.json({
       status: r.response_status,
       reviewer: r.reviewed_at ? { id: r.reviewer_id, name: r.reviewer_name, at: r.reviewed_at } : null,
@@ -59,6 +63,7 @@ router.post('/mi-responses/:id/review', authenticate, async (req, res) => {
     const meta = clientMeta(req);
     const out = await miApproval.sign({
       orgId:    req.user.orgId,
+      globalScope: hasGlobalAdminScope(req.user),
       responseId: req.params.id,
       role:     'reviewer',
       userId:   req.user.userId,
@@ -75,6 +80,7 @@ router.post('/mi-responses/:id/approve', authenticate, async (req, res) => {
     const meta = clientMeta(req);
     const out = await miApproval.sign({
       orgId:    req.user.orgId,
+      globalScope: hasGlobalAdminScope(req.user),
       responseId: req.params.id,
       role:     'approver',
       userId:   req.user.userId,
@@ -89,6 +95,7 @@ router.put('/mi-responses/:id/requires-two-signers', authenticate, requireRole(.
   try {
     await miApproval.setRequiresTwoSigners({
       orgId: req.user.orgId,
+      globalScope: hasGlobalAdminScope(req.user),
       responseId: req.params.id,
       value: !!(req.body || {}).value,
     });

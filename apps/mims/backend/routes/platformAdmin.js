@@ -87,77 +87,72 @@ function sendCsv(res, filename, rows) {
 }
 
 async function getDashboardSummary() {
-  const [
-    [[orgTotals]],
-    [[userTotals]],
-    [[failedLogins]],
-    [[lockedUsers]],
-    [recentAudit],
-    [recentLogins],
-    [[smtpStatus]],
-    [[unreadNotifications]],
-    [[alertEvents]],
-  ] = await Promise.all([
-    pool.execute(`SELECT COUNT(*) AS total,
-                         SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active,
-                         SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive
-                  FROM organisations`),
-    pool.execute(`SELECT COUNT(*) AS total,
-                         SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active,
-                         SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive
-                  FROM users
-                  WHERE id NOT IN (
-                    SELECT user_id FROM user_module_permissions
-                    WHERE module = 'platform_admin_console' AND can_access = 1
-                  )`),
-    pool.execute(`SELECT COUNT(*) AS count
-                  FROM login_audit
-                  WHERE status = 'failed'
-                    AND login_time >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`),
-    pool.execute(`SELECT COUNT(DISTINCT user_id) AS count
-                  FROM user_2fa_settings
-                  WHERE is_locked = 1`),
-    pool.execute(`SELECT id, user_name, action, entity, entity_id, created_at
-                  FROM audit_logs
-                  ORDER BY created_at DESC
-                  LIMIT 5`),
-    pool.execute(`SELECT id, user_name, status, fail_reason, auth_event, login_time
-                  FROM login_audit
-                  ORDER BY login_time DESC
-                  LIMIT 5`),
-    pool.execute(`SELECT MAX(last_smtp_test_status) AS last_status
-                  FROM email_accounts`),
-    pool.execute(`SELECT COUNT(*) AS count
-                  FROM notifications n
-                  JOIN user_module_permissions ump ON ump.user_id = n.user_id
-                  WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1 AND n.is_read = 0`),
-    pool.execute(`SELECT COUNT(*) AS count
-                  FROM platform_admin_alert_events
-                  WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`),
-  ]);
+  const conn = await pool.getConnection();
+  try {
+    const [[orgTotals]] = await conn.execute(`SELECT COUNT(*) AS total,
+                                                     SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active,
+                                                     SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive
+                                              FROM organisations`);
+    const [[userTotals]] = await conn.execute(`SELECT COUNT(*) AS total,
+                                                      SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active,
+                                                      SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive
+                                               FROM users
+                                               WHERE id NOT IN (
+                                                 SELECT user_id FROM user_module_permissions
+                                                 WHERE module = 'platform_admin_console' AND can_access = 1
+                                               )`);
+    const [[failedLogins]] = await conn.execute(`SELECT COUNT(*) AS count
+                                                 FROM login_audit
+                                                 WHERE status = 'failed'
+                                                   AND login_time >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`);
+    const [[lockedUsers]] = await conn.execute(`SELECT COUNT(DISTINCT user_id) AS count
+                                                FROM user_2fa_settings
+                                                WHERE is_locked = 1`);
+    const [recentAudit] = await conn.execute(`SELECT id, user_name, action, entity, entity_id, created_at
+                                              FROM audit_logs
+                                              ORDER BY created_at DESC
+                                              LIMIT 5`);
+    const [recentLogins] = await conn.execute(`SELECT id, user_name, status, fail_reason, auth_event, login_time
+                                               FROM login_audit
+                                               ORDER BY login_time DESC
+                                               LIMIT 5`);
+    const [[smtpStatus]] = await conn.execute(`SELECT MAX(last_smtp_test_status) AS last_status
+                                               FROM email_accounts`);
+    const [[unreadNotifications]] = await conn.execute(`SELECT COUNT(*) AS count
+                                                        FROM notifications n
+                                                        JOIN user_module_permissions ump ON ump.user_id = n.user_id
+                                                        WHERE ump.module = 'platform_admin_console'
+                                                          AND ump.can_access = 1
+                                                          AND n.is_read = 0`);
+    const [[alertEvents]] = await conn.execute(`SELECT COUNT(*) AS count
+                                                FROM platform_admin_alert_events
+                                                WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`);
 
-  const systemConfig = await getSystemConfig();
-  const readiness = await getPlatformReadinessSummary();
-  return {
-    kpis: {
-      organisations: orgTotals || { total: 0, active: 0, inactive: 0 },
-      users: userTotals || { total: 0, active: 0, inactive: 0 },
-      failedLogins24h: failedLogins?.count || 0,
-      lockedUsers: lockedUsers?.count || 0,
-      unreadNotifications: unreadNotifications?.count || 0,
-      alertEvents24h: alertEvents?.count || 0,
-      smtpStatus: smtpStatus?.last_status || (systemConfig.smtp_host ? 'configured' : 'not configured'),
-    },
-    readiness: {
-      totalOrgs: readiness.total_orgs,
-      readyOrgs: readiness.ready_orgs,
-      attentionOrgs: readiness.attention_orgs,
-      averageScore: readiness.average_score,
-      totalBlockers: readiness.total_blockers,
-    },
-    recentAudit: recentAudit || [],
-    recentLogins: recentLogins || [],
-  };
+    const systemConfig = await getSystemConfig();
+    const readiness = await getPlatformReadinessSummary();
+    return {
+      kpis: {
+        organisations: orgTotals || { total: 0, active: 0, inactive: 0 },
+        users: userTotals || { total: 0, active: 0, inactive: 0 },
+        failedLogins24h: failedLogins?.count || 0,
+        lockedUsers: lockedUsers?.count || 0,
+        unreadNotifications: unreadNotifications?.count || 0,
+        alertEvents24h: alertEvents?.count || 0,
+        smtpStatus: smtpStatus?.last_status || (systemConfig.smtp_host ? 'configured' : 'not configured'),
+      },
+      readiness: {
+        totalOrgs: readiness.total_orgs,
+        readyOrgs: readiness.ready_orgs,
+        attentionOrgs: readiness.attention_orgs,
+        averageScore: readiness.average_score,
+        totalBlockers: readiness.total_blockers,
+      },
+      recentAudit: recentAudit || [],
+      recentLogins: recentLogins || [],
+    };
+  } finally {
+    conn.release();
+  }
 }
 
 // GET /api/admin/platform/users — list users with current module overrides (excludes platform admin system account)

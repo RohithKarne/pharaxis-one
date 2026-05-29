@@ -26,6 +26,7 @@ const ROLES_PRIVILEGED = ['admin', 'platform_admin', 'medical_director', 'qppv',
  * requires two signers based on configured rules + per-response flag.
  */
 async function needsTwoSigners({ orgId, response }) {
+  const effectiveOrgId = response?.org_id || orgId;
   if (response?.requires_two_signers) return { required: true, reason: 'response_flag' };
   // Off-label inquiries auto-require two signers if a global rule is active
   const [[offLabelRule]] = await pool.execute(
@@ -34,7 +35,7 @@ async function needsTwoSigners({ orgId, response }) {
         AND is_active = 1
         AND condition_type = 'off_label'
       LIMIT 1`,
-    [orgId]
+    [effectiveOrgId]
   );
   if (offLabelRule) {
     // Check the source MI tab
@@ -56,19 +57,22 @@ async function needsTwoSigners({ orgId, response }) {
  * sign({orgId, responseId, role, userId, userName, password, reason})
  *   role: 'reviewer' | 'approver'
  */
-async function sign({ orgId, responseId, role, userId, userName, password, reason, ip, userAgent }) {
+async function sign({ orgId, globalScope = false, responseId, role, userId, userName, password, reason, ip, userAgent }) {
   if (!['reviewer', 'approver'].includes(role)) throw new Error('Invalid role');
 
+  const orgClause = globalScope ? '' : ' AND c.org_id = ?';
+  const params = globalScope ? [responseId] : [responseId, orgId];
   const [[r]] = await pool.execute(
-    `SELECT mr.*, c.id AS case_id
+    `SELECT mr.*, c.id AS case_id, c.org_id
        FROM case_mi_responses mr
        JOIN case_mi        t ON t.id = mr.mi_tab_id
        JOIN cases          c ON c.id = t.case_id
-      WHERE mr.id = ? AND c.org_id = ?
+      WHERE mr.id = ?${orgClause}
       LIMIT 1`,
-    [responseId, orgId]
+    params
   );
   if (!r) throw new Error('Response not found');
+  const effectiveOrgId = r.org_id || orgId;
 
   // Reviewer must come before approver
   if (role === 'approver' && !r.reviewed_at) {
@@ -81,7 +85,7 @@ async function sign({ orgId, responseId, role, userId, userName, password, reaso
 
   // Verify password via complianceService's captureESign which also chains the hash.
   const esign = await compliance.captureESign({
-    orgId,
+    orgId: effectiveOrgId,
     caseId: r.case_id,
     transition: role === 'reviewer' ? 'mi_review' : 'mi_approve',
     fromStatus: r.response_status,
@@ -112,16 +116,18 @@ async function sign({ orgId, responseId, role, userId, userName, password, reaso
   return { ok: true, esign_id: esign.id, hash: esign.hash };
 }
 
-async function setRequiresTwoSigners({ orgId, responseId, value }) {
+async function setRequiresTwoSigners({ orgId, globalScope = false, responseId, value }) {
   // Authorize indirectly via case scope
-  await pool.execute(
+  const orgClause = globalScope ? '' : ' AND c.org_id = ?';
+  const [result] = await pool.execute(
     `UPDATE case_mi_responses mr
        JOIN case_mi      t ON t.id = mr.mi_tab_id
        JOIN cases        c ON c.id = t.case_id
         SET mr.requires_two_signers = ?
-      WHERE mr.id = ? AND c.org_id = ?`,
-    [value ? 1 : 0, responseId, orgId]
+      WHERE mr.id = ?${orgClause}`,
+    globalScope ? [value ? 1 : 0, responseId] : [value ? 1 : 0, responseId, orgId]
   );
+  if (!result.affectedRows) throw new Error('Response not found');
   return { ok: true };
 }
 

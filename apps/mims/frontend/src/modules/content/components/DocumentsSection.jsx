@@ -6,6 +6,16 @@ import { CheckInModal, InitiateReviewModal, ApproveModal, PublishModal, ReviewSt
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { useAuth } from '../../../shared/context/AuthContext'
 
+const DEFAULT_FILTERS = {
+  folder_id: '',
+  doc_type: '',
+  status: '',
+  search: '',
+  category: '',
+  authoring_source: '',
+  include_expired: false,
+}
+
 function ReviewRowWithMode({ r, authHeaders, onOpen }) {
   const [mode, setMode] = useState(r.review_mode || null)
   const [saving, setSaving] = useState(false)
@@ -71,15 +81,8 @@ export default function DocumentsSection({ token, user }) {
   const [reviews, setReviews] = useState([])
   const [folders, setFolders] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({
-    folder_id: '',
-    doc_type: '',
-    status: '',
-    search: '',
-    category: '',
-    authoring_source: '',
-    include_expired: false,
-  })
+  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS)
   const [ftQuery, setFtQuery] = useState('')
   const [ftResults, setFtResults] = useState(null)
   const [ftSearching, setFtSearching] = useState(false)
@@ -136,11 +139,11 @@ export default function DocumentsSection({ token, user }) {
   const [relationsDoc, setRelationsDoc] = useState(null)
   const [usageDoc, setUsageDoc] = useState(null)
 
-  const loadDocs = useCallback(async () => {
+  const loadDocs = useCallback(async (nextFilters = appliedFilters, nextPage = page) => {
     setLoading(true)
     try {
-      const filterPayload = Object.fromEntries(Object.entries(filters).filter(([, value]) => value && value !== false))
-      const params = new URLSearchParams({ page, limit: LIMIT, ...filterPayload })
+      const filterPayload = Object.fromEntries(Object.entries(nextFilters).filter(([, value]) => value && value !== false))
+      const params = new URLSearchParams({ page: nextPage, limit: LIMIT, ...filterPayload })
       const res = await httpFetch(`/api/cm/documents?${params}`, { headers: authHeaders })
       if (res.ok) {
         const d = await res.json()
@@ -149,7 +152,7 @@ export default function DocumentsSection({ token, user }) {
       }
     } catch { /* silent */ }
     setLoading(false)
-  }, [token, filters, page]) // eslint-disable-line
+  }, [token, appliedFilters, page]) // eslint-disable-line
 
   const loadReviews = useCallback(async () => {
     try {
@@ -179,8 +182,15 @@ export default function DocumentsSection({ token, user }) {
     } catch { /* silent */ }
   }, [token]) // eslint-disable-line
 
-  useEffect(() => { loadFolders() }, [loadFolders])
-  useEffect(() => { if (subTab === 'all') loadDocs() }, [loadDocs, subTab])
+  useEffect(() => {
+    if (subTab !== 'all') return
+    loadFolders()
+  }, [loadFolders, subTab])
+
+  useEffect(() => {
+    if (subTab !== 'all') return
+    loadDocs()
+  }, [loadDocs, subTab])
   useEffect(() => { if (subTab === 'reviews') loadReviews() }, [loadReviews, subTab])
   useEffect(() => { if (subTab === 'checkedin') loadCheckedIn() }, [loadCheckedIn, subTab])
   useEffect(() => { if (subTab === 'checkedout') loadCheckedOut() }, [loadCheckedOut, subTab])
@@ -335,7 +345,10 @@ export default function DocumentsSection({ token, user }) {
               <input type="checkbox" checked={filters.include_expired} onChange={e => { setFilters(p => ({ ...p, include_expired: e.target.checked })); setPage(1) }} />
               Include expired
             </label>
-            <button className="cm-btn cm-btn-secondary" onClick={loadDocs}>Filter</button>
+            <button className="cm-btn cm-btn-secondary" onClick={() => {
+              setPage(1)
+              setAppliedFilters(filters)
+            }}>Filter</button>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
             <input className="cm-form-input" style={{ width: 300 }} placeholder="🔍 Full-text content search…" value={ftQuery}

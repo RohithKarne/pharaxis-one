@@ -4,6 +4,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { formatAdminRoleLabel, isAdminUser } from '../../../shared/utils/adminScope.js'
+import { prefetchRoutePath } from '../../../shared/utils/routePrefetch.js'
 
 const API = '/api'
 
@@ -334,8 +335,8 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="mims-home-hero-actions">
-            <button className="btn btn-outline" onClick={loadDashboard} disabled={loading}>Refresh</button>
-            <button className="btn btn-primary" onClick={() => navigate('/cases')}>Open Case Management</button>
+              <button className="btn btn-outline" onClick={loadDashboard} disabled={loading}>Refresh</button>
+            <button className="btn btn-primary" onMouseEnter={() => prefetchRoutePath('/cases')} onFocus={() => prefetchRoutePath('/cases')} onClick={() => navigate('/cases')}>Open Case Management</button>
           </div>
         </div>
 
@@ -349,7 +350,7 @@ export default function DashboardPage() {
                 </div>
                 <strong>{item.value}</strong>
               </div>
-              <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={() => navigate(item.actionTo)}>
+              <button className="btn btn-outline" style={{ fontSize: 12 }} onMouseEnter={() => prefetchRoutePath(item.actionTo)} onFocus={() => prefetchRoutePath(item.actionTo)} onClick={() => navigate(item.actionTo)}>
                 {item.actionLabel}
               </button>
             </article>
@@ -371,6 +372,8 @@ export default function DashboardPage() {
                     key={item.key}
                     type="button"
                     className="mims-workbench-card"
+                    onMouseEnter={() => prefetchRoutePath(item.to)}
+                    onFocus={() => prefetchRoutePath(item.to)}
                     onClick={() => navigate(item.to)}
                   >
                     <strong>{item.title}</strong>

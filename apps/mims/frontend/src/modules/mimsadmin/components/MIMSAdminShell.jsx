@@ -1,26 +1,35 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react'
 import ReactDOM from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
-import Dashboard        from './tabs/Dashboard'
 // import Organizations from './tabs/Organizations' // retired — see TABS note (Division Parameters replaces it)
-import ServiceLog       from './tabs/ServiceLog'
-import SystemActivity   from './tabs/SystemActivity'
-import ServiceDashboard from './tabs/ServiceDashboard'
-import Configuration    from './tabs/Configuration'
-import Escalation       from './tabs/Escalation'
-import Documents        from './tabs/Documents'
-import Tables           from './tabs/Tables'
-import System           from './tabs/System'
-import Help             from './tabs/Help'
 import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV } from './configItems'
 // Legacy nav-key permission map retired — admin gating is now capability-based.
 // groupSecurityConfig kept on disk for rollback. (import removed)
 import { AdminTenantProvider, useAdminTenant } from '../utils/AdminTenantContext'
 import HelpHint from '../../../shared/components/HelpHint'
 import { helpKeyFor, helpLabelFor } from '../utils/helpKeys'
+
+const DashboardTab = lazy(() => import('./tabs/Dashboard'))
+const ServiceLogTab = lazy(() => import('./tabs/ServiceLog'))
+const SystemActivityTab = lazy(() => import('./tabs/SystemActivity'))
+const ServiceDashboardTab = lazy(() => import('./tabs/ServiceDashboard'))
+const ConfigurationTab = lazy(() => import('./tabs/Configuration'))
+const EscalationTabContent = lazy(() => import('./tabs/Escalation'))
+const DocumentsTabContent = lazy(() => import('./tabs/Documents'))
+const TablesTabContent = lazy(() => import('./tabs/Tables'))
+const SystemTab = lazy(() => import('./tabs/System'))
+const HelpTab = lazy(() => import('./tabs/Help'))
+
+function AdminTabLoader() {
+  return (
+    <div style={{ minHeight: 240, display: 'grid', placeItems: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
+      Loading admin workspace...
+    </div>
+  )
+}
 
 function createResolvedAdminAccess(data = {}) {
   return { resolved: true, unrestricted: false, system_options: null, ...data }
@@ -66,18 +75,18 @@ function AdminTenantPicker() {
 }
 
 const TABS = [
-  { key: 'dashboard',         label: 'Dashboard',         component: Dashboard        },
+  { key: 'dashboard',         label: 'Dashboard',         component: DashboardTab        },
   // Organizations retired — replaced by System > Division Parameters (division-only model).
   // Component file kept for rollback; remove import + file once parity is fully confirmed.
-  { key: 'service-log',       label: 'Service Log',       component: ServiceLog       },
-  { key: 'system-activity',   label: 'System Activity',   component: SystemActivity   },
-  { key: 'service-dashboard', label: 'Service Dashboard', component: ServiceDashboard },
-  { key: 'configuration',     label: 'Configuration',     component: Configuration    },
-  { key: 'escalation',        label: 'Escalation',        component: Escalation       },
-  { key: 'documents',         label: 'Documents',         component: Documents        },
-  { key: 'tables',            label: 'Tables',            component: Tables           },
-  { key: 'system',            label: 'System',            component: System           },
-  { key: 'help',              label: 'Help',              component: Help             },
+  { key: 'service-log',       label: 'Service Log',       component: ServiceLogTab       },
+  { key: 'system-activity',   label: 'System Activity',   component: SystemActivityTab   },
+  { key: 'service-dashboard', label: 'Service Dashboard', component: ServiceDashboardTab },
+  { key: 'configuration',     label: 'Configuration',     component: ConfigurationTab    },
+  { key: 'escalation',        label: 'Escalation',        component: EscalationTabContent       },
+  { key: 'documents',         label: 'Documents',         component: DocumentsTabContent        },
+  { key: 'tables',            label: 'Tables',            component: TablesTabContent           },
+  { key: 'system',            label: 'System',            component: SystemTab           },
+  { key: 'help',              label: 'Help',              component: HelpTab             },
 ]
 
 const SERVICE_LOG_NAV = [
@@ -908,11 +917,18 @@ function MIMSAdminShellInner() {
     activateTab('system', 'system', value)
   }
 
+  function handleAuditSelect(value) {
+    setAuditItem(value)
+    setSystemItem('sys-view-data')
+    setActiveTab('system')
+    syncAdminState({ tab: 'system', system: 'sys-view-data', audit: value })
+  }
+
   function handleHelpSelect(value) {
     activateTab('help', 'help', value)
   }
 
-  const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || Dashboard
+  const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || DashboardTab
   const visibleTabs = TABS.filter(t => {
     if (t.key === 'system') return systemNav.length > 0
     return isAdminTabAllowed(t.key, effectiveAccess)
@@ -1044,30 +1060,32 @@ function MIMSAdminShellInner() {
       </div>
 
       <div className="mims-admin-tab-content">
-        {activeTab === 'system' && systemItem && !isSystemItemAllowed(effectiveAccess, systemItem)
-          ? <AdminAccessDenied label={helpLabelFor({ activeTab, systemItem }) || 'this system option'} />
-          : activeTab !== 'system' && !isAdminTabAllowed(activeTab, effectiveAccess)
-          ? <AdminAccessDenied label={TABS.find(t => t.key === activeTab)?.label || 'this admin tab'} />
-          : activeTab === 'service-log'
-          ? <ServiceLog selectedItem={serviceItem} />
-          : activeTab === 'system-activity'
-          ? <SystemActivity selectedItem={activityItem} />
-          : activeTab === 'configuration'
-          ? <Configuration selectedItem={configItem} onSelect={(value) => activateTab('configuration', 'config', value)} />
-          : activeTab === 'escalation'
-          ? <Escalation selectedItem={escalationItem} onSelect={(value) => activateTab('escalation', 'escalation', value)} />
-          : activeTab === 'documents'
-          ? <Documents selectedItem={documentsItem} onSelect={(value) => activateTab('documents', 'documents', value)} />
-          : activeTab === 'tables'
-          ? <Tables selectedItem={tablesItem} onSelect={(value) => activateTab('tables', 'tables', value)} />
-          : activeTab === 'system'
-          ? <System selectedItem={systemItem} auditItem={auditItem} />
-          : activeTab === 'help'
-          ? <Help selectedItem={helpItem} onSelect={(value) => activateTab('help', 'help', value)} />
-          : activeTab === 'dashboard'
-          ? <Dashboard onNavigateTab={activateTab} />
-          : <ActiveComponent />
-        }
+        <Suspense fallback={<AdminTabLoader />}>
+          {activeTab === 'system' && systemItem && !isSystemItemAllowed(effectiveAccess, systemItem)
+            ? <AdminAccessDenied label={helpLabelFor({ activeTab, systemItem }) || 'this system option'} />
+            : activeTab !== 'system' && !isAdminTabAllowed(activeTab, effectiveAccess)
+            ? <AdminAccessDenied label={TABS.find(t => t.key === activeTab)?.label || 'this admin tab'} />
+            : activeTab === 'service-log'
+            ? <ServiceLogTab selectedItem={serviceItem} />
+            : activeTab === 'system-activity'
+            ? <SystemActivityTab selectedItem={activityItem} />
+            : activeTab === 'configuration'
+            ? <ConfigurationTab selectedItem={configItem} onSelect={(value) => activateTab('configuration', 'config', value)} />
+            : activeTab === 'escalation'
+            ? <EscalationTabContent selectedItem={escalationItem} onSelect={(value) => activateTab('escalation', 'escalation', value)} />
+            : activeTab === 'documents'
+            ? <DocumentsTabContent selectedItem={documentsItem} onSelect={(value) => activateTab('documents', 'documents', value)} />
+            : activeTab === 'tables'
+            ? <TablesTabContent selectedItem={tablesItem} onSelect={(value) => activateTab('tables', 'tables', value)} />
+            : activeTab === 'system'
+            ? <SystemTab selectedItem={systemItem} auditItem={auditItem} onAuditSelect={handleAuditSelect} />
+            : activeTab === 'help'
+            ? <HelpTab selectedItem={helpItem} onSelect={(value) => activateTab('help', 'help', value)} />
+            : activeTab === 'dashboard'
+            ? <DashboardTab onNavigateTab={activateTab} />
+            : <ActiveComponent />
+          }
+        </Suspense>
       </div>
     </div>
   )

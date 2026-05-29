@@ -15,19 +15,19 @@ import { isAdminUser } from '../../shared/utils/adminScope.js'
 // ── Eagerly loaded — part of the critical navigation path ────────────────────
 import LoginPage            from './pages/LoginPage'
 import SsoCompletePage      from './pages/SsoCompletePage'
-import DashboardPage        from './pages/DashboardPage'
-import InboxPage            from './pages/InboxPage'
-import CasesPage            from '../cases/pages/CasesPage'
-import CaseFormPage         from '../cases/pages/CaseFormPage'
-import ICSRBuilderPage      from '../cases/pages/ICSRBuilderPage'
-import CaseQueryPage        from '../cases/pages/CaseQueryPage'
-import SessionManagementPage from './pages/SessionManagementPage'
 import NoAccessPage         from '../../pages/NoAccessPage'
 import ResetPasswordPage    from '../../pages/ResetPasswordPage'
 
 // ── Lazily loaded — heavy or rarely-visited pages (loaded on demand) ─────────
 // Each becomes its own JS chunk; only downloaded when the user navigates there.
+const DashboardPage            = lazy(() => import('./pages/DashboardPage'))
+const InboxPage                = lazy(() => import('./pages/InboxPage'))
 const ChatPage                 = lazy(() => import('./pages/ChatPage'))
+const SessionManagementPage    = lazy(() => import('./pages/SessionManagementPage'))
+const CasesPage                = lazy(() => import('../cases/pages/CasesPage'))
+const CaseFormPage             = lazy(() => import('../cases/pages/CaseFormPage'))
+const ICSRBuilderPage          = lazy(() => import('../cases/pages/ICSRBuilderPage'))
+const CaseQueryPage            = lazy(() => import('../cases/pages/CaseQueryPage'))
 const ContentPage              = lazy(() => import('../content/pages/ContentPage'))
 const AnalyticsPage            = lazy(() => import('../dv/pages/AnalyticsPage'))
 const ReportsPage              = lazy(() => import('../reports/pages/ReportsPage'))
