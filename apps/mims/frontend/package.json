@@ -19,7 +19,7 @@
     "@tiptap/extension-underline": "^3.20.4",
     "@tiptap/react": "^3.20.4",
     "@tiptap/starter-kit": "^3.20.4",
-    "dompurify": "^3.4.2",
+    "dompurify": "^3.4.11",
     "jspdf": "^4.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
