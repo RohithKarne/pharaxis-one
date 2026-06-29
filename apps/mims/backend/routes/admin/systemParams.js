@@ -102,8 +102,10 @@ router.get('/system-params/theme', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/admin/system-params/general — update password rules
+// WP1: writes the GLOBAL system_config (password policy enforced for every tenant)
+// — restrict to platform admins so a single tenant admin can't weaken it platform-wide.
 // ─────────────────────────────────────────────────────────────────────────────
-router.put('/system-params/general', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.put('/system-params/general', authenticate, requireRole('platform_admin'), async (req, res) => {
   const {
     password_expiry_days,
     password_require_alphanumeric,

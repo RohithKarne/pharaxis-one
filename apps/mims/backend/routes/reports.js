@@ -173,7 +173,7 @@ router.get('/reports/case-volume', authenticate, async (req, res) => {
 router.get('/reports/case-status', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'created_at');
 
     let sql = `
@@ -198,7 +198,7 @@ router.get('/reports/case-status', authenticate, async (req, res) => {
 router.get('/reports/case-type', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'created_at');
 
     let sql = `
@@ -223,7 +223,7 @@ router.get('/reports/case-type', authenticate, async (req, res) => {
 router.get('/reports/case-age', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'created_at');
 
     let sql = `
@@ -252,7 +252,7 @@ router.get('/reports/case-age', authenticate, async (req, res) => {
 router.get('/reports/case-assignee', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'c.created_at');
 
     let sql = `
@@ -278,7 +278,7 @@ router.get('/reports/case-assignee', authenticate, async (req, res) => {
 router.get('/reports/case-by-org', authenticate, async (req, res) => {
   try {
     const isPlatformAdmin = hasGlobalAdminScope(req.user);
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
 
     let sql = `
       SELECT o.name as org_name, c.org_id, COUNT(c.id) as total
@@ -305,7 +305,7 @@ router.get('/reports/case-by-org', authenticate, async (req, res) => {
 router.get('/reports/case-intake-channel', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'created_at');
 
     let sql = `
@@ -330,7 +330,7 @@ router.get('/reports/case-intake-channel', authenticate, async (req, res) => {
 router.get('/reports/case-priority', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'created_at');
 
     let sql = `
@@ -354,7 +354,7 @@ router.get('/reports/case-priority', authenticate, async (req, res) => {
 
 router.get('/reports/case-ae-summary', authenticate, async (req, res) => {
   try {
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const sql = `
       SELECT
         COUNT(DISTINCT c.id) as total_ae_cases,
@@ -376,7 +376,7 @@ router.get('/reports/case-ae-summary', authenticate, async (req, res) => {
 router.get('/reports/case-duplicates', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'c1.created_at');
 
     let sql = `
@@ -407,7 +407,7 @@ router.get('/reports/case-duplicates', authenticate, async (req, res) => {
 router.get('/reports/case-source', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'created_at');
 
     let sql = `
@@ -432,7 +432,7 @@ router.get('/reports/case-source', authenticate, async (req, res) => {
 router.get('/reports/case-audit-trail', authenticate, async (req, res) => {
   try {
     const caseId = parseInt(req.query.case_id, 10);
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
 
     if (Number.isNaN(caseId)) {
       return res.status(400).json({ error: 'case_id is required' });
@@ -460,7 +460,7 @@ router.get('/reports/case-audit-trail', authenticate, async (req, res) => {
 
 router.get('/reports/regulatory-readiness', authenticate, async (req, res) => {
   try {
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const sql = `
       SELECT c.case_number, c.case_type, c.created_at, c.status_id,
         DATEDIFF(NOW(), c.created_at) as age_days,
@@ -481,7 +481,7 @@ router.get('/reports/regulatory-readiness', authenticate, async (req, res) => {
 
 router.get('/reports/case-monthly-trend', authenticate, async (req, res) => {
   try {
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const monthsRaw = parseInt(req.query.months, 10);
     const months = Number.isNaN(monthsRaw) ? 6 : monthsRaw;
 
@@ -504,7 +504,7 @@ router.get('/reports/case-monthly-trend', authenticate, async (req, res) => {
 router.get('/reports/case-closure-rate', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'created_at');
 
     let sql = `
@@ -531,15 +531,20 @@ router.get('/reports/case-closure-rate', authenticate, async (req, res) => {
 router.get('/reports/user-activity', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 's.created_at');
 
+    // WP5: the date filter was appended as ` AND <df>` right after the LEFT JOIN, so it
+    // landed in the JOIN ON clause (not WHERE) and never actually filtered the report.
+    // Moved into WHERE so the date range applies as intended.
     let sql = `
       SELECT u.name, u.email, u.role,
         COUNT(s.id) as session_count,
         MAX(s.created_at) as last_login
       FROM users u
       LEFT JOIN sessions s ON s.user_id = u.id
+      WHERE u.is_active = 1
+        AND EXISTS (SELECT 1 FROM user_org_access uoa WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1)
     `;
 
     if (df.sql) {
@@ -547,13 +552,11 @@ router.get('/reports/user-activity', authenticate, async (req, res) => {
     }
 
     sql += `
-      WHERE u.is_active = 1
-        AND EXISTS (SELECT 1 FROM user_org_access uoa WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1)
       GROUP BY u.id, u.name, u.email, u.role
       ORDER BY session_count DESC
     `;
 
-    const params = [...df.params, orgId];
+    const params = [orgId, ...df.params];
     const [rows] = await pool.execute(sql, params);
     return res.json({ data: rows });
   } catch (err) {
@@ -564,7 +567,7 @@ router.get('/reports/user-activity', authenticate, async (req, res) => {
 router.get('/reports/security-events', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'created_at');
 
     let sql = `
@@ -590,7 +593,7 @@ router.get('/reports/security-events', authenticate, async (req, res) => {
 
 router.get('/reports/module-usage', authenticate, async (req, res) => {
   try {
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
 
     const sql = `
       SELECT source_module, COUNT(*) as total_requests,
@@ -637,7 +640,7 @@ router.get('/reports/org-activity', authenticate, async (req, res) => {
 
 router.get('/reports/user-roles', authenticate, async (req, res) => {
   try {
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
 
     const sql = `
       SELECT u.role, COUNT(DISTINCT u.id) as user_count
@@ -657,7 +660,7 @@ router.get('/reports/user-roles', authenticate, async (req, res) => {
 
 router.get('/reports/content-usage', authenticate, async (req, res) => {
   try {
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
 
     const sql = `
       SELECT d.title, d.doc_type, d.view_count,
@@ -681,7 +684,7 @@ router.get('/reports/content-usage', authenticate, async (req, res) => {
 
 router.get('/reports/integration-sync', authenticate, async (req, res) => {
   try {
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
 
     const sql = `
       SELECT integration_type, enabled, updated_at
@@ -700,7 +703,7 @@ router.get('/reports/integration-sync', authenticate, async (req, res) => {
 router.get('/reports/audit-summary', authenticate, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 'created_at');
 
     let sql = `
@@ -726,7 +729,7 @@ router.get('/reports/audit-summary', authenticate, async (req, res) => {
 
 router.get('/reports/system-health', authenticate, async (req, res) => {
   try {
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
 
     const sql = `
       SELECT source_module,
@@ -750,7 +753,7 @@ router.get('/reports/system-health', authenticate, async (req, res) => {
 
 router.get('/reports/field-usage', authenticate, async (req, res) => {
   try {
-    const orgId = normalizeOrgId(req.user.orgId);
+    const orgId = resolveReportOrgId(req);
 
     const sql = `
       SELECT fs.section_name, fs.field_name, fs.field_type,

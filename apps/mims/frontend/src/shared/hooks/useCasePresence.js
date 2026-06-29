@@ -24,6 +24,7 @@ export function useCasePresence(caseId) {
 
   const wsRef = useRef(null)
   const backoffRef = useRef(500)
+  const reconnectRef = useRef(null)  // WP6: track the pending reconnect timer so cleanup can cancel it
   const [state, setState] = useState(EMPTY)
   const [ready, setReady] = useState(false)
 
@@ -33,6 +34,7 @@ export function useCasePresence(caseId) {
     let cancelled = false
 
     function connect() {
+      if (cancelled) return  // WP6: a queued reconnect must not open a socket after unmount
       try {
         const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
         const ws = new WebSocket(`${proto}://${window.location.host}/api/cases/ws`)
@@ -51,7 +53,7 @@ export function useCasePresence(caseId) {
           setReady(false)
           if (cancelled) return
           backoffRef.current = Math.min(backoffRef.current * 2, 30_000)
-          setTimeout(connect, backoffRef.current)
+          reconnectRef.current = setTimeout(connect, backoffRef.current)
         }
         ws.onerror = () => ws.close()
       } catch { /* will retry on close */ }
@@ -59,6 +61,7 @@ export function useCasePresence(caseId) {
     connect()
     return () => {
       cancelled = true
+      if (reconnectRef.current) { clearTimeout(reconnectRef.current); reconnectRef.current = null }  // WP6
       try {
         wsRef.current?.send(JSON.stringify({ type: 'leave', caseId }))
         wsRef.current?.close()
@@ -66,6 +69,26 @@ export function useCasePresence(caseId) {
       setState(EMPTY); setReady(false)
     }
   }, [enabled, caseId, token])
+
+  // WP6: prune expired "typing" entries. They carry an `until` timestamp but nothing
+  // ever removed them, so a field showed a perpetual "typing…" long after the user stopped.
+  useEffect(() => {
+    if (!enabled) return
+    const iv = setInterval(() => {
+      setState(prev => {
+        if (!prev.typing.size) return prev
+        const now = Date.now()
+        let changed = false
+        const t = new Map()
+        for (const [field, info] of prev.typing) {
+          if (info?.until && new Date(info.until).getTime() < now) { changed = true; continue }
+          t.set(field, info)
+        }
+        return changed ? { ...prev, typing: t } : prev
+      })
+    }, 3000)
+    return () => clearInterval(iv)
+  }, [enabled])
 
   function send(payload) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

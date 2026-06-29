@@ -95,7 +95,9 @@ router.get('/observability/runtime-health', authenticate, requireRole('admin', '
   }
 });
 
-router.get('/observability/exceptions', authenticate, async (req, res) => {
+// WP1: cross-tenant service_logs (stack traces + PII) — was authenticate-only, any
+// logged-in user could page other tenants' exceptions. Lock to platform admins.
+router.get('/observability/exceptions', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page || '1', 10));
     const pageSize = Math.min(100, Math.max(10, parseInt(req.query.page_size || '20', 10)));

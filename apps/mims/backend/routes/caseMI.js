@@ -14,7 +14,14 @@ const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
-async function verifyCaseOrg(caseId, req) {
+const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+
+// WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
+// paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
+// were gated on org membership alone — any org member could mutate cases. Reads
+// (no key) keep the original org-membership-only behavior. Returns boolean.
+async function verifyCaseOrg(caseId, req, privilegeKey) {
+  if (privilegeKey) return !!(await verifyCaseScoped(caseId, req, privilegeKey));
   const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
   if (!c) return false;
   if (hasGlobalAdminScope(req.user)) return true;

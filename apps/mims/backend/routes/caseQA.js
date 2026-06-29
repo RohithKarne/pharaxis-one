@@ -172,10 +172,23 @@ router.post('/cases/:id/qa-override', authenticate, requireOrg, validate(schemas
   const { response_id, override_reason, has_critical_flags } = req.body;
 
   try {
+    // WP1: verify the QA response belongs to this caller's org AND this case before
+    // overriding — was unscoped; any user could suppress another org's critical QA
+    // alert by iterating response_id. This also ties the manager alert (which reads
+    // by caseId) to a response we've proven belongs to the same case + org.
+    const [[qaResp]] = await pool.execute(
+      'SELECT case_id, org_id FROM ai_qa_responses WHERE id = ?',
+      [response_id]
+    );
+    if (!qaResp || Number(qaResp.org_id) !== Number(req.user.orgId) || Number(qaResp.case_id) !== caseId) {
+      return res.status(404).json({ error: 'QA response not found.' });
+    }
+
     await storeOverride({
       responseId:     response_id,
       overrideBy:     req.user.userId,
       overrideReason: override_reason || null,
+      orgId:          req.user.orgId,
     });
 
     // If critical flag overridden without reason — write manager alert notification

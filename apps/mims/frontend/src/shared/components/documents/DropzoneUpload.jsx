@@ -92,7 +92,7 @@ export default function DropzoneUpload({
         </div>
         <input
           ref={inputRef} type="file" multiple accept={accept}
-          onChange={e => handleFiles(e.target.files)}
+          onChange={e => { handleFiles(e.target.files); e.target.value = '' }}
           style={{ display: 'none' }}
         />
       </div>

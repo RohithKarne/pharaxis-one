@@ -59,9 +59,14 @@ export default function ICSRBuilderPage() {
     const lock = await httpFetch(`/api/admin/icsr/${id}/lock`, { method: 'POST', headers })
     const lockData = await lock.json().catch(() => ({}))
     if (!lock.ok) { setErrors(lockData.errors || [{ reason: lockData.error }]); return }
-    const submit = await httpFetch(`/api/admin/icsr/${id}/submit`, { method: 'POST', headers, body: JSON.stringify({ gateway: 'mock', password: signature.password, reason: signature.reason }) })
+    // WP8: no hardcoded gateway — the backend resolves the transport from per-org gateway
+    // config, falling back to the report's receiver HA (and to mock if nothing is configured).
+    const submit = await httpFetch(`/api/admin/icsr/${id}/submit`, { method: 'POST', headers, body: JSON.stringify({ password: signature.password, reason: signature.reason }) })
     const submitData = await submit.json().catch(() => ({}))
-    setMessage(submit.ok ? `Submitted to mock regulatory gateway${submitData.e_sign_manifest?.manifest_id ? ` · Manifest ${submitData.e_sign_manifest.manifest_id}` : ''}` : submitData.error)
+    const gwLabel = submitData.gateway_mode === 'mock'
+      ? `mock gateway (${(submitData.gateway_key || 'mock').toUpperCase()} — configure credentials for live transport)`
+      : `${(submitData.gateway_key || report?.receiver_id || '').toUpperCase()} gateway`
+    setMessage(submit.ok ? `Submitted to ${gwLabel}${submitData.e_sign_manifest?.manifest_id ? ` · Manifest ${submitData.e_sign_manifest.manifest_id}` : ''}` : submitData.error)
     load()
   }
   async function parseAck(level) {

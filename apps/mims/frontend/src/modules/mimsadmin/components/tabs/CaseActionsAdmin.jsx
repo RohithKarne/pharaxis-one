@@ -72,7 +72,8 @@ function TemplatesPane() {
 
   async function del(id) {
     if (!confirm('Delete template?')) return
-    await httpFetch(`/api/admin/case-templates/${id}`, { method: 'DELETE', headers: H })
+    const r = await httpFetch(`/api/admin/case-templates/${id}`, { method: 'DELETE', headers: H })
+    if (!r.ok) { showFlash('Delete failed', 'error'); return }  // WP7: don't claim success on a failed delete
     showFlash('Deleted'); load()
   }
 

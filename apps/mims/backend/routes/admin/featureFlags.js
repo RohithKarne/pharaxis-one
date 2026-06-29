@@ -56,7 +56,8 @@ router.get('/feature-flags/:id/tenants', authenticate, requireRole(...ROLE), asy
 });
 
 // PUT /api/admin/feature-flags/:id/tenant/:orgId — toggle for a single tenant
-router.put('/feature-flags/:id/tenant/:orgId', authenticate, requireRole(...ROLE), async (req, res) => {
+// WP1: platform-level control — a tenant admin must not flip flags for other tenants.
+router.put('/feature-flags/:id/tenant/:orgId', authenticate, requireRole('platform_admin'), async (req, res) => {
   const { enabled, notes } = req.body || {};
   try {
     const [[flag]] = await pool.execute('SELECT id, flag_key FROM feature_flags WHERE id = ?', [req.params.id]);
@@ -82,7 +83,8 @@ router.put('/feature-flags/:id/tenant/:orgId', authenticate, requireRole(...ROLE
 });
 
 // POST /api/admin/feature-flags/:id/bulk — enable/disable for many tenants at once
-router.post('/feature-flags/:id/bulk', authenticate, requireRole(...ROLE), async (req, res) => {
+// WP1: platform-level control — restrict bulk tenant rollout to platform admins.
+router.post('/feature-flags/:id/bulk', authenticate, requireRole('platform_admin'), async (req, res) => {
   const { org_ids = [], enabled = true, notes } = req.body || {};
   if (!Array.isArray(org_ids) || !org_ids.length) {
     return res.status(400).json({ error: 'org_ids (array) is required.' });

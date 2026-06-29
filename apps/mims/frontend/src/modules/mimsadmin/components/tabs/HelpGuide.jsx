@@ -4,6 +4,14 @@ import { httpFetch } from '../../../../shared/api/httpFetch.js'
 import { confirm } from '../../../../shared/utils/confirm.js'
 import toast from '../../../../shared/utils/toast.js'
 
+// WP7: a single corrupt JSON value for `audience`/`tags` threw inside render and crashed
+// the entire Help Content tab. Parse defensively with a fallback.
+function safeParseArr(v, fallback = []) {
+  if (Array.isArray(v)) return v
+  if (typeof v === 'string') { try { return JSON.parse(v) } catch { return fallback } }
+  return v || fallback
+}
+
 const AUDIENCE_OPTIONS = [
   { value: 'all',        label: 'All Users' },
   { value: 'agent',      label: 'Case Agent' },
@@ -185,7 +193,7 @@ export default function HelpGuide() {
                         <code style={{ fontSize: 11, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>{art.feature_key}</code>
                       </td>
                       <td style={{ padding: '8px 12px', fontSize: 11 }}>
-                        {(typeof art.audience === 'string' ? JSON.parse(art.audience) : art.audience || ['all']).join(', ')}
+                        {safeParseArr(art.audience, ['all']).join(', ')}
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'center' }}>v{art.version}</td>
                       <td style={{ padding: '8px 12px', fontSize: 11 }}>
@@ -204,7 +212,7 @@ export default function HelpGuide() {
                       <td style={{ padding: '8px 12px' }}>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button className="btn btn-outline" style={{ fontSize: 11, padding: '3px 9px' }}
-                            onClick={() => setEditing({ ...art, audience: typeof art.audience === 'string' ? JSON.parse(art.audience) : art.audience, tags: typeof art.tags === 'string' ? JSON.parse(art.tags) : (art.tags || []) })}>
+                            onClick={() => setEditing({ ...art, audience: safeParseArr(art.audience, []), tags: safeParseArr(art.tags, []) })}>
                             Edit
                           </button>
                           {art.is_active && (

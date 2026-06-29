@@ -70,7 +70,8 @@ function FieldLocksPane() {
   }
   async function del(id) {
     if (!confirm('Remove lock?')) return
-    await httpFetch(`/api/admin/field-locks/${id}`, { method: 'DELETE', headers: H })
+    const r = await httpFetch(`/api/admin/field-locks/${id}`, { method: 'DELETE', headers: H })
+    if (!r.ok) { showFlash('Remove failed', 'error'); return }  // WP7
     showFlash('Removed'); load()
   }
   function newLock() {

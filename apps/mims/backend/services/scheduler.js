@@ -104,6 +104,11 @@ const HANDLERS = {
     const { refreshInboxOperationalAlerts } = require('./inboxGovernanceService')
     await refreshInboxOperationalAlerts()
   },
+  'case-state-sla': async () => {
+    // WP8: sweep workflow-state SLAs and escalate fresh breaches (notifies owner + target).
+    const { scanForBreaches } = require('./workflowSlaService')
+    await scanForBreaches()
+  },
   'notification-delivery-retry': async () => {
     const { retryFailedNotifications } = require('./notificationCenterService')
     await retryFailedNotifications(200)

@@ -38,6 +38,7 @@ export const SYSTEM_OPTION_SECTIONS = [
           'sys-setup-int-content',
           'sys-setup-int-emir',
           'sys-setup-int-case-import',
+          'sys-setup-int-routing',
           'sys-setup-int-transmission',
         ],
       },

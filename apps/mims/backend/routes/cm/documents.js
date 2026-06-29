@@ -8,6 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
+const fs = require('fs');
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireCapability } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
@@ -491,6 +492,78 @@ router.get('/documents/:id', authenticate, async (req, res) => {
   }
 });
 
+// Verify a document is visible to the caller's org (platform admin bypasses).
+// Returns true/false; mirrors the org guard used by GET /documents/:id.
+async function documentInScope(req, docId) {
+  const [[doc]] = await pool.execute(
+    hasPlatformAdminScope(req)
+      ? `SELECT d.id FROM cm_documents d WHERE d.id = ?`
+      : `SELECT d.id FROM cm_documents d
+         LEFT JOIN cm_folders f ON d.folder_id = f.id
+         WHERE d.id = ? AND f.org_id = ?`,
+    hasPlatformAdminScope(req) ? [docId] : [docId, req.user.orgId]
+  );
+  return !!doc;
+}
+
+// GET /api/cm/documents/:id/attachments — list source attachments for a document
+router.get('/documents/:id/attachments', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!(await documentInScope(req, id))) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+    const [rows] = await pool.execute(
+      `SELECT id, file_name, file_size, file_mime, created_at
+       FROM cm_document_attachments
+       WHERE document_id = ?
+       ORDER BY created_at ASC, id ASC`,
+      [id]
+    );
+    res.json({ attachments: rows });
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/documents/:id/attachments', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to list CM document attachments');
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/cm/documents/:id/attachments/:attId/download — stream one attachment (inline preview)
+router.get('/documents/:id/attachments/:attId/download', authenticate, async (req, res) => {
+  try {
+    const { id, attId } = req.params;
+    if (!(await documentInScope(req, id))) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+    const [[att]] = await pool.execute(
+      `SELECT id, file_path, file_name, file_mime
+       FROM cm_document_attachments
+       WHERE id = ? AND document_id = ?`,
+      [attId, id]
+    );
+    if (!att) return res.status(404).json({ error: 'Attachment not found.' });
+
+    // Resolve and confine to the cm_documents storage dir to prevent path traversal.
+    const storageRoot = path.join(__dirname, '../../storage/cm_documents');
+    const resolved = path.resolve(att.file_path);
+    const allowedRoot = path.resolve(storageRoot);
+    if (resolved !== allowedRoot && !resolved.startsWith(allowedRoot + path.sep)) {
+      logger.warn({ route: 'attachment-download', attId, document_id: id, file_path: att.file_path }, 'Attachment path outside storage root');
+      return res.status(404).json({ error: 'File no longer available.' });
+    }
+    if (!fs.existsSync(resolved)) {
+      return res.status(404).json({ error: 'File no longer available.' });
+    }
+    if (att.file_mime) res.type(att.file_mime);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(att.file_name || 'attachment')}"`);
+    fs.createReadStream(resolved).on('error', () => {
+      if (!res.headersSent) res.status(404).json({ error: 'File no longer available.' });
+    }).pipe(res);
+  } catch (err) {
+    logger.error({ err, route: '/api/cm/documents/:id/attachments/:attId/download', document_id: req.params?.id, user_id: req.user?.userId }, 'Failed to download CM document attachment');
+    if (!res.headersSent) res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // PUT /api/cm/documents/:id — update (only Draft or CheckedOut-by-me)
 router.put('/documents/:id', authenticate, uploadFields, validateUpload(['doc']), async (req, res) => {
   const conn = await pool.getConnection();
@@ -665,26 +738,28 @@ router.post('/documents/:id/checkin', authenticate, async (req, res) => {
 
     const { notes, bump_type } = req.body;
 
-    // Determine version bump — bump_type only applies on re-versioning (version_major > 1 or explicit minor bump)
-    let newMajor = doc.version_major;
-    let newMinor = doc.version_minor + 1;
-    if (bump_type === 'major') {
-      newMajor = doc.version_major + 1;
-      newMinor = 0;
-    }
-    const versionStr = `${newMajor}.${newMinor}`;
-
     // Auto-set owner_user_id on first checkin (locked to this user)
     const ownerUpdate = doc.owner_user_id ? '' : ', owner_user_id = ?';
     const ownerParams = doc.owner_user_id ? [] : [req.user.userId];
 
+    // WP5: increment the version ATOMICALLY in SQL rather than computing it from the
+    // earlier read (read-modify-write) — concurrent check-ins could otherwise compute
+    // the same next version and produce duplicates / lost history entries.
+    const versionExpr = bump_type === 'major'
+      ? 'version_major = version_major + 1, version_minor = 0'
+      : 'version_minor = version_minor + 1';
+
     await pool.execute(
       `UPDATE cm_documents SET
          status = 'Pending', checked_out_by = NULL, checked_out_at = NULL,
-         version_major = ?, version_minor = ?, updated_by = ?, updated_at = NOW()${ownerUpdate}
+         ${versionExpr}, updated_by = ?, updated_at = NOW()${ownerUpdate}
        WHERE id = ?`,
-      [newMajor, newMinor, req.user.userId, ...ownerParams, id]
+      [req.user.userId, ...ownerParams, id]
     );
+
+    // Read back the resulting version for history + response.
+    const [[after]] = await pool.execute('SELECT version_major, version_minor FROM cm_documents WHERE id = ?', [id]);
+    const versionStr = `${after.version_major}.${after.version_minor}`;
 
     await addVersionHistory('document', Number(id), versionStr, 'Pending', notes || 'Checked in', req.user.userId);
     await audit(req.user.userId, req.user.email, 'CHECKIN', 'cm_document', Number(id), { doc_id: doc.doc_id, version: versionStr });
@@ -708,6 +783,17 @@ router.post('/documents/:id/initiate-review', authenticate, async (req, res) => 
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
     if (!['Pending', 'Draft'].includes(doc.status)) {
       return res.status(400).json({ error: 'Document must be in Pending or Draft status to initiate a review.' });
+    }
+
+    // WP1: reviewers must belong to the caller's org (platform admin may attach
+    // cross-org). Was unchecked — a caller could attach outside users as reviewers
+    // and expose org content via their /reviews list. Validate before the txn.
+    if (Array.isArray(reviewer_ids) && reviewer_ids.length > 0 && !hasPlatformAdminScope(req)) {
+      for (const uid of reviewer_ids) {
+        if (!(await isUserInOrg(uid, req.user.orgId))) {
+          return res.status(400).json({ error: 'All reviewers must belong to your organisation.' });
+        }
+      }
     }
 
     const conn = await pool.getConnection();
@@ -817,10 +903,9 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
     const match = await verifyEsignPassword(req.user.userId, password);
     if (!match) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
 
-    const newMajor = doc.version_major + 1;
-    const newMinor = 0;
-    const versionStr = `${newMajor}.${newMinor}`;
-
+    // WP5: bump the version ATOMICALLY inside the transaction (was computed from the
+    // earlier read — concurrent publishes could land the same major). Read back after.
+    let versionStr;
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
@@ -832,9 +917,12 @@ router.post('/documents/:id/publish', authenticate, requireCapability('content.p
       );
 
       await conn.execute(
-        "UPDATE cm_documents SET status = 'Published', version_major = ?, version_minor = ?, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
-        [newMajor, newMinor, req.user.userId, req.user.userId, id]
+        "UPDATE cm_documents SET status = 'Published', version_major = version_major + 1, version_minor = 0, owner_user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+        [req.user.userId, req.user.userId, id]
       );
+
+      const [[after]] = await conn.execute('SELECT version_major, version_minor FROM cm_documents WHERE id = ?', [id]);
+      versionStr = `${after.version_major}.${after.version_minor}`;
 
       await conn.commit();
     } catch (err) {

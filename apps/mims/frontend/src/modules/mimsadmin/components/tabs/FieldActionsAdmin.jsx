@@ -55,9 +55,10 @@ export default function FieldActionsAdmin() {
 
   async function transition(id, toStatus) {
     const note = prompt(`Note for transition to "${toStatus}" (optional):`)
-    await httpFetch(`/api/field-actions/${id}/transition`, {
+    const r = await httpFetch(`/api/field-actions/${id}/transition`, {
       method: 'POST', headers: H, body: JSON.stringify({ to_status: toStatus, note }),
     })
+    if (!r.ok) { showFlash('Transition failed', 'error'); return }  // WP7
     showFlash(`Transitioned to ${toStatus}`); loadDetails(id); load()
   }
 

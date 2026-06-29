@@ -215,12 +215,15 @@ async function storeQaResponse({ caseId, orgId, evaluationType, triggeredBy, inp
 }
 
 // ── Store override against an existing ai_qa_response ─────────────────────
-async function storeOverride({ responseId, overrideBy, overrideReason }) {
+async function storeOverride({ responseId, overrideBy, overrideReason, orgId }) {
+  // WP1: org_id is now a required predicate — defense-in-depth so an override can
+  // never touch a row outside the caller's tenant even if a future caller forgets
+  // the route-level ownership check.
   await pool.execute(
     `UPDATE ai_qa_responses
         SET override_by = ?, override_reason = ?, override_at = NOW()
-      WHERE id = ?`,
-    [overrideBy, overrideReason || null, responseId]
+      WHERE id = ? AND org_id = ?`,
+    [overrideBy, overrideReason || null, responseId, orgId]
   );
 }
 

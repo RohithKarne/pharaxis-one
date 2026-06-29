@@ -91,11 +91,20 @@ router.get('/api/v1/products', scopeGuard('products:read'), async (req, res) => 
 
 router.get('/api/v1/contacts', scopeGuard('contacts:read'), async (_req, res) => res.json({ rows: [] }));
 router.get('/api/v1/users', scopeGuard('admin:read'), async (req, res) => {
-  const [rows] = await pool.execute('SELECT id, name, email, role FROM users ORDER BY name ASC LIMIT 100');
+  // WP1: scope to the API client's org — was leaking every tenant's user roster.
+  const [rows] = await pool.execute(
+    `SELECT u.id, u.name, u.email, u.role
+       FROM users u
+       JOIN user_org_access uoa ON uoa.user_id = u.id
+      WHERE uoa.org_id = ? AND uoa.is_active = 1
+      ORDER BY u.name ASC LIMIT 100`,
+    [req.apiClient.org_id]
+  );
   res.json({ rows });
 });
-router.get('/api/v1/organisations', scopeGuard('admin:read'), async (_req, res) => {
-  const [rows] = await pool.execute('SELECT id, name, data_region FROM organisations ORDER BY name ASC LIMIT 100');
+router.get('/api/v1/organisations', scopeGuard('admin:read'), async (req, res) => {
+  // WP1: a client only ever sees its own organisation — was leaking the full org list.
+  const [rows] = await pool.execute('SELECT id, name, data_region FROM organisations WHERE id = ? LIMIT 1', [req.apiClient.org_id]);
   res.json({ rows });
 });
 router.get('/api/v1/transmissions', scopeGuard('transmissions:read'), async (req, res) => {

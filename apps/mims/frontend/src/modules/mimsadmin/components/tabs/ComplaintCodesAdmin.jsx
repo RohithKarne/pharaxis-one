@@ -47,7 +47,8 @@ export default function ComplaintCodesAdmin() {
   }
   async function del(id) {
     if (!confirm('Deactivate complaint code?')) return
-    await httpFetch(`/api/admin/complaint-codes/${id}`, { method: 'DELETE', headers: H })
+    const r = await httpFetch(`/api/admin/complaint-codes/${id}`, { method: 'DELETE', headers: H })
+    if (!r.ok) { showFlash('Deactivate failed', 'error'); return }  // WP7
     showFlash('Deactivated'); load()
   }
 

@@ -89,6 +89,14 @@ module.exports = [
     configRoute:    '/admin-console/sites',
   },
   {
+    name:           'case-state-sla',
+    source:         'Cases',
+    cronExpression: '*/15 * * * *',
+    description:    'WP8: flags workflow-state SLA breaches and escalates them to the case owner + escalation target',
+    type:           'cron',
+    configRoute:    '/admin-console/sla',
+  },
+  {
     name:           'notification-delivery-retry',
     source:         'Notifications',
     cronExpression: '*/10 * * * *',

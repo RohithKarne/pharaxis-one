@@ -729,22 +729,28 @@ router.post('/bulk-update', authenticate, requireCapability('inbox.bulk'), async
     const scopedWhere = where ? `AND ${where.replace('WHERE ', '')}` : '';
     const placeholders = ids.map(() => '?').join(', ');
 
-    await pool.execute(
+    const [bulkResult] = await pool.execute(
       `UPDATE inquiries
        SET ${updates.join(', ')}
        WHERE id IN (${placeholders}) ${scopedWhere}`,
       [...params, ...ids, ...scopeParams]
     );
 
-    audit(req.user?.userId || null, req.user?.email || 'unknown', 'BULK_UPDATE', 'inquiry', 0, {
-      ids,
-      fields: allowedFields.reduce((acc, key) => {
-        if (req.body?.[key] !== undefined) acc[key] = req.body[key];
-        return acc;
-      }, {}),
-    });
+    // WP5: report the actual rows updated, not ids.length — out-of-scope (cross-tenant)
+    // IDs match 0 rows under the org scope, but the handler previously claimed success
+    // for all of them and wrote a misleading audit record.
+    if (bulkResult.affectedRows > 0) {
+      audit(req.user?.userId || null, req.user?.email || 'unknown', 'BULK_UPDATE', 'inquiry', 0, {
+        ids,
+        affected: bulkResult.affectedRows,
+        fields: allowedFields.reduce((acc, key) => {
+          if (req.body?.[key] !== undefined) acc[key] = req.body[key];
+          return acc;
+        }, {}),
+      });
+    }
 
-    res.json({ message: 'Bulk update applied.', updated: ids.length });
+    res.json({ message: 'Bulk update applied.', updated: bulkResult.affectedRows });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

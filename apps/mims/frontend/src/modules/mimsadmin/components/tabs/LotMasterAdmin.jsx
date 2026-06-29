@@ -51,7 +51,8 @@ export default function LotMasterAdmin() {
 
   async function recall(id) {
     if (!confirm('Mark this lot as recalled? This will flip status to "recalled" and stamp the recall time.')) return
-    await httpFetch(`/api/lot-master/${id}/recall`, { method: 'POST', headers: H, body: '{}' })
+    const r = await httpFetch(`/api/lot-master/${id}/recall`, { method: 'POST', headers: H, body: '{}' })
+    if (!r.ok) { showFlash('Recall failed', 'error'); return }  // WP7
     showFlash('Recalled'); load()
   }
 

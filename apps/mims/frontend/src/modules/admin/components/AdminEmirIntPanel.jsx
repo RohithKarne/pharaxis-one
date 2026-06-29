@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { LockedIntegration, IntegrationSectionHeader, useIntegrationHelpers } from './AdminIntegrationShared'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
@@ -10,13 +10,34 @@ export default function AdminEmirIntPanel({ config, setConfig, status, H }) {
   const [emirRouteForm, setEmirRouteForm] = useState({ rule_name: '', match_field: 'subject', match_type: 'contains', match_value: '', case_type: 'MI', default_priority: 'normal' })
   const { renderConfigField, renderSelect, renderPassword, renderToggle } = useIntegrationHelpers(config, setConfig)
 
+  // WP7: load existing sender/routing rules on mount — they were init'd to [] with no
+  // loader, so saved inbound-email security rules always rendered as "No rules defined"
+  // and admins created duplicates / couldn't manage the real ones.
+  useEffect(() => {
+    if (status === false) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [sRes, rRes] = await Promise.all([
+          httpFetch('/api/admin/emir/sender-rules', { headers: H }),
+          httpFetch('/api/admin/emir/routing-rules', { headers: H }),
+        ])
+        if (!cancelled && sRes.ok) { const d = await sRes.json(); setEmirSenderRules(Array.isArray(d) ? d : (d.rules || [])) }
+        if (!cancelled && rRes.ok) { const d = await rRes.json(); setEmirRoutingRules(Array.isArray(d) ? d : (d.rules || [])) }
+      } catch { /* leave empty on load failure */ }
+    })()
+    return () => { cancelled = true }
+  }, [status])
+
   if (status === false) return <LockedIntegration label="EMIR Integration" />
 
   async function save() {
     setSaving(true)
     try {
-      await httpFetch('/api/admin/integrations/emir/config', { method: 'PUT', headers: H, body: JSON.stringify({ config }) })
-    } finally { setSaving(false) }
+      // WP7: surface save failures instead of returning to idle as if it succeeded.
+      const res = await httpFetch('/api/admin/integrations/emir/config', { method: 'PUT', headers: H, body: JSON.stringify({ config }) })
+      if (!res.ok) { alert('Failed to save EMIR settings.'); return }
+    } catch { alert('Failed to save EMIR settings.') } finally { setSaving(false) }
   }
 
   return (

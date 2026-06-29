@@ -3,7 +3,17 @@
 const pool = require('../database/db');
 const { getVaultSession, runVQL } = require('./vaultService');
 
+// WP3: per-org in-flight guard. The HTTP poll trigger can fire concurrently; two
+// overlapping runs for the same org would duplicate/interleave expiry writes and
+// race the watermark. (Single main-process scope — a DB lock would be needed if the
+// trigger ever runs in multiple processes.)
+const _pollingOrgs = new Set();
+
 async function pollVaultForOrg(orgId) {
+  if (_pollingOrgs.has(orgId)) {
+    return { skipped: true, reason: 'Poll already in progress for this org' };
+  }
+  _pollingOrgs.add(orgId);
   try {
     const [rows] = await pool.query(
       'SELECT id, last_poll_at, poll_interval_hours FROM org_vault_config WHERE org_id = ? AND enabled = 1 LIMIT 1',
@@ -20,6 +30,9 @@ async function pollVaultForOrg(orgId) {
       : '2000-01-01 00:00:00';
 
     try {
+      // WP3: capture the watermark BEFORE the VQL call. Setting last_poll_at = NOW()
+      // after the query dropped any document modified during the VQL/processing window.
+      const pollStartedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
       const session = await getVaultSession(orgId);
       const vql =
         "SELECT id, name__v, status__v, version_modified_date__v FROM documents WHERE status__v IN ('expired__v','archived__v','withdrawn__v','superseded__v') AND version_modified_date__v >= '" +
@@ -37,7 +50,7 @@ async function pollVaultForOrg(orgId) {
         }
       }
 
-      await pool.query('UPDATE org_vault_config SET last_poll_at = NOW() WHERE org_id = ?', [orgId]);
+      await pool.query('UPDATE org_vault_config SET last_poll_at = ? WHERE org_id = ?', [pollStartedAt, orgId]);
 
       return { processed: data ? data.length : 0, org_id: orgId };
     } catch (err) {
@@ -55,6 +68,8 @@ async function pollVaultForOrg(orgId) {
     }
   } catch (err) {
     return { error: err.message, org_id: orgId };
+  } finally {
+    _pollingOrgs.delete(orgId);
   }
 }
 

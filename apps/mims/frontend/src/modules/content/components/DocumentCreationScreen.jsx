@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import toast from '../../../shared/utils/toast'
 import RichTextEditor from './RichTextEditor'
-import { normalizeSelectedModules } from './ContentUtils'
+import { normalizeSelectedModules, parseMaybeJson } from './ContentUtils'
 import { AssociatedDocsPanel, VersionDiffPanel, VersionAlertsPanel } from './ContentPanels'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
@@ -29,7 +29,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     content_html: doc?.content_html || '',
     expiry_date: doc?.expiry_date ? doc.expiry_date.slice(0, 10) : '',
     activation_date: doc?.activation_date ? doc.activation_date.slice(0, 10) : '',
-    expiry_alert_recipients: doc?.expiry_alert_recipients ? (typeof doc.expiry_alert_recipients === 'string' ? JSON.parse(doc.expiry_alert_recipients) : doc.expiry_alert_recipients) : [],
+    expiry_alert_recipients: parseMaybeJson(doc?.expiry_alert_recipients, []), /* WP7: guarded — raw JSON.parse white-screened the editor on a malformed/legacy value */
     language: doc?.language || 'en',
     search_tags: doc?.search_tags || '',
     mi_category_id: doc?.mi_category_id || '',
@@ -37,7 +37,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
     version_notes: doc?.version_notes || '',
     review_cycle_days: doc?.review_cycle_days || '',
     regulatory_ref: doc?.regulatory_ref || '',
-    custom_attributes: doc?.custom_attributes ? (typeof doc.custom_attributes === 'string' ? JSON.parse(doc.custom_attributes) : doc.custom_attributes) : [],
+    custom_attributes: parseMaybeJson(doc?.custom_attributes, []), /* WP7: guarded — raw JSON.parse white-screened the editor on a malformed/legacy value */
     bump_type: 'minor',
     is_product_specific: doc?.is_product_specific ? true : false,
     is_site_specific: doc?.is_site_specific ? true : false,
@@ -56,6 +56,9 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
   const [contentMode, setContentMode] = useState(() => deriveContentMode(doc))
   const [file, setFile] = useState(null)
   const [sourceAttachments, setSourceAttachments] = useState([])
+  const [savedAttachments, setSavedAttachments] = useState([])
+  const [viewingAtt, setViewingAtt] = useState(null)
+  const objectUrlsRef = useRef([])
   const [saving, setSaving] = useState(false)
   const [availableModules, setAvailableModules] = useState([])
   const [modulesLoading, setModulesLoading] = useState(false)
@@ -130,6 +133,51 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
 
   function removeAttachment(idx) {
     setSourceAttachments(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  // Load already-saved source attachments when editing an existing document.
+  useEffect(() => {
+    if (!doc?.id) return
+    let cancelled = false
+    httpFetch(`/api/cm/documents/${doc.id}/attachments`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : { attachments: [] }))
+      .then(d => { if (!cancelled) setSavedAttachments(Array.isArray(d.attachments) ? d.attachments : []) })
+      .catch(() => { if (!cancelled) setSavedAttachments([]) })
+    return () => { cancelled = true }
+  }, [doc?.id, token])
+
+  // Revoke any object URLs opened for previews when the editor unmounts.
+  useEffect(() => () => { objectUrlsRef.current.forEach(u => URL.revokeObjectURL(u)) }, [])
+
+  // Open a freshly-picked (not-yet-saved) file in a new tab.
+  function viewLocalFile(f) {
+    try {
+      const url = URL.createObjectURL(f)
+      objectUrlsRef.current.push(url)
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch {
+      toast.error('Unable to open this file.')
+    }
+  }
+
+  // Fetch a saved attachment (auth header required) and open the blob in a new tab.
+  async function viewSavedAttachment(att) {
+    setViewingAtt(att.id)
+    try {
+      const res = await httpFetch(`/api/cm/documents/${doc.id}/attachments/${att.id}/download`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) {
+        toast.error(res.status === 404 ? 'This file is no longer available.' : 'Unable to open this attachment.')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      objectUrlsRef.current.push(url)
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch {
+      toast.error('Unable to open this attachment.')
+    } finally {
+      setViewingAtt(null)
+    }
   }
 
   function addModule(moduleId) {
@@ -684,7 +732,28 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
                       <span>📄</span>
                       <span style={{ flex: 1 }}>{f.name}</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{(f.size / 1024).toFixed(0)} KB</span>
+                      <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 12, fontWeight: 600 }} onClick={() => viewLocalFile(f)}>View</button>
                       <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 16 }} onClick={() => removeAttachment(idx)}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {savedAttachments.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: sourceAttachments.length > 0 ? 8 : 0 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>Previously uploaded</div>
+                  {savedAttachments.map(att => (
+                    <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 12px', fontSize: 13 }}>
+                      <span>📄</span>
+                      <span style={{ flex: 1 }}>{att.file_name}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{att.file_size != null ? `${(att.file_size / 1024).toFixed(0)} KB` : ''}</span>
+                      <button
+                        style={{ background: 'none', border: 'none', cursor: viewingAtt === att.id ? 'default' : 'pointer', color: 'var(--primary)', fontSize: 12, fontWeight: 600, opacity: viewingAtt === att.id ? 0.6 : 1 }}
+                        disabled={viewingAtt === att.id}
+                        onClick={() => viewSavedAttachment(att)}
+                      >
+                        {viewingAtt === att.id ? 'Opening…' : 'View'}
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -802,7 +871,7 @@ export default function DocumentCreationScreen({ doc, token, onClose, onSaved })
       </div>
 
       {/* ── Footer ── */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 28px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 88px 14px 28px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
         <button className="cm-btn cm-btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
         <button className="cm-btn cm-btn-secondary" onClick={() => handleSave(false)} disabled={saving}>{saving ? 'Saving…' : 'Save Draft'}</button>
         <button className="cm-btn cm-btn-primary" onClick={() => handleSave(true)} disabled={saving}>{saving ? 'Saving…' : 'Save & Check-In'}</button>

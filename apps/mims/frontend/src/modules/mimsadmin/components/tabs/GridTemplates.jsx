@@ -48,7 +48,8 @@ export default function GridTemplates() {
   }
   async function del(id) {
     if (!confirm('Delete template?')) return
-    await httpFetch(`/api/admin/grid-templates/${id}`, { method: 'DELETE', headers: H })
+    const r = await httpFetch(`/api/admin/grid-templates/${id}`, { method: 'DELETE', headers: H })
+    if (!r.ok) { showFlash('Delete failed', 'error'); return }  // WP7
     showFlash('Deleted'); load()
   }
   function newTpl() {

@@ -292,7 +292,9 @@ export function VersionAlertsPanel({ docId, token }) {
         setSubscribers(d.subscribers || [])
       }
       if (emailRes.ok) setEmailAccounts((await emailRes.json()).accounts || [])
-      if (usersRes.ok) setUsers(await usersRes.json())
+      // WP7: normalize shape — /api/users may return a bare array or { users: [...] };
+      // storing the wrong shape crashed the tab on users.filter(...).
+      if (usersRes.ok) { const d = await usersRes.json(); setUsers(Array.isArray(d) ? d : (d.users || [])) }
     } catch { /* silent */ }
     setLoading(false)
   }
@@ -315,7 +317,7 @@ export function VersionAlertsPanel({ docId, token }) {
           setSubscribers(d.subscribers || [])
         }
         if (emailRes.ok && !cancelled) setEmailAccounts((await emailRes.json()).accounts || [])
-        if (usersRes.ok && !cancelled) setUsers(await usersRes.json())
+        if (usersRes.ok && !cancelled) { const d = await usersRes.json(); setUsers(Array.isArray(d) ? d : (d.users || [])) }  /* WP7: normalize array/{users} shape */
       } catch {
         /* silent */
       } finally {

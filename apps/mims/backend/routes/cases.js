@@ -1017,7 +1017,7 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
     const requestedOrgId = parseInt(req.body?.org_id, 10) || null;
     const org_id = hasGlobalAdminScope(req.user) ? requestedOrgId : req.user.orgId;
     if (!org_id) {
-      await conn.rollback(); conn.release();
+      await conn.rollback(); /* WP2: release handled by the finally — was double-released, which could hand the same pooled connection to two requests */
       return res.status(400).json({ error: 'org_id is required' });
     }
     // Site concept retired from the UI. Users no longer pick a site, so resolve
@@ -1032,7 +1032,7 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       resolvedSiteId = defSite?.id || null;
     }
     if (case_type && !['MI', 'AE', 'PC'].includes(case_type)) {
-      await conn.rollback(); conn.release();
+      await conn.rollback(); /* WP2: release handled by the finally — was double-released, which could hand the same pooled connection to two requests */
       return res.status(400).json({ error: 'case_type must be MI, AE, or PC' });
     }
     const dateReceived = toDateOnlyOrNull(date_received);
@@ -1490,9 +1490,11 @@ router.post('/cases/:id/reassign', authenticate, requireScopedCapability('case.a
        WHERE c.id = ?`,
       [req.params.id]
     );
-    if (hasOwn(body, 'awareness_date') || hasOwn(body, 'learn_of_validity_date') || hasOwn(body, 'follow_up_received_date') || hasOwn(body, 'date_received')) {
-      recalculateHaClocks({ orgId: currentCase.org_id, caseId: req.params.id }).catch(() => {});
-    }
+    // WP2: removed a copy-pasted HA-clock recalc block that referenced `body` and
+    // `currentCase` — neither exists in this handler (only `owned` is in scope), so
+    // it threw a ReferenceError on EVERY reassign AFTER the owner change + notifications
+    // had already committed (500 to client → retries → duplicate notifications).
+    // Reassignment changes ownership only, never date fields, so there is nothing to recalc.
     return res.json(updated);
   } catch (err) {
     logger.error({ err, route: '/api/cases/:id/reassign', case_id: req.params?.id, user_id: req.user?.userId }, 'Failed to reassign case');
@@ -1933,7 +1935,8 @@ router.get('/cases/:id/mi-response-builder/context', authenticate, async (req, r
               ${groupSelect} AS product_group_match
          FROM cm_templates t
          LEFT JOIN users u ON u.id = t.created_by
-        WHERE t.status = 'Active'
+        WHERE t.status = 'Published'
+          AND (t.expiry_date IS NULL OR t.expiry_date >= CURDATE())
           AND t.type IN ('Response','Email','Acknowledgment','Correspondence')
           AND (? = 1 OR u.org_id = ? OR EXISTS (
             SELECT 1 FROM user_org_access uoa

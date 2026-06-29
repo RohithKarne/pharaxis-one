@@ -19,6 +19,26 @@
 
 const pool = require('../database/db');
 const { logger } = require('./logger');
+const { createNotifications } = require('./notificationCenterService');
+
+// WP8: resolve who to alert on a state-SLA breach — the case owner, the explicit
+// escalation user, and anyone holding the configured escalation role in the org.
+async function resolveBreachRecipients(orgId, caseOwnerId, escalationUserId, escalationRole) {
+  const ids = new Set();
+  if (caseOwnerId) ids.add(Number(caseOwnerId));
+  if (escalationUserId) ids.add(Number(escalationUserId));
+  if (escalationRole) {
+    try {
+      const [urows] = await pool.execute(
+        `SELECT user_id FROM user_org_access
+          WHERE org_id = ? AND is_active = 1 AND role_at_org = ?`,
+        [orgId, escalationRole]
+      );
+      for (const u of urows) ids.add(Number(u.user_id));
+    } catch (e) { logger.warn({ err: e.message }, 'workflowSla: escalation-role lookup failed'); }
+  }
+  return [...ids].filter(Boolean);
+}
 
 const BUSINESS_HOURS_MODE = String(process.env.WORKFLOW_SLA_MODE || 'wall_clock').toLowerCase();
 
@@ -127,11 +147,13 @@ async function scanForBreaches() {
     const [rows] = await pool.execute(
       `SELECT t.id, t.org_id, t.case_id, t.state, t.entered_at, t.sla_hours_snapshot,
               t.warning_fired_at, t.breached_at, t.escalated_at,
-              s.warning_threshold_pct, s.escalation_role, s.escalation_user_id
+              s.warning_threshold_pct, s.escalation_role, s.escalation_user_id,
+              c.case_number, c.case_owner_id
          FROM case_state_timings t
          LEFT JOIN workflow_state_sla s
                 ON (s.org_id = t.org_id OR s.org_id IS NULL)
                AND s.state = t.state
+         LEFT JOIN cases c ON c.id = t.case_id
         WHERE t.exited_at IS NULL
           AND t.sla_hours_snapshot IS NOT NULL`
     );
@@ -156,6 +178,28 @@ async function scanForBreaches() {
           `UPDATE case_state_timings SET ${updates.join(', ')} WHERE id = ?`,
           [...params, r.id]
         );
+
+        // WP8: ENFORCEMENT — the sweeper previously only flipped flags. Now a fresh
+        // breach/escalation notifies the case owner + escalation target. eventKey makes
+        // it idempotent, and breached_at/escalated_at are set once, so it fires once.
+        const newlyBreached  = updates.includes('breached_at = NOW()');
+        const newlyEscalated = updates.includes('escalated_at = NOW()');
+        if (newlyBreached || newlyEscalated) {
+          const recipients = await resolveBreachRecipients(r.org_id, r.case_owner_id, r.escalation_user_id, r.escalation_role);
+          if (recipients.length) {
+            const ref = r.case_number || `Case ${r.case_id}`;
+            await createNotifications(recipients, {
+              category: 'sla_breach',
+              title: `SLA breached: ${ref}`,
+              message: `${ref} has exceeded its SLA while in state "${r.state}". Immediate action required.`,
+              linkUrl: `/cases/${r.case_id}`,
+              metadata: { case_id: r.case_id, state: r.state, timing_id: r.id, escalated: newlyEscalated },
+              severity: 'critical',
+              requiresAcknowledgement: true,
+              eventKey: `case-state-sla-breach-${r.id}`,
+            }).catch((e) => logger.warn({ err: e.message, timing_id: r.id }, 'workflowSla: breach notification failed'));
+          }
+        }
       }
     }
   } catch (err) {

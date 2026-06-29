@@ -31,6 +31,11 @@ export default function useCaseForm(id, token) {
   const autoSaveTimer = useRef(null)
   const draftRef = useRef({ infoForm, dynFieldValues, caseType: '' })
 
+  // WP6: clear the pending autosave timer on unmount — otherwise the 15s timer can fire
+  // after the component is gone, calling saveDraft()/setState on an unmounted hook and
+  // issuing a PUT for a draft the user already navigated away from.
+  useEffect(() => () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }, [])
+
   useEffect(() => {
     draftRef.current = { infoForm, dynFieldValues, caseType: caseData?.case_type || 'MI' }
   }, [infoForm, dynFieldValues, caseData?.case_type])
@@ -148,7 +153,9 @@ export default function useCaseForm(id, token) {
       const data = await res.json()
       if (res.status === 409) {
         setSavedMsg('Version conflict - reload to merge latest changes')
-        throw new Error(data.error || 'Version conflict')
+        const conflictErr = new Error(data.error || 'Version conflict')
+        conflictErr.isConflict = true  // WP6: so the catch keeps this actionable message
+        throw conflictErr
       }
       if (!res.ok) throw new Error(data.error)
       setCaseData(prev => ({ ...prev, ...data }))
@@ -167,9 +174,15 @@ export default function useCaseForm(id, token) {
       setDraftStatus('')
       httpFetch(`${API}/cases/drafts/${id}`, { method: 'DELETE', headers }).catch(() => {})
       setTimeout(() => setSavedMsg(''), 2500)
-    } catch {
-      setSavedMsg('Save failed')
-      setTimeout(() => setSavedMsg(''), 3000)
+    } catch (err) {
+      // WP6: preserve the 409 "reload to merge" guidance instead of clobbering it with
+      // the generic "Save failed" — the user needs the actionable instruction on a conflict.
+      if (err?.isConflict) {
+        setTimeout(() => setSavedMsg(''), 6000)
+      } else {
+        setSavedMsg('Save failed')
+        setTimeout(() => setSavedMsg(''), 3000)
+      }
     } finally {
       setSaving(false)
     }

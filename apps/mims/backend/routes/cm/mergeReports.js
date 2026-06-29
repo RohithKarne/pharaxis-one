@@ -21,7 +21,7 @@ function safeStoredFilename(originalname) {
   return `${Date.now()}_${base}`;
 }
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../../../storage/cm_documents')),
+  destination: (req, file, cb) => cb(null, path.join(__dirname, '../../storage/cm_documents')), /* WP5: was ../../../ (one level too high) — files landed outside backend/storage and were unreachable by download */
   filename: (req, file, cb) => cb(null, safeStoredFilename(file.originalname)),
 });
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
@@ -270,16 +270,17 @@ router.post('/merge-reports/:id/checkin', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Only the user who checked out this merge report can check it in.' });
     }
 
-    const newMinor = report.version_minor + 1;
-    const versionStr = `${report.version_major}.${newMinor}`;
-
+    // WP5: bump the version ATOMICALLY (was computed from the earlier read — concurrent
+    // check-ins could land the same minor), then read back for the version string.
     await pool.execute(
       `UPDATE cm_merge_reports SET
          status = 'Draft', checked_out_by = NULL, checked_out_at = NULL,
-         version_minor = ?, updated_by = ?, updated_at = NOW()
+         version_minor = version_minor + 1, updated_by = ?, updated_at = NOW()
        WHERE id = ?`,
-      [newMinor, req.user.userId, id]
+      [req.user.userId, id]
     );
+    const [[afterMr]] = await pool.execute('SELECT version_major, version_minor FROM cm_merge_reports WHERE id = ?', [id]);
+    const versionStr = `${afterMr.version_major}.${afterMr.version_minor}`;
     await addVersionHistory(Number(id), versionStr, 'Draft', notes || 'Checked in', req.user.userId);
     await audit(req.user.userId, req.user.email, 'CHECKIN', 'cm_merge_report', Number(id), { version: versionStr });
     res.json({ message: 'Merge report checked in.', version: versionStr });

@@ -21,7 +21,14 @@ const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
-async function verifyCaseOrg(caseId, req) {
+const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+
+// WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
+// paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
+// were gated on org membership alone — any org member could mutate cases. Reads
+// (no key) keep the original org-membership-only behavior. Returns boolean.
+async function verifyCaseOrg(caseId, req, privilegeKey) {
+  if (privilegeKey) return !!(await verifyCaseScoped(caseId, req, privilegeKey));
   const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
   if (!c) return false;
   if (hasGlobalAdminScope(req.user)) return true;
@@ -96,7 +103,7 @@ router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     if (!await verifyCaseOrg(req.params.id, req, 'case.update')) {
-      conn.release();
+      // WP2: no explicit release here — the finally block releases. Was double-released.
       return res.status(403).json({ error: 'Access denied' });
     }
     await conn.beginTransaction();
@@ -151,10 +158,15 @@ router.put('/cases/ae/versions/:versionId/status', authenticate, async (req, res
     }
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status required' });
-    await pool.execute(
+    const [upd] = await pool.execute(
       'UPDATE case_ae_versions SET status = ? WHERE id = ? AND is_locked = 0',
       [status, req.params.versionId]
     );
+    // WP2: a locked (or missing) version updates 0 rows — was silently returning 200
+    // with the unchanged row, so the caller thought the status change succeeded.
+    if (upd.affectedRows === 0) {
+      return res.status(409).json({ error: 'Version is locked or does not exist — status not changed.' });
+    }
     const [[v]] = await pool.execute(
       'SELECT * FROM case_ae_versions WHERE id = ?', [req.params.versionId]
     );
@@ -267,10 +279,11 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
       is_disability, is_congenital_anomaly, is_other_medically_important,
       is_required_intervention, is_lab_abnormality
     } = req.body;
-    const nextSerious = [
-      is_serious, is_death, is_life_threatening, is_hospitalization, is_disability,
-      is_congenital_anomaly, is_other_medically_important, is_required_intervention, is_lab_abnormality,
-    ].some(v => v === 1 || v === true || v === '1');
+    // WP2: is_serious is DERIVED from the seriousness criteria. The old SQL used
+    // `CASE WHEN ? = 1 THEN 1 ELSE is_serious END`, which could only ever PROMOTE —
+    // a regulatory E2B field that, once set, could never be cleared even when the
+    // client removed every criterion. We now recompute it from the MERGED
+    // (post-COALESCE) criteria so partial updates are correct and demotion works.
     await pool.execute(
       `UPDATE case_ae_events SET
         event_description          = COALESCE(?, event_description),
@@ -290,7 +303,12 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
         is_other_medically_important = COALESCE(?, is_other_medically_important),
         is_required_intervention   = COALESCE(?, is_required_intervention),
         is_lab_abnormality         = COALESCE(?, is_lab_abnormality),
-        is_serious                 = CASE WHEN ? = 1 THEN 1 ELSE is_serious END
+        is_serious                 = (CASE WHEN
+            COALESCE(?, is_death) = 1 OR COALESCE(?, is_life_threatening) = 1
+         OR COALESCE(?, is_hospitalization) = 1 OR COALESCE(?, is_disability) = 1
+         OR COALESCE(?, is_congenital_anomaly) = 1 OR COALESCE(?, is_other_medically_important) = 1
+         OR COALESCE(?, is_required_intervention) = 1 OR COALESCE(?, is_lab_abnormality) = 1
+          THEN 1 ELSE 0 END)
        WHERE id = ?`,
       [
         event_description ?? null, meddra_term ?? null, outcome ?? null, reported_causality ?? null, frequency ?? null, causality_assessment ?? null, seriousness ?? null,
@@ -298,7 +316,10 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
         is_death ?? null, is_life_threatening ?? null,
         is_hospitalization ?? null, is_disability ?? null,
         is_congenital_anomaly ?? null, is_other_medically_important ?? null,
-        is_required_intervention ?? null, is_lab_abnormality ?? null, nextSerious ? 1 : 0,
+        is_required_intervention ?? null, is_lab_abnormality ?? null,
+        // is_serious recompute — same 8 criteria flags, merged with stored values:
+        is_death ?? null, is_life_threatening ?? null, is_hospitalization ?? null, is_disability ?? null,
+        is_congenital_anomaly ?? null, is_other_medically_important ?? null, is_required_intervention ?? null, is_lab_abnormality ?? null,
         req.params.eventId
       ]
     );

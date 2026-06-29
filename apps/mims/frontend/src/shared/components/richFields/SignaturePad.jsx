@@ -15,6 +15,7 @@ export default function SignaturePad({ value = {}, onChange, label, readOnly, wi
   const last = useRef({ x: 0, y: 0 })
   const [signerName, setSignerName] = useState(value.signer_name || '')
   const [intent, setIntent] = useState(value.intent || 'sign')
+  const [hasSignature, setHasSignature] = useState(!!value.png_data_url)  // WP6: track whether a signature exists
 
   // Draw saved PNG when mounted / value changes
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function SignaturePad({ value = {}, onChange, label, readOnly, wi
     if (!drawing.current) return
     drawing.current = false
     const png = canvasRef.current.toDataURL('image/png')
+    setHasSignature(true)
     onChange?.({
       png_data_url: png, signer_name: signerName, intent,
       signed_at: new Date().toISOString(),
@@ -55,8 +57,22 @@ export default function SignaturePad({ value = {}, onChange, label, readOnly, wi
   function clear() {
     const cnv = canvasRef.current
     cnv.getContext('2d').clearRect(0, 0, cnv.width, cnv.height)
+    setHasSignature(false)
     onChange?.({})
   }
+
+  // WP6: re-emit when signer name / intent change AFTER a signature is drawn — previously
+  // those edits were only captured if the user drew another stroke afterward, so typing the
+  // signer name then saving persisted a stale/empty attribution on a 21 CFR-style signature.
+  useEffect(() => {
+    if (!hasSignature || !canvasRef.current) return
+    onChange?.({
+      png_data_url: canvasRef.current.toDataURL('image/png'),
+      signer_name: signerName, intent,
+      signed_at: new Date().toISOString(),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signerName, intent])
 
   return (
     <div>

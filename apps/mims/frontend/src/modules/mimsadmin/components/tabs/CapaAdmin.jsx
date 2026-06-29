@@ -54,25 +54,28 @@ export default function CapaAdmin() {
 
   async function transition(id, toStatus) {
     const note = prompt(`Note for "${toStatus}":`)
-    await httpFetch(`/api/capa/${id}/transition`, {
+    const r = await httpFetch(`/api/capa/${id}/transition`, {
       method: 'POST', headers: H, body: JSON.stringify({ to_status: toStatus, note }),
     })
+    if (!r.ok) { showFlash('Transition failed', 'error'); return }  // WP7: don't claim success on a failed transition
     showFlash(`→ ${toStatus}`); loadDetails(id); load()
   }
 
   async function addAction() {
     if (!actionEdit?.description || !actionEdit?.action_type) { showFlash('description + type required', 'error'); return }
-    await httpFetch(`/api/capa/${selected.id}/actions`, {
+    const r = await httpFetch(`/api/capa/${selected.id}/actions`, {
       method: 'POST', headers: H, body: JSON.stringify(actionEdit),
     })
+    if (!r.ok) { showFlash('Failed to add action', 'error'); return }  // WP7
     showFlash('Action added'); setActionEdit(null); loadDetails(selected.id)
   }
 
   async function completeAction(actionId) {
     const verification_notes = prompt('Verification notes (optional):')
-    await httpFetch(`/api/capa-actions/${actionId}/complete`, {
+    const r = await httpFetch(`/api/capa-actions/${actionId}/complete`, {
       method: 'PUT', headers: H, body: JSON.stringify({ verification_notes }),
     })
+    if (!r.ok) { showFlash('Failed to complete action', 'error'); return }  // WP7
     showFlash('Action completed'); loadDetails(selected.id)
   }
 
@@ -80,9 +83,10 @@ export default function CapaAdmin() {
     const outcome = prompt('Outcome (effective | partially_effective | not_effective):')
     if (!['effective','partially_effective','not_effective'].includes(outcome)) return
     const notes = prompt('Notes:')
-    await httpFetch(`/api/capa/${selected.id}/effectiveness`, {
+    const r = await httpFetch(`/api/capa/${selected.id}/effectiveness`, {
       method: 'POST', headers: H, body: JSON.stringify({ outcome, notes }),
     })
+    if (!r.ok) { showFlash('Failed to log effectiveness', 'error'); return }  // WP7
     showFlash('Effectiveness logged'); loadDetails(selected.id)
   }
 

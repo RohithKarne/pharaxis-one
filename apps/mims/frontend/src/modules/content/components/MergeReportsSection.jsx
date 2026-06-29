@@ -452,7 +452,7 @@ ${genResult.generated_html}
             {genResult && (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ padding: '10px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', flexWrap: 'wrap', gap: 12, background: '#f8fafc' }}>
-                  {Object.entries(genResult.merge_data).filter(([, v]) => v).map(([k, v]) => (
+                  {Object.entries(genResult.merge_data || {}).filter(([, v]) => v).map(([k, v]) => (/* WP7: guard — a response without merge_data threw Object.entries(undefined) */
                     <span key={k} style={{ fontSize: 11, color: '#475569' }}>
                       <strong style={{ color: '#1e293b' }}>{k.replace(/_/g, ' ')}</strong>: {v}
                     </span>

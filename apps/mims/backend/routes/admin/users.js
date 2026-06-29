@@ -21,6 +21,17 @@ const SALT_ROUNDS = 12;
 const PLATFORM_ADMIN_EXCLUSION_SQL =
   "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1)";
 
+// WP1: non-platform admins may only see/act on users within their OWN org.
+// Platform admins (global scope) keep full cross-tenant visibility. Returns a SQL
+// fragment (users alias = `u`) plus its bind params to AND into a WHERE clause.
+function orgScopeForUsers(req) {
+  if (hasGlobalAdminScope(req.user)) return { sql: '1=1', params: [] };
+  return {
+    sql: 'EXISTS (SELECT 1 FROM user_org_access uoa_scope WHERE uoa_scope.user_id = u.id AND uoa_scope.org_id = ? AND uoa_scope.is_active = 1)',
+    params: [req.user.orgId ?? null],
+  };
+}
+
 function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -46,6 +57,7 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
   try {
     const { search = '' } = req.query;
     const like = `%${search}%`;
+    const scope = orgScopeForUsers(req);
     const [users] = await pool.execute(
       `SELECT u.id, u.user_id, u.name, u.email, u.role, u.department,
               sg.name AS security_group_name,
@@ -54,9 +66,10 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
          FROM users u
     LEFT JOIN security_groups sg ON sg.id = u.security_group_id
         WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
+          AND ${scope.sql}
           AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
         ORDER BY u.name`,
-      [like, like, like]
+      [...scope.params, like, like, like]
     );
     const columns = [
       { key: 'user_id', label: 'User ID' },
@@ -111,6 +124,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
   try {
     const { search = '', limit = 100, offset = 0 } = req.query;
     const like = `%${search}%`;
+    const scope = orgScopeForUsers(req);
     const [users] = await pool.execute(
       `SELECT
          u.id, u.user_id, u.name, u.email, u.initials, u.role,
@@ -133,17 +147,19 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
        WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
+         AND ${scope.sql}
          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
        ORDER BY u.name ASC
        LIMIT ${parseInt(limit, 10)} OFFSET ${parseInt(offset, 10)}`,
-      [like, like, like]
+      [...scope.params, like, like, like]
     );
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) AS total
        FROM users u
        WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
+         AND ${scope.sql}
          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)`,
-      [like, like, like]
+      [...scope.params, like, like, like]
     );
     res.json({ users, total });
   } catch (err) {
@@ -155,6 +171,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
 // ── GET /api/admin/users/:id — single user with tenant assignments ─────────────
 router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
+    const scope = orgScopeForUsers(req);
     const [[user]] = await pool.execute(
       `SELECT
          u.id, u.user_id, u.name, u.email, u.initials, u.role,
@@ -165,8 +182,8 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
          u.password_expires_at, u.created_at, u.updated_at
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-       WHERE u.id = ? AND ${PLATFORM_ADMIN_EXCLUSION_SQL}`,
-      [req.params.id]
+       WHERE u.id = ? AND ${PLATFORM_ADMIN_EXCLUSION_SQL} AND ${scope.sql}`,
+      [req.params.id, ...scope.params]
     );
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
@@ -305,6 +322,15 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
       canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
     );
     if (!existing) return res.status(404).json({ error: 'User not found.' });
+
+    // WP1: a tenant admin may only edit users that belong to their own org.
+    if (!canTouchPlatformAdmin) {
+      const [[inOrg]] = await pool.execute(
+        'SELECT 1 AS ok FROM user_org_access WHERE user_id = ? AND org_id = ? AND is_active = 1 LIMIT 1',
+        [req.params.id, req.user.orgId ?? null]
+      );
+      if (!inOrg) return res.status(403).json({ error: 'You can only modify users within your organisation.' });
+    }
 
     // user_id uniqueness check (exclude self)
     if (user_id !== undefined) {

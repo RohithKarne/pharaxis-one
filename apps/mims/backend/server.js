@@ -488,6 +488,30 @@ function shutdown(signal) {
   setTimeout(() => process.exit(0), 1500).unref()
 }
 
+// ─── WP4: process-level safety net (main API process) ─────────────────────────
+// The child workers (pollerProcess/schedulerProcess) already register these; the
+// main API process did not. A single unhandled rejection in an un-wrapped async
+// route would otherwise terminate the server for ALL tenants (DoS-by-accident).
+let shuttingDown = false;
+process.on('unhandledRejection', (reason) => {
+  // Log and keep serving — do NOT exit. One stray rejection must not take the
+  // API down for every tenant. The error handler/route owner still sees it.
+  logger.error({ pid: process.pid, reason: reason instanceof Error ? reason.stack : String(reason) }, 'API: unhandledRejection (kept alive)');
+});
+process.on('uncaughtException', (err) => {
+  // A truly uncaught exception leaves the process in an unknown state — log and
+  // shut down cleanly so the process manager (pm2/ecosystem) restarts us fresh.
+  logger.error({ pid: process.pid, err: err?.stack || String(err) }, 'API: uncaughtException — exiting for restart');
+  if (shuttingDown) { process.exit(1); return; }
+  shuttingDown = true;
+  try { stopWorkers() } catch (_) {}
+  try { stopScheduler() } catch (_) {}
+  try { stopSchemaTracker() } catch (_) {}
+  if (server) { try { server.close(() => process.exit(1)) } catch (_) { process.exit(1) } }
+  else process.exit(1);
+  setTimeout(() => process.exit(1), 1500).unref();
+});
+
 process.once('SIGINT', () => shutdown('SIGINT'))
 process.once('SIGTERM', () => shutdown('SIGTERM'))
 // Nodemon restart signal: ensure we release the port cleanly.

@@ -333,6 +333,9 @@ router.post('/faqs/:id/approve', authenticate, requireCapability('content.approv
     }
 
     const [[user]] = await pool.execute('SELECT * FROM users WHERE id = ?', [req.user.userId]);
+    // WP5: guard against missing user / SSO-only (null password) account — bcrypt.compare
+    // on a null hash threw a TypeError → generic 500 instead of a clean 401 on the e-sign path.
+    if (!user?.password) return res.status(401).json({ error: 'Electronic signature rejected — password sign-off not available for this account.' });
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
 
@@ -378,16 +381,20 @@ router.post('/faqs/:id/publish', authenticate, requireCapability('content.publis
     }
 
     const [[user]] = await pool.execute('SELECT * FROM users WHERE id = ?', [req.user.userId]);
+    // WP5: guard against missing user / SSO-only (null password) account — bcrypt.compare
+    // on a null hash threw a TypeError → generic 500 instead of a clean 401 on the e-sign path.
+    if (!user?.password) return res.status(401).json({ error: 'Electronic signature rejected — password sign-off not available for this account.' });
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
 
-    const newMajor = faq.version_major + 1;
-    const versionStr = `${newMajor}.0`;
-
+    // WP5: bump the version ATOMICALLY (was computed from the earlier read — concurrent
+    // publishes could land the same major), then read back for the version string.
     await pool.execute(
-      "UPDATE cm_faqs SET status = 'Published', version_major = ?, version_minor = 0, updated_by = ?, updated_at = NOW() WHERE id = ?",
-      [newMajor, req.user.userId, id]
+      "UPDATE cm_faqs SET status = 'Published', version_major = version_major + 1, version_minor = 0, updated_by = ?, updated_at = NOW() WHERE id = ?",
+      [req.user.userId, id]
     );
+    const [[afterFaq]] = await pool.execute('SELECT version_major, version_minor FROM cm_faqs WHERE id = ?', [id]);
+    const versionStr = `${afterFaq.version_major}.${afterFaq.version_minor}`;
     await addVersionHistory(Number(id), versionStr, 'Published', reason, req.user.userId);
     await audit(req.user.userId, req.user.email, 'PUBLISH', 'cm_faq', Number(id), { reason, version: versionStr });
     res.json({ message: 'FAQ published.', version: versionStr });
@@ -455,7 +462,8 @@ router.post('/faqs/:id/archive', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/faqs/:id/clone — duplicate FAQ as Draft (#8)
-router.post('/faqs/:id/clone', authenticate, async (req, res) => {
+// WP5: clone creates a new FAQ, so it must require the same capability as POST /faqs.
+router.post('/faqs/:id/clone', authenticate, requireCapability('content.faq.manage'), async (req, res) => {
   try {
     const src = await getScopedFaq(req, req.params.id);
     if (!src) return res.status(404).json({ error: 'FAQ not found.' });

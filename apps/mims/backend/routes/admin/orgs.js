@@ -11,6 +11,16 @@ const { authenticate, requireRole, requireOrg } = require('../../middleware/auth
 const { logAudit } = require('../../utils/auditLog');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 
+// WP1: non-platform admins may only access resources for their OWN org. Returns
+// true (and sends 403) when a tenant admin targets another org via the URL.
+function denyCrossOrg(req, res, pathOrgId) {
+  if (!hasGlobalAdminScope(req.user) && Number(pathOrgId) !== Number(req.user.orgId)) {
+    res.status(403).json({ error: 'You can only access your own organisation.' });
+    return true;
+  }
+  return false;
+}
+
 // GET /api/admin/orgs — list all (platform admin sees all; admin sees only their org)
 router.get('/', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
@@ -63,6 +73,7 @@ router.put('/:id', authenticate, requireRole('platform_admin'), async (req, res)
 // GET /api/admin/orgs/:id/sites — list sites for an org
 router.get('/:id/sites', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
+    if (denyCrossOrg(req, res, req.params.id)) return;
     const [sites] = await pool.execute('SELECT * FROM sites WHERE org_id = ? ORDER BY name', [req.params.id]);
     res.json({ sites });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
@@ -100,6 +111,7 @@ router.put('/sites/:id', authenticate, requireRole('platform_admin'), async (req
 // GET /api/admin/orgs/:orgId/users — list users in org with access_expires_at
 router.get('/:orgId/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
+    if (denyCrossOrg(req, res, req.params.orgId)) return;
     const [rows] = await pool.execute(
       `SELECT u.id, u.name, u.email, uoa.role_at_org, uoa.is_active, uoa.access_expires_at, uoa.last_accessed_at
        FROM users u
@@ -115,6 +127,7 @@ router.get('/:orgId/users', authenticate, requireRole('admin', 'platform_admin')
 // PUT /api/admin/orgs/:orgId/users/:userId/expiry — set access_expires_at
 router.put('/:orgId/users/:userId/expiry', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
+    if (denyCrossOrg(req, res, req.params.orgId)) return;
     const { access_expires_at } = req.body;
     await pool.execute(
       'UPDATE user_org_access SET access_expires_at = ? WHERE user_id = ? AND org_id = ?',

@@ -70,19 +70,23 @@ export default function FeatureFlags() {
 
   // ── Toggle a single tenant
   async function toggleTenant(orgId, enabled) {
+    // WP7: capture prior state so we can roll back the optimistic toggle if the save fails —
+    // previously a failed save showed an error but left the toggle showing the new value
+    // while the backend kept the old one (the rollout control visually lied).
+    const prevTenants = tenants
     setTenants(t => t.map(x => x.org_id === orgId ? { ...x, enabled: enabled ? 1 : 0 } : x))
     try {
       const r = await httpFetch(`${API}/${selected.id}/tenant/${orgId}`, {
         method: 'PUT', headers: H,
         body: JSON.stringify({ enabled }),
       })
-      if (!r.ok) { showFlash('Failed to save.', 'error'); return }
+      if (!r.ok) { setTenants(prevTenants); showFlash('Failed to save.', 'error'); return }
       showFlash(`Flag ${enabled ? 'enabled' : 'disabled'} for tenant.`)
       // refresh enabled count on catalog
       setFlags(fl => fl.map(f => f.id === selected.id
         ? { ...f, enabled_tenant_count: (f.enabled_tenant_count ?? 0) + (enabled ? 1 : -1) }
         : f))
-    } catch { showFlash('Network error.', 'error') }
+    } catch { setTenants(prevTenants); showFlash('Network error.', 'error') }
   }
 
   // ── Bulk enable / disable

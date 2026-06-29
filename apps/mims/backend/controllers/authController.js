@@ -1725,6 +1725,7 @@ const authController = {
   },
 
   async me(req, res) {
+   try {
     res.set('Cache-Control', 'no-store');
     const user = await userModel.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -1794,6 +1795,10 @@ const authController = {
       sessionTimeout: (orgRows.find((row) => Number(row.org_id) === Number(current?.orgId))?.session_timeout_minutes) ?? 30,
       currentOrgActive: !!current && Number(current.orgId) === Number(req.user.orgId),
     });
+   } catch (err) {
+     console.error('me error:', err);
+     return res.status(500).json({ error: 'Could not load session.' });
+   }
   },
 
   async switchOrg(req, res) {

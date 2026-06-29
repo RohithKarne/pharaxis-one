@@ -310,9 +310,13 @@ export default function AdminCaseImportPanel({ H }) {
                     <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }} onClick={async () => {
                       if (!await confirm('Delete this scheduled export?')) return
                       try {
-                        await httpFetch(`/api/admin/exports/scheduled/${cfg.id}`, { method: 'DELETE', headers: H })
+                        // WP7: only remove the row if the DELETE actually succeeded — was
+                        // removing it unconditionally, so a failed delete made the schedule
+                        // vanish from the UI while it kept firing server-side.
+                        const res = await httpFetch(`/api/admin/exports/scheduled/${cfg.id}`, { method: 'DELETE', headers: H })
+                        if (!res.ok) { alert('Failed to delete scheduled export.'); return }
                         setScheduledExports(prev => prev.filter((_, idx) => idx !== i))
-                      } catch { /* ignore delete failure after local row removal */ }
+                      } catch { alert('Failed to delete scheduled export.') }
                     }}>Delete</button>
                   </td>
                 </tr>

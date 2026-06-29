@@ -15,8 +15,9 @@ export default function AdminCrmIntPanel({ config, setConfig, status, H }) {
   async function save() {
     setSaving(true)
     try {
-      await httpFetch('/api/admin/integrations/crm/config', { method: 'PUT', headers: H, body: JSON.stringify({ config }) })
-    } finally { setSaving(false) }
+      const res = await httpFetch('/api/admin/integrations/crm/config', { method: 'PUT', headers: H, body: JSON.stringify({ config }) })
+      if (!res.ok) { alert('Failed to save CRM settings.'); return }  // WP7: surface save failures
+    } catch { alert('Failed to save CRM settings.') } finally { setSaving(false) }
   }
 
   async function testConnection() {

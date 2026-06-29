@@ -48,6 +48,10 @@ export default function RichFieldRenderer({
       .catch(() => setValue(null))
   }, [entityType, entityId, section, field, token, enabled, externallyControlled])
 
+  // WP6: clear the pending autosave debounce on unmount — editing a rich field then
+  // closing the drawer/modal within 600ms otherwise fires a PUT and a setState after unmount.
+  useEffect(() => () => clearTimeout(debounceRef.current), [])
+
   const handleChange = useCallback((next) => {
     if (externallyControlled) { extOnChange?.(next); return }
     setValue(next)

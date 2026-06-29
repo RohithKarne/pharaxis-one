@@ -65,6 +65,9 @@ async function sessionCacheSet(token, userData) {
       role:                 userData.role,
       orgId:                userData.orgId,
       siteId:               userData.siteId,
+      // WP4: platformAdmin was omitted — cache hits dropped global scope for the
+      // 60s TTL, intermittently 403-ing platform admins. Keep cached == uncached.
+      platformAdmin:        Boolean(userData.platformAdmin),
       passwordResetRequired: userData.passwordResetRequired ?? false,
     };
     await _client.setex(`mims:session:${token}`, SESSION_CACHE_TTL, JSON.stringify(payload));

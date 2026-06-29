@@ -17,7 +17,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
     name: template?.name || '',
     subject: template?.subject || '',
     body_html: template?.body_html || template?.body || '',
-    status: template?.status || 'Active',
+    expiry_date: template?.expiry_date ? String(template.expiry_date).slice(0, 10) : '',
     folder_id: template?.folder_id || '',
   })
   const [saving, setSaving] = useState(false)
@@ -48,10 +48,17 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
     try {
       const url = isEdit ? `/api/cm/templates/${template.id}` : '/api/cm/templates'
       const method = isEdit ? 'PUT' : 'POST'
-      const payload = { ...form, folder_id: form.folder_id ? Number(form.folder_id) : null }
+      const payload = {
+        ...form,
+        folder_id: form.folder_id ? Number(form.folder_id) : null,
+        expiry_date: form.expiry_date || null,
+      }
       const res = await httpFetch(url, { method, headers: authHeaders, body: JSON.stringify(payload) })
-      if (res.ok) { onSaved(); onClose() }
-      else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
+      if (res.ok) {
+        const d = await res.json().catch(() => ({}))
+        if (d.reverted_to_draft) toast.info('Saved. Edited content was sent back to Draft for re-approval.')
+        onSaved(); onClose()
+      } else { const d = await res.json(); toast.error(d.error || 'Save failed.') }
     } catch { toast.error('Network error.') }
     setSaving(false)
   }
@@ -111,18 +118,21 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
             <RichTextEditor value={form.body_html} onChange={v => setForm(p => ({ ...p, body_html: v }))} />
           </div>
           <div className="cm-form-group">
-            <label className="cm-form-label">Status</label>
-            <div style={{ display: 'flex', gap: 20 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
-                <input type="radio" name="tstatus" value="Active" checked={form.status === 'Active'} onChange={() => setForm(p => ({ ...p, status: 'Active' }))} />
-                Active
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
-                <input type="radio" name="tstatus" value="Inactive" checked={form.status === 'Inactive'} onChange={() => setForm(p => ({ ...p, status: 'Inactive' }))} />
-                Inactive
-              </label>
-            </div>
+            <label className="cm-form-label">Expiry Date</label>
+            <input type="date" className="cm-form-input" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} />
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+              After this date the template is hidden from the response builder. Leave blank for no expiry.
+            </p>
           </div>
+          {isEdit && (
+            <div className="cm-form-group">
+              <label className="cm-form-label">Lifecycle Status</label>
+              <div><StatusBadge status={template.status || 'Draft'} /></div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                Status changes via Approve / Publish / Archive on the list. Editing approved or published content returns it to Draft for re-approval.
+              </p>
+            </div>
+          )}
         </div>
         {isEdit && (
           <div style={{ padding: '0 24px 16px', borderTop: '1px solid var(--border)' }}>
@@ -197,7 +207,7 @@ export default function TemplatesSection({ token }) {
   )
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ type: '', status: '', folder_id: '', search: '' })
+  const [filters, setFilters] = useState({ type: '', status: '', folder_id: '', search: '', include_expired: '' })
   const [folders, setFolders] = useState([])
   const [showDrawer, setShowDrawer] = useState(false)
   const [editTemplate, setEditTemplate] = useState(null)
@@ -228,14 +238,12 @@ export default function TemplatesSection({ token }) {
     return () => { cancelled = true }
   }, [authHeaders, filters, refreshKey])
 
-  async function toggleStatus(t) {
-    const newStatus = t.status === 'Active' ? 'Inactive' : 'Active'
+  async function transition(t, action) {
     try {
-      const res = await httpFetch(`/api/cm/templates/${t.id}/status`, {
-        method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: newStatus })
-      })
-      if (res.ok) setRefreshKey(key => key + 1)
-      else { const d = await res.json(); toast.error(d.error || 'Failed to update status.') }
+      const res = await httpFetch(`/api/cm/templates/${t.id}/${action}`, { method: 'POST', headers: authHeaders })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success(d.message || 'Template updated.'); setRefreshKey(key => key + 1) }
+      else toast.error(d.error || 'Action failed.')
     } catch { toast.error('Network error.') }
   }
 
@@ -256,14 +264,20 @@ export default function TemplatesSection({ token }) {
         </select>
         <select className="cm-form-select" style={{ width: 160 }} value={filters.status} onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
           <option value="">All Statuses</option>
-          <option>Active</option>
-          <option>Inactive</option>
+          <option>Draft</option>
+          <option>Approved</option>
+          <option>Published</option>
+          <option>Archived</option>
         </select>
         <input className="cm-form-input" style={{ width: 220 }} value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} placeholder="Search name or subject…" />
         <select className="cm-form-select" style={{ width: 180 }} value={filters.folder_id} onChange={e => setFilters(p => ({ ...p, folder_id: e.target.value }))}>
           <option value="">All Folders</option>
           {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
         </select>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
+          <input type="checkbox" checked={filters.include_expired === 'true'} onChange={e => setFilters(p => ({ ...p, include_expired: e.target.checked ? 'true' : '' }))} />
+          Include expired
+        </label>
         <button className="cm-btn cm-btn-secondary" onClick={() => setRefreshKey(key => key + 1)}>Filter</button>
       </div>
       {loading ? (
@@ -279,6 +293,7 @@ export default function TemplatesSection({ token }) {
               <th>Folder</th>
               <th>Subject</th>
               <th>Status</th>
+              <th>Expiry</th>
               <th>Last Updated</th>
               <th>Actions</th>
             </tr>
@@ -290,15 +305,23 @@ export default function TemplatesSection({ token }) {
                 <td>{t.type}</td>
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{folders.find(f => f.id === t.folder_id)?.name || '—'}</td>
                 <td style={{ color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.subject || '—'}</td>
-                <td><StatusBadge status={t.status || 'Active'} /></td>
+                <td><StatusBadge status={t.status || 'Draft'} /></td>
+                <td style={{ fontSize: 12 }}>
+                  {t.expiry_date
+                    ? <span style={{ color: t.is_expired ? 'var(--danger, #c0392b)' : 'var(--text-muted)' }}>
+                        {new Date(t.expiry_date).toLocaleDateString()}{t.is_expired ? ' · Expired' : ''}
+                      </span>
+                    : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                </td>
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '—'}</td>
                 <td>
                   <div className="cm-action-btns">
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => { setEditTemplate(t); setShowDrawer(true) }}>Edit</button>
                     <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => setHistoryTemplate(t)}>History</button>
-                    <button className={`cm-btn cm-btn-sm ${t.status === 'Active' ? 'cm-btn-danger' : 'cm-btn-primary'}`} onClick={() => toggleStatus(t)}>
-                      {t.status === 'Active' ? 'Deactivate' : 'Activate'}
-                    </button>
+                    {t.status === 'Draft' && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => transition(t, 'approve')}>Approve</button>}
+                    {t.status === 'Approved' && <button className="cm-btn cm-btn-primary cm-btn-sm" onClick={() => transition(t, 'publish')}>Publish</button>}
+                    {t.status === 'Published' && <button className="cm-btn cm-btn-danger cm-btn-sm" onClick={() => transition(t, 'archive')}>Archive</button>}
+                    {(t.status === 'Approved' || t.status === 'Published' || t.status === 'Archived') && <button className="cm-btn cm-btn-secondary cm-btn-sm" onClick={() => transition(t, 'revert')}>Revert</button>}
                   </div>
                 </td>
               </tr>

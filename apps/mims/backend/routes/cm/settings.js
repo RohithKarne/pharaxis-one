@@ -125,7 +125,7 @@ router.put('/settings', authenticate, async (req, res) => {
       `INSERT INTO cm_org_settings (org_id, setting_key, setting_value, updated_by)
        VALUES (?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by), updated_at = NOW()`,
-      [orgId(req), setting_key, JSON.stringify(setting_value), req.user?.id || null]
+      [orgId(req), setting_key, JSON.stringify(setting_value), req.user?.userId || null] /* WP5: was req.user.id (undefined) — actor id is req.user.userId */
     );
     res.json({ message: 'Setting saved.' });
   } catch (err) {

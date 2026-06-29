@@ -27,20 +27,27 @@ function hasPlatformAdminScope(req) {
 
 function templateScopePredicate(req, alias = 't') {
   if (hasPlatformAdminScope(req)) return '1=1';
-  return `EXISTS (
-    SELECT 1
-    FROM users tu
-    LEFT JOIN user_org_access tua
-      ON tua.user_id = tu.id
-     AND tua.org_id = ?
-     AND tua.is_active = 1
-    WHERE tu.id = ${alias}.created_by
-      AND (tu.org_id = ? OR tua.user_id IS NOT NULL)
+  // WP1: a foldered template is scoped strictly by its folder's org (cm_folders.org_id)
+  // — the old creator-based scope leaked a multi-org user's templates into every org
+  // they could access. NULL-folder templates keep the creator-based fallback so they
+  // don't vanish (no regression for legacy folderless templates).
+  return `(
+    EXISTS (SELECT 1 FROM cm_folders cf WHERE cf.id = ${alias}.folder_id AND cf.org_id = ?)
+    OR (${alias}.folder_id IS NULL AND EXISTS (
+      SELECT 1
+      FROM users tu
+      LEFT JOIN user_org_access tua
+        ON tua.user_id = tu.id
+       AND tua.org_id = ?
+       AND tua.is_active = 1
+      WHERE tu.id = ${alias}.created_by
+        AND (tu.org_id = ? OR tua.user_id IS NOT NULL)
+    ))
   )`;
 }
 
 function templateScopeParams(req) {
-  return hasPlatformAdminScope(req) ? [] : [req.user.orgId, req.user.orgId];
+  return hasPlatformAdminScope(req) ? [] : [req.user.orgId, req.user.orgId, req.user.orgId];
 }
 
 async function getScopedTemplate(req, templateId) {
@@ -73,17 +80,83 @@ async function getScopedCase(req, caseId) {
 
 function decorateTemplateRow(template) {
   if (!template) return template;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const exp = template.expiry_date ? new Date(template.expiry_date) : null;
   return {
     ...template,
     body: template.body_html ?? '',
     version: `${template.version_major || 1}.${template.version_minor || 0}`,
+    is_expired: !!exp && exp < today,
   };
+}
+
+// Lifecycle transitions for a template. Mirrors the cm_documents governance
+// model (Draft → Approved → Published → Archived). Templates only reach the MI
+// response builder once they are 'Published' and not expired.
+const TEMPLATE_TRANSITIONS = {
+  approve: { from: ['Draft'], to: 'Approved' },
+  publish: { from: ['Approved'], to: 'Published' },
+  archive: { from: ['Draft', 'Approved', 'Published'], to: 'Archived' },
+  revert:  { from: ['Approved', 'Published', 'Archived'], to: 'Draft' },
+};
+
+async function transitionTemplate(req, res, action) {
+  try {
+    const cfg = TEMPLATE_TRANSITIONS[action];
+    const tmpl = await getScopedTemplate(req, req.params.id);
+    if (!tmpl) return res.status(404).json({ error: 'Template not found.' });
+    if (!cfg.from.includes(tmpl.status)) {
+      return res.status(409).json({ error: `Cannot ${action} a template that is '${tmpl.status}'.` });
+    }
+
+    // Publishing makes a template live for response use — same gate as activation.
+    if (action === 'publish' && req.user.orgId) {
+      const evidenceGate = await enforceEvidenceGate({
+        orgId: req.user.orgId,
+        contentType: 'template',
+        contentId: Number(req.params.id),
+        mode: 'response',
+        actorUserId: req.user.userId,
+        metadata: { route: '/api/cm/templates/:id/publish', action: 'publish' },
+      });
+      if (!evidenceGate.allow) {
+        return res.status(422).json({
+          error: 'Evidence Chain Compiler blocked template publish.',
+          run_id: evidenceGate.run_id,
+          evidence: evidenceGate.result,
+        });
+      }
+    }
+
+    const sets = ['status = ?', 'updated_by = ?', 'updated_at = NOW()'];
+    const params = [cfg.to, req.user.userId];
+    if (action === 'approve') { sets.push('approved_by = ?', 'approved_at = NOW()'); params.push(req.user.userId); }
+    if (action === 'publish') { sets.push('published_by = ?', 'published_at = NOW()'); params.push(req.user.userId); }
+    if (action === 'revert')  { sets.push('approved_by = NULL', 'approved_at = NULL', 'published_by = NULL', 'published_at = NULL'); }
+    params.push(req.params.id);
+
+    await pool.execute(`UPDATE cm_templates SET ${sets.join(', ')} WHERE id = ?`, params);
+    await audit(req.user.userId, req.user.email, `TEMPLATE_${action.toUpperCase()}`, 'cm_template', Number(req.params.id), { name: tmpl.name, from: tmpl.status, to: cfg.to });
+    try {
+      await pool.execute(
+        `INSERT INTO cm_version_history (entity_type, entity_id, version, status, notes, author_id)
+         VALUES ('template', ?, ?, ?, ?, ?)`,
+        [req.params.id, `${tmpl.version_major || 1}.${tmpl.version_minor || 0}`, cfg.to, `${action} → ${cfg.to}`, req.user.userId]
+      );
+    } catch (_) {}
+
+    res.json({ message: `Template moved to ${cfg.to}.`, status: cfg.to });
+  } catch (err) {
+    console.error(`POST /cm/templates/:id/${action} error:`, err);
+    res.status(500).json({ error: 'Server error.' });
+  }
 }
 
 // GET /api/cm/templates — list with filters
 router.get('/templates', authenticate, async (req, res) => {
   try {
-    const { type, status, search, product_group_id, folder_id, page = 1, limit = 50 } = req.query;
+    const { type, status, search, product_group_id, folder_id, include_expired, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
 
     let query = `
@@ -121,6 +194,9 @@ router.get('/templates', authenticate, async (req, res) => {
       query += ' AND t.folder_id = ?';
       params.push(Number(folder_id));
     }
+    if (include_expired !== 'true') {
+      query += ' AND (t.expiry_date IS NULL OR t.expiry_date >= CURDATE())';
+    }
 
     const countQuery = query.replace('SELECT t.*, u.name AS created_by_name', 'SELECT COUNT(*) AS total');
     const [[{ total }]] = await pool.execute(countQuery, params);
@@ -138,13 +214,15 @@ router.get('/templates', authenticate, async (req, res) => {
 // POST /api/cm/templates — create template
 router.post('/templates', authenticate, async (req, res) => {
   try {
-    const { type, name, subject, body_html, body, status, folder_id } = req.body;
+    const { type, name, subject, body_html, body, folder_id, expiry_date } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
     const resolvedBodyHtml = body_html !== undefined ? body_html : (body !== undefined ? body : null);
 
+    // New templates always start as Draft — they must pass through approve →
+    // publish before they can be used in a response. Status is never client-set.
     const [result] = await pool.execute(
-      'INSERT INTO cm_templates (type, name, subject, body_html, status, folder_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [type || 'Response', name.trim(), subject || null, resolvedBodyHtml || null, status || 'Active', folder_id || null, req.user.userId]
+      'INSERT INTO cm_templates (type, name, subject, body_html, status, folder_id, expiry_date, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [type || 'Response', name.trim(), subject || null, resolvedBodyHtml || null, 'Draft', folder_id || null, expiry_date || null, req.user.userId]
     );
     await audit(req.user.userId, req.user.email, 'CREATE', 'cm_template', result.insertId, { name, type: type || 'Response' });
     const created = await getScopedTemplate(req, result.insertId);
@@ -204,57 +282,45 @@ router.put('/templates/:id', authenticate, async (req, res) => {
     const existing = await getScopedTemplate(req, id);
     if (!existing) return res.status(404).json({ error: 'Template not found.' });
 
-    const { type, name, subject, body_html, body, status, folder_id } = req.body;
+    const { type, name, subject, body_html, body, folder_id, expiry_date } = req.body;
     const resolvedBodyHtml = body_html !== undefined ? body_html : (body !== undefined ? body : existing.body_html);
+    const resolvedFolderId = folder_id !== undefined ? (folder_id || null) : existing.folder_id;
+    const resolvedExpiry = expiry_date !== undefined ? (expiry_date || null) : existing.expiry_date;
+
+    // Editing reviewed content invalidates its approval: an Approved/Published
+    // template is sent back to Draft so the new wording must be re-approved
+    // before it can reach a doctor again.
+    const wasGoverned = existing.status === 'Approved' || existing.status === 'Published';
+    const newStatus = wasGoverned ? 'Draft' : existing.status;
+
     await pool.execute(
-      'UPDATE cm_templates SET type = ?, name = ?, subject = ?, body_html = ?, status = ?, folder_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
-      [type || 'Response', name, subject || null, resolvedBodyHtml || null, status || 'Active', folder_id !== undefined ? (folder_id || null) : existing.folder_id, req.user.userId, id]
+      `UPDATE cm_templates
+          SET type = ?, name = ?, subject = ?, body_html = ?, folder_id = ?, expiry_date = ?,
+              status = ?,
+              approved_by  = CASE WHEN ? = 'Draft' THEN NULL ELSE approved_by  END,
+              approved_at  = CASE WHEN ? = 'Draft' THEN NULL ELSE approved_at  END,
+              published_by = CASE WHEN ? = 'Draft' THEN NULL ELSE published_by END,
+              published_at = CASE WHEN ? = 'Draft' THEN NULL ELSE published_at END,
+              updated_by = ?, updated_at = NOW()
+        WHERE id = ?`,
+      [type || 'Response', name, subject || null, resolvedBodyHtml || null, resolvedFolderId, resolvedExpiry,
+       newStatus, newStatus, newStatus, newStatus, newStatus, req.user.userId, id]
     );
-    await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_template', Number(id), { name, type });
-    res.json({ message: 'Template updated.' });
+    await audit(req.user.userId, req.user.email, 'UPDATE', 'cm_template', Number(id), { name, type, reverted_to_draft: wasGoverned });
+    res.json({ message: 'Template updated.', reverted_to_draft: wasGoverned, status: newStatus });
   } catch (err) {
     console.error('PUT /cm/templates/:id error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });
 
-// PATCH /api/cm/templates/:id/status — toggle Active/Inactive
-router.patch('/templates/:id/status', authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const existing = await getScopedTemplate(req, id);
-    if (!existing) return res.status(404).json({ error: 'Template not found.' });
-
-    const newStatus = existing.status === 'Active' ? 'Inactive' : 'Active';
-    if (newStatus === 'Active' && req.user.orgId) {
-      const evidenceGate = await enforceEvidenceGate({
-        orgId: req.user.orgId,
-        contentType: 'template',
-        contentId: Number(id),
-        mode: 'response',
-        actorUserId: req.user.userId,
-        metadata: { route: '/api/cm/templates/:id/status', action: 'activate' },
-      });
-      if (!evidenceGate.allow) {
-        return res.status(422).json({
-          error: 'Evidence Chain Compiler blocked template activation.',
-          run_id: evidenceGate.run_id,
-          evidence: evidenceGate.result,
-        });
-      }
-    }
-
-    await pool.execute(
-      'UPDATE cm_templates SET status = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
-      [newStatus, req.user.userId, id]
-    );
-    await audit(req.user.userId, req.user.email, 'STATUS_CHANGE', 'cm_template', Number(id), { name: existing.name, status: newStatus });
-    res.json({ message: `Template ${newStatus === 'Active' ? 'activated' : 'deactivated'}.`, status: newStatus });
-  } catch (err) {
-    console.error('PATCH /cm/templates/:id/status error:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
+// Lifecycle transitions — Draft → Approved → Published → Archived (+ revert).
+// Replaces the old Active/Inactive toggle. Only a Published, non-expired
+// template is offered in the MI response builder.
+router.post('/templates/:id/approve', authenticate, (req, res) => transitionTemplate(req, res, 'approve'));
+router.post('/templates/:id/publish', authenticate, (req, res) => transitionTemplate(req, res, 'publish'));
+router.post('/templates/:id/archive', authenticate, (req, res) => transitionTemplate(req, res, 'archive'));
+router.post('/templates/:id/revert',  authenticate, (req, res) => transitionTemplate(req, res, 'revert'));
 
 // POST /api/cm/templates/:id/checkin — snapshot current body as a new version
 router.post('/templates/:id/checkin', authenticate, async (req, res) => {

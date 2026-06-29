@@ -73,7 +73,7 @@ router.post('/picklists', authenticate, async (req, res) => {
     const [result] = await pool.execute(
       `INSERT INTO cm_picklists (org_id, field_type, value, label, sort_order, is_active, created_by)
        VALUES (?, ?, ?, ?, ?, 1, ?)`,
-      [org, field_type.trim(), value.trim(), finalLabel, Number(sort_order), req.user?.id || null]
+      [org, field_type.trim(), value.trim(), finalLabel, Number(sort_order), req.user?.userId || null] /* WP5: was req.user.id (undefined) — actor id is req.user.userId */
     );
     const [[created]] = await pool.execute('SELECT * FROM cm_picklists WHERE id = ?', [result.insertId]);
     res.status(201).json({ picklist: created });

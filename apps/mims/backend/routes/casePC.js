@@ -16,7 +16,14 @@ const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
-async function verifyCaseOrg(caseId, req) {
+const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+
+// WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
+// paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
+// were gated on org membership alone — any org member could mutate cases. Reads
+// (no key) keep the original org-membership-only behavior. Returns boolean.
+async function verifyCaseOrg(caseId, req, privilegeKey) {
+  if (privilegeKey) return !!(await verifyCaseScoped(caseId, req, privilegeKey));
   const [[c]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [caseId]);
   if (!c) return false;
   if (hasGlobalAdminScope(req.user)) return true;
@@ -61,7 +68,7 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     if (!await verifyCaseOrg(req.params.id, req, 'case.update')) {
-      conn.release();
+      // WP2: no explicit release here — the finally block releases. Was double-released.
       return res.status(403).json({ error: 'Access denied' });
     }
     await conn.beginTransaction();
@@ -129,10 +136,15 @@ router.put('/cases/pc/versions/:versionId/status', authenticate, async (req, res
     }
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status required' });
-    await pool.execute(
+    const [statusUpd] = await pool.execute(
       'UPDATE case_pc_versions SET status = ? WHERE id = ? AND is_locked = 0',
       [status, req.params.versionId]
     );
+    // WP2: a locked (or missing) version updates 0 rows — was silently returning 200
+    // with the unchanged row, so the caller thought the status change succeeded.
+    if (statusUpd.affectedRows === 0) {
+      return res.status(409).json({ error: 'Version is locked or does not exist — status not changed.' });
+    }
     const [[v]] = await pool.execute(
       'SELECT * FROM case_pc_versions WHERE id = ?', [req.params.versionId]
     );
@@ -267,7 +279,7 @@ router.put('/cases/pc/versions/:versionId/product-info', authenticate, async (re
         storage_conditions = VALUES(storage_conditions), additional_info = VALUES(additional_info)`,
       [req.params.versionId, product_id || null, product_name || null,
        product_type || null, product_category || null, lot_number || null, expiry_date || null,
-       manufacturing_date || null, pack_size || null, quantity_available ? 1 : 0, storage_conditions || null, additional_info_product ?? additional_info ?? null]
+       manufacturing_date || null, pack_size || null, quantity_available ?? null, storage_conditions || null, additional_info_product ?? additional_info ?? null]
     );
     const [[row]] = await pool.execute(
       'SELECT * FROM case_pc_product_info WHERE version_id = ?', [req.params.versionId]

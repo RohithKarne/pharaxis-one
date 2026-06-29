@@ -124,6 +124,24 @@ async function processBatch() {
   _running = true;
   let conn = null;
   try {
+    // WP3: reaper — recover jobs stranded in 'processing' by a worker crash between
+    // claim and the per-job terminal update (the claim selects only 'pending', so a
+    // stuck row would otherwise never send and never fail). The claim below stamps
+    // scheduled_at = NOW() as a de-facto claimed-at lease; anything still 'processing'
+    // past the lease window is re-queued, or failed if it has exhausted its attempts.
+    await pool.execute(
+      `UPDATE email_job_queue SET status = 'pending'
+        WHERE status = 'processing' AND scheduled_at < (NOW() - INTERVAL 15 MINUTE)
+          AND attempts < max_attempts`
+    ).catch((e) => logger.error({ err: e.message }, 'emailWorker: reaper requeue failed'));
+    await pool.execute(
+      `UPDATE email_job_queue
+          SET status = 'failed', processed_at = NOW(),
+              error_message = 'Reaped: stuck in processing past lease (worker crash)'
+        WHERE status = 'processing' AND scheduled_at < (NOW() - INTERVAL 15 MINUTE)
+          AND attempts >= max_attempts`
+    ).catch((e) => logger.error({ err: e.message }, 'emailWorker: reaper fail-mark failed'));
+
     // Claim a batch atomically inside an explicit transaction.
     // FOR UPDATE SKIP LOCKED only holds the row-lock for the duration of the
     // transaction — using pool.execute() (auto-commit) would release it
@@ -151,7 +169,9 @@ async function processBatch() {
     const ids = rows.map((r) => r.id);
     const placeholders = ids.map(() => '?').join(',');
     await conn.execute(
-      `UPDATE email_job_queue SET status = 'processing', attempts = attempts + 1 WHERE id IN (${placeholders})`,
+      // WP3: stamp scheduled_at = NOW() at claim so it doubles as a claimed-at lease
+      // for the reaper above. attempts is incremented exactly once, here at claim.
+      `UPDATE email_job_queue SET status = 'processing', attempts = attempts + 1, scheduled_at = NOW() WHERE id IN (${placeholders})`,
       ids
     );
 
@@ -183,7 +203,7 @@ async function processBatch() {
                   processed_at  = IF(? = 1, NOW(), processed_at)
             WHERE id = ?`,
           [exhausted ? 'failed' : 'pending', String(err.message || err).slice(0, 1000), exhausted ? nextAt : nextAt, exhausted ? 1 : 0, job.id]
-        ).catch(() => {});
+        ).catch((e) => logger.error({ job_id: job.id, err: e.message }, 'emailWorker: failed to persist failure state — job will be recovered by the reaper'));
 
         if (exhausted && job.case_id) {
           // Log permanent failure to transmission_audit_trail
@@ -192,7 +212,7 @@ async function processBatch() {
                (case_id, target_system, payload_summary, status, response_code)
              VALUES (?, 'MI Email', ?, 'Failed', 500)`,
             [job.case_id, `Email job ${job.id} exhausted after ${newAttempts} attempts: ${String(err.message).slice(0, 200)}`]
-          ).catch(() => {});
+          ).catch((e) => logger.error({ job_id: job.id, err: e.message }, 'emailWorker: failed to write exhaustion audit'));
         }
       }
     }

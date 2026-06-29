@@ -127,6 +127,7 @@ export const SYSTEM_NAV = [
           { label: 'Content Integration',           value: 'sys-setup-int-content'      },
           { label: 'EMIR Integration',              value: 'sys-setup-int-emir'         },
           { label: 'Case Import',                   value: 'sys-setup-int-case-import'  },
+          { label: 'Inbox Routing Rules',           value: 'sys-setup-int-routing'      },
           { label: 'Transmission Setup',            value: 'sys-setup-int-transmission' },
           { label: 'Developer API Clients',         value: 'sys-setup-developer-api'    },
           { label: 'Email Accounts',                value: 'sys-setup-email-accounts'   },

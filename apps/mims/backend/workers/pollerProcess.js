@@ -23,9 +23,10 @@ logger.info({ pid: process.pid }, 'pollerProcess: email poller worker started');
 
 startPoller();
 
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   logger.info({ pid: process.pid }, 'pollerProcess: SIGTERM received — stopping poller');
-  try { stopPoller(); } catch (e) { logger.warn({ pid: process.pid, err: e.message }, 'pollerProcess: stopPoller error on SIGTERM'); }
+  // WP3: await stopPoller so an in-flight ingest can finish and persist its watermark.
+  try { await stopPoller(); } catch (e) { logger.warn({ pid: process.pid, err: e.message }, 'pollerProcess: stopPoller error on SIGTERM'); }
   process.exit(0);
 });
 

@@ -40,15 +40,23 @@ function safeText(s, maxLen) {
   return str.length > maxLen ? str.slice(0, maxLen) : str
 }
 
-function hashFallback({ sender, subject, receivedAt, body }) {
+function hashFallback({ sender, recipient, subject, receivedAt, body, attachmentsCount }) {
+  // WP3: header-less mail (no Message-ID) is deduped on this fallback hash. Added
+  // recipient + attachment count and widened the body window from 1024 → 8192 to cut
+  // false collisions — two distinct emails sharing sender/subject/date/first-1KB were
+  // colliding and the second was silently dropped (bad in a PV inbox).
   const h = crypto.createHash('sha1')
   h.update(String(sender || ''))
+  h.update('|')
+  h.update(String(recipient || ''))
   h.update('|')
   h.update(String(subject || ''))
   h.update('|')
   h.update(String(receivedAt || ''))
   h.update('|')
-  h.update(String(body || '').slice(0, 1024))
+  h.update(String(attachmentsCount || 0))
+  h.update('|')
+  h.update(String(body || '').slice(0, 8192))
   return h.digest('hex')
 }
 
@@ -114,7 +122,7 @@ async function ingestAccount(account, sinceDt) {
         // Count attachments from parsedEmail
         const attachments_count = parsedEmail?.attachments?.length || 0
 
-        const message_hash = messageId ? null : hashFallback({ sender, subject, receivedAt, body: bodyText })
+        const message_hash = messageId ? null : hashFallback({ sender, recipient, subject, receivedAt, body: bodyText, attachmentsCount: attachments_count })
 
         const [result] = await pool.execute(`
           INSERT IGNORE INTO inquiries (
@@ -194,6 +202,9 @@ async function ingestAccount(account, sinceDt) {
 }
 
 let task = null
+// WP3: promise for the tick currently ingesting, so a graceful shutdown can await it
+// instead of killing an in-progress ingest (which interacts badly with the watermark).
+let _activeRun = null
 
 /**
  * Per-account IMAP failure backoff.
@@ -230,10 +241,10 @@ function startPoller() {
 
   task = cron.schedule('* * * * *', () => {
     // Kick work to the next tick so the cron scheduler itself stays responsive.
-    setImmediate(async () => {
+    setImmediate(() => {
       if (running) return
       running = true
-
+      _activeRun = (async () => {
       try {
         const [accounts] = await pool.execute(`
           SELECT *
@@ -266,10 +277,12 @@ function startPoller() {
             const n = await ingestAccount(account, sinceDt)
             _recordAccountSuccess(account.id) // clear any failure backoff on success
             const runEndedAt = new Date().toISOString()
-            const runEndedAtDb = toMySqlDateTime(runEndedAt)
+            // WP3: persist the watermark captured BEFORE the fetch (runStartedAt), not the
+            // run-end time. Setting it to run-end silently dropped any email that arrived
+            // during the fetch/parse window — a compliance risk for inbound PV/MI email.
             await pool.execute(
               `UPDATE email_accounts SET last_ingest_at = ? WHERE id = ?`,
-              [runEndedAtDb, account.id]
+              [toMySqlDateTime(runStartedAt), account.id]
             )
             logger.info({ account_id: account.id, account_name: account.account_name, inserted: n }, 'Email ingest completed');
             logService({
@@ -345,7 +358,9 @@ function startPoller() {
         }
       } finally {
         running = false
+        _activeRun = null
       }
+      })()
     })
   })
 
@@ -353,10 +368,15 @@ function startPoller() {
   return task
 }
 
-function stopPoller() {
+async function stopPoller() {
   if (!task) return
   try { task.stop() } catch (_) {}
   task = null
+  // WP3: let an in-flight ingest finish (and write its watermark) before we exit,
+  // capped at 5s so shutdown never hangs.
+  if (_activeRun) {
+    try { await Promise.race([_activeRun.catch(() => {}), new Promise((r) => setTimeout(r, 5000))]) } catch (_) {}
+  }
 }
 
 module.exports = { startPoller, stopPoller, ingestAccount }

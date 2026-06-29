@@ -78,12 +78,14 @@ export default function DocumentTypesAdmin() {
   }
   async function delCat(id) {
     if (!confirm('Deactivate category? (Soft delete — existing references stay readable)')) return
-    await httpFetch(`/api/admin/document-type-categories/${id}`, { method: 'DELETE', headers: H })
+    const r = await httpFetch(`/api/admin/document-type-categories/${id}`, { method: 'DELETE', headers: H })
+    if (!r.ok) { showFlash('Deactivate failed', 'error'); return }  // WP7
     showFlash('Deactivated'); loadCats()
   }
   async function delType(id) {
     if (!confirm('Deactivate type?')) return
-    await httpFetch(`/api/admin/document-types/${id}`, { method: 'DELETE', headers: H })
+    const r = await httpFetch(`/api/admin/document-types/${id}`, { method: 'DELETE', headers: H })
+    if (!r.ok) { showFlash('Deactivate failed', 'error'); return }  // WP7
     showFlash('Deactivated'); if (selectedCat) loadTypes(selectedCat.id)
   }
 

@@ -55,3 +55,6 @@ apps/**/frontend/design-screenshots/
 
 # PM2 ecosystem config — EC2-specific, never overwrite from repo
 ecosystem.config.js
+
+# WP9: never commit DB dumps (e.g. mims_dev_backup_*.sql)
+*.sql

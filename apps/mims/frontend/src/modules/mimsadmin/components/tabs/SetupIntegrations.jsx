@@ -9,6 +9,7 @@ const INTEGRATION_SECTION_BY_SETUP_ITEM = {
   'sys-setup-int-content': 'content-int',
   'sys-setup-int-emir': 'emir-int',
   'sys-setup-int-case-import': 'case-import',
+  'sys-setup-int-routing': 'inbox-routing',
 }
 
 function Placeholder({ label }) {

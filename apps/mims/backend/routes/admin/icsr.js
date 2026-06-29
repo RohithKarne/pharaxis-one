@@ -16,6 +16,7 @@ const { searchMedDra } = require('../../services/pv/meddraService');
 const { searchWhoDrug } = require('../../services/pv/whodrugService');
 const { parseAck } = require('../../services/pv/ackParser');
 const { getGatewayConfig } = require('../../services/pv/gatewayConfig');
+const { resolveGateway } = require('../../services/pv/gateways');
 const { generatePeriodicReport } = require('../../services/pv/periodicReportService');
 const { runSignalDetection } = require('../../services/pv/signalDetectionService');
 const { createESignManifest } = require('../../services/eSignManifestService');
@@ -318,8 +319,11 @@ router.post('/icsr/:id/submit', ...adminOnly, async (req, res) => {
     const xml = generateE2BXml(redactedData.report);
     const manifest = await createSubmissionManifest(req, data, xml, signature);
     const configured = await getGatewayConfig(data.report.org_id, data.report.receiver_id);
-    const gatewayName = String(req.body.gateway || configured.mode || data.report.receiver_id || 'mock').toLowerCase();
-    const gateway = require(`../../services/pv/gateways/${['fda','ema','pmda','mhra'].includes(gatewayName) ? gatewayName : 'mock'}`);
+    // WP8: resolve the transport via the gateway registry (was an inline require + whitelist
+    // ternary with a hardcoded 'mock' fallback). Selection order: explicit request →
+    // per-org configured mode → the report's receiver HA → mock.
+    const requestedGateway = req.body.gateway || configured.mode || data.report.receiver_id;
+    const { key: gatewayName, adapter: gateway } = resolveGateway(requestedGateway);
     const result = await gateway.submit(xml, { ...configured, ...(req.body.config || {}) });
     await pool.execute('UPDATE icsr_reports SET status="submitted", submission_count=submission_count+1, last_submitted_at=CURRENT_TIMESTAMP, gateway_message_id=? WHERE id=?', [result.gateway_id || null, req.params.id]);
     await pool.execute(
@@ -328,7 +332,7 @@ router.post('/icsr/:id/submit', ...adminOnly, async (req, res) => {
       [data.report.case_id, req.user.userId, req.user.email, `ICSR-${data.report.receiver_id}`, xml.slice(0, 1000), result.status || 'submitted', result.gateway_id || null]
     );
     await audit(req, 'SUBMIT', 'icsr_report', req.params.id, { gateway: gatewayName, gateway_id: result.gateway_id, manifest_id: manifest.manifest_id || null, pii_redaction_rule_ids: redactedData.applied_rule_ids });
-    res.json({ status: 'submitted', gateway: result, e_sign_manifest: manifest });
+    res.json({ status: 'submitted', gateway_key: gatewayName, gateway_mode: result.raw_response?.mode || configured.mode || 'mock', gateway: result, e_sign_manifest: manifest });
   } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
 });
 
