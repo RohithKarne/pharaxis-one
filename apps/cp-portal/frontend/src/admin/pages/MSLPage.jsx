@@ -33,6 +33,12 @@ export default function MSLPage() {
   const [showEdit, setShowEdit] = useState(false)
   const [editForm, setEditForm] = useState({})
 
+  // ── Slots state ──────────────────────────────────────────────
+  const [slotMSL, setSlotMSL]   = useState(null)
+  const [slots, setSlots]       = useState([])
+  const [slotForm, setSlotForm] = useState({ starts_at: '', ends_at: '' })
+  const [slotMsg, setSlotMsg]   = useState('')
+
   // ── Bookings state ───────────────────────────────────────────
   const [bookings, setBookings]       = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
@@ -87,6 +93,32 @@ export default function MSLPage() {
     if (!confirm('Remove this MSL from the directory?')) return
     await fetch(`/api/admin/msls/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
     loadMSLs()
+  }
+
+  async function openSlots(msl) {
+    setSlotMSL(msl); setSlotForm({ starts_at: '', ends_at: '' }); setSlotMsg('')
+    await loadSlots(msl.id)
+  }
+  async function loadSlots(mslId) {
+    try {
+      const res = await fetch(`/api/admin/msls/${clientId}/${mslId}/slots`, { headers: adminHeaders() })
+      const d = await res.json(); setSlots(d.slots || [])
+    } catch { setSlots([]) }
+  }
+  async function addSlot(e) {
+    e.preventDefault(); setSlotMsg('')
+    const fmt = v => v ? v.replace('T', ' ') + ':00' : v
+    const res = await fetch(`/api/admin/msls/${clientId}/${slotMSL.id}/slots`, {
+      method: 'POST', headers: adminHeaders(),
+      body: JSON.stringify({ starts_at: fmt(slotForm.starts_at), ends_at: fmt(slotForm.ends_at) }),
+    })
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setSlotMsg(d.error || 'Failed to add slot.'); return }
+    setSlotForm({ starts_at: '', ends_at: '' }); loadSlots(slotMSL.id)
+  }
+  async function deleteSlot(slotId) {
+    const res = await fetch(`/api/admin/msls/${clientId}/slots/${slotId}`, { method: 'DELETE', headers: adminHeaders() })
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setSlotMsg(d.error || 'Failed to delete slot.'); return }
+    loadSlots(slotMSL.id)
   }
 
   function openEditBooking(b) {
@@ -195,6 +227,43 @@ export default function MSLPage() {
             </div>
           )}
 
+          {slotMSL && (
+            <div className="cp-modal-overlay" onClick={() => setSlotMSL(null)}>
+              <div className="cp-modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+                <div className="cp-modal-header">
+                  <span>Availability Slots — {slotMSL.name}</span>
+                  <button className="cp-modal-close" onClick={() => setSlotMSL(null)}>✕</button>
+                </div>
+                <div className="cp-modal-body">
+                  <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 12 }}>Define bookable time slots. HCPs pick from these when requesting a meeting. (Google/Outlook calendar sync is a later phase.)</p>
+                  <form onSubmit={addSlot} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 14 }}>
+                    <div className="cp-field" style={{ margin: 0 }}><label>Start</label><input type="datetime-local" required value={slotForm.starts_at} onChange={e => setSlotForm(f => ({ ...f, starts_at: e.target.value }))} /></div>
+                    <div className="cp-field" style={{ margin: 0 }}><label>End</label><input type="datetime-local" required value={slotForm.ends_at} onChange={e => setSlotForm(f => ({ ...f, ends_at: e.target.value }))} /></div>
+                    <button type="submit" className="cp-btn cp-btn-primary cp-btn-sm">+ Add</button>
+                  </form>
+                  {slotMsg && <div className="cp-error" style={{ marginBottom: 10 }}>{slotMsg}</div>}
+                  {slots.length === 0 ? (
+                    <p style={{ fontSize: 13, color: '#9CA3AF' }}>No slots defined yet.</p>
+                  ) : (
+                    <table className="cp-table">
+                      <thead><tr><th>Start</th><th>End</th><th>Status</th><th></th></tr></thead>
+                      <tbody>
+                        {slots.map(s => (
+                          <tr key={s.id}>
+                            <td style={{ fontSize: 12 }}>{s.starts_at?.slice(0, 16).replace('T', ' ')}</td>
+                            <td style={{ fontSize: 12 }}>{s.ends_at?.slice(0, 16).replace('T', ' ')}</td>
+                            <td><span className={`cp-badge ${s.is_booked ? 'badge-inactive' : 'badge-active'}`}>{s.is_booked ? 'Booked' : 'Open'}</span></td>
+                            <td>{!s.is_booked && <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deleteSlot(s.id)}>Delete</button>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {loading ? <div className="cp-loading">Loading…</div> : msls.length === 0 ? (
             <div className="cp-empty"><div style={{ fontSize: 40 }}>👤</div><p>No MSLs added yet.</p></div>
           ) : (
@@ -212,6 +281,7 @@ export default function MSLPage() {
                     <td><span className={`cp-badge ${m.is_active ? 'badge-active' : 'badge-inactive'}`}>{m.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td style={{ display: 'flex', gap: 6 }}>
                       <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(m)}>Edit</button>
+                      <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openSlots(m)}>Slots</button>
                       <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => deactivate(m.id)}>Remove</button>
                     </td>
                   </tr>

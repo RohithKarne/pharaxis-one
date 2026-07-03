@@ -16,6 +16,8 @@ export default function FindMSLPage() {
   const [bookingError, setBookingError] = useState('')
   const [bookingDone,  setBookingDone]  = useState(false)
   const [bookingBusy,  setBookingBusy]  = useState(false)
+  const [availableSlots, setAvailableSlots] = useState([])
+  const [selectedSlot, setSelectedSlot]     = useState('')
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/msls`)
@@ -38,6 +40,12 @@ export default function FindMSLPage() {
     })
     setBookingError('')
     setBookingDone(false)
+    setSelectedSlot('')
+    setAvailableSlots([])
+    fetch(`/api/portal/bookings/${clientCode}/${msl.id}/slots`)
+      .then(r => r.ok ? r.json() : { slots: [] })
+      .then(d => setAvailableSlots(d.slots || []))
+      .catch(() => setAvailableSlots([]))
   }
 
   async function handleBookingSubmit(e) {
@@ -48,7 +56,7 @@ export default function FindMSLPage() {
       const res = await fetch(`/api/portal/bookings/${clientCode}/${bookingMSL.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify(bookingForm),
+        body: JSON.stringify({ ...bookingForm, slot_id: selectedSlot || undefined }),
       })
       const d = await res.json()
       if (!res.ok) { setBookingError(d.error || 'Submission failed.'); setBookingBusy(false); return }
@@ -129,10 +137,22 @@ export default function FindMSLPage() {
                     <input required type="email" value={bookingForm.requester_email} onChange={e => setBookingForm(f => ({ ...f, requester_email: e.target.value }))} placeholder="you@example.com" />
                   </div>
                 </div>
+                {availableSlots.length > 0 && (
+                  <div className="cp-field">
+                    <label>Available Time Slots</label>
+                    <select value={selectedSlot} onChange={e => setSelectedSlot(e.target.value)}>
+                      <option value="">— No specific slot (request general availability) —</option>
+                      {availableSlots.map(s => (
+                        <option key={s.id} value={s.id}>{new Date(s.starts_at).toLocaleString()}</option>
+                      ))}
+                    </select>
+                    <span style={{ fontSize: 11, color: '#6B7280' }}>Pick a slot for faster confirmation, or leave blank for general availability.</span>
+                  </div>
+                )}
                 <div className="cp-field-row">
                   <div className="cp-field">
-                    <label>Preferred Date</label>
-                    <input type="date" value={bookingForm.preferred_date} onChange={e => setBookingForm(f => ({ ...f, preferred_date: e.target.value }))} min={new Date().toISOString().slice(0, 10)} />
+                    <label>Preferred Date{selectedSlot ? ' (using selected slot)' : ''}</label>
+                    <input type="date" disabled={!!selectedSlot} value={bookingForm.preferred_date} onChange={e => setBookingForm(f => ({ ...f, preferred_date: e.target.value }))} min={new Date().toISOString().slice(0, 10)} />
                   </div>
                   <div className="cp-field">
                     <label>Topic / Area of Interest</label>

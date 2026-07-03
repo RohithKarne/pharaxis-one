@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 import { clientPortalUrl } from '../../shared/utils/portalUrl'
+import QRCode from 'qrcode'
 
 // ── Config Sections ───────────────────────────────────────────────────────────
 const CONFIG_GROUPS = [
@@ -181,6 +182,7 @@ export default function ClientDetailPage() {
   const [integrationData, setIntegrationData] = useState(null)
   const [recentActivity, setRecentActivity]   = useState([])
   const [urlCopied, setUrlCopied]     = useState(false)
+  const [qrDataUrl, setQrDataUrl]     = useState('')
 
   async function copyPortalUrl(code) {
     try {
@@ -188,6 +190,14 @@ export default function ClientDetailPage() {
       setUrlCopied(true)
       setTimeout(() => setUrlCopied(false), 1500)
     } catch { /* clipboard blocked — link is still openable */ }
+  }
+
+  async function toggleQr(code) {
+    if (qrDataUrl) { setQrDataUrl(''); return }
+    try {
+      const dataUrl = await QRCode.toDataURL(clientPortalUrl(code), { width: 160, margin: 1 })
+      setQrDataUrl(dataUrl)
+    } catch { /* QR generation failed — non-critical */ }
   }
 
   useEffect(() => {
@@ -254,7 +264,15 @@ export default function ClientDetailPage() {
             <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => copyPortalUrl(client.code)} style={{ marginLeft: 8 }}>
               {urlCopied ? 'Copied!' : 'Copy'}
             </button>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleQr(client.code)} style={{ marginLeft: 6 }}>
+              {qrDataUrl ? 'Hide QR' : 'QR'}
+            </button>
           </div>
+          {qrDataUrl && (
+            <div style={{ marginTop: 10 }}>
+              <img src={qrDataUrl} alt="Portal URL QR code" width={160} height={160} style={{ border: '1px solid var(--cp-border)', borderRadius: 8, background: '#fff' }} />
+            </div>
+          )}
         </div>
 
         <div className="ck-hero-stats">
@@ -454,6 +472,14 @@ export default function ClientDetailPage() {
                 <div key={i} className={`ck-check-item${item.done ? ' done' : ''}`} title={!item.done && item.hint ? item.hint : undefined}>
                   <span className="ck-check-icon">{item.done ? '✓' : '○'}</span>
                   <span className="ck-check-label">{item.label}</span>
+                  {!item.done && item.path && (
+                    <button
+                      className="cp-link-btn"
+                      style={{ marginLeft: 'auto', fontSize: 11, whiteSpace: 'nowrap' }}
+                      onClick={() => navigate(`/admin/clients/${clientId}/${item.path}`)}
+                      title={item.hint}
+                    >Fix →</button>
+                  )}
                 </div>
               ))}
             </div>

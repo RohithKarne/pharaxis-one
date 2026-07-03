@@ -24,6 +24,7 @@ export default function DashboardPage() {
     const alerts = []
     if (c.news_stale)        alerts.push({ clientId: c.id, clientName: c.name, type: 'news', msg: 'No news published in 30+ days' })
     if (c.expired_doc_count) alerts.push({ clientId: c.id, clientName: c.name, type: 'doc',  msg: `${c.expired_doc_count} expired document${c.expired_doc_count > 1 ? 's' : ''}` })
+    if (c.expiring_soon_doc_count) alerts.push({ clientId: c.id, clientName: c.name, type: 'expiring', msg: `${c.expiring_soon_doc_count} document${c.expiring_soon_doc_count > 1 ? 's' : ''} expiring within 7 days` })
     return alerts
   })
 
@@ -54,7 +55,7 @@ export default function DashboardPage() {
               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 7, cursor: 'pointer' }}
                 onClick={() => navigate(`/admin/clients/${a.clientId}`)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 14 }}>{a.type === 'news' ? '📰' : a.type === 'doc' ? '📁' : '⚠️'}</span>
+                  <span style={{ fontSize: 14 }}>{a.type === 'news' ? '📰' : a.type === 'doc' ? '📁' : a.type === 'expiring' ? '⏳' : '⚠️'}</span>
                   <span style={{ fontWeight: 600, fontSize: 13, color: '#92400E' }}>{a.clientName}</span>
                   <span style={{ fontSize: 13, color: '#78350F' }}>— {a.msg}</span>
                 </div>

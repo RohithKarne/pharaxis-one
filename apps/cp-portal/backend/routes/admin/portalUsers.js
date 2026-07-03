@@ -26,6 +26,25 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Bulk activate/deactivate — must be declared BEFORE '/:clientId/:userId' so 'bulk' isn't matched as a userId
+router.patch('/:clientId/bulk', authenticateAdmin, async (req, res) => {
+  try {
+    const { ids, is_active } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array is required.' });
+    const cleanIds = ids.map(Number).filter(Number.isInteger);
+    if (!cleanIds.length) return res.status(400).json({ error: 'No valid ids provided.' });
+    const placeholders = cleanIds.map(() => '?').join(',');
+    await pool.execute(
+      `UPDATE cp_portal_users SET is_active = ? WHERE client_id = ? AND id IN (${placeholders})`,
+      [is_active ? 1 : 0, req.params.clientId, ...cleanIds]
+    );
+    await audit(req.admin, req.params.clientId, is_active ? 'ENABLE' : 'DISABLE', 'portal_user', null, { count: cleanIds.length });
+    res.json({ message: `${cleanIds.length} user(s) ${is_active ? 'activated' : 'deactivated'}.`, count: cleanIds.length });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
   try {
     const { first_name, last_name, email, user_type, country, is_active, is_verified } = req.body;

@@ -7,12 +7,29 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal } = require('../../middleware/auth');
+const { sendEmail } = require('../../utils/mailer');
+
+// GET /api/portal/bookings/:clientCode/:mslId/slots — available (future, unbooked) slots
+router.get('/:clientCode/:mslId/slots', async (req, res) => {
+  try {
+    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
+    if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    const [slots] = await pool.execute(
+      `SELECT id, starts_at, ends_at FROM cp_msl_slots
+       WHERE client_id = ? AND msl_id = ? AND is_booked = 0 AND starts_at > NOW()
+       ORDER BY starts_at ASC LIMIT 50`,
+      [client.id, req.params.mslId]);
+    res.json({ slots });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
 
 // POST /api/portal/bookings/:clientCode/:mslId — request a meeting
 router.post('/:clientCode/:mslId', authenticatePortal, async (req, res) => {
   try {
     const { clientCode, mslId } = req.params;
-    const { requester_name, requester_email, preferred_date, topic, message } = req.body;
+    const { requester_name, requester_email, preferred_date, topic, message, slot_id } = req.body;
 
     if (!requester_name || !requester_email) {
       return res.status(400).json({ error: 'requester_name and requester_email are required.' });
@@ -21,8 +38,18 @@ router.post('/:clientCode/:mslId', authenticatePortal, async (req, res) => {
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
 
-    const [[msl]] = await pool.execute('SELECT id FROM cp_msls WHERE id = ? AND client_id = ? AND is_active = 1', [mslId, client.id]);
+    const [[msl]] = await pool.execute('SELECT id, name FROM cp_msls WHERE id = ? AND client_id = ? AND is_active = 1', [mslId, client.id]);
     if (!msl) return res.status(404).json({ error: 'MSL not found.' });
+
+    // If a specific slot was chosen, validate it is still available and use its time.
+    let chosenSlot = null;
+    if (slot_id) {
+      const [[slot]] = await pool.execute(
+        'SELECT id, starts_at FROM cp_msl_slots WHERE id = ? AND msl_id = ? AND client_id = ? AND is_booked = 0 AND starts_at > NOW()',
+        [slot_id, mslId, client.id]);
+      if (!slot) return res.status(409).json({ error: 'That time slot is no longer available. Please pick another.' });
+      chosenSlot = slot;
+    }
 
     // Deduplicate: prevent the same email requesting the same MSL more than once per day
     const [[existing]] = await pool.execute(`
@@ -34,6 +61,8 @@ router.post('/:clientCode/:mslId', authenticatePortal, async (req, res) => {
     const portalUserId = req.portalUser?.id || null;
     const userType     = req.portalUser?.user_type || null;
 
+    const effectiveDate = chosenSlot ? chosenSlot.starts_at : (preferred_date || null);
+
     const [result] = await pool.execute(`
       INSERT INTO cp_msl_bookings
         (client_id, msl_id, portal_user_id, requester_name, requester_email, requester_user_type, preferred_date, topic, message)
@@ -41,10 +70,23 @@ router.post('/:clientCode/:mslId', authenticatePortal, async (req, res) => {
     `, [
       client.id, mslId, portalUserId,
       requester_name.trim(), requester_email.toLowerCase().trim(), userType,
-      preferred_date || null, topic?.trim() || null, message?.trim() || null,
+      effectiveDate, topic?.trim() || null, message?.trim() || null,
     ]);
 
-    res.status(201).json({ ok: true, bookingId: result.insertId });
+    // Reserve the slot so it can't be double-booked.
+    if (chosenSlot) {
+      await pool.execute('UPDATE cp_msl_slots SET is_booked = 1, booking_id = ? WHERE id = ?', [result.insertId, chosenSlot.id]);
+    }
+
+    // Confirmation email — best-effort (requires the client's SMTP config; never blocks the booking).
+    const whenText = effectiveDate ? new Date(effectiveDate).toLocaleString() : 'a time to be confirmed';
+    sendEmail(client.id, {
+      to: requester_email.toLowerCase().trim(),
+      subject: `Meeting request received — ${msl.name}`,
+      html: `<p>Hi ${requester_name.trim()},</p><p>Your meeting request with <strong>${msl.name}</strong> has been received for <strong>${whenText}</strong>.</p>${topic ? `<p>Topic: ${String(topic).replace(/</g, '&lt;')}</p>` : ''}<p>We'll be in touch to confirm.</p>`,
+    }).catch(() => {});
+
+    res.status(201).json({ ok: true, bookingId: result.insertId, slotBooked: !!chosenSlot });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

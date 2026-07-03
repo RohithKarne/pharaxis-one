@@ -213,7 +213,8 @@ router.get('/:docId/download', authenticatePortal, requirePortalAuth, async (req
     await pool.execute(`UPDATE cp_documents SET download_count = download_count + 1, updated_at = NOW() WHERE id = ?`, [doc.id]);
 
     const encodedName = encodeURIComponent(doc.file_name);
-    res.setHeader('Content-Disposition', `attachment; filename="${doc.file_name}"; filename*=UTF-8''${encodedName}`);
+    const dispo = req.query.disposition === 'inline' ? 'inline' : 'attachment';
+    res.setHeader('Content-Disposition', `${dispo}; filename="${doc.file_name}"; filename*=UTF-8''${encodedName}`);
     res.setHeader('Content-Type', doc.mime_type);
     fs.createReadStream(filePath).pipe(res);
   } catch (err) {

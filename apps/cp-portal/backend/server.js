@@ -139,6 +139,7 @@ app.use('/api/portal/notifications', require('./routes/portal/notifications'));
 app.use('/api/portal/preferences',   require('./routes/portal/preferences'));
 app.use('/api/portal/feedback',      require('./routes/portal/feedback'));
 app.use('/api/portal/faq',           require('./routes/portal/faq'));
+app.use('/api/portal/search',        require('./routes/portal/search'));
 app.use('/api/portal/bookings',      require('./routes/portal/bookings'));
 
 // ── S5-6: Content Scheduler — auto-promote scheduled → published ──
@@ -175,6 +176,17 @@ function startContentScheduler() {
         `UPDATE cp_documents SET status='published', updated_at=NOW() WHERE status='scheduled' AND publish_at <= ?`,
         [now]
       );
+
+      // Weekly digest — fire only during the configured window (default Mon 08:00 server time).
+      // sendAllDigests() dedups per ISO week, so it sends at most once even though the
+      // window spans ~60 ticks.
+      const nowDate = new Date();
+      const digestDay  = Number(process.env.CP_DIGEST_DAY  ?? 1);   // 0=Sun .. 6=Sat
+      const digestHour = Number(process.env.CP_DIGEST_HOUR ?? 8);
+      if (nowDate.getDay() === digestDay && nowDate.getHours() === digestHour) {
+        const { sendAllDigests } = require('./utils/digest');
+        await sendAllDigests().catch(() => {});
+      }
     } catch { /* silently ignore scheduler errors */ }
     finally {
       if (lockAcquired) {

@@ -124,4 +124,44 @@ router.delete('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, r
   }
 });
 
+// ── MSL availability slots (v1 — manual, no external calendar sync) ──
+
+// GET /api/admin/msls/:clientId/:mslId/slots — all slots for an MSL (incl. booked)
+router.get('/:clientId/:mslId/slots', authenticateAdmin, async (req, res) => {
+  try {
+    const [slots] = await pool.execute(
+      `SELECT id, starts_at, ends_at, is_booked, booking_id, created_at
+       FROM cp_msl_slots WHERE client_id = ? AND msl_id = ? ORDER BY starts_at ASC`,
+      [req.params.clientId, req.params.mslId]);
+    res.json({ slots });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+// POST /api/admin/msls/:clientId/:mslId/slots — add a bookable slot
+router.post('/:clientId/:mslId/slots', authenticateAdmin, async (req, res) => {
+  try {
+    const { starts_at, ends_at } = req.body;
+    if (!starts_at || !ends_at) return res.status(400).json({ error: 'starts_at and ends_at are required.' });
+    if (new Date(ends_at) <= new Date(starts_at)) return res.status(400).json({ error: 'ends_at must be after starts_at.' });
+    const [[msl]] = await pool.execute('SELECT id FROM cp_msls WHERE id = ? AND client_id = ?', [req.params.mslId, req.params.clientId]);
+    if (!msl) return res.status(404).json({ error: 'MSL not found.' });
+    const [info] = await pool.execute(
+      'INSERT INTO cp_msl_slots (client_id, msl_id, starts_at, ends_at) VALUES (?, ?, ?, ?)',
+      [req.params.clientId, req.params.mslId, starts_at, ends_at]);
+    await audit(req.admin, req.params.clientId, 'CREATE', 'msl_slot', info.insertId, { msl_id: req.params.mslId });
+    res.status(201).json({ id: info.insertId, message: 'Slot added.' });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+// DELETE /api/admin/msls/:clientId/slots/:slotId — remove an unbooked slot
+router.delete('/:clientId/slots/:slotId', authenticateAdmin, async (req, res) => {
+  try {
+    const [[slot]] = await pool.execute('SELECT id, is_booked FROM cp_msl_slots WHERE id = ? AND client_id = ?', [req.params.slotId, req.params.clientId]);
+    if (!slot) return res.status(404).json({ error: 'Slot not found.' });
+    if (slot.is_booked) return res.status(409).json({ error: 'Cannot delete a booked slot.' });
+    await pool.execute('DELETE FROM cp_msl_slots WHERE id = ? AND client_id = ?', [req.params.slotId, req.params.clientId]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
 module.exports = router;

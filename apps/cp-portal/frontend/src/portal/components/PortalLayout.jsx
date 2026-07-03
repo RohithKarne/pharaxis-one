@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
+import Icon from '../../shared/components/Icon'
 import { usePortal } from '../context/PortalContext'
 import UserTypeGate from './UserTypeGate'
 import ConsentBanner from './ConsentBanner'
@@ -64,6 +65,7 @@ export default function PortalLayout({ children }) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [bellOpen, setBellOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
   const [, setTimeTick] = useState(0)
   const userMenuRef = useRef(null)
   const bellRef     = useRef(null)
@@ -203,6 +205,19 @@ export default function PortalLayout({ children }) {
 
           <div className="pp-header-actions">
             {/* Language switcher removed — portal is English-only for now (2026-07-03). */}
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && searchTerm.trim().length >= 2) {
+                  navigate(`/portal/${clientCode}/search?q=${encodeURIComponent(searchTerm.trim())}`)
+                }
+              }}
+              placeholder="Search…"
+              aria-label="Search portal"
+              style={{ fontSize: 13, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--pp-border, #E5E7EB)', background: 'transparent', color: 'var(--pp-header-text, inherit)', minWidth: 140 }}
+            />
             {isFeatureEnabled('medical_inquiry') && (
               <button className="pp-btn pp-btn-primary" onClick={() => navigate(`${base}/submit`)}>
                 {t('btn.submit_inquiry')}
@@ -368,7 +383,7 @@ function ChatboxWidget({ clientCode }) {
         body: JSON.stringify(payload)
       })
       const data = await res.json()
-      setMessages(m => [...m, { role: 'assistant', content: data.reply || 'Sorry, I could not process that.' }])
+      setMessages(m => [...m, { role: 'assistant', content: data.reply || 'Sorry, I could not process that.', sources: Array.isArray(data.sources) ? data.sources : [] }])
     } catch {
       setMessages(m => [...m, { role: 'assistant', content: 'Connection error. Please try again.' }])
     }
@@ -387,6 +402,14 @@ function ChatboxWidget({ clientCode }) {
             {messages.map((m, i) => (
               <div key={i} className={`pp-chat-msg pp-chat-msg-${m.role}`}>
                 <div className="pp-chat-bubble">{m.content}</div>
+                {m.sources && m.sources.length > 0 && (
+                  <div className="pp-chat-sources">
+                    <span className="pp-chat-sources-lbl">Based on approved content</span>
+                    {m.sources.map(s => (
+                      <span key={s.n} className="pp-chat-source" title={s.title}>{s.source}: {s.title}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
             {loading && <div className="pp-chat-msg pp-chat-msg-assistant" role="status" aria-live="polite" aria-busy="true"><div className="pp-chat-bubble pp-chat-typing">…</div></div>}
@@ -399,7 +422,7 @@ function ChatboxWidget({ clientCode }) {
         </div>
       ) : (
         <button className="pp-chat-fab" onClick={openChat} title="AI Medical Assistant" aria-label="Open AI Medical Assistant">
-          <span>💬</span>
+          <Icon name="message" size={24} />
         </button>
       )}
     </>

@@ -5,11 +5,12 @@ const NOTIF_TYPES = [
   { key: 'news',      icon: '📰', label: 'News & Announcements', desc: 'Notify me when new news posts are published.' },
   { key: 'documents', icon: '📁', label: 'Documents',             desc: 'Notify me when new documents are added to the library.' },
   { key: 'safety',    icon: '⚠️', label: 'Safety Alerts',         desc: 'Notify me when safety alerts are issued.' },
+  { key: 'digest',    icon: '✉️', label: 'Weekly Digest Email',   desc: 'Email me a weekly summary of new content.' },
 ]
 
 export default function PreferencesPage() {
   const { clientCode, portalHeaders } = usePortal()
-  const [prefs, setPrefs]     = useState({ news: true, documents: true, safety: true })
+  const [prefs, setPrefs]     = useState({ news: true, documents: true, safety: true, digest: true })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)

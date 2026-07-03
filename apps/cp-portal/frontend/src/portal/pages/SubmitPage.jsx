@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import Icon from '../../shared/components/Icon'
 
 const FORM_TYPES = [
   { key: 'medical_inquiry',     label: 'Medical Information Request', icon: '📋', desc: 'Request for medical/scientific information about our products or therapeutic areas.' },
@@ -20,6 +21,25 @@ export default function SubmitPage() {
   const [error, setError]               = useState('')
   const [fieldErrors, setFieldErrors]   = useState({})
   const [fieldsLoading, setFieldsLoading] = useState(false)
+  const [attachments, setAttachments]   = useState([])
+  const [attachError, setAttachError]   = useState('')
+
+  const ATTACH_MAX = 10 * 1024 * 1024
+  const ATTACH_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+  function handleFiles(e) {
+    setAttachError('')
+    const picked = Array.from(e.target.files || [])
+    const next = [...attachments]
+    for (const f of picked) {
+      if (!ATTACH_TYPES.includes(f.type)) { setAttachError(`"${f.name}" is not an allowed type (PDF, JPG, PNG, DOC, DOCX).`); continue }
+      if (f.size > ATTACH_MAX) { setAttachError(`"${f.name}" exceeds the 10MB limit.`); continue }
+      if (next.length >= 5) { setAttachError('You can attach up to 5 files.'); break }
+      if (!next.some(x => x.name === f.name && x.size === f.size)) next.push(f)
+    }
+    setAttachments(next)
+    e.target.value = ''
+  }
+  function removeAttachment(i) { setAttachments(a => a.filter((_, idx) => idx !== i)) }
 
   useEffect(() => {
     if (!selectedType) return
@@ -28,12 +48,26 @@ export default function SubmitPage() {
       .then(r => r.json())
       .then(d => {
         setFormFields(d.fields || [])
-        setFormValues({})
+        // Restore an auto-saved draft for this form type, if any.
+        let draft = {}
+        try { draft = JSON.parse(localStorage.getItem(`cp_draft_${clientCode}_${selectedType}`) || '{}') } catch { draft = {} }
+        setFormValues(draft && typeof draft === 'object' ? draft : {})
         setFieldErrors({})
       })
       .catch(() => {})
       .finally(() => setFieldsLoading(false))
   }, [selectedType, clientCode])
+
+  // Auto-save the in-progress form to localStorage so nothing is lost on refresh/navigation.
+  useEffect(() => {
+    if (!selectedType) return
+    const key = `cp_draft_${clientCode}_${selectedType}`
+    if (Object.keys(formValues).length > 0) localStorage.setItem(key, JSON.stringify(formValues))
+  }, [formValues, selectedType, clientCode])
+
+  function clearDraft() {
+    if (selectedType) localStorage.removeItem(`cp_draft_${clientCode}_${selectedType}`)
+  }
 
   function handleFieldChange(key, value) {
     setFormValues(v => ({ ...v, [key]: value }))
@@ -55,14 +89,20 @@ export default function SubmitPage() {
     e.preventDefault()
     if (!validate()) return
     setSubmitting(true); setError('')
+    const fd = new FormData()
+    fd.append('form_data', JSON.stringify(formValues))
+    attachments.forEach(f => fd.append('attachments', f))
+    const token = localStorage.getItem('cp_portal_token')
     const res  = await fetch(`/api/portal/submit/${clientCode}/${selectedType}`, {
       method: 'POST',
-      headers: portalHeaders(),
-      body: JSON.stringify({ form_data: formValues })
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+      body: fd,
     })
     const data = await res.json()
     setSubmitting(false)
     if (!res.ok) { setError(data.error || 'Submission failed. Please try again.'); return }
+    clearDraft()
     setSubmitted(data)
   }
 
@@ -167,6 +207,26 @@ export default function SubmitPage() {
                   )}
                 </div>
               ))}
+              <div className="pp-attach">
+                <label className="pp-attach-label">Attachments <span>(optional — PDF, JPG, PNG, DOC, DOCX · max 10MB each · up to 5 files)</span></label>
+                <label className="pp-attach-drop">
+                  <Icon name="file" size={17} /> Choose files
+                  <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={handleFiles} style={{ display: 'none' }} />
+                </label>
+                {attachError && <span className="pp-field-error-msg">{attachError}</span>}
+                {attachments.length > 0 && (
+                  <ul className="pp-attach-list">
+                    {attachments.map((f, i) => (
+                      <li key={i}>
+                        <Icon name="file" size={15} />
+                        <span className="pp-attach-name">{f.name}</span>
+                        <span className="pp-attach-size">{(f.size / 1024).toFixed(0)} KB</span>
+                        <button type="button" onClick={() => removeAttachment(i)} aria-label={`Remove ${f.name}`}>✕</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <div className="pp-form-disclaimer">
                 <small>By submitting this form, you confirm that the information provided is accurate to the best of your knowledge. This portal is intended for medical information purposes only and does not provide medical advice.</small>
               </div>

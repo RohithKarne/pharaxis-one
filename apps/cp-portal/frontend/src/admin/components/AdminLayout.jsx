@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useAdminAuth, adminHeaders } from '../context/AdminAuthContext'
 import PageLoader from './PageLoader'
+import Icon from '../../shared/components/Icon'
 
 const NAV_ITEMS = [
-  { to: '/admin',                  label: 'Dashboard',       icon: '🏠', exact: true },
-  { to: '/admin/clients',          label: 'Clients',         icon: '🏢' },
+  { to: '/admin',                  label: 'Dashboard',       icon: 'grid', exact: true },
+  { to: '/admin/clients',          label: 'Clients',         icon: 'building' },
 ]
 
 // ── #1 Grouped + collapsible client nav ───────────────────────────────────
@@ -14,52 +15,52 @@ const CLIENT_NAV_GROUPS = (id) => [
     key: 'overview',
     label: null, // no header — always visible
     items: [
-      { to: `/admin/clients/${id}`, label: 'Overview', icon: '📋', exact: true },
+      { to: `/admin/clients/${id}`, label: 'Overview', icon: 'clipboard', exact: true },
     ],
   },
   {
     key: 'experience',
     label: 'Branding & Experience',
     items: [
-      { to: `/admin/clients/${id}/branding`,  label: 'Branding',   icon: '🎨' },
-      { to: `/admin/clients/${id}/features`,  label: 'Features',   icon: '⚙️' },
-      { to: `/admin/clients/${id}/gate`,      label: 'User Gate',  icon: '🚪' },
-      { to: `/admin/clients/${id}/chatbox`,   label: 'Chatbox AI', icon: '🤖' },
+      { to: `/admin/clients/${id}/branding`,  label: 'Branding',   icon: 'palette' },
+      { to: `/admin/clients/${id}/features`,  label: 'Features',   icon: 'sliders' },
+      { to: `/admin/clients/${id}/gate`,      label: 'User Gate',  icon: 'gate' },
+      { to: `/admin/clients/${id}/chatbox`,   label: 'Chatbox AI', icon: 'message' },
     ],
   },
   {
     key: 'content',
     label: 'Content',
     items: [
-      { to: `/admin/clients/${id}/content`,      label: 'Content',       icon: '📄' },
-      { to: `/admin/clients/${id}/news`,         label: 'News',          icon: '📰' },
-      { to: `/admin/clients/${id}/safety`,       label: 'Safety Alerts', icon: '⚠️' },
-      { to: `/admin/clients/${id}/documents`,    label: 'Documents',     icon: '📁' },
-      { to: `/admin/clients/${id}/msls`,         label: 'MSL Directory', icon: '👤' },
-      { to: `/admin/clients/${id}/faq`,          label: 'FAQ',           icon: '❓' },
-      { to: `/admin/clients/${id}/review-queue`, label: 'Review Queue',  icon: '🔍', badge: true },
+      { to: `/admin/clients/${id}/content`,      label: 'Content',       icon: 'file' },
+      { to: `/admin/clients/${id}/news`,         label: 'News',          icon: 'news' },
+      { to: `/admin/clients/${id}/safety`,       label: 'Safety Alerts', icon: 'shield' },
+      { to: `/admin/clients/${id}/documents`,    label: 'Documents',     icon: 'folder' },
+      { to: `/admin/clients/${id}/msls`,         label: 'MSL Directory', icon: 'users' },
+      { to: `/admin/clients/${id}/faq`,          label: 'FAQ',           icon: 'help' },
+      { to: `/admin/clients/${id}/review-queue`, label: 'Review Queue',  icon: 'search', badge: true },
     ],
   },
   {
     key: 'compliance',
     label: 'Compliance & Forms',
     items: [
-      { to: `/admin/clients/${id}/compliance`,     label: 'Compliance',     icon: '🔒' },
-      { to: `/admin/clients/${id}/forms`,          label: 'Forms',          icon: '📝' },
-      { to: `/admin/clients/${id}/email-settings`, label: 'Email Settings', icon: '✉️' },
+      { to: `/admin/clients/${id}/compliance`,     label: 'Compliance',     icon: 'lock' },
+      { to: `/admin/clients/${id}/forms`,          label: 'Forms',          icon: 'form' },
+      { to: `/admin/clients/${id}/email-settings`, label: 'Email Settings', icon: 'mail' },
     ],
   },
   {
     key: 'operations',
     label: 'Operations',
     items: [
-      { to: `/admin/clients/${id}/users`,        label: 'Portal Users', icon: '👥' },
-      { to: `/admin/clients/${id}/submissions`,  label: 'Submissions',  icon: '📨' },
-      { to: `/admin/clients/${id}/integration`,  label: 'Integration',  icon: '🔗' },
-      { to: `/admin/clients/${id}/audit`,        label: 'Audit Trail',    icon: '📋' },
-      { to: `/admin/clients/${id}/analytics`,   label: 'Analytics',      icon: '📊' },
-      { to: `/admin/clients/${id}/feedback`,    label: 'Feedback',       icon: '💬' },
-      { to: `/admin/clients/${id}/admin-users`, label: 'Admin Users',    icon: '🔑' },
+      { to: `/admin/clients/${id}/users`,        label: 'Portal Users', icon: 'users' },
+      { to: `/admin/clients/${id}/submissions`,  label: 'Submissions',  icon: 'inbox' },
+      { to: `/admin/clients/${id}/integration`,  label: 'Integration',  icon: 'link' },
+      { to: `/admin/clients/${id}/audit`,        label: 'Audit Trail',    icon: 'list' },
+      { to: `/admin/clients/${id}/analytics`,   label: 'Analytics',      icon: 'chart' },
+      { to: `/admin/clients/${id}/feedback`,    label: 'Feedback',       icon: 'message' },
+      { to: `/admin/clients/${id}/admin-users`, label: 'Admin Users',    icon: 'key' },
     ],
   },
 ]
@@ -178,7 +179,7 @@ export default function AdminLayout({ children }) {
               title={item.label}
               className={({ isActive }) => `cp-nav-item${isActive ? ' active' : ''}`}
             >
-              <span className="cp-nav-icon">{item.icon}</span>
+              <span className="cp-nav-icon"><Icon name={item.icon} size={17} /></span>
               <span className="cp-nav-text">{item.label}</span>
             </NavLink>
           ))}
@@ -235,7 +236,7 @@ export default function AdminLayout({ children }) {
                           title={item.label}
                           className={({ isActive }) => `cp-nav-item${isActive ? ' active' : ''}`}
                         >
-                          <span className="cp-nav-icon">{item.icon}</span>
+                          <span className="cp-nav-icon"><Icon name={item.icon} size={17} /></span>
                           <span className="cp-nav-text">{item.label}</span>
                           {item.badge && reviewCount > 0 && (
                             <span style={{
@@ -263,6 +264,7 @@ export default function AdminLayout({ children }) {
       </aside>
 
       <div className="cp-admin-main">
+        {clientId && <div className="cp-brandbar" />}
         <div className="cp-admin-topbar">
           <button
             className="cp-sidebar-toggle"
@@ -273,6 +275,12 @@ export default function AdminLayout({ children }) {
             {sidebarCompact ? '⟩⟩' : '⟨⟨'}
           </button>
           <h1 className="cp-topbar-title">{pageTitle}</h1>
+          {clientId && clientName && (
+            <span className="cp-client-chip" title={`Configuring ${clientName}`}>
+              <span className="cp-client-avatar">{clientName.charAt(0).toUpperCase()}</span>
+              {clientName}
+            </span>
+          )}
         </div>
         <div className="cp-admin-content">
           {children}

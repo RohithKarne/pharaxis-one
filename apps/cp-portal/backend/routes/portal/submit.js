@@ -5,14 +5,67 @@
 
 const express = require('express');
 const router  = express.Router();
+const fs      = require('fs');
+const path    = require('path');
+const multer  = require('multer');
 const { pool } = require('../../database/db');
-const { authenticatePortal } = require('../../middleware/auth');
+const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const { sendEmail } = require('../../utils/mailer');
 const { assertSafeOutboundUrl } = require('../../utils/networkGuard');
 const { decryptSecret } = require('../../utils/secretCrypto');
 
+// ── Attachment upload config (private storage, streamed via auth endpoints) ──
+const ATT_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB per file
+const ATT_MAX_FILES = 5;
+const ATT_ALLOWED   = [
+  'application/pdf', 'image/jpeg', 'image/png',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+const attStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../../uploads/private/submissions', String(req.params.clientCode || 'unknown'));
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).slice(0, 12);
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  },
+});
+const submissionUpload = multer({
+  storage: attStorage,
+  limits: { fileSize: ATT_MAX_SIZE, files: ATT_MAX_FILES },
+  fileFilter: (req, file, cb) => {
+    if (ATT_ALLOWED.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('File type not allowed. Use PDF, JPG, PNG, DOC, or DOCX.'));
+  },
+}).array('attachments', ATT_MAX_FILES);
+
+// Middleware wrapper that turns multer errors into clean JSON responses.
+function handleUpload(req, res, next) {
+  submissionUpload(req, res, (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'A file exceeds the 10MB limit.'
+        : err.code === 'LIMIT_FILE_COUNT' ? 'Too many files (maximum 5).'
+        : (err.message || 'File upload failed.');
+      return res.status(400).json({ error: msg });
+    }
+    next();
+  });
+}
+
+// Stream a stored attachment; verifies the caller already established access.
+function streamAttachment(res, att, inline) {
+  const abs = path.join(__dirname, '../../', att.file_path.replace(/^\//, ''));
+  if (!fs.existsSync(abs)) return res.status(404).json({ error: 'File not found on server.' });
+  res.setHeader('Content-Type', att.mime_type || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${att.file_name}"`);
+  fs.createReadStream(abs).pipe(res);
+}
+
 // POST /api/portal/submit/:clientCode/:formType
-router.post('/:clientCode/:formType', authenticatePortal, async (req, res) => {
+router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (req, res) => {
   try {
     const { clientCode, formType } = req.params;
     const VALID_TYPES = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry'];
@@ -50,6 +103,18 @@ router.post('/:clientCode/:formType', authenticatePortal, async (req, res) => {
     ]);
 
     const submissionId = info.insertId;
+
+    // Save any uploaded attachments, linked to the new submission.
+    if (req.files && req.files.length > 0) {
+      for (const f of req.files) {
+        await pool.execute(
+          `INSERT INTO cp_submission_attachments (submission_id, client_id, file_name, file_path, file_size, mime_type)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [submissionId, client.id, f.originalname.slice(0, 255),
+           `/uploads/private/submissions/${clientCode}/${f.filename}`, f.size, f.mimetype]
+        );
+      }
+    }
 
     // Auto-sync to integrated system if configured
     syncToIntegration(client.id, submissionId, formType).catch(() => {});
@@ -152,5 +217,22 @@ async function syncToIntegration(clientId, submissionId, formType) {
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [err.message, submissionId]);
   }
 }
+
+// GET /api/portal/submit/:clientCode/attachments/:attachmentId — download own submission's attachment
+router.get('/:clientCode/attachments/:attachmentId', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const [[att]] = await pool.execute(
+      `SELECT a.file_name, a.file_path, a.mime_type
+       FROM cp_submission_attachments a
+       JOIN cp_submissions s ON s.id = a.submission_id
+       JOIN cp_clients c ON c.id = a.client_id
+       WHERE a.id = ? AND c.code = ? AND s.user_id = ?`,
+      [req.params.attachmentId, req.params.clientCode, req.portalUser.userId]);
+    if (!att) return res.status(404).json({ error: 'Attachment not found.' });
+    streamAttachment(res, att, req.query.disposition === 'inline');
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
 
 module.exports = router;

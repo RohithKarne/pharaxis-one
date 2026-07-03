@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
+import FormPreview from '../components/FormPreview'
 
 const FORM_TYPES = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry']
 const FIELD_TYPES = ['text', 'textarea', 'email', 'phone', 'number', 'date', 'select', 'multiselect', 'radio', 'checkbox', 'file', 'hidden']
@@ -21,6 +22,7 @@ export default function FormsPage() {
   const [newField, setNewField] = useState({ field_key: '', field_label: '', field_type: 'text', is_required: false, placeholder: '', help_text: '' })
   const [saving, setSaving]     = useState(false)
   const [optionsInput, setOptionsInput] = useState('')
+  const [showPreview, setShowPreview]   = useState(false)
 
   useEffect(() => { loadFields() }, [clientId, formType])
 
@@ -75,8 +77,26 @@ export default function FormsPage() {
 
       <div className="cp-section-header">
         <h3>{formType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Fields</h3>
-        <button className="cp-btn cp-btn-primary" onClick={() => setShowAdd(true)}>+ Add Field</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="cp-btn cp-btn-outline" onClick={() => setShowPreview(true)}>👁 Preview</button>
+          <button className="cp-btn cp-btn-primary" onClick={() => setShowAdd(true)}>+ Add Field</button>
+        </div>
       </div>
+
+      {showPreview && (
+        <div className="cp-modal-overlay" onClick={() => setShowPreview(false)}>
+          <div className="cp-modal" onClick={e => e.stopPropagation()}>
+            <div className="cp-modal-header">
+              <span>Form Preview — {formType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+              <button className="cp-modal-close" onClick={() => setShowPreview(false)}>✕</button>
+            </div>
+            <div className="cp-modal-body">
+              <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 16 }}>This is how the form appears to portal users. Fields are disabled here.</p>
+              <FormPreview fields={fields} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAdd && (
         <div className="cp-modal-overlay" onClick={() => setShowAdd(false)}>

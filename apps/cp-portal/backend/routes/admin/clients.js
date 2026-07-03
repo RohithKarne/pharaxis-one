@@ -123,14 +123,14 @@ router.get('/:id/readiness', authenticateAdmin, requireClientScopeByIdParam, asy
     const [[compliance]] = await pool.execute('SELECT * FROM cp_compliance_config WHERE client_id = ?', [id]);
 
     const checks = [
-      { key: 'branding',     label: 'Branding configured',          done: !!(branding?.logo_url && branding?.portal_name),          hint: 'Upload a logo and set a portal name' },
-      { key: 'logo',         label: 'Logo uploaded',                done: !!branding?.logo_url,                                      hint: 'Upload a logo in Branding & Theme' },
-      { key: 'compliance',   label: 'Compliance enabled',           done: !!(compliance && compliance.jurisdictions_json !== '[]'),  hint: 'Configure compliance jurisdictions' },
-      { key: 'features',     label: 'Features configured',          done: enabledFeatureCount > 0,                                   hint: 'Enable at least one portal feature' },
-      { key: 'news',         label: 'News post published',          done: newsCount > 0,                                             hint: 'Publish at least one news post' },
-      { key: 'content',      label: 'Safety alert or document live', done: safetyCount > 0 || docCount > 0,                          hint: 'Add a safety alert or publish a document' },
-      { key: 'msl',          label: 'MSL added',                    done: mslCount > 0,                                              hint: 'Add at least one Medical Science Liaison' },
-      { key: 'portal_url',   label: 'Custom brand color set',       done: !!(branding?.primary_color && branding.primary_color !== '#2563EB'), hint: 'Set a custom brand color in Branding & Theme' },
+      { key: 'branding',     label: 'Branding configured',          done: !!(branding?.logo_url && branding?.portal_name),          hint: 'Upload a logo and set a portal name', path: 'branding' },
+      { key: 'logo',         label: 'Logo uploaded',                done: !!branding?.logo_url,                                      hint: 'Upload a logo in Branding & Theme', path: 'branding' },
+      { key: 'compliance',   label: 'Compliance enabled',           done: !!(compliance && compliance.jurisdictions_json !== '[]'),  hint: 'Configure compliance jurisdictions', path: 'compliance' },
+      { key: 'features',     label: 'Features configured',          done: enabledFeatureCount > 0,                                   hint: 'Enable at least one portal feature', path: 'features' },
+      { key: 'news',         label: 'News post published',          done: newsCount > 0,                                             hint: 'Publish at least one news post', path: 'news' },
+      { key: 'content',      label: 'Safety alert or document live', done: safetyCount > 0 || docCount > 0,                          hint: 'Add a safety alert or publish a document', path: 'documents' },
+      { key: 'msl',          label: 'MSL added',                    done: mslCount > 0,                                              hint: 'Add at least one Medical Science Liaison', path: 'msls' },
+      { key: 'portal_url',   label: 'Custom brand color set',       done: !!(branding?.primary_color && branding.primary_color !== '#2563EB'), hint: 'Set a custom brand color in Branding & Theme', path: 'branding' },
     ];
 
     const doneCount = checks.filter(c => c.done).length;

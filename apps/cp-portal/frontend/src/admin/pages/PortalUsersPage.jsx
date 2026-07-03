@@ -15,6 +15,7 @@ export default function PortalUsersPage() {
   const [editForm, setEditForm]         = useState({ first_name: '', last_name: '', email: '', user_type: '', country: '', is_verified: false, is_active: true })
   const [saving, setSaving]             = useState(false)
   const [msg, setMsg]                   = useState(null)  // { type: 'success' | 'error', text }
+  const [selectedIds, setSelectedIds]   = useState([])
 
   useEffect(() => { load() }, [clientId, userType])
 
@@ -41,6 +42,29 @@ export default function PortalUsersPage() {
       const res = await fetch(`/api/admin/users/${clientId}/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: !current }) })
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Update failed.') }
       setMsg({ type: 'success', text: `User ${current ? 'deactivated' : 'activated'}.` })
+      load()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    }
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  function toggleSelectAll() {
+    setSelectedIds(prev => prev.length === users.length ? [] : users.map(u => u.id))
+  }
+  async function bulkSetActive(isActive) {
+    if (selectedIds.length === 0) return
+    if (!confirm(`${isActive ? 'Activate' : 'Deactivate'} ${selectedIds.length} selected user(s)?`)) return
+    try {
+      const res = await fetch(`/api/admin/users/${clientId}/bulk`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ ids: selectedIds, is_active: isActive }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Bulk update failed.') }
+      const d = await res.json()
+      setMsg({ type: 'success', text: d.message || 'Users updated.' })
+      setSelectedIds([])
       load()
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
@@ -99,6 +123,15 @@ export default function PortalUsersPage() {
         <button className="cp-btn cp-btn-outline" onClick={load}>Search</button>
       </div>
 
+      {selectedIds.length > 0 && (
+        <div className="cp-filter-bar" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 8, padding: '8px 12px', alignItems: 'center' }}>
+          <strong style={{ fontSize: 13, color: '#0369A1' }}>{selectedIds.length} selected</strong>
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => bulkSetActive(true)}>Activate</button>
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => bulkSetActive(false)}>Deactivate</button>
+          <button className="cp-btn cp-btn-sm" onClick={() => setSelectedIds([])}>Clear selection</button>
+        </div>
+      )}
+
       {showEditModal && editUser && (
         <div className="cp-modal-overlay" onClick={() => setShowEditModal(false)}>
           <div className="cp-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
@@ -148,16 +181,21 @@ export default function PortalUsersPage() {
         <div className="cp-empty"><div style={{ fontSize: 40 }}>👥</div><p>No portal users yet.</p></div>
       ) : (
         <table className="cp-table">
-          <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Country</th><th>Verified</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+          <thead><tr>
+            <th><input type="checkbox" checked={users.length > 0 && selectedIds.length === users.length} onChange={toggleSelectAll} aria-label="Select all" /></th>
+            <th>Name</th><th>Email</th><th>Type</th><th>Country</th><th>Verified</th><th>Status</th><th>Last Login</th><th>Joined</th><th></th>
+          </tr></thead>
           <tbody>
             {users.map(u => (
               <tr key={u.id}>
+                <td><input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => toggleSelect(u.id)} aria-label={`Select ${u.email}`} /></td>
                 <td>{u.first_name} {u.last_name}</td>
                 <td>{u.email}</td>
                 <td><span className="cp-type-badge">{u.user_type}</span></td>
                 <td>{u.country || '—'}</td>
                 <td>{u.is_verified ? '✓' : '—'}</td>
                 <td><span className={`cp-badge ${u.is_active ? 'badge-active' : 'badge-inactive'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td style={{ fontSize: 12 }}>{u.last_login_at ? u.last_login_at.slice(0, 16).replace('T', ' ') : '—'}</td>
                 <td>{u.created_at?.slice(0, 10)}</td>
                 <td style={{ display: 'flex', gap: 6 }}>
                   <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(u)}>Edit</button>

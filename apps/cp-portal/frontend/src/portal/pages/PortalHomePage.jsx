@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import Icon from '../../shared/components/Icon'
 
 export default function PortalHomePage() {
   const { portalConfig, isFeatureEnabled, clientCode, user, portalHeaders } = usePortal()
@@ -8,6 +9,7 @@ export default function PortalHomePage() {
   const branding  = portalConfig?.branding || {}
   const client    = portalConfig?.client   || {}
   const base      = `/portal/${clientCode}`
+  const [homeSearch, setHomeSearch] = useState('')
 
   // LOW-05: set document title
   useEffect(() => { document.title = 'Home | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
@@ -48,47 +50,48 @@ export default function PortalHomePage() {
 
   const featureCards = [
     {
+      key:   'medical_inquiry',
+      icon:  'send',
+      title: 'Submit an Inquiry',
+      desc:  'Submit a medical information request, adverse event report, or product complaint.',
+      path:  'submit',
+      stamp: 'Avg. reply < 2 business days',
+      highlight: true,
+    },
+    {
+      key:   'find_msl',
+      icon:  'user',
+      title: 'Find an MSL',
+      desc:  'Connect with our Medical Science Liaison team and book an open time slot.',
+      path:  'find-msl',
+    },
+    {
       key:   'therapeutic_areas',
-      icon:  '🧬',
+      icon:  'beaker',
       title: 'Therapeutic Areas',
       desc:  'Explore our focus areas across diseases and treatment categories.',
       path:  'therapeutic-areas',
     },
     {
-      key:   'medical_inquiry',
-      icon:  '📋',
-      title: 'Submit an Inquiry',
-      desc:  'Submit a medical information request, adverse event report, or product complaint.',
-      path:  'submit',
-      highlight: true,
-    },
-    {
-      key:   'events',
-      icon:  '📅',
-      title: 'Events & Webinars',
-      desc:  'Find upcoming medical education events, symposia, and webinars.',
-      path:  'events',
-    },
-    {
-      key:   'find_msl',
-      icon:  '👨‍⚕️',
-      title: 'Find an MSL',
-      desc:  'Connect with our Medical Science Liaison team in your region.',
-      path:  'find-msl',
+      key:   'drug_info',
+      icon:  'pill',
+      title: 'Drug Information',
+      desc:  'Review approved prescribing information and clinical summaries.',
+      path:  'drug-info',
     },
     {
       key:   'resources',
-      icon:  '📚',
+      icon:  'book',
       title: 'Resources',
       desc:  'Access publications, clinical data, and approved materials.',
       path:  'resources',
     },
     {
-      key:   'drug_info',
-      icon:  '💊',
-      title: 'Drug Information',
-      desc:  'Review approved prescribing information and clinical summaries.',
-      path:  'drug-info',
+      key:   'events',
+      icon:  'calendar',
+      title: 'Events & Webinars',
+      desc:  'Find upcoming medical education events, symposia, and webinars.',
+      path:  'events',
     },
   ].filter(c => isFeatureEnabled(c.key))
 
@@ -106,12 +109,25 @@ export default function PortalHomePage() {
         <div className="pp-hero-inner">
           <h1 className="pp-hero-title">{heroTitle}</h1>
           <p className="pp-hero-subtitle">{heroSubtitle}</p>
+          <form
+            className="pp-hero-search"
+            onSubmit={e => { e.preventDefault(); if (homeSearch.trim().length >= 2) navigate(`${base}/search?q=${encodeURIComponent(homeSearch.trim())}`) }}
+          >
+            <Icon name="search" size={20} />
+            <input
+              value={homeSearch}
+              onChange={e => setHomeSearch(e.target.value)}
+              placeholder="Search medical information, documents, safety…"
+              aria-label="Search the portal"
+            />
+            <button type="submit" className="pp-hero-search-btn">Search</button>
+          </form>
           <div className="pp-hero-actions">
             <button className="pp-btn pp-btn-primary pp-btn-lg" onClick={() => navigate(`${base}/submit`)}>
               Submit an Inquiry
             </button>
-            <button className="pp-btn pp-btn-outline pp-btn-lg" onClick={() => navigate(`${base}/therapeutic-areas`)}>
-              Learn More
+            <button className="pp-btn pp-btn-outline pp-btn-lg" onClick={() => navigate(`${base}/find-msl`)}>
+              Find an MSL
             </button>
           </div>
         </div>
@@ -166,10 +182,12 @@ export default function PortalHomePage() {
             {featureCards.map(card => (
               <Link key={card.key} to={`${base}/${card.path}`}
                 className={`pp-feature-card ${card.highlight ? 'pp-feature-card-highlight' : ''}`}>
-                <div className="pp-feature-icon">{card.icon}</div>
+                <div className="pp-feature-icon"><Icon name={card.icon} size={26} /></div>
                 <h3 className="pp-feature-title">{card.title}</h3>
                 <p className="pp-feature-desc">{card.desc}</p>
-                <span className="pp-feature-link">Learn more →</span>
+                {card.stamp
+                  ? <span className="pp-feature-stamp"><span className="pp-stamp-dot" />{card.stamp}</span>
+                  : <span className="pp-feature-link">Learn more →</span>}
               </Link>
             ))}
           </div>

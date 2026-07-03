@@ -8,7 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 
-const DEFAULT_PREFS = { news: true, documents: true, safety: true };
+const DEFAULT_PREFS = { news: true, documents: true, safety: true, digest: true };
 
 // GET /api/portal/preferences?clientCode=xxx
 router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
@@ -27,7 +27,7 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
 // PATCH /api/portal/preferences
 router.patch('/', authenticatePortal, requirePortalAuth, async (req, res) => {
   try {
-    const { news, documents, safety } = req.body;
+    const { news, documents, safety, digest } = req.body;
     const [[current]] = await pool.execute('SELECT notif_prefs_json FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     if (!current) return res.status(404).json({ error: 'User not found.' });
 
@@ -37,6 +37,7 @@ router.patch('/', authenticatePortal, requirePortalAuth, async (req, res) => {
     if (news      !== undefined) prefs.news      = !!news;
     if (documents !== undefined) prefs.documents = !!documents;
     if (safety    !== undefined) prefs.safety    = !!safety;
+    if (digest    !== undefined) prefs.digest    = !!digest;
 
     await pool.execute(`UPDATE cp_portal_users SET notif_prefs_json = ? WHERE id = ?`,
       [JSON.stringify(prefs), req.portalUser.userId]);

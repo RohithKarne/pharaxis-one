@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import PdfViewerModal from '../components/PdfViewerModal'
 
 function formatFileSize(bytes) {
   if (!bytes) return '—'
@@ -38,6 +39,7 @@ export default function DocumentsPage() {
   const [savingId, setSavingId]   = useState(null)
   const [aiMode, setAiMode] = useState(false)
   const [aiResults, setAiResults] = useState([])
+  const [viewDoc, setViewDoc] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
   const [aiUnavailable, setAiUnavailable] = useState(false)
@@ -183,6 +185,19 @@ export default function DocumentsPage() {
     }
   }
 
+  function docBadges(doc) {
+    const badges = []
+    if (doc.created_at && (Date.now() - new Date(doc.created_at).getTime()) < 14 * 86400000) {
+      badges.push(<span key="new" className="pp-badge-new">New</span>)
+    }
+    if (doc.expires_at) {
+      const ms = new Date(doc.expires_at).getTime() - Date.now()
+      if (ms < 0) badges.push(<span key="exp" className="pp-badge-exp gone">Expired</span>)
+      else if (ms < 30 * 86400000) badges.push(<span key="exp" className="pp-badge-exp">Expiring</span>)
+    }
+    return badges
+  }
+
   if (loading) return <div className="pp-docs-page"><div className="pp-loading" role="status" aria-live="polite">Loading…</div></div>
   if (error)   return <div className="pp-docs-page"><div className="pp-error-state">{error}</div></div>
 
@@ -316,12 +331,17 @@ export default function DocumentsPage() {
                   {doc.doc_type?.replace(/_/g, ' ').toUpperCase() || 'DOC'}
                 </span>
               </div>
-              <div className="pp-doc-title">{doc.title}</div>
+              <div className="pp-doc-title">{doc.title}{docBadges(doc)}</div>
               <div className="pp-doc-meta">
                 {doc.category && <span>{doc.category} · </span>}
                 {formatFileSize(doc.file_size)}
               </div>
               <div className="pp-doc-download" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {doc.mime_type === 'application/pdf' && (
+                  <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => setViewDoc(doc)} aria-label={`View ${doc.title}`}>
+                    View
+                  </button>
+                )}
                 <button
                   className="pp-btn pp-btn-outline pp-btn-sm"
                   onClick={() => handleDownload(doc)}
@@ -348,6 +368,14 @@ export default function DocumentsPage() {
             </div>
           ))}
         </div>
+      )}
+      {viewDoc && (
+        <PdfViewerModal
+          title={viewDoc.title}
+          url={`/api/portal/documents/${viewDoc.id}/download?disposition=inline`}
+          downloadUrl={`/api/portal/documents/${viewDoc.id}/download`}
+          onClose={() => setViewDoc(null)}
+        />
       )}
     </div>
   )

@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { decryptSecret } = require('../../utils/secretCrypto');
+const { retrieveContext, formatContext } = require('../../utils/retrieve');
 
 async function isFeatureEnabled(clientId, featureKey) {
   const [[row]] = await pool.execute('SELECT is_enabled FROM cp_features WHERE client_id = ? AND feature_key = ?', [clientId, featureKey]);
@@ -53,21 +54,25 @@ router.post('/:clientCode', async (req, res) => {
       return res.status(400).json({ error: 'messages array is required.' });
     }
 
-    // Build context from client content for better AI answers
-    const [therapeuticAreas] = await pool.execute('SELECT name, short_desc FROM cp_therapeutic_areas WHERE client_id=? AND is_active=1', [client.id]);
-    const [drugs] = await pool.execute('SELECT brand_name, generic_name, indication FROM cp_drugs WHERE client_id=? AND is_active=1', [client.id]);
-
-    const contextLines = [];
-    if (therapeuticAreas.length) contextLines.push(`Therapeutic Areas: ${therapeuticAreas.map(a => a.name).join(', ')}`);
-    if (drugs.length) contextLines.push(`Products: ${drugs.map(d => d.brand_name).join(', ')}`);
+    // RAG: retrieve relevant approved content for the user's latest question and
+    // ground the model in it. Retrieval is keyword-based (v1); the interface lets
+    // us swap in semantic search later without changing this handler.
+    const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+    const retrieved = await retrieveContext(client.id, lastUserMessage, 6);
+    const contextBlock = formatContext(retrieved);
 
     const safeSystemPrompt = (config.system_prompt || 'You are a helpful medical information assistant for a pharmaceutical company.').slice(0, 2000);
 
     const systemPrompt = [
       safeSystemPrompt,
-      contextLines.length ? `\nContext about this portal:\n${contextLines.join('\n')}` : '',
-      '\nIMPORTANT: You provide general information only. Always advise users to consult their healthcare provider for medical decisions. Do not provide specific medical diagnoses or treatment recommendations.',
+      contextBlock
+        ? `\n\nUse ONLY the following approved portal content to answer. Cite sources by their [number]. If the answer is not in this content, say you don't have that information and suggest contacting the medical team.\n\n--- APPROVED CONTENT ---\n${contextBlock}\n--- END CONTENT ---`
+        : `\n\nYou have no matching approved content for this question. Do not invent specifics — say you don't have that information and suggest contacting the medical team.`,
+      '\n\nIMPORTANT: You provide general information only, grounded in the approved content above. Always advise users to consult their healthcare provider for medical decisions. Never provide diagnoses or treatment recommendations beyond the approved content.',
     ].join('');
+
+    // Sources surfaced to the client for citation display.
+    const sources = retrieved.map((s, i) => ({ n: i + 1, source: s.source, title: s.title }));
 
     if (config.ai_provider === 'anthropic') {
       const Anthropic = require('@anthropic-ai/sdk');
@@ -78,7 +83,7 @@ router.post('/:clientCode', async (req, res) => {
         system: systemPrompt,
         messages: messages.map(m => ({ role: m.role, content: m.content })),
       });
-      return res.json({ reply: response.content[0]?.text || '' });
+      return res.json({ reply: response.content[0]?.text || '', sources });
     }
 
     if (config.ai_provider === 'openai') {
@@ -92,7 +97,7 @@ router.post('/:clientCode', async (req, res) => {
         }),
       });
       const data = await response.json();
-      return res.json({ reply: data.choices?.[0]?.message?.content || '' });
+      return res.json({ reply: data.choices?.[0]?.message?.content || '', sources });
     }
 
     res.status(400).json({ error: 'Unsupported AI provider.' });

@@ -51,7 +51,24 @@ async function listClients(pool) {
     return acc;
   }, {});
 
-  return rows.map(client => readinessForClient(client, expiredDocCounts));
+  // Documents expiring within the next 7 days (not yet expired) — proactive alert
+  const [expiringSoonRows] = await pool.execute(`
+    SELECT client_id, COUNT(*) as cnt
+    FROM cp_documents
+    WHERE is_active = 1 AND status = 'published'
+      AND expires_at IS NOT NULL
+      AND expires_at > NOW() AND expires_at <= (NOW() + INTERVAL 7 DAY)
+    GROUP BY client_id
+  `);
+  const expiringSoonCounts = expiringSoonRows.reduce((acc, row) => {
+    acc[row.client_id] = row.cnt;
+    return acc;
+  }, {});
+
+  return rows.map(client => ({
+    ...readinessForClient(client, expiredDocCounts),
+    expiring_soon_doc_count: expiringSoonCounts[client.id] || 0,
+  }));
 }
 
 async function getClientBundle(pool, clientId) {

@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
+import Icon from '../../shared/components/Icon'
+
+const SEVERITIES = ['critical', 'warning', 'informational']
 
 export default function SafetyPage() {
   const { clientCode, portalHeaders, language } = usePortal()
   const [alerts, setAlerts]           = useState([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState('')
+  const [sevFilter, setSevFilter]     = useState('all')
 
   useEffect(() => {
     async function load() {
@@ -36,6 +40,8 @@ export default function SafetyPage() {
 
   const active   = alerts.filter(a => a.status === 'active')
   const resolved = alerts.filter(a => a.status === 'resolved')
+  const shown    = sevFilter === 'all' ? active : active.filter(a => (a.severity || '').toLowerCase() === sevFilter)
+  const availableSeverities = SEVERITIES.filter(s => active.some(a => (a.severity || '').toLowerCase() === s))
 
   function SeverityBadge({ severity }) {
     const normalized = (severity || 'unknown').toLowerCase().replace(/\s+/g, '-')
@@ -80,8 +86,9 @@ export default function SafetyPage() {
               className="pp-btn pp-btn-outline pp-btn-sm"
               target="_blank"
               rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              📄 Download PDF
+              <Icon name="file" size={15} /> Download PDF
             </a>
           </div>
         )}
@@ -96,10 +103,23 @@ export default function SafetyPage() {
     <div className="pp-safety-page">
       <h1 className="pp-safety-section-title">Safety Alerts</h1>
 
+      {availableSeverities.length > 1 && (
+        <div className="pp-sev-filter" role="group" aria-label="Filter by severity">
+          <button className={`pp-sev-chip${sevFilter === 'all' ? ' on' : ''}`} onClick={() => setSevFilter('all')}>All ({active.length})</button>
+          {availableSeverities.map(s => (
+            <button key={s} className={`pp-sev-chip sev-${s}${sevFilter === s ? ' on' : ''}`} onClick={() => setSevFilter(s)}>
+              {s.charAt(0).toUpperCase() + s.slice(1)} ({active.filter(a => (a.severity || '').toLowerCase() === s).length})
+            </button>
+          ))}
+        </div>
+      )}
+
       {active.length === 0 ? (
         <div className="pp-safety-empty">No active safety alerts at this time.</div>
+      ) : shown.length === 0 ? (
+        <div className="pp-safety-empty">No {sevFilter} alerts.</div>
       ) : (
-        active.map(a => <AlertCard key={a.id} alert={a} isResolved={false} />)
+        shown.map(a => <AlertCard key={a.id} alert={a} isResolved={false} />)
       )}
 
       {resolved.length > 0 && (

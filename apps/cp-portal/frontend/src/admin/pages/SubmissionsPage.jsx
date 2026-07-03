@@ -29,6 +29,8 @@ export default function SubmissionsPage() {
   const [search, setSearch]     = useState('')
   const [expanded, setExpanded] = useState(null)
   const [msg, setMsg]           = useState(null)  // { type, text }
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo]     = useState('')
 
   useEffect(() => { load() }, [clientId, typeFilter, statusFilter, search])
 
@@ -67,6 +69,30 @@ export default function SubmissionsPage() {
 
   function parseFormData(raw) {
     try { return JSON.parse(raw) } catch { return {} }
+  }
+
+  // Server-side export of the FULL filtered dataset (respects date range), CSV or PDF.
+  async function exportServer(format) {
+    const params = new URLSearchParams()
+    if (typeFilter)   params.set('type', typeFilter)
+    if (statusFilter) params.set('status', statusFilter)
+    if (search)       params.set('search', search)
+    if (dateFrom)     params.set('from', dateFrom)
+    if (dateTo)       params.set('to', dateTo)
+    params.set('format', format)
+    try {
+      const res = await fetch(`/api/admin/submissions/${clientId}/export?${params}`, { headers: adminHeaders() })
+      if (!res.ok) throw new Error('Export failed.')
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url
+      a.download = `submissions-${clientId}-${new Date().toISOString().slice(0, 10)}.${format}`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    }
   }
 
   function exportCsv() {
@@ -141,20 +167,30 @@ export default function SubmissionsPage() {
           placeholder="Search name, email, ref…"
           style={{ padding: '6px 10px', border: '1px solid var(--cp-border)', borderRadius: 4, fontSize: 13, minWidth: 220 }}
         />
-        {(typeFilter || statusFilter || search) && (
-          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setTypeFilter(''); setStatusFilter(''); setSearch('') }}>
+        <label style={{ fontSize: 12, color: '#6B7280' }}>From
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            style={{ marginLeft: 4, padding: '5px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, fontSize: 12 }} />
+        </label>
+        <label style={{ fontSize: 12, color: '#6B7280' }}>To
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            style={{ marginLeft: 4, padding: '5px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, fontSize: 12 }} />
+        </label>
+        {(typeFilter || statusFilter || search || dateFrom || dateTo) && (
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setTypeFilter(''); setStatusFilter(''); setSearch(''); setDateFrom(''); setDateTo('') }}>
             Clear
           </button>
         )}
-        <button
-          className="cp-btn cp-btn-sm cp-btn-outline"
-          onClick={exportCsv}
-          disabled={submissions.length === 0}
-          style={{ marginLeft: 'auto' }}
-          title="Export the current view to CSV"
-        >
-          ⬇ Export CSV
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={exportCsv} disabled={submissions.length === 0} title="Export the loaded view to CSV">
+            ⬇ CSV (view)
+          </button>
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => exportServer('csv')} title="Export the full filtered dataset to CSV">
+            ⬇ CSV (all)
+          </button>
+          <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => exportServer('pdf')} title="Export a PDF audit report of the full filtered dataset">
+            ⬇ PDF
+          </button>
+        </div>
       </div>
 
       {msg && (
@@ -220,6 +256,19 @@ export default function SubmissionsPage() {
                             </div>
                           ))}
                         </div>
+                        {s.attachments && s.attachments.length > 0 && (
+                          <>
+                            <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Attachments ({s.attachments.length})</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {s.attachments.map(a => (
+                                <a key={a.id} href={`/api/admin/submissions/${clientId}/attachments/${a.id}`} target="_blank" rel="noopener noreferrer"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2563EB', textDecoration: 'none' }}>
+                                  ⬇ {a.file_name} <span style={{ color: '#9CA3AF', fontSize: 11 }}>({Math.round((a.file_size || 0) / 1024)} KB)</span>
+                                </a>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </td>
                     </tr>
                   )}
