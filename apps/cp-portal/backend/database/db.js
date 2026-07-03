@@ -681,23 +681,6 @@ async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
-  // ── CUSTOM REPORTS ─────────────────────────────────────────────
-  await run(`
-    CREATE TABLE IF NOT EXISTS cp_custom_reports (
-      id           INT      NOT NULL AUTO_INCREMENT,
-      client_id    INT      NOT NULL,
-      name         VARCHAR(255) NOT NULL,
-      layout_json  TEXT     NULL,
-      widgets_json TEXT     NULL,
-      created_by   INT      NULL,
-      created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      CONSTRAINT fk_reports_client  FOREIGN KEY (client_id)  REFERENCES cp_clients(id) ON DELETE CASCADE,
-      CONSTRAINT fk_reports_creator FOREIGN KEY (created_by) REFERENCES cp_admin_users(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-
   // ── FEEDBACK ───────────────────────────────────────────────────
   await run(`
     CREATE TABLE IF NOT EXISTS cp_feedback (
@@ -755,30 +738,6 @@ async function initializeDatabase() {
       CONSTRAINT fk_bookings_user   FOREIGN KEY (portal_user_id)  REFERENCES cp_portal_users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
-
-  // ── PROCESS LOGS ───────────────────────────────────────────────
-  await run(`
-    CREATE TABLE IF NOT EXISTS cp_process_logs (
-      id              INT          NOT NULL AUTO_INCREMENT,
-      source          VARCHAR(20)  NOT NULL DEFAULT 'admin',
-      method          VARCHAR(10)  NOT NULL,
-      path            VARCHAR(500) NOT NULL,
-      path_pattern    VARCHAR(500) NULL,
-      status_code     INT          NULL,
-      duration_ms     INT          NULL,
-      admin_id        INT          NULL,
-      portal_user_id  INT          NULL,
-      client_id       INT          NULL,
-      payload_summary TEXT         NULL,
-      error_message   TEXT         NULL,
-      created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      CONSTRAINT fk_plogs_admin  FOREIGN KEY (admin_id)       REFERENCES cp_admin_users(id) ON DELETE SET NULL,
-      CONSTRAINT fk_plogs_user   FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE SET NULL,
-      CONSTRAINT fk_plogs_client FOREIGN KEY (client_id)      REFERENCES cp_clients(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-  await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_process_logs_ts ON cp_process_logs(created_at DESC)`);
 
   // ── SEED DEFAULT FORM FIELDS for active clients (safe — skips if already exist) ──
   const DEFAULT_FORM_FIELDS = {

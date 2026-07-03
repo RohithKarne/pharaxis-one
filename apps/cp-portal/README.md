@@ -26,7 +26,7 @@ It includes both internal admin controls and public-facing portal APIs/UI.
 ### Backend
 
 ```bash
-cd apps/medical-affairs/cp-portal/backend
+cd apps/cp-portal/backend
 npm install
 npm run dev
 ```
@@ -34,7 +34,7 @@ npm run dev
 ### Frontend
 
 ```bash
-cd apps/medical-affairs/cp-portal/frontend
+cd apps/cp-portal/frontend
 npm install
 npm run dev
 ```

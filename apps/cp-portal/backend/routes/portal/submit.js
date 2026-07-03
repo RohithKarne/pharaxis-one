@@ -9,6 +9,7 @@ const { pool } = require('../../database/db');
 const { authenticatePortal } = require('../../middleware/auth');
 const { sendEmail } = require('../../utils/mailer');
 const { assertSafeOutboundUrl } = require('../../utils/networkGuard');
+const { decryptSecret } = require('../../utils/secretCrypto');
 
 // POST /api/portal/submit/:clientCode/:formType
 router.post('/:clientCode/:formType', authenticatePortal, async (req, res) => {
@@ -101,6 +102,7 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
 async function syncToIntegration(clientId, submissionId, formType) {
   const [[integration]] = await pool.execute('SELECT * FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [clientId]);
   if (!integration) return;
+  integration.api_key = decryptSecret(integration.api_key);
 
   const [[submission]] = await pool.execute('SELECT * FROM cp_submissions WHERE id = ?', [submissionId]);
   if (!submission) return;

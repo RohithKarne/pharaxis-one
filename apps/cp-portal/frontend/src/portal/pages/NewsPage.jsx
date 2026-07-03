@@ -34,6 +34,7 @@ export default function NewsPage() {
   const [activeCategory, setActiveCategory] = useState('All')
   const [allCategories, setAllCategories]   = useState([])
   const [search, setSearch]       = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [savedIds, setSavedIds]   = useState([])
   const [savingId, setSavingId]   = useState(null)
 
@@ -41,6 +42,13 @@ export default function NewsPage() {
 
   // LOW-05: set document title
   useEffect(() => { document.title = 'News | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+
+  // Debounce the search box, and reset to page 1 whenever the query changes,
+  // so search runs server-side across the whole archive (not just the loaded page).
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 300)
+    return () => clearTimeout(t)
+  }, [search])
 
   // Load saved news IDs for the logged-in user
   useEffect(() => {
@@ -56,7 +64,8 @@ export default function NewsPage() {
         const token = localStorage.getItem('cp_portal_token')
         const categoryParam = activeCategory !== 'All' ? `&category=${encodeURIComponent(activeCategory)}` : ''
         const langParam = language && language !== 'en' ? `&lang=${language}` : ''
-        const res = await fetch(`/api/portal/news?clientCode=${clientCode}&page=${page}&limit=${limit}${categoryParam}${langParam}`, {
+        const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''
+        const res = await fetch(`/api/portal/news?clientCode=${clientCode}&page=${page}&limit=${limit}${categoryParam}${langParam}${searchParam}`, {
           headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         })
         const d = await res.json()
@@ -70,17 +79,12 @@ export default function NewsPage() {
       setLoading(false)
     }
     if (clientCode) load()
-  }, [clientCode, page, activeCategory, language])
+  }, [clientCode, page, activeCategory, language, debouncedSearch])
 
   const categories = ['All', ...allCategories]
 
-  // Category is server-side; search is client-side (posts already loaded for current page)
-  const filtered = search
-    ? posts.filter(p => {
-        const q = search.toLowerCase()
-        return (p.title || '').toLowerCase().includes(q) || stripHtml(p.body_html || '').toLowerCase().includes(q)
-      })
-    : posts
+  // Search and category are both server-side now — render what the server returned.
+  const filtered = posts
 
   const totalPages = Math.ceil(total / limit)
 

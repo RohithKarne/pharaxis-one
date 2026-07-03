@@ -14,7 +14,8 @@ export function PortalProvider({ children }) {
   const portalConfigRef                 = useRef(null)
   const [user, setUser]                 = useState(null)
   const [showGate, setShowGate]         = useState(false)
-  const [language, setLanguageState]    = useState(() => localStorage.getItem(`cp_lang_${rawClientCode}`) || 'en')
+  // English-only for now (2026-07-03) — language switching disabled; always 'en'.
+  const [language, setLanguageState]    = useState('en')
 
   // Show gate when: gate is enabled, user is logged in, user hasn't confirmed type yet
   useEffect(() => {

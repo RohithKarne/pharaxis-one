@@ -28,6 +28,7 @@ export default function SubmissionsPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch]     = useState('')
   const [expanded, setExpanded] = useState(null)
+  const [msg, setMsg]           = useState(null)  // { type, text }
 
   useEffect(() => { load() }, [clientId, typeFilter, statusFilter, search])
 
@@ -39,25 +40,60 @@ export default function SubmissionsPage() {
       if (statusFilter) params.set('status', statusFilter)
       if (search)       params.set('search', search)
       const res = await fetch(`/api/admin/submissions/${clientId}?${params}`, { headers: adminHeaders() })
+      if (!res.ok) throw new Error('Failed to load submissions.')
       const d   = await res.json()
       setSubmissions(d.submissions || [])
       setCounts(d.counts || [])
       setTotal(d.total || 0)
-    } catch { /* ignore */ }
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    }
     setLoading(false)
   }
 
   async function updateStatus(id, status) {
-    await fetch(`/api/admin/submissions/${clientId}/${id}`, {
-      method: 'PATCH',
-      headers: adminHeaders(),
-      body: JSON.stringify({ status }),
-    })
-    load()
+    try {
+      const res = await fetch(`/api/admin/submissions/${clientId}/${id}`, {
+        method: 'PATCH',
+        headers: adminHeaders(),
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Status update failed.') }
+      load()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    }
   }
 
   function parseFormData(raw) {
     try { return JSON.parse(raw) } catch { return {} }
+  }
+
+  function exportCsv() {
+    const esc = v => {
+      const s = v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v))
+      return `"${s.replace(/"/g, '""')}"`
+    }
+    const header = ['ID', 'Date', 'Type', 'Submitter', 'Email', 'User Type', 'Status', 'Ref', 'Form Data']
+    const rows = submissions.map(s => [
+      s.id,
+      s.submitted_at || '',
+      TYPE_LABELS[s.submission_type] || s.submission_type,
+      s.submitter_name || (s.first_name ? `${s.first_name} ${s.last_name}` : ''),
+      s.submitter_email || s.user_email || '',
+      s.submitter_type || '',
+      s.status,
+      s.external_ref || '',
+      s.form_data || '',
+    ].map(esc).join(','))
+    const csv = [header.map(esc).join(','), ...rows].join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url
+    a.download = `submissions-client-${clientId}-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   if (loading) return <AdminLayout title="Submissions"><div className="cp-loading">Loading…</div></AdminLayout>
@@ -110,7 +146,22 @@ export default function SubmissionsPage() {
             Clear
           </button>
         )}
+        <button
+          className="cp-btn cp-btn-sm cp-btn-outline"
+          onClick={exportCsv}
+          disabled={submissions.length === 0}
+          style={{ marginLeft: 'auto' }}
+          title="Export the current view to CSV"
+        >
+          ⬇ Export CSV
+        </button>
       </div>
+
+      {msg && (
+        <div className={msg.type === 'error' ? 'cp-error' : 'cp-success'} onClick={() => setMsg(null)} style={{ cursor: 'pointer', marginBottom: 12 }}>
+          {msg.text}
+        </div>
+      )}
 
       {submissions.length === 0 ? (
         <div className="cp-empty"><p>No submissions found.</p></div>

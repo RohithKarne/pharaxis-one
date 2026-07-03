@@ -12,6 +12,7 @@
 
 const nodemailer = require('nodemailer')
 const { pool }   = require('../database/db')
+const { decryptSecret } = require('./secretCrypto')
 
 /**
  * Resolve the active SMTP config for a given client.
@@ -26,6 +27,7 @@ async function getEmailConfig(clientId) {
       AND smtp_host IS NOT NULL AND smtp_username IS NOT NULL AND smtp_password IS NOT NULL
     LIMIT 1
   `, [clientId])
+  if (row) row.smtp_password = decryptSecret(row.smtp_password)
   return row || null
 }
 

@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const { encryptSecret } = require('../../utils/secretCrypto');
 
 const VALID_PROVIDERS = ['anthropic', 'openai'];
 
@@ -15,6 +16,9 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
   try {
     const [[row]] = await pool.execute('SELECT * FROM cp_chatbox_config WHERE client_id = ?', [req.params.clientId]);
     if (!row) return res.status(404).json({ error: 'Chatbox config not found.' });
+    // Never expose the stored API key. Surface only whether one is set.
+    row.has_api_key = !!row.api_key;
+    delete row.api_key;
     res.json({ chatbox: row });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
@@ -42,7 +46,7 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
       if (req.body[key] !== undefined) { updates.push(`${key} = ?`); params.push(req.body[key]); }
     }
     // api_key stored separately — never returned in GET
-    if (req.body.api_key !== undefined) { updates.push('api_key = ?'); params.push(req.body.api_key || null); }
+    if (req.body.api_key !== undefined) { updates.push('api_key = ?'); params.push(encryptSecret(req.body.api_key || null)); }
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     updates.push(`updated_at = NOW()`);
     params.push(req.params.clientId);

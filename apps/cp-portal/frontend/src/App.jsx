@@ -48,13 +48,9 @@ import VerifyEmailPage          from './portal/pages/VerifyEmailPage'
 import PreferencesPage         from './portal/pages/PreferencesPage'
 import AnalyticsPage            from './admin/pages/AnalyticsPage'
 import FeedbackPage             from './admin/pages/FeedbackPage'
-import CustomReportsPage        from './admin/pages/CustomReportsPage'
 import EmailSettingsPage        from './admin/pages/EmailSettingsPage'
 import FAQAdminPage            from './admin/pages/FAQPage'
 import FAQPortalPage           from './portal/pages/FAQPage'
-import LanguagePage            from './admin/pages/LanguagePage'
-import AIConfigPage            from './admin/pages/AIConfigPage'
-import ProcessExplorerPage    from './admin/pages/ProcessExplorerPage'
 
 function AdminGuard({ children }) {
   const { admin } = useAdminAuth()
@@ -132,14 +128,10 @@ export default function App() {
         <Route path="/admin/clients/:clientId/submissions" element={<AdminGuard><SubmissionsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/analytics"    element={<AdminGuard><AnalyticsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/feedback"     element={<AdminGuard><FeedbackPage /></AdminGuard>} />
-        <Route path="/admin/clients/:clientId/reports"     element={<AdminGuard><CustomReportsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/admin-users"  element={<AdminGuard><AdminUsersPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/review-queue"    element={<AdminGuard><ReviewQueuePage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/email-settings" element={<AdminGuard><EmailSettingsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/faq"           element={<AdminGuard><FAQAdminPage /></AdminGuard>} />
-        <Route path="/admin/clients/:clientId/language"      element={<AdminGuard><LanguagePage /></AdminGuard>} />
-        <Route path="/admin/clients/:clientId/ai-config"     element={<AdminGuard><AIConfigPage /></AdminGuard>} />
-        <Route path="/admin/process-explorer"              element={<AdminGuard><ProcessExplorerPage /></AdminGuard>} />
 
         {/* Public Portal — multi-tenant by clientCode */}
         <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />

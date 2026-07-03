@@ -17,7 +17,6 @@ const { runMigrations } = require('./database/migrate');
 const { attachRequestContext } = require('./middleware/requestContext');
 const { inputSecurity } = require('./middleware/inputSecurity');
 const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandler');
-const { captureProcessLog } = require('./services/processLogService');
 
 const app  = express();
 const PORT = process.env.CP_PORT || 4000;
@@ -92,9 +91,6 @@ app.use(attachRequestContext);
 app.use('/api', apiLimiter);
 app.use('/api', inputSecurity);
 
-// ── Process Explorer: capture every API call ──────────────────
-app.use('/api/', captureProcessLog(pool));
-
 // Static uploads
 app.use('/uploads', (req, res, next) => {
   if (req.path.startsWith('/private/')) return res.status(403).json({ error: 'Access denied.' });
@@ -104,7 +100,6 @@ app.use('/uploads', (req, res, next) => {
 // ── Admin Console Routes ──────────────────────────────────────
 app.use('/api/admin/auth',         authLimiter, require('./routes/admin/auth'));
 app.use('/api/admin/clients',      require('./routes/admin/clients'));
-app.use('/api/admin/clients/:clientId/ai-config', require('./routes/admin/aiProxy'));
 app.use('/api/admin/branding',     require('./routes/admin/branding'));
 app.use('/api/admin/features',     require('./routes/admin/features'));
 app.use('/api/admin/content',      require('./routes/admin/content'));
@@ -122,14 +117,12 @@ app.use('/api/admin/safety',       require('./routes/admin/safety'));
 app.use('/api/admin/audit',        require('./routes/admin/audit'));
 app.use('/api/admin/submissions',  require('./routes/admin/submissions'));
 app.use('/api/admin/analytics',    require('./routes/admin/analytics'));
-app.use('/api/admin/reports',      require('./routes/admin/reports'));
 app.use('/api/admin/admin-users',  require('./routes/admin/adminUsers'));
 app.use('/api/admin/review-queue', require('./routes/admin/reviewQueue'));
 app.use('/api/admin/email-config', require('./routes/admin/emailConfig'));
 app.use('/api/admin/feedback',     require('./routes/admin/feedback'));
 app.use('/api/admin/faq',          require('./routes/admin/faq'));
 app.use('/api/admin/language',     require('./routes/admin/language'));
-app.use('/api/admin/process-logs', require('./routes/admin/processExplorer'));
 
 // ── Public Portal Routes ──────────────────────────────────────
 app.use('/api/portal/config',        require('./routes/portal/config'));

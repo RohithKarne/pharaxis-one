@@ -6,6 +6,7 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
+const { decryptSecret } = require('../../utils/secretCrypto');
 
 async function isFeatureEnabled(clientId, featureKey) {
   const [[row]] = await pool.execute('SELECT is_enabled FROM cp_features WHERE client_id = ? AND feature_key = ?', [clientId, featureKey]);
@@ -24,6 +25,7 @@ router.post('/:clientCode', async (req, res) => {
 
     const [[config]] = await pool.execute('SELECT * FROM cp_chatbox_config WHERE client_id = ? AND is_active = 1', [client.id]);
     if (!config || !config.api_key) return res.status(503).json({ error: 'Chatbox is not configured for this portal.' });
+    config.api_key = decryptSecret(config.api_key);
 
     // Accept either {messages} array OR {message + history} format from frontend
     let messages;

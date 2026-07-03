@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { assertSafeOutboundUrl } = require('../../utils/networkGuard');
+const { encryptSecret, decryptSecret } = require('../../utils/secretCrypto');
 
 // Mask a secret field — show only last 4 chars with **** prefix
 function maskSecret(value) {
@@ -39,7 +40,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
     const [result] = await pool.execute(
       `INSERT INTO cp_integration_config (client_id, system_name, api_base_url, api_key, api_secret, auth_type, extra_headers)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [req.params.clientId, system_name || 'MIMS', api_base_url, api_key ?? null, api_secret ?? null, auth_type || 'bearer', extra_headers ? JSON.stringify(extra_headers) : null]
+      [req.params.clientId, system_name || 'MIMS', api_base_url, encryptSecret(api_key ?? null), encryptSecret(api_secret ?? null), auth_type || 'bearer', extra_headers ? JSON.stringify(extra_headers) : null]
     );
     res.status(201).json({ id: result.insertId, message: 'Integration configured.' });
   } catch (err) {
@@ -56,7 +57,8 @@ router.patch('/:clientId/:integrationId', authenticateAdmin, requireClientAccess
       if (req.body[key] !== undefined) {
         // SEC-02: skip secret fields if the frontend is echoing back a masked display value
         if ((key === 'api_key' || key === 'api_secret') && String(req.body[key]).startsWith('****')) continue;
-        updates.push(`${key} = ?`); params.push(req.body[key]);
+        const isSecret = (key === 'api_key' || key === 'api_secret');
+        updates.push(`${key} = ?`); params.push(isSecret ? encryptSecret(req.body[key]) : req.body[key]);
       }
     }
     if (req.body.extra_headers !== undefined) { updates.push('extra_headers = ?'); params.push(JSON.stringify(req.body.extra_headers)); }
@@ -85,6 +87,7 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, requireClientAc
   try {
     const [[cfg]] = await pool.execute('SELECT * FROM cp_integration_config WHERE id=? AND client_id=?', [req.params.integrationId, req.params.clientId]);
     if (!cfg) return res.status(404).json({ error: 'Integration not found.' });
+    cfg.api_key = decryptSecret(cfg.api_key);
     try {
       const safeUrl = await assertSafeOutboundUrl(cfg.api_base_url);
       const headers = { 'Content-Type': 'application/json' };

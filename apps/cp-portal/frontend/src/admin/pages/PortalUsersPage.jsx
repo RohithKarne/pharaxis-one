@@ -14,23 +14,37 @@ export default function PortalUsersPage() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm]         = useState({ first_name: '', last_name: '', email: '', user_type: '', country: '', is_verified: false, is_active: true })
   const [saving, setSaving]             = useState(false)
+  const [msg, setMsg]                   = useState(null)  // { type: 'success' | 'error', text }
 
   useEffect(() => { load() }, [clientId, userType])
 
   async function load() {
     setLoading(true)
-    const params = new URLSearchParams()
-    if (userType) params.set('user_type', userType)
-    if (search) params.set('search', search)
-    const res = await fetch(`/api/admin/users/${clientId}?${params}`, { headers: adminHeaders() })
-    const d   = await res.json()
-    setUsers(d.users || [])
-    setLoading(false)
+    try {
+      const params = new URLSearchParams()
+      if (userType) params.set('user_type', userType)
+      if (search) params.set('search', search)
+      const res = await fetch(`/api/admin/users/${clientId}?${params}`, { headers: adminHeaders() })
+      if (!res.ok) throw new Error('Failed to load users.')
+      const d   = await res.json()
+      setUsers(d.users || [])
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function toggleActive(id, current) {
-    await fetch(`/api/admin/users/${clientId}/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: !current }) })
-    load()
+    if (!confirm(`${current ? 'Deactivate' : 'Activate'} this portal user?`)) return
+    try {
+      const res = await fetch(`/api/admin/users/${clientId}/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: !current }) })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Update failed.') }
+      setMsg({ type: 'success', text: `User ${current ? 'deactivated' : 'activated'}.` })
+      load()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    }
   }
 
   function openEdit(user) {
@@ -49,14 +63,27 @@ export default function PortalUsersPage() {
 
   async function handleEdit(e) {
     e.preventDefault(); setSaving(true)
-    await fetch(`/api/admin/users/${clientId}/${editUser.id}`, {
-      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(editForm)
-    })
-    setSaving(false); setShowEditModal(false); setEditUser(null); load()
+    try {
+      const res = await fetch(`/api/admin/users/${clientId}/${editUser.id}`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(editForm)
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Save failed.') }
+      setMsg({ type: 'success', text: 'User updated.' })
+      setShowEditModal(false); setEditUser(null); load()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <AdminLayout title="Portal Users">
+      {msg && (
+        <div className={msg.type === 'error' ? 'cp-error' : 'cp-success'} onClick={() => setMsg(null)} style={{ cursor: 'pointer' }}>
+          {msg.text}
+        </div>
+      )}
       <div className="cp-filter-bar">
         <input className="cp-search-input" placeholder="Search name or email…" value={search}
           onChange={e => setSearch(e.target.value)}

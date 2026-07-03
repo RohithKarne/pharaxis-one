@@ -12,6 +12,7 @@ const { pool } = require('../../database/db')
 const { authenticateAdmin, requireClientAccess, requireRole } = require('../../middleware/auth')
 const { audit } = require('../../utils/audit')
 const { sendEmail } = require('../../utils/mailer')
+const { encryptSecret } = require('../../utils/secretCrypto')
 
 // GET /api/admin/email-config/:clientId — returns config, never the real password
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -58,7 +59,7 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, requireRole('
       ]
       if (smtp_password) {
         updates.splice(3, 0, 'smtp_password = ?')
-        params.splice(3, 0, smtp_password)
+        params.splice(3, 0, encryptSecret(smtp_password))
       }
       params.push(clientId)
       await pool.execute(`UPDATE cp_email_config SET ${updates.join(', ')} WHERE client_id = ?`, params)
@@ -69,7 +70,7 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, requireRole('
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         clientId, smtp_host || null, smtp_port || 587, smtp_encryption || 'STARTTLS',
-        smtp_username || null, smtp_password || null, from_email || null, from_name || null,
+        smtp_username || null, encryptSecret(smtp_password || null), from_email || null, from_name || null,
         is_active ? 1 : 0,
       ])
     }

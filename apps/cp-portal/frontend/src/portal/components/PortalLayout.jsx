@@ -4,7 +4,6 @@ import { usePortal } from '../context/PortalContext'
 import UserTypeGate from './UserTypeGate'
 import ConsentBanner from './ConsentBanner'
 import FeedbackWidget from './FeedbackWidget'
-import { SUPPORTED_LANGUAGES } from '../utils/translations'
 
 function timeAgo(dateStr) {
   if (!dateStr) return ''
@@ -203,22 +202,7 @@ export default function PortalLayout({ children }) {
           </nav>
 
           <div className="pp-header-actions">
-            {/* S5-9: Language switcher — only shown when multiple languages enabled */}
-            {(portalConfig?.language?.enabled?.length || 0) > 1 && (
-              <select
-                value={language}
-                onChange={e => setLanguage(e.target.value)}
-                style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--pp-border, #E5E7EB)', background: 'transparent', cursor: 'pointer', color: 'var(--pp-header-text, inherit)' }}
-                aria-label="Select language"
-              >
-                {SUPPORTED_LANGUAGES
-                  .filter(l => (portalConfig?.language?.enabled || ['en']).includes(l.code))
-                  .map(l => (
-                    <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
-                  ))
-                }
-              </select>
-            )}
+            {/* Language switcher removed — portal is English-only for now (2026-07-03). */}
             {isFeatureEnabled('medical_inquiry') && (
               <button className="pp-btn pp-btn-primary" onClick={() => navigate(`${base}/submit`)}>
                 {t('btn.submit_inquiry')}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 import { apiJson } from '../../shared/api/client'
+import { clientPortalUrl } from '../../shared/utils/portalUrl'
 
 export default function ClientsPage() {
   const [clients, setClients] = useState([])
@@ -12,7 +13,16 @@ export default function ClientsPage() {
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState('')
   const [search, setSearch]   = useState('')
+  const [copiedCode, setCopiedCode] = useState('')
   const navigate = useNavigate()
+
+  async function copyPortalUrl(code) {
+    try {
+      await navigator.clipboard.writeText(clientPortalUrl(code))
+      setCopiedCode(code)
+      setTimeout(() => setCopiedCode(''), 1500)
+    } catch { /* clipboard blocked — link is still openable */ }
+  }
 
   useEffect(() => { loadClients() }, [])
 
@@ -121,13 +131,21 @@ export default function ClientsPage() {
       {loading ? <div className="cp-loading">Loading…</div> : (
         <table className="cp-table">
           <thead>
-            <tr><th>Name</th><th>Code</th><th>Contact</th><th>Submissions</th><th>Status</th><th>Actions</th></tr>
+            <tr><th>Name</th><th>Code</th><th>Portal URL</th><th>Contact</th><th>Submissions</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {clients.filter(c => !search || c.name?.toLowerCase().includes(search.toLowerCase()) || c.code?.toLowerCase().includes(search.toLowerCase())).map(c => (
               <tr key={c.id}>
                 <td><button className="cp-link-btn" onClick={() => navigate(`/admin/clients/${c.id}`)}>{c.name}</button></td>
                 <td><code>{c.code}</code></td>
+                <td>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <a href={clientPortalUrl(c.code)} target="_blank" rel="noopener noreferrer" className="cp-link-btn" title={clientPortalUrl(c.code)}>Open ↗</a>
+                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => copyPortalUrl(c.code)}>
+                      {copiedCode === c.code ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </td>
                 <td>{c.contact_email || '—'}</td>
                 <td>{c.submission_count || 0}</td>
                 <td><span className={`cp-badge ${c.is_active ? 'badge-active' : 'badge-inactive'}`}>{c.is_active ? 'Active' : 'Inactive'}</span></td>

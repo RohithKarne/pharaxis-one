@@ -42,6 +42,7 @@ router.get('/', authenticatePortal, async (req, res) => {
     const now      = new Date().toISOString().replace('T', ' ').substring(0, 19);
     const category = req.query.category || null;
     const lang     = req.query.lang || 'en';
+    const searchQ  = (req.query.search || '').trim().toLowerCase();
 
     const [allPosts] = await pool.execute(`
       SELECT id, title, body_html, category, thumbnail_path, target_types_json, publish_at, view_count, is_pinned, created_at, translations_json
@@ -60,7 +61,15 @@ router.get('/', authenticatePortal, async (req, res) => {
     const allCategories = [...new Set(visiblePosts.map(p => p.category).filter(Boolean))];
 
     // Apply server-side category filter after computing allCategories
-    const filtered = category ? visiblePosts.filter(p => p.category === category) : visiblePosts;
+    let filtered = category ? visiblePosts.filter(p => p.category === category) : visiblePosts;
+
+    // Server-side search across the WHOLE archive (title + body), not just the current page
+    if (searchQ) {
+      filtered = filtered.filter(p =>
+        (p.title || '').toLowerCase().includes(searchQ) ||
+        (p.body_html || '').toLowerCase().includes(searchQ)
+      );
+    }
 
     const total = filtered.length;
     const paged = filtered.slice(offset, offset + limit).map(p => {

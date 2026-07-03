@@ -6,7 +6,6 @@ import PageLoader from './PageLoader'
 const NAV_ITEMS = [
   { to: '/admin',                  label: 'Dashboard',       icon: '🏠', exact: true },
   { to: '/admin/clients',          label: 'Clients',         icon: '🏢' },
-  { to: '/admin/process-explorer', label: 'Process Explorer', icon: '🔬' },
 ]
 
 // ── #1 Grouped + collapsible client nav ───────────────────────────────────
@@ -26,8 +25,6 @@ const CLIENT_NAV_GROUPS = (id) => [
       { to: `/admin/clients/${id}/features`,  label: 'Features',   icon: '⚙️' },
       { to: `/admin/clients/${id}/gate`,      label: 'User Gate',  icon: '🚪' },
       { to: `/admin/clients/${id}/chatbox`,   label: 'Chatbox AI', icon: '🤖' },
-      { to: `/admin/clients/${id}/ai-config`, label: 'AI Configuration', icon: '✨' },
-      { to: `/admin/clients/${id}/language`,  label: 'Language',   icon: '🌐' },
     ],
   },
   {
@@ -62,7 +59,6 @@ const CLIENT_NAV_GROUPS = (id) => [
       { to: `/admin/clients/${id}/audit`,        label: 'Audit Trail',    icon: '📋' },
       { to: `/admin/clients/${id}/analytics`,   label: 'Analytics',      icon: '📊' },
       { to: `/admin/clients/${id}/feedback`,    label: 'Feedback',       icon: '💬' },
-      { to: `/admin/clients/${id}/reports`,     label: 'Custom Reports', icon: '🗂️' },
       { to: `/admin/clients/${id}/admin-users`, label: 'Admin Users',    icon: '🔑' },
     ],
   },
@@ -90,11 +86,7 @@ const SEGMENT_TITLES = {
   'email-settings':  'Email Settings',
   analytics:      'Analytics',
   feedback:       'Feedback',
-  reports:        'Custom Reports',
   faq:            'FAQ',
-  language:            'Language Settings',
-  'ai-config':         'AI Configuration',
-  'process-explorer':  'Process Explorer',
 }
 
 function deriveTitle(pathname) {

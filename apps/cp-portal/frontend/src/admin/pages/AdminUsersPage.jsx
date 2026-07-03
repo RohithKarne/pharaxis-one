@@ -28,6 +28,7 @@ export default function AdminUsersPage() {
   const [form, setForm]     = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
+  const [listMsg, setListMsg] = useState(null)  // { type, text } — list-level feedback
 
   useEffect(() => { loadUsers() }, [clientId])
 
@@ -81,12 +82,19 @@ export default function AdminUsersPage() {
   }
 
   async function toggleActive(user) {
-    await fetch(`/api/admin/admin-users/${clientId}/${user.id}`, {
-      method: 'PATCH',
-      headers: adminHeaders(),
-      body: JSON.stringify({ is_active: user.is_active ? 0 : 1 }),
-    })
-    loadUsers()
+    if (!confirm(`${user.is_active ? 'Deactivate' : 'Activate'} ${user.name || 'this admin user'}?`)) return
+    try {
+      const res = await fetch(`/api/admin/admin-users/${clientId}/${user.id}`, {
+        method: 'PATCH',
+        headers: adminHeaders(),
+        body: JSON.stringify({ is_active: user.is_active ? 0 : 1 }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Update failed.') }
+      setListMsg({ type: 'success', text: `${user.name || 'User'} ${user.is_active ? 'deactivated' : 'activated'}.` })
+      loadUsers()
+    } catch (e) {
+      setListMsg({ type: 'error', text: e.message })
+    }
   }
 
   function roleBadge(role) {
@@ -108,6 +116,12 @@ export default function AdminUsersPage() {
           <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ Add Admin User</button>
         )}
       </div>
+
+      {listMsg && (
+        <div className={listMsg.type === 'error' ? 'cp-error' : 'cp-success'} onClick={() => setListMsg(null)} style={{ cursor: 'pointer' }}>
+          {listMsg.text}
+        </div>
+      )}
 
       <div className="cp-card" style={{ marginBottom: 16, padding: '12px 16px', background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 8 }}>
         <strong style={{ color: '#0369A1', fontSize: 13 }}>Role permissions summary</strong>

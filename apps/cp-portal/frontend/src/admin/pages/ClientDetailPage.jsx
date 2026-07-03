@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
+import { clientPortalUrl } from '../../shared/utils/portalUrl'
 
 // ── Config Sections ───────────────────────────────────────────────────────────
 const CONFIG_GROUPS = [
@@ -179,6 +180,15 @@ export default function ClientDetailPage() {
   const [readiness, setReadiness]     = useState(null)
   const [integrationData, setIntegrationData] = useState(null)
   const [recentActivity, setRecentActivity]   = useState([])
+  const [urlCopied, setUrlCopied]     = useState(false)
+
+  async function copyPortalUrl(code) {
+    try {
+      await navigator.clipboard.writeText(clientPortalUrl(code))
+      setUrlCopied(true)
+      setTimeout(() => setUrlCopied(false), 1500)
+    } catch { /* clipboard blocked — link is still openable */ }
+  }
 
   useEffect(() => {
     fetch(`/api/admin/clients/${clientId}`, { headers: adminHeaders() })
@@ -234,7 +244,16 @@ export default function ClientDetailPage() {
           </div>
           <div className="ck-hero-url-row">
             <span className="ck-hero-url-label">Portal URL</span>
-            <span className="ck-hero-url-val">/{client.code}</span>
+            <a
+              className="ck-hero-url-val"
+              href={clientPortalUrl(client.code)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open portal in a new tab"
+            >{clientPortalUrl(client.code)}</a>
+            <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => copyPortalUrl(client.code)} style={{ marginLeft: 8 }}>
+              {urlCopied ? 'Copied!' : 'Copy'}
+            </button>
           </div>
         </div>
 
