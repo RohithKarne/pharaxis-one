@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
 
 export default function ContactPage() {
-  const { portalConfig, clientCode, isFeatureEnabled, user, config } = usePortal()
+  const { portalConfig, clientCode, isFeatureEnabled, user } = usePortal()
   const client   = portalConfig?.client   || {}
   const branding = portalConfig?.branding || {}
 
@@ -21,12 +21,10 @@ export default function ContactPage() {
     setStatus('submitting')
     setErrorMsg('')
     try {
-      const token = localStorage.getItem('cp_portal_token')
       const res = await fetch(`/api/portal/submit/${clientCode}/other_inquiry`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           submitter_name:  name,
@@ -60,10 +58,10 @@ export default function ContactPage() {
           <div className="pp-contact-icon">🏥</div>
           <h3>Medical Information</h3>
           <p>For medical information requests and clinical inquiries, please use our submission portal.</p>
-          {/* BLOCKER fix: no hardcoded fallback — only render if email exists */}
-          {(config?.contact_email || client.contact_email) ? (
-            <a href={`mailto:${config?.contact_email || client.contact_email}`} className="pp-contact-link">
-              {config?.contact_email || client.contact_email}
+          {/* Contact details come from the client record; render only if present. */}
+          {client.contact_email ? (
+            <a href={`mailto:${client.contact_email}`} className="pp-contact-link">
+              {client.contact_email}
             </a>
           ) : (
             <span className="pp-text-muted">Contact information not available.</span>
@@ -73,9 +71,9 @@ export default function ContactPage() {
           <div className="pp-contact-icon">📞</div>
           <h3>Phone Support</h3>
           <p>Our medical affairs team is available Monday through Friday, 9 AM – 5 PM EST.</p>
-          {/* BLOCKER fix: only render phone if it exists */}
-          {(config?.contact_phone || client.contact_phone) ? (
-            <p className="pp-contact-phone">{config?.contact_phone || client.contact_phone}</p>
+          {/* Contact details come from the client record; render only if present. */}
+          {client.contact_phone ? (
+            <p className="pp-contact-phone">{client.contact_phone}</p>
           ) : (
             <span className="pp-text-muted">Contact information not available.</span>
           )}

@@ -107,8 +107,7 @@ export default function SafetyPage() {
 
       const res = await fetch(url, {
         method,
-        headers: { Authorization: adminHeaders().Authorization },
-        body: fd,
+        body: fd, // multipart upload; auth rides the session cookie, browser sets Content-Type
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Save failed.'); setSaving(false); return }

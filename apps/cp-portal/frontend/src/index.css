@@ -1555,6 +1555,27 @@ body { background: var(--cp-bg); }
 .pp-pdf-head b { flex: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-pdf-head a, .pp-pdf-head button { font-size: 13px; font-weight: 600; color: var(--pp-primary); border: 1px solid var(--pp-border); border-radius: 7px; padding: 6px 12px; background: #fff; cursor: pointer; text-decoration: none; }
 .pp-pdf-frame { flex: 1; border: 0; width: 100%; }
+.pp-specialty-modal { background: #fff; border-radius: 14px; width: min(520px, 100%); padding: 28px; }
+.pp-specialty-modal h2 { font-size: 20px; font-weight: 700; margin: 0 0 6px; color: var(--pp-text); }
+.pp-specialty-modal p { font-size: 14px; color: var(--pp-text-muted); margin: 0 0 18px; }
+.pp-specialty-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.pp-specialty-chip { font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--pp-border); background: var(--pp-surface); color: var(--pp-text); cursor: pointer; }
+.pp-specialty-chip:hover:not(:disabled) { border-color: var(--pp-primary); color: var(--pp-primary); }
+.pp-specialty-chip:disabled { opacity: .5; cursor: default; }
+.pp-specialty-skip { background: none; border: 0; color: var(--pp-text-muted); font-size: 13px; cursor: pointer; text-decoration: underline; }
+/* Drug comparison */
+.pp-compare-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--pp-surface); border: 1px solid var(--pp-border); border-radius: 10px; padding: 10px 16px; margin-bottom: 16px; font-size: 14px; }
+.pp-compare-bar span { margin-right: auto; }
+.pp-compare-modal { background: #fff; border-radius: 14px; width: min(920px, 100%); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; }
+.pp-compare-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--pp-border); }
+.pp-compare-head b { font-size: 16px; }
+.pp-compare-head button { font-size: 13px; font-weight: 600; color: var(--pp-primary); border: 1px solid var(--pp-border); border-radius: 7px; padding: 6px 12px; background: #fff; cursor: pointer; }
+.pp-compare-scroll { overflow: auto; padding: 4px; }
+.pp-compare-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.pp-compare-table th, .pp-compare-table td { border: 1px solid var(--pp-border); padding: 10px 12px; vertical-align: top; text-align: left; }
+.pp-compare-table thead th { background: var(--pp-surface); font-weight: 700; position: sticky; top: 0; }
+.pp-compare-attr { background: var(--pp-surface); font-weight: 600; white-space: nowrap; min-width: 130px; position: sticky; left: 0; }
+.pp-compare-generic { font-size: 11px; color: var(--pp-text-muted); font-weight: 400; margin-top: 2px; }
 
 /* ── Root layout ─────────────────────────────────────────── */
 .pp-root { display: flex; flex-direction: column; min-height: 100vh; background: var(--pp-bg); color: var(--pp-text); font-family: var(--pp-font); font-size: var(--pp-font-size); }

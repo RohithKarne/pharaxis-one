@@ -37,6 +37,29 @@ export function AdminAuthProvider({ children }) {
     return res
   }
 
+  // AUTH-06b: global 401 safety net for the raw page-level fetches that don't go
+  // through adminFetch. Every /api/admin/* endpoint is authed, so a 401 there always
+  // means the session expired → log out and bounce to login instead of leaving the
+  // page stuck on an empty/error state. Scoped to /api/admin/ so it never affects
+  // portal fetches (which have public-optional endpoints), and it excludes the auth
+  // routes so a bad-login 401 keeps showing its own inline error.
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window)
+    let active = true
+    window.fetch = async (...args) => {
+      const res = await originalFetch(...args)
+      try {
+        const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '')
+        if (active && res.status === 401 && url.includes('/api/admin/') && !url.includes('/api/admin/auth/')) {
+          logout()
+          navigate('/admin/login', { replace: true })
+        }
+      } catch { /* an interceptor must never break the underlying request */ }
+      return res
+    }
+    return () => { active = false; window.fetch = originalFetch }
+  }, [])
+
   // Restore admin session from server on mount — handles case where localStorage
   // was cleared but the auth cookie / token is still valid.
   useEffect(() => {

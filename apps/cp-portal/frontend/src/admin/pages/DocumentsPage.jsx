@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
-import LoadingButton from '../components/LoadingButton'
 
 const VISIBLE_TO_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
@@ -157,8 +156,7 @@ export default function DocumentsPage() {
 
       const res = await fetch(`/api/admin/documents/${clientId}`, {
         method: 'POST',
-        headers: { Authorization: adminHeaders().Authorization },
-        body: fd,
+        body: fd, // multipart upload; auth rides the session cookie, browser sets Content-Type
       })
       const data = await res.json()
       if (!res.ok) { setUploadError(data.error || 'Upload failed.'); setSaving(false); return }
@@ -369,7 +367,7 @@ export default function DocumentsPage() {
               </div>
               {uploadError && <div className="cp-error">{uploadError}</div>}
               <div className="cp-modal-footer">
-                <LoadingButton type="submit" disabled={saving}>Upload</LoadingButton>
+                <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Uploading…' : 'Upload'}</button>
                 <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowUpload(false)}>Cancel</button>
               </div>
             </form>
@@ -439,7 +437,7 @@ export default function DocumentsPage() {
                 </label>
               </div>
               <div className="cp-modal-footer">
-                <LoadingButton type="submit" disabled={saving}>Save</LoadingButton>
+                <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
                 <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowEditModal(false)}>Cancel</button>
               </div>
             </form>

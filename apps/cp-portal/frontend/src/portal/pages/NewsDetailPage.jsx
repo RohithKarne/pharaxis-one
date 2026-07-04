@@ -21,8 +21,7 @@ export default function NewsDetailPage() {
     async function load() {
       setLoading(true)
       try {
-        const token = localStorage.getItem('cp_portal_token')
-        const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+        const headers = { 'Content-Type': 'application/json' }
         const langParam = language && language !== 'en' ? `&lang=${language}` : ''
         const res = await fetch(`/api/portal/news/${postId}?clientCode=${clientCode}${langParam}`, { headers })
         const d = await res.json()

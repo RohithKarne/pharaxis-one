@@ -51,14 +51,11 @@ export default function DocumentsPage() {
     async function load() {
       setLoading(true)
       try {
-        const token = localStorage.getItem('cp_portal_token')
         const [docsRes, savedRes] = await Promise.all([
           fetch(`/api/portal/documents?clientCode=${clientCode}${language && language !== 'en' ? `&lang=${language}` : ''}`, {
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            headers: { 'Content-Type': 'application/json' },
           }),
-          fetch(`/api/portal/saved?clientCode=${clientCode}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          fetch(`/api/portal/saved?clientCode=${clientCode}`),
         ])
         const d = await docsRes.json()
         const s = await savedRes.json()
@@ -106,10 +103,9 @@ export default function DocumentsPage() {
     setAiLoading(true)
     setAiError('')
     try {
-      const token = localStorage.getItem('cp_portal_token')
       const res = await fetch('/api/portal/documents/ai-search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientCode, query: q }),
       })
       const data = await res.json()
@@ -140,20 +136,19 @@ export default function DocumentsPage() {
   async function toggleSave(doc) {
     if (savingId === doc.id) return
     setSavingId(doc.id)
-    const token = localStorage.getItem('cp_portal_token')
     const isSaved = savedIds.includes(doc.id)
     try {
       if (isSaved) {
         await fetch('/api/portal/saved', {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ clientCode, item_type: 'document', item_id: doc.id }),
         })
         setSavedIds(prev => prev.filter(id => id !== doc.id))
       } else {
         await fetch('/api/portal/saved', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ clientCode, item_type: 'document', item_id: doc.id }),
         })
         setSavedIds(prev => [...prev, doc.id])
@@ -166,10 +161,7 @@ export default function DocumentsPage() {
     if (downloading === doc.id) return
     setDownloading(doc.id)
     try {
-      const token = localStorage.getItem('cp_portal_token')
-      const res = await fetch(`/api/portal/documents/${doc.id}/download`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const res = await fetch(`/api/portal/documents/${doc.id}/download`)
       if (!res.ok) { alert('Download failed. Please sign in and try again.'); return }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)

@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import Icon from '../../shared/components/Icon'
+
+const COMPARE_ROWS = [
+  { key: 'indication',         label: 'Indication' },
+  { key: 'dosage_info',        label: 'Dosage' },
+  { key: 'contraindications',  label: 'Contraindications' },
+  { key: 'side_effects',       label: 'Side effects' },
+  { key: 'storage_conditions', label: 'Storage' },
+]
 
 export default function DrugInfoPage() {
   const { clientCode } = usePortal()
@@ -7,6 +16,13 @@ export default function DrugInfoPage() {
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
   const [selected, setSelected] = useState(null)
+  const [compareList, setCompareList] = useState([])
+  const [showCompare, setShowCompare] = useState(false)
+
+  function toggleCompare(id) {
+    setCompareList(prev => prev.includes(id) ? prev.filter(x => x !== id) : (prev.length >= 3 ? prev : [...prev, id]))
+  }
+  const compareDrugs = drugs.filter(d => compareList.includes(d.id))
 
   // LOW-05: set document title
   useEffect(() => { document.title = 'Drug Information | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
@@ -32,21 +48,40 @@ export default function DrugInfoPage() {
         <input className="pp-search-input" placeholder="Search by brand or generic name…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
+      {compareList.length > 0 && (
+        <div className="pp-compare-bar">
+          <span><strong>{compareList.length}</strong> selected to compare{compareList.length < 2 ? ' (pick at least 2)' : ''}</span>
+          <button className="pp-btn pp-btn-primary pp-btn-sm" onClick={() => setShowCompare(true)} disabled={compareList.length < 2}>Compare</button>
+          <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => setCompareList([])}>Clear</button>
+        </div>
+      )}
+
       {loading ? <div className="pp-loading">Loading…</div> : (
         <div className="pp-drug-layout">
           <div className="pp-drug-index">
             {filtered.length === 0 ? (
-              <div className="pp-empty-state"><span>💊</span><p>No drugs found.</p></div>
+              <div className="pp-empty-state"><span><Icon name="pill" size={40} /></span><p>No drugs found.</p></div>
             ) : filtered.map(d => (
-              <button key={d.id} className={`pp-drug-index-item ${selected?.id === d.id ? 'active' : ''}`} onClick={() => setSelected(d)}>
-                <div className="pp-drug-index-brand">{d.brand_name || d.generic_name}</div>
-                {d.brand_name && d.generic_name && <div className="pp-drug-index-generic">{d.generic_name}</div>}
-              </button>
+              <div key={d.id} className="pp-drug-index-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={compareList.includes(d.id)}
+                  onChange={() => toggleCompare(d.id)}
+                  disabled={!compareList.includes(d.id) && compareList.length >= 3}
+                  aria-label={`Add ${d.brand_name || d.generic_name} to comparison`}
+                  title="Add to comparison"
+                  style={{ flex: 'none' }}
+                />
+                <button className={`pp-drug-index-item ${selected?.id === d.id ? 'active' : ''}`} onClick={() => setSelected(d)} style={{ flex: 1, textAlign: 'left' }}>
+                  <div className="pp-drug-index-brand">{d.brand_name || d.generic_name}</div>
+                  {d.brand_name && d.generic_name && <div className="pp-drug-index-generic">{d.generic_name}</div>}
+                </button>
+              </div>
             ))}
           </div>
           <div className="pp-drug-detail">
             {!selected ? (
-              <div className="pp-ta-placeholder"><span>💊</span><p>Select a product to view details.</p></div>
+              <div className="pp-ta-placeholder"><span><Icon name="pill" size={40} /></span><p>Select a product to view details, or tick products to compare.</p></div>
             ) : (
               <div className="pp-drug-detail-content">
                 {selected.image_url && <img src={selected.image_url} alt={selected.brand_name} className="pp-drug-image" loading="lazy" />}
@@ -91,6 +126,40 @@ export default function DrugInfoPage() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showCompare && compareDrugs.length >= 2 && (
+        <div className="pp-pdf-overlay" onClick={() => setShowCompare(false)} role="dialog" aria-modal="true" aria-label="Compare products">
+          <div className="pp-compare-modal" onClick={e => e.stopPropagation()}>
+            <div className="pp-compare-head">
+              <b>Compare products</b>
+              <button type="button" onClick={() => setShowCompare(false)}>Close</button>
+            </div>
+            <div className="pp-compare-scroll">
+              <table className="pp-compare-table">
+                <thead>
+                  <tr>
+                    <th className="pp-compare-attr"></th>
+                    {compareDrugs.map(d => (
+                      <th key={d.id}>
+                        {d.brand_name || d.generic_name}
+                        {d.brand_name && d.generic_name && <div className="pp-compare-generic">{d.generic_name}</div>}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPARE_ROWS.map(row => (
+                    <tr key={row.key}>
+                      <th className="pp-compare-attr">{row.label}</th>
+                      {compareDrugs.map(d => <td key={d.id}>{d[row.key] || '—'}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

@@ -47,6 +47,7 @@ import SavedItemsPage           from './portal/pages/SavedItemsPage'
 import VerifyEmailPage          from './portal/pages/VerifyEmailPage'
 import PreferencesPage         from './portal/pages/PreferencesPage'
 import SearchResultsPage        from './portal/pages/SearchResultsPage'
+import MyActivityPage           from './portal/pages/MyActivityPage'
 import AnalyticsPage            from './admin/pages/AnalyticsPage'
 import FeedbackPage             from './admin/pages/FeedbackPage'
 import EmailSettingsPage        from './admin/pages/EmailSettingsPage'
@@ -88,6 +89,7 @@ function PortalRoutes() {
           <Route path="drug-info"         element={<FeatureGuard featureKey="drug_info"><DrugInfoPage /></FeatureGuard>} />
           <Route path="find-msl"          element={<FeatureGuard featureKey="find_msl"><FindMSLPage /></FeatureGuard>} />
           <Route path="my-submissions"    element={<PortalAuthGuard><MySubmissionsPage /></PortalAuthGuard>} />
+          <Route path="my-activity"       element={<PortalAuthGuard><MyActivityPage /></PortalAuthGuard>} />
           <Route path="contact"           element={<ContactPage />} />
           <Route path="safety"            element={<SafetyPortalPage />} />
           <Route path="news"              element={<FeatureGuard featureKey="news_announcements"><NewsPortalPage /></FeatureGuard>} />

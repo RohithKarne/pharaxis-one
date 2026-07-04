@@ -16,16 +16,15 @@ export default function SafetyPage() {
     async function load() {
       setLoading(true)
       try {
-        const token = localStorage.getItem('cp_portal_token')
         const langParam = language && language !== 'en' ? `&lang=${language}` : ''
         const res = await fetch(`/api/portal/safety?clientCode=${clientCode}${langParam}`, {
-          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          headers: { 'Content-Type': 'application/json' },
         })
         const d = await res.json()
         setAlerts(d.alerts || [])
         // increment view count for each alert visible on this page load
         ;(d.alerts || []).forEach(a => {
-          fetch(`/api/portal/safety/${clientCode}/alerts/${a.id}/view`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } }).catch(() => {})
+          fetch(`/api/portal/safety/${clientCode}/alerts/${a.id}/view`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }).catch(() => {})
         })
       } catch {
         setError('Unable to load safety alerts.')

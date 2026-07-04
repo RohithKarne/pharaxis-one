@@ -92,11 +92,9 @@ export default function SubmitPage() {
     const fd = new FormData()
     fd.append('form_data', JSON.stringify(formValues))
     attachments.forEach(f => fd.append('attachments', f))
-    const token = localStorage.getItem('cp_portal_token')
     const res  = await fetch(`/api/portal/submit/${clientCode}/${selectedType}`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      credentials: 'include',
+      credentials: 'include', // multipart upload; auth rides the session cookie, browser sets Content-Type
       body: fd,
     })
     const data = await res.json()

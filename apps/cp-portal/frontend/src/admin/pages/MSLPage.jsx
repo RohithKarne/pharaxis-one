@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
-import LoadingButton from '../components/LoadingButton'
 
 function formatTherapeuticAreas(val) {
   if (!val) return '—'
@@ -29,6 +28,7 @@ export default function MSLPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm]       = useState({ name: '', title: '', specialty: '', region: '', territory: '', email: '', phone: '' })
   const [saving, setSaving]   = useState(false)
+  const [formError, setFormError] = useState('')
   const [editMSL, setEditMSL]   = useState(null)
   const [showEdit, setShowEdit] = useState(false)
   const [editForm, setEditForm] = useState({})
@@ -70,23 +70,46 @@ export default function MSLPage() {
   }
 
   async function handleAdd(e) {
-    e.preventDefault(); setSaving(true)
-    await fetch(`/api/admin/msls/${clientId}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(form) })
-    setSaving(false); setShowAdd(false); setForm({ name: '', title: '', specialty: '', region: '', territory: '', email: '', phone: '' })
-    loadMSLs()
+    e.preventDefault(); setSaving(true); setFormError('')
+    try {
+      const res = await fetch(`/api/admin/msls/${clientId}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(form) })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setFormError(d.error || `Could not create MSL (error ${res.status}).`)
+        return
+      }
+      setShowAdd(false); setForm({ name: '', title: '', specialty: '', region: '', territory: '', email: '', phone: '' })
+      loadMSLs()
+    } catch {
+      setFormError('Network error — please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   function openEdit(msl) {
     setEditMSL(msl)
+    setFormError('')
     setEditForm({ name: msl.name || '', title: msl.title || '', specialty: msl.specialty || '', region: msl.region || '', territory: msl.territory || '', email: msl.email || '', phone: msl.phone || '' })
     setShowEdit(true)
   }
 
   async function handleEdit(e) {
-    e.preventDefault(); setSaving(true)
-    await fetch(`/api/admin/msls/${clientId}/${editMSL.id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(editForm) })
-    setSaving(false); setShowEdit(false); setEditMSL(null)
-    loadMSLs()
+    e.preventDefault(); setSaving(true); setFormError('')
+    try {
+      const res = await fetch(`/api/admin/msls/${clientId}/${editMSL.id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(editForm) })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setFormError(d.error || `Could not save changes (error ${res.status}).`)
+        return
+      }
+      setShowEdit(false); setEditMSL(null)
+      loadMSLs()
+    } catch {
+      setFormError('Network error — please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function deactivate(id) {
@@ -150,7 +173,7 @@ export default function MSLPage() {
     <AdminLayout title="MSL Directory">
       <div className="cp-section-header">
         <h2>Medical Science Liaisons</h2>
-        {tab === 'directory' && <button className="cp-btn cp-btn-primary" onClick={() => setShowAdd(true)}>+ Add MSL</button>}
+        {tab === 'directory' && <button className="cp-btn cp-btn-primary" onClick={() => { setFormError(''); setShowAdd(true) }}>+ Add MSL</button>}
       </div>
 
       {/* Tab Bar */}
@@ -191,8 +214,9 @@ export default function MSLPage() {
                     <div className="cp-field"><label>Email</label><input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div>
                     <div className="cp-field"><label>Phone</label><input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
                   </div>
+                  {formError && <div className="cp-error" style={{ marginBottom: 10 }}>{formError}</div>}
                   <div className="cp-modal-footer">
-                    <LoadingButton type="submit" disabled={saving}>Add MSL</LoadingButton>
+                    <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Adding…' : 'Add MSL'}</button>
                     <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowAdd(false)}>Cancel</button>
                   </div>
                 </form>
@@ -218,8 +242,9 @@ export default function MSLPage() {
                     <div className="cp-field"><label>Email</label><input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} /></div>
                     <div className="cp-field"><label>Phone</label><input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} /></div>
                   </div>
+                  {formError && <div className="cp-error" style={{ marginBottom: 10 }}>{formError}</div>}
                   <div className="cp-modal-footer">
-                    <LoadingButton type="submit" disabled={saving}>Save Changes</LoadingButton>
+                    <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
                     <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowEdit(false)}>Cancel</button>
                   </div>
                 </form>

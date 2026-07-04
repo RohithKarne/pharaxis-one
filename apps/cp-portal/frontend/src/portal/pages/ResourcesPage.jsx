@@ -31,7 +31,7 @@ export default function ResourcesPage() {
   const types    = [...new Set(resources.map(r => r.resource_type).filter(Boolean))]
   const filtered = resources
     .filter(r => !filter || r.resource_type === filter)
-    .filter(r => !search  || r.title.toLowerCase().includes(search.toLowerCase()) || (r.description || '').toLowerCase().includes(search.toLowerCase()))
+    .filter(r => !search  || (r.title || '').toLowerCase().includes(search.toLowerCase()) || (r.description || '').toLowerCase().includes(search.toLowerCase()))
 
   // LOW-36: group by category, null/empty → 'General'
   const grouped = filtered.reduce((acc, r) => {

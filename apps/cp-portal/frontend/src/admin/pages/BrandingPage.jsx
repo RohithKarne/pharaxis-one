@@ -73,8 +73,7 @@ export default function BrandingPage() {
       form.append('logo', file)
       const res = await fetch(`/api/admin/branding/${clientId}/upload-logo`, {
         method: 'POST',
-        headers: { Authorization: adminHeaders().Authorization },
-        body: form,
+        body: form, // multipart upload; auth rides the session cookie, browser sets Content-Type
       })
       const data = await res.json()
       if (!res.ok) { setLogoError(data.error || 'Upload failed.'); setLogoPreview(branding?.logo_url || null); return }

@@ -12,8 +12,7 @@ export default function PdfViewerModal({ url, downloadUrl, title, onClose }) {
   useEffect(() => {
     let objectUrl = ''
     let cancelled = false
-    const token = localStorage.getItem('cp_portal_token')
-    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'include' })
+    fetch(url, { credentials: 'include' })
       .then(r => { if (!r.ok) throw new Error('Unable to open this document.'); return r.blob() })
       .then(b => { if (!cancelled) { objectUrl = URL.createObjectURL(b); setBlobUrl(objectUrl) } })
       .catch(e => { if (!cancelled) setError(e.message) })

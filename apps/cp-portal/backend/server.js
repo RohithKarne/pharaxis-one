@@ -140,6 +140,7 @@ app.use('/api/portal/preferences',   require('./routes/portal/preferences'));
 app.use('/api/portal/feedback',      require('./routes/portal/feedback'));
 app.use('/api/portal/faq',           require('./routes/portal/faq'));
 app.use('/api/portal/search',        require('./routes/portal/search'));
+app.use('/api/portal/personal',      require('./routes/portal/personal'));
 app.use('/api/portal/bookings',      require('./routes/portal/bookings'));
 
 // ── S5-6: Content Scheduler — auto-promote scheduled → published ──

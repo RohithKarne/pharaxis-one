@@ -55,10 +55,9 @@ export default function ConsentBanner() {
   async function saveConsent(finalChoices) {
     setSaving(true)
     try {
-      const token = localStorage.getItem('cp_portal_token')
       await fetch('/api/portal/consent', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientCode, choices: finalChoices, version }),
       })
     } catch { /* ignore — still save locally */ }

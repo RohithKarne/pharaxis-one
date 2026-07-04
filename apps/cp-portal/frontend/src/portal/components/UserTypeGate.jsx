@@ -18,10 +18,9 @@ export default function UserTypeGate() {
     setSaving(true)
     setError(null)
     try {
-      const token = localStorage.getItem('cp_portal_token')
       const res = await fetch(`/api/portal/auth/confirm-type`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_type: selected })
       })
       const d = await res.json()

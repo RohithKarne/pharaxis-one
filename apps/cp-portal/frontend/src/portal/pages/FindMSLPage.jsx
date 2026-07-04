@@ -27,7 +27,7 @@ export default function FindMSLPage() {
   const regions  = [...new Set(msls.map(m => m.region).filter(Boolean))]
   const filtered = msls
     .filter(m => !region || m.region === region)
-    .filter(m => !search  || m.name.toLowerCase().includes(search.toLowerCase())
+    .filter(m => !search  || (m.name || '').toLowerCase().includes(search.toLowerCase())
       || (m.specialty || '').toLowerCase().includes(search.toLowerCase())
       || (m.territory || '').toLowerCase().includes(search.toLowerCase()))
 
@@ -52,10 +52,9 @@ export default function FindMSLPage() {
     e.preventDefault()
     setBookingError(''); setBookingBusy(true)
     try {
-      const token = localStorage.getItem('cp_portal_token')
       const res = await fetch(`/api/portal/bookings/${clientCode}/${bookingMSL.id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...bookingForm, slot_id: selectedSlot || undefined }),
       })
       const d = await res.json()
@@ -88,7 +87,7 @@ export default function FindMSLPage() {
         <div className="pp-msl-grid">
           {filtered.map(m => (
             <div key={m.id} className="pp-msl-card">
-              <div className="pp-msl-avatar">{m.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
+              <div className="pp-msl-avatar">{(m.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
               <div className="pp-msl-info">
                 <div className="pp-msl-name">{m.name}</div>
                 {m.title     && <div className="pp-msl-title">{m.title}</div>}

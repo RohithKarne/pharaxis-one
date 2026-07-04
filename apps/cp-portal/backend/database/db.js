@@ -180,6 +180,7 @@ async function initializeDatabase() {
       is_required    TINYINT(1)   NOT NULL DEFAULT 0,
       is_active      TINYINT(1)   NOT NULL DEFAULT 1,
       display_order  INT          NOT NULL DEFAULT 0,
+      updated_at     DATETIME     NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       UNIQUE KEY uq_form_config (client_id, form_type, field_key),
       CONSTRAINT fk_form_config_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
@@ -410,6 +411,7 @@ async function initializeDatabase() {
       system_prompt   MEDIUMTEXT   NULL,
       welcome_message VARCHAR(500) NOT NULL DEFAULT 'Hello! How can I help you today?',
       max_tokens      INT          NOT NULL DEFAULT 1024,
+      api_key         TEXT         NULL,
       is_active       TINYINT(1)   NOT NULL DEFAULT 0,
       updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
@@ -656,6 +658,7 @@ async function initializeDatabase() {
       is_read        TINYINT(1)  NOT NULL DEFAULT 0,
       created_at     DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
+      UNIQUE KEY uq_notif_dedup (portal_user_id, type, item_id),
       CONSTRAINT fk_notif_user   FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE,
       CONSTRAINT fk_notif_client FOREIGN KEY (client_id)      REFERENCES cp_clients(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -772,6 +775,22 @@ async function initializeDatabase() {
       KEY idx_subatt_submission (submission_id),
       CONSTRAINT fk_subatt_sub    FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE,
       CONSTRAINT fk_subatt_client FOREIGN KEY (client_id)     REFERENCES cp_clients(id)     ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // ── USER FOLLOWS (personalization) ─────────────────────────────
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_user_follows (
+      id             INT         NOT NULL AUTO_INCREMENT,
+      portal_user_id INT         NOT NULL,
+      client_id      INT         NOT NULL,
+      item_type      VARCHAR(40) NOT NULL,
+      item_id        INT         NOT NULL,
+      created_at     DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_follow (portal_user_id, item_type, item_id),
+      CONSTRAINT fk_follow_user   FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE,
+      CONSTRAINT fk_follow_client FOREIGN KEY (client_id)      REFERENCES cp_clients(id)      ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 

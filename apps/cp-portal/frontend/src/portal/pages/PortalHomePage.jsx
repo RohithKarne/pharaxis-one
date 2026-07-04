@@ -17,8 +17,13 @@ export default function PortalHomePage() {
   // S4-9: fetch "For You" content — news + documents matched to user's type
   const [forYouNews, setForYouNews]   = useState([])
   const [forYouDocs, setForYouDocs]   = useState([])
+  const [followedTopics, setFollowedTopics] = useState([])
   useEffect(() => {
     if (!clientCode || !user) return
+    fetch(`/api/portal/personal/follows?clientCode=${clientCode}`, { headers: portalHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.follows) setFollowedTopics(d.follows.filter(f => f.item_type === 'therapeutic_area')) })
+      .catch(() => {})
     fetch(`/api/portal/news?clientCode=${clientCode}&limit=3`, { headers: portalHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.posts) setForYouNews(d.posts.slice(0, 3)) })
@@ -146,10 +151,24 @@ export default function PortalHomePage() {
                   Here's what's relevant for you today.
                 </p>
               </div>
-              <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#6B7280', textDecoration: 'none' }}>
-                ⚙ Notification preferences
-              </Link>
+              <div style={{ display: 'flex', gap: 16 }}>
+                <Link to={`${base}/my-activity`} style={{ fontSize: 13, color: '#6B7280', textDecoration: 'none' }}>My activity</Link>
+                <Link to={`${base}/preferences`} style={{ fontSize: 13, color: '#6B7280', textDecoration: 'none' }}>Notification preferences</Link>
+              </div>
             </div>
+
+            {followedTopics.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Topics you follow</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {followedTopics.map(f => (
+                    <Link key={f.id} to={`${base}/therapeutic-areas`} className="pp-chip" style={{ textDecoration: 'none', color: 'var(--pp-primary)' }}>
+                      {f.detail?.name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {(forYouNews.length > 0 || forYouDocs.length > 0) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>

@@ -4,11 +4,10 @@ import { usePortal } from '../context/PortalContext'
 
 async function fetchSavedIds(clientCode) {
   try {
-    const token = localStorage.getItem('cp_portal_token')
-    if (!token) return []
-    const res = await fetch(`/api/portal/saved?clientCode=${clientCode}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    // Auth rides the same-origin session cookie (fetch sends it by default);
+    // there is no stored bearer token. Only called for signed-in users.
+    const res = await fetch(`/api/portal/saved?clientCode=${clientCode}`)
+    if (!res.ok) return []
     const d = await res.json()
     return (d.saved || []).filter(s => s.item_type === 'news').map(s => s.item_id)
   } catch { return [] }
@@ -61,12 +60,11 @@ export default function NewsPage() {
     async function load() {
       setLoading(true)
       try {
-        const token = localStorage.getItem('cp_portal_token')
         const categoryParam = activeCategory !== 'All' ? `&category=${encodeURIComponent(activeCategory)}` : ''
         const langParam = language && language !== 'en' ? `&lang=${language}` : ''
         const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''
         const res = await fetch(`/api/portal/news?clientCode=${clientCode}&page=${page}&limit=${limit}${categoryParam}${langParam}${searchParam}`, {
-          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          headers: { 'Content-Type': 'application/json' },
         })
         const d = await res.json()
         setPosts(d.posts || [])
@@ -94,20 +92,19 @@ export default function NewsPage() {
     e.preventDefault()
     if (!user || savingId === post.id) return
     setSavingId(post.id)
-    const token = localStorage.getItem('cp_portal_token')
     const isSaved = savedIds.includes(post.id)
     try {
       if (isSaved) {
         await fetch('/api/portal/saved', {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ clientCode, item_type: 'news', item_id: post.id }),
         })
         setSavedIds(prev => prev.filter(id => id !== post.id))
       } else {
         await fetch('/api/portal/saved', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ clientCode, item_type: 'news', item_id: post.id }),
         })
         setSavedIds(prev => [...prev, post.id])

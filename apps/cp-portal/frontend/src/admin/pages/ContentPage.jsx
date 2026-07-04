@@ -48,14 +48,20 @@ export default function ContentPage() {
 
   async function loadAll() {
     setLoading(true)
-    const [ta, dr, ev, re] = await Promise.all([
-      fetch(`/api/admin/content/${clientId}/therapeutic-areas`, { headers: adminHeaders() }).then(r => r.json()),
-      fetch(`/api/admin/content/${clientId}/drugs`,             { headers: adminHeaders() }).then(r => r.json()),
-      fetch(`/api/admin/content/${clientId}/events`,            { headers: adminHeaders() }).then(r => r.json()),
-      fetch(`/api/admin/content/${clientId}/resources`,         { headers: adminHeaders() }).then(r => r.json()),
-    ])
-    setData({ therapeutic_areas: ta.therapeutic_areas || [], drugs: dr.drugs || [], events: ev.events || [], resources: re.resources || [] })
-    setLoading(false)
+    try {
+      const [ta, dr, ev, re] = await Promise.all([
+        fetch(`/api/admin/content/${clientId}/therapeutic-areas`, { headers: adminHeaders() }).then(r => r.json()),
+        fetch(`/api/admin/content/${clientId}/drugs`,             { headers: adminHeaders() }).then(r => r.json()),
+        fetch(`/api/admin/content/${clientId}/events`,            { headers: adminHeaders() }).then(r => r.json()),
+        fetch(`/api/admin/content/${clientId}/resources`,         { headers: adminHeaders() }).then(r => r.json()),
+      ])
+      setData({ therapeutic_areas: ta.therapeutic_areas || [], drugs: dr.drugs || [], events: ev.events || [], resources: re.resources || [] })
+    } catch {
+      // A failed/partial sub-request must not hang the spinner — surface empty and let the page render.
+      setData({ therapeutic_areas: [], drugs: [], events: [], resources: [] })
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleSubmit(e) {

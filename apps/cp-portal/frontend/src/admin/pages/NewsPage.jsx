@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
-import LoadingButton from '../components/LoadingButton'
 
 const TARGET_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other']
 
@@ -216,7 +215,7 @@ export default function NewsPage() {
               </div>
               {error && <div className="cp-error">{error}</div>}
               <div className="cp-modal-footer">
-                <LoadingButton type="submit" disabled={saving}>{editPost ? 'Save Changes' : 'Create Post'}</LoadingButton>
+                <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : (editPost ? 'Save Changes' : 'Create Post')}</button>
                 <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
               </div>
             </form>

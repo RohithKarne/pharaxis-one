@@ -24,10 +24,7 @@ export default function SavedItemsPage() {
       setLoading(true)
       setError('')
       try {
-        const token = localStorage.getItem('cp_portal_token')
-        const res = await fetch(`/api/portal/saved?clientCode=${clientCode}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await fetch(`/api/portal/saved?clientCode=${clientCode}`)
         const d = await res.json()
         setSaved(d.saved || [])
       } catch {
@@ -42,10 +39,9 @@ export default function SavedItemsPage() {
     if (unsaving === item.id) return
     setUnsaving(item.id)
     try {
-      const token = localStorage.getItem('cp_portal_token')
       await fetch('/api/portal/saved', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientCode, item_type: item.item_type, item_id: item.item_id }),
       })
       setSaved(prev => prev.filter(s => s.id !== item.id))

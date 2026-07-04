@@ -108,10 +108,7 @@ export default function PortalLayout({ children }) {
     if (!user || !clientCode) return
     async function loadNotifications() {
       try {
-        const token = localStorage.getItem('cp_portal_token')
-        const res = await fetch(`/api/portal/notifications?clientCode=${clientCode}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await fetch(`/api/portal/notifications?clientCode=${clientCode}`)
         const d = await res.json()
         const list = d.notifications || []
         setNotifications(list.slice(0, 10))
@@ -123,10 +120,9 @@ export default function PortalLayout({ children }) {
 
   async function markAllRead() {
     try {
-      const token = localStorage.getItem('cp_portal_token')
       await fetch('/api/portal/notifications/read-all', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientCode }),
       })
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
@@ -344,8 +340,44 @@ export default function PortalLayout({ children }) {
 
       {isFeatureEnabled('chatbox') && <ChatboxWidget clientCode={clientCode} />}
       {!loading && showGate && <UserTypeGate />}
+      {!loading && !showGate && user && !user.specialty && <SpecialtyPrompt clientCode={clientCode} />}
       {!loading && <ConsentBanner />}
       {!loading && <FeedbackWidget />}
+    </div>
+  )
+}
+
+const SPECIALTIES = ['Cardiology', 'Oncology', 'Neurology', 'Endocrinology', 'Immunology', 'Rheumatology', 'Dermatology', 'Gastroenterology', 'Respiratory', 'Nephrology', 'Hematology', 'Infectious Disease', 'General Practice', 'Pharmacist', 'Nurse', 'Other']
+
+function SpecialtyPrompt({ clientCode }) {
+  const { portalHeaders } = usePortal()
+  const [dismissed, setDismissed] = useState(false)
+  const [saving, setSaving] = useState(false)
+  if (dismissed) return null
+  async function pick(specialty) {
+    setSaving(true)
+    try {
+      await fetch('/api/portal/auth/profile', {
+        method: 'PATCH',
+        headers: { ...portalHeaders(), 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ specialty }),
+      })
+    } catch { /* non-blocking */ }
+    setDismissed(true)
+  }
+  return (
+    <div className="pp-pdf-overlay" onClick={() => setDismissed(true)} role="dialog" aria-modal="true" aria-label="Choose your specialty">
+      <div className="pp-specialty-modal" onClick={e => e.stopPropagation()}>
+        <h2>Personalize your experience</h2>
+        <p>What's your area of practice? We'll tailor content and recommendations to your specialty.</p>
+        <div className="pp-specialty-grid">
+          {SPECIALTIES.map(s => (
+            <button key={s} type="button" className="pp-specialty-chip" disabled={saving} onClick={() => pick(s)}>{s}</button>
+          ))}
+        </div>
+        <button type="button" className="pp-specialty-skip" onClick={() => setDismissed(true)}>Skip for now</button>
+      </div>
     </div>
   )
 }

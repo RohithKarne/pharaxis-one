@@ -1,14 +1,38 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import Icon from '../../shared/components/Icon'
 
 export default function TherapeuticAreasPage() {
-  const { clientCode } = usePortal()
+  const { clientCode, user, portalHeaders } = usePortal()
   const [areas, setAreas]   = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [drugs, setDrugs]   = useState([])
   const [drugsLoading, setDrugsLoading] = useState(false)
+  const [followed, setFollowed] = useState([])
+
+  useEffect(() => {
+    if (!user) return
+    fetch(`/api/portal/personal/follows?clientCode=${clientCode}`, { headers: portalHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.follows) setFollowed(d.follows.filter(f => f.item_type === 'therapeutic_area').map(f => f.item_id)) })
+      .catch(() => {})
+  }, [user, clientCode])
+
+  async function toggleFollow(taId) {
+    if (!user) return
+    const isFollowing = followed.includes(taId)
+    setFollowed(prev => isFollowing ? prev.filter(id => id !== taId) : [...prev, taId])
+    try {
+      await fetch('/api/portal/personal/follows', {
+        method: isFollowing ? 'DELETE' : 'POST',
+        headers: { ...portalHeaders(), 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ clientCode, item_type: 'therapeutic_area', item_id: taId }),
+      })
+    } catch { setFollowed(prev => isFollowing ? [...prev, taId] : prev.filter(id => id !== taId)) }
+  }
 
   // LOW-05: set document title
   useEffect(() => { document.title = 'Therapeutic Areas | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
@@ -36,7 +60,7 @@ export default function TherapeuticAreasPage() {
       </div>
 
       {loading ? <div className="pp-loading">Loading…</div> : areas.length === 0 ? (
-        <div className="pp-empty-state"><span>🧬</span><p>No therapeutic areas published yet.</p></div>
+        <div className="pp-empty-state"><span><Icon name="beaker" size={40} /></span><p>No therapeutic areas published yet.</p></div>
       ) : (
         <div className="pp-ta-layout">
           <div className="pp-ta-list">
@@ -49,11 +73,23 @@ export default function TherapeuticAreasPage() {
           </div>
           <div className="pp-ta-detail">
             {!selected ? (
-              <div className="pp-ta-placeholder"><span>🧬</span><p>Select a therapeutic area to explore.</p></div>
+              <div className="pp-ta-placeholder"><span><Icon name="beaker" size={40} /></span><p>Select a therapeutic area to explore.</p></div>
             ) : (
               <>
                 {selected.image_url && <img src={selected.image_url} alt={selected.name} className="pp-ta-image" loading="lazy" />}
-                <h2 className="pp-ta-detail-title">{selected.name}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <h2 className="pp-ta-detail-title" style={{ margin: 0 }}>{selected.name}</h2>
+                  {user && (
+                    <button
+                      className={`pp-sev-chip${followed.includes(selected.id) ? ' on' : ''}`}
+                      onClick={() => toggleFollow(selected.id)}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Icon name={followed.includes(selected.id) ? 'check' : 'grid'} size={14} />
+                      {followed.includes(selected.id) ? 'Following' : 'Follow'}
+                    </button>
+                  )}
+                </div>
                 {selected.description && <p className="pp-ta-detail-desc">{selected.description}</p>}
                 {selected.overview    && <div className="pp-ta-overview">{selected.overview}</div>}
                 {drugsLoading ? <div className="pp-loading">Loading products…</div> : drugs.length > 0 && (
