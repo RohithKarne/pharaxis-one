@@ -121,9 +121,16 @@ export default function SafetyPage() {
 
   async function handleResolve(alert) {
     if (!confirm(`Mark "${alert.title}" as resolved?`)) return
-    await fetch(`/api/admin/safety/${clientId}/${alert.id}/resolve`, {
-      method: 'PATCH', headers: adminHeaders(),
-    })
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/safety/${clientId}/${alert.id}/resolve`, {
+        method: 'PATCH', headers: adminHeaders(),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not resolve alert (error ${res.status}).`); return }
+    } catch {
+      setError('Network error — please try again.')
+      return
+    }
     load()
   }
 
@@ -147,6 +154,8 @@ export default function SafetyPage() {
         <h2>Safety Alerts</h2>
         {canWrite && <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New Alert</button>}
       </div>
+
+      {error && !showForm && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {showForm && (
         <div className="cp-modal-overlay" onClick={() => setShowForm(false)}>

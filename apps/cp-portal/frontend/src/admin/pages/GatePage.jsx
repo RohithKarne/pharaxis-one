@@ -13,6 +13,7 @@ export default function GatePage() {
   const [saving, setSaving]        = useState(false)
   const [saved, setSaved]          = useState(false)
   const [accessSaved, setAccessSaved] = useState(false)
+  const [error, setError]          = useState('')
 
   useEffect(() => { load() }, [clientId])
 
@@ -30,18 +31,32 @@ export default function GatePage() {
   function setConf(key, value) { setConfig(c => ({ ...c, [key]: value })); setSaved(false) }
 
   async function saveConfig(e) {
-    e.preventDefault(); setSaving(true); setSaved(false)
-    await fetch(`/api/admin/gate/${clientId}`, {
-      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(config)
-    })
-    setSaving(false); setSaved(true)
+    e.preventDefault(); setSaving(true); setSaved(false); setError('')
+    try {
+      const res = await fetch(`/api/admin/gate/${clientId}`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(config)
+      })
+      if (!res.ok) { setError('Failed to save gate settings.'); return }
+      setSaved(true)
+    } catch {
+      setError('Network error saving gate settings.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function updateUserType(typeId, field, value) {
-    await fetch(`/api/admin/gate/${clientId}/user-types/${typeId}`, {
-      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ [field]: value })
-    })
-    load()
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/gate/${clientId}/user-types/${typeId}`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ [field]: value })
+      })
+      if (!res.ok) setError('Failed to update user type.')
+    } catch {
+      setError('Network error updating user type.')
+    } finally {
+      load()
+    }
   }
 
   function toggleAccess(featureKey, typeKey, current) {
@@ -53,16 +68,22 @@ export default function GatePage() {
   }
 
   async function saveAccessMatrix() {
+    setAccessSaved(false); setError('')
     const updates = []
     for (const [featureKey, types] of Object.entries(accessMap)) {
       for (const [typeKey, isAllowed] of Object.entries(types)) {
         updates.push({ feature_key: featureKey, type_key: typeKey, is_allowed: isAllowed ? 1 : 0 })
       }
     }
-    await fetch(`/api/admin/gate/${clientId}/access`, {
-      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ updates })
-    })
-    setAccessSaved(true)
+    try {
+      const res = await fetch(`/api/admin/gate/${clientId}/access`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ updates })
+      })
+      if (!res.ok) { setError('Failed to save access matrix.'); return }
+      setAccessSaved(true)
+    } catch {
+      setError('Network error saving access matrix.')
+    }
   }
 
   function accessAllowed(featureKey, typeKey) {
@@ -75,6 +96,8 @@ export default function GatePage() {
 
   return (
     <AdminLayout title="User Type Gate">
+
+      {error && <div className="cp-error">{error}</div>}
 
       {/* ── Gate on/off + Appearance ─────────────────────────────── */}
       <form onSubmit={saveConfig}>

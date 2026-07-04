@@ -51,11 +51,18 @@ export default function NewsPage() {
   async function bulkAction(action) {
     if (!selectedIds.length) return
     if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${selectedIds.length} post(s)?`)) return
-    await fetch(`/api/admin/news/${clientId}/bulk`, {
-      method: 'POST',
-      headers: adminHeaders(),
-      body: JSON.stringify({ ids: selectedIds, action }),
-    })
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/news/${clientId}/bulk`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({ ids: selectedIds, action }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Bulk ${action} failed (error ${res.status}).`); return }
+    } catch {
+      setError('Network error — please try again.')
+      return
+    }
     load()
   }
 
@@ -118,19 +125,33 @@ export default function NewsPage() {
 
   async function handleArchive(post) {
     if (!confirm(`Archive "${post.title}"?`)) return
-    await fetch(`/api/admin/news/${clientId}/${post.id}`, {
-      method: 'DELETE', headers: adminHeaders(),
-    })
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/news/${clientId}/${post.id}`, {
+        method: 'DELETE', headers: adminHeaders(),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Archive failed (error ${res.status}).`); return }
+    } catch {
+      setError('Network error — please try again.')
+      return
+    }
     load()
   }
 
   // S4-8: quick status change without opening modal
   async function quickAction(post, newStatus) {
-    await fetch(`/api/admin/news/${clientId}/${post.id}`, {
-      method: 'PUT',
-      headers: adminHeaders(),
-      body: JSON.stringify({ ...post, target_types: post.target_types_json ? JSON.parse(post.target_types_json) : [], status: newStatus }),
-    })
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/news/${clientId}/${post.id}`, {
+        method: 'PUT',
+        headers: adminHeaders(),
+        body: JSON.stringify({ ...post, target_types: post.target_types_json ? JSON.parse(post.target_types_json) : [], status: newStatus }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Status change failed (error ${res.status}).`); return }
+    } catch {
+      setError('Network error — please try again.')
+      return
+    }
     load()
   }
 
@@ -158,6 +179,8 @@ export default function NewsPage() {
         <h2>News & Announcements</h2>
         {canWrite && <button className="cp-btn cp-btn-primary" onClick={openCreate}>+ New Post</button>}
       </div>
+
+      {error && !showForm && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {showForm && (
         <div className="cp-modal-overlay" onClick={() => setShowForm(false)}>

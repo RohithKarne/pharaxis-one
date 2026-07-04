@@ -27,20 +27,25 @@ export default function LoginPage() {
 
   async function handleLogin(e) {
     e.preventDefault(); setLoading(true); setError('')
-    const res  = await fetch(`/api/portal/auth/login`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_code: clientCode, email: form.email, password: form.password })
-    })
-    const data = await res.json()
-    setLoading(false)
-    if (!res.ok) {
-      setError(data.error || 'Login failed.')
-      // LOW-35: clear password on failed login
-      setForm(f => ({ ...f, password: '' }))
-      return
+    try {
+      const res  = await fetch(`/api/portal/auth/login`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_code: clientCode, email: form.email, password: form.password })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Login failed.')
+        // LOW-35: clear password on failed login
+        setForm(f => ({ ...f, password: '' }))
+        return
+      }
+      login(data.user, data.token)
+      navigate(returnTo, { replace: true })
+    } catch {
+      setError('Network error. Please check your connection and try again.')
+    } finally {
+      setLoading(false)
     }
-    login(data.user, data.token)
-    navigate(returnTo, { replace: true })
   }
 
   return (

@@ -92,16 +92,22 @@ export default function SubmitPage() {
     const fd = new FormData()
     fd.append('form_data', JSON.stringify(formValues))
     attachments.forEach(f => fd.append('attachments', f))
-    const res  = await fetch(`/api/portal/submit/${clientCode}/${selectedType}`, {
-      method: 'POST',
-      credentials: 'include', // multipart upload; auth rides the session cookie, browser sets Content-Type
-      body: fd,
-    })
-    const data = await res.json()
-    setSubmitting(false)
-    if (!res.ok) { setError(data.error || 'Submission failed. Please try again.'); return }
-    clearDraft()
-    setSubmitted(data)
+    try {
+      const res  = await fetch(`/api/portal/submit/${clientCode}/${selectedType}`, {
+        method: 'POST',
+        credentials: 'include', // multipart upload; auth rides the session cookie, browser sets Content-Type
+        body: fd,
+      })
+      // A 413 / proxy error may return non-JSON (HTML) — parse defensively.
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(data.error || 'Submission failed. Please try again.'); return }
+      clearDraft()
+      setSubmitted(data)
+    } catch {
+      setError('Submission failed. Please check your connection and try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const SUBMISSION_KEYS = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry']

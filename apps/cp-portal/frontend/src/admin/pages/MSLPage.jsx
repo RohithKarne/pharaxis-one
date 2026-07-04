@@ -45,6 +45,8 @@ export default function MSLPage() {
   const [editBooking, setEditBooking]   = useState(null)
   const [bookingNotes, setBookingNotes] = useState('')
   const [bookingStatus, setBookingStatus] = useState('')
+  const [bookingMsg, setBookingMsg]     = useState('')
+  const [bookingSaving, setBookingSaving] = useState(false)
 
   useEffect(() => { loadMSLs() }, [clientId])
   useEffect(() => { if (tab === 'bookings') loadBookings() }, [tab, clientId])
@@ -114,7 +116,13 @@ export default function MSLPage() {
 
   async function deactivate(id) {
     if (!confirm('Remove this MSL from the directory?')) return
-    await fetch(`/api/admin/msls/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
+    try {
+      const res = await fetch(`/api/admin/msls/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setFormError(d.error || `Could not remove MSL (error ${res.status}).`); return }
+    } catch {
+      setFormError('Network error — please try again.')
+      return
+    }
     loadMSLs()
   }
 
@@ -148,22 +156,38 @@ export default function MSLPage() {
     setEditBooking(b)
     setBookingStatus(b.status)
     setBookingNotes(b.admin_notes || '')
+    setBookingMsg('')
   }
 
   async function saveBooking() {
     if (!editBooking) return
-    await fetch(`/api/admin/msls/${clientId}/bookings/${editBooking.id}`, {
-      method: 'PUT',
-      headers: adminHeaders(),
-      body: JSON.stringify({ status: bookingStatus, admin_notes: bookingNotes }),
-    })
-    setEditBooking(null)
-    loadBookings()
+    setBookingMsg(''); setBookingSaving(true)
+    try {
+      const res = await fetch(`/api/admin/msls/${clientId}/bookings/${editBooking.id}`, {
+        method: 'PUT',
+        headers: adminHeaders(),
+        body: JSON.stringify({ status: bookingStatus, admin_notes: bookingNotes }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setBookingMsg(d.error || `Could not save booking (error ${res.status}).`); return }
+      setEditBooking(null)
+      loadBookings()
+    } catch {
+      setBookingMsg('Network error — please try again.')
+    } finally {
+      setBookingSaving(false)
+    }
   }
 
   async function deleteBooking(id) {
     if (!confirm('Delete this booking request?')) return
-    await fetch(`/api/admin/msls/${clientId}/bookings/${id}`, { method: 'DELETE', headers: adminHeaders() })
+    setBookingMsg('')
+    try {
+      const res = await fetch(`/api/admin/msls/${clientId}/bookings/${id}`, { method: 'DELETE', headers: adminHeaders() })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setBookingMsg(d.error || `Could not delete booking (error ${res.status}).`); return }
+    } catch {
+      setBookingMsg('Network error — please try again.')
+      return
+    }
     loadBookings()
   }
 
@@ -341,8 +365,9 @@ export default function MSLPage() {
                     <label>Internal Notes</label>
                     <textarea rows={3} value={bookingNotes} onChange={e => setBookingNotes(e.target.value)} placeholder="Notes visible to admin only…" />
                   </div>
+                  {bookingMsg && <div className="cp-error" style={{ marginBottom: 10 }}>{bookingMsg}</div>}
                   <div className="cp-modal-footer">
-                    <button className="cp-btn cp-btn-primary" onClick={saveBooking}>Save</button>
+                    <button className="cp-btn cp-btn-primary" onClick={saveBooking} disabled={bookingSaving}>{bookingSaving ? 'Saving…' : 'Save'}</button>
                     <button className="cp-btn cp-btn-outline" onClick={() => setEditBooking(null)}>Cancel</button>
                   </div>
                 </div>
@@ -350,6 +375,7 @@ export default function MSLPage() {
             </div>
           )}
 
+          {bookingMsg && !editBooking && <div className="cp-error" style={{ marginBottom: 12 }}>{bookingMsg}</div>}
           {bookingsLoading ? <div className="cp-loading">Loading…</div> : bookings.length === 0 ? (
             <div className="cp-empty"><p>No meeting requests yet.</p></div>
           ) : (

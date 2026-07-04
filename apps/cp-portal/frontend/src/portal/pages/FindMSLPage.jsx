@@ -141,9 +141,11 @@ export default function FindMSLPage() {
                     <label>Available Time Slots</label>
                     <select value={selectedSlot} onChange={e => setSelectedSlot(e.target.value)}>
                       <option value="">— No specific slot (request general availability) —</option>
-                      {availableSlots.map(s => (
-                        <option key={s.id} value={s.id}>{new Date(s.starts_at).toLocaleString()}</option>
-                      ))}
+                      {availableSlots.map(s => {
+                        const d = s.starts_at ? new Date(s.starts_at) : null
+                        const label = d && !isNaN(d.getTime()) ? d.toLocaleString() : ''
+                        return <option key={s.id} value={s.id}>{label}</option>
+                      })}
                     </select>
                     <span style={{ fontSize: 11, color: '#6B7280' }}>Pick a slot for faster confirmation, or leave blank for general availability.</span>
                   </div>

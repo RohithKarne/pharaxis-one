@@ -91,6 +91,19 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       const attachmentPath = req.file ? `/uploads/safety/${req.params.clientId}/${req.file.filename}` : null;
       const attachmentName = req.file ? req.file.originalname : null;
 
+      // target_types arrives as a JSON string on this multipart endpoint — validate it
+      // so malformed input returns a clean 400 instead of throwing a 500 mid-INSERT.
+      let targetTypes = [];
+      if (target_types) {
+        if (typeof target_types === 'string') {
+          try { targetTypes = JSON.parse(target_types); }
+          catch { return res.status(400).json({ error: 'target_types must be a JSON array.' }); }
+        } else {
+          targetTypes = target_types;
+        }
+      }
+      if (!Array.isArray(targetTypes)) return res.status(400).json({ error: 'target_types must be a JSON array.' });
+
       const [result] = await pool.execute(`
         INSERT INTO cp_safety_alerts
           (client_id, title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types_json, attachment_path, attachment_name, status)
@@ -100,7 +113,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
         product_name || null, ref_number || null,
         sanitiseHtml(body_html),
         effective_date || new Date().toISOString().replace('T', ' ').substring(0, 19),
-        JSON.stringify(target_types ? (typeof target_types === 'string' ? JSON.parse(target_types) : target_types) : []),
+        JSON.stringify(targetTypes),
         attachmentPath, attachmentName,
         status || 'active',
       ]);

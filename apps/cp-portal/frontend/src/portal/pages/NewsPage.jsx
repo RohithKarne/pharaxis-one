@@ -93,24 +93,21 @@ export default function NewsPage() {
     if (!user || savingId === post.id) return
     setSavingId(post.id)
     const isSaved = savedIds.includes(post.id)
+    // Optimistic update, reverted below if the request fails.
+    setSavedIds(prev => isSaved ? prev.filter(id => id !== post.id) : [...prev, post.id])
     try {
-      if (isSaved) {
-        await fetch('/api/portal/saved', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientCode, item_type: 'news', item_id: post.id }),
-        })
-        setSavedIds(prev => prev.filter(id => id !== post.id))
-      } else {
-        await fetch('/api/portal/saved', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientCode, item_type: 'news', item_id: post.id }),
-        })
-        setSavedIds(prev => [...prev, post.id])
-      }
-    } catch { /* silently fail */ }
-    setSavingId(null)
+      const res = await fetch('/api/portal/saved', {
+        method: isSaved ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientCode, item_type: 'news', item_id: post.id }),
+      })
+      if (!res.ok) throw new Error('save failed')
+    } catch {
+      // Revert the optimistic change so UI stays in sync with the server.
+      setSavedIds(prev => isSaved ? [...prev, post.id] : prev.filter(id => id !== post.id))
+    } finally {
+      setSavingId(null)
+    }
   }
 
   if (loading) return <div className="pp-news-page"><div className="pp-loading" role="status" aria-live="polite">Loading…</div></div>

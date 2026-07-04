@@ -90,12 +90,21 @@ export default function BrandingPage() {
 
   async function handleReset() {
     if (!confirm('Reset branding to defaults?')) return
-    await fetch(`/api/admin/branding/${clientId}/reset`, { method: 'POST', headers: adminHeaders() })
-    const res = await fetch(`/api/admin/branding/${clientId}`, { headers: adminHeaders() })
-    const d   = await res.json()
-    setBranding(d.branding || {})
-    setLogoPreview(d.branding?.logo_url || null)
-    setSaved(true)
+    setError(''); setSaved(false); setSaving(true)
+    try {
+      const resetRes = await fetch(`/api/admin/branding/${clientId}/reset`, { method: 'POST', headers: adminHeaders() })
+      if (!resetRes.ok) { const d = await resetRes.json().catch(() => ({})); setError(d.error || 'Reset failed.'); return }
+      const res = await fetch(`/api/admin/branding/${clientId}`, { headers: adminHeaders() })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Reset succeeded but could not reload branding.'); return }
+      const d = await res.json()
+      setBranding(d.branding || {})
+      setLogoPreview(d.branding?.logo_url || null)
+      setSaved(true)
+    } catch {
+      setError('Network error — please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (!branding) return <AdminLayout title="Branding"><div className="cp-loading">Loading…</div></AdminLayout>
@@ -293,7 +302,7 @@ export default function BrandingPage() {
 
         <div className="cp-form-actions">
           <LoadingButton onClick={handleSave} disabled={saving}>Save Branding</LoadingButton>
-          <button type="button" className="cp-btn cp-btn-outline" onClick={handleReset}>Reset to Defaults</button>
+          <button type="button" className="cp-btn cp-btn-outline" onClick={handleReset} disabled={saving}>Reset to Defaults</button>
         </div>
       </div>
     </AdminLayout>

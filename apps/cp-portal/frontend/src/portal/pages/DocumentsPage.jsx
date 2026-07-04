@@ -137,24 +137,21 @@ export default function DocumentsPage() {
     if (savingId === doc.id) return
     setSavingId(doc.id)
     const isSaved = savedIds.includes(doc.id)
+    // Optimistic update, reverted below if the request fails.
+    setSavedIds(prev => isSaved ? prev.filter(id => id !== doc.id) : [...prev, doc.id])
     try {
-      if (isSaved) {
-        await fetch('/api/portal/saved', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientCode, item_type: 'document', item_id: doc.id }),
-        })
-        setSavedIds(prev => prev.filter(id => id !== doc.id))
-      } else {
-        await fetch('/api/portal/saved', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientCode, item_type: 'document', item_id: doc.id }),
-        })
-        setSavedIds(prev => [...prev, doc.id])
-      }
-    } catch { /* silently fail */ }
-    setSavingId(null)
+      const res = await fetch('/api/portal/saved', {
+        method: isSaved ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientCode, item_type: 'document', item_id: doc.id }),
+      })
+      if (!res.ok) throw new Error('save failed')
+    } catch {
+      // Revert the optimistic change so UI stays in sync with the server.
+      setSavedIds(prev => isSaved ? [...prev, doc.id] : prev.filter(id => id !== doc.id))
+    } finally {
+      setSavingId(null)
+    }
   }
 
   async function handleDownload(doc) {
@@ -172,6 +169,8 @@ export default function DocumentsPage() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+    } catch {
+      alert('Download failed. Please check your connection and try again.')
     } finally {
       setDownloading(null)
     }

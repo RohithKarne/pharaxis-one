@@ -8,6 +8,7 @@ export default function ChatboxConfigPage() {
   const [config, setConfig] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved]   = useState(false)
+  const [error, setError]   = useState('')
   const [apiKey, setApiKey] = useState('')
 
   useEffect(() => {
@@ -15,15 +16,21 @@ export default function ChatboxConfigPage() {
       .then(r => r.json()).then(d => setConfig(d.chatbox || {})).catch(() => {})
   }, [clientId])
 
-  function set(key, value) { setConfig(c => ({ ...c, [key]: value })); setSaved(false) }
+  function set(key, value) { setConfig(c => ({ ...c, [key]: value })); setSaved(false); setError('') }
 
   async function handleSave(e) {
-    e.preventDefault(); setSaving(true)
+    e.preventDefault(); setSaving(true); setSaved(false); setError('')
     const payload = { ...config }
     if (apiKey) payload.api_key = apiKey
-    const res = await fetch(`/api/admin/chatbox/${clientId}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(payload) })
-    setSaving(false)
-    if (res.ok) { setSaved(true); setApiKey('') }
+    try {
+      const res = await fetch(`/api/admin/chatbox/${clientId}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(payload) })
+      if (!res.ok) { setError('Failed to save configuration.'); return }
+      setSaved(true); setApiKey('')
+    } catch {
+      setError('Network error saving configuration.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (!config) return <AdminLayout title="Chatbox AI"><div className="cp-loading">Loading…</div></AdminLayout>
@@ -88,6 +95,7 @@ export default function ChatboxConfigPage() {
           </div>
         </div>
 
+        {error && <div className="cp-error">{error}</div>}
         {saved && <div className="cp-success">✓ Chatbox configuration saved.</div>}
         <div className="cp-form-actions">
           <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Configuration'}</button>

@@ -54,13 +54,21 @@ export default function ConsentBanner() {
 
   async function saveConsent(finalChoices) {
     setSaving(true)
+    let serverOk = false
     try {
-      await fetch('/api/portal/consent', {
+      const res = await fetch('/api/portal/consent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientCode, choices: finalChoices, version }),
       })
-    } catch { /* ignore — still save locally */ }
+      serverOk = res.ok
+    } catch { /* network error — fall back to local-only for anonymous users */ }
+    // For a signed-in user a server rejection must stay retryable: don't persist
+    // local "consented" or close the banner unless the server accepted it.
+    if (user && !serverOk) {
+      setSaving(false)
+      return
+    }
     localStorage.setItem(`cp_consent_v${version}`, 'true')
     setSaving(false)
     setShow(false)

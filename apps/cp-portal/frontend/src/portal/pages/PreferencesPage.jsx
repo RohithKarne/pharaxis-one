@@ -14,6 +14,7 @@ export default function PreferencesPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     document.title = 'Preferences | CP Portal'
@@ -29,14 +30,21 @@ export default function PreferencesPage() {
   }, [clientCode])
 
   async function save() {
-    setSaving(true); setSaved(false)
-    await fetch('/api/portal/preferences', {
-      method: 'PATCH',
-      headers: portalHeaders(),
-      body: JSON.stringify(prefs),
-    })
-    setSaving(false); setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    setSaving(true); setSaved(false); setSaveError('')
+    try {
+      const res = await fetch('/api/portal/preferences', {
+        method: 'PATCH',
+        headers: portalHeaders(),
+        body: JSON.stringify(prefs),
+      })
+      if (!res.ok) { setSaveError('Unable to save preferences. Please try again.'); return }
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      setSaveError('Unable to save preferences. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) return <div className="pp-loading">Loading preferences…</div>
@@ -90,6 +98,9 @@ export default function PreferencesPage() {
         </button>
         {saved && (
           <span style={{ color: '#16A34A', fontSize: 13, fontWeight: 500 }}>✓ Saved</span>
+        )}
+        {saveError && (
+          <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{saveError}</span>
         )}
       </div>
     </div>

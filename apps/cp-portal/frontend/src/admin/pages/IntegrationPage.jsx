@@ -12,6 +12,7 @@ export default function IntegrationPage() {
   const [testing, setTesting]           = useState(null)
   const [testResult, setTestResult]     = useState({})
   const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState('')
 
   useEffect(() => { load() }, [clientId])
 
@@ -24,14 +25,28 @@ export default function IntegrationPage() {
   }
 
   async function handleAdd(e) {
-    e.preventDefault(); setSaving(true)
-    await fetch(`/api/admin/integration/${clientId}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(form) })
-    setSaving(false); setShowAdd(false); setForm({ system_name: 'MIMS', api_base_url: '', api_key: '', auth_type: 'bearer' })
-    load()
+    e.preventDefault(); setSaving(true); setError('')
+    try {
+      const res = await fetch(`/api/admin/integration/${clientId}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(form) })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not add integration (error ${res.status}).`); return }
+      setShowAdd(false); setForm({ system_name: 'MIMS', api_base_url: '', api_key: '', auth_type: 'bearer' })
+      load()
+    } catch {
+      setError('Network error — please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function toggleActive(id, current) {
-    await fetch(`/api/admin/integration/${clientId}/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: !current }) })
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/integration/${clientId}/${id}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: !current }) })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not update integration (error ${res.status}).`); return }
+    } catch {
+      setError('Network error — please try again.')
+      return
+    }
     load()
   }
 
@@ -81,6 +96,7 @@ export default function IntegrationPage() {
                 <label>API Key / Token</label>
                 <input type="password" value={form.api_key} onChange={e => setForm(f => ({ ...f, api_key: e.target.value }))} placeholder="Bearer token or API key" />
               </div>
+              {error && <div className="cp-error" style={{ marginBottom: 10 }}>{error}</div>}
               <div className="cp-modal-footer">
                 <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Adding…' : 'Add'}</button>
                 <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowAdd(false)}>Cancel</button>
@@ -89,6 +105,8 @@ export default function IntegrationPage() {
           </div>
         </div>
       )}
+
+      {error && !showAdd && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {loading ? <div className="cp-loading">Loading…</div> : integrations.length === 0 ? (
         <div className="cp-empty"><div style={{ fontSize: 40 }}>🔗</div><p>No integrations configured.</p></div>

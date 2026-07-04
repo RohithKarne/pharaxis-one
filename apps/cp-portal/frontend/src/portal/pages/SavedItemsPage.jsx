@@ -39,16 +39,18 @@ export default function SavedItemsPage() {
     if (unsaving === item.id) return
     setUnsaving(item.id)
     try {
-      await fetch('/api/portal/saved', {
+      const res = await fetch('/api/portal/saved', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientCode, item_type: item.item_type, item_id: item.item_id }),
       })
+      if (!res.ok) { setError('Unable to remove item. Please try again.'); return }
       setSaved(prev => prev.filter(s => s.id !== item.id))
     } catch {
-      // silently fail
+      setError('Unable to remove item. Please try again.')
+    } finally {
+      setUnsaving(null)
     }
-    setUnsaving(null)
   }
 
   if (!user) {

@@ -35,7 +35,8 @@ export default function FAQPage() {
     try {
       const url    = editItem ? `/api/admin/faq/${clientId}/${editItem.id}` : `/api/admin/faq/${clientId}`
       const method = editItem ? 'PUT' : 'POST'
-      const res    = await fetch(url, { method, headers: adminHeaders(), body: JSON.stringify(form) })
+      const payload = { ...form, sort_order: form.sort_order === '' ? 0 : Number(form.sort_order) }
+      const res    = await fetch(url, { method, headers: adminHeaders(), body: JSON.stringify(payload) })
       const d      = await res.json()
       if (!res.ok) { setError(d.error || 'Save failed.'); setSaving(false); return }
       setShowForm(false); load()
@@ -88,7 +89,7 @@ export default function FAQPage() {
                 </div>
                 <div className="cp-field">
                   <label>Sort Order</label>
-                  <input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: Number(e.target.value) }))} />
+                  <input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: e.target.value === '' ? '' : Number(e.target.value) }))} />
                 </div>
               </div>
               <div className="cp-field">

@@ -120,11 +120,12 @@ export default function PortalLayout({ children }) {
 
   async function markAllRead() {
     try {
-      await fetch('/api/portal/notifications/read-all', {
+      const res = await fetch('/api/portal/notifications/read-all', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientCode }),
       })
+      if (!res.ok) return
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
       setUnreadCount(0)
     } catch { /* silently fail */ }
@@ -357,14 +358,17 @@ function SpecialtyPrompt({ clientCode }) {
   async function pick(specialty) {
     setSaving(true)
     try {
-      await fetch('/api/portal/auth/profile', {
+      const res = await fetch('/api/portal/auth/profile', {
         method: 'PATCH',
         headers: { ...portalHeaders(), 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ specialty }),
       })
-    } catch { /* non-blocking */ }
-    setDismissed(true)
+      if (!res.ok) return // keep the prompt open so the user can retry
+      setDismissed(true)
+    } catch { /* non-blocking — keep prompt open for retry */ } finally {
+      setSaving(false)
+    }
   }
   return (
     <div className="pp-pdf-overlay" onClick={() => setDismissed(true)} role="dialog" aria-modal="true" aria-label="Choose your specialty">

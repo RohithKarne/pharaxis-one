@@ -10,7 +10,9 @@ export default function TherapeuticAreasPage() {
   const [selected, setSelected] = useState(null)
   const [drugs, setDrugs]   = useState([])
   const [drugsLoading, setDrugsLoading] = useState(false)
+  const [drugsError, setDrugsError] = useState('')
   const [followed, setFollowed] = useState([])
+  const [followBusy, setFollowBusy] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -21,17 +23,23 @@ export default function TherapeuticAreasPage() {
   }, [user, clientCode])
 
   async function toggleFollow(taId) {
-    if (!user) return
+    if (!user || followBusy) return
     const isFollowing = followed.includes(taId)
+    setFollowBusy(true)
     setFollowed(prev => isFollowing ? prev.filter(id => id !== taId) : [...prev, taId])
     try {
-      await fetch('/api/portal/personal/follows', {
+      const res = await fetch('/api/portal/personal/follows', {
         method: isFollowing ? 'DELETE' : 'POST',
         headers: { ...portalHeaders(), 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ clientCode, item_type: 'therapeutic_area', item_id: taId }),
       })
-    } catch { setFollowed(prev => isFollowing ? [...prev, taId] : prev.filter(id => id !== taId)) }
+      if (!res.ok) throw new Error('follow failed')
+    } catch {
+      setFollowed(prev => isFollowing ? [...prev, taId] : prev.filter(id => id !== taId))
+    } finally {
+      setFollowBusy(false)
+    }
   }
 
   // LOW-05: set document title
@@ -45,11 +53,18 @@ export default function TherapeuticAreasPage() {
   async function selectArea(area) {
     setSelected(area)
     setDrugsLoading(true)
-    const res = await fetch(`/api/portal/content/${clientCode}/drugs?therapeutic_area_id=${area.id}`)
-
-    const d   = await res.json()
-    setDrugs(d.items || [])
-    setDrugsLoading(false)
+    setDrugsError('')
+    setDrugs([])
+    try {
+      const res = await fetch(`/api/portal/content/${clientCode}/drugs?therapeutic_area_id=${area.id}`)
+      if (!res.ok) { setDrugsError('Unable to load products for this area.'); return }
+      const d = await res.json()
+      setDrugs(d.items || [])
+    } catch {
+      setDrugsError('Unable to load products for this area.')
+    } finally {
+      setDrugsLoading(false)
+    }
   }
 
   return (
@@ -83,6 +98,7 @@ export default function TherapeuticAreasPage() {
                     <button
                       className={`pp-sev-chip${followed.includes(selected.id) ? ' on' : ''}`}
                       onClick={() => toggleFollow(selected.id)}
+                      disabled={followBusy}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                     >
                       <Icon name={followed.includes(selected.id) ? 'check' : 'grid'} size={14} />
@@ -92,7 +108,9 @@ export default function TherapeuticAreasPage() {
                 </div>
                 {selected.description && <p className="pp-ta-detail-desc">{selected.description}</p>}
                 {selected.overview    && <div className="pp-ta-overview">{selected.overview}</div>}
-                {drugsLoading ? <div className="pp-loading">Loading products…</div> : drugs.length > 0 && (
+                {drugsLoading ? <div className="pp-loading">Loading products…</div> : drugsError ? (
+                  <div className="pp-error-state">{drugsError}</div>
+                ) : drugs.length > 0 && (
                   <div className="pp-ta-drugs">
                     <h3>Products in this area</h3>
                     <div className="pp-drug-cards">

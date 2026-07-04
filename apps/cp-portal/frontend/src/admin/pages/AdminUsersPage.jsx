@@ -52,7 +52,8 @@ export default function AdminUsersPage() {
     setModal(user)
   }
 
-  async function save() {
+  async function save(e) {
+    if (e) e.preventDefault()
     setError('')
     setSaving(true)
     try {
@@ -192,42 +193,44 @@ export default function AdminUsersPage() {
               <h2>{isCreate ? 'Add Admin User' : `Edit — ${modal.name}`}</h2>
               <button className="cp-modal-close" onClick={() => setModal(null)}>✕</button>
             </div>
-            <div className="cp-modal-body">
-              {error && <div className="cp-alert cp-alert-error" style={{ marginBottom: 12 }}>{error}</div>}
+            <form onSubmit={save}>
+              <div className="cp-modal-body">
+                {error && <div className="cp-alert cp-alert-error" style={{ marginBottom: 12 }}>{error}</div>}
 
-              <div className="cp-field">
-                <label>Full Name *</label>
-                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Jane Smith" />
+                <div className="cp-field">
+                  <label>Full Name *</label>
+                  <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Jane Smith" />
+                </div>
+
+                {isCreate && (
+                  <>
+                    <div className="cp-field">
+                      <label>Email *</label>
+                      <input required type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@example.com" />
+                    </div>
+                    <div className="cp-field">
+                      <label>Password * <span style={{ fontSize: 11, color: '#6B7280' }}>(min 8 characters)</span></label>
+                      <input required minLength={8} type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+                    </div>
+                  </>
+                )}
+
+                <div className="cp-field">
+                  <label>Role *</label>
+                  <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                    {ROLES.map(r => (
+                      <option key={r.value} value={r.value}>{r.label} — {r.desc}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-
-              {isCreate && (
-                <>
-                  <div className="cp-field">
-                    <label>Email *</label>
-                    <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@example.com" />
-                  </div>
-                  <div className="cp-field">
-                    <label>Password * <span style={{ fontSize: 11, color: '#6B7280' }}>(min 8 characters)</span></label>
-                    <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
-                  </div>
-                </>
-              )}
-
-              <div className="cp-field">
-                <label>Role *</label>
-                <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-                  {ROLES.map(r => (
-                    <option key={r.value} value={r.value}>{r.label} — {r.desc}</option>
-                  ))}
-                </select>
+              <div className="cp-modal-footer">
+                <button type="button" className="cp-btn cp-btn-outline" onClick={() => setModal(null)}>Cancel</button>
+                <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>
+                  {saving ? 'Saving…' : isCreate ? 'Create User' : 'Save Changes'}
+                </button>
               </div>
-            </div>
-            <div className="cp-modal-footer">
-              <button className="cp-btn cp-btn-outline" onClick={() => setModal(null)}>Cancel</button>
-              <button className="cp-btn cp-btn-primary" onClick={save} disabled={saving}>
-                {saving ? 'Saving…' : isCreate ? 'Create User' : 'Save Changes'}
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}

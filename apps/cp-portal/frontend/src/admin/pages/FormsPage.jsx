@@ -23,6 +23,7 @@ export default function FormsPage() {
   const [saving, setSaving]     = useState(false)
   const [optionsInput, setOptionsInput] = useState('')
   const [showPreview, setShowPreview]   = useState(false)
+  const [error, setError]       = useState('')
 
   useEffect(() => { loadFields() }, [clientId, formType])
 
@@ -35,34 +36,62 @@ export default function FormsPage() {
   }
 
   async function toggleField(fieldId, current) {
-    await fetch(`/api/admin/forms/${clientId}/${fieldId}`, {
-      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: !current }),
-    })
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/forms/${clientId}/${fieldId}`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: !current }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not update field (error ${res.status}).`); return }
+    } catch {
+      setError('Network error — please try again.')
+      return
+    }
     loadFields()
   }
 
   async function toggleRequired(fieldId, current) {
-    await fetch(`/api/admin/forms/${clientId}/${fieldId}`, {
-      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_required: !current }),
-    })
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/forms/${clientId}/${fieldId}`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_required: !current }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not update field (error ${res.status}).`); return }
+    } catch {
+      setError('Network error — please try again.')
+      return
+    }
     loadFields()
   }
 
   async function saveFieldInline(fieldId, field, value) {
-    await fetch(`/api/admin/forms/${clientId}/${fieldId}`, {
-      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ [field]: value }),
-    })
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/forms/${clientId}/${fieldId}`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ [field]: value }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not save change (error ${res.status}).`); loadFields(); return }
+    } catch {
+      setError('Network error — please try again.')
+      loadFields()
+    }
   }
 
   async function handleAdd(e) {
-    e.preventDefault(); setSaving(true)
+    e.preventDefault(); setSaving(true); setError('')
     const options = optionsInput.split('\n').map(s => s.trim()).filter(Boolean)
     const payload = { ...newField, form_type: formType, field_options: options.length ? JSON.stringify(options) : undefined }
-    await fetch(`/api/admin/forms/${clientId}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(payload) })
-    setSaving(false); setShowAdd(false)
-    setNewField({ field_key: '', field_label: '', field_type: 'text', is_required: false, placeholder: '', help_text: '' })
-    setOptionsInput('')
-    loadFields()
+    try {
+      const res = await fetch(`/api/admin/forms/${clientId}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(payload) })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not add field (error ${res.status}).`); return }
+      setShowAdd(false)
+      setNewField({ field_key: '', field_label: '', field_type: 'text', is_required: false, placeholder: '', help_text: '' })
+      setOptionsInput('')
+      loadFields()
+    } catch {
+      setError('Network error — please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -141,6 +170,7 @@ export default function FormsPage() {
                   <input value={newField.help_text} onChange={e => setNewField(f => ({ ...f, help_text: e.target.value }))} />
                 </div>
               </div>
+              {error && <div className="cp-error" style={{ marginBottom: 10 }}>{error}</div>}
               <div className="cp-modal-footer">
                 <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Adding…' : 'Add Field'}</button>
                 <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowAdd(false)}>Cancel</button>
@@ -149,6 +179,8 @@ export default function FormsPage() {
           </div>
         </div>
       )}
+
+      {error && !showAdd && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {loading ? <div className="cp-loading">Loading…</div> : (
         <table className="cp-table">

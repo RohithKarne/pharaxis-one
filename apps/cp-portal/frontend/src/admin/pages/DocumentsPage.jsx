@@ -45,6 +45,8 @@ export default function DocumentsPage() {
   const [editDoc, setEditDoc]         = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm]       = useState({})
+  const [editError, setEditError]     = useState('')
+  const [actionError, setActionError] = useState('')
   const [expiringDocs, setExpiringDocs] = useState([])
   const [alertMsg, setAlertMsg]         = useState(null)
   const [sendingAlert, setSendingAlert] = useState(false)
@@ -63,12 +65,19 @@ export default function DocumentsPage() {
   async function bulkAction(action) {
     if (!selectedIds.length) return
     if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${selectedIds.length} document(s)?`)) return
-    await fetch(`/api/admin/documents/${clientId}/bulk`, {
-      method: 'POST',
-      headers: adminHeaders(),
-      body: JSON.stringify({ ids: selectedIds, action }),
-    })
-    load()
+    setActionError('')
+    try {
+      const res = await fetch(`/api/admin/documents/${clientId}/bulk`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({ ids: selectedIds, action }),
+      })
+      if (!res.ok) { setActionError(`Bulk ${action} failed. Please try again.`); return }
+    } catch {
+      setActionError(`Network error during bulk ${action}.`)
+    } finally {
+      load()
+    }
   }
 
   async function load() {
@@ -108,21 +117,34 @@ export default function DocumentsPage() {
   async function addCategory(e) {
     e.preventDefault()
     if (!newCategory.trim()) return
-    await fetch(`/api/admin/documents/${clientId}/categories`, {
-      method: 'POST',
-      headers: adminHeaders(),
-      body: JSON.stringify({ name: newCategory.trim() }),
-    })
-    setNewCategory('')
-    load()
+    setActionError('')
+    try {
+      const res = await fetch(`/api/admin/documents/${clientId}/categories`, {
+        method: 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({ name: newCategory.trim() }),
+      })
+      if (!res.ok) { setActionError('Failed to add category.'); return }
+      setNewCategory('')
+      load()
+    } catch {
+      setActionError('Network error adding category.')
+    }
   }
 
   async function deleteCategory(id) {
     if (!confirm('Remove this category?')) return
-    await fetch(`/api/admin/documents/${clientId}/categories/${id}`, {
-      method: 'DELETE', headers: adminHeaders(),
-    })
-    load()
+    setActionError('')
+    try {
+      const res = await fetch(`/api/admin/documents/${clientId}/categories/${id}`, {
+        method: 'DELETE', headers: adminHeaders(),
+      })
+      if (!res.ok) { setActionError('Failed to remove category.'); return }
+    } catch {
+      setActionError('Network error removing category.')
+    } finally {
+      load()
+    }
   }
 
   function setField(key, value) { setForm(f => ({ ...f, [key]: value })) }
@@ -172,6 +194,7 @@ export default function DocumentsPage() {
 
   function openEdit(doc) {
     setEditDoc(doc)
+    setEditError('')
     setEditForm({
       is_active: !!doc.is_active,
       visible_to: doc.visible_to_json ? (Array.isArray(doc.visible_to_json) ? doc.visible_to_json : JSON.parse(doc.visible_to_json)) : [],
@@ -184,25 +207,42 @@ export default function DocumentsPage() {
   }
 
   async function handleEdit(e) {
-    e.preventDefault(); setSaving(true)
-    await fetch(`/api/admin/documents/${clientId}/${editDoc.id}`, {
-      method: 'PUT',
-      headers: adminHeaders(),
-      body: JSON.stringify({ ...editForm, publish_at: editForm.publish_at || null }),
-    })
-    setShowEditModal(false)
-    setSaving(false)
-    load()
+    e.preventDefault(); setSaving(true); setEditError('')
+    try {
+      const res = await fetch(`/api/admin/documents/${clientId}/${editDoc.id}`, {
+        method: 'PUT',
+        headers: adminHeaders(),
+        body: JSON.stringify({ ...editForm, publish_at: editForm.publish_at || null }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setEditError(data.error || 'Failed to save changes.')
+        return
+      }
+      setShowEditModal(false)
+      load()
+    } catch {
+      setEditError('Network error saving changes.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // S4-8: quick status change without opening modal
   async function quickDocAction(doc, newStatus) {
-    await fetch(`/api/admin/documents/${clientId}/${doc.id}`, {
-      method: 'PUT',
-      headers: adminHeaders(),
-      body: JSON.stringify({ status: newStatus }),
-    })
-    load()
+    setActionError('')
+    try {
+      const res = await fetch(`/api/admin/documents/${clientId}/${doc.id}`, {
+        method: 'PUT',
+        headers: adminHeaders(),
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) { setActionError(`Failed to update "${doc.title}". Please try again.`); return }
+    } catch {
+      setActionError(`Network error updating "${doc.title}".`)
+    } finally {
+      load()
+    }
   }
 
   function visibleSummary(doc) {
@@ -274,6 +314,8 @@ export default function DocumentsPage() {
         <h2>Documents</h2>
         {canWrite && <button className="cp-btn cp-btn-primary" onClick={() => { setShowUpload(true); setUploadError('') }}>+ Upload Document</button>}
       </div>
+
+      {actionError && <div className="cp-error">{actionError}</div>}
 
       {showUpload && (
         <div className="cp-modal-overlay" onClick={() => setShowUpload(false)}>
@@ -436,6 +478,7 @@ export default function DocumentsPage() {
                   Active
                 </label>
               </div>
+              {editError && <div className="cp-error">{editError}</div>}
               <div className="cp-modal-footer">
                 <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
                 <button type="button" className="cp-btn cp-btn-outline" onClick={() => setShowEditModal(false)}>Cancel</button>

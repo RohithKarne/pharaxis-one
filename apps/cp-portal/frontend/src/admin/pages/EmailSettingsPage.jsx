@@ -18,6 +18,7 @@ export default function EmailSettingsPage() {
   const [hasPassword, setHasPassword] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [testTo, setTestTo] = useState('')
   const [testMsg, setTestMsg] = useState(null)   // { type: 'success'|'error', text }
   const [testing, setTesting] = useState(false)
@@ -50,22 +51,33 @@ export default function EmailSettingsPage() {
 
   function set(field, value) {
     setSaved(false)
+    setSaveError('')
     setForm(f => ({ ...f, [field]: value }))
   }
 
   async function handleSave() {
-    const body = { ...form, smtp_port: Number(form.smtp_port), is_active: form.is_active ? 1 : 0 }
+    setSaved(false); setSaveError('')
+    // Guard the port: fall back to 587 if blank/NaN so it isn't persisted as 0
+    const port = parseInt(form.smtp_port, 10)
+    const body = { ...form, smtp_port: Number.isFinite(port) && port > 0 ? port : 587, is_active: form.is_active ? 1 : 0 }
     // If password field is blank and server already has one, omit it (don't overwrite with empty)
     if (!body.smtp_password) delete body.smtp_password
-    const res = await fetch(`/api/admin/email-config/${clientId}`, {
-      method: 'PATCH',
-      headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/admin/email-config/${clientId}`, {
+        method: 'PATCH',
+        headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setSaveError(d.error || `Could not save settings (error ${res.status}).`)
+        return
+      }
       setSaved(true)
       if (form.smtp_password) setHasPassword(true)
-      setForm(f => ({ ...f, smtp_password: '' }))
+      setForm(f => ({ ...f, smtp_port: body.smtp_port, smtp_password: '' }))
+    } catch {
+      setSaveError('Network error — please try again.')
     }
   }
 
@@ -186,6 +198,7 @@ export default function EmailSettingsPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
           <LoadingButton onClick={handleSave}>Save Settings</LoadingButton>
           {saved && <span style={{ fontSize: 13, color: '#16A34A', fontWeight: 500 }}>✓ Saved</span>}
+          {saveError && <span style={{ fontSize: 13, color: '#DC2626', fontWeight: 500 }}>✗ {saveError}</span>}
         </div>
       </div>
 

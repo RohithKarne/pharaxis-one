@@ -42,12 +42,17 @@ export default function VerifyEmailPage() {
   async function resend() {
     const email = prompt('Enter your registered email address to receive a new verification link:')
     if (!email) return
-    await fetch(`/api/portal/auth/resend-verification`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_code: clientCode, email }),
-    })
-    alert('If that email is registered and unverified, a new link has been sent.')
+    try {
+      const res = await fetch(`/api/portal/auth/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_code: clientCode, email }),
+      })
+      if (!res.ok) { alert('Unable to send a new verification link. Please try again later.'); return }
+      alert('If that email is registered and unverified, a new link has been sent.')
+    } catch {
+      alert('Network error. Please check your connection and try again.')
+    }
   }
 
   return (

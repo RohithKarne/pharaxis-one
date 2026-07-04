@@ -20,6 +20,7 @@ export default function ReviewQueuePage() {
   const [items, setItems]    = useState([])
   const [loading, setLoading] = useState(true)
   const [acting, setActing]  = useState(null)  // id of item being actioned
+  const [error, setError]    = useState('')
 
   useEffect(() => { load() }, [clientId])
 
@@ -33,16 +34,23 @@ export default function ReviewQueuePage() {
 
   async function transition(item, newStatus) {
     setActing(item.id + item.item_type)
+    setError('')
     const endpoint = item.item_type === 'news'
       ? `/api/admin/news/${clientId}/${item.id}`
       : `/api/admin/documents/${clientId}/${item.id}`
-    await fetch(endpoint, {
-      method: 'PUT',
-      headers: adminHeaders(),
-      body: JSON.stringify({ status: newStatus }),
-    })
-    setActing(null)
-    load()
+    try {
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: adminHeaders(),
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) { setError(`Failed to update "${item.title}". Please try again.`); return }
+      load()
+    } catch {
+      setError(`Network error updating "${item.title}".`)
+    } finally {
+      setActing(null)
+    }
   }
 
   function goToItem(item) {
@@ -156,6 +164,8 @@ export default function ReviewQueuePage() {
         <div className="cp-page-header">
           <h1 className="cp-page-title">Review Queue</h1>
         </div>
+
+        {error && <div className="cp-error">{error}</div>}
 
         {!canApprove && !canPublish && (
           <div className="cp-card" style={{ padding: '12px 16px', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 8, marginBottom: 16, fontSize: 13, color: '#92400E' }}>

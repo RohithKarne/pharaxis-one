@@ -44,10 +44,20 @@ export default function FeaturesPage() {
     setFeatures(prev => prev.map(f => f.feature_key === featureKey ? { ...f, is_enabled: !current ? 1 : 0 } : f))
     setSaved(true)
     if (featureKey === 'hcp_gate' && current) {
-      await fetch(`/api/admin/gate/${clientId}`, {
-        method: 'PATCH', headers: adminHeaders(),
-        body: JSON.stringify({ is_enabled: 0 }),
-      })
+      try {
+        const gateRes = await fetch(`/api/admin/gate/${clientId}`, {
+          method: 'PATCH', headers: adminHeaders(),
+          body: JSON.stringify({ is_enabled: 0 }),
+        })
+        if (!gateRes.ok) {
+          const d = await gateRes.json().catch(() => ({}))
+          setSaved(false)
+          setError(d.error || 'Feature disabled, but the HCP gate could not be turned off.')
+        }
+      } catch {
+        setSaved(false)
+        setError('Feature disabled, but the HCP gate could not be turned off (network error).')
+      }
     }
   }
 
