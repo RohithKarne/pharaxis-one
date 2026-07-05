@@ -20,6 +20,7 @@ export default function FeedbackPage() {
   const [total, setTotal]         = useState(0)
   const [page, setPage]           = useState(1)
   const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState('')
   const LIMIT = 20
 
   useEffect(() => { load() }, [clientId, page])
@@ -38,8 +39,12 @@ export default function FeedbackPage() {
 
   async function handleDelete(id) {
     if (!confirm('Delete this feedback entry?')) return
-    await fetch(`/api/admin/feedback/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
-    load()
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/feedback/${clientId}/${id}`, { method: 'DELETE', headers: adminHeaders() })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not delete feedback.'); return }
+      load()
+    } catch { setError('Network error — please try again.') }
   }
 
   const totalPages = Math.ceil(total / LIMIT)
@@ -58,6 +63,8 @@ export default function FeedbackPage() {
           </div>
         )}
       </div>
+
+      {error && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {items.length === 0 ? (
         <div className="cp-empty"><p>No feedback submitted yet.</p></div>

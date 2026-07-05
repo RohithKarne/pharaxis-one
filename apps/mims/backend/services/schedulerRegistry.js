@@ -129,22 +129,6 @@ module.exports = [
     configRoute:    '/cases',
   },
   {
-    name:           'novartis-daily-simulation',
-    source:         'Simulation',
-    cronExpression: '15 1 * * *',
-    description:    'Maintains Novartis high-volume simulation data and archives aged generated cases',
-    type:           'cron',
-    configRoute:    '/mims-admin?standalone=1',
-  },
-  {
-    name:           'extra-org-daily-simulation',
-    source:         'Simulation',
-    cronExpression: '45 1 * * *',
-    description:    'Runs daily simulation for additional demo orgs defined in EXTRA_DEMO_ORG_IDS env var (e.g. EXTRA_DEMO_ORG_IDS=2,3)',
-    type:           'cron',
-    configRoute:    '/mims-admin?standalone=1',
-  },
-  {
     name:           'login-audit-archive',
     source:         'Security',
     cronExpression: '0 2 * * *',

@@ -55,6 +55,13 @@ const pool = mysql.createPool({
   timezone:           '+00:00',
 });
 
+// Enforce STRICT mode (+ UTC) on every pooled connection so over-length pharma
+// text or bad dates cannot be silently truncated / zero-filled, regardless of
+// the production server's global sql_mode default. (Audit finding C-11.)
+pool.on('connection', (conn) => {
+  conn.query("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION', time_zone = '+00:00'");
+});
+
 async function initializeDatabase() {
   const conn = await pool.getConnection();
   try {

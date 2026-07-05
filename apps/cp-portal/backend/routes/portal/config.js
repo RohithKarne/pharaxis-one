@@ -47,10 +47,15 @@ router.get('/:clientCode', async (req, res) => {
 
     // F-13: Safety banner flag — true if any critical/high alert is active
     const [[activeSafetyAlert]] = await pool.execute(`
-      SELECT COUNT(*) as cnt FROM cp_safety_alerts
+      SELECT COUNT(*) as cnt, MAX(id) as max_id, MAX(UNIX_TIMESTAMP(updated_at)) as max_ts FROM cp_safety_alerts
       WHERE client_id = ? AND status = 'active' AND severity IN ('critical','high')
     `, [client.id]);
     const has_active_safety_alert = (activeSafetyAlert?.cnt || 0) > 0;
+    // Signature of the current active critical/high alerts. Changes when an alert is
+    // added, removed, or edited — so a dismissed banner re-appears for a NEW alert.
+    const safety_alert_sig = has_active_safety_alert
+      ? `${activeSafetyAlert.cnt}:${activeSafetyAlert.max_id}:${activeSafetyAlert.max_ts || 0}`
+      : null;
 
     // F-02: Compliance config — jurisdictions + version (no banner body exposed here)
     const [[complianceRow]] = await pool.execute('SELECT jurisdictions_json, version, require_reconsent FROM cp_compliance_config WHERE client_id = ?', [client.id]);
@@ -69,6 +74,7 @@ router.get('/:clientCode', async (req, res) => {
       chatbox,
       gate,
       has_active_safety_alert,
+      safety_alert_sig,
       compliance,
       language,
     });

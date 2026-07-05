@@ -527,6 +527,10 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     if (!existing) return res.status(404).json({ error: 'User not found.' });
 
     const validRoles = ['admin', 'agent', 'reviewer', 'content_manager', 'platform_admin'];
+    // H-02: only a global (platform) admin may assign the platform_admin role.
+    if (role === 'platform_admin' && !hasGlobalAdminScope(req.user)) {
+      return res.status(403).json({ error: 'You are not permitted to assign the platform_admin role.' });
+    }
     const newRole = role && validRoles.includes(role) ? role : existing.role;
 
     await pool.execute(

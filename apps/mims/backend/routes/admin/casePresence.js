@@ -11,13 +11,17 @@
 
 const express = require('express');
 const router  = express.Router();
+const pool = require('../../database/db');
 const { authenticate } = require('../../middleware/auth');
+const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const presence = require('../../services/casePresenceService');
 
 // GET /api/cases/:id/presence — { users:[...], focus:[...] }
-router.get('/cases/:id/presence', authenticate, (req, res) => {
+router.get('/cases/:id/presence', authenticate, async (req, res) => {
   const caseId = Number(req.params.id || 0);
   if (!caseId) return res.status(400).json({ error: 'caseId required' });
+  const [[c]] = await pool.execute('SELECT id FROM cases WHERE id = ? AND org_id = ?', [caseId, req.user.orgId]);
+  if (!c && !hasGlobalAdminScope(req.user)) return res.status(403).json({ error: 'Case not found in your organisation.' });
   res.json({
     caseId,
     users: presence.getRoomUsers(caseId),

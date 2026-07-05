@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 
 const NOTIF_TYPES = [
   { key: 'news',      icon: '📰', label: 'News & Announcements', desc: 'Notify me when new news posts are published.' },
@@ -16,10 +17,7 @@ export default function PreferencesPage() {
   const [saved, setSaved]     = useState(false)
   const [saveError, setSaveError] = useState('')
 
-  useEffect(() => {
-    document.title = 'Preferences | CP Portal'
-    return () => { document.title = 'CP Portal' }
-  }, [])
+  usePageTitle('Preferences')
 
   useEffect(() => {
     if (!clientCode) return

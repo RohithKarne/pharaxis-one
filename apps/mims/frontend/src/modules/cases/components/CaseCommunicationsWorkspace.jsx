@@ -5,7 +5,7 @@ import CaseAttachmentsPanel from './CaseAttachmentsPanel'
 
 const PANES = [
   { key: 'threads', label: 'Threaded Comments' },
-  { key: 'chat', label: 'Live Chat' },
+  // PARK: per-case Live Chat removed — Threaded Comments + @mentions remain the collaboration surface.
   { key: 'correspondence', label: 'Correspondence' },
   { key: 'attachments', label: 'Attachments' },
 ]
@@ -28,7 +28,7 @@ export default function CaseCommunicationsWorkspace({
         <div>
           <div className="cf-overview-kicker">Communications</div>
           <h3>Case Communication Workspace</h3>
-          <p>Comments, live chat, email history, and attachments are grouped here instead of spread across top-level tabs.</p>
+          <p>Comments, email history, and attachments are grouped here instead of spread across top-level tabs.</p>
         </div>
       </div>
 

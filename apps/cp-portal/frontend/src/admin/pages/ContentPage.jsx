@@ -32,6 +32,7 @@ export default function ContentPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm]   = useState({})
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false)
 
   const [showInactive, setShowInactive] = useState(false)
@@ -65,21 +66,36 @@ export default function ContentPage() {
   }
 
   async function handleSubmit(e) {
-    e.preventDefault(); setSaving(true)
-    await fetch(`/api/admin/content/${clientId}/${endpoints[tab]}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(form) })
-    setSaving(false); setShowForm(false); setForm({}); loadAll()
+    e.preventDefault(); setSaving(true); setError('')
+    try {
+      const res = await fetch(`/api/admin/content/${clientId}/${endpoints[tab]}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(form) })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not save. Please try again.'); return }
+      setShowForm(false); setForm({}); loadAll()
+    } catch {
+      setError('Network error — please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function deactivate(endpoint, id) {
-    await fetch(`/api/admin/content/${clientId}/${endpoint}/${id}`, { method: 'DELETE', headers: adminHeaders() })
-    loadAll()
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/content/${clientId}/${endpoint}/${id}`, { method: 'DELETE', headers: adminHeaders() })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not deactivate item.'); return }
+      loadAll()
+    } catch { setError('Network error — please try again.') }
   }
 
   async function reactivate(endpoint, id) {
-    await fetch(`/api/admin/content/${clientId}/${endpoint}/${id}`, {
-      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: 1 })
-    })
-    loadAll()
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/content/${clientId}/${endpoint}/${id}`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify({ is_active: 1 })
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not reactivate item.'); return }
+      loadAll()
+    } catch { setError('Network error — please try again.') }
   }
 
   function openEdit(item) {
@@ -97,11 +113,18 @@ export default function ContentPage() {
   }
 
   async function handleEdit(e) {
-    e.preventDefault(); setSaving(true)
-    await fetch(`/api/admin/content/${clientId}/${endpoints[tab]}/${editItem.id}`, {
-      method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(editForm)
-    })
-    setSaving(false); setShowEditForm(false); setEditItem(null); loadAll()
+    e.preventDefault(); setSaving(true); setError('')
+    try {
+      const res = await fetch(`/api/admin/content/${clientId}/${endpoints[tab]}/${editItem.id}`, {
+        method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(editForm)
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not save changes.'); return }
+      setShowEditForm(false); setEditItem(null); loadAll()
+    } catch {
+      setError('Network error — please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const tabKey = tab === 'Therapeutic Areas' ? 'therapeutic_areas' : tab.toLowerCase()
@@ -113,6 +136,8 @@ export default function ContentPage() {
       <div className="cp-tabs">
         {TABS.map(t => <button key={t} className={`cp-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</button>)}
       </div>
+
+      {error && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       <div className="cp-section-header">
         <h3>{tab}</h3>
@@ -171,6 +196,7 @@ export default function ContentPage() {
                 <div className="cp-field"><label>URL</label><input value={form.url||''} onChange={e=>setForm(f=>({...f,url:e.target.value}))} /></div>
                 <div className="cp-field"><label>Description</label><textarea rows={2} value={form.description||''} onChange={e=>setForm(f=>({...f,description:e.target.value}))} /></div>
               </>}
+              {error && <div className="cp-error" style={{ marginBottom: 10 }}>{error}</div>}
               <div className="cp-modal-footer">
                 <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving?'Adding…':'Add'}</button>
                 <button type="button" className="cp-btn cp-btn-outline" onClick={()=>setShowForm(false)}>Cancel</button>
@@ -232,6 +258,7 @@ export default function ContentPage() {
                   {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
+              {error && <div className="cp-error" style={{ marginBottom: 10 }}>{error}</div>}
               <div className="cp-modal-footer">
                 <button type="submit" className="cp-btn cp-btn-primary" disabled={saving}>{saving?'Saving…':'Save'}</button>
                 <button type="button" className="cp-btn cp-btn-outline" onClick={()=>setShowEditForm(false)}>Cancel</button>

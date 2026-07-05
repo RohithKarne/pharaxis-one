@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
 
 export default function PortalHomePage() {
@@ -11,8 +12,7 @@ export default function PortalHomePage() {
   const base      = `/portal/${clientCode}`
   const [homeSearch, setHomeSearch] = useState('')
 
-  // LOW-05: set document title
-  useEffect(() => { document.title = 'Home | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+  usePageTitle('Home')
 
   // S4-9: fetch "For You" content — news + documents matched to user's type
   const [forYouNews, setForYouNews]   = useState([])

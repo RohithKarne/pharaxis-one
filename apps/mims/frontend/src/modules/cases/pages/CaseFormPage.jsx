@@ -10,7 +10,6 @@ import CaseCommunicationsWorkspace from '../components/CaseCommunicationsWorkspa
 import CaseMITab            from '../components/CaseMITab'
 import CaseAETab            from '../components/CaseAETab'
 import CasePCTab            from '../components/CasePCTab'
-import AiAssistantPanel     from '../components/AiAssistantPanel'
 import CaseFormShell        from '../../../shared/components/CaseFormShell'
 import useUnsavedChangesGuard from '../../../shared/hooks/useUnsavedChangesGuard'
 
@@ -250,7 +249,8 @@ export default function CaseFormPage() {
       </div>
       </CaseFormShell>
 
-      <AiAssistantPanel caseId={id} headers={headers} activeTab={currentTab} />
+      {/* PARK: AI Assistant panel removed from the case form — the AI suite ships as a
+          deterministic-local mock (canned output). Re-surface once a real provider is standard. */}
 
     </div>
     </MIMSLayout>

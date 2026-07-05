@@ -136,9 +136,16 @@ router.put('/cases/pc/versions/:versionId/status', authenticate, async (req, res
     }
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status required' });
+    // L-05: normalise and validate against a known set so an arbitrary status can't
+    // strand follow-up creation (which requires the version to equal 'closed').
+    const PC_STATUSES = new Set(['open', 'in_progress', 'closed', 'reopened']);
+    const normStatus = String(status).trim().toLowerCase();
+    if (!PC_STATUSES.has(normStatus)) {
+      return res.status(400).json({ error: `Invalid status. Allowed: ${[...PC_STATUSES].join(', ')}.` });
+    }
     const [statusUpd] = await pool.execute(
       'UPDATE case_pc_versions SET status = ? WHERE id = ? AND is_locked = 0',
-      [status, req.params.versionId]
+      [normStatus, req.params.versionId]
     );
     // WP2: a locked (or missing) version updates 0 rows — was silently returning 200
     // with the unchanged row, so the caller thought the status change succeeded.

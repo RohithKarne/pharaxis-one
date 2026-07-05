@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { logService } = require('../services/serviceLogger');
 const { logger } = require('../services/logger');
@@ -9,7 +10,21 @@ function safeText(value, limit = 1000) {
   return text.length > limit ? text.slice(0, limit) : text;
 }
 
-router.post('/client-error', async (req, res) => {
+// M-03: This endpoint is intentionally unauthenticated (client error beacons
+// fire before/without auth) but writes to logs + telemetry. A dedicated strict
+// per-IP limiter caps abuse (log flooding). req.ip is trustworthy here because
+// server.js sets `app.set('trust proxy', 1)`.
+const clientErrorRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'Too many client error reports. Please slow down.' });
+  },
+});
+
+router.post('/client-error', clientErrorRateLimiter, async (req, res) => {
   try {
     const payload = req.body || {};
     const message = safeText(payload.message || 'Client runtime error', 500);

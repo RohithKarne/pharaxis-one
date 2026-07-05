@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
 
 export default function TherapeuticAreasPage() {
@@ -13,6 +14,8 @@ export default function TherapeuticAreasPage() {
   const [drugsError, setDrugsError] = useState('')
   const [followed, setFollowed] = useState([])
   const [followBusy, setFollowBusy] = useState(false)
+
+  usePageTitle('Therapeutic Areas')
 
   useEffect(() => {
     if (!user) return
@@ -41,9 +44,6 @@ export default function TherapeuticAreasPage() {
       setFollowBusy(false)
     }
   }
-
-  // LOW-05: set document title
-  useEffect(() => { document.title = 'Therapeutic Areas | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/therapeutic-areas`)

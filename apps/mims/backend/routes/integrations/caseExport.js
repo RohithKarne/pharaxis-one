@@ -64,7 +64,10 @@ router.get('/admin/cases/export', authenticate, async (req, res) => {
 
     function escapeCSV(val) {
       if (val == null) return '';
-      const str = String(val);
+      let str = String(val);
+      // Neutralise CSV formula injection: prefix a single quote when the value
+      // starts with a formula trigger (=, +, -, @) or a tab/CR.
+      if (/^[=+\-@\t\r]/.test(str)) str = `'${str}`;
       if (str.includes(',') || str.includes('"') || str.includes('\n')) {
         return `"${str.replace(/"/g, '""')}"`;
       }

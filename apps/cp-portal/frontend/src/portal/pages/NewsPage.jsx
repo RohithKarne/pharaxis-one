@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 
 async function fetchSavedIds(clientCode) {
   try {
@@ -39,8 +40,7 @@ export default function NewsPage() {
 
   const limit = 10
 
-  // LOW-05: set document title
-  useEffect(() => { document.title = 'News | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+  usePageTitle('News')
 
   // Debounce the search box, and reset to page 1 whenever the query changes,
   // so search runs server-side across the whole archive (not just the loaded page).

@@ -63,13 +63,14 @@ app.set('trust proxy', 1);
 const API_LATEST_VERSION = 'v1';
 const API_SUPPORTED_VERSIONS = ['v1'];
 const API_VERSION_CONTRACT_DATE = '2026-04-07';
+// M-07: Only local dev origins are baked in as defaults. Production origins must
+// be supplied via the ALLOWED_ORIGINS env var (see parseAllowedOrigins below) so
+// no public IP/host is hardcoded into the source.
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   'http://127.0.0.1:5173',
   'http://localhost:5173',
   'http://127.0.0.1:8081',
-  'http://localhost:8081',
-  'http://13.205.213.128',
-  'https://13.205.213.128'
+  'http://localhost:8081'
 ]);
 
 function parseAllowedOrigins(...rawOriginGroups) {
@@ -194,7 +195,13 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.use('/', require('./routes/apiPlatform'));
+// PARK (product rationalization): the public API platform (OAuth2 client credentials,
+// public REST, signed webhooks) is off by default. It is the surface of the SSRF and
+// cross-tenant webhook security findings and has no current client demand — enable
+// per-deployment (ENABLE_API_PLATFORM=true) only when a client contracts for it.
+if (process.env.ENABLE_API_PLATFORM === 'true') {
+  app.use('/', require('./routes/apiPlatform'));
+}
 
 // Serve CM document uploads as static files
 app.use('/uploads/cm', express.static(path.join(__dirname, 'storage/cm_documents')));
@@ -262,10 +269,16 @@ function mountRoutes(r, prefix = '') {
   // Auth
   r.use(`${prefix}/auth`, authRateLimiter, require('./routes/auth'));
   r.use(`${prefix}/inbox`, require('./routes/inbox'));
-  r.use(`${prefix}/mobile-sync`, require('./routes/mobileSync'));
+  // PARK: mobile app is pre-GA (no offline sync). Mobile-sync backend off by default.
+  if (process.env.ENABLE_MOBILE === 'true') {
+    r.use(`${prefix}/mobile-sync`, require('./routes/mobileSync'));
+  }
 
   // Admin
-  r.use(`${prefix}/admin`, require('./routes/admin/regression'));
+  // CUT: the in-app regression runner is dev tooling (belongs in CI), off by default.
+  if (process.env.ENABLE_INAPP_REGRESSION === 'true') {
+    r.use(`${prefix}/admin`, require('./routes/admin/regression'));
+  }
   r.use(`${prefix}/admin`, require('./routes/admin/picklists'));
   r.use(`${prefix}/admin`, require('./routes/admin/miCategories'));
   r.use(`${prefix}/admin`, require('./routes/admin/fieldSetup'));
@@ -361,7 +374,11 @@ function mountRoutes(r, prefix = '') {
   r.use(prefix || '/', require('./routes/casePC'));
   r.use(prefix || '/', require('./routes/caseQA'));
   r.use(prefix || '/', require('./routes/notifications'));
-  r.use(prefix || '/', require('./routes/chat'));
+  // PARK: standalone/live chat off by default — case Comments + @mentions remain the
+  // supported collaboration surface. Enable (ENABLE_CHAT=true) if a client needs team chat.
+  if (process.env.ENABLE_CHAT === 'true') {
+    r.use(prefix || '/', require('./routes/chat'));
+  }
   r.use(prefix || '/', require('./routes/reportModule'));
   r.use(prefix || '/', require('./routes/reports'));
   r.use(prefix || '/', require('./routes/help'));
@@ -460,7 +477,7 @@ if (!isTestEnv) {
       logger.info({ host: HOST, port: PORT }, 'MIMS server started');
       logger.info({ static_path: path.join(__dirname, '../frontend') }, 'Frontend static path mounted');
     });
-    attachChatRealtime(server);
+    if (process.env.ENABLE_CHAT === 'true') attachChatRealtime(server);
     attachAppRealtime(server);
     attachCasePresence(server);
     ocrWorker.start();

@@ -4,13 +4,28 @@ const rateLimit = require('express-rate-limit');
 const { RedisStore } = require('rate-limit-redis');
 const { getClient, isReady } = require('../services/redisClient');
 
+// M-05: warn once (not per-request) when we silently fall back to the in-memory
+// store in production, so a Redis outage — which turns per-instance limits into
+// easily-bypassable ones behind a load balancer — is actually visible in logs.
+let _memoryFallbackWarned = false;
+
 /**
  * Returns a RedisStore when Redis is available, otherwise undefined
  * (express-rate-limit falls back to in-memory store automatically).
  * Prefix ensures different limiters don't share counter keys.
  */
 function makeStore(prefix) {
-  if (!isReady()) return undefined;
+  if (!isReady()) {
+    if (process.env.NODE_ENV === 'production' && !_memoryFallbackWarned) {
+      _memoryFallbackWarned = true;
+      // eslint-disable-next-line no-console
+      console.error(
+        '[rateLimiters] Redis not ready — falling back to in-memory rate-limit store in production. ' +
+        'Rate limits are per-process and NOT shared across instances; investigate Redis connectivity.'
+      );
+    }
+    return undefined;
+  }
   return new RedisStore({
     sendCommand: (...args) => getClient().call(...args),
     prefix: `mims:rl:${prefix}:`,
@@ -27,12 +42,18 @@ function envInt(name, fallback) {
 }
 
 function getClientIp(req) {
+  // M-04: prefer Express's req.ip. With `app.set('trust proxy', 1)` (set in
+  // server.js) Express derives req.ip from the trusted proxy hop rather than
+  // the raw, client-spoofable X-Forwarded-For chain. Fall back to the legacy
+  // header parsing only if req.ip is somehow unavailable.
+  if (req.ip) return req.ip;
+
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.trim()) {
     const firstHop = forwarded.split(',')[0].trim();
     if (firstHop) return firstHop;
   }
-  return req.ip || req.connection?.remoteAddress || 'unknown';
+  return req.connection?.remoteAddress || 'unknown';
 }
 
 function getFingerprint(req) {

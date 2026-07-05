@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
 
 const SEVERITIES = ['critical', 'warning', 'informational']
@@ -11,6 +12,8 @@ export default function SafetyPage() {
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState('')
   const [sevFilter, setSevFilter]     = useState('all')
+
+  usePageTitle('Safety Alerts')
 
   useEffect(() => {
     async function load() {
@@ -33,9 +36,6 @@ export default function SafetyPage() {
     }
     if (clientCode) load()
   }, [clientCode, language])
-
-  // LOW-05: set document title
-  useEffect(() => { document.title = 'Safety Alerts | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
 
   const active   = alerts.filter(a => a.status === 'active')
   const resolved = alerts.filter(a => a.status === 'resolved')

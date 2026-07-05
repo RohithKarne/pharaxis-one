@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 
 export default function EventsPage() {
   const { clientCode } = usePortal()
@@ -7,8 +8,7 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter]   = useState('upcoming')
 
-  // LOW-05: set document title
-  useEffect(() => { document.title = 'Events | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+  usePageTitle('Events')
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/events`)

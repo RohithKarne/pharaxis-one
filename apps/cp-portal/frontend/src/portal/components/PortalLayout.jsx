@@ -59,7 +59,22 @@ function NavDropdown({ label, items, base, location, onNavigate }) {
 export default function PortalLayout({ children }) {
   const { portalConfig, loading, user, logout, isFeatureEnabled, clientCode, showGate, language, setLanguage, t } = usePortal()
   const has_active_safety_alert = portalConfig?.has_active_safety_alert
+  const safetySig = portalConfig?.safety_alert_sig || ''
   const [bannerDismissed, setBannerDismissed] = useState(false)
+
+  // Persist the safety-banner dismissal across refreshes/sessions, keyed to the alert
+  // signature — so it stays hidden after the × is clicked, but a NEW or updated
+  // critical/high alert (new signature) re-surfaces it.
+  useEffect(() => {
+    if (!safetySig) { setBannerDismissed(false); return }
+    try { setBannerDismissed(localStorage.getItem(`cp_safety_dismissed_${clientCode}`) === safetySig) }
+    catch { setBannerDismissed(false) }
+  }, [safetySig, clientCode])
+
+  function dismissSafetyBanner() {
+    setBannerDismissed(true)
+    try { if (safetySig) localStorage.setItem(`cp_safety_dismissed_${clientCode}`, safetySig) } catch { /* storage disabled */ }
+  }
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -171,7 +186,7 @@ export default function PortalLayout({ children }) {
           <span>⚠ Important Safety Information — </span>
           <Link to={`${base}/safety`} className="pp-safety-banner-link">View Safety Alerts</Link>
           <button
-            onClick={() => setBannerDismissed(true)}
+            onClick={dismissSafetyBanner}
             aria-label="Dismiss safety banner"
             style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 18, marginLeft: 'auto', padding: '0 8px', lineHeight: 1 }}
           >×</button>

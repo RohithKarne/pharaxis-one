@@ -23,7 +23,13 @@ function compare(condition = {}, data = {}) {
     case 'NOT_IN': return Array.isArray(right) && !right.map(String).includes(String(left));
     case 'EMPTY': return isEmpty(left);
     case 'NOT_EMPTY': return !isEmpty(left);
-    case 'REGEX': return new RegExp(String(right || '')).test(String(left || ''));
+    case 'REGEX': {
+      // M-10: cap pattern and input length before running admin-configured regex (ReDoS guard).
+      const pattern = String(right || '');
+      const subject = String(left || '');
+      if (pattern.length > 1000 || subject.length > 100000) return false;
+      try { return new RegExp(pattern).test(subject); } catch (_) { return false; }
+    }
     default: return false;
   }
 }

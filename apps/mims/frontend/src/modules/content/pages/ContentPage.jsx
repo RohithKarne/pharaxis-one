@@ -58,15 +58,12 @@ export default function ContentPage() {
     },
     {
       key: 'intelligence',
-      label: 'Intelligence',
-      description: 'Higher-order policy, evidence, and risk tooling.',
+      label: 'Taxonomy',
+      description: 'MI category taxonomy and inquiry framing for content operations.',
       items: [
         { key: 'mi-categories', label: 'MI Categories', description: 'Taxonomy and inquiry framing for content operations.' },
-        { key: 'policy-graph', label: 'Policy Graph Engine', description: 'Map policy structure and connected rules.' },
-        { key: 'evidence-chain-compiler', label: 'Evidence Chain Compiler', description: 'Link evidence trails before publication.' },
-        { key: 'contradiction-radar', label: 'Contradiction Radar', description: 'Spot conflicts across controlled content.' },
-        { key: 'digital-twin-release-simulator', label: 'Digital Twin Release Simulator', description: 'Test release impact before publishing.' },
-        { key: 'adaptive-risk-workflow', label: 'Adaptive Risk Workflow', description: 'Route higher-risk content through tighter control.' },
+        // CUT (rationalization): speculative "Intelligence" stubs removed — Policy Graph Engine,
+        // Evidence Chain Compiler, Contradiction Radar, Digital Twin Release Simulator, Adaptive Risk Workflow.
       ],
     },
   ]

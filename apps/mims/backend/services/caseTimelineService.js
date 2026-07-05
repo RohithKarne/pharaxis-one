@@ -36,6 +36,13 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
   const sinceParam = since ? new Date(since).toISOString().slice(0, 19).replace('T', ' ') : null;
   const events = [];
 
+  // C-04: verify the case belongs to the caller's org before assembling the timeline.
+  // Every sub-query below keys on caseId alone, so without this ownership gate an
+  // authenticated user in one org could read any other org's full case chronology
+  // (comments, e-signatures, field changes, transmissions).
+  const owner = await _q('SELECT id FROM cases WHERE id = ? AND org_id = ?', [caseId, orgId]);
+  if (!owner.length) return [];
+
   // Audit logs (CRUD / actions captured by middleware)
   events.push(...(await _q(
     `SELECT a.created_at AS ts, 'audit' AS type,

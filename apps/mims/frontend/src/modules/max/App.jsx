@@ -22,21 +22,18 @@ import ResetPasswordPage    from '../../pages/ResetPasswordPage'
 // Each becomes its own JS chunk; only downloaded when the user navigates there.
 const DashboardPage            = lazy(() => import('./pages/DashboardPage'))
 const InboxPage                = lazy(() => import('./pages/InboxPage'))
-const ChatPage                 = lazy(() => import('./pages/ChatPage'))
 const SessionManagementPage    = lazy(() => import('./pages/SessionManagementPage'))
 const CasesPage                = lazy(() => import('../cases/pages/CasesPage'))
 const CaseFormPage             = lazy(() => import('../cases/pages/CaseFormPage'))
 const ICSRBuilderPage          = lazy(() => import('../cases/pages/ICSRBuilderPage'))
 const CaseQueryPage            = lazy(() => import('../cases/pages/CaseQueryPage'))
 const ContentPage              = lazy(() => import('../content/pages/ContentPage'))
-const AnalyticsPage            = lazy(() => import('../dv/pages/AnalyticsPage'))
 const ReportsPage              = lazy(() => import('../reports/pages/ReportsPage'))
 const ExceptionLogsPage        = lazy(() => import('./pages/ExceptionLogsPage'))
 const TransmissionsPage        = lazy(() => import('../transmissions/pages/TransmissionsPage'))
 const BrowseContentPage        = lazy(() => import('../browse/pages/BrowseContentPage'))
 const ResponseLogPage          = lazy(() => import('../responselog/pages/ResponseLogPage'))
 const MIMSAdminPage            = lazy(() => import('../mimsadmin/pages/MIMSAdminPage'))
-const DeveloperPortalPage      = lazy(() => import('../devportal/DeveloperPortalPage'))
 
 // Shared Suspense fallback — minimal spinner so Suspense boundary doesn't flash
 function PageLoader() {
@@ -233,13 +230,8 @@ function AppRoutes() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
-          <Route path="/chat" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="mims_core">
-                <ChatPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
-          } />
+          {/* PARK (rationalization): standalone chat removed from GA — case Comments + @mentions remain the collaboration surface. */}
+          <Route path="/chat" element={<Navigate to="/cases" replace />} />
           <Route path="/session-management" element={
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
@@ -266,13 +258,8 @@ function AppRoutes() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
-          <Route path="/analytics" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="data_visualization">
-                <AnalyticsPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
-          } />
+          {/* CUT (rationalization): analytics was a stub redirect — send users to Reports. */}
+          <Route path="/analytics" element={<Navigate to="/reports" replace />} />
           <Route path="/cases" element={
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
@@ -294,13 +281,8 @@ function AppRoutes() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
-          <Route path="/developer" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="admin_console">
-                <DeveloperPortalPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
-          } />
+          {/* PARK (rationalization): public API developer portal removed from GA surface. */}
+          <Route path="/developer" element={<Navigate to="/cases" replace />} />
           <Route path="/case-query" element={
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">

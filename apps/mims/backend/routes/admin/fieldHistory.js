@@ -22,6 +22,7 @@ router.get('/field-history', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'entity_type and entity_id required' });
     }
     const rows = await fieldHistory.list({
+      orgId:      req.user.orgId,
       entityType: entity_type,
       entityId:   entity_id,
       field:      field || null,

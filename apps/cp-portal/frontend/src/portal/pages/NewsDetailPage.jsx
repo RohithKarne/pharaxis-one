@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 
 export default function NewsDetailPage() {
   const { postId }              = useParams()
@@ -11,11 +12,7 @@ export default function NewsDetailPage() {
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
 
-  // LOW-05 + LOW-27: set document title to post title when loaded
-  useEffect(() => {
-    if (post?.title) document.title = `${post.title} | CP Portal`
-    return () => { document.title = 'CP Portal' }
-  }, [post?.title])
+  usePageTitle(post?.title || 'News')
 
   useEffect(() => {
     async function load() {

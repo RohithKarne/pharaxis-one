@@ -7,7 +7,6 @@ function normalizePath(pathname = '') {
 const routeLoaders = [
   { key: 'dashboard', match: (path) => path === '/dashboard', load: () => import('../../modules/max/pages/DashboardPage') },
   { key: 'inbox', match: (path) => path === '/inbox', load: () => import('../../modules/max/pages/InboxPage') },
-  { key: 'chat', match: (path) => path === '/chat', load: () => import('../../modules/max/pages/ChatPage') },
   { key: 'session-management', match: (path) => path === '/session-management', load: () => import('../../modules/max/pages/SessionManagementPage') },
   { key: 'cases', match: (path) => path === '/cases', load: () => import('../../modules/cases/pages/CasesPage') },
   { key: 'case-form', match: (path) => path.startsWith('/cases/'), load: () => import('../../modules/cases/pages/CaseFormPage') },
@@ -19,7 +18,6 @@ const routeLoaders = [
   { key: 'content', match: (path) => path === '/content', load: () => import('../../modules/content/pages/ContentPage') },
   { key: 'reports', match: (path) => path === '/reports', load: () => import('../../modules/reports/pages/ReportsPage') },
   { key: 'mims-admin', match: (path) => path === '/mims-admin', load: () => import('../../modules/mimsadmin/pages/MIMSAdminPage') },
-  { key: 'developer', match: (path) => path === '/developer', load: () => import('../../modules/devportal/DeveloperPortalPage') },
 ]
 
 export function prefetchRoutePath(pathname = '') {

@@ -13,6 +13,7 @@
  */
 
 import { useState } from 'react'
+import DOMPurify from 'dompurify'
 import { useAuth } from '../context/AuthContext'
 import { httpFetch } from '../api/httpFetch.js'
 
@@ -123,7 +124,7 @@ export default function HelpHint({ featureKey, label = 'Help for this screen', p
                       )}
                       <div
                         style={{ fontSize: 14, color: 'var(--text-primary)', marginTop: 10, lineHeight: 1.7 }}
-                        dangerouslySetInnerHTML={{ __html: a.content_html || '' }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(a.content_html || '') }}
                       />
                     </article>
                   ))}

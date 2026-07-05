@@ -86,6 +86,9 @@ export function PortalProvider({ children }) {
       }
       link.href = b.favicon_url
     }
+
+    // Base tab title from branding; page-level usePageTitle refines it with a label.
+    document.title = b.portal_name || b.custom_domain || 'CP Portal'
   }
 
   const portalHeaders = useCallback(() => {

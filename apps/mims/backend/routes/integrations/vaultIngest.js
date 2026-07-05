@@ -40,6 +40,22 @@ router.post('/admin/vault/ingest', authenticate, async (req, res) => {
     );
     const mimsCategory = mapRow[0]?.mims_cm_category || doc.type__v;
 
+    // H-10: idempotent ingest — if this Vault document was already ingested for this org,
+    // return the existing record instead of inserting a duplicate controlled-content row.
+    const [[alreadyIngested]] = await pool.execute(
+      'SELECT id FROM cm_documents WHERE org_id = ? AND vault_source_id = ? LIMIT 1',
+      [orgId, doc.id]
+    );
+    if (alreadyIngested) {
+      return res.json({
+        message: 'Document already ingested into MIMS CM',
+        cm_document_id: alreadyIngested.id,
+        vault_doc_id: doc.id,
+        mims_category: mimsCategory,
+        idempotent: true,
+      });
+    }
+
     const [result] = await pool.execute(
       "INSERT INTO cm_documents (org_id, title, category, content, status, expiry_date, created_by, vault_source_id, vault_source_status) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?)",
       [

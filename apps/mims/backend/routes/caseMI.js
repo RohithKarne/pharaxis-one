@@ -105,11 +105,22 @@ router.post('/cases/:id/mi', authenticate, async (req, res) => {
   }
 });
 
+// H-19: MI tabs in a terminal state are locked (mirrors the AE/PC version lock model),
+// so a closed/answered response cannot be silently reopened, edited, or deleted.
+function isTerminalMiStatus(s) {
+  return /^(closed|answered|completed|resolved)$/i.test(String(s || '').trim());
+}
+
 // PUT /api/cases/mi/:miId — update an MI tab
 router.put('/cases/mi/:miId', authenticate, async (req, res) => {
   try {
     if (!await verifyMiOrg(req.params.miId, req)) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+    const [[currentMi]] = await pool.execute('SELECT status FROM case_mi WHERE id = ?', [req.params.miId]);
+    if (!currentMi) return res.status(404).json({ error: 'MI tab not found' });
+    if (isTerminalMiStatus(currentMi.status)) {
+      return res.status(409).json({ error: 'This MI response is closed and cannot be modified.' });
     }
     const {
       mi_category, subcategory, product_id,
@@ -163,6 +174,10 @@ router.delete('/cases/mi/:miId', authenticate, async (req, res) => {
   try {
     if (!await verifyMiOrg(req.params.miId, req)) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+    const [[currentMi]] = await pool.execute('SELECT status FROM case_mi WHERE id = ?', [req.params.miId]);
+    if (currentMi && isTerminalMiStatus(currentMi.status)) {
+      return res.status(409).json({ error: 'A closed MI response cannot be deleted.' });
     }
     await pool.execute('DELETE FROM case_mi WHERE id = ?', [req.params.miId]);
     res.json({ success: true });

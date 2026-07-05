@@ -18,6 +18,11 @@ const KEYS = {
   PASSWORD_HISTORY_COUNT:     'password_history_count',
 };
 
+// L-01: Single source of truth for the minimum password length. Consumed by
+// validateComplexity() here and by authController's pre-validation guards so the
+// literal "8" is not duplicated across the codebase.
+const MIN_PASSWORD_LENGTH = 8;
+
 const DEFAULTS = {
   expiry_days:      90,
   require_alpha:    false,
@@ -73,8 +78,8 @@ async function validateComplexity(password) {
   if (!password || typeof password !== 'string') {
     return { ok: false, error: 'Password is required.' };
   }
-  if (password.length < 8) {
-    return { ok: false, error: 'Password must be at least 8 characters.' };
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return { ok: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` };
   }
 
   const policy = await getPolicy();
@@ -98,4 +103,5 @@ module.exports = {
   invalidateCache,
   validateComplexity,
   DEFAULTS,
+  MIN_PASSWORD_LENGTH,
 };

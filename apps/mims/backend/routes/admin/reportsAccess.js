@@ -51,7 +51,11 @@ const REPORT_LABELS = {
   'field-usage': 'Field Usage'
 };
 
-const ROLE = ['admin', 'platform_admin'];
+// H-05: managing cross-org report access is a global operation. `admin` is an
+// ORG-level role (isAdminUser is true for any tenant admin), so allowing it here let a
+// tenant admin enumerate every org and grant/revoke report access across tenants.
+// Tenant-scoped report access is handled by the org-scoped admin/reportAccessRequests.js.
+const ROLE = ['platform_admin'];
 
 // ── GET /api/admin/reports-access/orgs ─────────────────────────────────────
 router.get('/reports-access/orgs', authenticate, requireRole(...ROLE), async (_req, res) => {
@@ -221,6 +225,11 @@ router.put('/reports-access/requests/:id', authenticate, requireRole(...ROLE), a
     const [existing] = await pool.query('SELECT * FROM report_access_requests WHERE id = ?', [id]);
     if (!existing.length) return res.status(404).json({ error: 'Request not found' });
     const req_row = existing[0];
+    // A request may only be approved while still pending — prevents re-approving
+    // a request that was already resolved/revoked.
+    if (status === 'approved' && req_row.status !== 'pending') {
+      return res.status(409).json({ error: 'Only a pending request can be approved.' });
+    }
     await pool.query(`
       UPDATE report_access_requests
       SET status = ?, reviewed_by = ?, reviewed_at = NOW(), notes = ?

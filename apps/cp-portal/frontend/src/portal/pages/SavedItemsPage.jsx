@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 
 export default function SavedItemsPage() {
   const { clientCode, user } = usePortal()
@@ -13,10 +14,7 @@ export default function SavedItemsPage() {
 
   const base = `/portal/${clientCode}`
 
-  useEffect(() => {
-    document.title = 'Saved Items | CP Portal'
-    return () => { document.title = 'CP Portal' }
-  }, [])
+  usePageTitle('Saved Items')
 
   useEffect(() => {
     if (!user) return

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 
 // LOW-15: resource_type icon map (extended)
 const TYPE_ICON = {
@@ -20,8 +21,7 @@ export default function ResourcesPage() {
   const [filter, setFilter]       = useState('')
   const [search, setSearch]       = useState('')
 
-  // LOW-05: set document title
-  useEffect(() => { document.title = 'Resources | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+  usePageTitle('Resources')
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/resources`)

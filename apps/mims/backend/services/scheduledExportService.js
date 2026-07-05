@@ -235,6 +235,26 @@ async function deliverInApp(config, rowCount) {
 }
 
 async function runScheduledExports(now = new Date()) {
+  // M-15(a): advisory lock so overlapping ticks can't double-run configs.
+  // Held on a dedicated connection for the whole sweep; a second runner that
+  // fails to acquire it (timeout 0) returns immediately instead of proceeding.
+  const lockConn = await pool.getConnection();
+  try {
+    const [[lockRow]] = await lockConn.query("SELECT GET_LOCK('scheduled_exports', 0) AS locked");
+    if (!Number(lockRow?.locked)) {
+      return; // another runner already holds the sweep lock
+    }
+    try {
+      await runScheduledExportsLocked(now);
+    } finally {
+      await lockConn.query("SELECT RELEASE_LOCK('scheduled_exports')");
+    }
+  } finally {
+    lockConn.release();
+  }
+}
+
+async function runScheduledExportsLocked(now) {
   const [configs] = await pool.query(
     'SELECT * FROM scheduled_export_configs WHERE is_active = 1 ORDER BY id ASC'
   );
@@ -314,7 +334,11 @@ async function runScheduledExports(now = new Date()) {
         `[ScheduledExport] report failed id=${config.id} org_id=${config.org_id}: ${lastError}`
       );
     } finally {
-      const next = computeNextRunAtUtc(config, new Date(now.getTime() + 60 * 1000));
+      // M-15(b): advance the cursor from this run's scheduled time, not wall-clock
+      // `now`, so cadence stays anchored to the schedule and does not drift when a
+      // tick fires late. +1s past nextRunAt so computeNextRunAtUtc yields the next slot.
+      const cursorBase = new Date(nextRunAt.getTime() + 1000);
+      const next = computeNextRunAtUtc(config, cursorBase);
       await recordReportRun({
         orgId: config.org_id,
         reportKey: resolvedReportKey,

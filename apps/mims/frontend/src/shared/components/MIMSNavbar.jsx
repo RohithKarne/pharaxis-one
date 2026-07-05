@@ -92,10 +92,6 @@ export default function MIMSNavbar({ collapsed, onToggle }) {
         active={isActive('/inbox')}
         disabled={!canAccess('mims_core')} />
 
-      {/* Chat */}
-      <NavItem collapsed={collapsed} to="/chat" icon={<Icon name="chat" />} label="Chat"
-        active={isActive('/chat')}
-        disabled={!canAccess('mims_core')} />
 
       {/* Case Management — accordion */}
       <div className={`mims-sidenav-item${isCasesActive() ? ' active' : ''}${!canAccessAny('mims_core', 'case_mgmt') ? ' disabled' : ''}`}

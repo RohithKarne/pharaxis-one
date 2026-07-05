@@ -60,10 +60,19 @@ router.get('/change-approvals/my-requests', authenticate, requireOrg, async (req
 // PUT /api/admin/change-approvals/:id/approve
 router.put('/change-approvals/:id/approve', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
-    await pool.execute(
-      `UPDATE change_approval_requests SET status = 'approved', approver_id = ?, resolved_at = NOW() WHERE id = ? AND org_id = ?`,
+    const [[existing]] = await pool.execute(
+      `SELECT requester_id FROM change_approval_requests WHERE id = ? AND org_id = ?`,
+      [req.params.id, req.user.orgId]
+    );
+    if (!existing) return res.status(404).json({ error: 'Request not found.' });
+    if (Number(existing.requester_id) === Number(req.user.userId)) {
+      return res.status(403).json({ error: 'You cannot approve your own change request. An independent approver is required.' });
+    }
+    const [result] = await pool.execute(
+      `UPDATE change_approval_requests SET status = 'approved', approver_id = ?, resolved_at = NOW() WHERE id = ? AND org_id = ? AND status = 'pending'`,
       [req.user.userId, req.params.id, req.user.orgId]
     );
+    if (result.affectedRows === 0) return res.status(409).json({ error: 'Request is no longer pending.' });
     await audit(req.user.userId, req.user.email, 'APPROVE', 'change_approval_request', req.params.id, {});
     res.json({ message: 'Request approved.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
@@ -73,10 +82,19 @@ router.put('/change-approvals/:id/approve', authenticate, requireRole('admin', '
 router.put('/change-approvals/:id/reject', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const { rejection_note } = req.body;
-    await pool.execute(
-      `UPDATE change_approval_requests SET status = 'rejected', approver_id = ?, rejection_note = ?, resolved_at = NOW() WHERE id = ? AND org_id = ?`,
+    const [[existing]] = await pool.execute(
+      `SELECT requester_id FROM change_approval_requests WHERE id = ? AND org_id = ?`,
+      [req.params.id, req.user.orgId]
+    );
+    if (!existing) return res.status(404).json({ error: 'Request not found.' });
+    if (Number(existing.requester_id) === Number(req.user.userId)) {
+      return res.status(403).json({ error: 'You cannot reject your own change request. An independent approver is required.' });
+    }
+    const [result] = await pool.execute(
+      `UPDATE change_approval_requests SET status = 'rejected', approver_id = ?, rejection_note = ?, resolved_at = NOW() WHERE id = ? AND org_id = ? AND status = 'pending'`,
       [req.user.userId, rejection_note || null, req.params.id, req.user.orgId]
     );
+    if (result.affectedRows === 0) return res.status(409).json({ error: 'Request is no longer pending.' });
     await audit(req.user.userId, req.user.email, 'REJECT', 'change_approval_request', req.params.id, { rejection_note });
     res.json({ message: 'Request rejected.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }

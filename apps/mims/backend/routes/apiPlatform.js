@@ -4,7 +4,12 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../database/db');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { hasGlobalAdminScope } = require('../utils/adminScope');
+const { assertPublicHttpUrl } = require('../utils/ssrfGuard');
 const { issueClientCredentials, createApiClient } = require('../services/api-platform/tokenIssuer');
+
+// Scopes a client may be granted. '*'/unknown scopes are rejected. (H-04)
+const ALLOWED_API_SCOPES = ['cases:read', 'cases:write', 'webhooks:read', 'webhooks:write'];
 const { apiKeyAuth } = require('../services/api-platform/apiKeyAuth');
 const { scopeGuard } = require('../services/api-platform/scopeGuard');
 const { publicApiRateLimiter } = require('../services/api-platform/rateLimiter');
@@ -33,7 +38,13 @@ router.post('/oauth/token', async (req, res) => {
 
 router.post('/api/admin/api-clients', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const client = await createApiClient({ org_id: req.body.org_id || req.user.orgId, name: req.body.name, scopes: req.body.scopes || ['cases:read'], rate_limit_per_min: req.body.rate_limit_per_min || 60, created_by: req.user.userId });
+    // H-04: only a platform admin may target another org; tenant admins are pinned to their own.
+    const orgId = hasGlobalAdminScope(req.user) ? (req.body.org_id || req.user.orgId) : req.user.orgId;
+    // Validate requested scopes against an allow-list; reject '*' / unknown scopes.
+    const requested = Array.isArray(req.body.scopes) && req.body.scopes.length ? req.body.scopes : ['cases:read'];
+    const invalid = requested.filter((s) => !ALLOWED_API_SCOPES.includes(s));
+    if (invalid.length) return res.status(400).json({ error: `Invalid scope(s): ${invalid.join(', ')}` });
+    const client = await createApiClient({ org_id: orgId, name: req.body.name, scopes: requested, rate_limit_per_min: req.body.rate_limit_per_min || 60, created_by: req.user.userId });
     res.status(201).json(client);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -72,6 +83,20 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
 });
 
 router.put('/api/v1/cases/:id', scopeGuard('cases:write'), async (req, res) => {
+  // M-20: optional optimistic concurrency. If the caller supplies an expected
+  // version, gate the UPDATE on it and return 409 on a stale write. Without it,
+  // behaviour is unchanged (last-write-wins) for backward compatibility.
+  const expected = req.body.expected_version_stamp;
+  if (expected !== undefined && expected !== null && expected !== '') {
+    const [result] = await pool.execute(
+      'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=? AND version_stamp=?',
+      [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id, expected]
+    );
+    if (result.affectedRows === 0) {
+      return res.status(409).json({ error: 'Version conflict: the case was modified since your expected version.' });
+    }
+    return res.json({ id: Number(req.params.id) });
+  }
   await pool.execute(
     'UPDATE cases SET description=COALESCE(?, description), priority=COALESCE(?, priority), version_stamp=version_stamp+1 WHERE id=? AND org_id=?',
     [req.body.description || req.body.subject || null, req.body.priority || null, req.params.id, req.apiClient.org_id]
@@ -118,12 +143,21 @@ router.get('/api/v1/webhook-subscriptions', scopeGuard('webhooks:write'), async 
   res.json({ rows });
 });
 router.post('/api/v1/webhook-subscriptions', scopeGuard('webhooks:write'), async (req, res) => {
+  // H-01: reject non-public / internal URLs at store time (SSRF).
+  let safeUrl;
+  try { safeUrl = await assertPublicHttpUrl(req.body.url); }
+  catch (e) { return res.status(400).json({ error: `Invalid webhook url: ${e.message}` }); }
   const secret = crypto.randomBytes(32).toString('hex');
-  const [result] = await pool.execute('INSERT INTO webhook_subscriptions (client_id, url, events, signing_secret, status) VALUES (?, ?, ?, ?, ?)', [req.apiClient.id, req.body.url, JSON.stringify(req.body.events || []), secret, 'active']);
+  const [result] = await pool.execute('INSERT INTO webhook_subscriptions (client_id, url, events, signing_secret, status) VALUES (?, ?, ?, ?, ?)', [req.apiClient.id, safeUrl, JSON.stringify(req.body.events || []), secret, 'active']);
   res.status(201).json({ id: result.insertId, signing_secret: secret });
 });
 router.put('/api/v1/webhook-subscriptions/:id', scopeGuard('webhooks:write'), async (req, res) => {
-  await pool.execute('UPDATE webhook_subscriptions SET url=COALESCE(?, url), events=COALESCE(?, events), status=COALESCE(?, status) WHERE id=? AND client_id=?', [req.body.url || null, req.body.events ? JSON.stringify(req.body.events) : null, req.body.status || null, req.params.id, req.apiClient.id]);
+  let safeUrl = null;
+  if (req.body.url) {
+    try { safeUrl = await assertPublicHttpUrl(req.body.url); }
+    catch (e) { return res.status(400).json({ error: `Invalid webhook url: ${e.message}` }); }
+  }
+  await pool.execute('UPDATE webhook_subscriptions SET url=COALESCE(?, url), events=COALESCE(?, events), status=COALESCE(?, status) WHERE id=? AND client_id=?', [safeUrl, req.body.events ? JSON.stringify(req.body.events) : null, req.body.status || null, req.params.id, req.apiClient.id]);
   res.json({ id: Number(req.params.id) });
 });
 router.delete('/api/v1/webhook-subscriptions/:id', scopeGuard('webhooks:write'), async (req, res) => {
@@ -135,7 +169,16 @@ router.get('/api/v1/webhook-subscriptions/:id/deliveries', scopeGuard('webhooks:
   res.json({ rows });
 });
 router.post('/api/v1/webhook-subscriptions/:id/deliveries/:dId/replay', scopeGuard('webhooks:write'), async (req, res) => {
-  await pool.execute('UPDATE webhook_deliveries SET attempt_count=0, next_retry_at=CURRENT_TIMESTAMP WHERE id=?', [req.params.dId]);
+  // C-05: scope the replay to the caller's own subscription + client, not the bare delivery id,
+  // otherwise any client could re-fire another org's webhook delivery by enumerating :dId.
+  const [r] = await pool.execute(
+    `UPDATE webhook_deliveries d
+       JOIN webhook_subscriptions s ON s.id = d.subscription_id
+        SET d.attempt_count = 0, d.next_retry_at = CURRENT_TIMESTAMP
+      WHERE d.id = ? AND d.subscription_id = ? AND s.client_id = ?`,
+    [req.params.dId, req.params.id, req.apiClient.id]
+  );
+  if (r.affectedRows === 0) return res.status(404).json({ error: 'Delivery not found' });
   res.json({ queued: true });
 });
 
@@ -144,39 +187,13 @@ router.post('/api/v1/webhook-deliveries/flush', scopeGuard('webhooks:write'), as
   res.json({ results });
 });
 
-router.post('/api/v1/graphql', scopeGuard('graphql:read'), async (req, res) => {
-  const query = String(req.body?.query || '');
-  if (query.includes('cases')) {
-    const [rows] = await pool.execute('SELECT id, case_number, case_type, priority FROM cases WHERE org_id=? AND is_deleted=0 LIMIT 20', [req.apiClient.org_id]);
-    return res.json({ data: { cases: rows } });
-  }
-  res.json({ data: { viewer: { clientId: req.apiClient.client_id, orgId: req.apiClient.org_id } } });
-});
+// CUT (product rationalization): GraphQL was a stub endpoint duplicating REST; removed.
 
 router.get('/api/v1/webhook-signature-example', scopeGuard('webhooks:write'), (req, res) => {
   const payload = { event: 'case.created', id: 1 };
   res.json({ payload, signature: signPayload('example-secret', payload) });
 });
 
-router.get('/api/v1/sdk/:language', scopeGuard('admin:read'), async (req, res) => {
-  const language = ['node', 'python', 'java'].includes(req.params.language) ? req.params.language : 'node';
-  await pool.execute('INSERT INTO api_sdk_downloads (client_id, sdk_language) VALUES (?, ?)', [req.apiClient.id, language]).catch(() => {});
-  const snippets = {
-    node: `export async function listCases(baseUrl, token) {
-  const res = await fetch(baseUrl + '/api/v1/cases', { headers: { Authorization: 'Bearer ' + token } });
-  return res.json();
-}
-`,
-    python: `import requests
-
-def list_cases(base_url, token):
-    return requests.get(base_url + '/api/v1/cases', headers={'Authorization': f'Bearer {token}'}).json()
-`,
-    java: `// Java SDK stub
-// Use java.net.http.HttpClient with Authorization: Bearer <token> against /api/v1/cases
-`,
-  };
-  res.type('text/plain').send(snippets[language]);
-});
+// CUT (product rationalization): the SDK-snippet endpoint (Node/Python/Java stubs) is removed.
 
 module.exports = router;

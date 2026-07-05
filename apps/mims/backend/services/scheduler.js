@@ -126,26 +126,8 @@ const HANDLERS = {
     const { runSignalDetection } = require('./pv/signalDetectionService')
     for (const org of orgs) await runSignalDetection(org.id)
   },
-  'novartis-daily-simulation': async () => {
-    const { runNovartisSimulation } = require('./novartisSimulationService')
-    await runNovartisSimulation({ orgId: 1, useScheduledConfig: true })
-  },
-  'extra-org-daily-simulation': async () => {
-    // Runs simulation for any additional demo orgs configured via EXTRA_DEMO_ORG_IDS env var.
-    // Set EXTRA_DEMO_ORG_IDS=2,3 to simulate orgs 2 and 3 alongside Novartis-Demo (org 1).
-    const raw = process.env.EXTRA_DEMO_ORG_IDS || ''
-    const orgIds = raw.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isInteger(n) && n > 0)
-    if (!orgIds.length) return
-    const { runNovartisSimulation } = require('./novartisSimulationService')
-    for (const orgId of orgIds) {
-      try {
-        await runNovartisSimulation({ orgId, useScheduledConfig: true })
-        logger.info({ orgId }, 'extra-org-daily-simulation: completed')
-      } catch (err) {
-        logger.error({ orgId, err: err.message }, 'extra-org-daily-simulation: failed for org')
-      }
-    }
-  },
+  // CUT (product rationalization): Novartis demo-data simulation removed — it fabricated
+  // ~100k synthetic cases/day for a single seeded org and is not a product feature.
   'login-audit-archive': async () => {
     let retentionDays = 90
     try {

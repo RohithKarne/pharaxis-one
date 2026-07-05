@@ -8,7 +8,9 @@ const { parseEmirEmail } = require('../../services/emirParser');
 
 router.post('/admin/emir/receive', authenticate, async (req, res) => {
   try {
-    const orgId = req.body.org_id || req.user.orgId;
+    // C-02: never trust a client-supplied org_id — always bind to the caller's org.
+    // Allowing req.body.org_id let any authenticated user create cases under an arbitrary tenant.
+    const orgId = req.user.orgId;
     const emailData = {
       from: req.body.from_email,
       subject: req.body.subject,

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
 
 const STATUS_LABELS = { submitted: 'Submitted', pending_sync: 'Pending', synced: 'Synced', failed_sync: 'Failed', closed: 'Closed' }
@@ -13,7 +14,7 @@ export default function MyActivityPage() {
   const [follows, setFollows] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { document.title = 'My Activity | CP Portal'; return () => { document.title = 'CP Portal' } }, [])
+  usePageTitle('My Activity')
 
   useEffect(() => {
     if (!user) { navigate(`${base}/login`); return }

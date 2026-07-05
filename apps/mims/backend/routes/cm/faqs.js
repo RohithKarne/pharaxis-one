@@ -331,6 +331,9 @@ router.post('/faqs/:id/approve', authenticate, requireCapability('content.approv
     if (!['Pending', 'Under Review'].includes(faq.status)) {
       return res.status(400).json({ error: 'FAQ must be in Pending or Under Review status to approve.' });
     }
+    if (Number(req.user.userId) === Number(faq.created_by)) {
+      return res.status(403).json({ error: 'The author of a document cannot approve it. An independent reviewer is required.' });
+    }
 
     const [[user]] = await pool.execute('SELECT * FROM users WHERE id = ?', [req.user.userId]);
     // WP5: guard against missing user / SSO-only (null password) account — bcrypt.compare

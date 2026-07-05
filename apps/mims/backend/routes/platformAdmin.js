@@ -63,7 +63,10 @@ function normalizeAlertRulePayload(input, fallback = {}) {
 }
 
 function csvEscape(value) {
-  const normalized = value === undefined || value === null ? '' : String(value);
+  let normalized = value === undefined || value === null ? '' : String(value);
+  // Neutralise CSV formula injection: prefix a single quote when the value
+  // starts with a formula trigger (=, +, -, @) or a tab/CR.
+  if (/^[=+\-@\t\r]/.test(normalized)) normalized = `'${normalized}`;
   if (normalized.includes('"') || normalized.includes(',') || normalized.includes('\n')) {
     return `"${normalized.replace(/"/g, '""')}"`;
   }
@@ -216,7 +219,7 @@ router.put('/users/:id/modules', authenticate, requireRole('platform_admin'), as
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.get('/dashboard', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
+router.get('/dashboard', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const summary = await getDashboardSummary();
     res.json(summary);
@@ -228,7 +231,7 @@ router.get('/dashboard', authenticate, requireRole('admin', 'platform_admin'), a
 // ── ORGANISATIONS ────────────────────────────────────────────────────────────
 
 // GET /api/admin/platform/orgs — list all orgs with their sites
-router.get('/orgs', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
+router.get('/orgs', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [orgs] = await pool.execute('SELECT * FROM organisations ORDER BY name');
     const [sites] = await pool.execute('SELECT * FROM sites ORDER BY name');
@@ -243,7 +246,7 @@ router.get('/orgs', authenticate, requireRole('admin', 'platform_admin'), async 
 });
 
 // POST /api/admin/platform/orgs — create organisation
-router.post('/orgs', authenticate, requireRole('admin', 'platform_admin'), validate(schemas.createOrg), async (req, res) => {
+router.post('/orgs', authenticate, requireRole('platform_admin'), validate(schemas.createOrg), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Organisation name is required.' });
   try {
@@ -255,7 +258,7 @@ router.post('/orgs', authenticate, requireRole('admin', 'platform_admin'), valid
 });
 
 // PUT /api/admin/platform/orgs/:id — update org (name / active status / session timeout)
-router.put('/orgs/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.put('/orgs/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const {
       name,
@@ -267,6 +270,9 @@ router.put('/orgs/:id', authenticate, requireRole('admin', 'platform_admin'), as
     } = req.body;
     const [[existing]] = await pool.execute('SELECT * FROM organisations WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Organisation not found.' });
+    // M-19: normalise is_active ONCE to a number so a boolean payload (is_active:true)
+    // cannot bypass the strict-equality readiness/deactivation gates below.
+    const active = is_active === undefined ? existing.is_active : (is_active ? 1 : 0);
     if (session_timeout_minutes !== undefined) {
       const mins = parseInt(session_timeout_minutes);
       if (isNaN(mins) || mins < 30)
@@ -277,7 +283,7 @@ router.put('/orgs/:id', authenticate, requireRole('admin', 'platform_admin'), as
       if (isNaN(days) || days < 1)
         return res.status(400).json({ error: 'Remember-device duration must be at least 1 day.' });
     }
-    if (!existing.is_active && is_active === 1) {
+    if (!existing.is_active && active === 1) {
       const readiness = await getOrgReadiness(Number(req.params.id));
       if (!readiness.ready) {
         return res.status(409).json({
@@ -294,7 +300,7 @@ router.put('/orgs/:id', authenticate, requireRole('admin', 'platform_admin'), as
        WHERE id = ?`,
       [
         name ?? existing.name,
-        is_active !== undefined ? (is_active ? 1 : 0) : existing.is_active,
+        active,
         session_timeout_minutes ?? existing.session_timeout_minutes ?? 30,
         two_factor_enabled !== undefined ? (two_factor_enabled ? 1 : 0) : existing.two_factor_enabled,
         two_factor_methods ?? existing.two_factor_methods ?? 'email,totp',
@@ -306,7 +312,7 @@ router.put('/orgs/:id', authenticate, requireRole('admin', 'platform_admin'), as
       name, is_active, session_timeout_minutes, two_factor_enabled, two_factor_methods,
       two_factor_remember_days,
     });
-    if (existing.is_active && is_active === 0) {
+    if (existing.is_active && active === 0) {
       await emitPlatformAdminAlert('organization_deactivated', {
         severity: 'medium',
         title: 'Organisation deactivated',
@@ -319,7 +325,7 @@ router.put('/orgs/:id', authenticate, requireRole('admin', 'platform_admin'), as
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-router.get('/orgs/:id/readiness', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.get('/orgs/:id/readiness', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const readiness = await getOrgReadiness(Number(req.params.id));
     res.json({ readiness });
@@ -331,7 +337,7 @@ router.get('/orgs/:id/readiness', authenticate, requireRole('admin', 'platform_a
   }
 });
 
-router.post('/orgs/:id/bootstrap', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/orgs/:id/bootstrap', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const readiness = await bootstrapOrg(Number(req.params.id), req.user.userId);
     await audit(req.user.userId, req.user.email, 'BOOTSTRAP', 'organisation', Number(req.params.id), { source: 'platform_admin' });
@@ -344,7 +350,7 @@ router.post('/orgs/:id/bootstrap', authenticate, requireRole('admin', 'platform_
   }
 });
 
-router.post('/orgs/:id/repair', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/orgs/:id/repair', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const readiness = await repairOrgData(Number(req.params.id));
     await audit(req.user.userId, req.user.email, 'REPAIR', 'organisation', Number(req.params.id), { source: 'platform_admin' });
@@ -358,7 +364,7 @@ router.post('/orgs/:id/repair', authenticate, requireRole('admin', 'platform_adm
 });
 
 // GET /api/admin/platform/config — get system config (e.g. platform admin timeout)
-router.get('/config', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
+router.get('/config', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const config = rows.reduce((acc, r) => { acc[r.config_key] = r.config_value; return acc; }, {});
@@ -373,7 +379,7 @@ router.get('/config', authenticate, requireRole('admin', 'platform_admin'), asyn
 });
 
 // PUT /api/admin/platform/config — update system config
-router.put('/config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.put('/config', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const {
       platform_admin_session_timeout_minutes,
@@ -438,7 +444,7 @@ router.put('/config', authenticate, requireRole('admin', 'platform_admin'), asyn
 });
 
 // POST /api/admin/platform/config/test-email — verify SMTP config and optionally send a test email
-router.post('/config/test-email', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/config/test-email', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT config_key, config_value FROM system_config');
     const currentConfig = rows.reduce((acc, row) => {
@@ -524,7 +530,7 @@ router.post('/config/test-email', authenticate, requireRole('admin', 'platform_a
 });
 
 // POST /api/admin/platform/orgs/:id/sites — create site under an org
-router.post('/orgs/:id/sites', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.post('/orgs/:id/sites', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { name, country, is_primary } = req.body;
     if (!name) return res.status(400).json({ error: 'Site name is required.' });
@@ -543,7 +549,7 @@ router.post('/orgs/:id/sites', authenticate, requireRole('admin', 'platform_admi
 });
 
 // PUT /api/admin/platform/sites/:id — update site
-router.put('/sites/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+router.put('/sites/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
   try {
     const { name, country, is_primary, is_active } = req.body;
     const [[existing]] = await pool.execute('SELECT id, name, is_active FROM sites WHERE id = ?', [req.params.id]);
@@ -651,10 +657,28 @@ router.put('/users/:id', authenticate, requireRole('platform_admin'), async (req
     const { name, email, role, org_id, is_active } = req.body;
     if (role && !ASSIGNABLE_ROLES.includes(role))
       return res.status(400).json({ error: `Invalid role. Allowed roles: ${ASSIGNABLE_ROLES.join(', ')}.` });
+    // C-07: COALESCE every column so a partial payload (e.g. only is_active) can no longer
+    // null out name/email/role. Org membership is managed via the /users/:id/org-access
+    // routes (user_org_access); users.org_id is a legacy mirror kept in sync best-effort.
     await pool.execute(
-      'UPDATE users SET name = ?, email = ?, role = ?, org_id = ?, is_active = ? WHERE id = ?',
-      [name, email, role, org_id || null, is_active ? 1 : 0, req.params.id]
+      `UPDATE users SET
+         name      = COALESCE(?, name),
+         email     = COALESCE(?, email),
+         role      = COALESCE(?, role),
+         org_id    = COALESCE(?, org_id),
+         is_active = COALESCE(?, is_active)
+       WHERE id = ?`,
+      [
+        name ?? null, email ?? null, role ?? null, org_id ?? null,
+        is_active === undefined ? null : (is_active ? 1 : 0),
+        req.params.id,
+      ]
     );
+    // M-16: when a user is deactivated, also deactivate their org-access rows so
+    // they no longer appear as active members.
+    if (is_active !== undefined && !is_active) {
+      await pool.execute('UPDATE user_org_access SET is_active = 0 WHERE user_id = ?', [req.params.id]);
+    }
     await audit(req.user.userId, req.user.email, 'UPDATE', 'user', req.params.id, { name, email, role, org_id, is_active });
     res.json({ message: 'Updated.' });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
@@ -752,6 +776,9 @@ router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), a
          )`,
         [action === 'activate' ? 1 : 0, ids]
       );
+      if (action === 'deactivate') {
+        await pool.query('UPDATE user_org_access SET is_active = 0 WHERE user_id IN (?)', [ids]);
+      }
     }
     await audit(req.user.userId, req.user.email, 'BULK_USER_ACTION', 'user', null, { action, userIds: ids });
     res.json({ message: 'Bulk action completed.' });
@@ -1142,7 +1169,7 @@ router.delete('/users/:id/org-access/:orgId', authenticate, requireRole('platfor
 });
 
 // GET /api/admin/platform/orgs-for-assignment — all active orgs with their sites (for assignment dropdown)
-router.get('/orgs-for-assignment', authenticate, requireRole('admin', 'platform_admin'), async (_req, res) => {
+router.get('/orgs-for-assignment', authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
     const [orgs]  = await pool.execute('SELECT id, name FROM organisations WHERE is_active = 1 ORDER BY name');
     const [sites] = await pool.execute('SELECT id, org_id, name FROM sites WHERE is_active = 1 ORDER BY name');
@@ -1219,7 +1246,7 @@ const logoUpload = multer({
 });
 
 // POST /api/admin/platform/orgs/:orgId/logo
-router.post('/orgs/:orgId/logo', authenticate, requireRole('admin', 'platform_admin'), logoUpload.single('logo'), validateUpload(['image']), async (req, res) => {
+router.post('/orgs/:orgId/logo', authenticate, requireRole('platform_admin'), logoUpload.single('logo'), validateUpload(['image']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
     const logoUrl = `/storage/org_logos/${req.file.filename}`;

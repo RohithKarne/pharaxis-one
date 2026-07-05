@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 
 export default function LoginPage() {
   const { clientCode, login, user } = usePortal()
@@ -9,13 +10,12 @@ export default function LoginPage() {
   const base                  = `/portal/${clientCode}`
   const returnTo              = location.state?.from || base
 
+  usePageTitle('Sign In')
+
   // AUTH-03: redirect already-authenticated users away from the login page
   useEffect(() => {
     if (user) navigate(base, { replace: true })
   }, [user, base, navigate])
-
-  // LOW-05: set document title
-  useEffect(() => { document.title = 'Sign In | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
 
   const [form, setForm]       = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)

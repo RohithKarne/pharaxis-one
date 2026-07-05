@@ -1358,6 +1358,10 @@ router.post('/:id/link-case', authenticate, async (req, res) => {
     if (!(await hasInboxOrgAccess(req, caseRow.org_id))) {
       return res.status(403).json({ error: 'Cannot link inquiry to a case outside your organisation.' });
     }
+    // M-21: inquiry and case must belong to the same organisation.
+    if (Number(inquiry.org_id) !== Number(caseRow.org_id)) {
+      return res.status(400).json({ error: 'Inquiry and case belong to different organisations.' });
+    }
 
     await pool.execute(
       `UPDATE inquiries

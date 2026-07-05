@@ -89,8 +89,11 @@ async function recordDiff({
   return Promise.all(writes);
 }
 
-async function list({ entityType, entityId, field = null, limit = 100 }) {
-  const params = [entityType, Number(entityId)];
+async function list({ orgId, entityType, entityId, field = null, limit = 100 }) {
+  // C-03: org_id is required and applied server-side — field-value history holds
+  // old/new values of reporter/patient PII, so a read must be scoped to the caller's org.
+  if (!orgId) throw new Error('orgId is required');
+  const params = [orgId, entityType, Number(entityId)];
   let sql = `
     SELECT h.id, h.section_name, h.field_name,
            h.old_value, h.new_value, h.reason, h.source,
@@ -98,7 +101,7 @@ async function list({ entityType, entityId, field = null, limit = 100 }) {
            u.name AS changed_by_name
       FROM field_value_history h
       LEFT JOIN users u ON u.id = h.changed_by
-     WHERE h.entity_type = ? AND h.entity_id = ?
+     WHERE h.org_id = ? AND h.entity_type = ? AND h.entity_id = ?
   `;
   if (field) { sql += ' AND h.field_name = ?'; params.push(field); }
   sql += ' ORDER BY h.changed_at DESC LIMIT ?';

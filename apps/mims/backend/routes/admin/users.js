@@ -199,6 +199,20 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
   }
 });
 
+// Roles a non-global (tenant) admin may never assign. (H-02 / H-13)
+const ELEVATED_ROLES = new Set(['platform_admin']);
+
+// Org ids the caller may assign users to. Returns null for global admins (unrestricted);
+// otherwise the set of orgs the caller is an active member of. (H-03)
+async function callerAssignableOrgIds(req) {
+  if (hasGlobalAdminScope(req.user)) return null;
+  const [rows] = await pool.execute(
+    'SELECT org_id FROM user_org_access WHERE user_id = ? AND is_active = 1',
+    [req.user.userId]
+  );
+  return new Set(rows.map((r) => Number(r.org_id)));
+}
+
 // ── POST /api/admin/users — create user ───────────────────────────────────────
 router.post('/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const {
@@ -239,6 +253,47 @@ router.post('/users', authenticate, requireRole('admin', 'platform_admin'), asyn
       return res.status(409).json({ error: 'Email address already in use.' });
     }
 
+    // Derive the effective role from the security group (H-13: users.role is not free-form
+    // body input — it mirrors the assigned group so the global admin gate can't be set
+    // independently of the group).
+    let roleAtOrg = 'agent';
+    if (security_group_id) {
+      const [[sg]] = await conn.execute(
+        'SELECT privileges FROM security_groups WHERE id = ? LIMIT 1', [security_group_id]
+      );
+      let parsedRole = null;
+      if (sg?.privileges) {
+        try {
+          const priv = typeof sg.privileges === 'string' ? JSON.parse(sg.privileges) : sg.privileges;
+          if (priv?.role) parsedRole = priv.role;
+        } catch (parseErr) {
+          // L-11: surface the silent fall-through to the 'agent' default.
+          console.warn(`POST /users: security group ${security_group_id} has unparseable privileges JSON, defaulting role_at_org to 'agent':`, parseErr.message);
+        }
+      }
+      if (parsedRole) {
+        roleAtOrg = parsedRole;
+      } else {
+        // L-11: no parseable role on the group — the 'agent' default now warns instead of being silent.
+        console.warn(`POST /users: security group ${security_group_id} has no parseable role; defaulting role_at_org to 'agent'.`);
+      }
+    }
+
+    // H-02 / H-03: a non-global (tenant) admin may not mint an elevated role and may only
+    // assign users to organisations they themselves belong to.
+    if (!hasGlobalAdminScope(req.user)) {
+      if (ELEVATED_ROLES.has(roleAtOrg)) {
+        await conn.rollback();
+        return res.status(403).json({ error: 'You are not permitted to assign a platform-admin security group.' });
+      }
+      const allowedOrgs = await callerAssignableOrgIds(req);
+      const bad = tenant_ids.map(Number).filter((id) => !allowedOrgs.has(id));
+      if (bad.length) {
+        await conn.rollback();
+        return res.status(403).json({ error: 'You can only assign users to organisations you belong to.' });
+      }
+    }
+
     // Temporary default password — user must reset on first login
     const tempPassword = await bcrypt.hash('Temp@12345!', SALT_ROUNDS);
     const { expiry_days } = await passwordPolicy.getPolicy();
@@ -253,25 +308,13 @@ router.post('/users', authenticate, requireRole('admin', 'platform_admin'), asyn
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 1, ?)`,
       [
         user_id.trim(), name.trim(), email.trim().toLowerCase(), tempPassword,
-        role, initials?.trim() || null, security_group_id || null,
+        roleAtOrg, initials?.trim() || null, security_group_id || null,
         network_user_id?.trim() || null, department?.trim() || null,
         is_primary_ref ? 1 : 0, access_admin_site ? 1 : 0,
         case_admin ? 1 : 0, expiresAt,
       ]
     );
     const newUserId = insert.insertId;
-
-    // Tenant assignments — derive role from security group
-    let roleAtOrg = 'agent';
-    if (security_group_id) {
-      const [[sg]] = await conn.execute(
-        'SELECT privileges FROM security_groups WHERE id = ? LIMIT 1', [security_group_id]
-      );
-      if (sg?.privileges) {
-        const priv = typeof sg.privileges === 'string' ? JSON.parse(sg.privileges) : sg.privileges;
-        if (priv?.role) roleAtOrg = priv.role;
-      }
-    }
 
     for (const orgId of tenant_ids) {
       await conn.execute(
@@ -330,6 +373,11 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
         [req.params.id, req.user.orgId ?? null]
       );
       if (!inOrg) return res.status(403).json({ error: 'You can only modify users within your organisation.' });
+    }
+
+    // H-02: a non-global admin may not elevate a user to a platform-admin role.
+    if (role != null && !hasGlobalAdminScope(req.user) && ELEVATED_ROLES.has(String(role))) {
+      return res.status(403).json({ error: 'You are not permitted to assign the platform_admin role.' });
     }
 
     // user_id uniqueness check (exclude self)
@@ -498,6 +546,20 @@ router.put('/users/:id/tenants', authenticate, requireRole('admin', 'platform_ad
     if (sg?.privileges) {
       const priv = typeof sg.privileges === 'string' ? JSON.parse(sg.privileges) : sg.privileges;
       if (priv?.role) roleAtOrg = priv.role;
+    }
+
+    // H-02 / H-03: non-global admins cannot assign an elevated role or orgs they don't belong to.
+    if (!hasGlobalAdminScope(req.user)) {
+      if (ELEVATED_ROLES.has(roleAtOrg)) {
+        await conn.rollback();
+        return res.status(403).json({ error: 'You are not permitted to assign a platform-admin security group.' });
+      }
+      const allowedOrgs = await callerAssignableOrgIds(req);
+      const bad = tenant_ids.map(Number).filter((id) => !allowedOrgs.has(id));
+      if (bad.length) {
+        await conn.rollback();
+        return res.status(403).json({ error: 'You can only assign users to organisations you belong to.' });
+      }
     }
 
     // Deactivate all existing

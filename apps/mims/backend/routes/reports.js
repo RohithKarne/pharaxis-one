@@ -358,8 +358,8 @@ router.get('/reports/case-ae-summary', authenticate, async (req, res) => {
     const sql = `
       SELECT
         COUNT(DISTINCT c.id) as total_ae_cases,
-        SUM(CASE WHEN ae.is_serious = 1 THEN 1 ELSE 0 END) as serious,
-        SUM(CASE WHEN ae.outcome IS NOT NULL AND ae.outcome <> '' THEN 1 ELSE 0 END) as with_outcome
+        COUNT(DISTINCT CASE WHEN ae.is_serious = 1 THEN c.id END) as serious,
+        COUNT(DISTINCT CASE WHEN ae.outcome IS NOT NULL AND ae.outcome <> '' THEN c.id END) as with_outcome
       FROM cases c
       LEFT JOIN case_ae_versions av ON av.case_id = c.id
       LEFT JOIN case_ae_events ae ON ae.version_id = av.id
@@ -386,6 +386,7 @@ router.get('/reports/case-duplicates', authenticate, async (req, res) => {
       JOIN cases c2 ON c1.org_id = c2.org_id
         AND c1.case_type = c2.case_type
         AND c1.id <> c2.id
+        AND c2.is_deleted = 0
         AND ABS(TIMESTAMPDIFF(HOUR, c1.created_at, c2.created_at)) <= 24
       WHERE c1.org_id = ? AND c1.is_deleted = 0
     `;
@@ -534,29 +535,26 @@ router.get('/reports/user-activity', authenticate, async (req, res) => {
     const orgId = resolveReportOrgId(req);
     const df = dateFilters(date_from, date_to, 's.created_at');
 
-    // WP5: the date filter was appended as ` AND <df>` right after the LEFT JOIN, so it
-    // landed in the JOIN ON clause (not WHERE) and never actually filtered the report.
-    // Moved into WHERE so the date range applies as intended.
+    // L-08: the session date range must sit in the LEFT JOIN ... ON clause, not WHERE.
+    // In WHERE it filters out the NULL `s.*` rows produced for users with no sessions in
+    // range, turning the LEFT JOIN into an effective INNER JOIN. Placing it in ON keeps
+    // those users with session_count = 0.
     let sql = `
       SELECT u.name, u.email, u.role,
         COUNT(s.id) as session_count,
         MAX(s.created_at) as last_login
       FROM users u
-      LEFT JOIN sessions s ON s.user_id = u.id
+      LEFT JOIN sessions s ON s.user_id = u.id${df.sql ? ` AND ${df.sql}` : ''}
       WHERE u.is_active = 1
         AND EXISTS (SELECT 1 FROM user_org_access uoa WHERE uoa.user_id = u.id AND uoa.org_id = ? AND uoa.is_active = 1)
     `;
-
-    if (df.sql) {
-      sql += ` AND ${df.sql}`;
-    }
 
     sql += `
       GROUP BY u.id, u.name, u.email, u.role
       ORDER BY session_count DESC
     `;
 
-    const params = [orgId, ...df.params];
+    const params = [...df.params, orgId];
     const [rows] = await pool.execute(sql, params);
     return res.json({ data: rows });
   } catch (err) {

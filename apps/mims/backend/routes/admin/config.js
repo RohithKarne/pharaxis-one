@@ -95,7 +95,7 @@ router.get('/source-types', authenticate, requireRole('admin', 'platform_admin')
     const [sources] = await pool.execute(
       hasPlatformAdminScope(req)
         ? 'SELECT * FROM source_types ORDER BY name'
-        : 'SELECT * FROM source_types WHERE org_id = ? ORDER BY name',
+        : 'SELECT * FROM source_types WHERE (org_id = ? OR org_id IS NULL) ORDER BY name',
       hasPlatformAdminScope(req) ? [] : [req.user.orgId]
     );
     res.json({ sources });
@@ -817,6 +817,11 @@ router.get('/system-config', authenticate, requireRole('admin', 'platform_admin'
 // POST /api/admin/system-config — upsert a system_config key/value
 router.post('/system-config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
+    // M-17: system_config is global; only platform admins may write it. A tenant
+    // admin must not be able to upsert arbitrary global config keys/values.
+    if (!hasGlobalAdminScope(req.user)) {
+      return res.status(403).json({ error: 'Only platform admins can modify system configuration.' });
+    }
     const { key, value } = req.body;
     if (!key) return res.status(400).json({ error: 'key is required.' });
     await pool.execute(

@@ -497,9 +497,11 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       })
       const data = await res.json()
       if (!res.ok) return showAlert(data.error || 'Could not send forgot-password code.')
-      setForgotMeta(meta => ({ ...meta, maskedEmail: data.maskedEmail || '' }))
+      // L-02: backend no longer returns maskedEmail (account-enumeration hardening),
+      // so show a generic, existence-agnostic confirmation.
+      setForgotMeta(meta => ({ ...meta, maskedEmail: '' }))
       setForgotStep('code')
-      showAlert(`Verification code sent to ${data.maskedEmail}.`, 'success')
+      showAlert('If an account exists for that email, a verification code has been sent.', 'success')
     } catch {
       showAlert('Cannot connect to server.')
     } finally {

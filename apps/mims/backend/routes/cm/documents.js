@@ -420,7 +420,13 @@ router.get('/documents/search', authenticate, async (req, res) => {
       params.push(req.user.orgId);
     }
     if (folder_id) { query += ` AND d.folder_id = ?`; params.push(folder_id); }
-    if (status) { query += ` AND d.status = ?`; params.push(status); }
+    if (status) {
+      query += ` AND d.status = ?`;
+      params.push(status);
+    } else if (req.query.include_expired !== 'true') {
+      // Default: only surface live content — published and not expired
+      query += ` AND d.status = 'Published' AND (d.expiry_date IS NULL OR d.expiry_date >= CURDATE())`;
+    }
     query += ` ORDER BY relevance DESC LIMIT 50`;
     const [rows] = await pool.execute(query, params);
     res.json({ documents: rows });
@@ -846,6 +852,9 @@ router.post('/documents/:id/approve', authenticate, requireCapability('content.a
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
     if (!['Pending', 'Under Review'].includes(doc.status)) {
       return res.status(400).json({ error: 'Document must be in Pending or Under Review status to approve.' });
+    }
+    if (Number(req.user.userId) === Number(doc.created_by)) {
+      return res.status(403).json({ error: 'The author of a document cannot approve it. An independent reviewer is required.' });
     }
 
     const match = await verifyEsignPassword(req.user.userId, password);
@@ -1406,7 +1415,7 @@ router.get('/documents/:id/download', authenticate, async (req, res) => {
       : path.join(__dirname, '../../', doc.file_path);
     const mime = doc.file_mime || 'application/octet-stream';
     res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Disposition', `attachment; filename="${doc.file_name || 'document'}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${(doc.file_name || 'document').replace(/"/g, '')}"`);
     res.sendFile(absPath, err => {
       if (err && !res.headersSent) res.status(500).json({ error: 'Could not serve file.' });
     });
@@ -1437,7 +1446,7 @@ router.get('/documents/:id/file', authenticate, async (req, res) => {
 
     const mime = doc.file_mime || 'application/octet-stream';
     res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Disposition', `inline; filename="${doc.file_name || 'document'}"`);
+    res.setHeader('Content-Disposition', `inline; filename="${(doc.file_name || 'document').replace(/"/g, '')}"`);
     res.sendFile(absPath, err => {
       if (err) {
         console.error('GET /cm/documents/:id/file sendFile error:', err.message);

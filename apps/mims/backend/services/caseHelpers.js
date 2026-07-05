@@ -268,9 +268,13 @@ async function logResponseError(orgId, caseId, errorType, errorMessage, details)
   } catch (_) {}
 }
 
-async function writeCaseAudit(caseId, userId, userName, actionType, fieldName, oldValue, newValue) {
+// C-09: pass a transaction `conn` to make the audit row atomic with the business write.
+// Audit failures are always logged (never silently swallowed); inside a transaction we
+// re-throw so the caller rolls back rather than committing a case change with no audit trail.
+async function writeCaseAudit(caseId, userId, userName, actionType, fieldName, oldValue, newValue, conn = null) {
+  const exec = conn || pool;
   try {
-    await pool.execute(
+    await exec.execute(
       `INSERT INTO case_audit_trail (case_id, user_id, user_name, action_type, field_name, old_value, new_value)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -279,20 +283,23 @@ async function writeCaseAudit(caseId, userId, userName, actionType, fieldName, o
         newValue !== undefined && newValue !== null ? String(newValue) : null,
       ]
     );
-  } catch (_) {
-    // best-effort: audit must never block case operations
+  } catch (err) {
+    logger.error({ err: err.message, caseId, actionType, fieldName }, 'writeCaseAudit failed to persist audit row');
+    if (conn) throw err;
   }
 }
 
-async function writeAuditLog(userId, userName, action, entity, entityId, details = null) {
+async function writeAuditLog(userId, userName, action, entity, entityId, details = null, conn = null) {
+  const exec = conn || pool;
   try {
-    await pool.execute(
+    await exec.execute(
       `INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [userId || null, userName || null, action, entity, entityId || null, details ? JSON.stringify(details) : null]
     );
-  } catch (_) {
-    // best-effort only
+  } catch (err) {
+    logger.error({ err: err.message, action, entity, entityId }, 'writeAuditLog failed to persist audit row');
+    if (conn) throw err;
   }
 }
 
@@ -301,6 +308,28 @@ async function pushNotification(userId, { category = 'general', title, message, 
     await createNotification(userId, { category, title, message, linkUrl, metadata });
   } catch (_) {
     // best-effort: notification should not fail main transaction path
+  }
+}
+
+/**
+ * withTxn — run `fn(conn)` inside a single transaction with guaranteed
+ * commit / rollback / release. Pass the `conn` into the business writes AND
+ * writeCaseAudit/writeAuditLog so a regulated state change and its audit row
+ * commit atomically (C-09). Do side effects (notifications, event emits,
+ * response-only re-selects) AFTER the returned promise resolves, never inside.
+ */
+async function withTxn(fn) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const result = await fn(conn);
+    await conn.commit();
+    return result;
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) {}
+    throw err;
+  } finally {
+    conn.release();
   }
 }
 
@@ -611,6 +640,8 @@ module.exports = {
   normalizePcTransmissionPriority,
   // Search
   buildGlobalCaseSearchClause,
+  // Transactions
+  withTxn,
   // DB write helpers
   logResponseError,
   writeCaseAudit,

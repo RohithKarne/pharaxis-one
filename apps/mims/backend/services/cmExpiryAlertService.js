@@ -13,7 +13,8 @@ async function runCmExpiryAlerts() {
     const [docs] = await pool.execute(`
       SELECT d.id, d.doc_id, d.name, d.expiry_date, d.alert_days, d.alert_email_account_id,
              d.owner_user_id, NULL AS org_id,
-             f.org_id AS folder_org_id, 'document' AS content_type
+             f.org_id AS folder_org_id, 'document' AS content_type,
+             DATEDIFF(d.expiry_date, CURDATE()) AS days_left
       FROM cm_documents d
       JOIN cm_folders f ON f.id = d.folder_id
       WHERE d.status IN ('Published', 'Approved')
@@ -23,7 +24,8 @@ async function runCmExpiryAlerts() {
       SELECT fq.id, NULL AS doc_id, fq.question AS name, fq.expiry_date,
              NULL AS alert_days, NULL AS alert_email_account_id,
              fq.created_by AS owner_user_id, NULL AS org_id,
-             fo.org_id AS folder_org_id, 'faq' AS content_type
+             fo.org_id AS folder_org_id, 'faq' AS content_type,
+             DATEDIFF(fq.expiry_date, CURDATE()) AS days_left
       FROM cm_faqs fq
       JOIN cm_folders fo ON fo.id = fq.folder_id
       WHERE fq.status IN ('Published', 'Approved')
@@ -34,8 +36,9 @@ async function runCmExpiryAlerts() {
     for (const doc of docs) {
       const orgId = doc.org_id || doc.folder_org_id;
       const expiryDate = new Date(doc.expiry_date);
-      const today = new Date();
-      const daysLeft = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+      // Date-only day difference computed in SQL (DATEDIFF) — avoids time-of-day
+      // drift that made the "N days before" alert miss its intended day.
+      const daysLeft = Number(doc.days_left);
 
       // Determine which alert days to check: per-doc config OR org default, always include 1
       let alertDays = [1];

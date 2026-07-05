@@ -29,7 +29,7 @@ router.get('/dependencies/picklist/:id', authenticate, requireRole('admin', 'pla
     const cached = depCacheGet(cacheKey);
     if (cached) return res.json(cached);
 
-    const [picklist] = await pool.execute('SELECT value, field_type FROM picklists WHERE id = ?', [id]);
+    const [picklist] = await pool.execute('SELECT value, field_type FROM picklists WHERE id = ? AND org_id = ?', [id, req.user.orgId]);
     if (!picklist.length) return res.status(404).json({ error: 'Picklist not found.' });
     const fieldType = picklist[0].field_type;
     const [fieldUsage] = await pool.execute(
@@ -61,10 +61,10 @@ router.get('/dependencies/user/:userId', authenticate, requireRole('admin', 'pla
     if (cached) return res.json(cached);
 
     const [open] = await pool.execute(
-      'SELECT COUNT(*) AS cnt FROM cases WHERE case_owner_id = ? AND is_deleted = 0',
-      [userId]
+      'SELECT COUNT(*) AS cnt FROM cases WHERE case_owner_id = ? AND org_id = ? AND is_deleted = 0',
+      [userId, req.user.orgId]
     );
-    const [total] = await pool.execute('SELECT COUNT(*) AS cnt FROM cases WHERE case_owner_id = ?', [userId]);
+    const [total] = await pool.execute('SELECT COUNT(*) AS cnt FROM cases WHERE case_owner_id = ? AND org_id = ?', [userId, req.user.orgId]);
     const result = { open_cases: open[0].cnt, total_cases: total[0].cnt, safe_to_remove: open[0].cnt === 0 };
     depCacheSet(cacheKey, result);
     res.json(result);
@@ -97,7 +97,7 @@ router.get('/dependencies/field-definition/:id', authenticate, requireRole('admi
     const cached = depCacheGet(cacheKey);
     if (cached) return res.json(cached);
 
-    const [field] = await pool.execute('SELECT field_name, field_type, picklist_type FROM field_setup WHERE id = ?', [fieldId]);
+    const [field] = await pool.execute('SELECT field_name, field_type, picklist_type FROM field_setup WHERE id = ? AND org_id = ?', [fieldId, req.user.orgId]);
     if (!field.length) return res.status(404).json({ error: 'Field not found.' });
     const [picklists] = await pool.execute(
       'SELECT COUNT(*) AS cnt FROM picklists WHERE field_id = ?',

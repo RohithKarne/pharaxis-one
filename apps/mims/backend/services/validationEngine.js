@@ -113,6 +113,11 @@ function buildClientSchema(rules) {
 }
 
 function _safeRegex(pattern) {
+  // M-10: cap admin-configured pattern length to bound ReDoS exposure.
+  if (typeof pattern !== 'string' || pattern.length > 1000) {
+    logger.warn({ patternLength: pattern == null ? 0 : String(pattern).length }, 'validationEngine: regex pattern too long or invalid type, skipping');
+    return null;
+  }
   try { return new RegExp(pattern); }
   catch (err) {
     logger.warn({ err: err.message, pattern }, 'validationEngine: invalid regex, skipping');
@@ -222,7 +227,8 @@ async function validatePayload({
     // 4. regex
     if (rule.validation_regex) {
       const re = _safeRegex(rule.validation_regex);
-      if (re && !re.test(String(v))) {
+      // M-10: cap tested-value length to bound ReDoS exposure on user input.
+      if (re && String(v).length <= 100000 && !re.test(String(v))) {
         errors[rule.field_name] = rule.validation_message || `Invalid format.`;
         continue;
       }

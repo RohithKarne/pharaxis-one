@@ -158,9 +158,16 @@ router.put('/cases/ae/versions/:versionId/status', authenticate, async (req, res
     }
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'status required' });
+    // L-05: normalise and validate against a known set so an arbitrary status can't
+    // strand follow-up creation (which requires the version to equal 'closed').
+    const AE_STATUSES = new Set(['open', 'in_progress', 'closed', 'reopened']);
+    const normStatus = String(status).trim().toLowerCase();
+    if (!AE_STATUSES.has(normStatus)) {
+      return res.status(400).json({ error: `Invalid status. Allowed: ${[...AE_STATUSES].join(', ')}.` });
+    }
     const [upd] = await pool.execute(
       'UPDATE case_ae_versions SET status = ? WHERE id = ? AND is_locked = 0',
-      [status, req.params.versionId]
+      [normStatus, req.params.versionId]
     );
     // WP2: a locked (or missing) version updates 0 rows — was silently returning 200
     // with the unchanged row, so the caller thought the status change succeeded.
@@ -304,7 +311,8 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
         is_required_intervention   = COALESCE(?, is_required_intervention),
         is_lab_abnormality         = COALESCE(?, is_lab_abnormality),
         is_serious                 = (CASE WHEN
-            COALESCE(?, is_death) = 1 OR COALESCE(?, is_life_threatening) = 1
+            COALESCE(?, is_serious) = 1
+         OR COALESCE(?, is_death) = 1 OR COALESCE(?, is_life_threatening) = 1
          OR COALESCE(?, is_hospitalization) = 1 OR COALESCE(?, is_disability) = 1
          OR COALESCE(?, is_congenital_anomaly) = 1 OR COALESCE(?, is_other_medically_important) = 1
          OR COALESCE(?, is_required_intervention) = 1 OR COALESCE(?, is_lab_abnormality) = 1
@@ -317,7 +325,10 @@ router.put('/cases/ae/events/:eventId', authenticate, async (req, res) => {
         is_hospitalization ?? null, is_disability ?? null,
         is_congenital_anomaly ?? null, is_other_medically_important ?? null,
         is_required_intervention ?? null, is_lab_abnormality ?? null,
-        // is_serious recompute — same 8 criteria flags, merged with stored values:
+        // is_serious recompute (C-08): preserve an explicitly-set serious flag — or the
+        // stored value when the client omits it — then OR the 8 specific criteria, so a
+        // routine event edit can never silently demote a serious AE to non-serious.
+        is_serious ?? null,
         is_death ?? null, is_life_threatening ?? null, is_hospitalization ?? null, is_disability ?? null,
         is_congenital_anomaly ?? null, is_other_medically_important ?? null, is_required_intervention ?? null, is_lab_abnormality ?? null,
         req.params.eventId
@@ -594,6 +605,14 @@ router.put('/cases/ae/versions/:versionId/ae-flex-fields', authenticate, async (
 // ─── GUARD HELPER — reject writes to locked versions ─────────────────────────
 
 async function guardLocked(versionId) {
+  // L-06 (TOCTOU): this check reads is_locked from case_ae_versions, but the guarded
+  // writes target the per-tab tables (case_ae_general, case_ae_flex_fields, …) which do
+  // not carry an is_locked column, so we cannot fold the guard into their WHERE clauses.
+  // A version locked concurrently between this SELECT and the subsequent tab UPDATE can
+  // therefore still be written once. The status/lock endpoints that mutate case_ae_versions
+  // already guard atomically via `WHERE ... AND is_locked = 0`; a durable fix for tab writes
+  // would require either an is_locked column on the tab tables or wrapping guard+write in a
+  // single transaction with `SELECT ... FOR UPDATE` on the version row.
   const [[v]] = await pool.execute(
     'SELECT is_locked FROM case_ae_versions WHERE id = ?', [versionId]
   );

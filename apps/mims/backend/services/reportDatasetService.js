@@ -115,7 +115,7 @@ async function getDailyCaseSummary(orgId, filters = {}) {
 
   const [closedRows] = await pool.execute(
     `
-      SELECT COUNT(*) AS closures
+      SELECT COUNT(DISTINCT cat.case_id) AS closures
       FROM case_audit_trail cat
       JOIN cases c ON c.id = cat.case_id
       LEFT JOIN workflow_states ws ON ws.id = CAST(cat.new_value AS UNSIGNED)
@@ -211,7 +211,7 @@ async function getTransmissionSlaReport(orgId, filters = {}) {
         LEFT JOIN users u ON u.id = t.assigned_to
         WHERE c.org_id = ? AND c.is_deleted = 0
       ) tx
-      ${useDateFilter ? 'WHERE DATE(COALESCE(due_date, updated_at)) >= ? AND DATE(COALESCE(due_date, updated_at)) <= ?' : ''}
+      ${useDateFilter ? 'WHERE ((DATE(COALESCE(due_date, updated_at)) >= ? AND DATE(COALESCE(due_date, updated_at)) <= ?) OR (due_date IS NULL AND updated_at IS NULL))' : ''}
       ORDER BY
         FIELD(sla_status, 'breached', 'at_risk', 'on_track', 'closed', 'untracked'),
         due_date ASC,

@@ -52,6 +52,9 @@ router.post('/admin/vault/pull', authenticate, async (req, res) => {
 
     const doc = data[0];
 
+    const [[c]] = await pool.execute('SELECT id FROM cases WHERE id = ? AND org_id = ?', [case_id, req.user.orgId]);
+    if (!c) return res.status(403).json({ error: 'Case not found in your organisation.' });
+
     await pool.query(
       'INSERT INTO case_vault_references (case_id, org_id, vault_doc_id, vault_doc_name, vault_doc_type, vault_doc_status, pulled_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
       [case_id, orgId, doc.id, doc.name__v, doc.type__v, doc.status__v]

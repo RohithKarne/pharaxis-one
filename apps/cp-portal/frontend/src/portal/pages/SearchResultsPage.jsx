@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 
 const TYPE_ICON = { news: '📰', safety: '⚠️', faq: '❓', ta: '🧬', drug: '💊', resource: '📚', document: '📁' }
 
@@ -13,10 +14,7 @@ export default function SearchResultsPage() {
   const [loading, setLoading] = useState(false)
   const [typeFilter, setTypeFilter] = useState('all')
 
-  useEffect(() => {
-    document.title = 'Search | CP Portal'
-    return () => { document.title = 'CP Portal' }
-  }, [])
+  usePageTitle('Search')
 
   useEffect(() => {
     if (!clientCode || q.trim().length < 2) { setResults([]); return }

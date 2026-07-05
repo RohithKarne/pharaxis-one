@@ -51,7 +51,7 @@ const {
   normalizeRole, parseRolesCsv, canViewSensitiveField, maskStringValue, applySensitiveMask,
   buildCaseOwnershipClause,
   normalizeFieldOverrides, normalizeAeTransmissionPriority, normalizePcTransmissionPriority,
-  buildGlobalCaseSearchClause, logResponseError, writeCaseAudit, writeAuditLog, pushNotification,
+  buildGlobalCaseSearchClause, logResponseError, writeCaseAudit, writeAuditLog, pushNotification, withTxn,
   verifyCaseOrg, findActivePicklistEntry, assertActivePicklistValue,
   buildReporterPatientSchemaSnapshot, buildCaseSchemaSnapshot,
   loadSensitiveFieldConfigMap, emitOutboundEvent,
@@ -569,10 +569,10 @@ router.get('/cases/dashboard-summary', authenticate, requireScopedCapability('ca
     const [[miStats]] = await pool.execute(
       `SELECT
         COALESCE(SUM(CASE WHEN r.response_status IN ('DRAFT','READY') THEN 1 ELSE 0 END), 0) AS pending_responses,
-       COALESCE(SUM(CASE WHEN r.response_status = 'APPROVED' THEN 1 ELSE 0 END), 0)         AS pending_approval,
+       COALESCE(SUM(CASE WHEN r.response_status = 'READY' THEN 1 ELSE 0 END), 0)            AS pending_approval,
        COALESCE(SUM(CASE WHEN r.response_status = 'SENT' AND DATE(r.approved_at) = CURDATE() THEN 1 ELSE 0 END), 0) AS sent_today,
-       COALESCE(SUM(CASE WHEN mi.response_required_by IS NOT NULL AND mi.response_required_by < CURDATE()
-                           AND r.response_status NOT IN ('SENT','VOIDED') THEN 1 ELSE 0 END), 0) AS sla_breached
+       COALESCE(COUNT(DISTINCT CASE WHEN mi.response_required_by IS NOT NULL AND mi.response_required_by < CURDATE()
+                           AND r.response_status NOT IN ('SENT','VOIDED') THEN mi.id END), 0) AS sla_breached
        FROM case_mi_responses r
        JOIN cases c ON c.id = r.case_id
        JOIN case_mi mi ON mi.id = r.mi_tab_id
@@ -1442,21 +1442,37 @@ router.post('/cases/:id/reassign', authenticate, requireScopedCapability('case.a
       ? await pool.execute('SELECT id, name, email FROM users WHERE id = ? LIMIT 1', [owned.case_owner_id])
       : [[]];
 
-    await pool.execute('UPDATE cases SET case_owner_id = ? WHERE id = ?', [newOwnerId, req.params.id]);
-
-    await writeCaseAudit(
-      req.params.id,
-      req.user.userId,
-      req.user.email,
-      'REASSIGNED',
-      'case_owner_id',
-      owned.case_owner_id || null,
-      newOwnerId
-    );
-    if (reason) {
-      await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'REASSIGN_REASON', 'reason', null, reason);
+    // C-10: owner change + its audit rows must be atomic. Previously these ran on the
+    // shared pool with no transaction, so a failure could change ownership on a PV case
+    // with no audit row (or vice-versa). The conn is threaded into writeCaseAudit so an
+    // audit failure rolls the whole reassignment back.
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.execute('UPDATE cases SET case_owner_id = ? WHERE id = ?', [newOwnerId, req.params.id]);
+      await writeCaseAudit(
+        req.params.id,
+        req.user.userId,
+        req.user.email,
+        'REASSIGNED',
+        'case_owner_id',
+        owned.case_owner_id || null,
+        newOwnerId,
+        conn
+      );
+      if (reason) {
+        await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'REASSIGN_REASON', 'reason', null, reason, conn);
+      }
+      await conn.commit();
+    } catch (txErr) {
+      await conn.rollback();
+      throw txErr;
+    } finally {
+      conn.release();
     }
 
+    // Notifications fire only after the reassignment has durably committed. They are
+    // best-effort — a notification failure must never roll back or duplicate the reassign.
     const caseRef = owned.case_number || `Case ${req.params.id}`;
     if (Number(newOwnerId) !== Number(req.user.userId)) {
       await pushNotification(newOwnerId, {
@@ -1528,6 +1544,21 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         code: 'VERSION_CONFLICT',
         current_version_stamp: currentCase.version_stamp,
       });
+    }
+
+    // H-07: once a case is in a terminal (Closed) workflow state, block edits to its
+    // regulated fields (date_received, awareness_date, etc. — these drive the HA reporting
+    // clock) unless the same request reopens it via a status transition.
+    if (currentCase.status_id) {
+      const [[curState]] = await pool.execute(
+        'SELECT name FROM workflow_states WHERE id = ? LIMIT 1', [currentCase.status_id]
+      );
+      const isClosed = curState && /closed|complete|cancel/i.test(curState.name || '');
+      const reopening = hasOwn(body, 'status_id') && body.status_id !== '' && body.status_id !== null
+        && Number(parseInt(body.status_id, 10)) !== Number(currentCase.status_id || 0);
+      if (isClosed && !reopening) {
+        return res.status(409).json({ error: 'This case is closed. Reopen it (change its status) before editing case fields.' });
+      }
     }
 
     // Division change-control: reason-required guards (all default OFF per org).
@@ -1686,77 +1717,76 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
     const nextInternalNotes = hasOwn(body, 'internal_notes') ? (body.internal_notes ?? null) : currentCase.internal_notes;
     const nextIntakeChannel = hasOwn(body, 'intake_channel') ? (body.intake_channel ?? null) : currentCase.intake_channel;
 
-    await pool.execute(
-      `UPDATE cases SET
-        status_id      = ?,
-        case_owner_id  = ?,
-        priority       = ?,
-        date_received  = ?,
-        awareness_date = ?,
-        learn_of_validity_date = ?,
-        follow_up_received_date = ?,
-        description    = ?,
-        internal_notes = ?,
-        intake_channel = ?,
-        version_stamp  = version_stamp + 1
-       WHERE id = ?`,
-      [
-        nextStatusId,
-        nextOwnerId,
-        nextPriority,
-        nextDateReceived,
-        nextAwarenessDate,
-        nextLearnOfValidityDate,
-        nextFollowUpReceivedDate,
-        nextDescription,
-        nextInternalNotes,
-        nextIntakeChannel,
-        req.params.id
-      ]
-    );
-    const [[updated]] = await pool.execute(
-      `SELECT c.*, o.name AS org_name, s.name AS site_name,
-        ws.name AS status_name, u.name AS owner_name
-       FROM cases c
-       LEFT JOIN organisations   o  ON c.org_id        = o.id
-       LEFT JOIN sites           s  ON c.site_id        = s.id
-       LEFT JOIN workflow_states ws ON c.status_id      = ws.id
-       LEFT JOIN users           u  ON c.case_owner_id  = u.id
-       WHERE c.id = ?`,
-      [req.params.id]
-    );
-
-    const previousStatusId = currentCase.status_id === null ? null : Number(currentCase.status_id);
-    const updatedStatusId = updated.status_id === null ? null : Number(updated.status_id);
-    const statusChanged = previousStatusId !== updatedStatusId;
-
-    const previousOwnerId = currentCase.case_owner_id === null ? null : Number(currentCase.case_owner_id);
-    const updatedOwnerId = updated.case_owner_id === null ? null : Number(updated.case_owner_id);
-    const ownerChanged = previousOwnerId !== updatedOwnerId;
-
-    const caseRef = updated.case_number || currentCase.case_number || `Case ${req.params.id}`;
-    if (statusChanged) {
-      await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'STATUS_CHANGED', 'status_id', previousStatusId, updatedStatusId);
-      await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'case_status', req.params.id, {
-        case_id: Number(req.params.id),
-        from_status_id: previousStatusId,
-        to_status_id: updatedStatusId,
-        workflow_rule_id: statusTransitionRule?.id || null,
-        esigned: Number(statusTransitionRule?.require_password || 0) === 1,
-      });
-      if (updatedOwnerId && Number(updatedOwnerId) !== Number(req.user.userId)) {
-        await pushNotification(updatedOwnerId, {
-          category: 'case_status',
-          title: `Status updated: ${caseRef}`,
-          message: `${req.user.email} changed the case status to ${updated.status_name || 'updated state'}.`,
-          linkUrl: `/cases/${req.params.id}`,
-          metadata: { case_id: Number(req.params.id), status_id: updatedStatusId },
-        });
+    // C-09: the field update AND its status/owner audit rows commit atomically —
+    // a case can never change state on a PV record without its audit trail.
+    let updated, previousStatusId, updatedStatusId, statusChanged;
+    let previousOwnerId, updatedOwnerId, ownerChanged, caseRef;
+    await withTxn(async (conn) => {
+      await conn.execute(
+        `UPDATE cases SET
+          status_id      = ?,
+          case_owner_id  = ?,
+          priority       = ?,
+          date_received  = ?,
+          awareness_date = ?,
+          learn_of_validity_date = ?,
+          follow_up_received_date = ?,
+          description    = ?,
+          internal_notes = ?,
+          intake_channel = ?,
+          version_stamp  = version_stamp + 1
+         WHERE id = ?`,
+        [
+          nextStatusId, nextOwnerId, nextPriority, nextDateReceived, nextAwarenessDate,
+          nextLearnOfValidityDate, nextFollowUpReceivedDate, nextDescription,
+          nextInternalNotes, nextIntakeChannel, req.params.id,
+        ]
+      );
+      const [[u]] = await conn.execute(
+        `SELECT c.*, o.name AS org_name, s.name AS site_name,
+          ws.name AS status_name, u.name AS owner_name
+         FROM cases c
+         LEFT JOIN organisations   o  ON c.org_id        = o.id
+         LEFT JOIN sites           s  ON c.site_id        = s.id
+         LEFT JOIN workflow_states ws ON c.status_id      = ws.id
+         LEFT JOIN users           u  ON c.case_owner_id  = u.id
+         WHERE c.id = ?`,
+        [req.params.id]
+      );
+      updated = u;
+      previousStatusId = currentCase.status_id === null ? null : Number(currentCase.status_id);
+      updatedStatusId = updated.status_id === null ? null : Number(updated.status_id);
+      statusChanged = previousStatusId !== updatedStatusId;
+      previousOwnerId = currentCase.case_owner_id === null ? null : Number(currentCase.case_owner_id);
+      updatedOwnerId = updated.case_owner_id === null ? null : Number(updated.case_owner_id);
+      ownerChanged = previousOwnerId !== updatedOwnerId;
+      caseRef = updated.case_number || currentCase.case_number || `Case ${req.params.id}`;
+      if (statusChanged) {
+        await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'STATUS_CHANGED', 'status_id', previousStatusId, updatedStatusId, conn);
+        await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'case_status', req.params.id, {
+          case_id: Number(req.params.id),
+          from_status_id: previousStatusId,
+          to_status_id: updatedStatusId,
+          workflow_rule_id: statusTransitionRule?.id || null,
+          esigned: Number(statusTransitionRule?.require_password || 0) === 1,
+        }, conn);
       }
-    }
+      if (ownerChanged) {
+        await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'OWNER_CHANGED', 'case_owner_id', previousOwnerId, updatedOwnerId, conn);
+      }
+    });
 
+    // Notifications fire only after the update + audit have durably committed (best-effort).
+    if (statusChanged && updatedOwnerId && Number(updatedOwnerId) !== Number(req.user.userId)) {
+      await pushNotification(updatedOwnerId, {
+        category: 'case_status',
+        title: `Status updated: ${caseRef}`,
+        message: `${req.user.email} changed the case status to ${updated.status_name || 'updated state'}.`,
+        linkUrl: `/cases/${req.params.id}`,
+        metadata: { case_id: Number(req.params.id), status_id: updatedStatusId },
+      });
+    }
     if (ownerChanged) {
-      await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'OWNER_CHANGED', 'case_owner_id', previousOwnerId, updatedOwnerId);
       if (updatedOwnerId && Number(updatedOwnerId) !== Number(req.user.userId)) {
         await pushNotification(updatedOwnerId, {
           category: 'case_reassignment',
@@ -1828,7 +1858,14 @@ router.post('/cases/:id/validate', authenticate, async (req, res) => {
         if (action.min !== undefined && Number(value) < Number(action.min)) valid = false;
         if (action.max !== undefined && Number(value) > Number(action.max)) valid = false;
         if (action.pattern) {
-          try { valid = new RegExp(action.pattern).test(String(value || '')); } catch (_) { valid = false; }
+          // M-10: cap pattern and input length before running admin-configured regex (ReDoS guard).
+          const patternStr = String(action.pattern);
+          const valueStr = String(value || '');
+          if (patternStr.length > 1000 || valueStr.length > 100000) {
+            valid = true; // skip matching on oversized inputs rather than blocking
+          } else {
+            try { valid = new RegExp(patternStr).test(valueStr); } catch (_) { valid = false; }
+          }
         }
         if (!valid) errors.push({ field: rule.field_name, section: rule.section_name, message: action.message || `${rule.field_name} is invalid.` });
       }
@@ -1896,10 +1933,13 @@ router.post('/cases/:id/merge', authenticate, requireRole('admin', 'platform_adm
       const setSql = Object.keys(updates).map((field) => `${field} = ?`).join(', ');
       await conn.execute(`UPDATE cases SET ${setSql}, version_stamp = version_stamp + 1 WHERE id = ?`, [...Object.values(updates), target.id]);
     }
-    await conn.execute('UPDATE cases SET merged_into_case_id = ?, version_stamp = version_stamp + 1 WHERE id = ?', [target.id, source.id]);
+    // H-08: mark the merged-away source as deleted so it no longer appears as an active
+    // case or can be edited / transmitted independently (which risked duplicate submissions).
+    await conn.execute('UPDATE cases SET merged_into_case_id = ?, is_deleted = 1, version_stamp = version_stamp + 1 WHERE id = ?', [target.id, source.id]);
+    // C-09: audit rows join the same transaction as the merge writes (moved before commit)
+    await writeCaseAudit(source.id, req.user.userId, req.user.email, 'CASE_MERGED_SOURCE', 'merged_into_case_id', null, target.id, conn);
+    await writeCaseAudit(target.id, req.user.userId, req.user.email, 'CASE_MERGED_TARGET', 'merge_choices', null, JSON.stringify(choices), conn);
     await conn.commit();
-    await writeCaseAudit(source.id, req.user.userId, req.user.email, 'CASE_MERGED_SOURCE', 'merged_into_case_id', null, target.id);
-    await writeCaseAudit(target.id, req.user.userId, req.user.email, 'CASE_MERGED_TARGET', 'merge_choices', null, JSON.stringify(choices));
     res.json({ ok: true, merged_into_case_id: target.id, field_choices: choices });
   } catch (err) {
     try { await conn.rollback(); } catch (_) {}
@@ -2090,7 +2130,10 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
       cm_document_name = doc?.name || null;
     }
 
-    const [result] = await pool.execute(
+    // C-09: MI response creation + its audit rows commit atomically
+    let result;
+    await withTxn(async (conn) => {
+      const [r] = await conn.execute(
       `INSERT INTO case_mi_responses
          (case_id, mi_tab_id, recipient_contact_id, recipient_name, recipient_email,
           product_id, template_id, template_name,
@@ -2132,13 +2175,15 @@ router.post('/cases/:id/mi-responses', authenticate, async (req, res) => {
         req.user.userId,
         req.user.name || req.user.email,
       ]
-    );
-    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_CREATED', 'mi_response_status', null, responseStatus);
-    await writeAuditLog(req.user.userId, req.user.email, 'CREATE', 'mi_response', result.insertId, {
-      case_id: Number(req.params.id),
-      response_status: responseStatus,
-      response_channel: channel,
-      response_date: responseDate,
+      );
+      result = r;
+      await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_CREATED', 'mi_response_status', null, responseStatus, conn);
+      await writeAuditLog(req.user.userId, req.user.email, 'CREATE', 'mi_response', r.insertId, {
+        case_id: Number(req.params.id),
+        response_status: responseStatus,
+        response_channel: channel,
+        response_date: responseDate,
+      }, conn);
     });
     // Notify case owner via notifications
     const [[c]] = await pool.execute('SELECT case_owner_id, case_number FROM cases WHERE id = ?', [req.params.id]);
@@ -2209,24 +2254,27 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
 
     // F7 FIX: set is_finalized=1 when advancing beyond DRAFT (DB-level immutability guard)
     const isFinalized = responseStatus !== 'DRAFT' ? 1 : 0;
-    await pool.execute(
-      `UPDATE case_mi_responses
-       SET response_status = ?,
-           is_finalized = CASE WHEN ? != 'DRAFT' THEN 1 ELSE is_finalized END,
-           draft_saved_at = CASE WHEN ? = 'DRAFT' THEN NOW() ELSE draft_saved_at END,
-           approved_by = CASE WHEN ? IN ('APPROVED', 'SENT') THEN ? ELSE approved_by END,
-           approved_at = CASE WHEN ? IN ('APPROVED', 'SENT') THEN NOW() ELSE approved_at END,
-           sent_at = CASE WHEN ? = 'SENT' THEN NOW() ELSE sent_at END
-       WHERE id = ? AND case_id = ?`,
-      [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id]
-    );
-    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_STATUS', 'mi_response_status', existing.response_status, responseStatus);
-    await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
-      case_id: Number(req.params.id),
-      from_status: existing.response_status,
-      to_status: responseStatus,
-      reason: reason || null,
-      esigned: ['APPROVED', 'SENT'].includes(responseStatus),
+    // C-09: MI response status change + its two audit rows commit atomically
+    await withTxn(async (conn) => {
+      await conn.execute(
+        `UPDATE case_mi_responses
+         SET response_status = ?,
+             is_finalized = CASE WHEN ? != 'DRAFT' THEN 1 ELSE is_finalized END,
+             draft_saved_at = CASE WHEN ? = 'DRAFT' THEN NOW() ELSE draft_saved_at END,
+             approved_by = CASE WHEN ? IN ('APPROVED', 'SENT') THEN ? ELSE approved_by END,
+             approved_at = CASE WHEN ? IN ('APPROVED', 'SENT') THEN NOW() ELSE approved_at END,
+             sent_at = CASE WHEN ? = 'SENT' THEN NOW() ELSE sent_at END
+         WHERE id = ? AND case_id = ?`,
+        [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id]
+      );
+      await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_STATUS', 'mi_response_status', existing.response_status, responseStatus, conn);
+      await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
+        case_id: Number(req.params.id),
+        from_status: existing.response_status,
+        to_status: responseStatus,
+        reason: reason || null,
+        esigned: ['APPROVED', 'SENT'].includes(responseStatus),
+      }, conn);
     });
 
     const [[caseRow]] = await pool.execute('SELECT org_id, case_owner_id, case_number FROM cases WHERE id = ?', [req.params.id]);
@@ -2360,14 +2408,17 @@ router.patch('/cases/:id/mi-responses/:responseId/discard', authenticate, async 
       if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
     }
     const reason = String(req.body?.reason || '').trim() || 'Discarded by user';
-    await pool.execute(
-      `UPDATE case_mi_responses SET response_status = 'VOIDED', voided_at = NOW(), voided_by = ? WHERE id = ? AND case_id = ?`,
-      [req.user.userId, req.params.responseId, req.params.id]
-    );
-    // F8 FIX: audit trail for VOIDED (21 CFR Part 11 — every status change must be recorded)
-    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_VOIDED', 'mi_response_status', 'DRAFT', 'VOIDED');
-    await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
-      case_id: Number(req.params.id), from_status: 'DRAFT', to_status: 'VOIDED', reason, esigned: false,
+    // C-09: void + its Part 11 audit rows commit atomically
+    await withTxn(async (conn) => {
+      await conn.execute(
+        `UPDATE case_mi_responses SET response_status = 'VOIDED', voided_at = NOW(), voided_by = ? WHERE id = ? AND case_id = ?`,
+        [req.user.userId, req.params.responseId, req.params.id]
+      );
+      // F8 FIX: audit trail for VOIDED (21 CFR Part 11 — every status change must be recorded)
+      await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_VOIDED', 'mi_response_status', 'DRAFT', 'VOIDED', conn);
+      await writeAuditLog(req.user.userId, req.user.email, 'UPDATE', 'mi_response_status', req.params.responseId, {
+        case_id: Number(req.params.id), from_status: 'DRAFT', to_status: 'VOIDED', reason, esigned: false,
+      }, conn);
     });
     const row = await getMiResponseRow(req.params.id, req.params.responseId);
     return res.json(row);
@@ -2877,12 +2928,15 @@ router.post('/cases/:id/escalate', authenticate, requireCapability('case.escalat
       { flag: 'cc_reason_escalation', label: 'escalation' },
     ]);
     if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
-    await pool.execute(
-      `UPDATE cases SET escalated_at = NOW(), escalation_level = COALESCE(escalation_level, 0) + 1, escalation_reason = ?
-       WHERE id = ? AND is_deleted = 0`,
-      [reason || null, req.params.id]
-    );
-    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'CASE_ESCALATED', 'escalation', null, reason || 'escalated');
+    // C-09: escalation update + its audit row commit atomically
+    await withTxn(async (conn) => {
+      await conn.execute(
+        `UPDATE cases SET escalated_at = NOW(), escalation_level = COALESCE(escalation_level, 0) + 1, escalation_reason = ?
+         WHERE id = ? AND is_deleted = 0`,
+        [reason || null, req.params.id]
+      );
+      await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'CASE_ESCALATED', 'escalation', null, reason || 'escalated', conn);
+    });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2926,8 +2980,9 @@ router.post('/cases/:id/mi-responses/:responseId/supersede', authenticate, async
         `UPDATE case_mi_responses SET superseded_by_id = ?, superseded_at = NOW() WHERE id = ?`,
         [ins.insertId, original.id]
       );
+      // C-09: audit joins the same transaction as the supersede writes (moved before commit)
+      await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_SUPERSEDED', 'mi_response', String(original.id), String(ins.insertId), conn);
       await conn.commit();
-      await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'MI_RESPONSE_SUPERSEDED', 'mi_response', String(original.id), String(ins.insertId));
       res.status(201).json({ id: ins.insertId, supersedes_response_id: original.id, response_status: 'DRAFT' });
     } catch (e) { await conn.rollback(); throw e; } finally { conn.release(); }
   } catch (err) { res.status(500).json({ error: err.message }); }

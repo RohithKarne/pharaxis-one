@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
 
 const COMPARE_ROWS = [
@@ -24,8 +25,7 @@ export default function DrugInfoPage() {
   }
   const compareDrugs = drugs.filter(d => compareList.includes(d.id))
 
-  // LOW-05: set document title
-  useEffect(() => { document.title = 'Drug Information | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+  usePageTitle('Drug Information')
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/drugs`)

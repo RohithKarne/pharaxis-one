@@ -178,16 +178,11 @@ export const SYSTEM_NAV = [
     label: 'UAT & QA', value: 'sys-uat-qa', children: [
       { label: 'Bug Reports',      value: 'sys-uat-bugs'     },
       { label: 'Feature Requests', value: 'sys-uat-features' },
-      { label: 'Regression Testing', value: 'sys-uat-regression' },
+      // CUT: in-app Regression Testing runner removed (dev tooling → CI).
     ],
   },
-  {
-    label: 'AI QA Engine', value: 'sys-ai-qa-engine', children: [
-      { label: 'Retrospective QA Reports', value: 'sys-ai-qa-reports'   },
-      { label: 'QA Rules Configuration',   value: 'sys-ai-qa-rules'     },
-      { label: 'Override Dashboard',       value: 'sys-ai-qa-overrides' },
-    ],
-  },
+  // PARK: AI QA Engine removed from the admin surface — the AI suite ships as a
+  // deterministic-local mock; re-surface once a real provider is standard.
 ]
 
 function findInNav(nav, value) {

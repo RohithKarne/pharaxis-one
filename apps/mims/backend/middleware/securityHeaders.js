@@ -22,7 +22,14 @@ const CSP_DIRECTIVES = [
 ].join('; ');
 
 const CSP_REPORT_URI = process.env.CSP_REPORT_URI || null;
-const CSP_ENFORCE    = String(process.env.CSP_ENFORCE || '').toLowerCase() === 'true';
+// M-06: In production, enforce CSP by default; only report-only when CSP_ENFORCE
+// is explicitly set to the string 'false'. In non-production, default to
+// report-only. NOTE: before shipping enforcing CSP to prod, run a browser
+// CSP-violation check (DevTools console / report-uri) to confirm the directives
+// above don't break the React app or the TipTap editor.
+const CSP_ENFORCE = process.env.NODE_ENV === 'production'
+  ? String(process.env.CSP_ENFORCE || '').toLowerCase() !== 'false'
+  : String(process.env.CSP_ENFORCE || '').toLowerCase() === 'true';
 
 function securityHeaders(req, res, next) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -38,7 +45,7 @@ function securityHeaders(req, res, next) {
 
   const isSecure = req.secure || String(req.headers['x-forwarded-proto'] || '').toLowerCase() === 'https';
   if (isSecure) {
-    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains; preload');
   }
 
   next();

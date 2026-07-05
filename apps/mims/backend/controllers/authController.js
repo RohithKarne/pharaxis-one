@@ -37,8 +37,35 @@ const {
 } = require('../services/ssoService');
 const geoip = require('geoip-lite');
 const { getDisplayRole, hasGlobalAdminScope } = require('../utils/adminScope');
+const { sessionCacheInvalidate } = require('../middleware/auth');
 
 const SALT_ROUNDS = Math.max(10, parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10) || 12);
+
+// M-01: After a password change/reset, invalidate all of the user's existing
+// JWT sessions so previously-issued tokens can no longer be used. Sessions are
+// validated against the `sessions` table (see middleware/auth.js), and cache
+// hits are keyed by token in Redis, so we delete every session row for the user
+// and evict each corresponding token from the session cache.
+async function invalidateUserSessions(userId) {
+  if (!userId) return;
+  try {
+    const [rows] = await pool.execute(
+      'SELECT token FROM sessions WHERE user_id = ?',
+      [userId]
+    );
+    await pool.execute('DELETE FROM sessions WHERE user_id = ?', [userId]);
+    for (const row of rows) {
+      if (row?.token) {
+        // Best-effort cache eviction; no-op if Redis is unavailable.
+        await sessionCacheInvalidate(row.token);
+      }
+    }
+  } catch (err) {
+    // Never block the password-change response on cleanup failure; the DB rows
+    // are the source of truth and expired/removed sessions fail validation.
+    console.error('invalidateUserSessions error:', err);
+  }
+}
 
 function resolveIp(req) {
   const forwarded = req?.headers?.['x-forwarded-for'];
@@ -1875,8 +1902,8 @@ const authController = {
   async resetPassword(req, res) {
     try {
       const { newPassword } = req.body;
-      if (!newPassword || newPassword.length < 8) {
-        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      if (!newPassword || newPassword.length < passwordPolicy.MIN_PASSWORD_LENGTH) {
+        return res.status(400).json({ error: `Password must be at least ${passwordPolicy.MIN_PASSWORD_LENGTH} characters.` });
       }
 
       if (!req.user.passwordResetRequired) {
@@ -1908,6 +1935,9 @@ const authController = {
         return res.status(400).json({ error: `You cannot reuse your current password or last ${history_count} passwords.` });
       }
 
+      // M-01: revoke all existing sessions after a successful password reset.
+      await invalidateUserSessions(req.user.userId);
+
       return res.status(200).json({ message: 'Password updated. Please log in again.' });
     } catch (err) {
       console.error('Reset-password error:', err);
@@ -1916,36 +1946,46 @@ const authController = {
   },
 
   async sendForgotPasswordCode(req, res) {
+    // L-02: Do NOT reveal whether an account exists / is eligible. Every non-error
+    // path returns the same generic response. The actual email-send stays gated on
+    // the user being eligible, but that decision is invisible to the caller.
+    const GENERIC_RESPONSE = {
+      message: 'If an account exists for this email, a verification code has been sent.',
+      expiresInMinutes: OTP_EXPIRY_MINUTES,
+    };
     try {
       const { email } = req.body || {};
       if (!email) return res.status(400).json({ error: 'Email is required.' });
 
       const user = await findUserByLoginIdentifier(email);
-      if (!user || hasGlobalAdminScope(user) || !String(user.email || '').includes('@')) {
-        return res.status(404).json({ error: 'No eligible user found for this email.' });
-      }
-      if (!user.is_active) {
-        return res.status(403).json({ error: 'This account is inactive.' });
+      // Silently no-op (but return the generic response) for any ineligible case:
+      // no such user, global-admin scope, malformed email, inactive, or no org.
+      if (
+        user &&
+        !hasGlobalAdminScope(user) &&
+        String(user.email || '').includes('@') &&
+        user.is_active
+      ) {
+        const orgId = await getLatestActiveOrgIdForUser(user.id);
+        if (orgId) {
+          await createEmailChallenge(user, orgId, 'password_reset_email');
+          await logLoginAudit({
+            userId: user.id,
+            userName: user.email,
+            role: user.role,
+            status: 'success',
+            authEvent: 'forgot_password_code_sent',
+            metadata: { orgId },
+          });
+        }
       }
 
-      const orgId = await getLatestActiveOrgIdForUser(user.id);
-      if (!orgId) {
-        return res.status(403).json({ error: 'No active organisation is assigned to this account.' });
-      }
-
-      await createEmailChallenge(user, orgId, 'password_reset_email');
-      await logLoginAudit({
-        userId: user.id,
-        userName: user.email,
-        role: user.role,
-        status: 'success',
-        authEvent: 'forgot_password_code_sent',
-        metadata: { orgId },
-      });
-      return res.json({ maskedEmail: maskEmail(user.email), expiresInMinutes: OTP_EXPIRY_MINUTES });
+      return res.json(GENERIC_RESPONSE);
     } catch (err) {
       console.error('sendForgotPasswordCode error:', err);
-      return res.status(400).json({ error: err.message || 'Could not send forgot-password code.' });
+      // Return the generic response even on internal failure so timing/behaviour
+      // does not disclose account existence.
+      return res.json(GENERIC_RESPONSE);
     }
   },
 
@@ -2000,8 +2040,8 @@ const authController = {
       if (!resetToken || !newPassword) {
         return res.status(400).json({ error: 'Reset token and new password are required.' });
       }
-      if (newPassword.length < 8) {
-        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      if (newPassword.length < passwordPolicy.MIN_PASSWORD_LENGTH) {
+        return res.status(400).json({ error: `Password must be at least ${passwordPolicy.MIN_PASSWORD_LENGTH} characters.` });
       }
 
       const pending = parsePasswordResetToken(resetToken);
@@ -2040,6 +2080,8 @@ const authController = {
         status: 'success',
         authEvent: 'forgot_password_reset_completed',
       });
+      // M-01: revoke all existing sessions after a successful password reset.
+      await invalidateUserSessions(pending.userId);
       return res.json({ message: 'Password updated successfully. Please sign in again.' });
     } catch (err) {
       console.error('completeForgotPasswordReset error:', err);
@@ -2053,8 +2095,8 @@ const authController = {
       if (!currentPassword || !newPassword) {
         return res.status(400).json({ error: 'Current password and new password are required.' });
       }
-      if (newPassword.length < 8) {
-        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      if (newPassword.length < passwordPolicy.MIN_PASSWORD_LENGTH) {
+        return res.status(400).json({ error: `Password must be at least ${passwordPolicy.MIN_PASSWORD_LENGTH} characters.` });
       }
 
       const user = await findUserByLoginIdentifier(req.user.email);
@@ -2096,6 +2138,8 @@ const authController = {
         status: 'success',
         authEvent: 'change_password_completed',
       });
+      // M-01: revoke all existing sessions after a successful password change.
+      await invalidateUserSessions(user.id);
       return res.json({ message: 'Password updated successfully.' });
     } catch (err) {
       console.error('changePassword error:', err);

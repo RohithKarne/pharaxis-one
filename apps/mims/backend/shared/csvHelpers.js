@@ -10,7 +10,10 @@
 
 function csvEscape(field) {
   if (field == null) return '';
-  const s = String(field);
+  let s = String(field);
+  // Neutralise CSV formula injection: prefix a single quote when the value
+  // starts with a formula trigger (=, +, -, @) or a tab/CR.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }

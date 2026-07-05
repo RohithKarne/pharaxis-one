@@ -99,6 +99,7 @@ router.put('/sites/:id', authenticate, requireRole('platform_admin'), async (req
   try {
     const { name, country, is_primary, is_active } = req.body;
     const [[siteCurrent]] = await pool.execute('SELECT name, country, is_primary, is_active FROM sites WHERE id = ?', [req.params.id]);
+    if (!siteCurrent) return res.status(404).json({ error: 'Site not found.' });
     await pool.execute(
       'UPDATE sites SET name = ?, country = ?, is_primary = ?, is_active = ? WHERE id = ?',
       [name ?? null, country ?? null, is_primary ? 1 : 0, is_active ? 1 : 0, req.params.id]
@@ -116,7 +117,7 @@ router.get('/:orgId/users', authenticate, requireRole('admin', 'platform_admin')
       `SELECT u.id, u.name, u.email, uoa.role_at_org, uoa.is_active, uoa.access_expires_at, uoa.last_accessed_at
        FROM users u
        JOIN user_org_access uoa ON uoa.user_id = u.id
-       WHERE uoa.org_id = ?
+       WHERE uoa.org_id = ? AND u.is_active = 1
        ORDER BY u.name`,
       [req.params.orgId]
     );

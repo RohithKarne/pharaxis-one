@@ -50,6 +50,15 @@ function shouldCaptureTelemetryEvent(req, res) {
   return true;
 }
 
+// H-06: case/contact/AE/MI request bodies are PII / pharmacovigilance data. Persist only
+// the SHAPE of the payload (top-level field names) into process logs — never the values —
+// so telemetry can't become a second, more broadly-read copy of patient/reporter data.
+function redactTelemetryPayload(payload) {
+  if (payload == null || typeof payload !== 'object') return null;
+  const fields = Array.isArray(payload) ? ['[array]'] : Object.keys(payload).slice(0, 100);
+  return JSON.stringify({ fields }).slice(0, 8000);
+}
+
 async function emitTelemetryEvent({
   orgId = null,
   sourceModule = 'Core',
@@ -65,7 +74,7 @@ async function emitTelemetryEvent({
   errorMessage = null,
 }) {
   try {
-    const payloadJson = payload == null ? null : JSON.stringify(payload).slice(0, 8000);
+    const payloadJson = redactTelemetryPayload(payload);
     await pool.execute(
       `INSERT INTO mims_process_logs
          (org_id, source_module, method, path, path_pattern, status_code, duration_ms,

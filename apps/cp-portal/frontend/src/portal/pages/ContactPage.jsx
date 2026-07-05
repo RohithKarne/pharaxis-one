@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { usePortal } from '../context/PortalContext'
+import usePageTitle from '../hooks/usePageTitle'
 
 export default function ContactPage() {
   const { portalConfig, clientCode, isFeatureEnabled, user } = usePortal()
   const client   = portalConfig?.client   || {}
   const branding = portalConfig?.branding || {}
 
-  // LOW-05: set document title
-  useEffect(() => { document.title = 'Contact Us | CP Portal'; return () => { document.title = 'CP Portal'; }; }, [])
+  usePageTitle('Contact Us')
 
   const [name,    setName]    = useState('')
   const [email,   setEmail]   = useState('')
