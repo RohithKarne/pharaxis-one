@@ -203,8 +203,12 @@ if (process.env.ENABLE_API_PLATFORM === 'true') {
   app.use('/', require('./routes/apiPlatform'));
 }
 
-// Serve CM document uploads as static files
-app.use('/uploads/cm', express.static(path.join(__dirname, 'storage/cm_documents')));
+// SECURITY (F3): Do NOT serve CM complaint documents as unauthenticated static files.
+// The former `app.use('/uploads/cm', express.static('storage/cm_documents'))` mount
+// exposed the entire complaint-document store with no auth, no org scoping, and no
+// path-traversal guard. It had zero frontend references. Authenticated, org-scoped,
+// traversal-guarded download routes already exist in routes/cm/documents.js
+// (GET /api/cm/documents/:id/download, /file, and /attachments/:attId/download).
 
 // Serve org logos
 app.use('/storage/org_logos', express.static(path.join(__dirname, 'storage/org_logos')));

@@ -2,6 +2,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const pool = require('../database/db');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
@@ -27,7 +28,27 @@ async function logCall(req, res, start) {
   ).catch(() => {});
 }
 
-router.post('/oauth/token', async (req, res) => {
+// F15: /oauth/token runs a cost-12 bcrypt.compare per request. Without a limiter
+// this is both a CPU-exhaustion (DoS) vector and a client_secret brute-force path.
+// Cap attempts per IP + client_id. Keyed on the (spoof-resistant) req.ip that
+// server.js derives via `trust proxy`, plus the presented client_id so one noisy
+// tenant cannot exhaust the budget for others sharing an egress IP.
+const oauthTokenRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 20 : 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const clientId = String((req.body && req.body.client_id) || 'unknown').slice(0, 120);
+    return `${ip}:${clientId}`;
+  },
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'Too many token requests. Please try again shortly.' });
+  },
+});
+
+router.post('/oauth/token', oauthTokenRateLimiter, async (req, res) => {
   try {
     if (req.body.grant_type && req.body.grant_type !== 'client_credentials') return res.status(400).json({ error: 'unsupported_grant_type' });
     const token = await issueClientCredentials(req.body || {});

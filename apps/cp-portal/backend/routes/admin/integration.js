@@ -7,7 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { assertSafeOutboundUrl } = require('../../utils/networkGuard');
+const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
 const { encryptSecret, decryptSecret } = require('../../utils/secretCrypto');
 
 // Mask a secret field — show only last 4 chars with **** prefix
@@ -95,7 +95,7 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, requireClientAc
       if (cfg.auth_type === 'apikey' && cfg.api_key) headers['X-API-Key'] = cfg.api_key;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
-      const r = await fetch(new URL('/api/health', safeUrl).toString(), { headers, signal: controller.signal });
+      const r = await safeFetch(new URL('/api/health', safeUrl).toString(), { headers, signal: controller.signal });
       clearTimeout(timeout);
       const syncStatus = r.ok ? 'success' : 'failure';
       await pool.execute(

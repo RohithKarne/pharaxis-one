@@ -62,9 +62,15 @@ export function AdminAuthProvider({ children }) {
 
   // Restore admin session from server on mount — handles case where localStorage
   // was cleared but the auth cookie / token is still valid.
+  // NOTE: this probe uses a RAW fetch, not adminFetch, on purpose. AdminAuthProvider
+  // wraps the whole app (admin console AND every public portal page), so this runs on
+  // every load. adminFetch redirects to /admin/login on any 401 — which would hijack
+  // anonymous portal visitors (who correctly get 401 here). The restore must be silent:
+  // 200 → set admin; anything else → clear state and stay put. Admin routes are still
+  // guarded by AdminGuard, which is what actually redirects unauthenticated admins.
   useEffect(() => {
     localStorage.removeItem('cp_admin_token')
-    adminFetch('/api/admin/auth/me')
+    fetch('/api/admin/auth/me', { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } })
       .then(async (res) => {
         if (res.status === 200) {
           const d = await res.json()

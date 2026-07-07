@@ -24,15 +24,25 @@ if (isDevLike && (!process.env.CP_ADMIN_JWT_SECRET || !process.env.CP_PORTAL_JWT
   console.warn('CP admin/portal JWT secrets are missing in development/test; using deterministic local defaults.')
 }
 
-function authenticateAdmin(req, res, next) {
+async function authenticateAdmin(req, res, next) {
   const token = req.cookies?.cp_admin_token ||
     (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
   if (!token) return res.status(401).json({ error: 'Admin authentication required.' });
   try {
-    req.admin = jwt.verify(token, ADMIN_RUNTIME_SECRET);
-    next();
+    // Pin the algorithm so only our HS256 tokens are accepted.
+    req.admin = jwt.verify(token, ADMIN_RUNTIME_SECRET, { algorithms: ['HS256'] });
   } catch {
     return res.status(401).json({ error: 'Invalid or expired admin token.' });
+  }
+  // SEC: re-check the account is still active on every request. A stateless JWT
+  // otherwise stays valid for its full 12h lifetime even after an admin is
+  // deactivated — a removed/compromised admin must lose access immediately.
+  try {
+    const [[row]] = await pool.execute('SELECT is_active FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);
+    if (!row || !row.is_active) return res.status(401).json({ error: 'Your admin account is no longer active.' });
+    next();
+  } catch (err) {
+    next(err);
   }
 }
 
@@ -42,7 +52,7 @@ async function authenticatePortal(req, _res, next) {
     (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
   if (token) {
     try {
-      const payload = jwt.verify(token, PORTAL_RUNTIME_SECRET);
+      const payload = jwt.verify(token, PORTAL_RUNTIME_SECRET, { algorithms: ['HS256'] });
       payload.id = payload.userId; // alias: routes use req.portalUser.id
       req.portalUser = payload;
       const [[userRecord]] = await pool.execute(

@@ -68,8 +68,12 @@ async function invalidateUserSessions(userId) {
 }
 
 function resolveIp(req) {
-  const forwarded = req?.headers?.['x-forwarded-for'];
-  if (forwarded) return forwarded.split(',')[0].trim();
+  // F22: Derive the client IP from Express's req.ip, which already resolves the
+  // trusted proxy hop when app 'trust proxy' is configured (=1). This matches how
+  // the rate limiters key requests and avoids trusting an attacker-supplied,
+  // spoofable X-Forwarded-For header for login audit, geoip, and security alerts.
+  const ip = req?.ip;
+  if (ip) return String(ip).trim();
   return req?.connection?.remoteAddress || req?.socket?.remoteAddress || null;
 }
 
@@ -793,16 +797,57 @@ async function verifyEmailChallenge(userId, orgId, challengeType, code) {
   return true;
 }
 
+// F19: The forgot-password OTP path used to have no per-challenge attempt cap,
+// so a valid code could be brute-forced within its expiry window. We mirror the
+// exact mechanism verifyEmailVerificationChallenge uses (gate on attempts < 5,
+// increment on every guess, invalidate on success). The user_2fa_challenges
+// table predates the `attempts` column, so we ensure it exists once (idempotent).
+let ensured2faChallengeAttemptsColumn = null;
+async function ensure2faChallengeAttemptsColumn() {
+  if (!ensured2faChallengeAttemptsColumn) {
+    ensured2faChallengeAttemptsColumn = (async () => {
+      const [[existing]] = await pool.execute(
+        `SELECT COUNT(*) AS c
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'user_2fa_challenges'
+           AND COLUMN_NAME = 'attempts'`
+      );
+      if (!existing || Number(existing.c) === 0) {
+        await pool.execute(
+          `ALTER TABLE user_2fa_challenges ADD COLUMN attempts INT NOT NULL DEFAULT 0`
+        );
+      }
+    })().catch((err) => {
+      // If the ensure fails, reset so a later call can retry; surface to caller
+      // which treats DB errors as verification failure (fail closed).
+      ensured2faChallengeAttemptsColumn = null;
+      throw err;
+    });
+  }
+  return ensured2faChallengeAttemptsColumn;
+}
+
 async function verifyEmailChallengeWithoutOrg(userId, challengeType, code) {
+  await ensure2faChallengeAttemptsColumn();
   const [[row]] = await pool.execute(
-    `SELECT * FROM user_2fa_challenges
-     WHERE user_id = ? AND challenge_type = ? AND is_consumed = 0 AND expires_at > NOW()
+    `SELECT id, code_hash, attempts FROM user_2fa_challenges
+     WHERE user_id = ? AND challenge_type = ? AND is_consumed = 0 AND expires_at > NOW() AND attempts < 5
      ORDER BY id DESC LIMIT 1`,
     [userId, challengeType]
   );
   if (!row) return false;
-  if (row.code_hash !== hashValue(code)) return false;
-  await pool.execute('UPDATE user_2fa_challenges SET is_consumed = 1 WHERE id = ?', [row.id]);
+  if (row.code_hash !== hashValue(code)) {
+    await pool.execute(
+      'UPDATE user_2fa_challenges SET attempts = attempts + 1 WHERE id = ?',
+      [row.id]
+    );
+    return false;
+  }
+  await pool.execute(
+    'UPDATE user_2fa_challenges SET is_consumed = 1, attempts = attempts + 1 WHERE id = ?',
+    [row.id]
+  );
   return true;
 }
 
@@ -2029,8 +2074,10 @@ const authController = {
       });
       return res.json({ resetToken });
     } catch (err) {
+      // F21: Log detail server-side; return a generic message so raw internal
+      // error text (DB errors, token internals) is not disclosed to the client.
       console.error('verifyForgotPasswordCode error:', err);
-      return res.status(400).json({ error: err.message || 'Could not verify code.' });
+      return res.status(400).json({ error: 'Could not verify code.' });
     }
   },
 
@@ -2084,8 +2131,10 @@ const authController = {
       await invalidateUserSessions(pending.userId);
       return res.json({ message: 'Password updated successfully. Please sign in again.' });
     } catch (err) {
+      // F21: Log detail server-side; return a generic message so raw internal
+      // error text (reset-token parse internals, DB errors) is not disclosed.
       console.error('completeForgotPasswordReset error:', err);
-      return res.status(400).json({ error: err.message || 'Could not reset password.' });
+      return res.status(400).json({ error: 'Could not reset password.' });
     }
   },
 

@@ -34,6 +34,7 @@ const thumbs  = require('../../services/thumbnailService');
 const jobs    = require('../../services/jobQueueService');
 const { logger } = require('../../services/logger');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { validateUpload } = require('../../middleware/uploadValidation');
 
 const MAX_FILE_BYTES = Number(process.env.UPLOAD_MAX_BYTES || 50 * 1024 * 1024); // 50 MB default
 const upload = multer({
@@ -45,6 +46,50 @@ function sha256(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
 
+// F9: content-based type sniffing. We must NOT trust the client-supplied mimetype.
+// Sniff magic bytes and derive the real content-type from the file body. Allowlist
+// covers the same legitimate types validateUpload(['image','doc']) permits:
+// pdf, jpeg, png, gif, webp, doc (OLE2/CFB), docx (zip container).
+function sniffMimeType(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 4) return null;
+  // PDF: "%PDF"
+  if (buf.slice(0, 4).toString('latin1') === '%PDF') return 'application/pdf';
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buf.length >= 8 &&
+      buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47 &&
+      buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A) return 'image/png';
+  // GIF: "GIF87a" / "GIF89a"
+  if (buf.slice(0, 6).toString('latin1') === 'GIF87a' ||
+      buf.slice(0, 6).toString('latin1') === 'GIF89a') return 'image/gif';
+  // WEBP: "RIFF"...."WEBP"
+  if (buf.length >= 12 &&
+      buf.slice(0, 4).toString('latin1') === 'RIFF' &&
+      buf.slice(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+  // ZIP container (docx/xlsx/pptx): "PK\x03\x04" (also PK\x05\x06 empty, PK\x07\x08 spanned)
+  if (buf[0] === 0x50 && buf[1] === 0x4B &&
+      (buf[2] === 0x03 || buf[2] === 0x05 || buf[2] === 0x07)) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+  // Legacy MS Office (doc): OLE2/CFB header D0 CF 11 E0 A1 B1 1A E1
+  if (buf.length >= 8 &&
+      buf[0] === 0xD0 && buf[1] === 0xCF && buf[2] === 0x11 && buf[3] === 0xE0 &&
+      buf[4] === 0xA1 && buf[5] === 0xB1 && buf[6] === 0x1A && buf[7] === 0xE1) {
+    return 'application/msword';
+  }
+  return null;
+}
+
+// F9: content-types that are safe to echo back on download. Anything not sniffed to
+// one of these is served as application/octet-stream (never the client-supplied MIME).
+const SAFE_SERVE_MIME = new Set([
+  'application/pdf',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
 // C-01: attachments are case source documents (AE/MI PII). Every by-id read/write/delete
 // must be constrained to the caller's org rather than trusting a client-supplied id or
 // :orgId. Platform (global) admins bypass the constraint.
@@ -54,7 +99,7 @@ function orgClause(req) {
 }
 
 // ── POST /attachments ────────────────────────────────────────────────────────
-router.post('/attachments', authenticate, upload.single('file'), async (req, res) => {
+router.post('/attachments', authenticate, upload.single('file'), validateUpload(['image', 'doc']), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'file (multipart) required' });
     const { entity_type, entity_id, field_name } = req.body || {};
@@ -63,7 +108,13 @@ router.post('/attachments', authenticate, upload.single('file'), async (req, res
     }
     const orgId = req.user.orgId ?? null;
     const buf   = req.file.buffer;
-    const mt    = req.file.mimetype || 'application/octet-stream';
+    // F9: do not trust req.file.mimetype — sniff the real type from the bytes and
+    // reject anything that isn't a recognized, allowlisted content type. This blocks
+    // e.g. an HTML/script payload uploaded with a spoofed image/pdf Content-Type.
+    const mt    = sniffMimeType(buf);
+    if (!mt || !SAFE_SERVE_MIME.has(mt)) {
+      return res.status(400).json({ error: 'Unsupported or unrecognized file content' });
+    }
     const ext   = path.extname(req.file.originalname || '') || '';
     const key   = storage.generateKey(ext);
 
@@ -170,8 +221,13 @@ router.get('/attachments/:id/content', authenticate, async (req, res) => {
     );
     if (!a) return res.status(404).json({ error: 'Not found' });
     const { stream } = await storage.get({ orgId: a.org_id, key: a.storage_key });
-    res.setHeader('Content-Type', a.mime_type);
-    res.setHeader('Content-Disposition', `inline; filename="${a.original_name.replace(/"/g, '')}"`);
+    // F9: never serve stored bytes inline with a possibly-attacker-influenced MIME.
+    // Force a download disposition + nosniff, and only echo the stored content-type if
+    // it is on the safe allowlist (otherwise octet-stream).
+    const serveType = SAFE_SERVE_MIME.has(a.mime_type) ? a.mime_type : 'application/octet-stream';
+    res.setHeader('Content-Type', serveType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `attachment; filename="${String(a.original_name || 'download').replace(/[\r\n"]/g, '')}"`);
     stream.pipe(res);
   } catch (err) {
     res.status(404).json({ error: err.message });
@@ -316,9 +372,12 @@ router.post('/attachments/:id/tags', authenticate, async (req, res) => {
 
 router.delete('/attachments/:id/tags/:tag', authenticate, async (req, res) => {
   try {
+    // F10: scope to the caller's org (attachment_tags.org_id) so a tag can only be
+    // deleted for attachments the caller can see. Platform admins bypass as elsewhere.
+    const scope = orgClause(req);
     await pool.execute(
-      `DELETE FROM attachment_tags WHERE attachment_id = ? AND tag = ?`,
-      [req.params.id, req.params.tag]
+      `DELETE FROM attachment_tags WHERE attachment_id = ? AND tag = ?${scope.sql}`,
+      [req.params.id, req.params.tag, ...scope.params]
     );
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -326,9 +385,12 @@ router.delete('/attachments/:id/tags/:tag', authenticate, async (req, res) => {
 
 router.get('/attachments/:id/tags', authenticate, async (req, res) => {
   try {
+    // F10: scope to the caller's org so tags are only readable for attachments in the
+    // caller's org. Platform admins bypass as elsewhere.
+    const scope = orgClause(req);
     const [rows] = await pool.execute(
-      `SELECT tag, created_by, created_at FROM attachment_tags WHERE attachment_id = ? ORDER BY tag`,
-      [req.params.id]
+      `SELECT tag, created_by, created_at FROM attachment_tags WHERE attachment_id = ?${scope.sql} ORDER BY tag`,
+      [req.params.id, ...scope.params]
     );
     res.json({ tags: rows });
   } catch (err) { res.status(500).json({ error: err.message }); }

@@ -1,0 +1,87 @@
+- generic [ref=e3]:
+  - alert [ref=e4]:
+    - text: ⚠ Important Safety Information —
+    - link [ref=e5] [cursor=pointer]:
+      - /url: /portal/novartis/safety
+      - text: View Safety Alerts
+    - button [ref=e6] [cursor=pointer]: ×
+  - banner [ref=e7]:
+    - generic [ref=e8]:
+      - link [ref=e9] [cursor=pointer]:
+        - /url: /portal/novartis
+        - img [ref=e10]
+        - generic [ref=e11]: Novartis
+      - navigation [ref=e12]:
+        - button [ref=e14] [cursor=pointer]: Science ▾
+        - button [ref=e16] [cursor=pointer]: Resources ▾
+        - link [ref=e17] [cursor=pointer]:
+          - /url: /portal/novartis/events
+          - text: Events
+        - link [ref=e18] [cursor=pointer]:
+          - /url: /portal/novartis/safety
+          - text: Safety
+        - link [ref=e19] [cursor=pointer]:
+          - /url: /portal/novartis/news
+          - text: News
+        - link [ref=e20] [cursor=pointer]:
+          - /url: /portal/novartis/find-msl
+          - text: Find MSL
+        - link [ref=e21] [cursor=pointer]:
+          - /url: /portal/novartis/faq
+          - text: FAQ
+        - link [ref=e22] [cursor=pointer]:
+          - /url: /portal/novartis/contact
+          - text: Contact
+      - generic [ref=e23]:
+        - searchbox [ref=e24]
+        - button [ref=e25] [cursor=pointer]: Submit Inquiry
+        - link [ref=e26] [cursor=pointer]:
+          - /url: /portal/novartis/login
+          - text: Sign In
+  - main [ref=e27]:
+    - generic [ref=e29]:
+      - generic [ref=e30]: Access is provisioned by administrator approval only.
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - generic [ref=e33]: Email Address
+          - textbox [ref=e34]:
+            - /placeholder: you@example.com
+        - generic [ref=e35]:
+          - generic [ref=e36]: Password
+          - generic [ref=e37]:
+            - textbox [ref=e38]:
+              - /placeholder: ••••••••
+            - button [ref=e39]: Show
+        - button [ref=e40] [cursor=pointer]: Sign In
+  - contentinfo [ref=e41]:
+    - generic [ref=e42]:
+      - generic [ref=e43]:
+        - img [ref=e44]
+        - paragraph [ref=e45]: Advancing Medicine. Improving Lives.
+      - generic [ref=e46]:
+        - link [ref=e47] [cursor=pointer]:
+          - /url: /portal/novartis/submit
+          - text: Submit Inquiry
+        - link [ref=e48] [cursor=pointer]:
+          - /url: /portal/novartis/find-msl
+          - text: Find an MSL
+        - link [ref=e49] [cursor=pointer]:
+          - /url: /portal/novartis/events
+          - text: Events
+        - link [ref=e50] [cursor=pointer]:
+          - /url: /portal/novartis/contact
+          - text: Contact Us
+      - generic [ref=e51]:
+        - paragraph [ref=e52]: This portal is intended for healthcare professionals and authorised users only. The information contained herein is for educational and informational purposes. Always refer to the full Prescribing Information for complete safety and efficacy data.
+        - paragraph [ref=e53]: © 2026 Novartis Pharmaceuticals Corporation. All rights reserved. Novartis and the Novartis logo are registered trademarks of Novartis AG.
+  - button [ref=e54] [cursor=pointer]:
+    - img [ref=e55]
+  - dialog [ref=e58]:
+    - generic [ref=e59]:
+      - generic [ref=e60]: We use cookies
+      - generic [ref=e61]: We use cookies and similar technologies to improve your experience on this portal. Please choose your preferences below.
+      - generic [ref=e62]:
+        - button [ref=e63] [cursor=pointer]: Accept All
+        - button [ref=e64] [cursor=pointer]: Necessary Only
+        - button [ref=e65] [cursor=pointer]: Manage Preferences
+  - button [ref=e67] [cursor=pointer]: 💬

@@ -11,14 +11,19 @@
  */
 
 import { useEffect, useRef } from 'react'
+import DOMPurify from 'dompurify'
 
 export default function RichTextField({ value = {}, onChange, label, readOnly, height = 140 }) {
   const ref = useRef(null)
 
   useEffect(() => {
     if (!ref.current) return
-    if ((value.html || '') !== ref.current.innerHTML) {
-      ref.current.innerHTML = value.html || ''
+    // Sanitize before assigning to innerHTML so a poisoned rich_text value cannot
+    // execute script merely by being viewed (both edit and read-only paths). Default
+    // DOMPurify config preserves normal formatting tags while stripping scripts/handlers.
+    const clean = DOMPurify.sanitize(value.html || '')
+    if (clean !== ref.current.innerHTML) {
+      ref.current.innerHTML = clean
     }
   }, [value.html])
 

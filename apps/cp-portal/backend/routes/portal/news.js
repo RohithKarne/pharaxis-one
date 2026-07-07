@@ -87,7 +87,13 @@ router.get('/', authenticatePortal, async (req, res) => {
 // NOTE: this route must be registered BEFORE /:postId to avoid being shadowed by the catch-all route
 router.get('/preview/:postId', authenticatePortal, requirePortalAuth, async (req, res) => {
   try {
-    const [[post]] = await pool.execute('SELECT * FROM cp_news_posts WHERE id = ?', [req.params.postId]);
+    // SEC: scope to the caller's own client. Without the client_id filter, any
+    // logged-in portal user could read another tenant's posts — including drafts
+    // and unpublished/embargoed content — by enumerating postId (cross-tenant IDOR).
+    const [[post]] = await pool.execute(
+      'SELECT * FROM cp_news_posts WHERE id = ? AND client_id = ?',
+      [req.params.postId, req.portalUser.clientId]
+    );
     if (!post) return res.status(404).json({ error: 'Post not found.' });
     res.json({ post });
   } catch (err) {

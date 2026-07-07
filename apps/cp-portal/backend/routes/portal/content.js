@@ -6,6 +6,7 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
+const { authenticatePortal } = require('../../middleware/auth');
 
 async function getClient(code) {
   const [[row]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [code]);
@@ -82,7 +83,7 @@ router.get('/:clientCode/events', async (req, res) => {
 });
 
 // GET /api/portal/content/:clientCode/msls
-router.get('/:clientCode/msls', async (req, res) => {
+router.get('/:clientCode/msls', authenticatePortal, async (req, res) => {
   try {
     const client = await getClient(req.params.clientCode);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
@@ -90,7 +91,10 @@ router.get('/:clientCode/msls', async (req, res) => {
       'SELECT id, name, title, specialty, region, territory, email, phone, profile_image_url FROM cp_msls WHERE client_id=? AND is_active=1 ORDER BY display_order ASC, name ASC',
       [client.id]
     );
-    res.json({ items: rows });
+    // SEC: contact PII (email/phone) is only returned to authenticated users so
+    // anonymous scrapers can't harvest the MSL directory for phishing/spam.
+    const items = req.portalUser ? rows : rows.map(({ email, phone, ...rest }) => rest);
+    res.json({ items });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

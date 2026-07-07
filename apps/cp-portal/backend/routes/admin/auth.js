@@ -10,7 +10,14 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, ADMIN_SECRET } = require('../../middleware/auth');
 
-const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' }
+// SEC: admin console is same-origin only and never linked cross-site, so Strict
+// SameSite is safe here and gives full CSRF protection on the admin surface.
+const COOKIE_OPTS = { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' }
+
+// SEC: constant dummy hash so login timing is identical whether or not the email
+// exists — otherwise the missing-user path returns faster (no bcrypt) and leaks
+// which admin emails are registered.
+const DUMMY_HASH = bcrypt.hashSync('cp-timing-equalizer', 12);
 
 // POST /api/admin/auth/login
 router.post('/login', async (req, res) => {
@@ -19,7 +26,10 @@ router.post('/login', async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
 
     const [[user]] = await pool.execute('SELECT * FROM cp_admin_users WHERE email = ? AND is_active = 1', [email]);
-    if (!user) return res.status(401).json({ error: 'Invalid credentials.' });
+    if (!user) {
+      bcrypt.compareSync(password, DUMMY_HASH); // equalize timing with the valid-user path
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
 
     const valid = bcrypt.compareSync(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials.' });
@@ -32,8 +42,9 @@ router.post('/login', async (req, res) => {
 
     await pool.execute(`UPDATE cp_admin_users SET updated_at = NOW() WHERE id = ?`, [user.id]);
 
+    // SEC: token is delivered only via the httpOnly cookie, never in the body.
     res.cookie('cp_admin_token', token, { ...COOKIE_OPTS, maxAge: 12 * 60 * 60 * 1000 })
-       .json({ token, admin: { id: user.id, name: user.name, email: user.email, role: user.role, clientId: user.client_id ?? null } });
+       .json({ admin: { id: user.id, name: user.name, email: user.email, role: user.role, clientId: user.client_id ?? null } });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }
@@ -60,7 +71,7 @@ router.patch('/password', authenticateAdmin, async (req, res) => {
     const [[user]] = await pool.execute('SELECT * FROM cp_admin_users WHERE id = ?', [req.admin.adminId]);
     if (!bcrypt.compareSync(current_password, user.password)) return res.status(401).json({ error: 'Current password incorrect.' });
 
-    const hash = bcrypt.hashSync(new_password, 10);
+    const hash = bcrypt.hashSync(new_password, 12);
     await pool.execute(`UPDATE cp_admin_users SET password = ?, updated_at = NOW() WHERE id = ?`, [hash, user.id]);
     res.json({ message: 'Password updated.' });
   } catch (err) {
@@ -71,7 +82,7 @@ router.patch('/password', authenticateAdmin, async (req, res) => {
 // POST /api/admin/auth/logout — clear auth cookie
 router.post('/logout', async (_req, res) => {
   try {
-    res.clearCookie('cp_admin_token', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
+    res.clearCookie('cp_admin_token', { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' })
        .json({ message: 'Logged out.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });

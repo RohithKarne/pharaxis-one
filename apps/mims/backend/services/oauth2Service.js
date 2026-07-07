@@ -2,6 +2,7 @@
 
 const pool = require('../database/db');
 const { httpFetch } = require('../utils/httpFetch');
+const { assertPublicHttpUrl } = require('../utils/ssrfGuard');
 
 function parseConfig(rawConfig) {
   if (!rawConfig) return null;
@@ -83,6 +84,7 @@ async function refreshToken(orgId, integrationType) {
         }).toString();
       }
 
+      await assertPublicHttpUrl(endpoint);
       const res = await httpFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -106,6 +108,7 @@ async function refreshToken(orgId, integrationType) {
         scope: String(config.scope || ''),
       }).toString();
 
+      await assertPublicHttpUrl(endpoint);
       const res = await httpFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -127,6 +130,7 @@ async function refreshToken(orgId, integrationType) {
         password: String(config.password || ''),
       }).toString();
 
+      await assertPublicHttpUrl(endpoint);
       const res = await httpFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

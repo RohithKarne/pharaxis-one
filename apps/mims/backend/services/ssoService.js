@@ -91,9 +91,43 @@ function buildBackendCallbackUrl(providerKey) {
   return `${DEFAULT_BACKEND_BASE_URL.replace(/\/+$/, '')}/api/auth/sso/${providerKey}/callback`;
 }
 
+// Resolve the dedicated SSO config encryption key. Fail closed in production if
+// it is missing — no fallback to JWT_SECRET or a hardcoded constant. The shipped
+// .env sets SSO_CONFIG_ENCRYPTION_KEY, so this only bites a misconfigured deploy.
+function getSsoEncryptionKeyMaterial() {
+  const configured = String(process.env.SSO_CONFIG_ENCRYPTION_KEY || '').trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'SSO_CONFIG_ENCRYPTION_KEY must be set in production to encrypt/decrypt SSO client secrets.'
+    );
+  }
+  // Dev/test only: without a dedicated key, refuse to encrypt/decrypt rather than
+  // silently deriving from JWT_SECRET or a constant. Surface a clear error.
+  throw new Error(
+    'SSO_CONFIG_ENCRYPTION_KEY is not set. Add it to your environment (.env) to manage SSO secrets.'
+  );
+}
+
 function deriveEncryptionKey() {
-  const base = process.env.SSO_CONFIG_ENCRYPTION_KEY || process.env.JWT_SECRET || JWT_SECRET;
-  return crypto.createHash('sha256').update(String(base || 'mims-sso')).digest();
+  return crypto.createHash('sha256').update(getSsoEncryptionKeyMaterial()).digest();
+}
+
+// Read-compatibility only: keys previously used to encrypt SSO secrets before a
+// dedicated key was introduced. Used solely to decrypt legacy DB rows; new writes
+// always use deriveEncryptionKey(). Never includes the removed 'mims-sso' constant.
+function legacyDecryptionKeys() {
+  const keys = [];
+  const seen = new Set();
+  const push = (material) => {
+    const base = String(material || '').trim();
+    if (!base || seen.has(base)) return;
+    seen.add(base);
+    keys.push(crypto.createHash('sha256').update(base).digest());
+  };
+  push(process.env.JWT_SECRET);
+  push(JWT_SECRET);
+  return keys;
 }
 
 function encryptSecret(value) {
@@ -106,22 +140,37 @@ function encryptSecret(value) {
   return `${iv.toString('base64')}.${tag.toString('base64')}.${encrypted.toString('base64')}`;
 }
 
-function decryptSecret(value) {
-  const payload = String(value || '').trim();
-  if (!payload) return null;
-  const [ivB64, tagB64, encryptedB64] = payload.split('.');
-  if (!ivB64 || !tagB64 || !encryptedB64) return null;
-  const decipher = crypto.createDecipheriv(
-    'aes-256-gcm',
-    deriveEncryptionKey(),
-    Buffer.from(ivB64, 'base64')
-  );
+function decryptWithKey(key, ivB64, tagB64, encryptedB64) {
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
   decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
   const decrypted = Buffer.concat([
     decipher.update(Buffer.from(encryptedB64, 'base64')),
     decipher.final(),
   ]);
   return decrypted.toString('utf8');
+}
+
+function decryptSecret(value) {
+  const payload = String(value || '').trim();
+  if (!payload) return null;
+  const [ivB64, tagB64, encryptedB64] = payload.split('.');
+  if (!ivB64 || !tagB64 || !encryptedB64) return null;
+
+  // Prefer the dedicated key. Fall back to legacy JWT_SECRET-derived keys only to
+  // read rows encrypted before the dedicated key existed (GCM auth tag guards
+  // against a wrong key producing garbage — a mismatch throws instead).
+  try {
+    return decryptWithKey(deriveEncryptionKey(), ivB64, tagB64, encryptedB64);
+  } catch (primaryErr) {
+    for (const key of legacyDecryptionKeys()) {
+      try {
+        return decryptWithKey(key, ivB64, tagB64, encryptedB64);
+      } catch (_) {
+        // try next legacy key
+      }
+    }
+    throw primaryErr;
+  }
 }
 
 function maskSecret(value) {

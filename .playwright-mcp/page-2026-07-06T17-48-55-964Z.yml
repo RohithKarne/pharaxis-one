@@ -1,0 +1,37 @@
+- generic [ref=f5e3]:
+  - banner [ref=f5e4]:
+    - generic [ref=f5e5]:
+      - link "Medical Portal" [ref=f5e6] [cursor=pointer]:
+        - /url: /portal/novartis
+        - generic [ref=f5e7]: Medical Portal
+      - navigation [ref=f5e8]:
+        - link "Safety" [ref=f5e9] [cursor=pointer]:
+          - /url: /portal/novartis/safety
+        - link "FAQ" [ref=f5e10] [cursor=pointer]:
+          - /url: /portal/novartis/faq
+        - link "Contact" [ref=f5e11] [cursor=pointer]:
+          - /url: /portal/novartis/contact
+      - generic [ref=f5e12]:
+        - searchbox "Search portal" [ref=f5e13]
+        - link "Sign In" [ref=f5e14] [cursor=pointer]:
+          - /url: /portal/novartis/login
+  - main [ref=f5e15]:
+    - generic [ref=f5e16]:
+      - generic [ref=f5e18]:
+        - heading "Welcome to the Medical Portal" [level=1] [ref=f5e19]
+        - paragraph [ref=f5e20]: Your trusted source for medical information, resources, and support.
+        - generic [ref=f5e21]:
+          - img [ref=f5e22]
+          - textbox "Search the portal" [ref=f5e25]:
+            - /placeholder: Search medical information, documents, safety…
+          - button "Search" [ref=f5e26] [cursor=pointer]
+        - generic [ref=f5e27]:
+          - button "Submit an Inquiry" [ref=f5e28] [cursor=pointer]
+          - button "Find an MSL" [ref=f5e29] [cursor=pointer]
+      - heading "How Can We Help?" [level=2] [ref=f5e32]
+  - contentinfo [ref=f5e33]:
+    - generic [ref=f5e34]:
+      - generic [ref=f5e36]: Medical Portal
+      - link "Contact Us" [ref=f5e38] [cursor=pointer]:
+        - /url: /portal/novartis/contact
+      - paragraph [ref=f5e40]: © 2026 undefined. All rights reserved.

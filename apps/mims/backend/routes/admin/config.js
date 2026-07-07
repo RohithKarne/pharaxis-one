@@ -11,6 +11,101 @@ const { authenticate, requireRole, requireOrg } = require('../../middleware/auth
 const { validate, schemas } = require('../../middleware/validate');
 const { logService } = require('../../services/serviceLogger');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const crypto = require('crypto');
+// P7/F12: reuse the SAME AES-256-GCM secret encryption the codebase uses for SSO
+// secrets so IMAP/SMTP mailbox passwords are no longer stored in plaintext at rest.
+const { encryptSecret } = require('../../services/ssoService');
+
+// ssoService only exports encryptSecret; mirror its decrypt (same key derivation and
+// iv.tag.ciphertext format) locally, tolerating not-yet-encrypted (plaintext) rows so
+// existing accounts keep working without a data migration.
+//
+// Mailbox passwords are written with ssoService.encryptSecret, so the dedicated
+// SSO_CONFIG_ENCRYPTION_KEY is the primary key here too. Fail closed if it is missing —
+// no fallback to JWT_SECRET or a hardcoded constant (mirrors getSsoEncryptionKeyMaterial).
+function getMailboxEncryptionKeyMaterial() {
+  const configured = String(process.env.SSO_CONFIG_ENCRYPTION_KEY || '').trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'SSO_CONFIG_ENCRYPTION_KEY must be set in production to encrypt/decrypt mailbox credentials.'
+    );
+  }
+  throw new Error(
+    'SSO_CONFIG_ENCRYPTION_KEY is not set. Add it to your environment (.env) to manage mailbox credentials.'
+  );
+}
+
+function deriveMailboxSecretKey() {
+  return crypto.createHash('sha256').update(getMailboxEncryptionKeyMaterial()).digest();
+}
+
+// Read-compatibility only: keys previously used to derive the mailbox secret key
+// before a dedicated key was required. Used solely to decrypt legacy DB rows; new
+// writes always use deriveMailboxSecretKey(). Never includes the removed 'mims-sso'
+// constant — a predictable key is not an acceptable fallback.
+function legacyMailboxDecryptionKeys() {
+  const keys = [];
+  const seen = new Set();
+  const push = (material) => {
+    const base = String(material || '').trim();
+    if (!base || seen.has(base)) return;
+    seen.add(base);
+    keys.push(crypto.createHash('sha256').update(base).digest());
+  };
+  push(process.env.JWT_SECRET);
+  push(require('../../utils/jwtSecret'));
+  return keys;
+}
+
+function decryptWithMailboxKey(key, ivB64, tagB64, encryptedB64) {
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
+  decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+  const decrypted = Buffer.concat([decipher.update(Buffer.from(encryptedB64, 'base64')), decipher.final()]);
+  return decrypted.toString('utf8');
+}
+
+// Attempt to open an iv.tag.ciphertext envelope with the dedicated key, then any
+// legacy key. Returns the plaintext, or null if no configured key decrypts it. The
+// GCM auth tag makes a wrong-key attempt throw rather than return garbage. A missing
+// dedicated key throws out of deriveMailboxSecretKey() (fail closed) — it is a
+// deployment misconfiguration, not a legacy-plaintext row.
+function tryDecryptMailboxEnvelope(ivB64, tagB64, encryptedB64) {
+  const candidateKeys = [deriveMailboxSecretKey(), ...legacyMailboxDecryptionKeys()];
+  for (const key of candidateKeys) {
+    try {
+      return decryptWithMailboxKey(key, ivB64, tagB64, encryptedB64);
+    } catch (_) { /* wrong key → try next */ }
+  }
+  return null;
+}
+
+function decryptMailboxSecret(value) {
+  const payload = String(value == null ? '' : value).trim();
+  if (!payload) return value;
+  const parts = payload.split('.');
+  if (parts.length !== 3) return value; // not our envelope → assume legacy plaintext
+  const [ivB64, tagB64, encryptedB64] = parts;
+  if (!ivB64 || !tagB64 || !encryptedB64) return value;
+  const plain = tryDecryptMailboxEnvelope(ivB64, tagB64, encryptedB64);
+  return plain === null ? value : plain; // no key matched → treat as legacy plaintext
+}
+
+// Encrypt a mailbox password for write. Idempotent: an already-encrypted value
+// (e.g. the kept existing value on PUT replace-only) is returned unchanged.
+function encryptMailboxSecret(value) {
+  if (value == null || value === '') return value == null ? null : value;
+  const str = String(value);
+  const parts = str.split('.');
+  if (parts.length === 3 && parts.every(Boolean)) {
+    // Looks like our envelope; only re-encrypt if it does NOT decrypt cleanly with
+    // the dedicated or any legacy key.
+    if (tryDecryptMailboxEnvelope(parts[0], parts[1], parts[2]) !== null) {
+      return str; // already validly encrypted → leave as-is
+    }
+  }
+  return encryptSecret(str);
+}
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -411,9 +506,9 @@ router.post('/email-accounts', authenticate, requireRole('admin', 'platform_admi
       mailbox_email || null, from_email || null, display_name || null,
       is_default_outbound ? 1 : 0,
       imap_host || null, imap_port || null, imap_encryption || null,
-      imap_username || null, imap_password || null,
+      imap_username || null, imap_password ? encryptMailboxSecret(imap_password) : null,
       smtp_host || null, smtp_port || null, smtp_encryption || null,
-      smtp_username || null, smtp_password || null,
+      smtp_username || null, smtp_password ? encryptMailboxSecret(smtp_password) : null,
       polling_interval_min || 5, initial_fetch_days || 7,
       mailbox_folder || 'INBOX', ingest_attachments ? 1 : 0,
       max_attachment_mb || 10
@@ -459,9 +554,11 @@ router.put('/email-accounts/:id', authenticate, requireRole('admin', 'platform_a
     } = req.body;
     const orgId = getScopedOrgId(req, req.body.org_id || existing.org_id);
 
-    // Replace-only: keep existing password if blank/absent
-    const imapPwd = req.body.imap_password || existing.imap_password;
-    const smtpPwd = req.body.smtp_password || existing.smtp_password;
+    // Replace-only: keep existing password if blank/absent. A newly-supplied plaintext
+    // password is encrypted; a kept existing value is already encrypted (encryptMailboxSecret
+    // is idempotent on our envelope), so both paths store ciphertext at rest.
+    const imapPwd = encryptMailboxSecret(req.body.imap_password || existing.imap_password);
+    const smtpPwd = encryptMailboxSecret(req.body.smtp_password || existing.smtp_password);
 
     if (['Inbound', 'Both'].includes(direction) && !mailbox_email)
       return res.status(400).json({ error: 'Mailbox email required for inbound accounts.' });
@@ -599,7 +696,7 @@ router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 
 
     const imap = new Imap({
       user: account.imap_username,
-      password: account.imap_password,
+      password: decryptMailboxSecret(account.imap_password),
       host: account.imap_host,
       port: account.imap_port,
       tls,
@@ -671,7 +768,7 @@ router.post('/email-accounts/:id/test-smtp', authenticate, requireRole('admin', 
       port: account.smtp_port,
       secure,
       requireTLS,
-      auth: { user: account.smtp_username, pass: account.smtp_password },
+      auth: { user: account.smtp_username, pass: decryptMailboxSecret(account.smtp_password) },
       tls: { rejectUnauthorized: false },
       connectionTimeout: 10000,
     });
@@ -726,7 +823,7 @@ router.post('/email-accounts/:id/send-test', authenticate, requireRole('admin', 
       port: account.smtp_port,
       secure,
       requireTLS,
-      auth: { user: account.smtp_username, pass: account.smtp_password },
+      auth: { user: account.smtp_username, pass: decryptMailboxSecret(account.smtp_password) },
       tls: { rejectUnauthorized: false },
       connectionTimeout: 10000,
     });

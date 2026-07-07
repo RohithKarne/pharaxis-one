@@ -48,6 +48,7 @@ import VerifyEmailPage          from './portal/pages/VerifyEmailPage'
 import PreferencesPage         from './portal/pages/PreferencesPage'
 import SearchResultsPage        from './portal/pages/SearchResultsPage'
 import MyActivityPage           from './portal/pages/MyActivityPage'
+import ProfilePage              from './portal/pages/ProfilePage'
 import AnalyticsPage            from './admin/pages/AnalyticsPage'
 import FeedbackPage             from './admin/pages/FeedbackPage'
 import EmailSettingsPage        from './admin/pages/EmailSettingsPage'
@@ -97,6 +98,7 @@ function PortalRoutes() {
           <Route path="documents"         element={<FeatureGuard featureKey="document_library"><DocumentsPortalPage /></FeatureGuard>} />
           <Route path="saved"             element={<PortalAuthGuard><SavedItemsPage /></PortalAuthGuard>} />
           <Route path="preferences"     element={<PortalAuthGuard><PreferencesPage /></PortalAuthGuard>} />
+          <Route path="profile"          element={<PortalAuthGuard><ProfilePage /></PortalAuthGuard>} />
           <Route path="faq"             element={<FAQPortalPage />} />
           <Route path="search"          element={<SearchResultsPage />} />
           <Route path="*"                 element={<PortalNotFoundPage />} />

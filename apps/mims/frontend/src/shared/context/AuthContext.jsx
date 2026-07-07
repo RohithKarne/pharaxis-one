@@ -40,7 +40,11 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     if (!savedUser) return null
     return {
       user:    JSON.parse(savedUser),
-      token:   localStorage.getItem(`${prefix}_token`) || null,
+      // SECURITY (F14): the raw session JWT is NEVER persisted in localStorage
+      // (XSS-exfiltratable). Authentication on reload is restored via the
+      // httpOnly `mims_token` cookie, which is sent automatically on same-origin
+      // /api requests. Token lives in React state/memory only.
+      token:   null,
       modules: JSON.parse(localStorage.getItem(`${prefix}_modules`) || '[]'),
       orgId:   localStorage.getItem(`${prefix}_org_id`) ? Number(localStorage.getItem(`${prefix}_org_id`)) : null,
       siteId:  localStorage.getItem(`${prefix}_site_id`) ? Number(localStorage.getItem(`${prefix}_site_id`)) : null,
@@ -101,8 +105,10 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     if (nextUser) localStorage.setItem(`${KEY}_user`, JSON.stringify(nextUser))
     else localStorage.removeItem(`${KEY}_user`)
 
-    if (nextToken) localStorage.setItem(`${KEY}_token`, nextToken)
-    else localStorage.removeItem(`${KEY}_token`)
+    // SECURITY (F14): do NOT persist the raw session JWT in localStorage. It is
+    // held in React state only. Session survives reload via the httpOnly cookie.
+    // Proactively strip any legacy token left by an older build.
+    localStorage.removeItem(`${KEY}_token`)
 
     localStorage.setItem(`${KEY}_modules`, JSON.stringify(nextModules))
     localStorage.setItem(`${KEY}_org_id`, nextOrgId ?? '')
@@ -175,8 +181,16 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     setSecurityAccess(createUnresolvedSecurityAccess())
   }
 
+  // Session restore / validation. Runs on load whenever we have EITHER an
+  // in-memory token OR a locally-persisted user (which, after a reload, is the
+  // only signal we have that a session may exist — the JWT is no longer in
+  // localStorage). Authentication is carried by the httpOnly `mims_token`
+  // cookie (sent automatically on same-origin requests), so no Authorization
+  // header is required. On success applyAuthState() rehydrates state including
+  // a fresh in-memory token for the rest of the session.
   useEffect(() => {
-    if (!token || isPublicAuthPath()) return
+    if (isPublicAuthPath()) return
+    if (!token && !user) return
     let cancelled = false
 
     async function hydrateFromServer() {
@@ -195,7 +209,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
     hydrateFromServer()
     return () => { cancelled = true }
-  }, [applyAuthState, token])
+  }, [applyAuthState, token, user])
 
   const refreshOrgAccess = useCallback(async () => {
     if (!token) return
@@ -225,8 +239,8 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     })
     if (!switchRes.ok) return
     const switched = await switchRes.json()
+    // Token kept in memory only (F14); the httpOnly cookie carries auth on reload.
     setToken(switched.token || null)
-    localStorage.setItem(`${KEY}_token`,           switched.token || '')
     localStorage.setItem(`${KEY}_org_id`,          switched.orgId   ?? '')
     localStorage.setItem(`${KEY}_site_id`,         switched.siteId  ?? '')
     localStorage.setItem(`${KEY}_org_name`,        switched.orgName ?? '')

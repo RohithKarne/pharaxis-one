@@ -1,0 +1,99 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - generic [ref=f1e5]:
+      - link "Ardelyx" [ref=f1e6] [cursor=pointer]:
+        - /url: /portal/ardelyx
+        - generic [ref=f1e7]: Ardelyx
+      - navigation [ref=f1e8]:
+        - button "Science ▾" [ref=f1e10] [cursor=pointer]
+        - button "Resources ▾" [ref=f1e12] [cursor=pointer]
+        - link "Events" [ref=f1e13] [cursor=pointer]:
+          - /url: /portal/ardelyx/events
+        - link "Safety" [ref=f1e14] [cursor=pointer]:
+          - /url: /portal/ardelyx/safety
+        - link "News" [ref=f1e15] [cursor=pointer]:
+          - /url: /portal/ardelyx/news
+        - link "Find MSL" [ref=f1e16] [cursor=pointer]:
+          - /url: /portal/ardelyx/find-msl
+        - link "FAQ" [ref=f1e17] [cursor=pointer]:
+          - /url: /portal/ardelyx/faq
+        - link "Contact" [ref=f1e18] [cursor=pointer]:
+          - /url: /portal/ardelyx/contact
+      - generic [ref=f1e19]:
+        - searchbox "Search portal" [ref=f1e20]
+        - button "Submit Inquiry" [ref=f1e21] [cursor=pointer]
+        - link "Sign In" [ref=f1e22] [cursor=pointer]:
+          - /url: /portal/ardelyx/login
+  - main [ref=f1e23]:
+    - generic [ref=f1e24]:
+      - generic [ref=f1e26]:
+        - heading "Welcome to Ardelyx" [level=1] [ref=f1e27]
+        - paragraph [ref=f1e28]: Your trusted source for medical information, resources, and support.
+        - generic [ref=f1e29]:
+          - img [ref=f1e30]
+          - textbox "Search the portal" [ref=f1e33]:
+            - /placeholder: Search medical information, documents, safety…
+          - button "Search" [ref=f1e34] [cursor=pointer]
+        - generic [ref=f1e35]:
+          - button "Submit an Inquiry" [ref=f1e36] [cursor=pointer]
+          - button "Find an MSL" [ref=f1e37] [cursor=pointer]
+      - generic [ref=f1e39]:
+        - heading "How Can We Help?" [level=2] [ref=f1e40]
+        - generic [ref=f1e41]:
+          - link "Submit an Inquiry Submit a medical information request, adverse event report, or product complaint. Avg. reply < 2 business days" [ref=f1e42] [cursor=pointer]:
+            - /url: /portal/ardelyx/submit
+            - img [ref=f1e44]
+            - heading "Submit an Inquiry" [level=3] [ref=f1e46]
+            - paragraph [ref=f1e47]: Submit a medical information request, adverse event report, or product complaint.
+            - generic [ref=f1e48]: Avg. reply < 2 business days
+          - link "Find an MSL Connect with our Medical Science Liaison team and book an open time slot. Learn more →" [ref=f1e50] [cursor=pointer]:
+            - /url: /portal/ardelyx/find-msl
+            - img [ref=f1e52]
+            - heading "Find an MSL" [level=3] [ref=f1e55]
+            - paragraph [ref=f1e56]: Connect with our Medical Science Liaison team and book an open time slot.
+            - text: Learn more →
+          - link "Therapeutic Areas Explore our focus areas across diseases and treatment categories. Learn more →" [ref=f1e57] [cursor=pointer]:
+            - /url: /portal/ardelyx/therapeutic-areas
+            - img [ref=f1e59]
+            - heading "Therapeutic Areas" [level=3] [ref=f1e61]
+            - paragraph [ref=f1e62]: Explore our focus areas across diseases and treatment categories.
+            - text: Learn more →
+          - link "Drug Information Review approved prescribing information and clinical summaries. Learn more →" [ref=f1e63] [cursor=pointer]:
+            - /url: /portal/ardelyx/drug-info
+            - img [ref=f1e65]
+            - heading "Drug Information" [level=3] [ref=f1e68]
+            - paragraph [ref=f1e69]: Review approved prescribing information and clinical summaries.
+            - text: Learn more →
+          - link "Resources Access publications, clinical data, and approved materials. Learn more →" [ref=f1e70] [cursor=pointer]:
+            - /url: /portal/ardelyx/resources
+            - img [ref=f1e72]
+            - heading "Resources" [level=3] [ref=f1e75]
+            - paragraph [ref=f1e76]: Access publications, clinical data, and approved materials.
+            - text: Learn more →
+          - link "Events & Webinars Find upcoming medical education events, symposia, and webinars. Learn more →" [ref=f1e77] [cursor=pointer]:
+            - /url: /portal/ardelyx/events
+            - img [ref=f1e79]
+            - heading "Events & Webinars" [level=3] [ref=f1e82]
+            - paragraph [ref=f1e83]: Find upcoming medical education events, symposia, and webinars.
+            - text: Learn more →
+      - generic [ref=f1e86]:
+        - generic [ref=f1e87]:
+          - heading "Need Medical Information?" [level=2] [ref=f1e88]
+          - paragraph [ref=f1e89]: Our medical affairs team is ready to assist healthcare professionals and patients with accurate, evidence-based information.
+        - button "Submit a Request" [ref=f1e90] [cursor=pointer]
+  - contentinfo [ref=f1e91]:
+    - generic [ref=f1e92]:
+      - generic [ref=f1e94]: Ardelyx
+      - generic [ref=f1e95]:
+        - link "Submit Inquiry" [ref=f1e96] [cursor=pointer]:
+          - /url: /portal/ardelyx/submit
+        - link "Find an MSL" [ref=f1e97] [cursor=pointer]:
+          - /url: /portal/ardelyx/find-msl
+        - link "Events" [ref=f1e98] [cursor=pointer]:
+          - /url: /portal/ardelyx/events
+        - link "Contact Us" [ref=f1e99] [cursor=pointer]:
+          - /url: /portal/ardelyx/contact
+      - paragraph [ref=f1e101]: © 2026 Ardelyx. All rights reserved.
+  - button "Open AI Medical Assistant" [ref=f1e102] [cursor=pointer]:
+    - img [ref=f1e103]
+  - button "Give feedback" [ref=f1e107] [cursor=pointer]: 💬

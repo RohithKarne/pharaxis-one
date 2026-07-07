@@ -1,0 +1,55 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Ardelyx" [ref=e6] [cursor=pointer]:
+        - /url: /portal/ardelyx
+        - generic [ref=e7]: Ardelyx
+      - navigation [ref=e8]:
+        - button "Science ▾" [ref=e10] [cursor=pointer]
+        - button "Resources ▾" [ref=e12] [cursor=pointer]
+        - link "Events" [ref=e13] [cursor=pointer]:
+          - /url: /portal/ardelyx/events
+        - link "Safety" [ref=e14] [cursor=pointer]:
+          - /url: /portal/ardelyx/safety
+        - link "News" [ref=e15] [cursor=pointer]:
+          - /url: /portal/ardelyx/news
+        - link "Find MSL" [ref=e16] [cursor=pointer]:
+          - /url: /portal/ardelyx/find-msl
+        - link "FAQ" [ref=e17] [cursor=pointer]:
+          - /url: /portal/ardelyx/faq
+        - link "Contact" [ref=e18] [cursor=pointer]:
+          - /url: /portal/ardelyx/contact
+      - generic [ref=e19]:
+        - searchbox "Search portal" [ref=e20]
+        - button "Submit Inquiry" [ref=e21] [cursor=pointer]
+        - link "Sign In" [ref=e22] [cursor=pointer]:
+          - /url: /portal/ardelyx/login
+  - main [ref=e23]:
+    - generic [ref=e25]:
+      - generic [ref=e26]: Access is provisioned by administrator approval only.
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - generic [ref=e29]: Email Address
+          - textbox "you@example.com" [ref=e30]
+        - generic [ref=e31]:
+          - generic [ref=e32]: Password
+          - generic [ref=e33]:
+            - textbox "••••••••" [ref=e34]
+            - button "Show password" [ref=e35]: Show
+        - button "Sign In" [ref=e36] [cursor=pointer]
+  - contentinfo [ref=e37]:
+    - generic [ref=e38]:
+      - generic [ref=e40]: Ardelyx
+      - generic [ref=e41]:
+        - link "Submit Inquiry" [ref=e42] [cursor=pointer]:
+          - /url: /portal/ardelyx/submit
+        - link "Find an MSL" [ref=e43] [cursor=pointer]:
+          - /url: /portal/ardelyx/find-msl
+        - link "Events" [ref=e44] [cursor=pointer]:
+          - /url: /portal/ardelyx/events
+        - link "Contact Us" [ref=e45] [cursor=pointer]:
+          - /url: /portal/ardelyx/contact
+      - paragraph [ref=e47]: © 2026 Ardelyx. All rights reserved.
+  - button "Open AI Medical Assistant" [ref=e48] [cursor=pointer]:
+    - img [ref=e49]
+  - button "Give feedback" [ref=e53] [cursor=pointer]: 💬

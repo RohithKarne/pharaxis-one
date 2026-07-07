@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import toast from '../../../shared/utils/toast'
 import StatusBadge from './StatusBadge'
 import RichTextEditor from './RichTextEditor'
@@ -261,6 +262,8 @@ export default function MergeReportsSection({ token }) {
 
   function handleDownloadHtml() {
     if (!genResult?.generated_html) return
+    // Sanitize server-generated HTML before writing it into a same-origin document.
+    const safeHtml = DOMPurify.sanitize(genResult.generated_html)
     const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${genResult.report_name || 'Merge Report'}</title>
 <style>
@@ -271,7 +274,7 @@ export default function MergeReportsSection({ token }) {
   @media print { body { margin: 0; padding: 20px; } }
 </style>
 </head><body>
-${genResult.generated_html}
+${safeHtml}
 </body></html>`
     const blob = new Blob([fullHtml], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
@@ -286,6 +289,10 @@ ${genResult.generated_html}
     if (!genResult?.generated_html) return
     const win = window.open('', '_blank')
     if (!win) return
+    // Sanitize server-generated HTML before writing it into the same-origin print
+    // window, and trigger printing from the parent instead of an injected <script>
+    // so no attacker-supplied markup can execute in this origin.
+    const safeHtml = DOMPurify.sanitize(genResult.generated_html)
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${genResult.report_name || 'Merge Report'}</title>
 <style>
@@ -295,10 +302,13 @@ ${genResult.generated_html}
   td,th { border: 1px solid #d1d5db; padding: 6px 10px; } th { background: #f9fafb; }
 </style>
 </head><body>
-${genResult.generated_html}
-<script>window.onload = function(){ window.print(); }</script>
+${safeHtml}
 </body></html>`)
     win.document.close()
+    win.focus()
+    win.onload = () => win.print()
+    // Fallback in case the load event already fired before the handler attached.
+    setTimeout(() => { try { win.print() } catch { /* window closed */ } }, 300)
   }
 
   return (

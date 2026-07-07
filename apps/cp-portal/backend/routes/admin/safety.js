@@ -10,6 +10,7 @@ const { authenticateAdmin, requireClientAccess } = require('../../middleware/aut
 const { audit } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
 const { autoTranslate } = require('../../utils/translator');
+const { validateUploads } = require('../../utils/fileValidation');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -25,7 +26,7 @@ const MAX_SIZE = 10 * 1024 * 1024;
 
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const dir = path.join(__dirname, '../../uploads/safety', req.params.clientId);
+    const dir = path.join(__dirname, '../../uploads/private/safety', req.params.clientId);
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -81,6 +82,12 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
   upload.single('attachment')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message });
 
+    // SEC: validate real file content (magic bytes), not the spoofable MIME header.
+    if (req.file) {
+      const failure = validateUploads([req.file], ALLOWED_MIMES);
+      if (failure) return res.status(400).json({ error: failure });
+    }
+
     try {
       const { title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types, status } = req.body;
 
@@ -88,7 +95,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       if (!VALID_TYPES.includes(alert_type))      return res.status(400).json({ error: 'Invalid alert_type.' });
       if (!VALID_SEVERITIES.includes(severity))   return res.status(400).json({ error: 'Invalid severity.' });
 
-      const attachmentPath = req.file ? `/uploads/safety/${req.params.clientId}/${req.file.filename}` : null;
+      const attachmentPath = req.file ? `/uploads/private/safety/${req.params.clientId}/${req.file.filename}` : null;
       const attachmentName = req.file ? req.file.originalname : null;
 
       // target_types arrives as a JSON string on this multipart endpoint — validate it

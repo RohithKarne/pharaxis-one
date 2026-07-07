@@ -7,9 +7,30 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { logger } = require('../../services/logger');
 
 function orgScope(req) {
   return hasGlobalAdminScope(req.user) ? (Number(req.query.org_id || req.body?.org_id || 0) || null) : req.user.orgId;
+}
+
+// Org-ownership clause for by-id lookups. Platform admins bypass (1=1);
+// tenant admins are pinned to their own org_id. Modelled on icsr.js loadIcsr.
+function orgByIdClause(req) {
+  return hasGlobalAdminScope(req.user)
+    ? { sql: '1=1', params: [] }
+    : { sql: 'org_id = ?', params: [req.user.orgId] };
+}
+
+// Fetch an rtbf_requests row scoped to the caller's org. Returns null when the
+// row does not exist OR is outside the caller's org (caller should 404).
+async function getScopedRtbf(req, id, { forUpdate = false, conn = null } = {}) {
+  const scope = orgByIdClause(req);
+  const executor = conn || pool;
+  const [[row]] = await executor.execute(
+    `SELECT * FROM rtbf_requests WHERE id = ? AND ${scope.sql}${forUpdate ? ' FOR UPDATE' : ''}`,
+    [id, ...scope.params]
+  );
+  return row || null;
 }
 
 async function audit(userId, action, entityId, details) {
@@ -95,7 +116,10 @@ router.post('/rtbf/intake', authenticate, requireRole('admin', 'platform_admin')
     );
     await audit(req.user.userId, 'RTBF_INTAKE', result.insertId, req.body);
     res.status(201).json({ id: result.insertId });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    logger.error({ err }, 'rtbf intake failed');
+    res.status(500).json({ error: 'Failed to create RTBF request.' });
+  }
 });
 
 router.get('/rtbf', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
@@ -107,37 +131,57 @@ router.get('/rtbf', authenticate, requireRole('admin', 'platform_admin'), async 
     if (req.query.status) { where += ' AND status = ?'; params.push(req.query.status); }
     const [rows] = await pool.execute(`SELECT * FROM rtbf_requests WHERE ${where} ORDER BY created_at DESC`, params);
     res.json({ requests: rows });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    logger.error({ err }, 'rtbf list failed');
+    res.status(500).json({ error: 'Failed to list RTBF requests.' });
+  }
 });
 
 router.get('/rtbf/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  const [[row]] = await pool.execute('SELECT * FROM rtbf_requests WHERE id = ?', [req.params.id]);
-  if (!row) return res.status(404).json({ error: 'RTBF request not found.' });
-  res.json({ request: row });
+  try {
+    const row = await getScopedRtbf(req, req.params.id);
+    if (!row) return res.status(404).json({ error: 'RTBF request not found.' });
+    res.json({ request: row });
+  } catch (err) {
+    logger.error({ err, id: req.params.id }, 'rtbf get failed');
+    res.status(500).json({ error: 'Failed to load RTBF request.' });
+  }
 });
 
 router.get('/rtbf/:id/preview', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  const [[row]] = await pool.execute('SELECT * FROM rtbf_requests WHERE id = ?', [req.params.id]);
-  if (!row) return res.status(404).json({ error: 'RTBF request not found.' });
-  res.json({ affected: await previewAffected(row.org_id, row.subject_identifier) });
+  try {
+    const row = await getScopedRtbf(req, req.params.id);
+    if (!row) return res.status(404).json({ error: 'RTBF request not found.' });
+    res.json({ affected: await previewAffected(row.org_id, row.subject_identifier) });
+  } catch (err) {
+    logger.error({ err, id: req.params.id }, 'rtbf preview failed');
+    res.status(500).json({ error: 'Failed to preview RTBF request.' });
+  }
 });
 
 router.post('/rtbf/:id/review', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  const decision = req.body?.decision;
-  if (!['approved', 'rejected'].includes(decision)) return res.status(400).json({ error: 'decision must be approved or rejected.' });
-  await pool.execute(
-    `UPDATE rtbf_requests SET status = ?, reviewer_id = ?, review_notes = ?, review_at = NOW() WHERE id = ?`,
-    [decision, req.user.userId, req.body?.notes || null, req.params.id]
-  );
-  await audit(req.user.userId, 'RTBF_REVIEW', req.params.id, req.body);
-  res.json({ ok: true });
+  try {
+    const decision = req.body?.decision;
+    if (!['approved', 'rejected'].includes(decision)) return res.status(400).json({ error: 'decision must be approved or rejected.' });
+    const row = await getScopedRtbf(req, req.params.id);
+    if (!row) return res.status(404).json({ error: 'RTBF request not found.' });
+    await pool.execute(
+      `UPDATE rtbf_requests SET status = ?, reviewer_id = ?, review_notes = ?, review_at = NOW() WHERE id = ?`,
+      [decision, req.user.userId, req.body?.notes || null, row.id]
+    );
+    await audit(req.user.userId, 'RTBF_REVIEW', row.id, req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, id: req.params.id }, 'rtbf review failed');
+    res.status(500).json({ error: 'Failed to review RTBF request.' });
+  }
 });
 
 router.post('/rtbf/:id/execute', authenticate, requireRole('platform_admin'), async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const [[row]] = await conn.execute('SELECT * FROM rtbf_requests WHERE id = ? FOR UPDATE', [req.params.id]);
+    const row = await getScopedRtbf(req, req.params.id, { forUpdate: true, conn });
     if (!row) {
       const err = new Error('RTBF request not found.');
       err.statusCode = 404;
@@ -165,14 +209,15 @@ router.post('/rtbf/:id/execute', authenticate, requireRole('platform_admin'), as
     res.json({ ok: true, affected, signature_manifest: manifest });
   } catch (err) {
     try { await conn.rollback(); } catch (_) {}
-    res.status(err.statusCode || 500).json({ error: err.message });
+    if (!err.statusCode) logger.error({ err, id: req.params.id }, 'rtbf execute failed');
+    res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to execute RTBF request.' });
   } finally { conn.release(); }
 });
 
 router.get('/rtbf/:id/certificate', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  const [[row]] = await pool.execute('SELECT * FROM rtbf_requests WHERE id = ?', [req.params.id]);
-  if (!row) return res.status(404).json({ error: 'RTBF request not found.' });
   try {
+    const row = await getScopedRtbf(req, req.params.id);
+    if (!row) return res.status(404).json({ error: 'RTBF request not found.' });
     const payload = { certificate: row, generated_at: new Date().toISOString() };
     const manifest = signatureManifest(payload);
     const pdf = buildSimplePdf([
@@ -190,7 +235,8 @@ router.get('/rtbf/:id/certificate', authenticate, requireRole('admin', 'platform
     res.setHeader('Content-Disposition', `attachment; filename="rtbf-certificate-${row.id}.pdf"`);
     res.send(pdf);
   } catch (err) {
-    res.status(err.statusCode || 500).json({ error: err.message });
+    if (!err.statusCode) logger.error({ err, id: req.params.id }, 'rtbf certificate failed');
+    res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to generate RTBF certificate.' });
   }
 });
 

@@ -222,8 +222,11 @@ export default function InboxPage() {
     results: [],
   })
 
+  // Auth rides on the httpOnly mims_token cookie (httpFetch sends credentials:
+  // 'include'); the session JWT is no longer persisted in localStorage (F14), so
+  // no Authorization header is attached here.
   const AUTH_H = useMemo(
-    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('mims_token')}` }),
+    () => ({ 'Content-Type': 'application/json' }),
     []
   )
 

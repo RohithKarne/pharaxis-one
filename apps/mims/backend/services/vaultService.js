@@ -2,6 +2,7 @@
 
 const pool = require('../database/db');
 const { httpFetch } = require('../utils/httpFetch');
+const { assertPublicHttpUrl } = require('../utils/ssrfGuard');
 
 async function getVaultSession(orgId) {
   const [rows] = await pool.query(
@@ -15,8 +16,10 @@ async function getVaultSession(orgId) {
 
   const config = rows[0];
 
+  const authUrl = config.vault_domain + '/api/' + config.vault_api_version + '/auth';
+  await assertPublicHttpUrl(authUrl);
   const authResponse = await httpFetch(
-    config.vault_domain + '/api/' + config.vault_api_version + '/auth',
+    authUrl,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -42,8 +45,10 @@ async function getVaultSession(orgId) {
 }
 
 async function runVQL(session, vql) {
+  const queryUrl = session.vaultDomain + '/api/' + session.apiVersion + '/query';
+  await assertPublicHttpUrl(queryUrl);
   const queryResponse = await httpFetch(
-    session.vaultDomain + '/api/' + session.apiVersion + '/query',
+    queryUrl,
     {
       method: 'POST',
       headers: {

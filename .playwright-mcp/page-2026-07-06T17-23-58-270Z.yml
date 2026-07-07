@@ -1,0 +1,126 @@
+- generic [ref=f4e3]:
+  - alert [ref=f4e4]:
+    - text: ⚠ Important Safety Information —
+    - link "View Safety Alerts" [ref=f4e5] [cursor=pointer]:
+      - /url: /portal/novartis/safety
+    - button "Dismiss safety banner" [ref=f4e6] [cursor=pointer]: ×
+  - banner [ref=f4e7]:
+    - generic [ref=f4e8]:
+      - link "Novartis Novartis" [ref=f4e9] [cursor=pointer]:
+        - /url: /portal/novartis
+        - img "Novartis" [ref=f4e10]
+        - generic [ref=f4e11]: Novartis
+      - navigation [ref=f4e12]:
+        - button "Science ▾" [ref=f4e14] [cursor=pointer]
+        - button "Resources ▾" [ref=f4e16] [cursor=pointer]
+        - link "Events" [ref=f4e17] [cursor=pointer]:
+          - /url: /portal/novartis/events
+        - link "Safety" [ref=f4e18] [cursor=pointer]:
+          - /url: /portal/novartis/safety
+        - link "News" [ref=f4e19] [cursor=pointer]:
+          - /url: /portal/novartis/news
+        - link "Find MSL" [ref=f4e20] [cursor=pointer]:
+          - /url: /portal/novartis/find-msl
+        - link "FAQ" [ref=f4e21] [cursor=pointer]:
+          - /url: /portal/novartis/faq
+        - link "Contact" [ref=f4e22] [cursor=pointer]:
+          - /url: /portal/novartis/contact
+      - generic [ref=f4e23]:
+        - searchbox "Search portal" [ref=f4e24]
+        - button "Submit Inquiry" [ref=f4e25] [cursor=pointer]
+        - link "Sign In" [ref=f4e26] [cursor=pointer]:
+          - /url: /portal/novartis/login
+  - main [ref=f4e27]:
+    - generic [ref=f4e28]:
+      - generic [ref=f4e30]:
+        - heading "Welcome to Novartis" [level=1] [ref=f4e31]
+        - paragraph [ref=f4e32]: Advancing Medicine. Improving Lives.
+        - generic [ref=f4e33]:
+          - img [ref=f4e34]
+          - textbox "Search the portal" [ref=f4e37]:
+            - /placeholder: Search medical information, documents, safety…
+          - button "Search" [ref=f4e38] [cursor=pointer]
+        - generic [ref=f4e39]:
+          - button "Submit an Inquiry" [ref=f4e40] [cursor=pointer]
+          - button "Find an MSL" [ref=f4e41] [cursor=pointer]
+      - generic [ref=f4e43]:
+        - heading "How Can We Help?" [level=2] [ref=f4e44]
+        - generic [ref=f4e45]:
+          - link "Submit an Inquiry Submit a medical information request, adverse event report, or product complaint. Avg. reply < 2 business days" [ref=f4e46] [cursor=pointer]:
+            - /url: /portal/novartis/submit
+            - img [ref=f4e48]
+            - heading "Submit an Inquiry" [level=3] [ref=f4e50]
+            - paragraph [ref=f4e51]: Submit a medical information request, adverse event report, or product complaint.
+            - generic [ref=f4e52]: Avg. reply < 2 business days
+          - link "Find an MSL Connect with our Medical Science Liaison team and book an open time slot. Learn more →" [ref=f4e54] [cursor=pointer]:
+            - /url: /portal/novartis/find-msl
+            - img [ref=f4e56]
+            - heading "Find an MSL" [level=3] [ref=f4e59]
+            - paragraph [ref=f4e60]: Connect with our Medical Science Liaison team and book an open time slot.
+            - text: Learn more →
+          - link "Therapeutic Areas Explore our focus areas across diseases and treatment categories. Learn more →" [ref=f4e61] [cursor=pointer]:
+            - /url: /portal/novartis/therapeutic-areas
+            - img [ref=f4e63]
+            - heading "Therapeutic Areas" [level=3] [ref=f4e65]
+            - paragraph [ref=f4e66]: Explore our focus areas across diseases and treatment categories.
+            - text: Learn more →
+          - link "Drug Information Review approved prescribing information and clinical summaries. Learn more →" [ref=f4e67] [cursor=pointer]:
+            - /url: /portal/novartis/drug-info
+            - img [ref=f4e69]
+            - heading "Drug Information" [level=3] [ref=f4e72]
+            - paragraph [ref=f4e73]: Review approved prescribing information and clinical summaries.
+            - text: Learn more →
+          - link "Resources Access publications, clinical data, and approved materials. Learn more →" [ref=f4e74] [cursor=pointer]:
+            - /url: /portal/novartis/resources
+            - img [ref=f4e76]
+            - heading "Resources" [level=3] [ref=f4e79]
+            - paragraph [ref=f4e80]: Access publications, clinical data, and approved materials.
+            - text: Learn more →
+          - link "Events & Webinars Find upcoming medical education events, symposia, and webinars. Learn more →" [ref=f4e81] [cursor=pointer]:
+            - /url: /portal/novartis/events
+            - img [ref=f4e83]
+            - heading "Events & Webinars" [level=3] [ref=f4e86]
+            - paragraph [ref=f4e87]: Find upcoming medical education events, symposia, and webinars.
+            - text: Learn more →
+      - generic [ref=f4e89]:
+        - heading "Upcoming Events" [level=2] [ref=f4e90]
+        - generic [ref=f4e91]:
+          - generic [ref=f4e92]:
+            - generic [ref=f4e93]: July 21, 2026
+            - generic [ref=f4e94]: Novartis Q2 2026 Financial Results Webcast
+            - generic [ref=f4e95]: conference
+          - generic [ref=f4e96]:
+            - generic [ref=f4e97]: August 28, 2026
+            - generic [ref=f4e98]: ESC Congress 2026 — European Society of Cardiology
+            - generic [ref=f4e99]: conference
+          - generic [ref=f4e100]:
+            - generic [ref=f4e101]: August 28, 2026
+            - generic [ref=f4e102]: ESC Congress 2026 — European Society of Cardiology
+            - generic [ref=f4e103]: conference
+        - link "View All Events →" [ref=f4e104] [cursor=pointer]:
+          - /url: /portal/novartis/events
+      - generic [ref=f4e107]:
+        - generic [ref=f4e108]:
+          - heading "Need Medical Information?" [level=2] [ref=f4e109]
+          - paragraph [ref=f4e110]: Our medical affairs team is ready to assist healthcare professionals and patients with accurate, evidence-based information.
+        - button "Submit a Request" [ref=f4e111] [cursor=pointer]
+  - contentinfo [ref=f4e112]:
+    - generic [ref=f4e113]:
+      - generic [ref=f4e114]:
+        - img "Novartis" [ref=f4e115]
+        - paragraph [ref=f4e116]: Advancing Medicine. Improving Lives.
+      - generic [ref=f4e117]:
+        - link "Submit Inquiry" [ref=f4e118] [cursor=pointer]:
+          - /url: /portal/novartis/submit
+        - link "Find an MSL" [ref=f4e119] [cursor=pointer]:
+          - /url: /portal/novartis/find-msl
+        - link "Events" [ref=f4e120] [cursor=pointer]:
+          - /url: /portal/novartis/events
+        - link "Contact Us" [ref=f4e121] [cursor=pointer]:
+          - /url: /portal/novartis/contact
+      - generic [ref=f4e122]:
+        - paragraph [ref=f4e123]: This portal is intended for healthcare professionals and authorised users only. The information contained herein is for educational and informational purposes. Always refer to the full Prescribing Information for complete safety and efficacy data.
+        - paragraph [ref=f4e124]: © 2026 Novartis Pharmaceuticals Corporation. All rights reserved. Novartis and the Novartis logo are registered trademarks of Novartis AG.
+  - button "Open AI Medical Assistant" [ref=f4e125] [cursor=pointer]:
+    - img [ref=f4e126]
+  - button "Give feedback" [ref=f4e130] [cursor=pointer]: 💬

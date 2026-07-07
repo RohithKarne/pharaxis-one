@@ -149,11 +149,16 @@ export function PortalProvider({ children }) {
     return res
   }
 
-  // Restore signed-in user from DB on mount/refresh — localStorage alone is not the source of truth
+  // Restore signed-in user from DB on mount/refresh — localStorage alone is not the source of truth.
+  // NOTE: uses a RAW fetch, not portalFetch, on purpose. The portal is browsable anonymously,
+  // so this probe returns 401 for every visitor who isn't signed in — and portalFetch redirects
+  // to the portal login on any 401, which would bounce anonymous visitors off public pages.
+  // The restore must be silent: 200 → set user; 401 → clear state and stay put. Pages that truly
+  // require auth are already protected by PortalAuthGuard / their own redirects.
   useEffect(() => {
     if (!clientCode) return
     localStorage.removeItem('cp_portal_token')
-    portalFetch(`/api/portal/auth/me`)
+    fetch(`/api/portal/auth/me`, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } })
       .then(async res => {
         if (res.status === 200) {
           const d = await res.json()

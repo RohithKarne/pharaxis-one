@@ -67,7 +67,7 @@ router.post('/login', async (req, res) => {
     const safe = { id: user.id, first_name: user.first_name, last_name: user.last_name, email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed };
     const token = makeToken(user, client.id);
     res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
-       .json({ token, user: safe });
+       .json({ user: safe });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }
@@ -96,33 +96,56 @@ router.patch('/confirm-type', authenticatePortal, requirePortalAuth, async (req,
     const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     const newToken = makeToken(updated, req.portalUser.clientId);
     res.cookie('cp_portal_token', newToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
-       .json({ message: 'Type confirmed.', token: newToken, user: updated });
+       .json({ message: 'Type confirmed.', user: updated });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }
 });
 
-// PATCH /api/portal/auth/profile — user updates their own profile (including changing user_type)
+// PATCH /api/portal/auth/profile — user updates their own profile details.
+// SEC: user_type is intentionally NOT editable here. It gates access to
+// HCP-only clinical content, so allowing self-service changes would let a
+// patient-tier user escalate to HCP. Type is set only via the one-time gate
+// confirmation flow (PATCH /confirm-type), which applies the required disclaimer.
 router.patch('/profile', authenticatePortal, requirePortalAuth, async (req, res) => {
   try {
-    const { first_name, last_name, country, specialty, user_type } = req.body;
+    const { first_name, last_name, country, specialty } = req.body;
     const updates = [], params = [];
     if (first_name !== undefined) { updates.push('first_name = ?'); params.push(first_name); }
     if (last_name  !== undefined) { updates.push('last_name = ?');  params.push(last_name); }
     if (country    !== undefined) { updates.push('country = ?');    params.push(country); }
     if (specialty  !== undefined) { updates.push('specialty = ?');  params.push(specialty); }
-    const validTypes = await getValidTypes(req.portalUser.clientId);
-    if (user_type !== undefined && validTypes.includes(user_type)) {
-      updates.push('user_type = ?');
-      updates.push('user_type_confirmed = 1');
-      params.push(user_type);
-    }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.portalUser.userId);
     await pool.execute(`UPDATE cp_portal_users SET ${updates.join(', ')} WHERE id = ?`, params);
 
     const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
-    res.json({ message: 'Profile updated.', token: makeToken(updated, req.portalUser.clientId), user: updated });
+    // SEC: do not echo the JWT in the response body — it lives only in the httpOnly cookie.
+    res.json({ message: 'Profile updated.', user: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// PATCH /api/portal/auth/password — user changes their own password (requires current password)
+router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+    if (!current_password || !new_password) return res.status(400).json({ error: 'Current and new password are required.' });
+    if (new_password.length < 8)  return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+    if (new_password.length > 128) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+
+    const [[user]] = await pool.execute('SELECT password FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
+    if (!user || !bcrypt.compareSync(current_password, user.password)) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+    if (bcrypt.compareSync(new_password, user.password)) {
+      return res.status(400).json({ error: 'New password must be different from your current password.' });
+    }
+
+    const hash = await bcrypt.hash(new_password, 12);
+    await pool.execute('UPDATE cp_portal_users SET password = ? WHERE id = ?', [hash, req.portalUser.userId]);
+    res.json({ message: 'Password updated successfully.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }
@@ -148,7 +171,7 @@ router.post('/verify-email', async (req, res) => {
 
     const authToken = makeToken(user, user.client_id);
     res.cookie('cp_portal_token', authToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
-       .json({ message: 'Email verified successfully.', token: authToken, user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed } });
+       .json({ message: 'Email verified successfully.', user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed } });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

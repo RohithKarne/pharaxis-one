@@ -6,7 +6,7 @@ const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { parseEmirEmail } = require('../../services/emirParser');
 
-router.post('/admin/emir/receive', authenticate, async (req, res) => {
+router.post('/admin/emir/receive', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
     // C-02: never trust a client-supplied org_id — always bind to the caller's org.
     // Allowing req.body.org_id let any authenticated user create cases under an arbitrary tenant.

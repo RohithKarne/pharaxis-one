@@ -29,6 +29,9 @@ function applySecurityHeaders(req, res, next) {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  // Baseline CSP — restrictive on the vectors that don't affect the SPA's own
+  // scripts/styles: no plugins, no framing by other origins, no <base> hijack.
+  res.setHeader('Content-Security-Policy', "object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
 
   const isSecure = req.secure || String(req.headers['x-forwarded-proto'] || '').toLowerCase() === 'https';
   if (isSecure) {
@@ -42,13 +45,19 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
 // ── Rate limiters ─────────────────────────────────────────────
+// SEC: only skip throttling for genuine local development. Previously this
+// skipped whenever req.ip was loopback — but with `trust proxy` set, req.ip is
+// derived from the client-controlled X-Forwarded-For header, so an attacker
+// could send `X-Forwarded-For: 127.0.0.1` to disable auth rate limiting and
+// brute-force logins. Gate the bypass on NODE_ENV instead of the request IP.
+const isDevEnv = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
+  skip: () => isDevEnv,
 });
 
 const submitLimiter = rateLimit({
@@ -65,7 +74,7 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Rate limit exceeded. Please retry shortly.' },
-  skip: (req) => req.ip === '::1' || req.ip === '127.0.0.1',
+  skip: () => isDevEnv,
 });
 
 // ── Middleware ────────────────────────────────────────────────
@@ -73,7 +82,9 @@ const ALLOWED_ORIGINS = process.env.CP_CORS_ORIGINS
   ? process.env.CP_CORS_ORIGINS.split(',').map(o => o.trim())
   : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000',
      'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:3000',
-     'http://13.205.213.128', 'https://13.205.213.128'];
+     // SEC: cleartext-HTTP origin dropped — session cookies must never traverse
+     // an unencrypted origin. Serve deployed environments over HTTPS only.
+     'https://13.205.213.128'];
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -94,6 +105,10 @@ app.use('/api', inputSecurity);
 // Static uploads
 app.use('/uploads', (req, res, next) => {
   if (req.path.startsWith('/private/')) return res.status(403).json({ error: 'Access denied.' });
+  // SEC: defence-in-depth — any file that is ever served statically is fully
+  // sandboxed and cannot execute script, even if a disguised HTML/SVG slips in.
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   next();
 }, express.static(path.join(__dirname, 'uploads')));
 

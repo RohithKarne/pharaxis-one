@@ -3,6 +3,7 @@
 const pool = require('../database/db');
 const { getToken } = require('./oauth2Service');
 const { httpFetch } = require('../utils/httpFetch');
+const { assertPublicHttpUrl } = require('../utils/ssrfGuard');
 
 function parseConfig(rawConfig) {
   if (!rawConfig) return null;
@@ -117,6 +118,7 @@ async function syncCaseToCrm(orgId, caseId) {
 
   let responseBody = null;
   try {
+    await assertPublicHttpUrl(request.url);
     const response = await httpFetch(request.url, {
       method: 'POST',
       headers: {

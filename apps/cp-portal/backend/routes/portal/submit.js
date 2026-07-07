@@ -11,8 +11,9 @@ const multer  = require('multer');
 const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const { sendEmail } = require('../../utils/mailer');
-const { assertSafeOutboundUrl } = require('../../utils/networkGuard');
+const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
 const { decryptSecret } = require('../../utils/secretCrypto');
+const { validateUploads } = require('../../utils/fileValidation');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
 const ATT_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB per file
@@ -24,7 +25,11 @@ const ATT_ALLOWED   = [
 ];
 const attStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '../../uploads/private/submissions', String(req.params.clientCode || 'unknown'));
+    // SEC: sanitize clientCode before it touches the filesystem — multer runs
+    // before route validation, so a raw `../` in the path param would otherwise
+    // be a path-traversal write vector. Strip to the known clientCode charset.
+    const safeCode = String(req.params.clientCode || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '') || 'unknown';
+    const dir = path.join(__dirname, '../../uploads/private/submissions', safeCode);
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -70,6 +75,13 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     const { clientCode, formType } = req.params;
     const VALID_TYPES = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry'];
     if (!VALID_TYPES.includes(formType)) return res.status(400).json({ error: 'Invalid form type.' });
+
+    // SEC: validate real attachment content (magic bytes), not the spoofable MIME
+    // header. Rejects disguised HTML/SVG/executables and deletes them from disk.
+    if (req.files && req.files.length) {
+      const failure = validateUploads(req.files, ATT_ALLOWED);
+      if (failure) return res.status(400).json({ error: failure });
+    }
 
     const [[client]] = await pool.execute('SELECT * FROM cp_clients WHERE code = ? AND is_active = 1', [clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
@@ -202,7 +214,7 @@ async function syncToIntegration(clientId, submissionId, formType) {
     if (integration.auth_type === 'apikey' && integration.api_key) headers['X-API-Key'] = integration.api_key;
     if (integration.extra_headers) Object.assign(headers, JSON.parse(integration.extra_headers));
 
-    const r = await fetch(new URL('/api/cases', safeBaseUrl).toString(), {
+    const r = await safeFetch(new URL('/api/cases', safeBaseUrl).toString(), {
       method: 'POST', headers, body: JSON.stringify(payload),
     });
 

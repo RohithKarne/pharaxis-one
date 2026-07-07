@@ -26,7 +26,12 @@ async function readResponseDetail(response) {
 }
 
 export async function httpFetch(input, init) {
-  const response = await globalThis.fetch(input, init)
+  // SECURITY (F14): the session JWT is no longer persisted in localStorage; the
+  // httpOnly `mims_token` cookie carries authentication. Ensure that cookie is
+  // sent on every request (defaults to same-origin, but be explicit so a
+  // configured cross-origin VITE_API_URL still receives it). Callers may still
+  // override credentials via init.
+  const response = await globalThis.fetch(input, { credentials: 'include', ...init })
   const url = typeof input === 'string' ? input : (input?.url ?? '')
 
   if ((response.status === 401 || response.status === 403 || response.status === 503) && !url.includes('/api/auth/')) {

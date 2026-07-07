@@ -32,6 +32,7 @@ const { audit } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
 const { sendEmail } = require('../../utils/mailer');
 const { autoTranslate } = require('../../utils/translator');
+const { validateContent } = require('../../utils/fileValidation');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -247,10 +248,10 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'File is required.' });
 
-    // Re-validate MIME server-side (defense in depth)
-    if (!ALLOWED_MIMES.includes(req.file.mimetype)) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Only PDF and DOCX files are allowed.' });
+    // SEC: validate real file content (magic bytes), not the spoofable MIME header.
+    if (validateContent(req.file.path, req.file.mimetype, ALLOWED_MIMES).ok !== true) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      return res.status(400).json({ error: 'File content is not a valid PDF or Office document.' });
     }
 
     const { title, category, doc_type, visible_to, source, status, version, expires_at } = req.body;

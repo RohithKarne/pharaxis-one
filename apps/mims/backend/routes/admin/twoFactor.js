@@ -235,7 +235,7 @@ router.post('/two-factor/config/test-email', ...adminTwoFactorAuth, async (req, 
       secure: encryption === 'SSL/TLS',
       requireTLS: encryption === 'STARTTLS',
       auth: { user: username, pass: password },
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
       connectionTimeout: 10000,
     });
 

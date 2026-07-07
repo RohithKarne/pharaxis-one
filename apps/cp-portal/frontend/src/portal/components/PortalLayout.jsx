@@ -313,6 +313,7 @@ export default function PortalLayout({ children }) {
                 </button>
                 {userMenuOpen && (
                   <div className="pp-user-dropdown" role="menu">
+                    <Link to={`${base}/profile`} className="pp-dropdown-item" role="menuitem">{t('btn.my_account')}</Link>
                     <Link to={`${base}/my-submissions`} className="pp-dropdown-item" role="menuitem">{t('btn.my_submissions')}</Link>
                     <Link to={`${base}/saved`} className="pp-dropdown-item" role="menuitem">{t('btn.saved_items')}</Link>
                     <Link to={`${base}/preferences`} className="pp-dropdown-item" role="menuitem">{t('btn.preferences')}</Link>

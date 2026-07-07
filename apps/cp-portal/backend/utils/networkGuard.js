@@ -53,6 +53,12 @@ async function assertSafeOutboundUrl(rawUrl) {
   if (hostname === 'localhost' || hostname.endsWith('.local')) {
     throw new Error('Outbound localhost/local domains are blocked')
   }
+  // SEC: reject obfuscated numeric IP encodings (decimal/hex/octal like
+  // http://2130706433/ or http://0x7f000001/). net.isIP() returns 0 for these,
+  // so they would otherwise slip past the dotted-IPv4 private-range check.
+  if (/^0x[0-9a-f]+$/i.test(hostname) || /^\d+$/.test(hostname) || /^0[0-7]+$/.test(hostname)) {
+    throw new Error('Outbound numeric/obfuscated IP hosts are blocked')
+  }
   if (!isAllowedHostname(hostname)) {
     throw new Error('Outbound destination host is not in allowlist')
   }
@@ -71,4 +77,25 @@ async function assertSafeOutboundUrl(rawUrl) {
   return parsed
 }
 
-module.exports = { assertSafeOutboundUrl }
+/**
+ * safeFetch — SSRF-hardened fetch. Validates the destination, disables automatic
+ * redirect following, and re-validates every redirect target before following it.
+ * This closes the redirect-to-internal bypass where a vetted host 302s the request
+ * to http://169.254.169.254/ (cloud metadata) or another internal service.
+ */
+async function safeFetch(rawUrl, options = {}, maxRedirects = 3) {
+  let target = (await assertSafeOutboundUrl(rawUrl)).toString()
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    const res = await fetch(target, { ...options, redirect: 'manual' })
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      if (hop === maxRedirects) throw new Error('Too many outbound redirects')
+      const next = new URL(res.headers.get('location'), target).toString()
+      target = (await assertSafeOutboundUrl(next)).toString() // re-validate before following
+      continue
+    }
+    return res
+  }
+  throw new Error('Outbound request failed')
+}
+
+module.exports = { assertSafeOutboundUrl, safeFetch }

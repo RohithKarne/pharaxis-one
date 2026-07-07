@@ -5,6 +5,16 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { getVaultSession } = require('../../services/vaultService');
+const { assertPublicHttpUrl } = require('../../utils/ssrfGuard');
+
+// Write-time SSRF defense (F17): reject a vault_domain that points at an
+// internal / metadata / non-public host before it is ever persisted, so a bad
+// config can't be stored and later drive an outbound request. Runtime egress in
+// vaultService.js is also guarded, but failing at save time is clearer and
+// closes the gap defence-in-depth.
+async function assertVaultDomainPublic(vaultDomain) {
+  await assertPublicHttpUrl(vaultDomain);
+}
 
 router.get(['/admin/platform/vault-config', '/admin/platform/vault-config'], authenticate, requireRole('platform_admin'), async (_req, res) => {
   try {
@@ -32,6 +42,12 @@ router.post(['/admin/platform/vault-config', '/admin/platform/vault-config'], au
       poll_interval_hours,
       enabled,
     } = req.body;
+
+    try {
+      await assertVaultDomainPublic(vault_domain);
+    } catch (_e) {
+      return res.status(400).json({ error: 'vault_domain must be a valid public https URL' });
+    }
 
     const [result] = await pool.query(
       `INSERT INTO org_vault_config
@@ -65,6 +81,12 @@ router.put(['/admin/platform/vault-config/:id', '/admin/platform/vault-config/:i
       poll_interval_hours,
       enabled,
     } = req.body;
+
+    try {
+      await assertVaultDomainPublic(vault_domain);
+    } catch (_e) {
+      return res.status(400).json({ error: 'vault_domain must be a valid public https URL' });
+    }
 
     await pool.query(
       `UPDATE org_vault_config

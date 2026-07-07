@@ -3,6 +3,7 @@
 const pool = require('../database/db');
 const { getToken } = require('../services/oauth2Service');
 const { httpFetch } = require('../utils/httpFetch');
+const { assertPublicHttpUrl } = require('../utils/ssrfGuard');
 
 function parseConfig(rawConfig) {
   if (!rawConfig) return null;
@@ -101,6 +102,7 @@ async function sendCaseToMir(orgId, caseId) {
     const config = await getMirConfig(orgId);
     const authHeaders = await buildAuthHeaders(orgId, config);
 
+    await assertPublicHttpUrl(config.endpoint_url);
     const response = await httpFetch(config.endpoint_url, {
       method: 'POST',
       headers: {
@@ -146,6 +148,7 @@ async function testMirConnection(orgId) {
     const config = await getMirConfig(orgId);
     const authHeaders = await buildAuthHeaders(orgId, config);
 
+    await assertPublicHttpUrl(config.endpoint_url);
     let response = await httpFetch(config.endpoint_url, {
       method: 'HEAD',
       headers: authHeaders,

@@ -48,7 +48,7 @@ function generateTotpSecret() {
 }
 
 function generateOtpCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 function hashValue(value) {
@@ -130,7 +130,7 @@ async function sendEmailOtp({ toEmail, userName, code }) {
     secure: encryption === 'SSL/TLS',
     requireTLS: encryption === 'STARTTLS',
     auth: { user: username, pass: password },
-    tls: { rejectUnauthorized: false },
+    tls: { rejectUnauthorized: process.env.SMTP_ALLOW_INSECURE_TLS !== 'true' },
     connectionTimeout: 10000,
   });
 
