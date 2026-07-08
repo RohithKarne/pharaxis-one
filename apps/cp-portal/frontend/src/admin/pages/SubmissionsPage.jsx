@@ -18,6 +18,14 @@ const STATUS_COLORS = {
   closed:        { background: '#F3F4F6', color: '#6B7280' },
 }
 
+const STATUS_LABELS = {
+  submitted: 'New submission',
+  pending_sync: 'Sync pending',
+  synced: 'Synced',
+  failed_sync: 'Sync failed',
+  closed: 'Closed',
+}
+
 export default function SubmissionsPage() {
   const { clientId }            = useParams()
   const [submissions, setSubmissions] = useState([])
@@ -226,8 +234,8 @@ export default function SubmissionsPage() {
                     <td style={{ fontSize: 12 }}>{s.submitter_email || s.user_email || '—'}</td>
                     <td style={{ fontSize: 12 }}>{s.submitter_type || '—'}</td>
                     <td>
-                      <span style={{ ...(STATUS_COLORS[s.status] || {}), padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
-                        {s.status}
+                      <span className="cp-status-badge" style={STATUS_COLORS[s.status] || {}}>
+                        {STATUS_LABELS[s.status] || s.status}
                       </span>
                     </td>
                     <td style={{ fontSize: 12 }}>{s.external_ref || '—'}</td>

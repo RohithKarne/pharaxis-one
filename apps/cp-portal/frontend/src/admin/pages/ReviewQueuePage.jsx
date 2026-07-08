@@ -8,6 +8,11 @@ const STATUS_STYLE = {
   approved: { background: '#CCFBF1', color: '#0D9488' },
 }
 
+const STATUS_LABELS = {
+  review: 'Needs review',
+  approved: 'Approved to publish',
+}
+
 const TYPE_STYLE = {
   news:     { background: '#DBEAFE', color: '#1D4ED8', label: 'News' },
   document: { background: '#F3E8FF', color: '#7C3AED', label: 'Document' },
@@ -70,7 +75,7 @@ export default function ReviewQueuePage() {
         <div style={{ fontSize: 13, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
           {title} ({rows.length})
         </div>
-        <div className="cp-card" style={{ padding: 0 }}>
+        <div className="cp-card cp-table-card" style={{ padding: 0 }}>
           <table className="cp-table">
             <thead>
               <tr>
@@ -101,8 +106,8 @@ export default function ReviewQueuePage() {
                     </td>
                     <td>{item.category || '—'}</td>
                     <td>
-                      <span style={{ ...ss, borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
-                        {item.status}
+                      <span className="cp-status-badge" style={ss}>
+                        {STATUS_LABELS[item.status] || item.status}
                       </span>
                     </td>
                     <td style={{ fontSize: 12, color: '#6B7280' }}>
@@ -162,7 +167,11 @@ export default function ReviewQueuePage() {
     <AdminLayout title="Review Queue">
       <div className="cp-page">
         <div className="cp-page-header">
-          <h1 className="cp-page-title">Review Queue</h1>
+          <div>
+            <div className="cp-page-kicker">Content governance</div>
+            <h1 className="cp-page-title">Review Queue</h1>
+            <p className="cp-page-subtitle">Approve content before it becomes visible in the public portal.</p>
+          </div>
         </div>
 
         {error && <div className="cp-error">{error}</div>}
@@ -177,8 +186,7 @@ export default function ReviewQueuePage() {
           <div className="cp-empty">Loading…</div>
         ) : items.length === 0 ? (
           <div className="cp-empty">
-            <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
-            <div>Review queue is empty — all content is up to date.</div>
+            <div>Review queue is empty. All content is up to date.</div>
           </div>
         ) : (
           <>

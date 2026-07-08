@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
+import { formatLongDate } from '../../shared/utils/datetime'
 
 const SPECIALTIES = ['Cardiology', 'Oncology', 'Neurology', 'Endocrinology', 'Immunology', 'Rheumatology', 'Dermatology', 'Gastroenterology', 'Respiratory', 'Nephrology', 'Hematology', 'Infectious Disease', 'General Practice', 'Pharmacist', 'Nurse', 'Other']
 
@@ -99,9 +100,7 @@ export default function ProfilePage() {
 
   if (loading) return <div className="pp-container pp-page-content"><div className="pp-loading">Loading…</div></div>
 
-  const memberSince = meta.created_at
-    ? new Date(meta.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
-    : '—'
+  const memberSince = meta.created_at ? formatLongDate(meta.created_at) : '—'
 
   return (
     <div className="pp-container pp-page-content" style={{ maxWidth: 640, paddingTop: 40, paddingBottom: 60 }}>

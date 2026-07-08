@@ -1,0 +1,31 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "Medical Portal" [ref=e6] [cursor=pointer]:
+        - /url: /portal/novartis
+        - generic [ref=e7]: Medical Portal
+      - navigation [ref=e8]:
+        - link "Safety" [ref=e9] [cursor=pointer]:
+          - /url: /portal/novartis/safety
+        - link "FAQ" [ref=e10] [cursor=pointer]:
+          - /url: /portal/novartis/faq
+        - link "Contact" [ref=e11] [cursor=pointer]:
+          - /url: /portal/novartis/contact
+      - generic [ref=e12]:
+        - generic "Current local date and time" [ref=e13]:
+          - generic [ref=e14]: Wed, Jul 8, 2026
+          - generic [ref=e15]: ·
+          - generic [ref=e16]: 8:48 PM GMT+5:30
+        - generic [ref=e17]:
+          - img [ref=e18]
+          - searchbox "Search portal" [ref=e21]
+        - link "Sign In" [ref=e22] [cursor=pointer]:
+          - /url: /portal/novartis/login
+  - main [ref=e23]:
+    - generic [ref=e24]: Loading…
+  - contentinfo [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e28]: Medical Portal
+      - link "Contact Us" [ref=e30] [cursor=pointer]:
+        - /url: /portal/novartis/contact
+      - paragraph [ref=e32]: © 2026 undefined. All rights reserved.

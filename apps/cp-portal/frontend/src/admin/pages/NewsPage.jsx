@@ -15,6 +15,15 @@ const EMPTY_FORM = {
   is_pinned: false,
 }
 
+const STATUS_LABELS = {
+  draft: 'Draft',
+  review: 'Needs review',
+  approved: 'Approved to publish',
+  scheduled: 'Scheduled',
+  published: 'Live in portal',
+  archived: 'Archived',
+}
+
 export default function NewsPage() {
   const { clientId }              = useParams()
   const { canWrite, canPublish, canApprove } = useAdminAuth()
@@ -165,6 +174,10 @@ export default function NewsPage() {
     return {}
   }
 
+  function statusLabel(status) {
+    return STATUS_LABELS[status] || status || 'Draft'
+  }
+
   function targetSummary(post) {
     const raw = post.target_types_json || post.target_types
     const tt = raw ? (Array.isArray(raw) ? raw : JSON.parse(raw)) : []
@@ -248,8 +261,8 @@ export default function NewsPage() {
 
       {/* S5-11: Bulk action bar */}
       {canPublish && selectedIds.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
-          <span style={{ fontSize: 13, color: '#1E40AF', fontWeight: 500 }}>{selectedIds.length} selected</span>
+        <div className="cp-bulk-bar">
+          <strong>{selectedIds.length} selected</strong>
           <button className="cp-btn cp-btn-sm" style={{ background: '#16A34A', color: '#fff', border: 'none' }} onClick={() => bulkAction('publish')}>Publish</button>
           <button className="cp-btn cp-btn-sm" style={{ background: '#6B7280', color: '#fff', border: 'none' }} onClick={() => bulkAction('archive')}>Archive</button>
           <button className="cp-btn cp-btn-sm cp-btn-outline" style={{ marginLeft: 'auto' }} onClick={() => setSelectedIds([])}>Clear</button>
@@ -259,7 +272,7 @@ export default function NewsPage() {
       {posts.length === 0 ? (
         <div className="cp-empty"><p>No posts yet.</p></div>
       ) : (
-        <div className="cp-card" style={{ padding: 0 }}>
+        <div className="cp-card cp-table-card" style={{ padding: 0 }}>
           <table className="cp-table">
             <thead>
               <tr>
@@ -289,11 +302,11 @@ export default function NewsPage() {
                   <td>{p.title}</td>
                   <td>{p.category || '—'}</td>
                   <td>
-                    <span className="cp-badge" style={{ ...statusBadgeStyle(p.status), padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
-                      {p.status}
+                    <span className="cp-status-badge" style={statusBadgeStyle(p.status)}>
+                      {statusLabel(p.status)}
                     </span>
                   </td>
-                  <td>{p.is_pinned ? '📌' : '—'}</td>
+                  <td>{p.is_pinned ? 'Pinned' : 'Not pinned'}</td>
                   <td>{targetSummary(p)}</td>
                   <td>{p.publish_at ? p.publish_at.slice(0, 16).replace('T', ' ') : '—'}</td>
                   <td>{p.view_count || 0}</td>

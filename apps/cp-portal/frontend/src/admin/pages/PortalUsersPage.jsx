@@ -124,8 +124,8 @@ export default function PortalUsersPage() {
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="cp-filter-bar" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 8, padding: '8px 12px', alignItems: 'center' }}>
-          <strong style={{ fontSize: 13, color: '#0369A1' }}>{selectedIds.length} selected</strong>
+        <div className="cp-bulk-bar">
+          <strong>{selectedIds.length} selected</strong>
           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => bulkSetActive(true)}>Activate</button>
           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => bulkSetActive(false)}>Deactivate</button>
           <button className="cp-btn cp-btn-sm" onClick={() => setSelectedIds([])}>Clear selection</button>
@@ -178,33 +178,35 @@ export default function PortalUsersPage() {
       )}
 
       {loading ? <div className="cp-loading">Loading…</div> : users.length === 0 ? (
-        <div className="cp-empty"><div style={{ fontSize: 40 }}>👥</div><p>No portal users yet.</p></div>
+        <div className="cp-empty"><p>No portal users have registered yet.</p></div>
       ) : (
-        <table className="cp-table">
-          <thead><tr>
-            <th><input type="checkbox" checked={users.length > 0 && selectedIds.length === users.length} onChange={toggleSelectAll} aria-label="Select all" /></th>
-            <th>Name</th><th>Email</th><th>Type</th><th>Country</th><th>Verified</th><th>Status</th><th>Last Login</th><th>Joined</th><th></th>
-          </tr></thead>
-          <tbody>
-            {users.map(u => (
-              <tr key={u.id}>
-                <td><input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => toggleSelect(u.id)} aria-label={`Select ${u.email}`} /></td>
-                <td>{u.first_name} {u.last_name}</td>
-                <td>{u.email}</td>
-                <td><span className="cp-type-badge">{u.user_type}</span></td>
-                <td>{u.country || '—'}</td>
-                <td>{u.is_verified ? '✓' : '—'}</td>
-                <td><span className={`cp-badge ${u.is_active ? 'badge-active' : 'badge-inactive'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
-                <td style={{ fontSize: 12 }}>{u.last_login_at ? u.last_login_at.slice(0, 16).replace('T', ' ') : '—'}</td>
-                <td>{u.created_at?.slice(0, 10)}</td>
-                <td style={{ display: 'flex', gap: 6 }}>
-                  <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(u)}>Edit</button>
-                  <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(u.id, u.is_active)}>{u.is_active ? 'Deactivate' : 'Activate'}</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="cp-table-card">
+          <table className="cp-table">
+            <thead><tr>
+              <th><input type="checkbox" checked={users.length > 0 && selectedIds.length === users.length} onChange={toggleSelectAll} aria-label="Select all" /></th>
+              <th>Name</th><th>Email</th><th>Type</th><th>Country</th><th>Verified</th><th>Status</th><th>Last Login</th><th>Joined</th><th></th>
+            </tr></thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.id}>
+                  <td><input type="checkbox" checked={selectedIds.includes(u.id)} onChange={() => toggleSelect(u.id)} aria-label={`Select ${u.email}`} /></td>
+                  <td>{u.first_name} {u.last_name}</td>
+                  <td>{u.email}</td>
+                  <td><span className="cp-type-badge">{u.user_type}</span></td>
+                  <td>{u.country || '—'}</td>
+                  <td>{u.is_verified ? 'Verified' : 'Not verified'}</td>
+                  <td><span className={`cp-status-badge ${u.is_active ? 'cp-status-active' : 'cp-status-inactive'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
+                  <td style={{ fontSize: 12 }}>{u.last_login_at ? u.last_login_at.slice(0, 16).replace('T', ' ') : '—'}</td>
+                  <td>{u.created_at?.slice(0, 10)}</td>
+                  <td style={{ display: 'flex', gap: 6 }}>
+                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => openEdit(u)}>Edit</button>
+                    <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => toggleActive(u.id, u.is_active)}>{u.is_active ? 'Deactivate' : 'Activate'}</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </AdminLayout>
   )

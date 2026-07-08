@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
+import { formatDate } from '../../shared/utils/datetime'
 
 async function fetchSavedIds(clientCode) {
   try {
@@ -166,7 +167,7 @@ export default function NewsPage() {
                   </div>
                   {post.publish_at && (
                     <div className="pp-news-card-date">
-                      {new Date(post.publish_at).toLocaleDateString()}
+                      {formatDate(post.publish_at)}
                     </div>
                   )}
                 </div>

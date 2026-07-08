@@ -56,8 +56,10 @@ import FAQAdminPage            from './admin/pages/FAQPage'
 import FAQPortalPage           from './portal/pages/FAQPage'
 
 function AdminGuard({ children }) {
-  const { admin } = useAdminAuth()
-  return admin ? children : <Navigate to="/admin/login" replace />
+  const { admin, authLoading } = useAdminAuth()
+  const location = useLocation()
+  if (authLoading) return <div className="cp-loading">Restoring admin session...</div>
+  return admin ? children : <Navigate to="/admin/login" replace state={{ from: location.pathname + location.search }} />
 }
 
 function FeatureGuard({ featureKey, children }) {

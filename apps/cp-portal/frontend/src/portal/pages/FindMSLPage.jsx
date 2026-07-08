@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import { formatDateTime } from '../../shared/utils/datetime'
 
 const EMPTY_BOOKING = { requester_name: '', requester_email: '', preferred_date: '', topic: '', message: '' }
 
@@ -142,8 +143,7 @@ export default function FindMSLPage() {
                     <select value={selectedSlot} onChange={e => setSelectedSlot(e.target.value)}>
                       <option value="">— No specific slot (request general availability) —</option>
                       {availableSlots.map(s => {
-                        const d = s.starts_at ? new Date(s.starts_at) : null
-                        const label = d && !isNaN(d.getTime()) ? d.toLocaleString() : ''
+                        const label = s.starts_at ? formatDateTime(s.starts_at) : ''
                         return <option key={s.id} value={s.id}>{label}</option>
                       })}
                     </select>

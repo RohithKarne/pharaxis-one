@@ -45,11 +45,18 @@ export default function DashboardPage() {
   const metricCards = [
     { label: 'Active Clients', value: active.length, helper: `${inactive.length} inactive`, icon: 'building', tone: 'blue' },
     { label: 'Open Submissions', value: totalSubs, helper: `${clientsWithSubs.length} client queues`, icon: 'inbox', tone: 'green' },
-    { label: 'Content Alerts', value: freshnessAlerts.length, helper: 'needs review', icon: 'shield', tone: freshnessAlerts.length ? 'amber' : 'green' },
-    { label: 'Average Readiness', value: `${avgReadiness}%`, helper: `${readyClients.length} ready`, icon: 'chart', tone: avgReadiness >= 75 ? 'green' : 'amber' },
+    { label: 'Content Alerts', value: freshnessAlerts.length, helper: freshnessAlerts.length ? 'Action needed' : 'Clear', icon: 'shield', tone: freshnessAlerts.length ? 'amber' : 'green' },
+    { label: 'Launch Readiness', value: `${avgReadiness}%`, helper: `${readyClients.length} ready to launch`, icon: 'chart', tone: avgReadiness >= 75 ? 'green' : 'amber' },
   ]
 
   const priorityItems = freshnessAlerts.slice(0, 5)
+
+  function readinessLabel(client) {
+    if (client.readiness_label === 'Ready') return 'Ready to launch'
+    if (client.readiness_label === 'Almost Ready') return 'Almost ready'
+    if (client.readiness_label === 'Needs Setup') return 'Setup needed'
+    return client.readiness_label || 'Not scored'
+  }
 
   return (
     <AdminLayout title="Dashboard">
@@ -142,7 +149,7 @@ export default function DashboardPage() {
         <section className="oc-panel">
           <div className="oc-panel-header">
             <div>
-              <h2>Setup Readiness</h2>
+              <h2>Launch Readiness</h2>
               <p>Clients closest to launch or needing setup work.</p>
             </div>
             <span className="oc-count-pill">{readyClients.length}/{clients.length}</span>
@@ -217,7 +224,7 @@ export default function DashboardPage() {
                     <td>
                       {c.readiness_score !== undefined ? (
                         <div className="oc-table-progress">
-                          <span>{c.readiness_label || 'Not started'}</span>
+                          <span>{readinessLabel(c)}</span>
                           <strong>{c.readiness_score}%</strong>
                           <div className="oc-progress-track"><span style={{ width: `${c.readiness_score}%` }} /></div>
                         </div>

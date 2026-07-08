@@ -6,17 +6,20 @@ const AdminAuthContext = createContext(null)
 export function AdminAuthProvider({ children }) {
   const navigate = useNavigate()
   const [admin, setAdmin] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
   function login(_token, adminData) {
     localStorage.removeItem('cp_admin_token')
     localStorage.setItem('cp_admin', JSON.stringify(adminData))
     setAdmin(adminData)
+    setAuthLoading(false)
   }
 
   function logout() {
     localStorage.removeItem('cp_admin_token')
     localStorage.removeItem('cp_admin')
     setAdmin(null)
+    setAuthLoading(false)
   }
 
   // AUTH-06: central fetch helper — attaches admin auth header and auto-logs out on 401
@@ -69,6 +72,7 @@ export function AdminAuthProvider({ children }) {
   // 200 → set admin; anything else → clear state and stay put. Admin routes are still
   // guarded by AdminGuard, which is what actually redirects unauthenticated admins.
   useEffect(() => {
+    setAuthLoading(true)
     localStorage.removeItem('cp_admin_token')
     fetch('/api/admin/auth/me', { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } })
       .then(async (res) => {
@@ -80,6 +84,7 @@ export function AdminAuthProvider({ children }) {
         }
       })
       .catch(() => logout())
+      .finally(() => setAuthLoading(false))
   }, [])
 
   // S4-10: role helper — true if the signed-in admin has one of the given roles
@@ -95,7 +100,7 @@ export function AdminAuthProvider({ children }) {
   const canPublish  = hasRole('superadmin', 'admin');
 
   return (
-    <AdminAuthContext.Provider value={{ admin, login, logout, adminFetch, hasRole, canWrite, canApprove, canPublish }}>
+    <AdminAuthContext.Provider value={{ admin, authLoading, login, logout, adminFetch, hasRole, canWrite, canApprove, canPublish }}>
       {children}
     </AdminAuthContext.Provider>
   )

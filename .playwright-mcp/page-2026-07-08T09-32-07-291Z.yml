@@ -1,0 +1,148 @@
+- generic [ref=e21]:
+  - complementary [ref=e22]:
+    - generic [ref=e23]:
+      - img [ref=e24]
+      - generic [ref=e28]:
+        - text: CP Portal
+        - generic [ref=e29]: Admin Console
+    - navigation [ref=e30]:
+      - generic [ref=e31]: Main
+      - link "Dashboard" [ref=e32] [cursor=pointer]:
+        - /url: /admin
+        - img [ref=e34]
+        - generic [ref=e39]: Dashboard
+      - link "Clients" [ref=e40] [cursor=pointer]:
+        - /url: /admin/clients
+        - img [ref=e42]
+        - generic [ref=e45]: Clients
+    - generic [ref=e46]:
+      - generic [ref=e47]: CP Superadmin
+      - generic [ref=e48]: superadmin
+      - button "Sign Out" [ref=e49] [cursor=pointer]
+  - generic [ref=e50]:
+    - generic [ref=e51]:
+      - button "Collapse menu" [ref=e52] [cursor=pointer]: ⟨⟨
+      - heading "Dashboard" [level=1] [ref=e53]
+    - generic [ref=e54]:
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - generic [ref=e57]: CP Portal Admin
+          - heading "Operations Command Center" [level=2] [ref=e58]
+          - paragraph [ref=e59]: Monitor client launch readiness, content health, and submission queues from one workspace.
+        - generic [ref=e60]:
+          - generic [ref=e61]: Updated Jul 8, 3:02 PM
+          - button "Manage Clients" [ref=e62] [cursor=pointer]
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - img [ref=e66]
+          - generic [ref=e69]:
+            - generic [ref=e70]: "2"
+            - generic [ref=e71]: Active Clients
+            - generic [ref=e72]: 0 inactive
+        - generic [ref=e73]:
+          - img [ref=e75]
+          - generic [ref=e78]:
+            - generic [ref=e79]: "3"
+            - generic [ref=e80]: Open Submissions
+            - generic [ref=e81]: 1 client queues
+        - generic [ref=e82]:
+          - img [ref=e84]
+          - generic [ref=e87]:
+            - generic [ref=e88]: "1"
+            - generic [ref=e89]: Content Alerts
+            - generic [ref=e90]: Action needed
+        - generic [ref=e91]:
+          - img [ref=e93]
+          - generic [ref=e95]:
+            - generic [ref=e96]: 80%
+            - generic [ref=e97]: Launch Readiness
+            - generic [ref=e98]: 1 ready to launch
+      - generic [ref=e99]:
+        - generic [ref=e100]:
+          - generic [ref=e101]:
+            - generic [ref=e102]:
+              - heading "Priority Alerts" [level=2] [ref=e103]
+              - paragraph [ref=e104]: Content and document items that need admin attention.
+            - generic [ref=e105]: "1"
+          - button "Novartis Pharmaceuticals No news published in 30+ days Review" [ref=e107] [cursor=pointer]:
+            - img [ref=e109]
+            - generic [ref=e112]:
+              - strong [ref=e113]: Novartis Pharmaceuticals
+              - generic [ref=e114]: No news published in 30+ days
+            - generic [ref=e115]: Review
+        - generic [ref=e116]:
+          - generic [ref=e117]:
+            - generic [ref=e118]:
+              - heading "Open Submissions" [level=2] [ref=e119]
+              - paragraph [ref=e120]: Client queues sorted by highest volume.
+            - generic [ref=e121]: "3"
+          - button "Novartis Pharmaceuticals novartis 3" [ref=e123] [cursor=pointer]:
+            - img [ref=e125]
+            - generic [ref=e128]:
+              - strong [ref=e129]: Novartis Pharmaceuticals
+              - generic [ref=e130]: novartis
+            - generic [ref=e131]: "3"
+        - generic [ref=e132]:
+          - generic [ref=e133]:
+            - generic [ref=e134]:
+              - heading "Launch Readiness" [level=2] [ref=e135]
+              - paragraph [ref=e136]: Clients closest to launch or needing setup work.
+            - generic [ref=e137]: 1/2
+          - button "Ardelyx 60%" [ref=e139] [cursor=pointer]:
+            - generic [ref=e140]: Ardelyx
+            - strong [ref=e141]: 60%
+      - generic [ref=e144]:
+        - generic [ref=e145]:
+          - generic [ref=e146]:
+            - heading "Client Portfolio" [level=2] [ref=e147]
+            - paragraph [ref=e148]: Operational table view for status, readiness, and queue health.
+          - button "Open Client Manager" [ref=e149] [cursor=pointer]
+        - table [ref=e150]:
+          - rowgroup [ref=e151]:
+            - row "Client Status Readiness Submissions Content Health Last Updated" [ref=e152]:
+              - columnheader "Client" [ref=e153]
+              - columnheader "Status" [ref=e154]
+              - columnheader "Readiness" [ref=e155]
+              - columnheader "Submissions" [ref=e156]
+              - columnheader "Content Health" [ref=e157]
+              - columnheader "Last Updated" [ref=e158]
+              - columnheader [ref=e159]
+          - rowgroup [ref=e160]:
+            - row "A Ardelyx ardelyx Active Almost ready 60% 0 Clear 7/5/2026 Open" [ref=e161] [cursor=pointer]:
+              - cell "A Ardelyx ardelyx" [ref=e162]:
+                - generic [ref=e163]:
+                  - generic [ref=e164]: A
+                  - generic [ref=e165]:
+                    - strong [ref=e166]: Ardelyx
+                    - generic [ref=e167]: ardelyx
+              - cell "Active" [ref=e168]:
+                - generic [ref=e169]: Active
+              - cell "Almost ready 60%" [ref=e170]:
+                - generic [ref=e171]:
+                  - generic [ref=e172]: Almost ready
+                  - strong [ref=e173]: 60%
+              - cell "0" [ref=e176]
+              - cell "Clear" [ref=e177]:
+                - generic [ref=e178]: Clear
+              - cell "7/5/2026" [ref=e179]
+              - cell "Open" [ref=e180]:
+                - button "Open" [ref=e181]
+            - row "N Novartis Pharmaceuticals novartis Active Ready to launch 100% 3 1 alert 3/21/2026 Open" [ref=e182] [cursor=pointer]:
+              - cell "N Novartis Pharmaceuticals novartis" [ref=e183]:
+                - generic [ref=e184]:
+                  - generic [ref=e185]: "N"
+                  - generic [ref=e186]:
+                    - strong [ref=e187]: Novartis Pharmaceuticals
+                    - generic [ref=e188]: novartis
+              - cell "Active" [ref=e189]:
+                - generic [ref=e190]: Active
+              - cell "Ready to launch 100%" [ref=e191]:
+                - generic [ref=e192]:
+                  - generic [ref=e193]: Ready to launch
+                  - strong [ref=e194]: 100%
+              - cell "3" [ref=e197]
+              - cell "1 alert" [ref=e198]:
+                - generic [ref=e199]: 1 alert
+              - cell "3/21/2026" [ref=e200]
+              - cell "Open" [ref=e201]:
+                - button "Open" [ref=e202]

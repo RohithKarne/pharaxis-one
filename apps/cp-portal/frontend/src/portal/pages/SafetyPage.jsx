@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
+import { formatLongDate } from '../../shared/utils/datetime'
 
 const SEVERITIES = ['critical', 'warning', 'informational']
 
@@ -70,7 +71,7 @@ export default function SafetyPage() {
           </div>
         )}
         {alert.effective_date && (
-          <div className="pp-alert-meta">Effective: {new Date(alert.effective_date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+          <div className="pp-alert-meta">Effective: {formatLongDate(alert.effective_date)}</div>
         )}
         {alert.body_html && (
           <div

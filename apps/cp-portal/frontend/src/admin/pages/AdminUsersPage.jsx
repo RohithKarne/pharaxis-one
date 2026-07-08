@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import AdminLayout from '../components/AdminLayout'
 import { useAdminAuth, adminHeaders } from '../context/AdminAuthContext'
 
 const ROLES = [
@@ -110,6 +111,7 @@ export default function AdminUsersPage() {
   const isCreate = modal === 'create'
 
   return (
+    <AdminLayout title="Admin Users">
     <div className="cp-page">
       <div className="cp-page-header">
         <h1 className="cp-page-title">Admin Users</h1>
@@ -235,5 +237,6 @@ export default function AdminUsersPage() {
         </div>
       )}
     </div>
+    </AdminLayout>
   )
 }

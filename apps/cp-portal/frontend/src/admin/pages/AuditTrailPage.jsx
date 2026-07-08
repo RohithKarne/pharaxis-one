@@ -127,7 +127,7 @@ export default function AuditTrailPage() {
 
       {/* Filters */}
       <div className="cp-card">
-        <div className="cp-card-title">Filters</div>
+        <div className="cp-card-title">Filter Audit Records</div>
         <div className="cp-field-row" style={{ flexWrap: 'wrap', gap: 12 }}>
 
           <div className="cp-field" style={{ minWidth: 160 }}>
@@ -175,7 +175,7 @@ export default function AuditTrailPage() {
       </div>
 
       {/* Audit Table */}
-      <div className="cp-card" style={{ marginTop: 24 }}>
+      <div className="cp-card cp-table-card" style={{ marginTop: 24, padding: 0 }}>
         <div className="cp-card-title">Audit Records</div>
 
         {error && <div className="cp-error">{error}</div>}
@@ -207,13 +207,7 @@ export default function AuditTrailPage() {
                     <td>{r.admin_email || r.admin_name || '—'}</td>
                     <td>
                       {r.action ? (
-                        <span style={{
-                          display: 'inline-block',
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          letterSpacing: '0.04em',
+                        <span className="cp-status-badge" style={{
                           ...(ACTION_BADGE_STYLES[r.action] || { background: '#f1f5f9', color: '#475569' }),
                         }}>
                           {r.action}

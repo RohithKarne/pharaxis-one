@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
+import { formatLongDate } from '../../shared/utils/datetime'
 
 export default function NewsDetailPage() {
   const { postId }              = useParams()
@@ -45,7 +46,7 @@ export default function NewsDetailPage() {
       {post.category && <div className="pp-article-cat">{post.category}</div>}
       <h1 className="pp-article-title">{post.title}</h1>
       {post.publish_at && (
-        <div className="pp-article-date">{new Date(post.publish_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+        <div className="pp-article-date">{formatLongDate(post.publish_at)}</div>
       )}
       {post.thumbnail_url && (
         <img src={post.thumbnail_url} alt={post.title} className="pp-article-img" loading="lazy" />

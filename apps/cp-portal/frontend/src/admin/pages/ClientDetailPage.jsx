@@ -75,9 +75,9 @@ function computeHealthScore(data, submissionStats) {
 }
 
 function healthMeta(score) {
-  if (score >= 75) return { label: 'Healthy',         color: '#15803D', bg: '#DCFCE7', ring: '#16A34A' }
-  if (score >= 40) return { label: 'Needs Attention', color: '#D97706', bg: '#FEF3C7', ring: '#F59E0B' }
-  return                  { label: 'Not Launched',    color: '#DC2626', bg: '#FEE2E2', ring: '#EF4444' }
+  if (score >= 75) return { label: 'Ready to launch', color: '#15803D', bg: '#DCFCE7', ring: '#16A34A' }
+  if (score >= 40) return { label: 'Needs attention', color: '#D97706', bg: '#FEF3C7', ring: '#F59E0B' }
+  return                  { label: 'Not launch ready', color: '#DC2626', bg: '#FEE2E2', ring: '#EF4444' }
 }
 
 // ── Badges ────────────────────────────────────────────────────────────────────
@@ -92,17 +92,17 @@ const BADGE_STYLES = {
 function getBadge(path, data, submissionStats, integrationData) {
   const { branding, features } = data || {}
   const n = features?.filter(f => f.is_enabled).length || 0
-  if (path === 'branding')    return branding?.logo_url && branding?.portal_name ? { label: 'Ready',          s: 'success'   } : { label: 'Needs setup',    s: 'warning'   }
+  if (path === 'branding')    return branding?.logo_url && branding?.portal_name ? { label: 'Ready to use',    s: 'success'   } : { label: 'Needs setup',    s: 'warning'   }
   if (path === 'features')    return n > 0  ? { label: `${n} active`,      s: 'info'      } : { label: 'Not configured', s: 'danger'    }
-  if (path === 'compliance')  return           { label: 'Ready',            s: 'success'   }
-  if (path === 'gate')        return           { label: 'Ready',            s: 'success'   }
+  if (path === 'compliance')  return           { label: 'Ready to use',     s: 'success'   }
+  if (path === 'gate')        return           { label: 'Ready to use',     s: 'success'   }
   if (path === 'chatbox')     return           { label: 'Not configured',   s: 'warning'   }
-  if (path === 'content')     return           { label: 'Ready',            s: 'success'   }
-  if (path === 'news')        return           { label: 'No recent',        s: 'attention' }
-  if (path === 'safety')      return           { label: 'No alerts',        s: 'attention' }
-  if (path === 'documents')   return           { label: 'Ready',            s: 'success'   }
-  if (path === 'msls')        return           { label: 'Ready',            s: 'success'   }
-  if (path === 'forms')       return           { label: 'Ready',            s: 'success'   }
+  if (path === 'content')     return           { label: 'Content ready',    s: 'success'   }
+  if (path === 'news')        return           { label: 'Needs update',     s: 'attention' }
+  if (path === 'safety')      return           { label: 'No active alerts', s: 'attention' }
+  if (path === 'documents')   return           { label: 'Library ready',    s: 'success'   }
+  if (path === 'msls')        return           { label: 'Contacts ready',   s: 'success'   }
+  if (path === 'forms')       return           { label: 'Forms ready',      s: 'success'   }
   if (path === 'analytics')   return           { label: 'View',             s: 'info'      }
   if (path === 'integration') {
     const integrations = integrationData?.integrations || []
@@ -116,7 +116,7 @@ function getBadge(path, data, submissionStats, integrationData) {
   if (path === 'submissions' && submissionStats) {
     return submissionStats.total > 0
       ? { label: `${submissionStats.total} total`, s: 'info' }
-      : { label: 'None yet', s: 'attention' }
+      : { label: 'No queue yet', s: 'attention' }
   }
   return null
 }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import Icon from '../../shared/components/Icon'
+import { formatDateTime } from '../../shared/utils/datetime'
 
 const STATUS_LABELS = {
   pending:    { label: 'Pending',     cls: 'pp-status-pending'    },
@@ -29,10 +30,8 @@ export default function MySubmissionsPage() {
       .then(r => r.json()).then(d => { setSubs(d.submissions || []); setLoading(false) }).catch(() => setLoading(false))
   }, [user, clientCode])
 
-  function formatDate(str) {
-    if (!str) return '—'
-    return new Date(str).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-  }
+  // Submitted timestamps are shown with date + time in the viewer's local zone.
+  const formatDate = (str) => formatDateTime(str)
 
   function exportSummary() {
     const esc = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`

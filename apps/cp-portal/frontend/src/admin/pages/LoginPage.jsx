@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 
 export default function LoginPage() {
   const { login, admin } = useAdminAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const returnTo = location.state?.from || '/admin'
 
   // AUTH-04: redirect already-authenticated admins away from the login page
   useEffect(() => {
-    if (admin) navigate('/admin', { replace: true })
-  }, [admin, navigate])
+    if (admin) navigate(returnTo, { replace: true })
+  }, [admin, navigate, returnTo])
   const [email, setEmail]         = useState('')
   const [password, setPassword]   = useState('')
   const [error, setError]         = useState('')
@@ -45,7 +47,7 @@ export default function LoginPage() {
         return
       }
       login(data.token, data.admin)
-      navigate('/admin')
+      navigate(returnTo, { replace: true })
     } catch {
       setError('Network error. Please try again.')
     } finally {

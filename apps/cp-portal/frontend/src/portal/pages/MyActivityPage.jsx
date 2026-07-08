@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
+import { formatDateTime } from '../../shared/utils/datetime'
 
 const STATUS_LABELS = { submitted: 'Submitted', pending_sync: 'Pending', synced: 'Synced', failed_sync: 'Failed', closed: 'Closed' }
 
@@ -24,7 +25,7 @@ export default function MyActivityPage() {
     ]).then(([a, f]) => { setStats(a); setFollows(f?.follows || []); setLoading(false) }).catch(() => setLoading(false))
   }, [user, clientCode])
 
-  function fmtDate(str) { return str ? new Date(str).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—' }
+  const fmtDate = (str) => formatDateTime(str)
 
   if (loading) return <div className="pp-container pp-page-content"><div className="pp-loading">Loading…</div></div>
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
+import { formatLongDate } from '../../shared/utils/datetime'
 
 export default function EventsPage() {
   const { clientCode } = usePortal()
@@ -37,10 +38,7 @@ export default function EventsPage() {
     return filter === 'upcoming' ? d >= now : d < now
   })
 
-  function formatDate(str) {
-    if (!str) return '—'
-    return new Date(str).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-  }
+  const formatDate = (str) => (str ? formatLongDate(str) : '—')
 
   return (
     <div className="pp-container pp-page-content">

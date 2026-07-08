@@ -22,6 +22,19 @@ const EMPTY_UPLOAD = {
   is_active: true,
 }
 
+const DOC_STATUS_LABELS = {
+  draft: 'Draft',
+  review: 'Needs review',
+  approved: 'Approved to publish',
+  published: 'Live in portal',
+  scheduled: 'Scheduled',
+  archived: 'Archived',
+}
+
+function docStatusLabel(status) {
+  return DOC_STATUS_LABELS[status] || status || 'Draft'
+}
+
 function formatFileSize(bytes) {
   if (!bytes) return '—'
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -257,13 +270,9 @@ export default function DocumentsPage() {
 
       {/* S5-14: Expiry alert banner */}
       {expiringDocs.length > 0 && (
-        <div style={{
-          marginBottom: 20, padding: '12px 16px', borderRadius: 8,
-          background: '#FEF3C7', border: '1px solid #FDE68A',
-          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-        }}>
+        <div className="cp-inline-alert warning">
           <span style={{ fontSize: 13, color: '#92400E', flex: 1 }}>
-            <strong>⚠ {expiringDocs.length} document{expiringDocs.length > 1 ? 's' : ''}</strong>
+            <strong>{expiringDocs.length} document{expiringDocs.length > 1 ? 's' : ''}</strong>
             {' '}
             {expiringDocs.filter(d => d.expires_at.slice(0,10) < new Date().toISOString().slice(0,10)).length > 0
               ? `(${expiringDocs.filter(d => d.expires_at.slice(0,10) < new Date().toISOString().slice(0,10)).length} expired)`
@@ -367,7 +376,7 @@ export default function DocumentsPage() {
                 <div className="cp-field">
                   <label>Status</label>
                   <select value={form.status} onChange={e => setField('status', e.target.value)}>
-                    {docStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                    {docStatuses.map(s => <option key={s} value={s}>{docStatusLabel(s)}</option>)}
                   </select>
                 </div>
                 <div className="cp-field">
@@ -429,7 +438,7 @@ export default function DocumentsPage() {
                 <div className="cp-field">
                   <label>Status</label>
                   <select value={editForm.status || 'published'} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
-                    {docStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                    {docStatuses.map(s => <option key={s} value={s}>{docStatusLabel(s)}</option>)}
                   </select>
                 </div>
                 <div className="cp-field">
@@ -490,8 +499,8 @@ export default function DocumentsPage() {
 
       {/* S5-11: Bulk action bar */}
       {canPublish && selectedIds.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '10px 14px', background: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
-          <span style={{ fontSize: 13, color: '#1E40AF', fontWeight: 500 }}>{selectedIds.length} selected</span>
+        <div className="cp-bulk-bar">
+          <strong>{selectedIds.length} selected</strong>
           <button className="cp-btn cp-btn-sm" style={{ background: '#16A34A', color: '#fff', border: 'none' }} onClick={() => bulkAction('publish')}>Publish</button>
           <button className="cp-btn cp-btn-sm" style={{ background: '#6B7280', color: '#fff', border: 'none' }} onClick={() => bulkAction('archive')}>Archive</button>
           <button className="cp-btn cp-btn-sm" style={{ background: '#DC2626', color: '#fff', border: 'none' }} onClick={() => bulkAction('delete')}>Delete</button>
@@ -502,7 +511,7 @@ export default function DocumentsPage() {
       {docs.length === 0 ? (
         <div className="cp-empty"><p>No documents uploaded yet.</p></div>
       ) : (
-        <div className="cp-card" style={{ padding: 0 }}>
+        <div className="cp-card cp-table-card" style={{ padding: 0 }}>
           <table className="cp-table">
             <thead>
               <tr>
@@ -535,16 +544,15 @@ export default function DocumentsPage() {
                   <td>{d.title}</td>
                   <td>{d.category || '—'}</td>
                   <td>
-                    <span className="cp-badge" style={{ background: '#F3F4F6', color: '#374151', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }}>
+                    <span className="cp-status-badge cp-status-draft" style={{ textTransform: 'uppercase' }}>
                       {d.doc_type}
                     </span>
                   </td>
                   <td>
-                    <span className="cp-badge" style={{
+                    <span className="cp-status-badge" style={{
                       background: d.status === 'published' ? '#DCFCE7' : d.status === 'archived' ? '#F3F4F6' : d.status === 'review' ? '#FEF3C7' : d.status === 'approved' ? '#CCFBF1' : d.status === 'scheduled' ? '#DBEAFE' : '#F3F4F6',
                       color:      d.status === 'published' ? '#16A34A' : d.status === 'archived' ? '#9CA3AF' : d.status === 'review' ? '#D97706' : d.status === 'approved' ? '#0D9488' : d.status === 'scheduled' ? '#2563EB' : '#6B7280',
-                      padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-                    }}>{d.status || 'draft'}</span>
+                    }}>{docStatusLabel(d.status)}</span>
                   </td>
                   <td>{d.version || '—'}</td>
                   <td style={{ color: d.expires_at && new Date(d.expires_at) < new Date() ? '#DC2626' : undefined }}>

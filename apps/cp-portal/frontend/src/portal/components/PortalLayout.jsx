@@ -5,6 +5,7 @@ import { usePortal } from '../context/PortalContext'
 import UserTypeGate from './UserTypeGate'
 import ConsentBanner from './ConsentBanner'
 import FeedbackWidget from './FeedbackWidget'
+import LocalClock from './LocalClock'
 
 function timeAgo(dateStr) {
   if (!dateStr) return ''
@@ -170,6 +171,8 @@ export default function PortalLayout({ children }) {
   ].filter(Boolean)
 
   const base = `/portal/${clientCode}`
+  // The home page has a large hero search, so the header search is redundant there.
+  const isHomePage = location.pathname === base || location.pathname === `${base}/`
 
   function handleLogout() {
     logout()
@@ -227,16 +230,19 @@ export default function PortalLayout({ children }) {
 
           <div className="pp-header-actions">
             {/* Language switcher removed — portal is English-only for now (2026-07-03). */}
-            <form className="pp-header-search" onSubmit={submitHeaderSearch}>
-              <Icon name="search" size={16} />
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search approved content..."
-                aria-label="Search portal"
-              />
-            </form>
+            <LocalClock />
+            {!isHomePage && (
+              <form className="pp-header-search" onSubmit={submitHeaderSearch}>
+                <Icon name="search" size={16} />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Search approved content..."
+                  aria-label="Search portal"
+                />
+              </form>
+            )}
             {isFeatureEnabled('medical_inquiry') && (
               <button className="pp-btn pp-btn-primary" onClick={() => navigate(`${base}/submit`)}>
                 <Icon name="send" size={16} />

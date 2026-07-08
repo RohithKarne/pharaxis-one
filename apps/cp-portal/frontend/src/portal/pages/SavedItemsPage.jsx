@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
+import { formatDateTime } from '../../shared/utils/datetime'
 
 export default function SavedItemsPage() {
   const { clientCode, user } = usePortal()
@@ -126,7 +127,7 @@ export default function SavedItemsPage() {
                   {item.title || 'Untitled'}
                 </div>
                 <div style={{ fontSize: 12, color: '#94A3B8' }}>
-                  Saved {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                  Saved {item.created_at ? formatDateTime(item.created_at) : ''}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>

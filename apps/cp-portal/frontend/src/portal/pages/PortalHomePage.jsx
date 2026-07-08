@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
+import { formatLongDate } from '../../shared/utils/datetime'
 
 export default function PortalHomePage() {
   const { portalConfig, isFeatureEnabled, clientCode, user, portalHeaders } = usePortal()
@@ -45,9 +46,18 @@ export default function PortalHomePage() {
       .then(data => {
         if (data?.items?.length) {
           const now = new Date()
+          const seen = new Set()
           const upcoming = data.items
             .filter(e => new Date(e.event_date || e.start_date) >= now)
             .sort((a, b) => new Date(a.event_date || a.start_date) - new Date(b.event_date || b.start_date))
+            // de-dupe events that share the same title + date (prevents the same
+            // conference showing twice on the home page)
+            .filter(e => {
+              const key = `${e.title}|${e.event_date || e.start_date}`
+              if (seen.has(key)) return false
+              seen.add(key)
+              return true
+            })
             .slice(0, 3)
           setUpcomingEvents(upcoming)
         }
@@ -129,13 +139,28 @@ export default function PortalHomePage() {
         { id: 'medical-literature', title: 'Request Medical Literature' },
       ]
 
+  const trustItems = [
+    {
+      icon: 'shield',
+      title: 'Safety information, front and centre',
+      desc: 'Current safety alerts and prescribing details are always one click away, so you can check risk information first.',
+    },
+    {
+      icon: 'check',
+      title: 'Reviewed and approved',
+      desc: 'Every document and answer is vetted by our medical affairs team before it reaches you.',
+    },
+    {
+      icon: 'users',
+      title: 'Relevant to your practice',
+      desc: 'Content and recommendations are tailored to your specialty, so you find what matters faster.',
+    },
+  ]
+
   const heroTitle    = portalConfig?.welcome_title || `Welcome to ${branding.portal_name || client.name || 'the Medical Portal'}`
   const heroSubtitle = portalConfig?.welcome_message || branding.tagline || 'Your trusted source for medical information, resources, and support.'
 
-  function formatEventDate(str) {
-    if (!str) return ''
-    return new Date(str).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
-  }
+  const formatEventDate = (str) => (str ? formatLongDate(str) : '')
 
   function runSearch(term) {
     const query = term.trim()
@@ -197,6 +222,22 @@ export default function PortalHomePage() {
               </Link>
             </div>
           </aside>
+        </div>
+      </section>
+
+      <section className="pp-trust-section">
+        <div className="pp-container">
+          <div className="pp-trust-grid">
+            {trustItems.map(item => (
+              <div key={item.title} className="pp-trust-item">
+                <span className="pp-trust-icon"><Icon name={item.icon} size={20} /></span>
+                <span>
+                  <h3>{item.title}</h3>
+                  <p>{item.desc}</p>
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

@@ -18,6 +18,19 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit   : 10,
   charset           : 'utf8mb4',
+  // TZ: interpret/emit DATETIME values as UTC so the API always sends ISO-8601
+  // with a trailing Z. The browser then converts each instant to the viewer's
+  // local timezone (with correct DST) at display time.
+  timezone          : 'Z',
+});
+
+// Pin every pooled connection's session timezone to UTC so CURRENT_TIMESTAMP /
+// NOW() / UTC_TIMESTAMP() all produce UTC regardless of the DB server's system
+// timezone (our dev server runs on IST). This makes all NEW writes UTC-correct.
+// NOTE: rows written before this change are in the server's old local time and
+// require a one-time migration to UTC — tracked separately.
+pool.on('connection', (conn) => {
+  conn.query("SET time_zone = '+00:00'");
 });
 
 async function run(sql) {
