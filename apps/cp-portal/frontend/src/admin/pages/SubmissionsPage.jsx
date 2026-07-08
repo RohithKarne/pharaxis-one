@@ -142,12 +142,11 @@ export default function SubmissionsPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="cp-table-toolbar">
         <select
           className="cp-select"
           value={typeFilter}
           onChange={e => setTypeFilter(e.target.value)}
-          style={{ padding: '6px 10px', border: '1px solid var(--cp-border)', borderRadius: 4, fontSize: 13 }}
         >
           <option value="">All Types</option>
           {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -156,7 +155,6 @@ export default function SubmissionsPage() {
           className="cp-select"
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
-          style={{ padding: '6px 10px', border: '1px solid var(--cp-border)', borderRadius: 4, fontSize: 13 }}
         >
           <option value="">All Statuses</option>
           {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s}>{s}</option>)}
@@ -165,30 +163,30 @@ export default function SubmissionsPage() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search name, email, ref…"
-          style={{ padding: '6px 10px', border: '1px solid var(--cp-border)', borderRadius: 4, fontSize: 13, minWidth: 220 }}
+          className="cp-search-input"
         />
-        <label style={{ fontSize: 12, color: '#6B7280' }}>From
+        <label className="cp-date-filter">From
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            style={{ marginLeft: 4, padding: '5px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, fontSize: 12 }} />
+          />
         </label>
-        <label style={{ fontSize: 12, color: '#6B7280' }}>To
+        <label className="cp-date-filter">To
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            style={{ marginLeft: 4, padding: '5px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, fontSize: 12 }} />
+          />
         </label>
         {(typeFilter || statusFilter || search || dateFrom || dateTo) && (
           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => { setTypeFilter(''); setStatusFilter(''); setSearch(''); setDateFrom(''); setDateTo('') }}>
             Clear
           </button>
         )}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+        <div className="cp-table-actions">
           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={exportCsv} disabled={submissions.length === 0} title="Export the loaded view to CSV">
-            ⬇ CSV (view)
+            CSV View
           </button>
           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => exportServer('csv')} title="Export the full filtered dataset to CSV">
-            ⬇ CSV (all)
+            CSV All
           </button>
           <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => exportServer('pdf')} title="Export a PDF audit report of the full filtered dataset">
-            ⬇ PDF
+            PDF
           </button>
         </div>
       </div>
@@ -202,7 +200,7 @@ export default function SubmissionsPage() {
       {submissions.length === 0 ? (
         <div className="cp-empty"><p>No submissions found.</p></div>
       ) : (
-        <div className="cp-card" style={{ padding: 0 }}>
+        <div className="cp-card cp-table-card" style={{ padding: 0 }}>
           <table className="cp-table">
             <thead>
               <tr>

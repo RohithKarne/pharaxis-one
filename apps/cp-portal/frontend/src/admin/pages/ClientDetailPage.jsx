@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 import { clientPortalUrl } from '../../shared/utils/portalUrl'
+import Icon from '../../shared/components/Icon'
 import QRCode from 'qrcode'
 
 // ── Config Sections ───────────────────────────────────────────────────────────
@@ -11,48 +12,48 @@ const CONFIG_GROUPS = [
     key: 'experience',
     label: 'Branding & Experience',
     desc: 'Portal identity, visual design, and AI configuration',
-    sectionIcon: '🎨',
+    sectionIcon: 'palette',
     cards: [
-      { path: 'branding',  icon: '🎨', label: 'Branding & Theme',    desc: 'Logo, colors, fonts, and portal name',              cta: 'Configure', primary: true },
-      { path: 'features',  icon: '⚙️', label: 'Features',             desc: 'Enable or disable portal sections',                 cta: 'Configure' },
-      { path: 'gate',      icon: '🚪', label: 'User Gate',            desc: 'User type confirmation and access control',         cta: 'Configure' },
-      { path: 'chatbox',   icon: '🤖', label: 'Chatbox AI',           desc: 'AI provider and system prompt',                    cta: 'Configure' },
+      { path: 'branding',  icon: 'palette', label: 'Branding & Theme', desc: 'Logo, colors, fonts, and portal name',             cta: 'Configure', primary: true },
+      { path: 'features',  icon: 'sliders', label: 'Features',         desc: 'Enable or disable portal sections',                cta: 'Configure' },
+      { path: 'gate',      icon: 'gate',    label: 'User Gate',        desc: 'User type confirmation and access control',        cta: 'Configure' },
+      { path: 'chatbox',   icon: 'message', label: 'Chatbox AI',       desc: 'AI provider and system prompt',                   cta: 'Configure' },
     ],
   },
   {
     key: 'content',
     label: 'Content & Publishing',
     desc: 'All content published and visible in the portal',
-    sectionIcon: '📄',
+    sectionIcon: 'file',
     cards: [
-      { path: 'content',   icon: '📄', label: 'Content Library',      desc: 'Therapeutic areas, drugs, events, and resources',   cta: 'Open',      primary: true },
-      { path: 'news',      icon: '📰', label: 'News & Announcements',  desc: 'Publish news posts and updates',                    cta: 'Open'      },
-      { path: 'safety',    icon: '⚠️', label: 'Safety Alerts',         desc: 'Drug safety communications and recalls',            cta: 'Review'    },
-      { path: 'documents', icon: '📁', label: 'Document Library',      desc: 'Upload and manage clinical documents',              cta: 'Open'      },
-      { path: 'msls',      icon: '👤', label: 'MSL Directory',         desc: 'Medical Science Liaisons',                         cta: 'Open'      },
+      { path: 'content',   icon: 'file',   label: 'Content Library',     desc: 'Therapeutic areas, drugs, events, and resources', cta: 'Open',   primary: true },
+      { path: 'news',      icon: 'news',   label: 'News & Announcements', desc: 'Publish news posts and updates',                  cta: 'Open'   },
+      { path: 'safety',    icon: 'shield', label: 'Safety Alerts',        desc: 'Drug safety communications and recalls',          cta: 'Review' },
+      { path: 'documents', icon: 'folder', label: 'Document Library',     desc: 'Upload and manage clinical documents',            cta: 'Open'   },
+      { path: 'msls',      icon: 'users',  label: 'MSL Directory',        desc: 'Medical Science Liaisons',                       cta: 'Open'   },
     ],
   },
   {
     key: 'compliance',
     label: 'Compliance & Governance',
     desc: 'Regulatory requirements and form configuration',
-    sectionIcon: '🔒',
+    sectionIcon: 'lock',
     cards: [
-      { path: 'compliance', icon: '🔒', label: 'Compliance',           desc: 'Consent, cookie policy, and regulatory settings',   cta: 'Configure', primary: true },
-      { path: 'forms',      icon: '📝', label: 'Form Builder',         desc: 'Submission form fields per inquiry type',           cta: 'Configure' },
+      { path: 'compliance', icon: 'lock', label: 'Compliance',   desc: 'Consent, cookie policy, and regulatory settings', cta: 'Configure', primary: true },
+      { path: 'forms',      icon: 'form', label: 'Form Builder', desc: 'Submission form fields per inquiry type',         cta: 'Configure' },
     ],
   },
   {
     key: 'operations',
     label: 'Operations & Monitoring',
     desc: 'Users, submissions, integrations, and audit',
-    sectionIcon: '📡',
+    sectionIcon: 'chart',
     cards: [
-      { path: 'users',       icon: '👥', label: 'Portal Users',        desc: 'Manage registered portal users',                    cta: 'Open',      primary: true },
-      { path: 'submissions', icon: '📨', label: 'Submissions',         desc: 'View and manage form submissions',                  cta: 'Open'      },
-      { path: 'integration', icon: '🔗', label: 'Integration',         desc: 'MIMS or third-party system connection',             cta: 'Configure' },
-      { path: 'audit',       icon: '📋', label: 'Audit Trail',         desc: 'Full admin activity log',                          cta: 'Review'    },
-      { path: 'analytics',   icon: '📊', label: 'Analytics',           desc: 'Portal usage, downloads, and submission trends',    cta: 'View'      },
+      { path: 'users',       icon: 'users', label: 'Portal Users', desc: 'Manage registered portal users',                 cta: 'Open',      primary: true },
+      { path: 'submissions', icon: 'inbox', label: 'Submissions',  desc: 'View and manage form submissions',               cta: 'Open'      },
+      { path: 'integration', icon: 'link',  label: 'Integration',  desc: 'MIMS or third-party system connection',          cta: 'Configure' },
+      { path: 'audit',       icon: 'list',  label: 'Audit Trail',  desc: 'Full admin activity log',                       cta: 'Review'    },
+      { path: 'analytics',   icon: 'chart', label: 'Analytics',    desc: 'Portal usage, downloads, and submission trends', cta: 'View'      },
     ],
   },
 ]
@@ -137,13 +138,13 @@ function getUrgentIssues(data, integrationData) {
 }
 
 const ENTITY_ICONS = {
-  branding: '🎨', news: '📰', safety_alert: '⚠️', document: '📁',
-  feature: '⚙️', compliance: '🔒', msl: '👤', integration: '🔗',
-  portal_user: '👥', client: '🏢', chatbox: '🤖', gate: '🚪',
-  submission: '📨', submissions: '📨',
+  branding: 'palette', news: 'news', safety_alert: 'shield', document: 'folder',
+  feature: 'sliders', compliance: 'lock', msl: 'user', integration: 'link',
+  portal_user: 'users', client: 'building', chatbox: 'message', gate: 'gate',
+  submission: 'inbox', submissions: 'inbox',
 }
 
-function activityIcon(entity) { return ENTITY_ICONS[entity] || '📋' }
+function activityIcon(entity) { return ENTITY_ICONS[entity] || 'list' }
 
 function activityText(action, entity) {
   const e = entity.replace(/_/g, ' ')
@@ -294,12 +295,6 @@ export default function ClientDetailPage() {
               {client.updated_at ? new Date(client.updated_at).toLocaleDateString() : '—'}
             </span>
           </div>
-          {client.contact_email && (
-            <div className="ck-stat">
-              <span className="ck-stat-label">Owner</span>
-              <span className="ck-stat-value">{client.contact_email}</span>
-            </div>
-          )}
         </div>
 
         <div className="ck-health-block">
@@ -314,7 +309,7 @@ export default function ClientDetailPage() {
 
       {/* ── SEARCH ───────────────────────────────────────────────────── */}
       <div className="cp-config-search-bar">
-        <span className="cp-config-search-icon">🔍</span>
+        <span className="cp-config-search-icon"><Icon name="search" size={16} /></span>
         <input
           type="text"
           className="cp-config-search-input"
@@ -337,6 +332,13 @@ export default function ClientDetailPage() {
             const secondary = filtered.filter(c => !c.primary)
             return (
               <div key={group.key} className="ck-group" data-key={group.key}>
+                <div className="ck-group-hdr">
+                  <span className="ck-group-hdr-icon"><Icon name={group.sectionIcon} size={17} /></span>
+                  <span className="ck-group-hdr-text">
+                    <span className="ck-group-hdr-label">{group.label}</span>
+                    <span className="ck-group-hdr-desc">{group.desc}</span>
+                  </span>
+                </div>
 
                 <div className="ck-group-body">
 
@@ -349,7 +351,7 @@ export default function ClientDetailPage() {
                           onClick={() => navigate(`/admin/clients/${clientId}/${primary.path}`)}
                         >
                           <div className="ck-card-primary-left">
-                            <span className="ck-card-primary-icon">{primary.icon}</span>
+                            <span className="ck-card-primary-icon"><Icon name={primary.icon} size={22} /></span>
                             <div>
                               <div className="ck-card-primary-label">{primary.label}</div>
                               <div className="ck-card-primary-desc">{primary.desc}</div>
@@ -377,7 +379,7 @@ export default function ClientDetailPage() {
                               onClick={() => navigate(`/admin/clients/${clientId}/${card.path}`)}
                             >
                               <div className="ck-sub-top">
-                                <span className="ck-sub-icon">{card.icon}</span>
+                                <span className="ck-sub-icon"><Icon name={card.icon} size={17} /></span>
                                 {badge && (
                                   <span className="ck-badge ck-badge-sm" style={BADGE_STYLES[badge.s] || {}}>{badge.label}</span>
                                 )}
@@ -410,7 +412,7 @@ export default function ClientDetailPage() {
             </div>
             {urgentIssues.length === 0 ? (
               <div className="ck-panel-empty">
-                <span style={{ fontSize: 18, color: '#16A34A' }}>✓</span>
+                <span style={{ color: '#16A34A', display: 'inline-flex' }}><Icon name="check" size={18} /></span>
                 <span style={{ color: '#16A34A', fontWeight: 600, fontSize: 12 }}>No issues detected</span>
               </div>
             ) : (
@@ -438,7 +440,7 @@ export default function ClientDetailPage() {
                 <div style={{ fontSize: 12, color: '#9CA3AF', padding: '4px 0' }}>No activity yet.</div>
               ) : recentActivity.map((item, i) => (
                 <div key={i} className="ck-activity-item">
-                  <span className="ck-activity-icon">{activityIcon(item.entity)}</span>
+                  <span className="ck-activity-icon"><Icon name={activityIcon(item.entity)} size={14} /></span>
                   <div className="ck-activity-body">
                     <div className="ck-activity-text">{activityText(item.action, item.entity)}</div>
                     <div className="ck-activity-meta">{item.admin_email || 'Admin'} · {relativeTime(item.created_at)}</div>

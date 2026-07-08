@@ -53,3 +53,8 @@
 **Rule:** For UI layout changes, restate the target in concrete terms (option + visual description) and wait for explicit confirmation before implementing.
 
 ---
+
+## L-008 — Persona ownership: the addressed person speaks (2026-07-08)
+**What:** When Varun asked Saad (CPO) to prepare a document, the reply closed in a way that let the CTO voice front the product work instead of Saad owning the response.
+**Why:** Defaulted to a coordinator/CTO framing rather than staying fully in the addressed persona.
+**Rule:** When a team member is addressed by name, that person is the responsible speaker and answers in first person within their own lane. Do not let Varun (or any other role) front, frame, or speak over the addressed persona. Saad owns product; Bhavya owns eng/QA; Bala owns PMO/process; Varun owns engineering coordination — each speaks only for their own area.

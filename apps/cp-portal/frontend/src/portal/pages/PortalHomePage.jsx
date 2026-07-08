@@ -36,6 +36,8 @@ export default function PortalHomePage() {
 
   // LOW-16: fetch upcoming events from API
   const [upcomingEvents, setUpcomingEvents] = useState([])
+  const [latestNews, setLatestNews] = useState([])
+  const [latestDocs, setLatestDocs] = useState([])
   useEffect(() => {
     if (!clientCode) return
     fetch(`/api/portal/content/${clientCode}/events`)
@@ -51,25 +53,51 @@ export default function PortalHomePage() {
         }
       })
       .catch(() => {})
+  }, [clientCode, portalHeaders])
+
+  useEffect(() => {
+    if (!clientCode) return
+    fetch(`/api/portal/news?clientCode=${clientCode}&limit=4`, { headers: portalHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.posts) setLatestNews(d.posts.slice(0, 4)) })
+      .catch(() => {})
+    fetch(`/api/portal/documents?clientCode=${clientCode}`, { headers: portalHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.documents) setLatestDocs(d.documents.slice(0, 3)) })
+      .catch(() => {})
   }, [clientCode])
 
-  const featureCards = [
+  const topTasks = [
     {
       key:   'medical_inquiry',
       icon:  'send',
-      title: 'Submit an Inquiry',
-      desc:  'Submit a medical information request, adverse event report, or product complaint.',
+      title: 'Submit a Medical Inquiry',
+      desc:  'Ask a product question, report an event, or request medical information.',
       path:  'submit',
-      stamp: 'Avg. reply < 2 business days',
-      highlight: true,
+      action: 'Start request',
+      tone: 'primary',
+    },
+    {
+      key:   'document_library',
+      icon:  'file',
+      title: 'Find Approved Documents',
+      desc:  'Browse prescribing information, safety materials, and approved resources.',
+      path:  'documents',
+      action: 'Browse documents',
+      tone: 'teal',
     },
     {
       key:   'find_msl',
-      icon:  'user',
-      title: 'Find an MSL',
-      desc:  'Connect with our Medical Science Liaison team and book an open time slot.',
+      icon:  'users',
+      title: 'Contact an MSL',
+      desc:  'Connect with a Medical Science Liaison for your area.',
       path:  'find-msl',
+      action: 'Find an MSL',
+      tone: 'primary',
     },
+  ].filter(c => isFeatureEnabled(c.key))
+
+  const secondaryTasks = [
     {
       key:   'therapeutic_areas',
       icon:  'beaker',
@@ -91,14 +119,15 @@ export default function PortalHomePage() {
       desc:  'Access publications, clinical data, and approved materials.',
       path:  'resources',
     },
-    {
-      key:   'events',
-      icon:  'calendar',
-      title: 'Events & Webinars',
-      desc:  'Find upcoming medical education events, symposia, and webinars.',
-      path:  'events',
-    },
   ].filter(c => isFeatureEnabled(c.key))
+
+  const quickSearches = ['PX-104', 'Dosing', 'Clinical trials', 'Prescribing information', 'Safety']
+  const quickDocs = latestDocs.length > 0
+    ? latestDocs.slice(0, 2)
+    : [
+        { id: 'prescribing-info', title: 'Prescribing Information' },
+        { id: 'medical-literature', title: 'Request Medical Literature' },
+      ]
 
   const heroTitle    = portalConfig?.welcome_title || `Welcome to ${branding.portal_name || client.name || 'the Medical Portal'}`
   const heroSubtitle = portalConfig?.welcome_message || branding.tagline || 'Your trusted source for medical information, resources, and support.'
@@ -108,32 +137,86 @@ export default function PortalHomePage() {
     return new Date(str).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
   }
 
+  function runSearch(term) {
+    const query = term.trim()
+    if (query.length >= 2) navigate(`${base}/search?q=${encodeURIComponent(query)}`)
+  }
+
+  function submitHomeSearch(e) {
+    e.preventDefault()
+    runSearch(homeSearch)
+  }
+
   return (
     <div className="pp-home">
       <section className="pp-hero">
         <div className="pp-hero-inner">
-          <h1 className="pp-hero-title">{heroTitle}</h1>
-          <p className="pp-hero-subtitle">{heroSubtitle}</p>
-          <form
-            className="pp-hero-search"
-            onSubmit={e => { e.preventDefault(); if (homeSearch.trim().length >= 2) navigate(`${base}/search?q=${encodeURIComponent(homeSearch.trim())}`) }}
-          >
-            <Icon name="search" size={20} />
-            <input
-              value={homeSearch}
-              onChange={e => setHomeSearch(e.target.value)}
-              placeholder="Search medical information, documents, safety…"
-              aria-label="Search the portal"
-            />
-            <button type="submit" className="pp-hero-search-btn">Search</button>
-          </form>
-          <div className="pp-hero-actions">
-            <button className="pp-btn pp-btn-primary pp-btn-lg" onClick={() => navigate(`${base}/submit`)}>
-              Submit an Inquiry
-            </button>
-            <button className="pp-btn pp-btn-outline pp-btn-lg" onClick={() => navigate(`${base}/find-msl`)}>
-              Find an MSL
-            </button>
+          <div className="pp-hero-copy">
+            <span className="pp-hero-kicker">Medical affairs support</span>
+            <h1 className="pp-hero-title">{heroTitle}</h1>
+            <p className="pp-hero-subtitle">{heroSubtitle}</p>
+            <form className="pp-hero-search" onSubmit={submitHomeSearch}>
+              <Icon name="search" size={20} />
+              <input
+                value={homeSearch}
+                onChange={e => setHomeSearch(e.target.value)}
+                placeholder="Search medical information, documents, events..."
+                aria-label="Search the portal"
+              />
+              <button type="submit" className="pp-hero-search-btn">Search</button>
+            </form>
+            <div className="pp-search-suggestions" aria-label="Popular searches">
+              <span>Popular searches:</span>
+              {quickSearches.map(term => (
+                <button key={term} type="button" onClick={() => runSearch(term)}>{term}</button>
+              ))}
+            </div>
+          </div>
+          <aside className="pp-hero-panel" aria-label="Portal shortcuts">
+            <div className="pp-safety-card">
+              <div className="pp-safety-card-icon"><Icon name="shield" size={20} /></div>
+              <div>
+                <div className="pp-safety-card-title">Safety Update</div>
+                <p>Review the latest safety information before using approved content.</p>
+                <Link to={`${base}/safety`}>View Safety Alerts</Link>
+              </div>
+            </div>
+            <div className="pp-quick-links">
+              <div className="pp-quick-links-title">Quick Links</div>
+              {quickDocs.map(doc => (
+                <Link key={doc.id} to={`${base}/documents`} className="pp-quick-link-row">
+                  <Icon name="file" size={18} />
+                  <span>{doc.title}</span>
+                  <span aria-hidden="true">›</span>
+                </Link>
+              ))}
+              <Link to={`${base}/submit`} className="pp-quick-link-row">
+                <Icon name="shield" size={18} />
+                <span>Report a Product Complaint</span>
+                <span aria-hidden="true">›</span>
+              </Link>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section className="pp-top-tasks-section">
+        <div className="pp-container">
+          <div className="pp-section-heading">
+            <h2>What can we help you with today?</h2>
+            <p>Start with the most common medical information tasks.</p>
+          </div>
+          <div className="pp-top-task-grid">
+            {topTasks.map(card => (
+              <Link key={card.key} to={`${base}/${card.path}`} className={`pp-top-task-card ${card.tone === 'teal' ? 'teal' : ''}`}>
+                <div className="pp-top-task-icon"><Icon name={card.icon} size={30} /></div>
+                <div className="pp-top-task-body">
+                  <h3>{card.title}</h3>
+                  <p>{card.desc}</p>
+                  <span>{card.action} <span aria-hidden="true">→</span></span>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
@@ -194,45 +277,88 @@ export default function PortalHomePage() {
         </section>
       )}
 
-      <section className="pp-features-section">
-        <div className="pp-container">
-          <h2 className="pp-section-title">How Can We Help?</h2>
-          <div className="pp-feature-grid">
-            {featureCards.map(card => (
-              <Link key={card.key} to={`${base}/${card.path}`}
-                className={`pp-feature-card ${card.highlight ? 'pp-feature-card-highlight' : ''}`}>
-                <div className="pp-feature-icon"><Icon name={card.icon} size={26} /></div>
-                <h3 className="pp-feature-title">{card.title}</h3>
-                <p className="pp-feature-desc">{card.desc}</p>
-                {card.stamp
-                  ? <span className="pp-feature-stamp"><span className="pp-stamp-dot" />{card.stamp}</span>
-                  : <span className="pp-feature-link">Learn more →</span>}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* LOW-16: upcoming events pulled from API */}
-      {isFeatureEnabled('events') && upcomingEvents.length > 0 && (
-        <section className="pp-upcoming-events-section">
+      {secondaryTasks.length > 0 && (
+        <section className="pp-features-section">
           <div className="pp-container">
-            <h2 className="pp-section-title">Upcoming Events</h2>
-            <div className="pp-upcoming-events-list">
-              {upcomingEvents.map(ev => (
-                <div key={ev.id} className="pp-upcoming-event-item">
-                  <div className="pp-upcoming-event-date">{formatEventDate(ev.event_date || ev.start_date)}</div>
-                  <div className="pp-upcoming-event-title">{ev.title}</div>
-                  {ev.event_type && <div className="pp-upcoming-event-type">{ev.event_type}</div>}
-                </div>
+            <div className="pp-section-heading compact">
+              <h2>Explore more resources</h2>
+              <p>Move quickly into product, science, and support areas.</p>
+            </div>
+            <div className="pp-feature-grid">
+              {secondaryTasks.map(card => (
+                <Link key={card.key} to={`${base}/${card.path}`} className="pp-feature-card">
+                  <div className="pp-feature-icon"><Icon name={card.icon} size={24} /></div>
+                  <h3 className="pp-feature-title">{card.title}</h3>
+                  <p className="pp-feature-desc">{card.desc}</p>
+                  <span className="pp-feature-link">Open <span aria-hidden="true">→</span></span>
+                </Link>
               ))}
             </div>
-            <Link to={`${base}/events`} className="pp-btn pp-btn-outline" style={{ marginTop: 16, display: 'inline-block' }}>
-              View All Events →
-            </Link>
           </div>
         </section>
       )}
+
+      <section className="pp-updates-section">
+        <div className="pp-container">
+          <div className="pp-updates-grid">
+            {isFeatureEnabled('events') && (
+              <section className="pp-update-panel">
+                <div className="pp-update-panel-head">
+                  <h2>Upcoming Events</h2>
+                  <Link to={`${base}/events`}>View all</Link>
+                </div>
+                <div className="pp-update-list">
+                  {upcomingEvents.length > 0 ? upcomingEvents.map(ev => (
+                    <Link key={ev.id} to={`${base}/events`} className="pp-update-row pp-event-row">
+                      <span className="pp-date-chip">{formatEventDate(ev.event_date || ev.start_date)}</span>
+                      <span>
+                        <b>{ev.title}</b>
+                        {ev.event_type && <small>{ev.event_type}</small>}
+                      </span>
+                      <span aria-hidden="true">›</span>
+                    </Link>
+                  )) : (
+                    <div className="pp-update-empty">No upcoming events are published yet.</div>
+                  )}
+                </div>
+              </section>
+            )}
+            {isFeatureEnabled('news_announcements') && (
+              <section className="pp-update-panel">
+                <div className="pp-update-panel-head">
+                  <h2>Latest News</h2>
+                  <Link to={`${base}/news`}>View all</Link>
+                </div>
+                <div className="pp-update-list">
+                  {latestNews.length > 0 ? latestNews.map(post => (
+                    <Link key={post.id} to={`${base}/news/${post.id}`} className="pp-update-row">
+                      <span className="pp-dot" />
+                      <span>
+                        <b>{post.title}</b>
+                        {post.category && <small>{post.category}</small>}
+                      </span>
+                      <span aria-hidden="true">›</span>
+                    </Link>
+                  )) : (
+                    <div className="pp-update-empty">No news has been published yet.</div>
+                  )}
+                </div>
+              </section>
+            )}
+            <section className="pp-update-panel pp-safety-info-panel">
+              <div className="pp-update-panel-head">
+                <h2>Safety Information</h2>
+                <Link to={`${base}/safety`}>View all</Link>
+              </div>
+              <div className="pp-safety-info-box">
+                <Icon name="shield" size={22} />
+                <p>Important safety information is available for healthcare professionals. Always refer to current prescribing information.</p>
+                <Link to={`${base}/safety`} className="pp-btn pp-btn-outline pp-btn-full">View Safety Information</Link>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
 
       {isFeatureEnabled('medical_inquiry') && (
         <section className="pp-cta-section">

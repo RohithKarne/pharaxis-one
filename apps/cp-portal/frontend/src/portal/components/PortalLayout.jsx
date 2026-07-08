@@ -18,7 +18,7 @@ function timeAgo(dateStr) {
   return `${days}d ago`
 }
 
-const NOTIF_ICONS = { news: '📰', document: '📁', safety: '⚠️' }
+const NOTIF_ICONS = { news: 'news', document: 'file', safety: 'shield' }
 
 function NavDropdown({ label, items, base, location, onNavigate }) {
   const [open, setOpen] = useState(false)
@@ -176,6 +176,13 @@ export default function PortalLayout({ children }) {
     navigate(`${base}`)
   }
 
+  function submitHeaderSearch(e) {
+    e.preventDefault()
+    if (searchTerm.trim().length >= 2) {
+      navigate(`/portal/${clientCode}/search?q=${encodeURIComponent(searchTerm.trim())}`)
+    }
+  }
+
   const logoUrl  = branding.logo_url
   const logoText = branding.portal_name || client.name || 'Medical Portal'
 
@@ -183,13 +190,16 @@ export default function PortalLayout({ children }) {
     <div className="pp-root">
       {has_active_safety_alert && !bannerDismissed && (
         <div className="pp-safety-banner" role="alert">
-          <span>⚠ Important Safety Information — </span>
-          <Link to={`${base}/safety`} className="pp-safety-banner-link">View Safety Alerts</Link>
+          <span className="pp-safety-banner-icon"><Icon name="shield" size={16} /></span>
+          <span className="pp-safety-banner-copy">Important Safety Information</span>
+          <Link to={`${base}/safety`} className="pp-safety-banner-link">Review safety alerts and prescribing information</Link>
           <button
             onClick={dismissSafetyBanner}
             aria-label="Dismiss safety banner"
-            style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 18, marginLeft: 'auto', padding: '0 8px', lineHeight: 1 }}
-          >×</button>
+            className="pp-safety-banner-dismiss"
+          >
+            <span aria-hidden="true">x</span>
+          </button>
         </div>
       )}
       <header className="pp-header">
@@ -217,21 +227,19 @@ export default function PortalLayout({ children }) {
 
           <div className="pp-header-actions">
             {/* Language switcher removed — portal is English-only for now (2026-07-03). */}
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && searchTerm.trim().length >= 2) {
-                  navigate(`/portal/${clientCode}/search?q=${encodeURIComponent(searchTerm.trim())}`)
-                }
-              }}
-              placeholder="Search…"
-              aria-label="Search portal"
-              style={{ fontSize: 13, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--pp-border, #E5E7EB)', background: 'transparent', color: 'var(--pp-header-text, inherit)', minWidth: 140 }}
-            />
+            <form className="pp-header-search" onSubmit={submitHeaderSearch}>
+              <Icon name="search" size={16} />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Search approved content..."
+                aria-label="Search portal"
+              />
+            </form>
             {isFeatureEnabled('medical_inquiry') && (
               <button className="pp-btn pp-btn-primary" onClick={() => navigate(`${base}/submit`)}>
+                <Icon name="send" size={16} />
                 {t('btn.submit_inquiry')}
               </button>
             )}
@@ -279,8 +287,8 @@ export default function PortalLayout({ children }) {
                               onClick={() => { if (href) { setBellOpen(false); navigate(href) } }}
                               style={{ cursor: href ? 'pointer' : 'default' }}
                             >
-                              <span style={{ fontSize: 18, lineHeight: 1 }}>
-                                {NOTIF_ICONS[n.type] || '🔔'}
+                              <span style={{ color: '#2563EB', lineHeight: 1 }}>
+                                <Icon name={NOTIF_ICONS[n.type] || 'message'} size={18} />
                               </span>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div className="pp-notif-title">{n.title || n.message || 'Notification'}</div>

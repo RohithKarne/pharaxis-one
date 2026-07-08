@@ -92,6 +92,7 @@ const SEGMENT_TITLES = {
 
 function deriveTitle(pathname) {
   if (pathname === '/admin' || pathname === '/admin/') return 'Dashboard'
+  if (/^\/admin\/clients\/[^/]+\/?$/.test(pathname)) return 'Overview'
   const lastSegment = pathname.split('/').filter(Boolean).pop() || ''
   return SEGMENT_TITLES[lastSegment] || 'Admin'
 }
