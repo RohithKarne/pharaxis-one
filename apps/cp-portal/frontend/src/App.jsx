@@ -12,6 +12,7 @@ import ContentPage          from './admin/pages/ContentPage'
 import FormsPage            from './admin/pages/FormsPage'
 import MSLPage              from './admin/pages/MSLPage'
 import IntegrationPage      from './admin/pages/IntegrationPage'
+import SsoConfigPage        from './admin/pages/SsoConfigPage'
 import PortalUsersPage      from './admin/pages/PortalUsersPage'
 import ChatboxConfigPage    from './admin/pages/ChatboxConfigPage'
 import GatePage             from './admin/pages/GatePage'
@@ -45,6 +46,7 @@ import NewsDetailPage           from './portal/pages/NewsDetailPage'
 import DocumentsPortalPage      from './portal/pages/DocumentsPage'
 import SavedItemsPage           from './portal/pages/SavedItemsPage'
 import VerifyEmailPage          from './portal/pages/VerifyEmailPage'
+import SsoCompletePage           from './portal/pages/SsoCompletePage'
 import PreferencesPage         from './portal/pages/PreferencesPage'
 import SearchResultsPage        from './portal/pages/SearchResultsPage'
 import MyActivityPage           from './portal/pages/MyActivityPage'
@@ -91,6 +93,7 @@ function PortalRoutes() {
           <Route path="forgot-password"   element={<ForgotPasswordPage />} />
           <Route path="reset-password"    element={<ResetPasswordPage />} />
           <Route path="verify-email"     element={<VerifyEmailPage />} />
+          <Route path="sso-complete"      element={<SsoCompletePage />} />
           <Route path="submit"            element={<FeatureGuard featureKey="medical_inquiry"><SubmitPage /></FeatureGuard>} />
           <Route path="therapeutic-areas" element={<FeatureGuard featureKey="therapeutic_areas"><TherapeuticAreasPage /></FeatureGuard>} />
           <Route path="events"            element={<FeatureGuard featureKey="events"><EventsPage /></FeatureGuard>} />
@@ -132,6 +135,7 @@ export default function App() {
         <Route path="/admin/clients/:clientId/forms" element={<AdminGuard><FormsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/msls" element={<AdminGuard><MSLPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/integration" element={<AdminGuard><IntegrationPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/sso" element={<AdminGuard><SsoConfigPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/users" element={<AdminGuard><PortalUsersPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/chatbox" element={<AdminGuard><ChatboxConfigPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/gate"       element={<AdminGuard><GatePage /></AdminGuard>} />

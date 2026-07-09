@@ -23,6 +23,30 @@ export default function LoginPage() {
   // LOW-09: show/hide password toggle
   const [showLoginPassword, setShowLoginPassword]       = useState(false)
 
+  // SSO: which OIDC providers this portal offers, and whether local password
+  // login is still allowed (a portal may be configured sso_only).
+  const [ssoProviders, setSsoProviders] = useState([])
+  const [localAllowed, setLocalAllowed] = useState(true)
+
+  useEffect(() => {
+    if (!clientCode) return
+    let cancelled = false
+    fetch(`/api/portal/auth/sso/providers?client_code=${encodeURIComponent(clientCode)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (cancelled || !d) return
+        setSsoProviders(Array.isArray(d.providers) ? d.providers : [])
+        setLocalAllowed(d.local_login_allowed !== false)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [clientCode])
+
+  function startSso(provider) {
+    const rt = returnTo && returnTo !== base ? `&return_to=${encodeURIComponent(returnTo)}` : ''
+    window.location.href = `/api/portal/auth/sso/${provider.key}/start?client_code=${encodeURIComponent(clientCode)}${rt}`
+  }
+
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); setError('') }
 
   async function handleLogin(e) {
@@ -57,6 +81,19 @@ export default function LoginPage() {
           Access is provisioned by administrator approval only.
         </div>
 
+        {/* SSO: single sign-on with the portal's configured identity providers */}
+        {ssoProviders.length > 0 && (
+          <div className="pp-sso-group">
+            {ssoProviders.map(p => (
+              <button key={p.key} type="button" className="pp-sso-btn" onClick={() => startSso(p)}>
+                Continue with {p.label}
+              </button>
+            ))}
+            {localAllowed && <div className="pp-sso-divider"><span>or</span></div>}
+          </div>
+        )}
+
+        {localAllowed && (
         <form onSubmit={handleLogin} className="pp-auth-form">
           <div className="pp-field">
             <label>Email Address</label>
@@ -81,6 +118,7 @@ export default function LoginPage() {
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   )

@@ -52,6 +52,7 @@ const CONFIG_GROUPS = [
       { path: 'users',       icon: 'users', label: 'Portal Users', desc: 'Manage registered portal users',                 cta: 'Open',      primary: true },
       { path: 'submissions', icon: 'inbox', label: 'Submissions',  desc: 'View and manage form submissions',               cta: 'Open'      },
       { path: 'integration', icon: 'link',  label: 'Integration',  desc: 'MIMS or third-party system connection',          cta: 'Configure' },
+      { path: 'sso',         icon: 'lock',  label: 'Single Sign-On', desc: 'OIDC login with Microsoft or Google',          cta: 'Configure' },
       { path: 'audit',       icon: 'list',  label: 'Audit Trail',  desc: 'Full admin activity log',                       cta: 'Review'    },
       { path: 'analytics',   icon: 'chart', label: 'Analytics',    desc: 'Portal usage, downloads, and submission trends', cta: 'View'      },
     ],
@@ -111,6 +112,7 @@ function getBadge(path, data, submissionStats, integrationData) {
     if (integrations.some(i => i.last_sync_status === 'success'))  return { label: 'Connected',      s: 'success' }
     return { label: 'Not tested', s: 'attention' }
   }
+  if (path === 'sso')         return           { label: 'Optional',         s: 'attention' }
   if (path === 'audit')       return           { label: 'Active',           s: 'info'      }
   if (path === 'users')       return           { label: 'Active',           s: 'info'      }
   if (path === 'submissions' && submissionStats) {

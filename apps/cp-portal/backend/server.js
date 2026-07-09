@@ -126,6 +126,7 @@ app.use('/api/admin/content',      require('./routes/admin/content'));
 app.use('/api/admin/forms',        require('./routes/admin/forms'));
 app.use('/api/admin/msls',         require('./routes/admin/msls'));
 app.use('/api/admin/integration',  require('./routes/admin/integration'));
+app.use('/api/admin/sso',          require('./routes/admin/sso'));
 app.use('/api/admin/users',        require('./routes/admin/portalUsers'));
 app.use('/api/admin/templates',    require('./routes/admin/templates'));
 app.use('/api/admin/chatbox',      require('./routes/admin/chatbox'));

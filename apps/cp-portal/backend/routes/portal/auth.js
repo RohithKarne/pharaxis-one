@@ -11,6 +11,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { requirePortalAuth, authenticatePortal, PORTAL_SECRET } = require('../../middleware/auth');
 const { sendEmail } = require('../../utils/mailer');
+const sso = require('../../services/ssoService');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' };
 
@@ -270,6 +271,136 @@ router.post('/reset-password', async (req, res) => {
     res.json({ message: 'Your password has been reset. You can now sign in.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ─── Single Sign-On (OIDC) ────────────────────────────────────────────────────
+// Ported from MIMS "Signal SSO". SSO logs a user into an EXISTING, admin-provisioned
+// account matched by verified email — it never self-registers, matching the portal's
+// "access by administrator approval only" policy. See services/ssoService.js.
+
+// GET /api/portal/auth/sso/providers?client_code= — public list of enabled providers
+router.get('/sso/providers', async (req, res) => {
+  try {
+    const client = await sso.getClientByCode(req.query.client_code);
+    if (!client || !client.is_active) return res.status(404).json({ error: 'Portal not found.' });
+    const options = await sso.getPublicLoginOptions(client.id, client.code);
+    res.json(options || { providers: [], local_login_allowed: true, sso_login_allowed: false });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/portal/auth/sso/:provider/start?client_code=&return_to= — redirect to IdP
+router.get('/sso/:provider/start', async (req, res) => {
+  try {
+    const providerKey = sso.normalizeProviderKey(req.params.provider);
+    if (!providerKey) return res.status(400).send('Unsupported SSO provider.');
+
+    const client = await sso.getClientByCode(req.query.client_code);
+    if (!client || !client.is_active) return res.status(404).send('Portal not found.');
+    if (sso.normalizeLoginMode(client.login_mode) === 'local_only') {
+      return res.status(403).send('SSO is not enabled for this portal.');
+    }
+
+    const provider = await sso.getProviderConfig(client.id, providerKey);
+    if (!provider?.enabled) return res.status(404).send('This SSO provider is not configured.');
+
+    const nonce = sso.makeCryptoNonce();
+    const returnTo = typeof req.query.return_to === 'string' ? req.query.return_to : '';
+    const state = sso.issueSsoState({
+      clientId: client.id,
+      clientCode: client.code,
+      provider: providerKey,
+      nonce,
+      returnTo,
+    });
+    const url = await sso.buildAuthorizationUrl(client.id, providerKey, state, nonce);
+    res.redirect(url);
+  } catch (err) {
+    res.status(500).send('Unable to start SSO sign-in.');
+  }
+});
+
+// GET /api/portal/auth/sso/:provider/callback?code=&state= — IdP redirect target
+router.get('/sso/:provider/callback', async (req, res) => {
+  // Best-effort clientCode for the error redirect; refined once state is parsed.
+  let clientCode = '';
+  const fail = (reason) => res.redirect(sso.ssoCompleteUrl(clientCode || '_', { error: reason }));
+  try {
+    const providerKey = sso.normalizeProviderKey(req.params.provider);
+    const { code, state, error: idpError } = req.query;
+    if (idpError) return fail('idp_declined');
+    if (!providerKey || !code || !state) return fail('invalid_request');
+
+    let parsed;
+    try { parsed = sso.parseSsoState(state); }
+    catch { return fail('expired'); }
+    if (parsed.provider !== providerKey) return fail('invalid_request');
+    clientCode = parsed.clientCode || '';
+
+    const client = await sso.getClientById(parsed.clientId);
+    if (!client || !client.is_active) return fail('portal_unavailable');
+    if (sso.normalizeLoginMode(client.login_mode) === 'local_only') return fail('sso_disabled');
+
+    const tokens = await sso.exchangeCodeForTokens(client.id, providerKey, code);
+
+    let identity;
+    try {
+      identity = await sso.verifyIdToken(client.id, providerKey, tokens.id_token, parsed.nonce);
+    } catch (verr) {
+      return fail(verr.code === 'DOMAIN_NOT_ALLOWED' ? 'domain_not_allowed' : 'verification_failed');
+    }
+
+    // Resolve the portal user: first by a previously-linked SSO identity, then by
+    // verified email against an existing active account. No auto-provisioning.
+    let user = null;
+    const [[linked]] = await pool.execute(
+      `SELECT u.* FROM cp_sso_identities i
+         JOIN cp_portal_users u ON u.id = i.portal_user_id
+        WHERE i.client_id = ? AND i.provider_key = ? AND i.subject = ? AND u.is_active = 1
+        LIMIT 1`,
+      [client.id, providerKey, identity.subject]
+    );
+    if (linked) {
+      user = linked;
+    } else {
+      if (!identity.emailVerified) return fail('email_unverified');
+      const [[byEmail]] = await pool.execute(
+        'SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ? AND is_active = 1 LIMIT 1',
+        [client.id, identity.email]
+      );
+      if (!byEmail) return fail('no_account');
+      user = byEmail;
+      // Link this IdP identity to the matched account for future logins.
+      await pool.execute(
+        `INSERT INTO cp_sso_identities (client_id, portal_user_id, provider_key, subject, email, last_login_at)
+         VALUES (?, ?, ?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE portal_user_id = VALUES(portal_user_id), email = VALUES(email), last_login_at = NOW()`,
+        [client.id, user.id, providerKey, identity.subject, identity.email]
+      );
+    }
+
+    // An SSO login proves control of the email, so mark it verified if it wasn't.
+    await pool.execute(
+      'UPDATE cp_portal_users SET last_login_at = NOW(), email_verified = 1 WHERE id = ?',
+      [user.id]
+    );
+    if (linked) {
+      await pool.execute(
+        'UPDATE cp_sso_identities SET last_login_at = NOW() WHERE client_id = ? AND provider_key = ? AND subject = ?',
+        [client.id, providerKey, identity.subject]
+      );
+    }
+
+    const token = makeToken(user, client.id);
+    res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 });
+    const safeReturn = typeof parsed.returnTo === 'string' && parsed.returnTo.startsWith(`/portal/${client.code}`)
+      ? parsed.returnTo
+      : '';
+    res.redirect(sso.ssoCompleteUrl(client.code, safeReturn ? { return_to: safeReturn } : {}));
+  } catch (err) {
+    fail('server_error');
   }
 });
 

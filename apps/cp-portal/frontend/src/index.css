@@ -2875,3 +2875,29 @@ textarea:focus-visible {
   border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none;
 }
 .pp-skip-link:focus { left: 8px; }
+
+/* ── SSO (single sign-on) login controls ─────────────────────────────── */
+.pp-sso-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+.pp-sso-btn {
+  width: 100%; padding: 11px 16px; border: 1px solid var(--pp-border, #d5d8de);
+  border-radius: 8px; background: #fff; color: #1f2430; font-size: 15px;
+  font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.pp-sso-btn:hover { background: #f6f7f9; border-color: var(--pp-primary, #5B2FA0); }
+.pp-sso-btn:focus-visible { outline: 2px solid var(--pp-primary, #5B2FA0); outline-offset: 2px; }
+.pp-sso-divider {
+  display: flex; align-items: center; text-align: center;
+  color: var(--pp-muted, #6b7280); font-size: 13px; margin: 14px 0 6px;
+}
+.pp-sso-divider::before, .pp-sso-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--pp-border, #e2e5ea);
+}
+.pp-sso-divider span { padding: 0 12px; }
+.pp-spinner {
+  width: 28px; height: 28px; margin: 0 auto; border-radius: 50%;
+  border: 3px solid var(--pp-border, #e2e5ea);
+  border-top-color: var(--pp-primary, #5B2FA0);
+  animation: pp-spin .7s linear infinite;
+}
+@keyframes pp-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pp-spinner { animation-duration: 2s; } }
