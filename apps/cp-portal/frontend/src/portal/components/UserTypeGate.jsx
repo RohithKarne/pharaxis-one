@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { usePortal } from '../context/PortalContext'
+import { useFocusTrap } from '../../shared/hooks/useFocusTrap'
 
 export default function UserTypeGate() {
   const { portalConfig, clientCode, login } = usePortal()
@@ -8,6 +9,9 @@ export default function UserTypeGate() {
   const [accepted, setAccepted]     = useState(false)
   const [saving, setSaving]         = useState(false)
   const [error, setError]           = useState(null)
+
+  // CP-16: trap focus in the mandatory gate (no Esc — it can't be dismissed).
+  const trapRef = useFocusTrap(!!gate, null)
 
   if (!gate) return null
 
@@ -34,7 +38,7 @@ export default function UserTypeGate() {
 
   return (
     <div className="pp-gate-overlay">
-      <div className="pp-gate-modal" role="dialog" aria-modal="true" aria-labelledby="pp-gate-title">
+      <div className="pp-gate-modal" ref={trapRef} role="dialog" aria-modal="true" aria-labelledby="pp-gate-title">
         <div className="pp-gate-header">
           <h2 id="pp-gate-title" className="pp-gate-title">
             {gate.gate_title || 'Welcome — Please Identify Yourself'}

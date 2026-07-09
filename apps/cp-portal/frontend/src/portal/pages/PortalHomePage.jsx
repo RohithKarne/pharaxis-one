@@ -14,21 +14,31 @@ export default function PortalHomePage() {
   const [homeSearch, setHomeSearch] = useState('')
   const [suggestions, setSuggestions] = useState([])
   const [showSuggest, setShowSuggest] = useState(false)
+  const [activeIdx, setActiveIdx] = useState(-1)
 
   usePageTitle('Home')
 
   // CP-12: debounced typeahead suggestions for the hero search.
   useEffect(() => {
     const q = homeSearch.trim()
-    if (q.length < 2) { setSuggestions([]); return }
+    if (q.length < 2) { setSuggestions([]); setActiveIdx(-1); return }
     const t = setTimeout(() => {
       fetch(`/api/portal/search/suggest?clientCode=${clientCode}&q=${encodeURIComponent(q)}`)
         .then(r => r.ok ? r.json() : null)
-        .then(d => setSuggestions(d?.suggestions || []))
+        .then(d => { setSuggestions(d?.suggestions || []); setActiveIdx(-1) })
         .catch(() => {})
     }, 250)
     return () => clearTimeout(t)
   }, [homeSearch, clientCode])
+
+  // CP-16: keyboard navigation for the typeahead (↑/↓/Enter/Esc).
+  function onSearchKeyDown(e) {
+    if (!showSuggest || suggestions.length === 0) return
+    if (e.key === 'ArrowDown')      { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)) }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, -1)) }
+    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); navigate(`${base}/${suggestions[activeIdx].path}`); setShowSuggest(false) }
+    else if (e.key === 'Escape')    { setShowSuggest(false) }
+  }
 
   // S4-9: fetch "For You" content — news + documents matched to user's type
   const [forYouNews, setForYouNews]   = useState([])
@@ -203,19 +213,24 @@ export default function PortalHomePage() {
                   onChange={e => setHomeSearch(e.target.value)}
                   onFocus={() => setShowSuggest(true)}
                   onBlur={() => setTimeout(() => setShowSuggest(false), 150)}
+                  onKeyDown={onSearchKeyDown}
                   placeholder="Search medical information, documents, events..."
                   aria-label="Search the portal"
                   role="combobox"
                   aria-expanded={showSuggest && suggestions.length > 0}
+                  aria-controls="pp-suggest-list"
+                  aria-activedescendant={activeIdx >= 0 ? `pp-suggest-${activeIdx}` : undefined}
                   aria-autocomplete="list"
                 />
                 <button type="submit" className="pp-hero-search-btn">Search</button>
               </form>
               {showSuggest && suggestions.length > 0 && (
-                <ul className="pp-suggest-dropdown" role="listbox">
+                <ul className="pp-suggest-dropdown" role="listbox" id="pp-suggest-list">
                   {suggestions.map((s, i) => (
-                    <li key={i} role="option" aria-selected="false">
-                      <button type="button" className="pp-suggest-item" onMouseDown={() => navigate(`${base}/${s.path}`)}>
+                    <li key={i} id={`pp-suggest-${i}`} role="option" aria-selected={i === activeIdx}>
+                      <button type="button" className={`pp-suggest-item ${i === activeIdx ? 'active' : ''}`}
+                        onMouseEnter={() => setActiveIdx(i)}
+                        onMouseDown={() => navigate(`${base}/${s.path}`)}>
                         <span className="pp-suggest-type">{s.type}</span>
                         <span className="pp-suggest-title">{s.title}</span>
                       </button>

@@ -2018,10 +2018,10 @@ body { background: var(--cp-bg); }
 
 /* ── Header ──────────────────────────────────────────────── */
 .pp-header { background: #fff; color: var(--pp-text); border-bottom: 1px solid var(--pp-border); box-shadow: 0 1px 2px rgba(15,23,42,0.04); position: sticky; top: 0; z-index: 100; }
-.pp-header-inner { max-width: 1320px; margin: 0 auto; padding: 0 24px; height: 72px; display: flex; align-items: center; gap: 18px; }
-.pp-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--pp-header-text); flex-shrink: 0; }
-.pp-logo-img { height: 36px; object-fit: contain; }
-.pp-logo-text { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+.pp-header-inner { max-width: 1320px; margin: 0 auto; padding: 0 24px; height: 100px; display: flex; align-items: center; gap: 18px; }
+.pp-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--pp-header-text); flex-shrink: 0; }
+.pp-logo-img { height: 52px; object-fit: contain; }
+.pp-logo-text { font-size: 23px; font-weight: 800; letter-spacing: -0.4px; color: var(--pp-text); }
 .pp-nav { display: flex; align-items: center; gap: 2px; flex: 1; }
 .pp-nav-link { color: var(--pp-text-muted); text-decoration: none; padding: 7px 9px; border-radius: 7px; font-size: 15px; font-weight: 600; transition: background 0.15s, color 0.15s; white-space: nowrap; }
 .pp-nav-link:hover, .pp-nav-link-active { background: #EEF5FF; color: var(--pp-primary); }
@@ -2861,7 +2861,7 @@ textarea:focus-visible {
   display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
   background: none; border: 0; padding: 9px 12px; border-radius: 8px; cursor: pointer; font: inherit;
 }
-.pp-suggest-item:hover { background: var(--pp-surface, #F3F4F6); }
+.pp-suggest-item:hover, .pp-suggest-item.active { background: var(--pp-surface, #F3F4F6); }
 .pp-suggest-type {
   font-size: 10px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700;
   color: var(--pp-primary); background: var(--pp-surface, #F3F4F6); padding: 2px 6px; border-radius: 4px; flex-shrink: 0;

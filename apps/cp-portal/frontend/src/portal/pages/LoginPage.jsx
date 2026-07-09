@@ -51,7 +51,7 @@ export default function LoginPage() {
   return (
     <div className="pp-auth-page">
       <div className="pp-auth-card">
-        {error && <div className="pp-error-msg">{error}</div>}
+        {error && <div className="pp-error-msg" id="pp-login-error" role="alert">{error}</div>}
 
         <div className="pp-auth-footer" style={{ marginBottom: 16, textAlign: 'left' }}>
           Access is provisioned by administrator approval only.
@@ -60,7 +60,7 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="pp-auth-form">
           <div className="pp-field">
             <label>Email Address</label>
-            <input type="email" required value={form.email} onChange={e => set('email', e.target.value)} placeholder="you@example.com" />
+            <input type="email" required value={form.email} onChange={e => set('email', e.target.value)} placeholder="you@example.com" aria-invalid={!!error} aria-describedby={error ? 'pp-login-error' : undefined} />
           </div>
           {/* LOW-09: password show/hide toggle */}
           <div className="pp-field pp-field-password">

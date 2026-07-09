@@ -3,6 +3,7 @@ import { usePortal } from '../context/PortalContext'
 import { SkeletonCards } from '../../shared/components/Skeleton'
 import { formatDateTime } from '../../shared/utils/datetime'
 import { useToast } from '../../shared/components/Toast'
+import { useFocusTrap } from '../../shared/hooks/useFocusTrap'
 
 const EMPTY_BOOKING = { requester_name: '', requester_email: '', preferred_date: '', topic: '', message: '' }
 
@@ -22,6 +23,9 @@ export default function FindMSLPage() {
   const [bookingBusy,  setBookingBusy]  = useState(false)
   const [availableSlots, setAvailableSlots] = useState([])
   const [selectedSlot, setSelectedSlot]     = useState('')
+
+  // CP-16: trap focus in the booking dialog while it's open.
+  const bookingTrapRef = useFocusTrap(!!bookingMSL, () => setBookingMSL(null))
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/msls`)
@@ -115,7 +119,7 @@ export default function FindMSLPage() {
       {/* Booking Modal */}
       {bookingMSL && (
         <div className="cp-modal-overlay" onClick={() => setBookingMSL(null)}>
-          <div className="cp-modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+          <div className="cp-modal" style={{ maxWidth: 520 }} ref={bookingTrapRef} role="dialog" aria-modal="true" aria-label={`Request meeting with ${bookingMSL.name}`} onClick={e => e.stopPropagation()}>
             <div className="cp-modal-header">
               <span>Request Meeting with {bookingMSL.name}</span>
               <button className="cp-modal-close" onClick={() => setBookingMSL(null)}>✕</button>

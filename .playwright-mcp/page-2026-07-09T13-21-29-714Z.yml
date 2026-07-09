@@ -1,0 +1,27 @@
+- generic [ref=f1e2]:
+  - generic [ref=f1e3]:
+    - link "Skip to content" [ref=f1e4] [cursor=pointer]:
+      - /url: "#pp-main"
+    - banner [ref=f1e5]:
+      - generic [ref=f1e6]:
+        - link "Medical Portal" [ref=f1e7] [cursor=pointer]:
+          - /url: /portal/novartis
+          - generic [ref=f1e8]: Medical Portal
+        - navigation [ref=f1e9]:
+          - link "Safety" [ref=f1e10] [cursor=pointer]:
+            - /url: /portal/novartis/safety
+          - link "FAQ" [ref=f1e11] [cursor=pointer]:
+            - /url: /portal/novartis/faq
+          - link "Contact" [ref=f1e12] [cursor=pointer]:
+            - /url: /portal/novartis/contact
+        - link "Sign In" [ref=f1e14] [cursor=pointer]:
+          - /url: /portal/novartis/login
+    - main [ref=f1e15]:
+      - generic [ref=f1e16]: Loading…
+    - contentinfo [ref=f1e17]:
+      - generic [ref=f1e18]:
+        - generic [ref=f1e20]: Medical Portal
+        - link "Contact Us" [ref=f1e22] [cursor=pointer]:
+          - /url: /portal/novartis/contact
+        - paragraph [ref=f1e24]: © 2026 undefined. All rights reserved.
+  - region "Notifications"

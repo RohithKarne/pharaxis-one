@@ -81,7 +81,7 @@ export default function PortalLayout({ children }) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [bellOpen, setBellOpen] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [logoBroken, setLogoBroken] = useState(false)
   const [, setTimeTick] = useState(0)
   const userMenuRef = useRef(null)
   const bellRef     = useRef(null)
@@ -171,19 +171,10 @@ export default function PortalLayout({ children }) {
   ].filter(Boolean)
 
   const base = `/portal/${clientCode}`
-  // The home page has a large hero search, so the header search is redundant there.
-  const isHomePage = location.pathname === base || location.pathname === `${base}/`
 
   function handleLogout() {
     logout()
     navigate(`${base}`)
-  }
-
-  function submitHeaderSearch(e) {
-    e.preventDefault()
-    if (searchTerm.trim().length >= 2) {
-      navigate(`/portal/${clientCode}/search?q=${encodeURIComponent(searchTerm.trim())}`)
-    }
   }
 
   const logoUrl  = branding.logo_url
@@ -209,7 +200,9 @@ export default function PortalLayout({ children }) {
       <header className="pp-header">
         <div className="pp-header-inner">
           <Link to={base} className="pp-logo">
-            {logoUrl ? <img src={logoUrl} alt={logoText} className="pp-logo-img" width="160" height="40" style={{ objectFit: 'contain' }} /> : null}
+            {logoUrl && !logoBroken && (
+              <img src={logoUrl} alt={logoText} className="pp-logo-img" onError={() => setLogoBroken(true)} style={{ objectFit: 'contain' }} />
+            )}
             <span className="pp-logo-text">{logoText}</span>
           </Link>
 
@@ -223,6 +216,7 @@ export default function PortalLayout({ children }) {
             {flatNavItems.map(n => (
               <Link key={n.path} to={`${base}/${n.path}`}
                 className={`pp-nav-link ${location.pathname.includes(n.path) ? 'pp-nav-link-active' : ''}`}
+                aria-current={location.pathname.includes(n.path) ? 'page' : undefined}
                 onClick={() => setMobileOpen(false)}>
                 {n.label}
               </Link>
@@ -231,19 +225,9 @@ export default function PortalLayout({ children }) {
 
           <div className="pp-header-actions">
             {/* Language switcher removed — portal is English-only for now (2026-07-03). */}
+            {/* Header search removed (2026-07-09) — it pushed the header off-alignment.
+                Search lives on the home hero + the dedicated /search page. */}
             <LocalClock />
-            {!isHomePage && (
-              <form className="pp-header-search" onSubmit={submitHeaderSearch}>
-                <Icon name="search" size={16} />
-                <input
-                  type="search"
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  placeholder="Search approved content..."
-                  aria-label="Search portal"
-                />
-              </form>
-            )}
             {isFeatureEnabled('medical_inquiry') && (
               <button className="pp-btn pp-btn-primary" onClick={() => navigate(`${base}/submit`)}>
                 <Icon name="send" size={16} />

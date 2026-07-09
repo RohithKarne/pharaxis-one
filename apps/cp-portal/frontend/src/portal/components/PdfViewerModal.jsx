@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useFocusTrap } from '../../shared/hooks/useFocusTrap'
 
 /**
  * PdfViewerModal — views a PDF inline using the browser's native renderer.
@@ -19,9 +20,11 @@ export default function PdfViewerModal({ url, downloadUrl, title, onClose }) {
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [url])
 
+  const trapRef = useFocusTrap(true, onClose)
+
   return (
     <div className="pp-pdf-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
-      <div className="pp-pdf-modal" onClick={e => e.stopPropagation()}>
+      <div className="pp-pdf-modal" ref={trapRef} onClick={e => e.stopPropagation()}>
         <div className="pp-pdf-head">
           <b>{title}</b>
           {downloadUrl && <a href={downloadUrl}>Download</a>}
