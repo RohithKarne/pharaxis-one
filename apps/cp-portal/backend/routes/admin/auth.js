@@ -35,7 +35,8 @@ router.post('/login', async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'Invalid credentials.' });
 
     const token = jwt.sign(
-      { adminId: user.id, email: user.email, name: user.name, role: user.role, clientId: user.client_id ?? null },
+      // CP-26: embed token_version for revocation on password change.
+      { adminId: user.id, email: user.email, name: user.name, role: user.role, clientId: user.client_id ?? null, tv: user.token_version ?? 0 },
       ADMIN_SECRET,
       { expiresIn: '12h' }
     );
@@ -72,7 +73,7 @@ router.patch('/password', authenticateAdmin, async (req, res) => {
     if (!bcrypt.compareSync(current_password, user.password)) return res.status(401).json({ error: 'Current password incorrect.' });
 
     const hash = bcrypt.hashSync(new_password, 12);
-    await pool.execute(`UPDATE cp_admin_users SET password = ?, updated_at = NOW() WHERE id = ?`, [hash, user.id]);
+    await pool.execute(`UPDATE cp_admin_users SET password = ?, token_version = token_version + 1, updated_at = NOW() WHERE id = ?`, [hash, user.id]);
     res.json({ message: 'Password updated.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });

@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "test:static": "node tests/syntax-check.js",
-    "test:smoke": "node tests/smoke-health.js"
+    "test:smoke": "node tests/smoke-health.js",
+    "test:api": "node tests/api-integration.js",
+    "migrate:utc": "node scripts/migrate-timestamps-to-utc.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

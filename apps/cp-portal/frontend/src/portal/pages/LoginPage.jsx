@@ -75,6 +75,11 @@ export default function LoginPage() {
           <button type="submit" className="pp-btn pp-btn-primary pp-btn-full" disabled={loading}>
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
+          <div style={{ marginTop: 14, textAlign: 'center' }}>
+            <button type="button" className="pp-link-btn" onClick={() => navigate(`${base}/forgot-password`)}>
+              Forgot your password?
+            </button>
+          </div>
         </form>
       </div>
     </div>

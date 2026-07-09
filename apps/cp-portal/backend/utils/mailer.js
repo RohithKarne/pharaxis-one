@@ -56,7 +56,7 @@ function buildTransporter(config) {
  * @param {{ to: string, subject: string, html?: string, text?: string }} opts
  * @throws if no active email config or SMTP send fails
  */
-async function sendEmail(clientId, { to, subject, html, text }) {
+async function sendEmail(clientId, { to, subject, html, text, attachments }) {
   const config = await getEmailConfig(clientId)
   if (!config) throw new Error('No active email configuration for this client.')
 
@@ -70,6 +70,7 @@ async function sendEmail(clientId, { to, subject, html, text }) {
     subject,
     html: html || undefined,
     text: text || undefined,
+    attachments: attachments || undefined, // CP-11: e.g. .ics calendar invite
   })
 }
 

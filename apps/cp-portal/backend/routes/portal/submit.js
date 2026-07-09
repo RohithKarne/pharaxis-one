@@ -14,6 +14,7 @@ const { sendEmail } = require('../../utils/mailer');
 const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
 const { decryptSecret } = require('../../utils/secretCrypto');
 const { validateUploads } = require('../../utils/fileValidation');
+const { enqueue } = require('../../utils/jobQueue');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
 const ATT_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB per file
@@ -140,12 +141,14 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     if (recipientEmail) {
       const ref = `CP-${String(submissionId).padStart(6, '0')}`;
       const typeLabel = { medical_inquiry: 'Medical Inquiry', adverse_event: 'Adverse Event', product_complaint: 'Product Complaint', other_inquiry: 'Other Inquiry' }[formType] || formType;
-      sendEmail(client.id, {
+      // CP-21: send via the job queue so a slow SMTP never blocks the response and
+      // transient failures are retried instead of silently dropped.
+      enqueue('submission.ack-email', () => sendEmail(client.id, {
         to: recipientEmail,
         subject: `Submission Received — ${typeLabel} (${ref})`,
         html: `<p>Thank you for your submission.</p><p>Your reference number is <strong>${ref}</strong>.</p><p>We will review your ${typeLabel} and respond as soon as possible.</p>`,
         text: `Thank you for your submission. Your reference number is ${ref}. We will review your ${typeLabel} and respond as soon as possible.`,
-      }).catch(() => {}); // never block the response
+      }));
     }
 
     res.status(201).json({
@@ -168,7 +171,9 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
       SELECT id, submission_type, status, external_ref, submitted_at, updated_at
       FROM cp_submissions WHERE client_id = ? AND user_id = ? ORDER BY submitted_at DESC
     `, [client.id, req.portalUser.userId]);
-    res.json({ submissions: rows });
+    // Surface the user-facing case reference (matches the confirmation email/response).
+    const submissions = rows.map(r => ({ ...r, reference: `CP-${String(r.id).padStart(6, '0')}` }));
+    res.json({ submissions });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

@@ -1,9 +1,15 @@
+const log = require('../utils/logger')
+
 function notFoundHandler(_req, res) {
   res.status(404).json({ error: 'Route not found.' })
 }
 
 function globalErrorHandler(error, req, res, _next) {
   const status = error.statusCode || error.status || 500
+  // CP-19: structured server-error log + error tracking (Sentry when configured).
+  if (status >= 500) {
+    log.error('request.error', { err: error, method: req.method, path: req.path, request_id: req.requestId || null })
+  }
   const payload = {
     error: status >= 500 ? 'Server error.' : error.message,
     request_id: req.requestId || null

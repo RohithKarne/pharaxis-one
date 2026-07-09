@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
+import { useToast } from '../../shared/components/Toast'
 
 const NOTIF_TYPES = [
   { key: 'news',      icon: '📰', label: 'News & Announcements', desc: 'Notify me when new news posts are published.' },
@@ -11,6 +12,7 @@ const NOTIF_TYPES = [
 
 export default function PreferencesPage() {
   const { clientCode, portalHeaders } = usePortal()
+  const toast = useToast()
   const [prefs, setPrefs]     = useState({ news: true, documents: true, safety: true, digest: true })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
@@ -35,11 +37,13 @@ export default function PreferencesPage() {
         headers: portalHeaders(),
         body: JSON.stringify(prefs),
       })
-      if (!res.ok) { setSaveError('Unable to save preferences. Please try again.'); return }
+      if (!res.ok) { setSaveError('Unable to save preferences. Please try again.'); toast.error('Unable to save preferences.'); return }
       setSaved(true)
+      toast.success('Preferences saved.')
       setTimeout(() => setSaved(false), 3000)
     } catch {
       setSaveError('Unable to save preferences. Please try again.')
+      toast.error('Unable to save preferences.')
     } finally {
       setSaving(false)
     }

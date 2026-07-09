@@ -1933,6 +1933,17 @@ body { background: var(--cp-bg); }
   --pp-font-size:   15px;
   --pp-radius:      8px;
   --pp-shadow:      0 2px 8px rgba(0,0,0,0.08);
+  /* Design tokens (CP-31) — spacing scale + elevation for consistent layout. */
+  --pp-space-1:     4px;
+  --pp-space-2:     8px;
+  --pp-space-3:     12px;
+  --pp-space-4:     16px;
+  --pp-space-5:     24px;
+  --pp-space-6:     32px;
+  --pp-radius-sm:   6px;
+  --pp-radius-lg:   12px;
+  --pp-shadow-sm:   0 1px 2px rgba(15,23,42,0.06);
+  --pp-shadow-lg:   0 8px 24px rgba(15,23,42,0.12);
 }
 
 /* ── Design v3: guided medical self-service home ─────────────── */
@@ -2759,3 +2770,108 @@ textarea:focus-visible {
   .pp-clock { grid-column: 1 / -1; order: -1; justify-content: flex-start; font-size: 12px; }
   .pp-clock-date, .pp-clock-sep { display: inline; }
 }
+
+/* ── Accessibility (CP-32) ─────────────────────────────────────────────────
+   Visible keyboard focus + respect users who prefer reduced motion. */
+:focus-visible {
+  outline: 2px solid var(--pp-primary, #5B2FA0);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Print styles (CP-36) ──────────────────────────────────────────────────
+   Strip chrome, force high-contrast black-on-white, avoid breaking cards. */
+@media print {
+  .pp-header, .pp-safety-banner, .pp-chat-fab, .pp-chat-window,
+  .pp-feedback-widget, .pp-mobile-menu-btn, .pp-header-actions,
+  .pp-hero-search, .pp-search-suggestions, .pp-user-menu,
+  .pp-cta-section, .pp-consent-banner, .pp-footer .pp-footer-nav {
+    display: none !important;
+  }
+  html, body, .pp-home, .pp-page-content, .pp-container {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  a { color: #000 !important; text-decoration: underline; }
+  .pp-card, .pp-update-panel, .pp-feature-card, .pp-top-task-card, .pp-trust-item {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+  }
+  @page { margin: 1.5cm; }
+}
+
+/* ── Loading skeletons + empty states (CP-30) ─────────────────────────────── */
+.pp-skeleton {
+  background: linear-gradient(90deg, #eef1f5 25%, #e2e7ee 37%, #eef1f5 63%);
+  background-size: 400% 100%;
+  border-radius: 6px;
+  animation: pp-shimmer 1.4s ease infinite;
+}
+.pp-skeleton-group > .pp-skeleton + .pp-skeleton { margin-top: 10px; }
+.pp-skeleton-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.pp-skeleton-card { background: #fff; border: 1px solid var(--pp-border); border-radius: 10px; padding: 18px; }
+@keyframes pp-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+.pp-empty-state { text-align: center; padding: 48px 24px; color: var(--pp-text-muted); }
+.pp-empty-state-icon {
+  display: inline-flex; width: 56px; height: 56px; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--pp-surface, #F3F4F6); color: var(--pp-primary); margin-bottom: 14px;
+}
+.pp-empty-state-title { font-size: 16px; font-weight: 700; color: var(--pp-text); margin-bottom: 4px; }
+.pp-empty-state-msg { font-size: 14px; margin: 0 auto; max-width: 360px; line-height: 1.6; }
+.pp-empty-state-action { margin-top: 16px; }
+
+/* ── Toasts (CP-33) ───────────────────────────────────────────────────────── */
+.pp-toast-stack {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 10px; z-index: 10001; width: min(92vw, 420px);
+}
+.pp-toast {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  background: #fff; border-left: 4px solid var(--pp-primary); font-size: 14px; color: var(--pp-text);
+  animation: pp-toast-in 0.18s ease;
+}
+.pp-toast-success { border-left-color: #16A34A; }
+.pp-toast-error   { border-left-color: #DC2626; }
+.pp-toast-info    { border-left-color: #2563EB; }
+.pp-toast-msg { flex: 1; }
+.pp-toast-close { border: 0; background: none; font-size: 18px; line-height: 1; color: var(--pp-text-muted); cursor: pointer; padding: 0 2px; }
+@keyframes pp-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Search typeahead dropdown (CP-12) ────────────────────────────────────── */
+.pp-hero-search-wrap { position: relative; width: min(100%, 720px); }
+.pp-hero-search-wrap .pp-hero-search { width: 100%; }
+.pp-suggest-dropdown {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 50;
+  background: #fff; border: 1px solid var(--pp-border); border-radius: 10px;
+  box-shadow: var(--pp-shadow-lg, 0 8px 24px rgba(15,23,42,0.12));
+  list-style: none; margin: 0; padding: 6px; max-height: 340px; overflow-y: auto;
+}
+.pp-suggest-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: none; border: 0; padding: 9px 12px; border-radius: 8px; cursor: pointer; font: inherit;
+}
+.pp-suggest-item:hover { background: var(--pp-surface, #F3F4F6); }
+.pp-suggest-type {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700;
+  color: var(--pp-primary); background: var(--pp-surface, #F3F4F6); padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
+}
+.pp-suggest-title { font-size: 14px; color: var(--pp-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Skip-to-content link (CP-32) — visible only on keyboard focus. */
+.pp-skip-link {
+  position: absolute; left: -9999px; top: 8px; z-index: 10002;
+  background: var(--pp-primary, #5B2FA0); color: #fff; padding: 10px 16px;
+  border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none;
+}
+.pp-skip-link:focus { left: 8px; }

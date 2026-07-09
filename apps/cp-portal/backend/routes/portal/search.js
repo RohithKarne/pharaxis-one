@@ -87,4 +87,36 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/portal/search/suggest?clientCode=xxx&q=term — lightweight typeahead (CP-12)
+// Returns just titles across the main content types for an autocomplete dropdown.
+router.get('/suggest', async (req, res) => {
+  try {
+    const { clientCode } = req.query;
+    const q = String(req.query.q || '').trim();
+    if (!clientCode || q.length < 2) return res.json({ suggestions: [] });
+
+    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [clientCode]);
+    if (!client) return res.json({ suggestions: [] });
+    const cid = client.id;
+    const like = `%${q}%`;
+    const out = [];
+
+    const [news] = await pool.execute(
+      `SELECT title FROM cp_news_posts WHERE client_id=? AND status='published' AND title LIKE ? ORDER BY publish_at DESC LIMIT 5`, [cid, like]);
+    news.forEach(r => out.push({ title: r.title, type: 'news', path: 'news' }));
+
+    const [faq] = await pool.execute(
+      `SELECT question FROM cp_faq_items WHERE client_id=? AND is_published=1 AND question LIKE ? LIMIT 5`, [cid, like]);
+    faq.forEach(r => out.push({ title: r.question, type: 'faq', path: 'faq' }));
+
+    const [docs] = await pool.execute(
+      `SELECT title FROM cp_documents WHERE client_id=? AND is_active=1 AND status='published' AND title LIKE ? LIMIT 5`, [cid, like]);
+    docs.forEach(r => out.push({ title: r.title, type: 'document', path: 'documents' }));
+
+    res.json({ suggestions: out.slice(0, 8) });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 module.exports = router;

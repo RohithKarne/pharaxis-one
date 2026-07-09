@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import { SkeletonCards } from '../../shared/components/Skeleton'
 import usePageTitle from '../hooks/usePageTitle'
 import { formatDateTime } from '../../shared/utils/datetime'
 
@@ -91,7 +92,7 @@ export default function SavedItemsPage() {
       </div>
 
       {loading ? (
-        <div className="pp-loading" role="status" aria-live="polite">Loading…</div>
+        <SkeletonCards count={4} />
       ) : error ? (
         <div className="pp-error-state">{error}</div>
       ) : tabItems.length === 0 ? (

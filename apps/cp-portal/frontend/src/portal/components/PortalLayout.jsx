@@ -191,6 +191,7 @@ export default function PortalLayout({ children }) {
 
   return (
     <div className="pp-root">
+      <a href="#pp-main" className="pp-skip-link">Skip to content</a>
       {has_active_safety_alert && !bannerDismissed && (
         <div className="pp-safety-banner" role="alert">
           <span className="pp-safety-banner-icon"><Icon name="shield" size={16} /></span>
@@ -343,7 +344,7 @@ export default function PortalLayout({ children }) {
         </div>
       </header>
 
-      <main className="pp-main">
+      <main className="pp-main" id="pp-main" tabIndex={-1}>
         {children}
       </main>
 

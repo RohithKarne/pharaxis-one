@@ -7,12 +7,16 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
+const cache = require('../../utils/cache');
 
 // GET /api/portal/config/:clientCode
 router.get('/:clientCode', async (req, res) => {
   try {
+    // CP-22: cache the assembled config briefly — it's ~8 queries and changes
+    // rarely. Admin config writes call cache.invalidate('config:') to refresh.
+    const payload = await cache.wrap(`config:${req.params.clientCode}`, 20000, async () => {
     const [[client]] = await pool.execute('SELECT * FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
-    if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    if (!client) return { __notFound: true };
 
     const [[branding]] = await pool.execute('SELECT * FROM cp_branding WHERE client_id = ?', [client.id]);
     // API-03: Return features as a simple { feature_key: is_enabled } map — no internal IDs or metadata
@@ -66,7 +70,7 @@ router.get('/:clientCode', async (req, res) => {
     let language = { default: 'en', enabled: ['en'] };
     try { language = JSON.parse(client.language_config_json || '{}'); } catch {}
 
-    res.json({
+    return {
       // API-03: omit internal client.id — only public-safe identifiers
       client:   { name: client.name, code: client.code },
       branding: branding || {},
@@ -77,7 +81,11 @@ router.get('/:clientCode', async (req, res) => {
       safety_alert_sig,
       compliance,
       language,
+    };
     });
+
+    if (payload.__notFound) return res.status(404).json({ error: 'Portal not found.' });
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

@@ -58,7 +58,13 @@ router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
     }
     if (country     !== undefined) { updates.push('country = ?');     params.push(country); }
     if (is_active   !== undefined) { updates.push('is_active = ?');   params.push(is_active ? 1 : 0); }
-    if (is_verified !== undefined) { updates.push('is_verified = ?'); params.push(is_verified ? 1 : 0); }
+    if (is_verified !== undefined) {
+      // BUGFIX: login gates on `email_verified`, so an admin marking a user verified
+      // must clear that gate too — otherwise the user still can't sign in.
+      const v = is_verified ? 1 : 0;
+      updates.push('is_verified = ?');   params.push(v);
+      updates.push('email_verified = ?'); params.push(v);
+    }
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.userId, req.params.clientId);
     await pool.execute(`UPDATE cp_portal_users SET ${updates.join(', ')} WHERE id=? AND client_id=?`, params);

@@ -8,6 +8,8 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal } = require('../../middleware/auth');
 const { sendEmail } = require('../../utils/mailer');
+const { buildEvent } = require('../../utils/ics');
+const { enqueue } = require('../../utils/jobQueue');
 
 // GET /api/portal/bookings/:clientCode/:mslId/slots — available (future, unbooked) slots
 router.get('/:clientCode/:mslId/slots', async (req, res) => {
@@ -78,13 +80,25 @@ router.post('/:clientCode/:mslId', authenticatePortal, async (req, res) => {
       await pool.execute('UPDATE cp_msl_slots SET is_booked = 1, booking_id = ? WHERE id = ?', [result.insertId, chosenSlot.id]);
     }
 
-    // Confirmation email — best-effort (requires the client's SMTP config; never blocks the booking).
+    // Confirmation email — queued (async + retried), with a calendar invite when
+    // a concrete slot was chosen (CP-11 + CP-21).
     const whenText = effectiveDate ? new Date(effectiveDate).toLocaleString() : 'a time to be confirmed';
-    sendEmail(client.id, {
+    let attachments;
+    if (chosenSlot?.starts_at) {
+      const ics = buildEvent({
+        uid: `msl-booking-${result.insertId}@pharaxis`,
+        start: chosenSlot.starts_at,
+        summary: `Meeting with ${msl.name}`,
+        description: topic ? `Topic: ${topic}` : 'Medical Science Liaison meeting',
+      });
+      attachments = [{ filename: 'meeting.ics', content: ics, contentType: 'text/calendar; method=REQUEST' }];
+    }
+    enqueue('booking.confirm-email', () => sendEmail(client.id, {
       to: requester_email.toLowerCase().trim(),
       subject: `Meeting request received — ${msl.name}`,
-      html: `<p>Hi ${requester_name.trim()},</p><p>Your meeting request with <strong>${msl.name}</strong> has been received for <strong>${whenText}</strong>.</p>${topic ? `<p>Topic: ${String(topic).replace(/</g, '&lt;')}</p>` : ''}<p>We'll be in touch to confirm.</p>`,
-    }).catch(() => {});
+      html: `<p>Hi ${requester_name.trim()},</p><p>Your meeting request with <strong>${msl.name}</strong> has been received for <strong>${whenText}</strong>.</p>${topic ? `<p>Topic: ${String(topic).replace(/</g, '&lt;')}</p>` : ''}<p>We'll be in touch to confirm.${attachments ? ' A calendar invite is attached.' : ''}</p>`,
+      attachments,
+    }));
 
     res.status(201).json({ ok: true, bookingId: result.insertId, slotBooked: !!chosenSlot });
   } catch (err) {

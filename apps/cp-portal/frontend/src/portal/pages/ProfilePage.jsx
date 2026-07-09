@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 import { formatLongDate } from '../../shared/utils/datetime'
+import { useToast } from '../../shared/components/Toast'
 
 const SPECIALTIES = ['Cardiology', 'Oncology', 'Neurology', 'Endocrinology', 'Immunology', 'Rheumatology', 'Dermatology', 'Gastroenterology', 'Respiratory', 'Nephrology', 'Hematology', 'Infectious Disease', 'General Practice', 'Pharmacist', 'Nurse', 'Other']
 
@@ -13,6 +14,7 @@ const cardStyle  = { background: '#fff', border: '1px solid #E5E7EB', borderRadi
 export default function ProfilePage() {
   const { clientCode, user, login } = usePortal()
   const navigate = useNavigate()
+  const toast = useToast()
   const base = `/portal/${clientCode}`
 
   usePageTitle('My Account')
@@ -60,12 +62,14 @@ export default function ProfilePage() {
         body: JSON.stringify(form),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setProfileErr(data.error || 'Unable to save your details. Please try again.'); return }
+      if (!res.ok) { setProfileErr(data.error || 'Unable to save your details. Please try again.'); toast.error(data.error || 'Unable to save your details.'); return }
       if (data.user) login(data.user) // refresh header name/avatar immediately
       setProfileMsg('Your details have been saved.')
+      toast.success('Your details have been saved.')
       setTimeout(() => setProfileMsg(''), 3000)
     } catch {
       setProfileErr('Unable to save your details. Please try again.')
+      toast.error('Unable to save your details. Please try again.')
     } finally {
       setSavingProfile(false)
     }

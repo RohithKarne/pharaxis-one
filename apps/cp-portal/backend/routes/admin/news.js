@@ -34,20 +34,8 @@ const STATUS_ALLOWED_ROLES = {
 const { audit } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
 
-function sanitiseHtml(dirty) {
-  // Blocklist-based sanitizer: strips dangerous tags and attributes
-  if (!dirty) return '';
-  // Strip script/style/iframe/object/embed tags completely (including content)
-  let clean = dirty.replace(/<(script|style|iframe|object|embed|form|input|button)[^>]*>[\s\S]*?<\/\1>/gi, '');
-  // Remove event handler attributes (on*)
-  clean = clean.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
-  clean = clean.replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '');
-  // Remove javascript: hrefs
-  clean = clean.replace(/href\s*=\s*["']\s*javascript:[^"']*["']/gi, '');
-  // Remove data: URIs in src/href
-  clean = clean.replace(/(src|href)\s*=\s*["']\s*data:[^"']*["']/gi, '');
-  return clean;
-}
+// CP-28: shared allow-list sanitizer (replaces the bypassable blocklist).
+const { sanitizeHtml: sanitiseHtml } = require('../../utils/sanitizeHtml');
 
 // GET /api/admin/news/:clientId
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import { SkeletonCards } from '../../shared/components/Skeleton'
 import usePageTitle from '../hooks/usePageTitle'
 import { formatLongDate } from '../../shared/utils/datetime'
 
@@ -52,7 +53,7 @@ export default function EventsPage() {
         <button className={`pp-tab ${filter === 'past'     ? 'pp-tab-active' : ''}`} aria-pressed={filter === 'past'}     onClick={() => setFilter('past')}>Past Events</button>
       </div>
 
-      {loading ? <div className="pp-loading">Loading…</div> : filtered.length === 0 ? (
+      {loading ? <SkeletonCards count={4} /> : filtered.length === 0 ? (
         <div className="pp-empty-state"><span>📅</span><p>No {filter} events found.</p></div>
       ) : (
         <div className="pp-event-list">

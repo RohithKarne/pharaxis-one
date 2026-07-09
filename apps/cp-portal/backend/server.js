@@ -17,6 +17,8 @@ const { runMigrations } = require('./database/migrate');
 const { attachRequestContext } = require('./middleware/requestContext');
 const { inputSecurity } = require('./middleware/inputSecurity');
 const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandler');
+const log = require('./utils/logger');
+const { makeStore } = require('./utils/rateLimitStore');
 
 const app  = express();
 const PORT = process.env.CP_PORT || 4000;
@@ -57,6 +59,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
+  store: makeStore(),
   skip: () => isDevEnv,
 });
 
@@ -66,6 +69,7 @@ const submitLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Submission limit reached. Please try again later.' },
+  store: makeStore(),
 });
 
 const apiLimiter = rateLimit({
@@ -74,6 +78,7 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Rate limit exceeded. Please retry shortly.' },
+  store: makeStore(),
   skip: () => isDevEnv,
 });
 
@@ -159,7 +164,9 @@ app.use('/api/portal/personal',      require('./routes/portal/personal'));
 app.use('/api/portal/bookings',      require('./routes/portal/bookings'));
 
 // ── S5-6: Content Scheduler — auto-promote scheduled → published ──
-function startContentScheduler() {
+// CP-14: returns the tick fn (no side effects) so it can be driven either by the
+// in-process interval (dev/single instance) or an external cron (stateless/HA).
+function createContentScheduler() {
   const { notifyPortalUsers } = require('./utils/notify');
   const SCHEDULER_LOCK_KEY = 'cp-portal-content-scheduler';
 
@@ -211,9 +218,23 @@ function startContentScheduler() {
     }
   }
 
-  tick();
-  return setInterval(tick, 60 * 1000);
+  return tick;
 }
+
+// Build the tick once (no side effects until invoked).
+const schedulerTick = createContentScheduler();
+
+// CP-14: internal cron endpoint so an external scheduler (Azure Cron / container
+// job) can drive the tick when the API runs stateless/multi-instance. Guarded by
+// a shared secret; the MySQL advisory lock inside tick() still prevents overlap.
+app.post('/api/internal/cron/scheduler-tick', async (req, res) => {
+  const secret = process.env.CP_CRON_SECRET;
+  if (!secret || req.get('x-cron-secret') !== secret) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+  try { await schedulerTick(); res.json({ ok: true }); }
+  catch (err) { log.error('scheduler.cron.failed', { err }); res.status(500).json({ error: 'Scheduler tick failed.' }); }
+});
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
@@ -242,11 +263,20 @@ runMigrations()
   .then(() => initializeDatabase())
   .then(() => {
     server = app.listen(PORT, () => {
+      log.info('server.started', { port: PORT, env: process.env.NODE_ENV || 'development', sentry: log.sentryEnabled() });
       console.log(`✅ CP Portal backend running on http://localhost:${PORT}`);
     });
-    schedulerHandle = startContentScheduler();
+    // CP-14: run the in-process interval unless an external cron drives the tick.
+    if (process.env.CP_SCHEDULER === 'external') {
+      log.info('scheduler.mode', { mode: 'external-cron' });
+    } else {
+      schedulerTick();
+      schedulerHandle = setInterval(schedulerTick, 60 * 1000);
+      log.info('scheduler.mode', { mode: 'in-process' });
+    }
   })
   .catch(err => {
+    log.error('server.init.failed', { err });
     console.error('❌ Failed to initialize CP Portal database:', err);
     process.exit(1);
   });

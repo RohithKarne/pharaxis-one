@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import PdfViewerModal from '../components/PdfViewerModal'
+import { SkeletonCards } from '../../shared/components/Skeleton'
 
 function formatFileSize(bytes) {
   if (!bytes) return '—'
@@ -189,7 +190,7 @@ export default function DocumentsPage() {
     return badges
   }
 
-  if (loading) return <div className="pp-docs-page"><div className="pp-loading" role="status" aria-live="polite">Loading…</div></div>
+  if (loading) return <div className="pp-docs-page" style={{ padding: '24px' }}><SkeletonCards count={6} /></div>
   if (error)   return <div className="pp-docs-page"><div className="pp-error-state">{error}</div></div>
 
   return (

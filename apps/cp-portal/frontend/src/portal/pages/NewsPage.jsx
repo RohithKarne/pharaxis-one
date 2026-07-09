@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import { SkeletonCards } from '../../shared/components/Skeleton'
 import usePageTitle from '../hooks/usePageTitle'
 import { formatDate } from '../../shared/utils/datetime'
 
@@ -111,7 +112,7 @@ export default function NewsPage() {
     }
   }
 
-  if (loading) return <div className="pp-news-page"><div className="pp-loading" role="status" aria-live="polite">Loading…</div></div>
+  if (loading) return <div className="pp-news-page"><SkeletonCards count={4} /></div>
   if (error)   return <div className="pp-news-page"><div className="pp-error-state">{error}</div></div>
 
   return (

@@ -24,7 +24,8 @@ async function getValidTypes(clientId) {
 
 function makeToken(user, clientId) {
   return jwt.sign(
-    { userId: user.id, clientId, email: user.email, name: `${user.first_name} ${user.last_name}`, user_type: user.user_type },
+    // CP-26: embed token_version so a password change/reset can revoke old tokens.
+    { userId: user.id, clientId, email: user.email, name: `${user.first_name} ${user.last_name}`, user_type: user.user_type, tv: user.token_version ?? 0 },
     PORTAL_SECRET,
     { expiresIn: '24h' }
   );
@@ -93,7 +94,7 @@ router.patch('/confirm-type', authenticatePortal, requirePortalAuth, async (req,
 
     await pool.execute(`UPDATE cp_portal_users SET user_type = ?, user_type_confirmed = 1 WHERE id = ?`, [user_type, req.portalUser.userId]);
 
-    const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
+    const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     const newToken = makeToken(updated, req.portalUser.clientId);
     res.cookie('cp_portal_token', newToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Type confirmed.', user: updated });
@@ -119,7 +120,7 @@ router.patch('/profile', authenticatePortal, requirePortalAuth, async (req, res)
     params.push(req.portalUser.userId);
     await pool.execute(`UPDATE cp_portal_users SET ${updates.join(', ')} WHERE id = ?`, params);
 
-    const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
+    const [[updated]] = await pool.execute('SELECT id, first_name, last_name, email, user_type, user_type_confirmed, token_version FROM cp_portal_users WHERE id = ?', [req.portalUser.userId]);
     // SEC: do not echo the JWT in the response body — it lives only in the httpOnly cookie.
     res.json({ message: 'Profile updated.', user: updated });
   } catch (err) {
@@ -144,7 +145,7 @@ router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res
     }
 
     const hash = await bcrypt.hash(new_password, 12);
-    await pool.execute('UPDATE cp_portal_users SET password = ? WHERE id = ?', [hash, req.portalUser.userId]);
+    await pool.execute('UPDATE cp_portal_users SET password = ?, token_version = token_version + 1 WHERE id = ?', [hash, req.portalUser.userId]);
     res.json({ message: 'Password updated successfully.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
@@ -204,6 +205,69 @@ router.post('/resend-verification', async (req, res) => {
     }).catch(() => {});
 
     res.json({ message: 'If that email is registered and unverified, a new link has been sent.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/portal/auth/forgot-password — issue a password reset link (CP-37)
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { client_code, email } = req.body;
+    if (!client_code || !email) return res.status(400).json({ error: 'client_code and email are required.' });
+    if (email.length > 254) return res.status(400).json({ error: 'Input exceeds maximum length.' });
+
+    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
+    if (client) {
+      const [[user]] = await pool.execute(
+        'SELECT id, first_name FROM cp_portal_users WHERE client_id = ? AND email = ? AND is_active = 1 AND email_verified = 1',
+        [client.id, email]
+      );
+      if (user) {
+        // Store only a SHA-256 hash of the token; email the raw token. 1h expiry.
+        const rawToken  = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const expires   = new Date(Date.now() + 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+        await pool.execute('UPDATE cp_portal_users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?', [tokenHash, expires, user.id]);
+
+        const origin   = req.headers.origin || 'http://localhost:5174';
+        const resetUrl = `${origin}/portal/${client_code}/reset-password#token=${encodeURIComponent(rawToken)}`;
+        sendEmail(client.id, {
+          to: email,
+          subject: 'Reset your password',
+          html: `<p>Hi ${user.first_name},</p><p>We received a request to reset your password.</p><p><a href="${resetUrl}" style="background:#6B3FA0;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Reset Password</a></p><p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>`,
+          text: `Hi ${user.first_name}, reset your password: ${resetUrl} (expires in 1 hour)`,
+        }).catch(() => {});
+      }
+    }
+    // Generic response regardless of whether the account exists — prevents enumeration.
+    res.json({ message: 'If that email is registered, a password reset link has been sent.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/portal/auth/reset-password — complete the reset with a valid token (CP-37)
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, new_password } = req.body;
+    if (!token || !new_password) return res.status(400).json({ error: 'token and new_password are required.' });
+    if (new_password.length < 8)   return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+    if (new_password.length > 128)  return res.status(400).json({ error: 'Input exceeds maximum length.' });
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const [[user]] = await pool.execute(
+      'SELECT id FROM cp_portal_users WHERE reset_token = ? AND reset_token_expires_at > UTC_TIMESTAMP()',
+      [tokenHash]
+    );
+    if (!user) return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+
+    const hash = await bcrypt.hash(new_password, 12);
+    await pool.execute(
+      'UPDATE cp_portal_users SET password = ?, token_version = token_version + 1, reset_token = NULL, reset_token_expires_at = NULL WHERE id = ?',
+      [hash, user.id]
+    );
+    res.json({ message: 'Your password has been reset. You can now sign in.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

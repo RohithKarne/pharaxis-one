@@ -49,6 +49,9 @@ import PreferencesPage         from './portal/pages/PreferencesPage'
 import SearchResultsPage        from './portal/pages/SearchResultsPage'
 import MyActivityPage           from './portal/pages/MyActivityPage'
 import ProfilePage              from './portal/pages/ProfilePage'
+import ForgotPasswordPage       from './portal/pages/ForgotPasswordPage'
+import ResetPasswordPage        from './portal/pages/ResetPasswordPage'
+import { ToastProvider }        from './shared/components/Toast'
 import AnalyticsPage            from './admin/pages/AnalyticsPage'
 import FeedbackPage             from './admin/pages/FeedbackPage'
 import EmailSettingsPage        from './admin/pages/EmailSettingsPage'
@@ -80,10 +83,13 @@ function PortalAuthGuard({ children }) {
 function PortalRoutes() {
   return (
     <PortalProvider>
+      <ToastProvider>
       <PortalLayout>
         <Routes>
           <Route index                    element={<PortalHomePage />} />
           <Route path="login"             element={<PortalLoginPage />} />
+          <Route path="forgot-password"   element={<ForgotPasswordPage />} />
+          <Route path="reset-password"    element={<ResetPasswordPage />} />
           <Route path="verify-email"     element={<VerifyEmailPage />} />
           <Route path="submit"            element={<FeatureGuard featureKey="medical_inquiry"><SubmitPage /></FeatureGuard>} />
           <Route path="therapeutic-areas" element={<FeatureGuard featureKey="therapeutic_areas"><TherapeuticAreasPage /></FeatureGuard>} />
@@ -106,6 +112,7 @@ function PortalRoutes() {
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
       </PortalLayout>
+      </ToastProvider>
     </PortalProvider>
   )
 }

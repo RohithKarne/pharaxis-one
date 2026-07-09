@@ -9,7 +9,6 @@ import MIMSNavbar from './MIMSNavbar'
 import MIMSStatStrip from './MIMSStatStrip'
 import NotificationOverlay from './NotificationOverlay'
 import HelpDrawer from './HelpDrawer'
-import FeedbackWidget from './FeedbackWidget'
 import CommandPalette from './CommandPalette'
 
 const SIDEBAR_PREF_KEY = 'mims_sidebar_collapsed'
@@ -70,7 +69,6 @@ export default function MIMSLayout({ children, showStatStrip = true, bodyClassNa
       <NotificationOverlay open={notifOpen} onClose={() => setNotifOpen(false)} />
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <FeedbackWidget />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import { SkeletonCards } from '../../shared/components/Skeleton'
 import usePageTitle from '../hooks/usePageTitle'
 
 // LOW-15: resource_type icon map (extended)
@@ -60,7 +61,7 @@ export default function ResourcesPage() {
         </select>
       </div>
 
-      {loading ? <div className="pp-loading">Loading…</div> : filtered.length === 0 ? (
+      {loading ? <SkeletonCards count={4} /> : filtered.length === 0 ? (
         <div className="pp-empty-state"><span>📚</span><p>No resources found.</p></div>
       ) : (
         groupKeys.map(cat => (

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import { SkeletonCards } from '../../shared/components/Skeleton'
 import usePageTitle from '../hooks/usePageTitle'
 import Icon from '../../shared/components/Icon'
 
@@ -74,7 +75,7 @@ export default function TherapeuticAreasPage() {
         <p>Explore our scientific and medical focus areas.</p>
       </div>
 
-      {loading ? <div className="pp-loading">Loading…</div> : areas.length === 0 ? (
+      {loading ? <SkeletonCards count={4} /> : areas.length === 0 ? (
         <div className="pp-empty-state"><span><Icon name="beaker" size={40} /></span><p>No therapeutic areas published yet.</p></div>
       ) : (
         <div className="pp-ta-layout">

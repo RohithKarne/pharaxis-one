@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
+import { SkeletonCards } from '../../shared/components/Skeleton'
 import Icon from '../../shared/components/Icon'
 import { formatDateTime } from '../../shared/utils/datetime'
 
@@ -65,7 +66,7 @@ export default function MySubmissionsPage() {
         )}
       </div>
 
-      {loading ? <div className="pp-loading">Loading…</div> : subs.length === 0 ? (
+      {loading ? <SkeletonCards count={4} /> : subs.length === 0 ? (
         <div className="pp-empty-state">
           <span><Icon name="inbox" size={40} /></span>
           <p>You haven't submitted any requests yet.</p>

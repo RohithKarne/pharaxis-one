@@ -12,8 +12,23 @@ export default function PortalHomePage() {
   const client    = portalConfig?.client   || {}
   const base      = `/portal/${clientCode}`
   const [homeSearch, setHomeSearch] = useState('')
+  const [suggestions, setSuggestions] = useState([])
+  const [showSuggest, setShowSuggest] = useState(false)
 
   usePageTitle('Home')
+
+  // CP-12: debounced typeahead suggestions for the hero search.
+  useEffect(() => {
+    const q = homeSearch.trim()
+    if (q.length < 2) { setSuggestions([]); return }
+    const t = setTimeout(() => {
+      fetch(`/api/portal/search/suggest?clientCode=${clientCode}&q=${encodeURIComponent(q)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => setSuggestions(d?.suggestions || []))
+        .catch(() => {})
+    }, 250)
+    return () => clearTimeout(t)
+  }, [homeSearch, clientCode])
 
   // S4-9: fetch "For You" content — news + documents matched to user's type
   const [forYouNews, setForYouNews]   = useState([])
@@ -180,16 +195,35 @@ export default function PortalHomePage() {
             <span className="pp-hero-kicker">Medical affairs support</span>
             <h1 className="pp-hero-title">{heroTitle}</h1>
             <p className="pp-hero-subtitle">{heroSubtitle}</p>
-            <form className="pp-hero-search" onSubmit={submitHomeSearch}>
-              <Icon name="search" size={20} />
-              <input
-                value={homeSearch}
-                onChange={e => setHomeSearch(e.target.value)}
-                placeholder="Search medical information, documents, events..."
-                aria-label="Search the portal"
-              />
-              <button type="submit" className="pp-hero-search-btn">Search</button>
-            </form>
+            <div className="pp-hero-search-wrap">
+              <form className="pp-hero-search" onSubmit={submitHomeSearch}>
+                <Icon name="search" size={20} />
+                <input
+                  value={homeSearch}
+                  onChange={e => setHomeSearch(e.target.value)}
+                  onFocus={() => setShowSuggest(true)}
+                  onBlur={() => setTimeout(() => setShowSuggest(false), 150)}
+                  placeholder="Search medical information, documents, events..."
+                  aria-label="Search the portal"
+                  role="combobox"
+                  aria-expanded={showSuggest && suggestions.length > 0}
+                  aria-autocomplete="list"
+                />
+                <button type="submit" className="pp-hero-search-btn">Search</button>
+              </form>
+              {showSuggest && suggestions.length > 0 && (
+                <ul className="pp-suggest-dropdown" role="listbox">
+                  {suggestions.map((s, i) => (
+                    <li key={i} role="option" aria-selected="false">
+                      <button type="button" className="pp-suggest-item" onMouseDown={() => navigate(`${base}/${s.path}`)}>
+                        <span className="pp-suggest-type">{s.type}</span>
+                        <span className="pp-suggest-title">{s.title}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <div className="pp-search-suggestions" aria-label="Popular searches">
               <span>Popular searches:</span>
               {quickSearches.map(term => (

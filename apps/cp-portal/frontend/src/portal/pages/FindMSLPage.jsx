@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import { usePortal } from '../context/PortalContext'
+import { SkeletonCards } from '../../shared/components/Skeleton'
 import { formatDateTime } from '../../shared/utils/datetime'
+import { useToast } from '../../shared/components/Toast'
 
 const EMPTY_BOOKING = { requester_name: '', requester_email: '', preferred_date: '', topic: '', message: '' }
 
 export default function FindMSLPage() {
   const { clientCode, user } = usePortal()
+  const toast = useToast()
   const [msls, setMSLs]       = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
@@ -59,9 +62,10 @@ export default function FindMSLPage() {
         body: JSON.stringify({ ...bookingForm, slot_id: selectedSlot || undefined }),
       })
       const d = await res.json()
-      if (!res.ok) { setBookingError(d.error || 'Submission failed.'); setBookingBusy(false); return }
+      if (!res.ok) { setBookingError(d.error || 'Submission failed.'); toast.error(d.error || 'Meeting request failed.'); setBookingBusy(false); return }
       setBookingDone(true)
-    } catch { setBookingError('Network error. Please try again.') }
+      toast.success('Meeting request sent.')
+    } catch { setBookingError('Network error. Please try again.'); toast.error('Network error. Please try again.') }
     setBookingBusy(false)
   }
 
@@ -82,7 +86,7 @@ export default function FindMSLPage() {
         )}
       </div>
 
-      {loading ? <div className="pp-loading">Loading…</div> : filtered.length === 0 ? (
+      {loading ? <SkeletonCards count={4} /> : filtered.length === 0 ? (
         <div className="pp-empty-state"><span>👨‍⚕️</span><p>No MSLs found matching your search.</p></div>
       ) : (
         <div className="pp-msl-grid">

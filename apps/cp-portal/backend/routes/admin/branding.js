@@ -12,6 +12,8 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const { validateContent } = require('../../utils/fileValidation');
+const { ratio, AA_NORMAL } = require('../../utils/contrast');
+const cache = require('../../utils/cache');
 
 // Multer — logo uploads only (5 MB, images only)
 const logoStorage = multer.diskStorage({
@@ -68,6 +70,7 @@ router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, up
     const logoUrl = `/uploads/logos/${safeName}`;
     await pool.execute(`UPDATE cp_branding SET logo_url = ?, updated_at = NOW() WHERE client_id = ?`, [logoUrl, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'UPLOAD', 'branding', req.params.clientId, { logo_url: logoUrl });
+    cache.invalidate('config:'); // CP-22: refresh portal config cache after logo change
     res.json({ logo_url: logoUrl });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
@@ -78,6 +81,23 @@ router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, up
 router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     const { clientId } = req.params;
+
+    // CP-29: reject text colors that fail WCAG AA contrast against the background,
+    // so a client can't save unreadable body text (the "blue text" root cause).
+    if (req.body.text_primary !== undefined || req.body.text_secondary !== undefined || req.body.background_color !== undefined) {
+      const [[cur]] = await pool.execute('SELECT background_color, text_primary, text_secondary FROM cp_branding WHERE client_id = ?', [clientId]);
+      const bg = req.body.background_color ?? cur?.background_color ?? '#FFFFFF';
+      for (const field of ['text_primary', 'text_secondary']) {
+        const color = req.body[field] ?? cur?.[field];
+        if (!color) continue;
+        const r = ratio(color, bg);
+        if (r !== null && r < AA_NORMAL) {
+          return res.status(400).json({
+            error: `${field} (${color}) fails accessibility contrast against the background (${bg}) — ${r.toFixed(2)}:1, needs at least ${AA_NORMAL}:1. Pick a darker or lighter text color.`,
+          });
+        }
+      }
+    }
 
     const allowed = [
       'portal_name', 'tagline', 'logo_url', 'favicon_url', 'custom_domain',
@@ -102,6 +122,7 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
     params.push(clientId);
     await pool.execute(`UPDATE cp_branding SET ${updates.join(', ')} WHERE client_id = ?`, params);
     await audit(req.admin, clientId, 'UPDATE', 'branding', clientId, { fields: Object.keys(req.body) });
+    cache.invalidate('config:'); // CP-22: refresh portal config cache after edits
     res.json({ message: 'Branding updated.' });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });

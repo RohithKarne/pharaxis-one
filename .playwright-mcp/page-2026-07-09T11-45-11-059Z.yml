@@ -1,0 +1,95 @@
+- generic [ref=f1e2]:
+  - generic [ref=f1e3]:
+    - banner [ref=f1e4]:
+      - generic [ref=f1e5]:
+        - link "Medical Portal" [ref=f1e6] [cursor=pointer]:
+          - /url: /portal/novartis
+          - generic [ref=f1e7]: Medical Portal
+        - navigation [ref=f1e8]:
+          - link "Safety" [ref=f1e9] [cursor=pointer]:
+            - /url: /portal/novartis/safety
+          - link "FAQ" [ref=f1e10] [cursor=pointer]:
+            - /url: /portal/novartis/faq
+          - link "Contact" [ref=f1e11] [cursor=pointer]:
+            - /url: /portal/novartis/contact
+        - link "Sign In" [ref=f1e13] [cursor=pointer]:
+          - /url: /portal/novartis/login
+    - main [ref=f1e14]:
+      - generic [ref=f1e15]:
+        - generic [ref=f1e17]:
+          - generic [ref=f1e18]:
+            - generic [ref=f1e19]: Medical affairs support
+            - heading "Welcome to the Medical Portal" [level=1] [ref=f1e20]
+            - paragraph [ref=f1e21]: Your trusted source for medical information, resources, and support.
+            - generic [ref=f1e23]:
+              - img [ref=f1e24]
+              - combobox "Search the portal" [ref=f1e27]
+              - button "Search" [ref=f1e28] [cursor=pointer]
+            - generic "Popular searches" [ref=f1e29]:
+              - generic [ref=f1e30]: "Popular searches:"
+              - button "PX-104" [ref=f1e31] [cursor=pointer]
+              - button "Dosing" [ref=f1e32] [cursor=pointer]
+              - button "Clinical trials" [ref=f1e33] [cursor=pointer]
+              - button "Prescribing information" [ref=f1e34] [cursor=pointer]
+              - button "Safety" [ref=f1e35] [cursor=pointer]
+          - complementary "Portal shortcuts" [ref=f1e36]:
+            - generic [ref=f1e37]:
+              - img [ref=f1e39]
+              - generic [ref=f1e42]:
+                - generic [ref=f1e43]: Safety Update
+                - paragraph [ref=f1e44]: Review the latest safety information before using approved content.
+                - link "View Safety Alerts" [ref=f1e45] [cursor=pointer]:
+                  - /url: /portal/novartis/safety
+            - generic [ref=f1e46]:
+              - generic [ref=f1e47]: Quick Links
+              - link "Prescribing Information" [ref=f1e48] [cursor=pointer]:
+                - /url: /portal/novartis/documents
+                - img [ref=f1e49]
+                - generic [ref=f1e52]: Prescribing Information
+                - generic [ref=f1e53]: ›
+              - link "Request Medical Literature" [ref=f1e54] [cursor=pointer]:
+                - /url: /portal/novartis/documents
+                - img [ref=f1e55]
+                - generic [ref=f1e58]: Request Medical Literature
+                - generic [ref=f1e59]: ›
+              - link "Report a Product Complaint" [ref=f1e60] [cursor=pointer]:
+                - /url: /portal/novartis/submit
+                - img [ref=f1e61]
+                - generic [ref=f1e64]: Report a Product Complaint
+                - generic [ref=f1e65]: ›
+        - generic [ref=f1e68]:
+          - generic [ref=f1e69]:
+            - img [ref=f1e71]
+            - generic [ref=f1e74]:
+              - heading "Safety information, front and centre" [level=3] [ref=f1e75]
+              - paragraph [ref=f1e76]: Current safety alerts and prescribing details are always one click away, so you can check risk information first.
+          - generic [ref=f1e77]:
+            - img [ref=f1e79]
+            - generic [ref=f1e81]:
+              - heading "Reviewed and approved" [level=3] [ref=f1e82]
+              - paragraph [ref=f1e83]: Every document and answer is vetted by our medical affairs team before it reaches you.
+          - generic [ref=f1e84]:
+            - img [ref=f1e86]
+            - generic [ref=f1e90]:
+              - heading "Relevant to your practice" [level=3] [ref=f1e91]
+              - paragraph [ref=f1e92]: Content and recommendations are tailored to your specialty, so you find what matters faster.
+        - generic [ref=f1e95]:
+          - heading "What can we help you with today?" [level=2] [ref=f1e96]
+          - paragraph [ref=f1e97]: Start with the most common medical information tasks.
+        - generic [ref=f1e101]:
+          - generic [ref=f1e102]:
+            - heading "Safety Information" [level=2] [ref=f1e103]
+            - link "View all" [ref=f1e104] [cursor=pointer]:
+              - /url: /portal/novartis/safety
+          - generic [ref=f1e105]:
+            - img [ref=f1e106]
+            - paragraph [ref=f1e109]: Important safety information is available for healthcare professionals. Always refer to current prescribing information.
+            - link "View Safety Information" [ref=f1e110] [cursor=pointer]:
+              - /url: /portal/novartis/safety
+    - contentinfo [ref=f1e111]:
+      - generic [ref=f1e112]:
+        - generic [ref=f1e114]: Medical Portal
+        - link "Contact Us" [ref=f1e116] [cursor=pointer]:
+          - /url: /portal/novartis/contact
+        - paragraph [ref=f1e118]: © 2026 undefined. All rights reserved.
+  - region "Notifications"
