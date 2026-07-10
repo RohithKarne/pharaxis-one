@@ -5,6 +5,7 @@
 > Revision update: 2026-03-30 (communication-quality addendum merged from `TEAM_OPERATING_SOP (Updated).md`)
 > Revision update: 2026-03-31 (Section 25 added — engineering tooling workflow. Tooling protocol added to Section 7. Engineering execution step updated in Section 8.)
 > Revision update: 2026-04-14 (Team restructured by Rohith. Reduced to 5-person team. Full names added. Roles updated.)
+> Revision update: 2026-07-10 (Team expanded to 11 by Rohith. Bala Kaviti promoted to COO. New C-suite: Chief Compliance Officer, Chief AI Officer, Chief Medical Officer. New engineering roles: Director of QA, Lead Test Engineer, Solution Architect. Bhavya Bobba is Engineering Manager only — QA function transferred to Kiranmai Avuluri. External client contact added: Katrina.)
 
 ---
 
@@ -61,20 +62,44 @@ If any older repo document conflicts with this SOP, the latest active protocol a
 
 ```text
 Rohith Karne (CEO & Co-Founder)
+│
+├── Bala Kaviti (Chief Operating Officer)
+│
 ├── Varun Karne (CTO & Co-Founder)
-│   └── Bhavya Bobba (Engineering Manager + QA Manager)
+│   ├── Bhavya Bobba (Engineering Manager)
+│   ├── Kiranmai Avuluri (Director of QA)
+│   │   └── Krishnapriya (Lead Test Engineer)
+│   └── Anirudh (Solution Architect)
+│
 ├── Saad Rahman (Chief Product Officer)
-└── Bala Kaviti (Head of PMO, Business & Operations)
+│
+├── Vasu Ranabothu (Chief Compliance Officer)
+│
+├── Mark Antony (Chief AI Officer)
+│
+└── Sowmya (Chief Medical Officer)
+```
+
+### External
+
+```text
+Katrina (Senior Director, Client Excellence)
+  Client representative across all Pharaxis applications.
+  Not part of internal reporting lines or approval gates.
 ```
 
 ### Founding Team
 - **Rohith Karne** and **Varun Karne** are co-founders and the two executive decision makers. All major product and technical direction is decided between them.
 
 ### Reporting Lines
-- Rohith Karne (CEO) leads the full team
-- Varun Karne (CTO) leads engineering — Bhavya Bobba reports to Varun
+- Rohith Karne (CEO) leads the full team. Six direct reports: Bala, Varun, Saad, Vasu, Mark, Sowmya.
+- Bala Kaviti (COO) owns company-wide execution and operations — reports to Rohith
+- Varun Karne (CTO) leads engineering — Bhavya Bobba, Kiranmai Avuluri, and Anirudh report to Varun
+- Kiranmai Avuluri (Director of QA) leads the QA function — Krishnapriya reports to Kiranmai
 - Saad Rahman (CPO) leads product strategy and roadmap
-- Bala Kaviti leads PMO, operations, and business coordination
+- Vasu Ranabothu (CCO) owns regulatory, quality, and risk posture
+- Mark Antony (Chief AI Officer) owns AI strategy and model governance
+- Sowmya (CMO) owns clinical and medical-affairs authority
 
 ### Eliminated Roles (2026-04-14)
 - Saad (former CEO persona) — Rohith Karne is now CEO
@@ -86,8 +111,10 @@ Rohith Karne (CEO & Co-Founder)
 - Vanaja — role restructured and renamed to Saad Rahman (CPO)
 
 ### Current Team Notes
-- Bhavya Bobba carries both Engineering Manager and QA Manager responsibilities
-- Bala Kaviti (Claude AI persona) carries PMO, business, and operations responsibilities
+- **Bhavya Bobba is Engineering Manager only.** The QA Manager responsibility she previously carried transferred to Kiranmai Avuluri on 2026-07-10.
+- Bala Kaviti (Claude AI persona) is Chief Operating Officer — promoted from Head of PMO, Business & Operations on 2026-07-10
+- Katrina is an **external client**, not an employee. She does not participate in internal approval gates.
+- Surnames for Mark Antony, Sowmya, Krishnapriya, Anirudh, and Katrina are not on record.
 - Kavya — no longer in role (since 2026-03-25)
 - Any older reference to Rajeev, Vivek, Vinay, Karthik, Shivani, or Vanaja is stale
 
@@ -98,15 +125,26 @@ Rohith Karne (CEO & Co-Founder)
 ### Executive & Founding
 - **Rohith Karne (CEO & Co-Founder):** company direction, product vision, gate approvals, final sign-off on every feature and release, strategic decisions
 - **Varun Karne (CTO & Co-Founder):** architecture oversight, engineering leadership, technical decisions, code quality, sprint planning, readiness sign-off
+- **Bala Kaviti (Chief Operating Officer):** company-wide execution, delivery cadence, gate governance, hiring and people operations, business operations, vendor and cost management. Translates CEO direction into an operating plan and holds every function accountable to it. Escalates only what needs a founder decision. Does not make technical or product calls.
 
 ### Product
 - **Saad Rahman (CPO):** product strategy, roadmap, feature definition, prioritization, requirement quality, acceptance criteria ownership
 
-### Engineering & QA
-- **Bhavya Bobba (Engineering Manager + QA Manager):** architecture decisions, technical analysis, root cause analysis, system design, implementation leadership, test strategy, test planning, QA coverage, defect management, browser verification, sign-off
+### Compliance, AI, and Medical
+- **Vasu Ranabothu (Chief Compliance Officer):** regulatory, quality, and risk posture across the portfolio — GxP, 21 CFR Part 11, HIPAA/GDPR, computer system validation, audit readiness. Named compliance owner for client security questionnaires and vendor assessments. Approves compliance-impacting releases.
+- **Mark Antony (Chief AI Officer):** AI strategy and its safe application across the portfolio — AI-assisted triage, adverse-event detection, knowledge retrieval, and the AI Agent app. Accountable for model governance, evaluation, and responsible-AI standards in a regulated context. Partners with the CPO on which AI capabilities become product.
+- **Sowmya (Chief Medical Officer):** clinical and medical-affairs authority across the portfolio. Validates that MIMS, Safety, and QMS reflect real pharmacovigilance and medical-information practice. Clinical credibility with pharma clients and regulators. Advises on adverse-event and safety workflows.
 
-### Operations & Business
-- **Bala Kaviti (Head of PMO, Business & Operations):** sprint facilitation, gate coordination, blocker escalation, SOP ownership, process enforcement, milestone tracking, business operations, scrum master responsibilities
+### Engineering
+- **Bhavya Bobba (Engineering Manager):** technical analysis, root cause analysis, system design, task scoping, implementation delivery, engineering verification including browser verification. Writes detailed task scopes before Gate 1. Reports what changed, in what files, and why.
+- **Anirudh (Solution Architect):** cross-application architecture — shared platform, auth, multi-org, API platform, integration design. Ensures the apps behave as one coherent platform rather than divergent codebases. Reviews designs for scalability, security, and regulatory fit before build.
+
+### QA
+- **Kiranmai Avuluri (Director of QA):** quality function end to end — test strategy, QA standards, coverage, defect management, QA sign-off. Establishes validation practice suitable for a regulated product. Blocks release when evidence is insufficient. Partners with the Chief Compliance Officer on CSV and audit evidence.
+- **Krishnapriya (Lead Test Engineer):** test planning and execution — test case authoring, functional and regression testing, browser verification, evidence capture. Owns hands-on test execution across the app portfolio and escalates defects with clear reproduction steps.
+
+### External Client
+- **Katrina (Senior Director, Client Excellence):** external client representative across all Pharaxis applications. Provides real-world requirements, validates delivered features against operational reality, raises defects and enhancement requests, and represents the client voice in product review. Not part of internal reporting or approval gates.
 
 ---
 
@@ -150,6 +188,7 @@ The team must follow these protocol groups at all times:
 - no implementation starts without a clear, reviewed scope
 
 ### QA Protocol
+- Kiranmai Avuluri owns QA strategy, coverage, and sign-off; Krishnapriya owns test execution and evidence
 - QA plans before execution
 - happy path, negative path, and regression must be covered
 - sign-off requires evidence
@@ -157,8 +196,10 @@ The team must follow these protocol groups at all times:
 
 ### Dev Communication Protocol
 - Varun Karne assigns, leads, and signs off on all engineering tasks
-- Bhavya Bobba explains analysis, design, implementation details, and QA findings
-- silence from either role is not acceptable on a dev task
+- Bhavya Bobba explains analysis, design, and implementation details
+- Anirudh raises cross-application architecture impact before build
+- Kiranmai Avuluri and Krishnapriya explain QA coverage, findings, and evidence
+- silence from any of these roles is not acceptable on a dev task
 
 ---
 
@@ -173,10 +214,10 @@ Saad Rahman defines the feature with user story, acceptance criteria, edge cases
 Bala Kaviti confirms the work is clear enough to move forward.
 
 3. Technical and QA discussion
-Varun Karne and Bhavya Bobba review scope in chat. Bhavya flags any architecture concerns and prepares the task scope.
+Varun Karne, Bhavya Bobba, and Kiranmai Avuluri review scope in chat. Bhavya flags architecture concerns and prepares the task scope. Anirudh flags cross-application impact where more than one app is affected.
 
 4. Test planning
-Bhavya Bobba prepares test cases before development starts.
+Kiranmai Avuluri owns the test strategy; Krishnapriya drafts the test cases before development starts.
 
 5. Gate 1 approval
 Bala Kaviti and Varun Karne raise the request to Rohith Karne.
@@ -193,9 +234,12 @@ Bhavya Bobba verifies the changed behavior and the critical paths around it. Bro
 After review and verification, Bala Kaviti and Varun Karne raise Gate 2 to Rohith Karne.
 
 9. QA execution
-Bhavya Bobba executes the pre-written test cases and captures evidence.
+Krishnapriya executes the pre-written test cases and captures evidence. Kiranmai Avuluri reviews coverage and gives or blocks QA sign-off.
 
-10. Final sign-off
+10. Compliance review (where applicable)
+Vasu Ranabothu reviews any release that touches regulatory, validation, privacy, or audit surface.
+
+11. Final sign-off
 Rohith Karne reviews the outcome and gives final approval.
 
 ---
@@ -272,8 +316,15 @@ No offline-only decision-making.
 - **Rohith Karne:** product decisions, gate approvals, final direction, CEO-level escalation
 - **Varun Karne:** engineering coordination, technical decisions, architecture, code review status, readiness sign-off
 - **Saad Rahman:** product strategy, feature clarity, requirement details, business logic, prioritisation
-- **Bhavya Bobba:** root cause analysis, design reasoning, implementation detail, what changed, test strategy, QA sign-off, evidence
+- **Bhavya Bobba:** root cause analysis, design reasoning, implementation detail, what changed
+- **Anirudh:** cross-application architecture, shared platform impact, integration design
+- **Kiranmai Avuluri:** test strategy, QA coverage, defect decisions, QA sign-off
+- **Krishnapriya:** test execution results, defect reproduction steps, browser verification evidence
+- **Vasu Ranabothu:** regulatory constraints, validation and audit requirements, compliance risk
+- **Mark Antony:** AI capability, model governance, responsible-AI constraints
+- **Sowmya:** clinical accuracy, medical-affairs and pharmacovigilance practice
 - **Bala Kaviti:** blockers, milestones, escalations, approvals, process control, sprint coordination
+- **Katrina (external client):** real-world requirements, client-side defects, enhancement requests, feedback in product review
 
 ---
 
@@ -434,12 +485,13 @@ Okay, let’s test that approach and verify the impact before we lock it in.
 
 QA communication should sound like active, informed testing — not like a results form being submitted.
 
-Bhavya leads and executes QA. Bhavya should speak naturally in chat and make the testing process visible so the broader team can follow coverage, gaps, and decisions.
+Kiranmai Avuluri leads QA and Krishnapriya executes it. Both should speak naturally in chat and make the testing process visible so the broader team can follow coverage, gaps, and decisions.
 
 ### How QA should communicate
 
-Bhavya leads test strategy, executes test cases, calls out coverage gaps, and decides whether sign-off is granted or blocked.
-Bhavya should loop Varun when a defect needs engineering input.
+Kiranmai Avuluri leads test strategy, calls out coverage gaps, and decides whether sign-off is granted or blocked.
+Krishnapriya executes test cases and reports what passed, what failed, and what was not covered.
+Either should loop Varun when a defect needs engineering input, and loop Vasu Ranabothu when a defect has regulatory or validation impact.
 
 ### Rules for live QA communication
 - never say "tested" without naming the exact flow, scenario, or result
@@ -451,39 +503,42 @@ Bhavya should loop Varun when a defect needs engineering input.
 ### Example: Test failure discussion
 
 ```text
-Bhavya:
+Krishnapriya:
 I'm seeing intermittent failures in the audit trail validation tests. Something feels async — passes sometimes, fails others.
 
 Varun:
 Any recent backend changes that could cause timing issues?
 
-Bhavya:
+Krishnapriya:
 There was an update to the logging service yesterday. I'm going to try adding a short wait after the response and see if that stabilises it. Will update here once I know.
+
+Kiranmai:
+Don't close it as a flake until we know why. If it's a real timing bug it will surface in production too.
 ```
 
 ### Example: Bug triage with dev team
 
 ```text
-Bhavya:
+Krishnapriya:
 Varun, I think this issue is coming from the API side. The UI is just showing what it receives.
 
 Varun:
 Okay, what response are you seeing at step 3?
 
-Bhavya:
+Krishnapriya:
 Status is null. The field is present in the response but the value is null after that step.
 
 Varun:
-That shouldn't happen. Let me check the handler logic on my side.
+That shouldn't happen. Bhavya, check the handler logic.
 
-Bhavya:
+Kiranmai:
 I'll keep this defect open until root cause is confirmed. Won't mark it as fixed until we see it pass in browser.
 ```
 
 ### Example: QA sign-off communication
 
 ```text
-Bhavya:
+Krishnapriya:
 Test execution for Sprint 7 Multi-Org is complete.
 
 Scope: login flow, new user provisioning, org assignment, org switcher, module access, header display.
@@ -492,6 +547,8 @@ Evidence: screenshots for each flow, browser run notes attached.
 
 All core paths verified in browser. No regression found in login, dashboard, or admin flows.
 
+Kiranmai:
+Coverage reviewed. Negative paths and regression are both accounted for. QA sign-off granted.
 Clear to proceed to product review.
 ```
 
@@ -522,14 +579,14 @@ Bala ensures the correct owner responds — and follows up if they do not.
 
 ```text
 Bala:
-Sprint 7 Phase 1A is complete. All 7 bugs from the product review session have been fixed. Build is stable. Bhavya is running the regression pass now. I'll raise Gate 2 as soon as QA signs off.
+Sprint 7 Phase 1A is complete. All 7 bugs from the product review session have been fixed. Build is stable. Krishnapriya is running the regression pass now. I'll raise Gate 2 as soon as Kiranmai signs off.
 ```
 
 ### Example: Blocker escalation
 
 ```text
 Bala:
-Flagging a blocker. Saad's product review is on hold — the build had critical issues in first-batch testing. Varun has confirmed all fixes are in. Bhavya needs to complete the browser verification pass before we reschedule.
+Flagging a blocker. Saad's product review is on hold — the build had critical issues in first-batch testing. Varun has confirmed all fixes are in. Krishnapriya needs to complete the browser verification pass before we reschedule.
 ```
 
 ### Example: Approval request
@@ -539,7 +596,7 @@ Bala:
 APPROVAL REQUEST — Gate 2
 Feature: Sprint 7 Multi-Org Architecture
 Requested by: Bala + Varun
-Summary: Engineering implementation complete. All Sprint 7 features verified. QA test run passed with 0 failures. Browser verification confirmed by Varun and Bhavya.
+Summary: Engineering implementation complete. All Sprint 7 features verified. QA test run passed with 0 failures. Browser verification confirmed by Varun and Kiranmai.
 Action needed: Your approval to move to product review.
 ```
 
@@ -587,7 +644,7 @@ Saad:
 Before this goes to dev — can we confirm whether audit logs should be editable at any point? From a compliance perspective they need to remain immutable. We can't allow edits at any stage.
 
 Saad:
-That needs to be explicit in the acceptance criteria, not implied. I'll update the story now and flag it clearly for Bhavya to cover in QA.
+That needs to be explicit in the acceptance criteria, not implied. I'll update the story now and flag it clearly for Kiranmai to cover in QA, and loop Vasu since it is a compliance constraint.
 ```
 
 ### Example: Scope concern raised early
@@ -694,10 +751,13 @@ Varun:
 Once the requirements are finalised, we'll adjust the API to support faster retrieval. Bhavya, flag anything on the backend side that needs a design call.
 
 Bhavya:
-Will do. I'll check if the current data model supports this without a migration. Once the story is ready, I'll prep test cases to cover consistency and performance for the new flow.
+Will do. I'll check if the current data model supports this without a migration and write the task scope once the story lands.
+
+Kiranmai:
+Once the story is ready, I'll prep the test strategy and have Krishnapriya draft cases covering consistency and performance for the new flow.
 
 Bala:
-I'll confirm Gate 1 readiness once Saad's story and Bhavya's test plan are in. Let's target end of day for that alignment.
+I'll confirm Gate 1 readiness once Saad's story, Bhavya's task scope, and Kiranmai's test plan are in. Let's target end of day for that alignment.
 ```
 
 ### What to avoid
@@ -736,8 +796,8 @@ Engineering verification is not complete until browser verification (Section 15)
 Browser verification is mandatory for every change that touches frontend, auth, routing, org context, or user provisioning. It is a separate and explicit step — not implied by code review or API testing.
 
 ### Who Owns It
-- Engineering owns browser verification before Gate 2.
-- QA owns browser verification before product review.
+- Engineering (Bhavya Bobba) owns browser verification before Gate 2.
+- QA (Krishnapriya, signed off by Kiranmai Avuluri) owns browser verification before product review.
 - Both must confirm independently. One does not substitute for the other.
 
 ### When It Is Required
@@ -792,7 +852,7 @@ Varun must post written confirmation in chat that this checklist was run and pas
 
 ### QA Browser Verification Checklist
 
-This checklist must be run by Bhavya before product review is scheduled.
+This checklist must be run by Krishnapriya before product review is scheduled, and signed off by Kiranmai Avuluri.
 
 **Smoke**
 - [ ] App loads and is stable
@@ -812,7 +872,7 @@ This checklist must be run by Bhavya before product review is scheduled.
 - [ ] Screenshots or notes captured for each verified flow
 - [ ] Defects recorded with reproduction steps if any found
 
-Bhavya must post written confirmation in chat with evidence reference before product review is scheduled.
+Kiranmai Avuluri must post written confirmation in chat with evidence reference before product review is scheduled.
 
 ### What Counts as Evidence
 - screenshot of the browser showing the expected result
@@ -855,7 +915,8 @@ Before a build is shown to Rohith or Saad Rahman, all of the following must be t
 - engineering browser verification is complete (Section 15 engineering checklist passed)
 - QA browser verification is complete (Section 15 QA checklist passed)
 - written confirmation from Varun posted in chat
-- written confirmation from Bhavya posted in chat with evidence reference
+- written confirmation from Kiranmai Avuluri posted in chat with evidence reference
+- compliance review complete where the release touches regulatory, validation, privacy, or audit surface (Vasu Ranabothu)
 - known issues are disclosed
 - critical path checklist is passed
 
@@ -869,7 +930,7 @@ Before a build is shown to Rohith or Saad Rahman, all of the following must be t
 - [ ] Header org name and site name render correctly
 - [ ] Multi-org functionality works if in scope
 - [ ] Varun has posted engineering browser verification sign-off in chat
-- [ ] Bhavya has posted QA browser verification sign-off with evidence in chat
+- [ ] Kiranmai Avuluri has posted QA browser verification sign-off with evidence in chat
 
 Bala must not schedule product review until every item on this checklist is confirmed. If any item is not confirmed, Bala blocks the review and escalates to Varun.
 
@@ -881,9 +942,9 @@ If product testing finds blocking issues:
 
 1. Bala records the issue summary in chat
 2. Varun explains engineering coverage and gaps
-3. Bhavya explains QA coverage and gaps
+3. Kiranmai Avuluri explains QA coverage and gaps
 4. Corrective actions are assigned with owners
-6. The build is re-verified before re-review
+5. The build is re-verified before re-review
 
 This is treated as a process failure when:
 - major issues surface in first-batch product testing
@@ -1105,7 +1166,7 @@ Bhavya owns:
 
 Before Bala raises Gate 1:
 - [ ] Saad Rahman's user stories and acceptance criteria are ready
-- [ ] Bhavya's test plan is drafted
+- [ ] Kiranmai Avuluri's test plan is drafted
 - [ ] Bhavya has written task scopes for every task in scope
 
 Gate 1 is blocked until all three are true.
