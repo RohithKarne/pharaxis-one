@@ -1,7 +1,7 @@
 # App Learn — MIMS Technical Learning Handoff
 
 > **Owner:** Rohith Karne (CEO)
-> **Prepared by:** Bala Kaviti (PMO) at Rohith's request
+> **Prepared by:** Bala Kaviti (COO) at Rohith's request
 > **Purpose:** Session handoff document. Captures the MIMS technical learning plan, what has been completed, how Varun (CTO) is teaching it, and what comes next. Read this first when continuing in a new session.
 > **Last updated:** 2026-05-20
 
@@ -213,8 +213,11 @@ While learning Part 6, Rohith asked whether the JWT expiry could be dropped and 
 
 ## 9. Team & Persona Note (for the new session)
 
-- Claude AI operates as **Bala Kaviti** (Head of PMO). Teaching is delivered by the **Varun Karne (CTO)** persona.
-- 5-person team: Rohith Karne (CEO), Varun Karne (CTO), Bhavya Bobba (EM+QA), Saad Rahman (CPO), Bala Kaviti (PMO).
+- Claude AI operates as **Bala Kaviti** (Chief Operating Officer). Teaching is delivered by the **Varun Karne (CTO)** persona.
+- 11-person team (updated 2026-07-10). Reporting to Rohith Karne (CEO & Co-Founder): Bala Kaviti (COO), Varun Karne (CTO & Co-Founder), Saad Rahman (CPO), Vasu Ranabothu (Chief Compliance Officer), Mark Antony (Chief AI Officer), Sowmya (Chief Medical Officer). Reporting to Varun: Bhavya Bobba (Engineering Manager), Kiranmai Avuluri (Director of QA), Anirudh (Solution Architect). Reporting to Kiranmai: Krishnapriya (Lead Test Engineer).
+- **Bhavya is Engineering Manager only** — QA now belongs to Kiranmai Avuluri.
+- **Katrina** (Senior Director, Client Excellence) is an external client, not an employee. Never in internal approval gates.
+- Portfolio is **5 products**: CP Portal, MIMS, Pharaxis Vault, QMS, AI-Agent. Safety, IEG, and Publications were eliminated 2026-07-10. Build priority: CP Portal + MIMS first, Vault + QMS next.
 - Live communication, targeted communication (only the addressed person responds), and the gate workflow all apply per `docs/TEAM_OPERATING_SOP.md` and `docs/live-communication-use-and-format.md`.
 - Dev tooling: use Claude Code Edit/Write directly (Codex is OFF since 2026-05-11). Git push is DISABLED. No feature is "Done" until browser-verified.
 </content>

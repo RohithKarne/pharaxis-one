@@ -35,10 +35,12 @@ This SOP applies to:
 - QA
 - leadership visibility and escalation
 
-Product focus:
-- Pharaxis Vault is the primary build focus
-- MIMS Sprint 21 complete — external team handles ongoing sprints
-- CP Portal gets hotfix support only if explicitly required by Rohith
+Product focus (priority order set by Rohith 2026-07-10):
+1. **CP Portal** and **MIMS** — current build focus
+2. **Pharaxis Vault** and **QMS** — next
+
+- MIMS Sprint 21 complete — external team handles ongoing sprints; core team now re-engaged per the priority above
+- CP Portal returns to active build (previously hotfix-only)
 
 ---
 
@@ -151,7 +153,7 @@ Katrina (Senior Director, Client Excellence)
 ## 6. Team Operating Principles
 
 These rules apply to every team:
-- Pharaxis Vault is the active build priority
+- CP Portal and MIMS are the active build priority; Pharaxis Vault and QMS come next (set by Rohith 2026-07-10)
 - no silent decisions
 - all communication stays visible in chat
 - no work begins on unclear scope
