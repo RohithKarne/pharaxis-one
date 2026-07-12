@@ -7,7 +7,7 @@ export default function IntegrationPage() {
   const { clientId }      = useParams()
   const [integrations, setIntegrations] = useState([])
   const [showAdd, setShowAdd]           = useState(false)
-  const [form, setForm]                 = useState({ system_name: 'MIMS', api_base_url: '', api_key: '', auth_type: 'bearer' })
+  const [form, setForm]                 = useState({ system_name: 'MIMS', api_base_url: '', api_key: '', auth_type: 'bearer', mims_case_url_base: '' })
   const [saving, setSaving]             = useState(false)
   const [testing, setTesting]           = useState(null)
   const [testResult, setTestResult]     = useState({})
@@ -29,7 +29,7 @@ export default function IntegrationPage() {
     try {
       const res = await fetch(`/api/admin/integration/${clientId}`, { method: 'POST', headers: adminHeaders(), body: JSON.stringify(form) })
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || `Could not add integration (error ${res.status}).`); return }
-      setShowAdd(false); setForm({ system_name: 'MIMS', api_base_url: '', api_key: '', auth_type: 'bearer' })
+      setShowAdd(false); setForm({ system_name: 'MIMS', api_base_url: '', api_key: '', auth_type: 'bearer', mims_case_url_base: '' })
       load()
     } catch {
       setError('Network error — please try again.')
@@ -95,6 +95,10 @@ export default function IntegrationPage() {
               <div className="cp-field">
                 <label>API Key / Token</label>
                 <input type="password" value={form.api_key} onChange={e => setForm(f => ({ ...f, api_key: e.target.value }))} placeholder="Bearer token or API key" />
+              </div>
+              <div className="cp-field">
+                <label>MIMS Case URL Base</label>
+                <input value={form.mims_case_url_base} onChange={e => setForm(f => ({ ...f, mims_case_url_base: e.target.value }))} placeholder="http://mims.example.com/mims/cases/" />
               </div>
               {error && <div className="cp-error" style={{ marginBottom: 10 }}>{error}</div>}
               <div className="cp-modal-footer">

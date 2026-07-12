@@ -211,6 +211,7 @@ async function initializeDatabase() {
       api_secret       TEXT         NULL,
       auth_type        VARCHAR(50)  NOT NULL DEFAULT 'bearer',
       extra_headers    TEXT         NULL,
+      mims_case_url_base VARCHAR(500) NULL,
       is_active        TINYINT(1)   NOT NULL DEFAULT 0,
       last_sync_at     DATETIME     NULL,
       last_sync_status VARCHAR(50)  NOT NULL DEFAULT 'unknown',

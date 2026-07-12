@@ -75,6 +75,21 @@ export default function SubmissionsPage() {
     }
   }
 
+  // O2: admin-triggered re-sync of a failed submission.
+  async function retrySync(id) {
+    try {
+      const res = await fetch(`/api/admin/submissions/${clientId}/${id}/retry`, { method: 'POST', headers: adminHeaders() })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'Retry failed.')
+      setMsg(d.status === 'synced'
+        ? { type: 'success', text: `Synced (MIMS #${d.external_ref}).` }
+        : { type: 'error', text: `Still failed: ${d.error || 'unknown'}` })
+      load()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    }
+  }
+
   function parseFormData(raw) {
     try { return JSON.parse(raw) } catch { return {} }
   }
@@ -238,7 +253,18 @@ export default function SubmissionsPage() {
                         {STATUS_LABELS[s.status] || s.status}
                       </span>
                     </td>
-                    <td style={{ fontSize: 12 }}>{s.external_ref || '—'}</td>
+                    <td style={{ fontSize: 12 }}>
+                      <div style={{ fontWeight: 500 }}>{s.reference || `CP-${String(s.id).padStart(6, '0')}`}</div>
+                      {s.external_ref ? (
+                        s.mims_case_url ? (
+                          <a href={s.mims_case_url} target="_blank" rel="noopener noreferrer"
+                             onClick={e => e.stopPropagation()}
+                             style={{ color: '#2563EB', textDecoration: 'none' }}>MIMS #{s.external_ref} ↗</a>
+                        ) : (
+                          <span style={{ color: '#6B7280' }}>MIMS #{s.external_ref}</span>
+                        )
+                      ) : null}
+                    </td>
                     <td>
                       <select
                         value={s.status}
@@ -248,6 +274,12 @@ export default function SubmissionsPage() {
                       >
                         {Object.keys(STATUS_COLORS).map(st => <option key={st} value={st}>{st}</option>)}
                       </select>
+                      {s.status === 'failed_sync' && (
+                        <button onClick={e => { e.stopPropagation(); retrySync(s.id) }}
+                          style={{ marginLeft: 6, fontSize: 11, padding: '2px 8px', border: '1px solid var(--cp-border)', borderRadius: 4, cursor: 'pointer', background: 'transparent' }}>
+                          ↻ Retry
+                        </button>
+                      )}
                     </td>
                   </tr>
                   {expanded === s.id && (

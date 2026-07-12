@@ -17,8 +17,24 @@ const { publicApiRateLimiter } = require('../services/api-platform/rateLimiter')
 const { signPayload } = require('../services/api-platform/webhookDispatcher');
 const { deliverPendingWebhooks } = require('../services/api-platform/webhookDeliveryWorker');
 const { buildOpenApiYaml } = require('../services/api-platform/openapiSpec');
+const multer = require('multer');
+const storage = require('../services/fileStorageService');
+const { validateUpload } = require('../middleware/uploadValidation');
 
 const router = express.Router();
+
+// Coerce a loose date input to a MySQL DATE ('YYYY-MM-DD') or null. Intake data
+// arrives from an external portal, so never throw on a bad date — drop it.
+function toDateOnly(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+// C1: attachment forwarding — in-memory multer (files are streamed to the storage
+// service, not written to a temp path here).
+const attUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: Number(process.env.UPLOAD_MAX_BYTES || 50 * 1024 * 1024) } });
+function attSha256(buf) { return crypto.createHash('sha256').update(buf).digest('hex'); }
 
 async function logCall(req, res, start) {
   if (!req.apiClient) return;
@@ -92,15 +108,181 @@ router.get('/api/v1/cases', scopeGuard('cases:read'), async (req, res) => {
   res.json({ rows, pagination: { limit: 100 } });
 });
 
-router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
-  const [[site]] = await pool.execute('SELECT id FROM sites WHERE org_id=? ORDER BY id ASC LIMIT 1', [req.apiClient.org_id]);
-  if (!site?.id) return res.status(400).json({ error: 'No site is configured for this organisation.' });
-  const [[state]] = await pool.execute('SELECT id FROM workflow_states WHERE org_id=? OR org_id IS NULL ORDER BY org_id IS NULL DESC, id ASC LIMIT 1', [req.apiClient.org_id]);
-  const [result] = await pool.execute(
-    `INSERT INTO cases (org_id, site_id, case_type, intake_channel, description, status_id, priority, created_by) VALUES (?, ?, ?, 'api', ?, ?, ?, ?)`,
-    [req.apiClient.org_id, site.id, req.body.case_type || 'MI', req.body.description || req.body.subject || null, state?.id || null, req.body.priority || 'normal', null]
+// Fetch a single case's current status — used by the CP portal close-sync poller.
+// Org-scoped by the API key so a client can only read its own cases.
+router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
+  const [[row]] = await pool.execute(
+    `SELECT c.id, c.case_number, c.case_type, ws.name AS status, c.priority, c.created_at, c.updated_at
+       FROM cases c
+       LEFT JOIN workflow_states ws ON ws.id = c.status_id
+      WHERE c.id = ? AND c.org_id = ? AND c.is_deleted = 0
+      LIMIT 1`,
+    [req.params.id, req.apiClient.org_id]
   );
-  res.status(201).json({ id: result.insertId });
+  if (!row) return res.status(404).json({ error: 'Case not found.' });
+  res.json(row);
+});
+
+router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
+  // org is always resolved from the API key — never from the request body — so a
+  // client can only ever create a case in its own organisation (cross-tenant safe).
+  const orgId = req.apiClient.org_id;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [[site]] = await conn.execute('SELECT id FROM sites WHERE org_id=? ORDER BY id ASC LIMIT 1', [orgId]);
+    if (!site?.id) { await conn.rollback(); return res.status(400).json({ error: 'No site is configured for this organisation.' }); }
+    const [[state]] = await conn.execute('SELECT id FROM workflow_states WHERE org_id=? OR org_id IS NULL ORDER BY org_id IS NULL DESC, id ASC LIMIT 1', [orgId]);
+
+    const caseType = ['MI', 'AE', 'PC'].includes(req.body.case_type) ? req.body.case_type : 'MI';
+    // Intake data is captured at the MINIMUM at the source portal; MIMS triage
+    // completes the regulated fields. Values are stored as received (no strict
+    // picklist rejection) so a valid submission is never dropped at the boundary.
+    const intakeChannel = String(req.body.intake_channel || 'api').slice(0, 50);
+    // T1: stamp the source reference (e.g. CP-0000NN) as the case number so the
+    // case is identifiable and searchable in MIMS by the originating portal
+    // reference. case_number is unique per org — fall back to a suffixed value on
+    // the rare collision rather than failing the intake.
+    const caseNumber = req.body.reference ? String(req.body.reference).slice(0, 100) : null;
+    const desc = req.body.description || req.body.subject || null;
+    const priority = req.body.priority || 'normal';
+
+    // R2: idempotency — a repeated push of the same submission (same reference)
+    // must NOT create a duplicate case. If one already exists for this org with
+    // this reference, return it unchanged. Safe under retries.
+    if (caseNumber) {
+      const [[existing]] = await conn.execute(
+        'SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND is_deleted = 0 LIMIT 1',
+        [orgId, caseNumber]
+      );
+      if (existing) {
+        await conn.commit();
+        return res.status(200).json({ id: existing.id, idempotent: true });
+      }
+    }
+
+    let result;
+    try {
+      [result] = await conn.execute(
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, case_number, description, status_id, priority, created_by)
+         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, NULL)`,
+        [orgId, site.id, caseType, intakeChannel, caseNumber, desc, state?.id || null, priority]
+      );
+    } catch (err) {
+      // Race: another request created the same reference between our check and insert.
+      if (err.code === 'ER_DUP_ENTRY' && caseNumber) {
+        const [[dup]] = await conn.execute(
+          'SELECT id FROM cases WHERE org_id = ? AND case_number = ? AND is_deleted = 0 LIMIT 1',
+          [orgId, caseNumber]
+        );
+        if (dup) { await conn.commit(); return res.status(200).json({ id: dup.id, idempotent: true }); }
+      }
+      throw err;
+    }
+    const caseId = result.insertId;
+
+    const reporter = req.body.reporter;
+    if (reporter && typeof reporter === 'object') {
+      await conn.execute(
+        `INSERT INTO case_reporter (case_id, first_name, last_name, email, phone, reporter_type, country, organisation)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [caseId, reporter.first_name || null, reporter.last_name || null, reporter.email || null,
+         reporter.phone || null, reporter.reporter_type || 'HCP', reporter.country || null, reporter.organisation || null]
+      );
+    }
+
+    const patient = req.body.patient;
+    if (patient && typeof patient === 'object' && ['AE', 'PC'].includes(caseType)) {
+      const ageNum = patient.age != null && String(patient.age).trim() !== '' ? Number(patient.age) : null;
+      await conn.execute(
+        `INSERT INTO case_patient (case_id, initials, age, age_unit, gender, weight_kg)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [caseId, patient.initials || null, Number.isFinite(ageNum) ? ageNum : null,
+         patient.age_unit || 'years', patient.gender || null,
+         patient.weight_kg ? Number(patient.weight_kg) || null : null]
+      );
+    }
+
+    const ae = req.body.ae_intake;
+    if (ae && typeof ae === 'object' && caseType === 'AE') {
+      await conn.execute(
+        `INSERT INTO case_ae_intake
+           (case_id, suspect_drug_name, batch_lot_number, dose, route_of_admin,
+            treatment_start_date, treatment_stop_date, reaction_description, reaction_onset_date, outcome,
+            is_serious, is_death, is_life_threatening, is_hospitalization, is_prolonged_hospitalization,
+            is_disability, is_congenital_anomaly, is_other_medically_important)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [caseId, ae.suspect_drug_name || null, ae.batch_lot_number || null, ae.dose || null, ae.route_of_admin || null,
+         toDateOnly(ae.treatment_start_date), toDateOnly(ae.treatment_stop_date), ae.reaction_description || null,
+         toDateOnly(ae.reaction_onset_date), ae.outcome || null,
+         ae.is_serious ? 1 : 0, ae.is_death ? 1 : 0, ae.is_life_threatening ? 1 : 0,
+         ae.is_hospitalization ? 1 : 0, ae.is_prolonged_hospitalization ? 1 : 0,
+         ae.is_disability ? 1 : 0, ae.is_congenital_anomaly ? 1 : 0, ae.is_other_medically_important ? 1 : 0]
+      );
+    }
+
+    const pc = req.body.pc_intake;
+    if (pc && typeof pc === 'object' && caseType === 'PC') {
+      await conn.execute(
+        `INSERT INTO case_pc_intake
+           (case_id, product_name, batch_lot_number, expiry_date, purchase_date,
+            complaint_category, complaint_description, sample_available, sample_return_requested)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [caseId, pc.product_name || null, pc.batch_lot_number || null,
+         toDateOnly(pc.expiry_date), toDateOnly(pc.purchase_date),
+         pc.complaint_category || null, pc.complaint_description || null,
+         pc.sample_available ? 1 : 0, pc.sample_return_requested ? 1 : 0]
+      );
+    }
+
+    // C2: MI question fields → case_mi tab (not just the case description).
+    const mi = req.body.mi_intake;
+    if (mi && typeof mi === 'object' && caseType === 'MI') {
+      await conn.execute(
+        `INSERT INTO case_mi (case_id, tab_index, mi_category, question_summary, detailed_question, status)
+         VALUES (?, 1, ?, ?, ?, 'Open')`,
+        [caseId, mi.mi_category || null, mi.question_summary || null, mi.detailed_question || null]
+      );
+    }
+
+    await conn.commit();
+    res.status(201).json({ id: caseId });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    res.status(500).json({ error: 'Failed to create case.' });
+  } finally {
+    conn.release();
+  }
+});
+
+// C1: attach a file to a case. Stored via the shared file-storage service and
+// recorded in the generic attachments table (entity_type='case'). Org-scoped by key.
+router.post('/api/v1/cases/:id/attachments', scopeGuard('cases:write'), attUpload.single('file'), validateUpload(['image', 'doc']), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'file is required.' });
+    const [[c]] = await pool.execute(
+      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND is_deleted = 0 LIMIT 1',
+      [req.params.id, req.apiClient.org_id]
+    );
+    if (!c) return res.status(404).json({ error: 'Case not found.' });
+
+    const ext = (String(req.file.originalname || '').match(/\.[a-z0-9]+$/i) || [''])[0];
+    const key = storage.generateKey(ext);
+    const stored = await storage.put({ orgId: req.apiClient.org_id, key, body: req.file.buffer, contentType: req.file.mimetype });
+
+    const [result] = await pool.execute(
+      `INSERT INTO attachments
+         (org_id, entity_type, entity_id, storage_provider, storage_key,
+          original_name, mime_type, size_bytes, checksum_sha256, uploaded_by, ocr_status)
+       VALUES (?, 'case', ?, ?, ?, ?, ?, ?, ?, NULL, 'skipped')`,
+      [req.apiClient.org_id, c.id, stored.provider, stored.key,
+       String(req.file.originalname || '').slice(0, 255), req.file.mimetype, req.file.size, attSha256(req.file.buffer)]
+    );
+    res.status(201).json({ id: result.insertId });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to store attachment.' });
+  }
 });
 
 router.put('/api/v1/cases/:id', scopeGuard('cases:write'), async (req, res) => {

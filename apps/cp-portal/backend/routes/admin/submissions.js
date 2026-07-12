@@ -9,6 +9,7 @@ const fs      = require('fs');
 const path    = require('path');
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
 
 // GET /api/admin/submissions/:clientId
 // Returns submissions with optional filter by submission_type and status
@@ -38,6 +39,17 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     query += ' ORDER BY s.submitted_at DESC LIMIT 200';
 
     const [rows] = await pool.execute(query, params);
+
+    // T2: surface the user-facing CP reference (CP-0000NN) and a deep link to the
+    // linked MIMS case. The MIMS case URL base is deployment config (per-client UI
+    // host); when unset, the frontend simply shows the id without a link.
+    // O1: prefer the per-integration case URL base; fall back to the global env.
+    const [[integ]] = await pool.execute('SELECT mims_case_url_base FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [req.params.clientId]);
+    const caseUrlBase = (integ && integ.mims_case_url_base) || process.env.CP_MIMS_CASE_URL_BASE || null;
+    rows.forEach(r => {
+      r.reference = `CP-${String(r.id).padStart(6, '0')}`;
+      r.mims_case_url = (caseUrlBase && r.external_ref) ? caseUrlBase + encodeURIComponent(r.external_ref) : null;
+    });
 
     // Attach uploaded files per submission
     if (rows.length > 0) {
@@ -163,7 +175,47 @@ router.patch('/:clientId/:submissionId', authenticateAdmin, requireClientAccess,
        WHERE id = ? AND client_id = ?`,
       [status, req.params.submissionId, req.params.clientId]
     );
+    // A1: audit the manual status change with the admin actor.
+    await audit(req.admin, req.params.clientId, 'STATUS_CHANGED', 'submission', req.params.submissionId, { status });
     res.json({ message: 'Status updated.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── O2: sync-failure dashboard ────────────────────────────────
+// GET /api/admin/submissions/:clientId/sync-health — counts by status + failures list
+router.get('/:clientId/sync-health', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [counts] = await pool.execute(
+      'SELECT status, COUNT(*) n FROM cp_submissions WHERE client_id = ? GROUP BY status', [req.params.clientId]);
+    const byStatus = {};
+    counts.forEach(c => { byStatus[c.status] = c.n; });
+    const [failures] = await pool.execute(
+      `SELECT id, submission_type, sync_attempts, sync_error, updated_at
+         FROM cp_submissions
+        WHERE client_id = ? AND status = 'failed_sync'
+        ORDER BY updated_at DESC LIMIT 100`, [req.params.clientId]);
+    failures.forEach(f => { f.reference = `CP-${String(f.id).padStart(6, '0')}`; });
+    res.json({ counts: byStatus, failures });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/submissions/:clientId/:submissionId/retry — manual re-sync (admin-triggered)
+router.post('/:clientId/:submissionId/retry', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [[sub]] = await pool.execute(
+      'SELECT id, submission_type FROM cp_submissions WHERE id = ? AND client_id = ?',
+      [req.params.submissionId, req.params.clientId]);
+    if (!sub) return res.status(404).json({ error: 'Submission not found.' });
+    // Attributable to the admin who triggered it (Vasu's condition).
+    await audit(req.admin, req.params.clientId, 'MANUAL_RETRY', 'submission', sub.id, {});
+    const { syncToIntegration } = require('../portal/submit');
+    await syncToIntegration(Number(req.params.clientId), sub.id, sub.submission_type);
+    const [[after]] = await pool.execute('SELECT status, external_ref, sync_error FROM cp_submissions WHERE id = ?', [sub.id]);
+    res.json({ status: after.status, external_ref: after.external_ref, error: after.sync_error });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

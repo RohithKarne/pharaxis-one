@@ -30,4 +30,14 @@ async function audit(admin, clientId, action, entity, entityId, details) {
   } catch (_) { /* never throw from audit */ }
 }
 
-module.exports = { audit };
+/**
+ * systemAudit — audit an event that has no human admin actor (integration sync,
+ * automated close-sync, portal submission). Records an attributable actor name
+ * instead of a blank/unknown one, so a Part 11 reviewer can see the source.
+ * @param {string} actorName - e.g. 'MIMS integration', 'portal', 'system'
+ */
+async function systemAudit(actorName, clientId, action, entity, entityId, details) {
+  return audit({ adminId: null, name: actorName || 'system' }, clientId, action, entity, entityId, details);
+}
+
+module.exports = { audit, systemAudit };

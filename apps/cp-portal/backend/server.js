@@ -24,6 +24,8 @@ const app  = express();
 const PORT = process.env.CP_PORT || 4000;
 let server = null;
 let schedulerHandle = null;
+let mimsCloseSyncHandle = null;
+let mimsRetryHandle = null;
 
 function applySecurityHeaders(req, res, next) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -237,6 +239,67 @@ app.post('/api/internal/cron/scheduler-tick', async (req, res) => {
   catch (err) { log.error('scheduler.cron.failed', { err }); res.status(500).json({ error: 'Scheduler tick failed.' }); }
 });
 
+// ── B1: MIMS close-sync poller ───────────────────────────────
+// Polls MIMS for the status of already-synced submissions and auto-closes the CP
+// inquiry when the linked case is Closed. Same lock/cron shape as the content
+// scheduler so it is safe under multi-instance and can be driven by external cron.
+function createMimsCloseSyncScheduler() {
+  const { pollOnce } = require('./services/mimsCloseSync');
+  const LOCK_KEY = 'cp-portal-mims-close-sync';
+  async function tick() {
+    let lockAcquired = false;
+    try {
+      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [LOCK_KEY]);
+      lockAcquired = Number(lockRow?.acquired || 0) === 1;
+      if (!lockAcquired) return;
+      await pollOnce();
+    } catch { /* silently ignore poller errors */ }
+    finally {
+      if (lockAcquired) await pool.execute('SELECT RELEASE_LOCK(?)', [LOCK_KEY]).catch(() => {});
+    }
+  }
+  return tick;
+}
+const mimsCloseSyncTick = createMimsCloseSyncScheduler();
+
+app.post('/api/internal/cron/mims-close-sync', async (req, res) => {
+  const secret = process.env.CP_CRON_SECRET;
+  if (!secret || req.get('x-cron-secret') !== secret) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+  try { await mimsCloseSyncTick(); res.json({ ok: true }); }
+  catch (err) { log.error('mims-close-sync.cron.failed', { err }); res.status(500).json({ error: 'Close-sync tick failed.' }); }
+});
+
+// ── R1: MIMS sync retry (exponential backoff) ────────────────
+function createMimsRetryScheduler() {
+  const { retryOnce } = require('./services/mimsRetry');
+  const LOCK_KEY = 'cp-portal-mims-retry';
+  async function tick() {
+    let lockAcquired = false;
+    try {
+      const [[lockRow]] = await pool.execute('SELECT GET_LOCK(?, 0) AS acquired', [LOCK_KEY]);
+      lockAcquired = Number(lockRow?.acquired || 0) === 1;
+      if (!lockAcquired) return;
+      await retryOnce();
+    } catch { /* silently ignore retry errors */ }
+    finally {
+      if (lockAcquired) await pool.execute('SELECT RELEASE_LOCK(?)', [LOCK_KEY]).catch(() => {});
+    }
+  }
+  return tick;
+}
+const mimsRetryTick = createMimsRetryScheduler();
+
+app.post('/api/internal/cron/mims-retry', async (req, res) => {
+  const secret = process.env.CP_CRON_SECRET;
+  if (!secret || req.get('x-cron-secret') !== secret) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+  try { await mimsRetryTick(); res.json({ ok: true }); }
+  catch (err) { log.error('mims-retry.cron.failed', { err }); res.status(500).json({ error: 'Retry tick failed.' }); }
+});
+
 // ── Health check ──────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
   let dbStatus = 'ok';
@@ -273,6 +336,12 @@ runMigrations()
     } else {
       schedulerTick();
       schedulerHandle = setInterval(schedulerTick, 60 * 1000);
+      // B1: close-sync poller (configurable, default every 5 min)
+      mimsCloseSyncTick();
+      mimsCloseSyncHandle = setInterval(mimsCloseSyncTick, Number(process.env.MIMS_CLOSE_SYNC_INTERVAL_MS || 5 * 60 * 1000));
+      // R1: retry poller (configurable, default every 60s; backoff gates actual work)
+      mimsRetryTick();
+      mimsRetryHandle = setInterval(mimsRetryTick, Number(process.env.MIMS_RETRY_INTERVAL_MS || 60 * 1000));
       log.info('scheduler.mode', { mode: 'in-process' });
     }
   })
@@ -285,6 +354,8 @@ runMigrations()
 function shutdown(signal) {
   console.log(`CP Portal shutdown signal received: ${signal}`);
   if (schedulerHandle) clearInterval(schedulerHandle);
+  if (mimsCloseSyncHandle) clearInterval(mimsCloseSyncHandle);
+  if (mimsRetryHandle) clearInterval(mimsRetryHandle);
   if (!server) return process.exit(0);
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 1500).unref();

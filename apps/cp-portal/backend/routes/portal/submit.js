@@ -15,6 +15,7 @@ const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard')
 const { decryptSecret } = require('../../utils/secretCrypto');
 const { validateUploads } = require('../../utils/fileValidation');
 const { enqueue } = require('../../utils/jobQueue');
+const { systemAudit } = require('../../utils/audit');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
 const ATT_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB per file
@@ -117,6 +118,9 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
 
     const submissionId = info.insertId;
 
+    // A1: audit the inquiry lifecycle. 'submitted' is the first entry.
+    systemAudit('portal', client.id, 'SUBMITTED', 'submission', submissionId, { type: formType });
+
     // Save any uploaded attachments, linked to the new submission.
     if (req.files && req.files.length > 0) {
       for (const f of req.files) {
@@ -181,7 +185,114 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
 
 // ── Integration sync helper ───────────────────────────────────
 
+// CP form type → MIMS case_type. `other_inquiry` has NO MIMS equivalent
+// (MIMS only models MI/AE/PC), so it is intentionally absent here and is never
+// pushed — it stays CP-only on the admin screen. (Rohith decision, Gate 1 2026-07-10)
+const FORM_TYPE_TO_CASE_TYPE = {
+  medical_inquiry:   'MI',
+  adverse_event:     'AE',
+  product_complaint: 'PC',
+};
+
+// Build the MIMS /api/v1/cases payload from a CP submission's form_data.
+// The portal captures the MINIMUM field set; MIMS triage completes the regulated
+// fields (seriousness, causality, MedDRA, etc.). Reads the seeded CP field keys
+// and tolerates the richer AE template's alternate keys as fallbacks.
+function buildMimsPayload(formType, formData, submissionId) {
+  const caseType = FORM_TYPE_TO_CASE_TYPE[formType];
+  const pick = (...keys) => {
+    for (const k of keys) {
+      const v = formData[k];
+      if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+    }
+    return null;
+  };
+
+  const payload = {
+    case_type: caseType,
+    intake_channel: 'Portal',
+    reference: `CP-${String(submissionId).padStart(6, '0')}`,
+    reporter: {
+      first_name:    pick('first_name'),
+      last_name:     pick('last_name'),
+      email:         pick('email', 'reporter_contact'),
+      phone:         pick('phone'),
+      organisation:  pick('organization', 'organisation'),
+      reporter_type: pick('reporter_type'),
+    },
+  };
+
+  if (caseType === 'MI') {
+    const question = pick('inquiry_details', 'question_summary', 'message');
+    payload.description = question;
+    // C2: populate the MIMS MI tab, not just the case description.
+    payload.mi_intake = {
+      mi_category:       pick('mi_category', 'category'),
+      question_summary:  pick('question_summary', 'subject') || (question ? String(question).slice(0, 255) : null),
+      detailed_question: question,
+    };
+  } else if (caseType === 'AE') {
+    payload.patient = {
+      initials: pick('patient_initials'),
+      age:      pick('patient_age'),
+      gender:   pick('patient_sex'),
+    };
+    payload.ae_intake = {
+      suspect_drug_name:    pick('product_name', 'suspect_product'),
+      batch_lot_number:     pick('lot_number', 'batch_lot_number'),
+      reaction_description: pick('event_description'),
+      reaction_onset_date:  pick('event_date', 'onset_date'),
+      outcome:              pick('outcome'),
+    };
+    payload.description = pick('event_description');
+  } else if (caseType === 'PC') {
+    payload.pc_intake = {
+      product_name:          pick('product_name'),
+      batch_lot_number:      pick('lot_number', 'batch_lot_number'),
+      complaint_category:    pick('complaint_category'),
+      complaint_description: pick('complaint_details', 'complaint_description'),
+    };
+    payload.description = pick('complaint_details');
+  }
+
+  return payload;
+}
+
+// C1: push a submission's stored attachments onto the linked MIMS case. Each file
+// is independent — a failure on one is audited and skipped, never fatal to the sync.
+async function forwardAttachments(integration, mimsCaseId, submissionId, headers) {
+  const [atts] = await pool.execute(
+    'SELECT id, file_name, file_path, mime_type FROM cp_submission_attachments WHERE submission_id = ?',
+    [submissionId]
+  );
+  if (!atts.length) return;
+  // Multipart: carry only the auth header — fetch sets the multipart Content-Type + boundary.
+  const authHeaders = {};
+  if (headers['Authorization']) authHeaders['Authorization'] = headers['Authorization'];
+  if (headers['X-API-Key']) authHeaders['X-API-Key'] = headers['X-API-Key'];
+
+  for (const a of atts) {
+    try {
+      const abs = path.join(__dirname, '../../', a.file_path.replace(/^\//, ''));
+      if (!fs.existsSync(abs)) continue;
+      const fd = new FormData();
+      fd.append('file', new Blob([fs.readFileSync(abs)], { type: a.mime_type || 'application/octet-stream' }), a.file_name || 'attachment');
+      const url = new URL(`/api/v1/cases/${encodeURIComponent(mimsCaseId)}/attachments`, integration.api_base_url).toString();
+      const r = await safeFetch(url, { method: 'POST', headers: authHeaders, body: fd });
+      systemAudit('MIMS integration', integration.client_id, r.ok ? 'ATTACHMENT_FORWARDED' : 'ATTACHMENT_FAILED',
+        'submission', submissionId, { attachment: a.file_name, mims_case_id: mimsCaseId, status: r.status });
+    } catch (err) {
+      systemAudit('MIMS integration', integration.client_id, 'ATTACHMENT_FAILED', 'submission', submissionId,
+        { attachment: a.file_name, error: err.message });
+    }
+  }
+}
+
 async function syncToIntegration(clientId, submissionId, formType) {
+  // other_inquiry has no MIMS case type — it is never pushed (CP-only). Gate 1 decision.
+  if (!Object.prototype.hasOwnProperty.call(FORM_TYPE_TO_CASE_TYPE, formType)) return;
+
+  // AC3: no active integration configured for this client → stay CP-only, no MIMS call.
   const [[integration]] = await pool.execute('SELECT * FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [clientId]);
   if (!integration) return;
   integration.api_key = decryptSecret(integration.api_key);
@@ -194,20 +305,15 @@ async function syncToIntegration(clientId, submissionId, formType) {
 
   const formData = typeof submission.form_data === 'string' ? JSON.parse(submission.form_data) : submission.form_data;
 
-  // Build target payload using field mappings
-  const payload = {};
+  // Default structured payload — works out-of-the-box for the seeded portal forms.
+  const payload = buildMimsPayload(formType, formData, submissionId);
+
+  // Admin-configured field mappings override/extend the defaults (flat target fields).
   for (const m of mappings) {
     let value = formData[m.cp_field] ?? m.default_value ?? null;
     if (value && m.transform === 'uppercase') value = String(value).toUpperCase();
     if (value && m.transform === 'date_iso') value = new Date(value).toISOString();
     payload[m.target_field] = value;
-  }
-
-  // If no mappings configured, send raw form_data
-  if (mappings.length === 0) {
-    payload.form_data = formData;
-    payload.submission_type = formType;
-    payload.reference = `CP-${String(submissionId).padStart(6, '0')}`;
   }
 
   try {
@@ -219,19 +325,27 @@ async function syncToIntegration(clientId, submissionId, formType) {
     if (integration.auth_type === 'apikey' && integration.api_key) headers['X-API-Key'] = integration.api_key;
     if (integration.extra_headers) Object.assign(headers, JSON.parse(integration.extra_headers));
 
-    const r = await safeFetch(new URL('/api/cases', safeBaseUrl).toString(), {
+    // MIMS machine-to-machine intake endpoint (API-key auth). Was /api/cases (the
+    // internal user-JWT route); retargeted to the purpose-built partner endpoint.
+    const r = await safeFetch(new URL('/api/v1/cases', safeBaseUrl).toString(), {
       method: 'POST', headers, body: JSON.stringify(payload),
     });
 
     if (r.ok) {
       const data = await r.json().catch(() => ({}));
+      const mimsCaseId = data.case_id || data.id || null;
       await pool.execute(`UPDATE cp_submissions SET status='synced', external_ref=?, synced_at=NOW(), sync_error=null WHERE id=?`,
-        [data.case_id || data.id || null, submissionId]);
+        [mimsCaseId, submissionId]);
+      systemAudit('MIMS integration', clientId, 'SYNCED', 'submission', submissionId, { mims_case_id: mimsCaseId });
+      // C1: forward any attachments onto the MIMS case (non-fatal per file).
+      if (mimsCaseId) await forwardAttachments(integration, mimsCaseId, submissionId, headers);
     } else {
       await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [`HTTP ${r.status}`, submissionId]);
+      systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: `HTTP ${r.status}` });
     }
   } catch (err) {
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [err.message, submissionId]);
+    systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: err.message });
   }
 }
 
@@ -253,3 +367,5 @@ router.get('/:clientCode/attachments/:attachmentId', authenticatePortal, require
 });
 
 module.exports = router;
+// R1: exposed so the retry poller can re-drive a failed sync without duplicating logic.
+module.exports.syncToIntegration = syncToIntegration;

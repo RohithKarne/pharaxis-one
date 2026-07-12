@@ -35,12 +35,12 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 // POST /api/admin/integration/:clientId — add integration
 router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    const { system_name, api_base_url, api_key, api_secret, auth_type, extra_headers } = req.body;
+    const { system_name, api_base_url, api_key, api_secret, auth_type, extra_headers, mims_case_url_base } = req.body;
     if (!api_base_url) return res.status(400).json({ error: 'api_base_url is required.' });
     const [result] = await pool.execute(
-      `INSERT INTO cp_integration_config (client_id, system_name, api_base_url, api_key, api_secret, auth_type, extra_headers)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [req.params.clientId, system_name || 'MIMS', api_base_url, encryptSecret(api_key ?? null), encryptSecret(api_secret ?? null), auth_type || 'bearer', extra_headers ? JSON.stringify(extra_headers) : null]
+      `INSERT INTO cp_integration_config (client_id, system_name, api_base_url, api_key, api_secret, auth_type, extra_headers, mims_case_url_base)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.params.clientId, system_name || 'MIMS', api_base_url, encryptSecret(api_key ?? null), encryptSecret(api_secret ?? null), auth_type || 'bearer', extra_headers ? JSON.stringify(extra_headers) : null, mims_case_url_base || null]
     );
     res.status(201).json({ id: result.insertId, message: 'Integration configured.' });
   } catch (err) {
@@ -51,7 +51,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
 // PATCH /api/admin/integration/:clientId/:integrationId
 router.patch('/:clientId/:integrationId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    const allowed = ['system_name', 'api_base_url', 'api_key', 'api_secret', 'auth_type', 'is_active'];
+    const allowed = ['system_name', 'api_base_url', 'api_key', 'api_secret', 'auth_type', 'is_active', 'mims_case_url_base'];
     const updates = [], params = [];
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
@@ -95,14 +95,22 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, requireClientAc
       if (cfg.auth_type === 'apikey' && cfg.api_key) headers['X-API-Key'] = cfg.api_key;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
-      const r = await safeFetch(new URL('/api/health', safeUrl).toString(), { headers, signal: controller.signal });
+      // O1: authenticated check — hit the real intake endpoint so a valid host with
+      // a bad/missing token or wrong scope FAILS the test (was only pinging /api/health).
+      const r = await safeFetch(new URL('/api/v1/cases', safeUrl).toString(), { headers, signal: controller.signal });
       clearTimeout(timeout);
+      let message;
+      if (r.ok) message = 'Authenticated OK — token valid with case access.';
+      else if (r.status === 401) message = 'Unauthorized — token missing or invalid.';
+      else if (r.status === 403) message = 'Forbidden — token lacks the cases scope.';
+      else if (r.status === 404) message = 'Host reached, but /api/v1/cases not found — is the API platform enabled?';
+      else message = `Unexpected response (HTTP ${r.status}).`;
       const syncStatus = r.ok ? 'success' : 'failure';
       await pool.execute(
-        `UPDATE cp_integration_config SET last_sync_at = NOW(), last_sync_status = ?, last_sync_error = NULL WHERE id = ?`,
-        [syncStatus, cfg.id]
+        `UPDATE cp_integration_config SET last_sync_at = NOW(), last_sync_status = ?, last_sync_error = ? WHERE id = ?`,
+        [syncStatus, r.ok ? null : message, cfg.id]
       );
-      res.json({ success: r.ok, status: r.status });
+      res.json({ success: r.ok, status: r.status, message });
     } catch (fetchErr) {
       await pool.execute(
         `UPDATE cp_integration_config SET last_sync_at = NOW(), last_sync_status = 'failure', last_sync_error = ? WHERE id = ?`,

@@ -34,6 +34,19 @@ function isAllowedHostname(hostname) {
   return allowlist.some((entry) => hostname === entry || hostname.endsWith(`.${entry}`))
 }
 
+// Operator-designated internal integration targets (e.g. the MIMS service on the
+// same private network). Set ONLY via server env (CP_INTERNAL_INTEGRATION_HOSTS) —
+// never from admin-UI input — so the SSRF guard still fully applies to any URL an
+// admin can enter, while the one vetted internal destination can be reached.
+// Exact hostname match only; no suffix/wildcard expansion.
+function isTrustedInternalHost(hostname) {
+  const list = String(process.env.CP_INTERNAL_INTEGRATION_HOSTS || '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+  return list.includes(String(hostname).toLowerCase())
+}
+
 async function assertSafeOutboundUrl(rawUrl) {
   let parsed
   try {
@@ -50,6 +63,12 @@ async function assertSafeOutboundUrl(rawUrl) {
   }
 
   const hostname = parsed.hostname.toLowerCase()
+  // Operator-vetted internal target (env-only): bypass the localhost/private-IP
+  // blocks for this exact host, since MIMS is an internal service on the same
+  // private network. All other hosts remain subject to every check below.
+  if (isTrustedInternalHost(hostname)) {
+    return parsed
+  }
   if (hostname === 'localhost' || hostname.endsWith('.local')) {
     throw new Error('Outbound localhost/local domains are blocked')
   }
