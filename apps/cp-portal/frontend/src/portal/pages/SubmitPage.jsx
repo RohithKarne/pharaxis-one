@@ -185,8 +185,17 @@ export default function SubmitPage() {
                       value={formValues[field.field_key] || ''}
                       onChange={e => handleFieldChange(field.field_key, e.target.value)}>
                       <option value="">-- Select --</option>
-                      {(field.options || '').split('\n').filter(Boolean).map(o => (
-                        <option key={o.trim()} value={o.trim()}>{o.trim()}</option>
+                      {(() => {
+                        // Options may be stored as a JSON array (e.g. ["HCP","Patient"])
+                        // or as newline-separated text. Handle both, else the whole
+                        // array renders as a single broken option.
+                        const raw = String(field.options || '').trim()
+                        let opts = []
+                        if (raw.startsWith('[')) { try { opts = JSON.parse(raw) } catch { opts = [] } }
+                        if (!opts.length) opts = raw.split('\n')
+                        return opts.map(o => String(o).trim()).filter(Boolean)
+                      })().map(o => (
+                        <option key={o} value={o}>{o}</option>
                       ))}
                     </select>
                   ) : field.field_type === 'checkbox' ? (

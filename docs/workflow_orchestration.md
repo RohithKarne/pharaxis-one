@@ -27,6 +27,14 @@
 ### 4. Verification Before Done
 
 -   Never mark a task complete without proving it works
+-   **Functional + browser verification, like a human: open the real UI a user
+    uses and confirm the change renders and behaves correctly.** Data present in
+    the database or returned by an API is NOT proof — the user reads the screen,
+    not the database. Verify the screen. (Team Operating SOP §26)
+-   **For an integration between two apps, verify the data is visible and usable
+    in the RECEIVING app's UI — not just that rows landed in its database.** The
+    screen may read from different tables/versions or be gated by a feature flag;
+    only opening the UI proves it. (This gap let a defect reach the CEO 2026-07-11.)
 -   Diff behavior between main and your changes when relevant
 -   Ask yourself: "Would a staff engineer approve this?"
 -   Run tests, check logs, demonstrate correctness

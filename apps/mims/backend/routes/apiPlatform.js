@@ -246,6 +246,61 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
       );
     }
 
+    // FIX-1: also write the case into the structures the MIMS case SCREEN reads,
+    // so portal-created cases are actually visible — not just present in intake tables.
+    //   reporter  → case_contacts                     (Overview / Contacts tab)
+    //   AE detail → case_ae_versions + general/events/product  (AE tab)
+    //   PC detail → case_pc_versions + general/product          (PC tab)
+    if (reporter && typeof reporter === 'object') {
+      await conn.execute(
+        `INSERT INTO case_contacts (case_id, contact_role, is_primary, first_name, last_name, contact_type, reporter_type, phone, email)
+         VALUES (?, 'reporter', 1, ?, ?, ?, ?, ?, ?)`,
+        [caseId, reporter.first_name || null, reporter.last_name || null, 'Reporter', reporter.reporter_type || 'HCP', reporter.phone || null, reporter.email || null]
+      );
+    }
+
+    if (caseType === 'AE') {
+      const aeData = (ae && typeof ae === 'object') ? ae : {};
+      const [aev] = await conn.execute('INSERT INTO case_ae_versions (case_id, version_number, created_by) VALUES (?, 1, NULL)', [caseId]);
+      const aeVer = aev.insertId;
+      await conn.execute(
+        `INSERT INTO case_ae_general (version_id, ae_status, date_of_onset, additional_info) VALUES (?, 'Open', ?, ?)`,
+        [aeVer, toDateOnly(aeData.reaction_onset_date), aeData.reaction_description || desc || null]
+      );
+      await conn.execute(
+        `INSERT INTO case_ae_events
+           (version_id, event_description, outcome, start_date,
+            is_serious, is_death, is_life_threatening, is_hospitalization,
+            is_disability, is_congenital_anomaly, is_other_medically_important)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [aeVer, aeData.reaction_description || null, aeData.outcome || null, toDateOnly(aeData.reaction_onset_date),
+         aeData.is_serious ? 1 : 0, aeData.is_death ? 1 : 0, aeData.is_life_threatening ? 1 : 0, aeData.is_hospitalization ? 1 : 0,
+         aeData.is_disability ? 1 : 0, aeData.is_congenital_anomaly ? 1 : 0, aeData.is_other_medically_important ? 1 : 0]
+      );
+      if (aeData.suspect_drug_name || aeData.batch_lot_number) {
+        await conn.execute(
+          `INSERT INTO case_ae_product_info (version_id, product_name, batch_lot_number, is_suspect) VALUES (?, ?, ?, 1)`,
+          [aeVer, aeData.suspect_drug_name || null, aeData.batch_lot_number || null]
+        );
+      }
+    }
+
+    if (caseType === 'PC') {
+      const pcData = (pc && typeof pc === 'object') ? pc : {};
+      const [pcv] = await conn.execute('INSERT INTO case_pc_versions (case_id, version_number, created_by) VALUES (?, 1, NULL)', [caseId]);
+      const pcVer = pcv.insertId;
+      await conn.execute(
+        `INSERT INTO case_pc_general (version_id, complaint_description) VALUES (?, ?)`,
+        [pcVer, pcData.complaint_description || desc || null]
+      );
+      if (pcData.product_name || pcData.batch_lot_number) {
+        await conn.execute(
+          `INSERT INTO case_pc_product_info (version_id, product_name, lot_number) VALUES (?, ?, ?)`,
+          [pcVer, pcData.product_name || null, pcData.batch_lot_number || null]
+        );
+      }
+    }
+
     await conn.commit();
     res.status(201).json({ id: caseId });
   } catch (err) {

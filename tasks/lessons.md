@@ -58,3 +58,17 @@
 **What:** When Varun asked Saad (CPO) to prepare a document, the reply closed in a way that let the CTO voice front the product work instead of Saad owning the response.
 **Why:** Defaulted to a coordinator/CTO framing rather than staying fully in the addressed persona.
 **Rule:** When a team member is addressed by name, that person is the responsible speaker and answers in first person within their own lane. Do not let Varun (or any other role) front, frame, or speak over the addressed persona. Saad owns product; Bhavya owns eng/QA; Bala owns PMO/process; Varun owns engineering coordination — each speaks only for their own area.
+
+---
+
+## L-009 — DB/API "verification" that never opened the user's screen (2026-07-11)
+**What:** The CP Portal → MIMS integration was called "done and verified" across multiple waves. Verification only checked that rows landed in the MIMS database and that API endpoints returned data. When Rohith actually opened a MIMS case, the reporter, AE/PC details, and attachments were **not visible** — the case screen reads `case_contacts` + the versioned `case_ae_*`/`case_pc_*` tables + a feature-flagged attachments panel, while the integration wrote the flat intake tables (`case_reporter`, `case_ae_intake`, `case_pc_intake`). Data was present but rendered nowhere. The defect reached the CEO.
+**Why:** DB/API evidence was allowed to stand in for functional verification. No one opened the receiving app's UI as a real user. "It's in the database" was treated as "the user can see it."
+**Rule:** **Never call anything done on DB/API evidence alone.** Verify functionally in the actual UI a user opens, like a human — for the changed flow and one negative path. For an integration, verify the data is visible and usable in the RECEIVING app's UI (which may read different tables/versions or be gated by a feature flag), not just written to its database. Codified as Team Operating SOP §26 (Functional Verification Standard), Definition of Done (§22), and the live-communication Core Rules. When verifying a two-app integration, trace what the consuming screen actually reads BEFORE writing, and confirm it renders AFTER.
+
+---
+
+## L-010 — Refresh governing SOPs before preparing a product plan (2026-07-14)
+**What:** Rohith asked for the Vault roadmap plan, then directed the team to read the current live-communication, operating, and workflow documents before preparing it.
+**Why:** A product plan can become stale or breach the current operating model when it is drafted from prior context rather than the active project SOPs.
+**Rule:** Before drafting a non-trivial Pharaxis product plan or implementation scope, refresh the current governing SOPs and reflect their latest roles, approval gates, task-scope requirements, and functional verification standard in the output.

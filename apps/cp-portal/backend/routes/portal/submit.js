@@ -208,22 +208,32 @@ function buildMimsPayload(formType, formData, submissionId) {
     return null;
   };
 
+  // FIX-3: clients configure their own form field keys (e.g. Novartis uses
+  // `reporter_name`, `reporter_email`, `description`, `question`; the seed used
+  // `first_name`, `email`, `event_description`, `inquiry_details`). Read a broad set
+  // of aliases so real submissions carry their content into MIMS instead of syncing
+  // an empty case. A single full-name field is split into first/last.
+  const fullName = pick('reporter_name', 'name', 'full_name', 'contact_name');
+  const nameParts = fullName ? String(fullName).trim().split(/\s+/) : [];
+  const firstName = pick('first_name') || (nameParts.length ? nameParts[0] : null);
+  const lastName  = pick('last_name')  || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : null);
+
   const payload = {
     case_type: caseType,
     intake_channel: 'Portal',
     reference: `CP-${String(submissionId).padStart(6, '0')}`,
     reporter: {
-      first_name:    pick('first_name'),
-      last_name:     pick('last_name'),
-      email:         pick('email', 'reporter_contact'),
-      phone:         pick('phone'),
-      organisation:  pick('organization', 'organisation'),
-      reporter_type: pick('reporter_type'),
+      first_name:    firstName,
+      last_name:     lastName,
+      email:         pick('email', 'reporter_email', 'reporter_contact', 'contact_email'),
+      phone:         pick('phone', 'reporter_phone', 'contact_phone'),
+      organisation:  pick('organization', 'organisation', 'institution'),
+      reporter_type: pick('reporter_type', 'user_type'),
     },
   };
 
   if (caseType === 'MI') {
-    const question = pick('inquiry_details', 'question_summary', 'message');
+    const question = pick('inquiry_details', 'question', 'question_details', 'question_summary', 'message', 'description', 'details');
     payload.description = question;
     // C2: populate the MIMS MI tab, not just the case description.
     payload.mi_intake = {
@@ -234,25 +244,27 @@ function buildMimsPayload(formType, formData, submissionId) {
   } else if (caseType === 'AE') {
     payload.patient = {
       initials: pick('patient_initials'),
-      age:      pick('patient_age'),
-      gender:   pick('patient_sex'),
+      age:      pick('patient_age', 'age'),
+      gender:   pick('patient_sex', 'gender'),
     };
+    const reaction = pick('event_description', 'description', 'reaction_description', 'event_details', 'details');
     payload.ae_intake = {
-      suspect_drug_name:    pick('product_name', 'suspect_product'),
-      batch_lot_number:     pick('lot_number', 'batch_lot_number'),
-      reaction_description: pick('event_description'),
-      reaction_onset_date:  pick('event_date', 'onset_date'),
+      suspect_drug_name:    pick('product_name', 'suspect_product', 'drug_name', 'product'),
+      batch_lot_number:     pick('lot_number', 'batch_lot_number', 'batch_number', 'lot'),
+      reaction_description: reaction,
+      reaction_onset_date:  pick('event_date', 'onset_date', 'reaction_onset_date', 'date_of_event'),
       outcome:              pick('outcome'),
     };
-    payload.description = pick('event_description');
+    payload.description = reaction;
   } else if (caseType === 'PC') {
+    const complaint = pick('complaint_details', 'complaint_description', 'description', 'details', 'complaint');
     payload.pc_intake = {
-      product_name:          pick('product_name'),
-      batch_lot_number:      pick('lot_number', 'batch_lot_number'),
-      complaint_category:    pick('complaint_category'),
-      complaint_description: pick('complaint_details', 'complaint_description'),
+      product_name:          pick('product_name', 'product', 'drug_name'),
+      batch_lot_number:      pick('lot_number', 'batch_lot_number', 'batch_number', 'lot'),
+      complaint_category:    pick('complaint_category', 'category'),
+      complaint_description: complaint,
     };
-    payload.description = pick('complaint_details');
+    payload.description = complaint;
   }
 
   return payload;

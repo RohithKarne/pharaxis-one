@@ -51,6 +51,7 @@ This is not a reporting format. It is how the team thinks, discusses, and moves 
 - Katrina is an external client — loop her only when Rohith brings her in, and never expose internal capacity, cost, staffing, or unreleased roadmap
 - Work does not start without Gate 1 approval
 - Work is not called done without Gate 2 approval and QA evidence
+- Nothing is called done without **functional + browser verification, exercised like a real user** — data present in the database or returned by an API is NOT "done" until it is confirmed rendering and working in the actual UI the user opens (see Team Operating SOP, Section 26)
 
 ---
 
@@ -345,6 +346,7 @@ Noted. Raising Gate 2 now.
 ### Everyone
 - Do not make decisions in offline channels and not reflect them in chat
 - Do not say "fixed" or "done" without explaining what changed
+- Do not call anything done based on database or API checks alone — verify it works in the actual UI, like a real user, before saying done (Team Operating SOP §26)
 - Do not stay silent during a task you are assigned to
 
 ### Bala Kaviti

@@ -6,6 +6,7 @@
 > Revision update: 2026-03-31 (Section 25 added — engineering tooling workflow. Tooling protocol added to Section 7. Engineering execution step updated in Section 8.)
 > Revision update: 2026-04-14 (Team restructured by Rohith. Reduced to 5-person team. Full names added. Roles updated.)
 > Revision update: 2026-07-10 (Team expanded to 11 by Rohith. Bala Kaviti promoted to COO. New C-suite: Chief Compliance Officer, Chief AI Officer, Chief Medical Officer. New engineering roles: Director of QA, Lead Test Engineer, Solution Architect. Bhavya Bobba is Engineering Manager only — QA function transferred to Kiranmai Avuluri. External client contact added: Katrina.)
+> Revision update: 2026-07-11 (Section 26 added — Functional Verification Standard. Mandated by Rohith after a defect reached the CEO: data was written to the database and returned by the API, but did not render in the MIMS case screen the user actually opens. DB/API evidence alone no longer counts as verification. Definition of Done (§22) and "What Does Not Count as Evidence" (§15) strengthened accordingly.)
 
 ---
 
@@ -887,6 +888,8 @@ Kiranmai Avuluri must post written confirmation in chat with evidence reference 
 - API-only testing for a frontend change
 - code review without runtime verification
 - a passing test run from a previous build
+- **data present in the database, or returned by an API/endpoint, WITHOUT confirming it renders and behaves correctly in the actual UI the end user uses.** This exact gap let a defect reach the CEO on 2026-07-11 — the integration wrote data MIMS stored, but the case screen read from different tables and showed nothing. Presence in the DB is not proof the user can see or use it.
+- for an integration between two apps: verifying only the sending side, or only that rows landed in the receiving app's database — without opening the receiving app's UI and confirming the data is visible and usable there
 
 ---
 
@@ -1000,6 +1003,7 @@ Work is ready for development only when:
 Work is done only when:
 - build is implemented
 - engineering has verified it
+- **the change has been verified FUNCTIONALLY in the actual UI a user uses (browser), exercised like a real user — not only in the database or via API (see Section 26)**
 - Gate 2 is approved
 - QA has executed and evidenced it
 - no blocking issue remains
@@ -1172,3 +1176,37 @@ Before Bala raises Gate 1:
 - [ ] Bhavya has written task scopes for every task in scope
 
 Gate 1 is blocked until all three are true.
+
+---
+
+## 26. Functional Verification Standard (Mandatory)
+
+> Established: 2026-07-11. Mandated by Rohith after a defect reached the CEO because the team verified the database, not the screen.
+
+### Principle
+
+**Every fix, feature, and enhancement must be verified functionally — in the actual UI a real user opens — before anyone says it is done.** Testing that a value was written to the database, or returned by an API/endpoint, is a *step*, not proof. It does not count as verification on its own.
+
+Test it like a human would: open the app, do the thing, look at the result on screen.
+
+### The rule
+
+- A change is not verified until someone has **exercised it end-to-end through the real user interface** and seen the correct result render and behave.
+- "The data is in the database" and "the API returns it" are **necessary but not sufficient**. The user does not read the database — they read the screen. Verify the screen.
+- For a change that spans two applications (an **integration**), verification must include **opening the receiving application's UI and confirming the data is visible and usable there** — not only that rows were written to its database. The screen may read from different tables, versions, or be gated by a feature flag; only the UI proves it.
+- This applies to backend-only changes too: if a backend change is supposed to make something appear or behave differently for a user, the verification is the user-facing result, not the backend log.
+
+### Who owns it
+
+- **Bhavya Bobba (Engineering)** — functional/browser verification of the changed behaviour through the real UI before Gate 2. Reports what was clicked and what was seen.
+- **Krishnapriya (Lead Test Engineer)**, signed off by **Kiranmai Avuluri (Director of QA)** — independent functional/browser verification through the real UI before product review. QA does not accept engineering's DB/API check in place of this.
+- **Saad Rahman (CPO)** — walks each delivered request end-to-end as a user before confirming to Rohith that it is complete.
+
+### Evidence required
+
+- A description (and, where possible, a screenshot) of **what was done in the UI and what was observed on screen** — for the changed flow and at least one negative path.
+- For integrations: evidence from **both** the sending and the **receiving** app's UI.
+
+### What this prevents
+
+A change that "works" in the database or the API but shows nothing (or the wrong thing) to the user — the exact failure that reached the CEO on 2026-07-11. Presence of data is never a substitute for a user being able to see and use it.
