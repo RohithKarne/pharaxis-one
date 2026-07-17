@@ -9,6 +9,7 @@ import { resolveUserSecurityGroups } from '../services/securityGroupService.js';
 import { queueEmailNotification } from '../services/platform/notificationService.js';
 
 const OTP_VALIDITY_SECONDS = 600;
+const EMPTY_RLS_ORG_ID = '00000000-0000-0000-0000-000000000000';
 
 export const authRouter = Router();
 
@@ -68,6 +69,20 @@ function makeUserAuthResponse(user, securityGroups, token) {
       securityGroups
     }
   };
+}
+
+async function applyAuthRouteRlsContext(client) {
+  await client.query("SELECT set_config('app.is_superadmin', 'true', false)");
+  await client.query("SELECT set_config('app.current_org_id', $1, false)", [EMPTY_RLS_ORG_ID]);
+}
+
+async function resetAuthRouteRlsContext(client) {
+  try {
+    await client.query("SELECT set_config('app.is_superadmin', 'false', false)");
+    await client.query("SELECT set_config('app.current_org_id', $1, false)", [EMPTY_RLS_ORG_ID]);
+  } catch {
+    // Ignore reset failures while returning the client to the pool.
+  }
 }
 
 async function validatePassword(client, passwordHash, passwordInput) {
@@ -158,10 +173,9 @@ authRouter.get('/orgs', orgDiscoveryLimiter, async (req, res, next) => {
   const pool = getDbPool();
   const client = await pool.connect();
   try {
+    await applyAuthRouteRlsContext(client);
     const query = String(req.query.q || '').trim();
-    if (query.length < 2) {
-      return res.json({ orgs: [] });
-    }
+    const searchPattern = query.length >= 2 ? `%${query}%` : '%';
     const { rows } = await client.query(
       `
         SELECT org_code, org_name
@@ -174,7 +188,7 @@ authRouter.get('/orgs', orgDiscoveryLimiter, async (req, res, next) => {
         ORDER BY org_name ASC
         LIMIT 10
       `,
-      [`%${query}%`]
+      [searchPattern]
     );
     return res.json({
       orgs: rows.map((row) => ({
@@ -185,6 +199,7 @@ authRouter.get('/orgs', orgDiscoveryLimiter, async (req, res, next) => {
   } catch (error) {
     return next(error);
   } finally {
+    await resetAuthRouteRlsContext(client);
     client.release();
   }
 });
@@ -194,6 +209,7 @@ authRouter.post('/login', authEndpointLimiter, async (req, res, next) => {
   const client = await pool.connect();
 
   try {
+    await applyAuthRouteRlsContext(client);
     const { userId, email, password, orgCode } = req.body || {};
     const loginIdentifier = String(userId || email || '').trim();
     if (!loginIdentifier || !password || !orgCode) {
@@ -343,6 +359,7 @@ authRouter.post('/login', authEndpointLimiter, async (req, res, next) => {
   } catch (error) {
     return next(error);
   } finally {
+    await resetAuthRouteRlsContext(client);
     client.release();
   }
 });
@@ -352,6 +369,7 @@ authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next)
   const client = await pool.connect();
 
   try {
+    await applyAuthRouteRlsContext(client);
     const { challengeId, otp } = req.body || {};
     if (!challengeId || !otp) {
       return res.status(400).json({ error: 'challengeId and otp are required' });
@@ -495,6 +513,7 @@ authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next)
   } catch (error) {
     return next(error);
   } finally {
+    await resetAuthRouteRlsContext(client);
     client.release();
   }
 });
@@ -504,6 +523,7 @@ authRouter.post('/superadmin/login', authEndpointLimiter, async (req, res, next)
   const client = await pool.connect();
 
   try {
+    await applyAuthRouteRlsContext(client);
     const { userId, email, password } = req.body || {};
     const loginIdentifier = String(userId || email || '').trim();
     if (!loginIdentifier || !password) {
@@ -625,6 +645,7 @@ authRouter.post('/superadmin/login', authEndpointLimiter, async (req, res, next)
   } catch (error) {
     return next(error);
   } finally {
+    await resetAuthRouteRlsContext(client);
     client.release();
   }
 });

@@ -17,10 +17,14 @@ async function retryOnce() {
   // Lazy require avoids a load-order cycle with the submit route.
   const { syncToIntegration } = require('../routes/portal/submit');
 
+  // Includes stale `pending_sync` rows: a process crash between the status write
+  // and the sync result leaves them stuck forever otherwise (found via the Sync
+  // Health dashboard — submission #42 sat in pending_sync for months).
   const [rows] = await pool.execute(
     `SELECT id, client_id, submission_type, sync_attempts, updated_at
        FROM cp_submissions
-      WHERE status = 'failed_sync' AND sync_attempts < ?
+      WHERE (status = 'failed_sync' AND sync_attempts < ?)
+         OR (status = 'pending_sync' AND updated_at < NOW() - INTERVAL 10 MINUTE)
       ORDER BY id ASC LIMIT ${BATCH}`,
     [MAX_ATTEMPTS]
   );

@@ -76,6 +76,12 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   const [siteName, setSiteName] = useState(() => initState('siteName'))
   const [allOrgs,       setAllOrgs]       = useState(() => initState('allOrgs'))
   const [securityAccess, setSecurityAccess] = useState(() => createUnresolvedSecurityAccess())
+  // True while a cookie-backed session MAY exist but the in-memory token hasn't
+  // been rehydrated yet (persisted user, no token, non-public path). ProtectedRoute
+  // waits on this instead of bouncing a valid session to /login on every hard
+  // refresh (the JWT is cookie-only by design — F14 — so token is ALWAYS null on
+  // first render and the old redirect-on-null-token check always lost the race).
+  const [restoring, setRestoring] = useState(() => !isPublicAuthPath() && !!initState('user'))
   const [sessionTimeout, setSessionTimeout] = useState(() => {
     const saved = localStorage.getItem(`${KEY}_session_timeout`)
     return saved ? parseInt(saved) : 30
@@ -189,8 +195,8 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   // header is required. On success applyAuthState() rehydrates state including
   // a fresh in-memory token for the rest of the session.
   useEffect(() => {
-    if (isPublicAuthPath()) return
-    if (!token && !user) return
+    if (isPublicAuthPath()) { setRestoring(false); return }
+    if (!token && !user) { setRestoring(false); return }
     let cancelled = false
 
     async function hydrateFromServer() {
@@ -204,12 +210,20 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
         applyAuthState(data)
       } catch {
         // Keep the locally-restored state when the network is unavailable.
+      } finally {
+        if (!cancelled) setRestoring(false)
       }
     }
 
     hydrateFromServer()
     return () => { cancelled = true }
-  }, [applyAuthState, token, user])
+    // Depend on stable identities (token string, user id) — NOT the user object.
+    // applyAuthState builds a fresh user object from every /me response, so
+    // depending on `user` itself re-triggered this effect after each hydrate in
+    // an infinite /api/auth/me + security-groups loop that burned the rate
+    // limits and locked real users out ("Too many authentication requests").
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyAuthState, token, user?.id])
 
   const refreshOrgAccess = useCallback(async () => {
     if (!token) return
@@ -330,7 +344,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   return (
     <AuthContext.Provider value={{
-      user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, securityAccess,
+      user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, securityAccess, restoring,
       login, logout, switchOrg, refreshOrgAccess, refreshSecurityAccess, getInitials, formatRole, hasModuleAccess, hasSystemOption, hasCaseOption, hasCapability
     }}>
       {children}

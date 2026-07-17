@@ -12,7 +12,7 @@ const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const { sendEmail } = require('../../utils/mailer');
 const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
-const { decryptSecret } = require('../../utils/secretCrypto');
+const { getAuthHeaders, invalidateAuth } = require('../../services/mimsAuth');
 const { validateUploads } = require('../../utils/fileValidation');
 const { enqueue } = require('../../utils/jobQueue');
 const { systemAudit } = require('../../utils/audit');
@@ -261,7 +261,7 @@ function buildMimsPayload(formType, formData, submissionId) {
     payload.pc_intake = {
       product_name:          pick('product_name', 'product', 'drug_name'),
       batch_lot_number:      pick('lot_number', 'batch_lot_number', 'batch_number', 'lot'),
-      complaint_category:    pick('complaint_category', 'category'),
+      complaint_category:    pick('complaint_category', 'complaint_type', 'category'),
       complaint_description: complaint,
     };
     payload.description = complaint;
@@ -307,7 +307,6 @@ async function syncToIntegration(clientId, submissionId, formType) {
   // AC3: no active integration configured for this client → stay CP-only, no MIMS call.
   const [[integration]] = await pool.execute('SELECT * FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [clientId]);
   if (!integration) return;
-  integration.api_key = decryptSecret(integration.api_key);
 
   const [[submission]] = await pool.execute('SELECT * FROM cp_submissions WHERE id = ?', [submissionId]);
   if (!submission) return;
@@ -320,28 +319,48 @@ async function syncToIntegration(clientId, submissionId, formType) {
   // Default structured payload — works out-of-the-box for the seeded portal forms.
   const payload = buildMimsPayload(formType, formData, submissionId);
 
-  // Admin-configured field mappings override/extend the defaults (flat target fields).
+  // Admin-configured field mappings override/extend the defaults. NEW-C: dot-path
+  // targets (e.g. `reporter.first_name`, `ae_intake.outcome`) write into the nested
+  // payload the MIMS API actually reads — a flat assignment would silently no-op.
   for (const m of mappings) {
     let value = formData[m.cp_field] ?? m.default_value ?? null;
     if (value && m.transform === 'uppercase') value = String(value).toUpperCase();
     if (value && m.transform === 'date_iso') value = new Date(value).toISOString();
-    payload[m.target_field] = value;
+    const segs = String(m.target_field).split('.');
+    let obj = payload;
+    while (segs.length > 1) {
+      const k = segs.shift();
+      if (!obj[k] || typeof obj[k] !== 'object') obj[k] = {};
+      obj = obj[k];
+    }
+    obj[segs[0]] = value;
   }
 
   try {
     await pool.execute(`UPDATE cp_submissions SET status='pending_sync', sync_attempts=sync_attempts+1 WHERE id=?`, [submissionId]);
     const safeBaseUrl = await assertSafeOutboundUrl(integration.api_base_url);
 
-    const headers = { 'Content-Type': 'application/json' };
-    if (integration.auth_type === 'bearer' && integration.api_key) headers['Authorization'] = `Bearer ${integration.api_key}`;
-    if (integration.auth_type === 'apikey' && integration.api_key) headers['X-API-Key'] = integration.api_key;
-    if (integration.extra_headers) Object.assign(headers, JSON.parse(integration.extra_headers));
+    const buildHeaders = async () => {
+      const headers = { 'Content-Type': 'application/json', ...(await getAuthHeaders(integration)) };
+      if (integration.extra_headers) Object.assign(headers, JSON.parse(integration.extra_headers));
+      return headers;
+    };
+    let headers = await buildHeaders();
 
     // MIMS machine-to-machine intake endpoint (API-key auth). Was /api/cases (the
     // internal user-JWT route); retargeted to the purpose-built partner endpoint.
-    const r = await safeFetch(new URL('/api/v1/cases', safeBaseUrl).toString(), {
+    const postCase = () => safeFetch(new URL('/api/v1/cases', safeBaseUrl).toString(), {
       method: 'POST', headers, body: JSON.stringify(payload),
     });
+    let r = await postCase();
+
+    // NEW-D: a cached OAuth token can be revoked/expired server-side — mint a
+    // fresh one and retry exactly once before recording a failure.
+    if (r.status === 401 && integration.auth_type === 'oauth') {
+      invalidateAuth(integration.id);
+      headers = await buildHeaders();
+      r = await postCase();
+    }
 
     if (r.ok) {
       const data = await r.json().catch(() => ({}));

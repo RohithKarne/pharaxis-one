@@ -92,6 +92,12 @@ const authRateLimiter = createLimiter({
     ? envInt('RATE_LIMIT_AUTH_MAX', 90)
     : envInt('RATE_LIMIT_AUTH_MAX_DEV', 600),
   keyGenerator: getFingerprint,
+  // Successful requests don't count: GET /api/auth/me fires on every page load
+  // for cookie-session restore, and counting it locked out legitimate active
+  // users ("Too many authentication requests"). Brute-force protection is
+  // unaffected — failures still count here, and login/2FA/recovery each have
+  // their own stricter dedicated limiters.
+  skipSuccessfulRequests: true,
   message: 'Too many authentication requests. Please try again shortly.',
   storePrefix: 'auth',
 });

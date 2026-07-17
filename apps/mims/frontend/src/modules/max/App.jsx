@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../../shared/context/AuthContext'
+import { FeatureFlagsProvider } from '../../shared/context/FeatureFlagsContext'
 import { setAuthIssueHandler, setSessionExpiryHandler } from '../../shared/api/httpFetch'
 import ProtectedRoute from '../../shared/components/ProtectedRoute'
 import ModuleAccessGuard from '../../shared/components/ModuleAccessGuard'
@@ -367,9 +368,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter basename="/mims">
-        <AppRoutes />
-      </BrowserRouter>
+      {/* W3: was never mounted, so useFeatureFlag() read the empty default
+          context and every cf.* tenant flag rendered as OFF app-wide. */}
+      <FeatureFlagsProvider>
+        <BrowserRouter basename="/mims">
+          <AppRoutes />
+        </BrowserRouter>
+      </FeatureFlagsProvider>
     </AuthProvider>
   )
 }

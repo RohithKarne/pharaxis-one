@@ -222,11 +222,13 @@ async function run() {
 
   try {
     await client.query('BEGIN');
+    await client.query("SELECT set_config('app.is_superadmin', 'true', true)");
 
     const org = await upsertOrg(client, {
       orgCode: DEFAULT_ORG_CODE,
       orgName: DEFAULT_ORG_NAME
     });
+    await client.query("SELECT set_config('app.current_org_id', $1, true)", [org.id]);
 
     const allRoleKeys = Array.from(new Set(DEV_USERS.flatMap((user) => user.roleKeys)));
     await ensureRoles(client, org.id, allRoleKeys);

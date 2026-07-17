@@ -8,7 +8,8 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
-const { encryptSecret, decryptSecret } = require('../../utils/secretCrypto');
+const { encryptSecret } = require('../../utils/secretCrypto');
+const { getAuthHeaders, invalidateAuth } = require('../../services/mimsAuth');
 
 // Mask a secret field — show only last 4 chars with **** prefix
 function maskSecret(value) {
@@ -87,12 +88,12 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, requireClientAc
   try {
     const [[cfg]] = await pool.execute('SELECT * FROM cp_integration_config WHERE id=? AND client_id=?', [req.params.integrationId, req.params.clientId]);
     if (!cfg) return res.status(404).json({ error: 'Integration not found.' });
-    cfg.api_key = decryptSecret(cfg.api_key);
     try {
       const safeUrl = await assertSafeOutboundUrl(cfg.api_base_url);
-      const headers = { 'Content-Type': 'application/json' };
-      if (cfg.auth_type === 'bearer' && cfg.api_key) headers['Authorization'] = `Bearer ${cfg.api_key}`;
-      if (cfg.auth_type === 'apikey' && cfg.api_key) headers['X-API-Key'] = cfg.api_key;
+      // NEW-D: for auth_type 'oauth' this mints a fresh token from the stored client
+      // credentials, so the Test button also proves the token exchange works.
+      invalidateAuth(cfg.id);
+      const headers = { 'Content-Type': 'application/json', ...(await getAuthHeaders(cfg)) };
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
       // O1: authenticated check — hit the real intake endpoint so a valid host with

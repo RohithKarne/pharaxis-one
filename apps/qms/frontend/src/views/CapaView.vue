@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { apiRequest } from '../services/api';
 import { useModuleAccess } from '../composables/useModuleAccess';
@@ -11,6 +11,17 @@ const message = ref('');
 const list = ref([]);
 const showCreate = ref(false);
 const creating = ref(false);
+const searchQuery = ref('');
+const statusFilter = ref('All');
+const riskFilter = ref('All');
+const dueFilter = ref('All');
+const sourceFilter = ref('All');
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const STATUS_FILTERS = ['All', 'Draft', 'Submitted', 'Investigation', 'ActionPlanApproval', 'InExecution', 'EffectivenessPending', 'Closed', 'Reopened'];
+const RISK_FILTERS = ['All', 'Critical', 'High', 'Medium', 'Low', 'Unscored'];
+const DUE_FILTERS = ['All', 'Overdue', 'Due Soon', 'No Due Date'];
+const SOURCE_FILTERS = ['All', 'Manual', 'Deviation', 'AuditFinding', 'Complaint', 'ChangeControl', 'DocumentControl', 'Validation'];
 
 const createForm = ref({
   title: '',
@@ -29,6 +40,32 @@ const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAcces
 function formatDate(val) {
   if (!val) return '—';
   return new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function normalizeStatus(value) {
+  return String(value || 'Draft').trim();
+}
+
+function isOpenStatus(value) {
+  return !['Closed', 'Cancelled'].includes(normalizeStatus(value));
+}
+
+function daysUntil(value) {
+  if (!value) return null;
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / DAY_MS);
+}
+
+function matchesDueFilter(capa) {
+  const days = daysUntil(capa.due_date);
+  if (dueFilter.value === 'Overdue') return isOpenStatus(capa.status) && days !== null && days < 0;
+  if (dueFilter.value === 'Due Soon') return isOpenStatus(capa.status) && days !== null && days >= 0 && days <= 14;
+  if (dueFilter.value === 'No Due Date') return days === null;
+  return true;
 }
 
 async function load() {
@@ -88,6 +125,55 @@ const RISK_COLORS = {
   Low: 'bg-green-100 text-green-800'
 };
 
+const capaKpis = computed(() => {
+  const openCapas = list.value.filter((capa) => isOpenStatus(capa.status));
+  const highRisk = openCapas.filter((capa) => ['High', 'Critical'].includes(capa.risk_band));
+  const overdue = openCapas.filter((capa) => {
+    const days = daysUntil(capa.due_date);
+    return days !== null && days < 0;
+  });
+  const dueSoon = openCapas.filter((capa) => {
+    const days = daysUntil(capa.due_date);
+    return days !== null && days >= 0 && days <= 14;
+  });
+  const effectivenessPending = list.value.filter((capa) => normalizeStatus(capa.status) === 'EffectivenessPending');
+
+  return [
+    { label: 'Total CAPAs', value: list.value.length, detail: 'All corrective/preventive records' },
+    { label: 'Open CAPAs', value: openCapas.length, detail: 'Still moving through lifecycle' },
+    { label: 'High/Critical Risk', value: highRisk.length, detail: 'Needs QA leadership attention' },
+    { label: 'Overdue', value: overdue.length, detail: 'Past due date and not closed' },
+    { label: 'Due Soon', value: dueSoon.length, detail: 'Due in the next 14 days' },
+    { label: 'Effectiveness Review', value: effectivenessPending.length, detail: 'Awaiting verification before closure' }
+  ];
+});
+
+const filteredCapas = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  return list.value.filter((capa) => {
+    const status = normalizeStatus(capa.status);
+    const searchable = [
+      capa.capa_code,
+      capa.title,
+      capa.source_type,
+      capa.classification,
+      capa.risk_band,
+      capa.department,
+      capa.product_name,
+      status
+    ].join(' ').toLowerCase();
+
+    const matchesSearch = !query || searchable.includes(query);
+    const matchesStatus = statusFilter.value === 'All' || status === statusFilter.value;
+    const matchesRisk =
+      riskFilter.value === 'All' ||
+      (riskFilter.value === 'Unscored' ? !capa.risk_band : capa.risk_band === riskFilter.value);
+    const matchesSource = sourceFilter.value === 'All' || capa.source_type === sourceFilter.value;
+
+    return matchesSearch && matchesStatus && matchesRisk && matchesSource && matchesDueFilter(capa);
+  });
+});
+
 onMounted(load);
 </script>
 
@@ -112,11 +198,48 @@ onMounted(load);
 
     <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">{{ writeDisabledReason }}</p>
 
+    <section class="mt-3 grid gap-3 xl:grid-cols-6 md:grid-cols-3 sm:grid-cols-2">
+      <article
+        v-for="kpi in capaKpis"
+        :key="kpi.label"
+        class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+      >
+        <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{{ kpi.label }}</p>
+        <p class="mt-2 text-2xl font-extrabold text-slate-900">{{ kpi.value }}</p>
+        <p class="mt-1 text-xs text-slate-500">{{ kpi.detail }}</p>
+      </article>
+    </section>
+
     <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div class="border-b border-slate-100 bg-slate-50 px-4 py-3">
-        <p class="text-sm font-semibold text-slate-700">
-          {{ loading ? 'Loading…' : `${list.length} record${list.length !== 1 ? 's' : ''}` }}
-        </p>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-semibold text-slate-700">
+              {{ loading ? 'Loading…' : `${filteredCapas.length} of ${list.length} record${list.length !== 1 ? 's' : ''}` }}
+            </p>
+            <p class="text-xs text-slate-500">Filter by status, risk, source, and due-date pressure.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <input
+              v-model="searchQuery"
+              class="h-8 w-60 rounded border border-slate-300 px-3 text-xs"
+              type="search"
+              placeholder="Search code, title, department, product"
+            />
+            <select v-model="statusFilter" class="h-8 rounded border border-slate-300 px-2 text-xs">
+              <option v-for="status in STATUS_FILTERS" :key="status" :value="status">{{ status }} status</option>
+            </select>
+            <select v-model="riskFilter" class="h-8 rounded border border-slate-300 px-2 text-xs">
+              <option v-for="risk in RISK_FILTERS" :key="risk" :value="risk">{{ risk }} risk</option>
+            </select>
+            <select v-model="sourceFilter" class="h-8 rounded border border-slate-300 px-2 text-xs">
+              <option v-for="source in SOURCE_FILTERS" :key="source" :value="source">{{ source }} source</option>
+            </select>
+            <select v-model="dueFilter" class="h-8 rounded border border-slate-300 px-2 text-xs">
+              <option v-for="due in DUE_FILTERS" :key="due" :value="due">{{ due }} due</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div v-if="loading" class="flex items-center justify-center py-16">
@@ -128,6 +251,10 @@ onMounted(load);
 
       <div v-else-if="!list.length" class="py-16 text-center text-sm text-slate-400">
         No CAPA records found. Click <strong>New CAPA</strong> to get started.
+      </div>
+
+      <div v-else-if="!filteredCapas.length" class="py-16 text-center text-sm text-slate-400">
+        No CAPA records match the current filters.
       </div>
 
       <table v-else class="w-full text-sm">
@@ -145,7 +272,7 @@ onMounted(load);
         </thead>
         <tbody>
           <tr
-            v-for="capa in list"
+            v-for="capa in filteredCapas"
             :key="capa.id"
             class="cursor-pointer border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50"
             @click="router.push('/capa/' + capa.id)"

@@ -10,75 +10,63 @@ import {
 
 const PRIMARY_SECTIONS = [
   {
-    key: 'overview',
+    key: 'home',
     label: 'Home',
-    moduleKey: 'workspace',
-    match: pathname => pathname === '/vault' || pathname.startsWith('/vault/content')
+    moduleKey: 'home',
+    defaultPath: '/vault',
+    match: pathname => pathname === '/vault'
   },
   {
-    key: 'qualityOps',
+    key: 'library',
     label: 'Library',
-    moduleKey: 'qualityOps',
-    match: pathname => pathname.startsWith('/vault/upload') || pathname.startsWith('/vault/search') || pathname.startsWith('/vault/bulk')
+    moduleKey: 'library',
+    defaultPath: '/vault/search',
+    match: pathname => pathname.startsWith('/vault/upload') || pathname.startsWith('/vault/search') || pathname.startsWith('/vault/content') || pathname.startsWith('/vault/bulk') || pathname.startsWith('/vault/dossiers') || pathname.startsWith('/vault/slots')
   },
   {
-    key: 'compliance',
-    label: 'Document Actions',
-    moduleKey: 'compliance',
-    match: pathname => pathname.startsWith('/vault/dossiers') || pathname.startsWith('/vault/slots')
-  },
-  {
-    key: 'riskPartners',
-    label: 'Lifecycle',
-    moduleKey: 'riskPartners',
-    match: pathname => pathname.startsWith('/vault/expiry')
-  },
-  {
-    key: 'workforce',
-    label: 'Training',
-    moduleKey: 'workforce',
+    key: 'tasks',
+    label: 'Tasks',
+    moduleKey: 'tasks',
+    defaultPath: '/vault/tasks',
     match: pathname => pathname.startsWith('/vault/tasks') || pathname.startsWith('/vault/notifications') || pathname.startsWith('/vault/training')
   },
   {
-    key: 'intelligence',
-    label: 'Reports',
-    moduleKey: 'intelligence',
-    match: pathname => pathname.startsWith('/admin/workflows') || pathname.startsWith('/admin/audit') || pathname.startsWith('/vault/reach') || pathname.startsWith('/vault/intelligence') || pathname.startsWith('/vault/reports')
+    key: 'governance',
+    label: 'Governance',
+    moduleKey: 'governance',
+    defaultPath: '/vault/expiry',
+    match: pathname => pathname.startsWith('/admin/workflows') || pathname.startsWith('/admin/audit') || pathname.startsWith('/vault/expiry') || pathname.startsWith('/vault/reach') || pathname.startsWith('/vault/intelligence') || pathname.startsWith('/vault/reports')
   },
   {
     key: 'platform',
     label: 'Administration',
     moduleKey: 'platform',
     adminOnly: true,
+    defaultPath: '/admin',
     match: pathname => pathname.startsWith('/admin')
   }
 ]
 
 const MODULE_GROUPS = {
-  workspace: [
-    { label: 'Workspace Home', path: '/vault' },
-    { label: 'Content Search', path: '/vault/search' }
+  home: [
+    { label: 'Workspace Home', path: '/vault', end: true },
+    { label: 'All Content', path: '/vault/search' }
   ],
-  qualityOps: [
-    { label: 'Upload', path: '/vault/upload' },
+  library: [
+    { label: 'Upload', path: '/vault/upload', roles: ['admin', 'author'] },
     { label: 'Search', path: '/vault/search' },
+    { label: 'Content Slots', path: '/vault/slots' },
+    { label: 'Dossiers', path: '/vault/dossiers' },
     { label: 'Bulk Operations', path: '/vault/bulk', adminOnly: true }
   ],
-  compliance: [
-    { label: 'Content Slots', path: '/vault/slots' },
-    { label: 'Dossiers', path: '/vault/dossiers' }
-  ],
-  riskPartners: [
-    { label: 'Expiry Dashboard', path: '/vault/expiry' },
-    { label: 'Integrations', path: '/admin/integrations', adminOnly: true }
-  ],
-  workforce: [
+  tasks: [
     { label: 'My Tasks', path: '/vault/tasks' },
     { label: 'Read & Understood', path: '/vault/training' },
     { label: 'Notifications', path: '/vault/notifications' },
     { label: 'Workflow Queue', path: '/admin/workflows', adminOnly: true }
   ],
-  intelligence: [
+  governance: [
+    { label: 'Expiry Dashboard', path: '/vault/expiry' },
     { label: 'Reach Score', path: '/vault/reach' },
     { label: 'Content Intelligence', path: '/vault/intelligence' },
     { label: 'Reports', path: '/vault/reports', adminOnly: true },
@@ -110,15 +98,19 @@ function activeSectionForPath(pathname) {
   return firstMatch || PRIMARY_SECTIONS[0]
 }
 
+function canViewModule(entry, user) {
+  if (entry.adminOnly && user?.role !== 'admin') return false
+  if (entry.roles && !entry.roles.includes(user?.role)) return false
+  return true
+}
+
 export default function WorkspaceShell({ children }) {
   const user = getOrgUser()
   const isAdmin = user?.role === 'admin'
   const appIconUrl = `${import.meta.env.BASE_URL}vault-icon.svg`
   const location = useLocation()
   const navigate = useNavigate()
-  const [moduleSearch, setModuleSearch] = useState('')
   const [globalSearch, setGlobalSearch] = useState('')
-  const [searchScope, setSearchScope] = useState('All Documents')
   const [createOpen, setCreateOpen] = useState(false)
 
   const activePrimary = useMemo(
@@ -137,11 +129,8 @@ export default function WorkspaceShell({ children }) {
 
   const visibleModules = useMemo(() => {
     const entries = MODULE_GROUPS[activePrimary.moduleKey] || []
-    const allowed = entries.filter(entry => isAdmin || !entry.adminOnly)
-    const query = moduleSearch.trim().toLowerCase()
-    if (!query) return allowed
-    return allowed.filter(entry => entry.label.toLowerCase().includes(query))
-  }, [activePrimary.moduleKey, isAdmin, moduleSearch])
+    return entries.filter(entry => canViewModule(entry, user))
+  }, [activePrimary.moduleKey, user])
 
   const visibleCreateActions = useMemo(() => {
     const role = String(user?.role || '')
@@ -177,43 +166,17 @@ export default function WorkspaceShell({ children }) {
       <div className="workspace-sticky-header">
       <div className="workspace-utility-strip">
         <div className="workspace-utility-brand">
-          <button
-            className="workspace-app-launcher"
-            type="button"
-            aria-label="Open app launcher"
-          >
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-          </button>
           <span className="workspace-utility-logo">
             <img className="workspace-utility-logo-mark" src={appIconUrl} alt="Vault" />
           </span>
           <span className="workspace-brand-wordmark">Pharaxis <strong>Vault</strong></span>
         </div>
         <form className="workspace-utility-search-wrap" onSubmit={submitGlobalSearch}>
-          <select
-            className="workspace-search-scope"
-            value={searchScope}
-            onChange={event => setSearchScope(event.target.value)}
-            aria-label="Search scope"
-          >
-            <option>All Documents</option>
-            <option>Recent Library</option>
-            <option>Workflows</option>
-            <option>Training Evidence</option>
-            <option>Audit Trail</option>
-          </select>
           <input
             className="workspace-utility-search"
             type="search"
-            placeholder={`Search ${searchScope.toLowerCase()}`}
+            aria-label="Search all documents"
+            placeholder="Search all documents"
             value={globalSearch}
             onChange={event => setGlobalSearch(event.target.value)}
           />
@@ -222,7 +185,6 @@ export default function WorkspaceShell({ children }) {
           </button>
         </form>
         <div className="workspace-utility-actions">
-          <span className="workspace-module-pill">Vault</span>
           {visibleCreateActions.length ? (
             <div className="workspace-create-menu">
               <button
@@ -283,12 +245,7 @@ export default function WorkspaceShell({ children }) {
               type="button"
               className={section.key === activePrimary.key ? 'workspace-primary-tab workspace-primary-tab-active' : 'workspace-primary-tab'}
               onClick={() => {
-                const modules = MODULE_GROUPS[section.moduleKey] || []
-                const allowed = modules.find(entry => isAdmin || !entry.adminOnly)
-                if (allowed) {
-                  navigate(allowed.path)
-                  setModuleSearch('')
-                }
+                navigate(section.defaultPath)
               }}
             >
               {section.label}
@@ -312,19 +269,11 @@ export default function WorkspaceShell({ children }) {
               key={item.path}
               className={({ isActive }) => (isActive ? 'workspace-secondary-link workspace-secondary-link-active' : 'workspace-secondary-link')}
               to={item.path}
+              end={item.end}
             >
               {item.label}
             </NavLink>
           ))}
-        </div>
-        <div className="workspace-subnav-tools">
-          <input
-            className="workspace-module-search"
-            type="search"
-            placeholder="Filter modules in this tab"
-            value={moduleSearch}
-            onChange={event => setModuleSearch(event.target.value)}
-          />
         </div>
       </div>
 

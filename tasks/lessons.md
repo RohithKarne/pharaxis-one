@@ -68,6 +68,27 @@
 
 ---
 
+## L-010 — Fixed one instance of a bug class, missed its sibling (2026-07-15)
+**What:** The mysql2 JSON-column double-parse bug (`JSON.parse` on an already-parsed array) was fixed in `apiKeyAuth.js` during e2e, but the identical pattern in `tokenIssuer.js` (`JSON.parse(client.scopes)`) was left in place — it 500'd the `/oauth/token` endpoint the moment we needed it. This is a direct repeat of the L-004 failure mode.
+**Why:** The fix was applied where the symptom appeared instead of grepping for the pattern.
+**Rule:** The moment a bug is identified as a *pattern* (not a one-off), grep the whole codebase for that pattern and fix every instance in the same change. `grep -rn "JSON.parse(.*scopes"` took 2 seconds and would have prevented a broken prod-path months later.
+
+---
+
+## L-011 — Verification credentials/config must be created the way the server reads them (2026-07-15)
+**What:** Two self-inflicted failures during NEW-D provisioning: (1) an encryption script ran without loading `.env`, so secrets were encrypted with the dev-fallback key while the server decrypts with the real `CP_SECRET_ENCRYPTION_KEY` — silent auth failure; (2) a JWT was minted for MIMS while the server used a random per-process secret (no `JWT_SECRET` in .env), so no externally minted token could ever validate.
+**Why:** Scripts assumed the server's runtime environment instead of confirming it (which env file, which key resolution path).
+**Rule:** Before minting/encrypting anything a server must accept, read the server's own resolution code (key/env loading) and replicate it exactly — then verify round-trip (encrypt→decrypt, sign→verify) before relying on it. Also: MIMS dev now has a fixed `JWT_SECRET` in `apps/mims/.env` so sessions survive nodemon restarts.
+
+---
+
+## L-012 — A whole subsystem can be inert because its provider was never mounted (2026-07-15)
+**What:** Enabling `cf.theme6_documents` in the DB changed nothing on the MIMS case screen. Root cause: `FeatureFlagsProvider` was never mounted in any app — `useFeatureFlag()` read the empty default context, so EVERY tenant feature flag rendered as OFF app-wide since the flag system was built. The backend, admin UI, and DB all "worked"; the consuming side was never wired.
+**Why:** The flag system was verified at the API/DB level only — nobody flipped a flag and looked at the screen (same failure class as L-009).
+**Rule:** When building a provider/consumer pair (context, event bus, config system), verification = flip a value and see the CONSUMER change in the UI. Also found the same day via browser verification: an infinite `/api/auth/me` + `security-groups` fetch loop in AuthContext (effect depended on a user object rebuilt by every response) that burned rate limits and caused the recurring "Too many authentication requests" lockouts — fixed by depending on stable identities (`token`, `user?.id`), plus `skipSuccessfulRequests` on the auth backstop limiter.
+
+---
+
 ## L-010 — Refresh governing SOPs before preparing a product plan (2026-07-14)
 **What:** Rohith asked for the Vault roadmap plan, then directed the team to read the current live-communication, operating, and workflow documents before preparing it.
 **Why:** A product plan can become stale or breach the current operating model when it is drafted from prior context rather than the active project SOPs.

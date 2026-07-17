@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { assertAnyRole } from '../middleware/rbac.js';
+import { assertAnyRole, hasAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { createInAppNotification, queueEmailNotification } from '../services/platform/notificationService.js';
 import { makeEntityCode, asDateString } from '../utils/codegen.js';
@@ -37,10 +37,6 @@ function makeError(message, statusCode = 400) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
-}
-
-function hasRole(authRoles, roleKey) {
-  return Array.isArray(authRoles) && authRoles.includes(roleKey);
 }
 
 function normalizeRiskFactor(value, fallback = null) {

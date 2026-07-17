@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { apiRequest } from '../services/api';
 import { useModuleAccess } from '../composables/useModuleAccess';
@@ -11,6 +11,15 @@ const message = ref('');
 const list = ref([]);
 const showCreate = ref(false);
 const creating = ref(false);
+const searchQuery = ref('');
+const statusFilter = ref('All');
+const criticalityFilter = ref('All');
+const reviewFilter = ref('All');
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const STATUS_FILTERS = ['All', 'Draft', 'Review', 'Approved', 'Effective', 'Retired'];
+const CRITICALITY_FILTERS = ['All', 'Critical', 'High', 'Medium', 'Low'];
+const REVIEW_FILTERS = ['All', 'Overdue', 'Due Soon', 'No Review Date'];
 
 const createForm = ref({
   title: '',
@@ -31,6 +40,28 @@ const { isWriteDisabled, writeDisabledReason, withWriteAccess } = useModuleAcces
 function formatDate(val) {
   if (!val) return '—';
   return new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function normalizeStatus(value) {
+  return String(value || 'Draft').trim();
+}
+
+function daysUntil(value) {
+  if (!value) return null;
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / DAY_MS);
+}
+
+function matchesReviewFilter(doc) {
+  const days = daysUntil(doc.next_review_due_date);
+  if (reviewFilter.value === 'Overdue') return days !== null && days < 0;
+  if (reviewFilter.value === 'Due Soon') return days !== null && days >= 0 && days <= 30;
+  if (reviewFilter.value === 'No Review Date') return days === null;
+  return true;
 }
 
 async function load() {
@@ -98,6 +129,50 @@ const CRIT_COLORS = {
   Low: 'bg-green-100 text-green-800'
 };
 
+const documentKpis = computed(() => {
+  const reviewDocs = list.value.filter((doc) => normalizeStatus(doc.status) === 'Review');
+  const effectiveDocs = list.value.filter((doc) => normalizeStatus(doc.status) === 'Effective');
+  const highCriticalDocs = list.value.filter((doc) => ['High', 'Critical'].includes(doc.criticality));
+  const reviewDueSoon = list.value.filter((doc) => {
+    const days = daysUntil(doc.next_review_due_date);
+    return days !== null && days >= 0 && days <= 30;
+  });
+  const overdueReviews = list.value.filter((doc) => {
+    const days = daysUntil(doc.next_review_due_date);
+    return days !== null && days < 0;
+  });
+
+  return [
+    { label: 'Total Documents', value: list.value.length, detail: 'Controlled records in scope' },
+    { label: 'In Review', value: reviewDocs.length, detail: 'Needs reviewer action' },
+    { label: 'Effective', value: effectiveDocs.length, detail: 'Released for use' },
+    { label: 'High/Critical', value: highCriticalDocs.length, detail: 'Higher compliance sensitivity' },
+    { label: 'Due Soon', value: reviewDueSoon.length, detail: 'Periodic review in 30 days' },
+    { label: 'Overdue Review', value: overdueReviews.length, detail: 'Needs immediate follow-up' }
+  ];
+});
+
+const filteredDocuments = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  return list.value.filter((doc) => {
+    const status = normalizeStatus(doc.status);
+    const searchable = [
+      doc.document_code,
+      doc.title,
+      doc.document_type,
+      doc.department,
+      doc.criticality,
+      status
+    ].join(' ').toLowerCase();
+
+    const matchesSearch = !query || searchable.includes(query);
+    const matchesStatus = statusFilter.value === 'All' || status === statusFilter.value;
+    const matchesCriticality = criticalityFilter.value === 'All' || doc.criticality === criticalityFilter.value;
+
+    return matchesSearch && matchesStatus && matchesCriticality && matchesReviewFilter(doc);
+  });
+});
+
 onMounted(load);
 </script>
 
@@ -122,11 +197,45 @@ onMounted(load);
 
     <p v-if="isWriteDisabled" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">{{ writeDisabledReason }}</p>
 
+    <section class="mt-3 grid gap-3 xl:grid-cols-6 md:grid-cols-3 sm:grid-cols-2">
+      <article
+        v-for="kpi in documentKpis"
+        :key="kpi.label"
+        class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+      >
+        <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{{ kpi.label }}</p>
+        <p class="mt-2 text-2xl font-extrabold text-slate-900">{{ kpi.value }}</p>
+        <p class="mt-1 text-xs text-slate-500">{{ kpi.detail }}</p>
+      </article>
+    </section>
+
     <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div class="border-b border-slate-100 bg-slate-50 px-4 py-3">
-        <p class="text-sm font-semibold text-slate-700">
-          {{ loading ? 'Loading…' : `${list.length} document${list.length !== 1 ? 's' : ''}` }}
-        </p>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-semibold text-slate-700">
+              {{ loading ? 'Loading…' : `${filteredDocuments.length} of ${list.length} document${list.length !== 1 ? 's' : ''}` }}
+            </p>
+            <p class="text-xs text-slate-500">Filter by status, criticality, and periodic review pressure.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <input
+              v-model="searchQuery"
+              class="h-8 w-60 rounded border border-slate-300 px-3 text-xs"
+              type="search"
+              placeholder="Search code, title, type, department"
+            />
+            <select v-model="statusFilter" class="h-8 rounded border border-slate-300 px-2 text-xs">
+              <option v-for="status in STATUS_FILTERS" :key="status" :value="status">{{ status }} status</option>
+            </select>
+            <select v-model="criticalityFilter" class="h-8 rounded border border-slate-300 px-2 text-xs">
+              <option v-for="level in CRITICALITY_FILTERS" :key="level" :value="level">{{ level }} criticality</option>
+            </select>
+            <select v-model="reviewFilter" class="h-8 rounded border border-slate-300 px-2 text-xs">
+              <option v-for="review in REVIEW_FILTERS" :key="review" :value="review">{{ review }} review</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div v-if="loading" class="flex items-center justify-center py-16">
@@ -138,6 +247,10 @@ onMounted(load);
 
       <div v-else-if="!list.length" class="py-16 text-center text-sm text-slate-400">
         No documents found. Click <strong>New Document</strong> to get started.
+      </div>
+
+      <div v-else-if="!filteredDocuments.length" class="py-16 text-center text-sm text-slate-400">
+        No documents match the current filters.
       </div>
 
       <table v-else class="w-full text-sm">
@@ -155,7 +268,7 @@ onMounted(load);
         </thead>
         <tbody>
           <tr
-            v-for="doc in list"
+            v-for="doc in filteredDocuments"
             :key="doc.id"
             class="cursor-pointer border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50"
             @click="router.push('/document-control/' + doc.id)"

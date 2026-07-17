@@ -8,7 +8,7 @@
  * outbound sync uses, so no new attack surface.
  */
 const { pool } = require('../database/db');
-const { decryptSecret } = require('../utils/secretCrypto');
+const { getAuthHeaders } = require('./mimsAuth');
 const { safeFetch } = require('../utils/networkGuard');
 const { systemAudit } = require('../utils/audit');
 
@@ -20,10 +20,10 @@ function isClosedStatus(name) {
   return typeof name === 'string' && /^closed/i.test(name.trim());
 }
 
-function buildHeaders(integ, apiKey) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (integ.auth_type === 'bearer' && apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-  if (integ.auth_type === 'apikey' && apiKey) headers['X-API-Key'] = apiKey;
+// NEW-D: auth headers come from mimsAuth (handles static bearer/apikey AND the
+// hourly-expiring OAuth tokens that used to silently kill this poller).
+async function buildHeaders(integ) {
+  const headers = { 'Content-Type': 'application/json', ...(await getAuthHeaders(integ)) };
   if (integ.extra_headers) { try { Object.assign(headers, JSON.parse(integ.extra_headers)); } catch (_) {} }
   return headers;
 }
@@ -34,9 +34,6 @@ async function pollOnce() {
   let closedCount = 0;
 
   for (const integ of integrations) {
-    let apiKey;
-    try { apiKey = decryptSecret(integ.api_key); } catch (_) { continue; }
-
     // synced + linked to a MIMS case + not yet closed
     // LIMIT is interpolated from our own integer constant (not user input) — mysql2
     // prepared statements reject a bound LIMIT parameter, matching the rest of the codebase.
@@ -48,7 +45,8 @@ async function pollOnce() {
     );
     if (!subs.length) continue;
 
-    const headers = buildHeaders(integ, apiKey);
+    let headers;
+    try { headers = await buildHeaders(integ); } catch (_) { continue; } // bad creds → skip this tick
     for (const s of subs) {
       try {
         const url = new URL(`/api/v1/cases/${encodeURIComponent(s.external_ref)}`, integ.api_base_url).toString();

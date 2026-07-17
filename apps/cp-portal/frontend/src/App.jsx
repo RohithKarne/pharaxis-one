@@ -12,6 +12,7 @@ import ContentPage          from './admin/pages/ContentPage'
 import FormsPage            from './admin/pages/FormsPage'
 import MSLPage              from './admin/pages/MSLPage'
 import IntegrationPage      from './admin/pages/IntegrationPage'
+import SyncHealthPage       from './admin/pages/SyncHealthPage'
 import SsoConfigPage        from './admin/pages/SsoConfigPage'
 import PortalUsersPage      from './admin/pages/PortalUsersPage'
 import ChatboxConfigPage    from './admin/pages/ChatboxConfigPage'
@@ -135,6 +136,7 @@ export default function App() {
         <Route path="/admin/clients/:clientId/forms" element={<AdminGuard><FormsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/msls" element={<AdminGuard><MSLPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/integration" element={<AdminGuard><IntegrationPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/sync-health" element={<AdminGuard><SyncHealthPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/sso" element={<AdminGuard><SsoConfigPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/users" element={<AdminGuard><PortalUsersPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/chatbox" element={<AdminGuard><ChatboxConfigPage /></AdminGuard>} />

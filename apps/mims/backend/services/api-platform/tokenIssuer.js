@@ -19,7 +19,9 @@ async function issueClientCredentials({ client_id, client_secret }) {
     [client.id, hashToken(token), expires]
   );
   await pool.execute('UPDATE api_clients SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?', [client.id]);
-  return { access_token: token, token_type: 'Bearer', expires_in: 3600, scope: JSON.parse(client.scopes || '[]').join(' ') };
+  // mysql2 returns JSON columns pre-parsed — same array-or-string guard as apiKeyAuth.
+  const scopes = Array.isArray(client.scopes) ? client.scopes : JSON.parse(client.scopes || '[]');
+  return { access_token: token, token_type: 'Bearer', expires_in: 3600, scope: scopes.join(' ') };
 }
 
 async function createApiClient({ org_id, name, scopes = [], rate_limit_per_min = 60, created_by = null }) {

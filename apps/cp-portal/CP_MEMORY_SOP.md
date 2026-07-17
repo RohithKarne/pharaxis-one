@@ -11,6 +11,7 @@
 | Date | Updated By | What Changed |
 |------|-----------|--------------|
 | 2026-03-27 | Bala | Initial creation — full snapshot as of 2026-03-22 stable release |
+| 2026-07-15 | Bala | CP↔MIMS integration SHIPPED and browser-verified (approved by Rohith). Outbound sync to MIMS `POST /api/v1/cases` (OAuth client-credentials with auto-refresh — `services/mimsAuth.js`), idempotent on CP reference, attachments forwarded, close-sync poller auto-closes CP inquiries, retry poller (incl. stale `pending_sync`), audit trail. Admin: Integration page gained an OAuth auth type + per-form-type Field Mapping builder (`cp_field_mapping`, dot-path targets); new Sync Health dashboard page (`/admin/clients/:id/sync-health`). Secrets encrypted at rest; provisioning scripts must load `.env` (see `tasks/lessons.md` L-011). |
 
 ---
 
@@ -24,7 +25,7 @@ CP Portal has two apps in one codebase:
 - **Portal** — the public-facing site that HCPs and patients visit (`/portal/:clientCode/`)
 
 **Relationship to MIMS:**
-CP Portal sends medical inquiry submissions to MIMS for processing. MIMS pushes outcomes and updates back to CP Portal. This integration is planned but not yet built. When ready, integration will use the CP Portal REST API (`/api/portal/` and `/api/admin/submissions`).
+CP Portal sends MI/AE/PC submissions to MIMS as cases — LIVE since 2026-07 (see Version History 2026-07-15). Outbound: `syncToIntegration` in `backend/routes/portal/submit.js` posts to MIMS `POST /api/v1/cases` with OAuth client-credentials auth (`services/mimsAuth.js`), forwards attachments, and is idempotent on the CP reference. Inbound: `services/mimsCloseSync.js` polls MIMS case status and auto-closes CP inquiries. Admin config lives on the Integration page (credentials, field mapping, test connection) plus the Sync Health page (status tiles, failed syncs, manual retry). `other_inquiry` stays CP-only by design.
 
 **Active status:**
 CP Portal is in maintenance mode. MIMS is the active development priority. CP Portal receives hotfix support only when explicitly required by Rohith.
