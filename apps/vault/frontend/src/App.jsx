@@ -32,7 +32,7 @@ import {
   OrgAuthGuard,
   OrgRoleGuard
 } from './modules/common/components/RouteGuards'
-import WorkspaceShell from './modules/common/components/WorkspaceShell'
+import ErrorBoundary from './modules/common/components/ErrorBoundary'
 
 function WorkspaceRoute({ children }) {
   return (
@@ -52,8 +52,9 @@ function AdminWorkspaceRoute({ children }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Routes>
         <Route path="/" element={<LoginPage />} />
         <Route path="/external/vault-share/:token" element={<ExternalSharePage />} />
 
@@ -287,5 +288,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   )
 }

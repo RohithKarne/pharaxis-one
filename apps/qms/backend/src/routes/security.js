@@ -135,3 +135,24 @@ securityRouter.post('/users/:userId/2fa-reset', async (req, res, next) => {
     return next(error);
   }
 });
+
+securityRouter.get('/audit-chain/verify', async (req, res, next) => {
+  try {
+    const isSuperadmin = hasRole(req.authContext.roles, 'superadmin');
+    const isOrgAdmin = hasRole(req.authContext.roles, 'admin');
+    const isQaReviewer = hasRole(req.authContext.roles, 'qareviewer');
+    if (!isSuperadmin && !isOrgAdmin && !isQaReviewer) {
+      return res.status(403).json({ error: 'Admin, QA Reviewer, or Superadmin role required' });
+    }
+
+    const verificationResult = await req.withRlsTransaction(async (client) => {
+      const { verifyAuditHashChain } = await import('../utils/auditVerify.js');
+      return verifyAuditHashChain(client, req.authContext.orgId);
+    });
+
+    return res.json(verificationResult);
+  } catch (error) {
+    return next(error);
+  }
+});
+

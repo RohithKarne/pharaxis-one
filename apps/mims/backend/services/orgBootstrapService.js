@@ -585,4 +585,5 @@ module.exports = {
   repairOrgData,
   repairOrgDataWithConnection,
   resolveDefaultWorkflowStateId,
+  assignCaseNumberWithConnection,
 };

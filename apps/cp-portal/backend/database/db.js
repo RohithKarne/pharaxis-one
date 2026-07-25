@@ -644,6 +644,16 @@ async function initializeDatabase() {
   `);
   await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_audit_created ON cp_audit_logs(created_at)`);
 
+  // ── MIMS TOKEN CACHE ───────────────────────────────────────────
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_mims_token_cache (
+      integration_id INT          NOT NULL PRIMARY KEY,
+      access_token   TEXT         NOT NULL,
+      expires_at     DATETIME     NOT NULL,
+      updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   // ── SAVED ITEMS ────────────────────────────────────────────────
   await run(`
     CREATE TABLE IF NOT EXISTS cp_saved_items (

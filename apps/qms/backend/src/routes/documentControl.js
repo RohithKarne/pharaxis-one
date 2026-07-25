@@ -94,6 +94,37 @@ async function appendDocHistoryEvent(client, {
 
 export const documentControlRouter = Router();
 
+documentControlRouter.get('/documents/periodic-reviews/alerts', async (req, res, next) => {
+  try {
+    const alerts = await req.withRlsTransaction(async (client) => {
+      const { rows } = await client.query(
+        `
+          SELECT
+            d.id AS document_id,
+            d.document_code,
+            d.title,
+            d.document_type,
+            d.next_review_due_date,
+            d.owner_user_id,
+            u.full_name AS owner_name,
+            u.email::text AS owner_email,
+            (d.next_review_due_date::date - CURRENT_DATE) AS days_until_due
+          FROM dc_documents d
+          LEFT JOIN qms_users u ON u.id = d.owner_user_id
+          WHERE d.next_review_due_date <= (CURRENT_DATE + INTERVAL '90 days')
+          ORDER BY d.next_review_due_date ASC
+        `
+      );
+      return rows;
+    });
+
+    return res.json({ alerts });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+
 documentControlRouter.post('/documents', async (req, res, next) => {
   try {
     const {

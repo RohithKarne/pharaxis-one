@@ -32,9 +32,8 @@ async function run() {
 
   const orgLogin = await request('/api/auth/login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Org-Slug': ORG_SLUG },
     body: JSON.stringify({
-      orgSlug: ORG_SLUG,
       email: ORG_EMAIL,
       password: ORG_PASSWORD
     })

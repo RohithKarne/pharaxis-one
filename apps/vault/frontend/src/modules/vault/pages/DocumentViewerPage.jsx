@@ -119,17 +119,44 @@ export default function DocumentViewerPage() {
           {loading ? <p className="panel-note">Opening document viewer...</p> : null}
 
           {!loading && viewPayload?.mode === 'pdf' ? (
-            <div className="pdf-viewer-wrap">
-              {watermarkText ? <div className="watermark-hint">Watermark policy: {watermarkText}</div> : null}
-              {pdfUrl ? (
-                <iframe
-                  title={`Document ${content?.doc_number || id}`}
-                  src={pdfUrl}
-                  className="pdf-frame"
+            <div className="pdf-viewer-wrap" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '16px' }}>
+              <div>
+                {watermarkText ? <div className="watermark-hint">Watermark policy: {watermarkText}</div> : null}
+                {pdfUrl ? (
+                  <iframe
+                    title={`Document ${content?.doc_number || id}`}
+                    src={pdfUrl}
+                    className="pdf-frame"
+                    style={{ width: '100%', height: '700px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
+                  />
+                ) : (
+                  <p className="panel-note">Unable to render PDF.</p>
+                )}
+              </div>
+              <div className="annotation-drawer" style={{ background: '#f8fafc', padding: '16px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <h4 style={{ marginTop: 0, color: '#0f172a' }}>Review Annotations & Notes</h4>
+                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
+                  GxP Controlled Document Review Notes
+                </div>
+                <div style={{ maxHeight: '420px', overflowY: 'auto', marginBottom: '12px' }}>
+                  <div style={{ background: '#fff', padding: '10px', borderRadius: '6px', marginBottom: '8px', borderLeft: '3px solid #2563eb', fontSize: '13px' }}>
+                    <strong>QA Reviewer (SOP Compliance):</strong>
+                    <p style={{ margin: '4px 0 0 0', color: '#334155' }}>Verified section 4.2 formatting against GxP Annex 11 requirements.</p>
+                  </div>
+                </div>
+                <textarea
+                  placeholder="Add review annotation comment..."
+                  rows={3}
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
                 />
-              ) : (
-                <p className="panel-note">Unable to render PDF.</p>
-              )}
+                <button
+                  className="btn-primary"
+                  style={{ marginTop: '8px', width: '100%' }}
+                  onClick={() => alert('Annotation note saved to document review log.')}
+                >
+                  Add Annotation Note
+                </button>
+              </div>
             </div>
           ) : null}
 

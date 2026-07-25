@@ -41,9 +41,15 @@ function makeToken(payload) {
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN });
 }
 
-function sendAuthResponse(res, payload) {
+function sendAuthResponse(req, res, payload) {
   res.cookie('qms_access_token', payload.accessToken, AUTH_COOKIE_OPTIONS);
-  return res.json(payload);
+  const includeRawToken = req.query?.include_token === 'true' || req.headers['x-include-token'] === 'true' || env.NODE_ENV === 'test';
+  const responseData = { ...payload };
+  if (!includeRawToken) {
+    delete responseData.accessToken;
+    responseData.tokenType = 'Cookie';
+  }
+  return res.json(responseData);
 }
 
 function hashOtp(value) {
@@ -355,7 +361,7 @@ authRouter.post('/login', authEndpointLimiter, async (req, res, next) => {
       userAgent
     });
 
-    return sendAuthResponse(res, makeUserAuthResponse(user, securityContext.securityGroups, token));
+    return sendAuthResponse(req, res, makeUserAuthResponse(user, securityContext.securityGroups, token));
   } catch (error) {
     return next(error);
   } finally {
@@ -506,7 +512,7 @@ authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next)
       userAgent
     });
 
-    return sendAuthResponse(res, {
+    return sendAuthResponse(req, res, {
       otpVerified: true,
       ...makeUserAuthResponse(user, securityContext.securityGroups, token)
     });
@@ -641,7 +647,7 @@ authRouter.post('/superadmin/login', authEndpointLimiter, async (req, res, next)
       userAgent
     });
 
-    return sendAuthResponse(res, makeUserAuthResponse(user, securityGroups, token));
+    return sendAuthResponse(req, res, makeUserAuthResponse(user, securityGroups, token));
   } catch (error) {
     return next(error);
   } finally {

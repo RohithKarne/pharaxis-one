@@ -273,6 +273,56 @@ export default function SearchPage() {
               <button className="btn-secondary" type="submit">Search</button>
             </form>
           </div>
+          <div className="quick-filter-chips" style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '12px' }}
+              onClick={() => {
+                const next = { ...filters, state: '' }
+                setFilters(next)
+                runSearch(1, next)
+              }}
+            >
+              All Documents
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '12px', background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' }}
+              onClick={() => {
+                const next = { ...filters, state: 'approved' }
+                setFilters(next)
+                runSearch(1, next)
+              }}
+            >
+              ✔ GxP Approved
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '12px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}
+              onClick={() => {
+                const next = { ...filters, state: 'in_review' }
+                setFilters(next)
+                runSearch(1, next)
+              }}
+            >
+              ⏳ In Review
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '12px', background: '#ffe4e6', color: '#9f1239', border: '1px solid #fecdd3' }}
+              onClick={() => {
+                const next = { ...filters, state: 'draft' }
+                setFilters(next)
+                runSearch(1, next)
+              }}
+            >
+              📝 Drafts
+            </button>
+          </div>
         </section>
 
         <section className="panel span-4">

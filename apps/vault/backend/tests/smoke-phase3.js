@@ -28,10 +28,14 @@ function bearer(token) {
 }
 
 async function login(credentials) {
+  const { orgSlug, ...loginPayload } = credentials
   return requestJson('/api/auth/login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(credentials)
+    headers: {
+      'Content-Type': 'application/json',
+      ...(orgSlug ? { 'X-Org-Slug': orgSlug } : {})
+    },
+    body: JSON.stringify(loginPayload)
   })
 }
 

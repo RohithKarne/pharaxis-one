@@ -6,6 +6,7 @@
 > Revision update: 2026-03-31 (Section 25 added — engineering tooling workflow. Tooling protocol added to Section 7. Engineering execution step updated in Section 8.)
 > Revision update: 2026-04-14 (Team restructured by Rohith. Reduced to 5-person team. Full names added. Roles updated.)
 > Revision update: 2026-07-10 (Team expanded to 11 by Rohith. Bala Kaviti promoted to COO. New C-suite: Chief Compliance Officer, Chief AI Officer, Chief Medical Officer. New engineering roles: Director of QA, Lead Test Engineer, Solution Architect. Bhavya Bobba is Engineering Manager only — QA function transferred to Kiranmai Avuluri. External client contact added: Katrina.)
+> Revision update: 2026-07-22 (Section 26 added — Pre-Development Discussion & Feature Lock Process, mandated by Rohith. Applies to all Pharaxis applications. First application under this process: MIMS.)
 > Revision update: 2026-07-11 (Section 26 added — Functional Verification Standard. Mandated by Rohith after a defect reached the CEO: data was written to the database and returned by the API, but did not render in the MIMS case screen the user actually opens. DB/API evidence alone no longer counts as verification. Definition of Done (§22) and "What Does Not Count as Evidence" (§15) strengthened accordingly.)
 
 ---
@@ -64,23 +65,25 @@ If any older repo document conflicts with this SOP, the latest active protocol a
 ### Org Chart
 
 ```text
-Rohith Karne (CEO & Co-Founder)
+Rohith Karne (Founder & CEO)
 │
-├── Bala Kaviti (Chief Operating Officer)
-│
-├── Varun Karne (CTO & Co-Founder)
-│   ├── Bhavya Bobba (Engineering Manager)
-│   ├── Kiranmai Avuluri (Director of QA)
-│   │   └── Krishnapriya (Lead Test Engineer)
-│   └── Anirudh (Solution Architect)
-│
-├── Saad Rahman (Chief Product Officer)
-│
-├── Vasu Ranabothu (Chief Compliance Officer)
-│
-├── Mark Antony (Chief AI Officer)
-│
-└── Sowmya (Chief Medical Officer)
+└── Aditi Raghavan (Chief of Staff)   ← Rohith's single point of contact
+    │
+    ├── Bala Kaviti (Chief Operating Officer)
+    │
+    ├── Varun Karne (Head of Development)
+    │   ├── Bhavya Bobba (Engineering Manager)
+    │   ├── Kiranmai Avuluri (Director of Test Engineering)
+    │   │   └── Krishnapriya (Lead Test Engineer)
+    │   └── Anirudh (Solution Architect)
+    │
+    ├── Saad Rahman (Chief Product Officer)
+    │
+    ├── Vasu Ranabothu (Chief Compliance Officer)
+    │
+    ├── Mark Antony (Chief AI Officer)
+    │
+    └── Sowmya (Chief Medical Officer)
 ```
 
 ### External
@@ -92,13 +95,14 @@ Katrina (Senior Director, Client Excellence)
 ```
 
 ### Founding Team
-- **Rohith Karne** and **Varun Karne** are co-founders and the two executive decision makers. All major product and technical direction is decided between them.
+- **Rohith Karne is the sole founder** — Founder & CEO. Set 2026-07-24. Varun Karne is no longer a co-founder.
 
-### Reporting Lines
-- Rohith Karne (CEO) leads the full team. Six direct reports: Bala, Varun, Saad, Vasu, Mark, Sowmya.
-- Bala Kaviti (COO) owns company-wide execution and operations — reports to Rohith
-- Varun Karne (CTO) leads engineering — Bhavya Bobba, Kiranmai Avuluri, and Anirudh report to Varun
-- Kiranmai Avuluri (Director of QA) leads the QA function — Krishnapriya reports to Kiranmai
+### Reporting Lines (updated 2026-07-24)
+- Rohith Karne (Founder & CEO) has **one direct report: Aditi Raghavan (Chief of Staff)**.
+- Aditi Raghavan (Chief of Staff) is Rohith's **single point of contact for everything**. All functions report to her: Bala, Varun, Saad, Vasu, Mark, Sowmya. See Section 27 for the engagement model.
+- Bala Kaviti (COO) owns company-wide execution and operations — reports to Aditi
+- Varun Karne (Head of Development) leads engineering — Bhavya Bobba, Kiranmai Avuluri, and Anirudh report to Varun
+- Kiranmai Avuluri (Director of Test Engineering) leads the QA function — Krishnapriya reports to Kiranmai
 - Saad Rahman (CPO) leads product strategy and roadmap
 - Vasu Ranabothu (CCO) owns regulatory, quality, and risk posture
 - Mark Antony (Chief AI Officer) owns AI strategy and model governance
@@ -126,8 +130,9 @@ Katrina (Senior Director, Client Excellence)
 ## 5. Team Role Responsibilities
 
 ### Executive & Founding
-- **Rohith Karne (CEO & Co-Founder):** company direction, product vision, gate approvals, final sign-off on every feature and release, strategic decisions
-- **Varun Karne (CTO & Co-Founder):** architecture oversight, engineering leadership, technical decisions, code quality, sprint planning, readiness sign-off
+- **Rohith Karne (Founder & CEO):** company direction, product vision, gate approvals, final sign-off on every feature and release, strategic decisions. Raises every new ask to the Chief of Staff first (Section 27)
+- **Aditi Raghavan (Chief of Staff):** Rohith's single point of contact across product, features, development, business, support, validation, and compliance. Analyses each ask, delegates it to the right owner, and tracks it to closure. Does not answer subject-matter questions on another person's behalf, and does not duplicate Bala's gate governance
+- **Varun Karne (Head of Development):** architecture oversight, engineering leadership, technical decisions, code quality, sprint planning, readiness sign-off
 - **Bala Kaviti (Chief Operating Officer):** company-wide execution, delivery cadence, gate governance, hiring and people operations, business operations, vendor and cost management. Translates CEO direction into an operating plan and holds every function accountable to it. Escalates only what needs a founder decision. Does not make technical or product calls.
 
 ### Product
@@ -1176,6 +1181,88 @@ Before Bala raises Gate 1:
 - [ ] Bhavya has written task scopes for every task in scope
 
 Gate 1 is blocked until all three are true.
+
+---
+
+## 26. Pre-Development Discussion & Feature Lock Process
+
+> Established: 2026-07-22. Mandated by Rohith.
+> Applies to: all Pharaxis applications.
+> First application under this process: MIMS.
+
+### Principle
+
+Development does not start immediately on any product enhancement or improvement. Every batch of work goes through a structured discussion phase first, and nothing is built until it has been explicitly confirmed and locked.
+
+### The Process
+
+1. **Discussion phase (2–3 weeks)**
+   - No development work of any kind during this phase.
+   - Rohith and Saad Rahman discuss features, functionalities, business logic, bugs, and existing code files — one item at a time, iterating back and forth.
+   - Coordination of the discussion phase is owned by Saad.
+   - Each item is confirmed individually. A feature is only considered agreed when it is explicitly **locked in the chat session** — Saad states "locked" when Rohith confirms.
+   - A discussed feature that is not locked is not carried forward. Discussion alone does not imply commitment.
+
+2. **Consensus checkpoint**
+   - When the discussion phase completes, Saad produces a **table of all confirmed (locked) features** — feature, app, problem it solves, business logic, and status.
+   - Bala maintains a running log of locked features throughout the phase so the final table is complete and nothing is lost across sessions.
+
+3. **Technical review**
+   - Varun Karne joins the conversation after the confirmed table exists, to review every locked feature for technical clarity.
+   - Optional: Saad may pull Varun in mid-discussion for a quick feasibility check when a feature has a hard technical constraint that would change its shape. Otherwise, technical input waits for this step.
+
+4. **Proceed to build**
+   - Only after the technical review does the work enter the standard delivery flow (Section 8): task scoping, test planning, Gate 1, development, verification, Gate 2, QA, final sign-off.
+
+### Rules
+
+- No development starts during the discussion phase — including "quick fixes" — unless Rohith explicitly directs otherwise.
+- No feature is implemented that was discussed but not locked.
+- All locking happens visibly in chat. No offline confirmation counts.
+- Bala enforces this process and blocks any work item that has not passed through it.
+
+---
+
+## 27. Chief of Staff Engagement Model (Mandatory)
+
+> Established: 2026-07-24. Mandated by Rohith Karne.
+> Applies to: every ask, every application, every function. No exceptions.
+
+### Principle
+
+**Aditi Raghavan (Chief of Staff) is Rohith's single point of contact for everything** — product,
+features, development, business, support, validation, compliance, delivery. Rohith's first
+conversation on any new ask is with Aditi. She analyses it, delegates it to the right owner,
+and tracks it to closure — but **the owner gives the answer, never Aditi.**
+
+### The flow
+
+1. **Rohith raises the ask to Aditi.** This is the entry point for everything new.
+2. **Aditi checks and analyses it herself** before routing — what is actually being asked, what it
+   touches, and who genuinely owns it. Forwarding without understanding is not acceptable.
+3. **Aditi delegates in chat**, naming the owner and stating exactly what they are being asked.
+4. **The owner answers directly** — the analysis, finding, or decision comes from the person who owns
+   that subject. Aditi does not speak for them.
+5. **Rohith follows up directly with that owner.** Aditi does not sit in the middle of every exchange.
+
+### Rules
+
+- Aditi is the entry point; she is not a gate on ongoing conversations
+- Rohith may go direct to any team member at any time for information or clarity — this is expected, not a bypass
+- Team members may delegate onward to other members, stating the handoff visibly in chat
+- Team members may ask Rohith questions directly when they need a product or direction decision
+- Team members return to Aditi for clarification on scope, priority, or conflicting direction
+- Aditi tracks every ask to closure — nothing raised to her is allowed to go quiet
+- All routing happens visibly in chat; the delegation is part of live communication, not a private hand-off
+
+### What the Chief of Staff must not do
+
+- Answer a technical question in place of Varun, Bhavya, or Anirudh
+- Answer a QA or coverage question in place of Kiranmai or Krishnapriya
+- Answer a product or requirement question in place of Saad
+- Answer a compliance, AI, or clinical question in place of Vasu, Mark, or Sowmya
+- Become a bottleneck once an owner is engaged
+- Duplicate Bala's remit — Bala continues to own gate governance, delivery cadence, and escalation
 
 ---
 

@@ -199,13 +199,16 @@ function requireScopedCapability(privilegeKey) {
  */
 function requireOrg(req, res, next) {
   if (hasGlobalAdminScope(req.user)) return next();
-  if (!req.user.orgId) {
+  const headerOrgId = req.headers['x-org-id'] ? parseInt(req.headers['x-org-id'], 10) : null;
+  const activeOrgId = req.user.orgId || (headerOrgId && !Number.isNaN(headerOrgId) ? headerOrgId : null);
+  if (!activeOrgId) {
     return res.status(403).json({
       error: 'No active organisation. Please contact your administrator.',
       error_code: 'ORG_CONTEXT_MISSING',
       should_logout: false,
     });
   }
+  req.user.orgId = activeOrgId;
   next();
 }
 

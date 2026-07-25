@@ -18,74 +18,10 @@ const { emitTelemetryEvent } = require('./telemetryService')
 const { logger } = require('./logger')
 const { classifyInquiry } = require('./ai/inboxClassifierService')
 
-// P7/F12: mailbox passwords are stored AES-256-GCM encrypted at rest (same scheme as
-// SSO secrets). Decrypt at the point the IMAP client consumes them. Tolerant of legacy
-// not-yet-encrypted (plaintext) rows so existing accounts keep polling.
-//
-// Mailbox passwords are written with ssoService.encryptSecret, so the dedicated
-// SSO_CONFIG_ENCRYPTION_KEY is the key here too. Fail closed if it is missing — no
-// fallback to JWT_SECRET or a hardcoded constant (mirrors getSsoEncryptionKeyMaterial).
-function getMailboxEncryptionKeyMaterial() {
-  const configured = String(process.env.SSO_CONFIG_ENCRYPTION_KEY || '').trim()
-  if (configured) return configured
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'SSO_CONFIG_ENCRYPTION_KEY must be set in production to decrypt mailbox credentials.'
-    )
-  }
-  throw new Error(
-    'SSO_CONFIG_ENCRYPTION_KEY is not set. Add it to your environment (.env) to manage mailbox credentials.'
-  )
-}
-
-function deriveMailboxSecretKey() {
-  return crypto.createHash('sha256').update(getMailboxEncryptionKeyMaterial()).digest()
-}
-
-// Read-compatibility only: keys previously used to derive the mailbox secret key
-// before a dedicated key was required. Used solely to decrypt legacy DB rows.
-// Never includes the removed 'mims-sso' constant — a predictable key is not an
-// acceptable fallback.
-function legacyMailboxDecryptionKeys() {
-  const keys = []
-  const seen = new Set()
-  const push = (material) => {
-    const base = String(material || '').trim()
-    if (!base || seen.has(base)) return
-    seen.add(base)
-    keys.push(crypto.createHash('sha256').update(base).digest())
-  }
-  push(process.env.JWT_SECRET)
-  push(require('../utils/jwtSecret'))
-  return keys
-}
-
-function decryptWithMailboxKey(key, ivB64, tagB64, encryptedB64) {
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'))
-  decipher.setAuthTag(Buffer.from(tagB64, 'base64'))
-  const decrypted = Buffer.concat([decipher.update(Buffer.from(encryptedB64, 'base64')), decipher.final()])
-  return decrypted.toString('utf8')
-}
-
-function decryptMailboxSecret(value) {
-  const payload = String(value == null ? '' : value).trim()
-  if (!payload) return value
-  const parts = payload.split('.')
-  if (parts.length !== 3) return value // not our envelope → assume legacy plaintext
-  const [ivB64, tagB64, encryptedB64] = parts
-  if (!ivB64 || !tagB64 || !encryptedB64) return value
-  // Dedicated key first, then legacy keys for rows written before it was required.
-  // deriveMailboxSecretKey() throws if the dedicated key is missing — fail closed
-  // rather than falling back to a predictable constant. The GCM auth tag makes a
-  // wrong-key attempt throw, so we advance to the next candidate.
-  const candidateKeys = [deriveMailboxSecretKey(), ...legacyMailboxDecryptionKeys()]
-  for (const key of candidateKeys) {
-    try {
-      return decryptWithMailboxKey(key, ivB64, tagB64, encryptedB64)
-    } catch (_) { /* wrong key → try next */ }
-  }
-  return value // no configured key matched → treat as legacy plaintext
-}
+// P7/F12: mailbox passwords are stored AES-256-GCM encrypted at rest. Decrypt
+// at the point the IMAP client consumes them — shared helper so the Email Case
+// Import ack sender uses the identical scheme without a circular require.
+const { decryptMailboxSecret } = require('./mailboxCrypto')
 
 function toMySqlDateTime(input) {
   const dt = input instanceof Date ? input : new Date(input)

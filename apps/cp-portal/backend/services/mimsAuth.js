@@ -15,9 +15,10 @@
 
 const { decryptSecret } = require('../utils/secretCrypto');
 const { assertSafeOutboundUrl, safeFetch } = require('../utils/networkGuard');
+const { pool } = require('../database/db');
 
-// integration.id → { token, expiresAt(ms) }
-const tokenCache = new Map();
+// In-process memory fallback
+const memoryTokenCache = new Map();
 
 // Refresh 2 minutes before the server-side expiry so in-flight calls never race it.
 const EXPIRY_SAFETY_MS = 2 * 60 * 1000;
@@ -38,7 +39,21 @@ async function fetchOauthToken(integration) {
   if (!data.access_token) throw new Error('Token response missing access_token.');
 
   const ttlMs = Math.max((Number(data.expires_in) || 3600) * 1000 - EXPIRY_SAFETY_MS, 30 * 1000);
-  tokenCache.set(integration.id, { token: data.access_token, expiresAt: Date.now() + ttlMs });
+  const expiresAt = new Date(Date.now() + ttlMs);
+
+  // Update DB cache
+  try {
+    await pool.execute(
+      `INSERT INTO cp_mims_token_cache (integration_id, access_token, expires_at)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE access_token = VALUES(access_token), expires_at = VALUES(expires_at)`,
+      [integration.id, data.access_token, expiresAt]
+    );
+  } catch (err) {
+    // Fallback to process memory if DB update fails transiently
+    memoryTokenCache.set(integration.id, { token: data.access_token, expiresAt: expiresAt.getTime() });
+  }
+
   return data.access_token;
 }
 
@@ -48,8 +63,28 @@ async function fetchOauthToken(integration) {
  */
 async function getAuthHeaders(integration) {
   if (integration.auth_type === 'oauth') {
-    const cached = tokenCache.get(integration.id);
-    const token = cached && cached.expiresAt > Date.now() ? cached.token : await fetchOauthToken(integration);
+    let token = null;
+
+    // Check DB cache first
+    try {
+      const [[dbToken]] = await pool.execute(
+        `SELECT access_token, expires_at FROM cp_mims_token_cache WHERE integration_id = ? AND expires_at > NOW() LIMIT 1`,
+        [integration.id]
+      );
+      if (dbToken?.access_token) {
+        token = dbToken.access_token;
+      }
+    } catch (err) {
+      // Memory fallback check
+      const cached = memoryTokenCache.get(integration.id);
+      if (cached && cached.expiresAt > Date.now()) {
+        token = cached.token;
+      }
+    }
+
+    if (!token) {
+      token = await fetchOauthToken(integration);
+    }
     return { Authorization: `Bearer ${token}` };
   }
   const apiKey = decryptSecret(integration.api_key);
@@ -59,8 +94,13 @@ async function getAuthHeaders(integration) {
 }
 
 /** Drop a cached token (e.g. after a 401) so the next call mints a fresh one. */
-function invalidateAuth(integrationId) {
-  tokenCache.delete(integrationId);
+async function invalidateAuth(integrationId) {
+  memoryTokenCache.delete(integrationId);
+  try {
+    await pool.execute(`DELETE FROM cp_mims_token_cache WHERE integration_id = ?`, [integrationId]);
+  } catch (err) {
+    // Ignore db deletion errors
+  }
 }
 
 module.exports = { getAuthHeaders, invalidateAuth };

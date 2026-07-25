@@ -57,6 +57,7 @@ const fishbone = computed(() => detail.value?.fishbone || [])
 const effectivenessChecks = computed(() => detail.value?.effectivenessChecks || [])
 const approvals = computed(() => detail.value?.approvals || [])
 const timeline = computed(() => detail.value?.timeline || [])
+const DAY_MS = 24 * 60 * 60 * 1000
 
 const CAPA_LIFECYCLE = [
   { key: 'Draft', label: 'Draft' },
@@ -67,6 +68,80 @@ const CAPA_LIFECYCLE = [
   { key: 'EffectivenessPending', label: 'Effectiveness Review' },
   { key: 'Closed', label: 'Closed' }
 ]
+
+function daysUntil(value) {
+  if (!value) return null
+  const target = new Date(value)
+  if (Number.isNaN(target.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  target.setHours(0, 0, 0, 0)
+  return Math.ceil((target.getTime() - today.getTime()) / DAY_MS)
+}
+
+function isOpenStatus(value) {
+  return !['Closed', 'Cancelled'].includes(String(value || '').trim())
+}
+
+function duePressure(value, status) {
+  const days = daysUntil(value)
+  if (!isOpenStatus(status)) return { label: 'Closed record', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' }
+  if (days === null) return { label: 'No due date', tone: 'border-slate-200 bg-slate-50 text-slate-700' }
+  if (days < 0) return { label: `${Math.abs(days)} days overdue`, tone: 'border-red-200 bg-red-50 text-red-700' }
+  if (days <= 14) return { label: `${days} days remaining`, tone: 'border-amber-200 bg-amber-50 text-amber-700' }
+  return { label: `${days} days remaining`, tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' }
+}
+
+const inspectionCards = computed(() => {
+  const pressure = duePressure(capa.value?.due_date, capa.value?.status)
+  const rcaCount = fiveWhys.value.length + fishbone.value.length
+  return [
+    {
+      label: 'Lifecycle',
+      value: capa.value?.status || 'Draft',
+      detail: availableActions.value.length ? `${availableActions.value.length} action available` : 'No immediate action'
+    },
+    {
+      label: 'Due Pressure',
+      value: formatDate(capa.value?.due_date),
+      detail: pressure.label,
+      tone: pressure.tone
+    },
+    {
+      label: 'Risk',
+      value: capa.value?.risk_band || 'Unscored',
+      detail: capa.value?.risk_score ? `Score ${capa.value.risk_score} (S:${capa.value.severity} O:${capa.value.occurrence} D:${capa.value.detectability})` : 'Risk factors not complete'
+    },
+    {
+      label: 'Evidence',
+      value: `${actionItems.value.length + rcaCount + approvals.value.length + effectivenessChecks.value.length}`,
+      detail: `${actionItems.value.length} actions, ${rcaCount} RCA entries, ${approvals.value.length} approvals`
+    }
+  ]
+})
+
+const readinessItems = computed(() => [
+  {
+    label: 'Action plan',
+    value: actionItems.value.length ? `${actionItems.value.length} action${actionItems.value.length === 1 ? '' : 's'}` : 'Missing',
+    ready: actionItems.value.length > 0 || capa.value?.status === 'Draft'
+  },
+  {
+    label: 'RCA evidence',
+    value: fiveWhys.value.length + fishbone.value.length ? `${fiveWhys.value.length + fishbone.value.length} entr${fiveWhys.value.length + fishbone.value.length === 1 ? 'y' : 'ies'}` : 'Not captured',
+    ready: fiveWhys.value.length + fishbone.value.length > 0 || ['Draft', 'Submitted'].includes(capa.value?.status)
+  },
+  {
+    label: 'Approvals',
+    value: approvals.value.length ? `${approvals.value.length} decision${approvals.value.length === 1 ? '' : 's'}` : 'No decisions',
+    ready: approvals.value.length > 0 || ['Draft', 'Submitted', 'Investigation'].includes(capa.value?.status)
+  },
+  {
+    label: 'Timeline',
+    value: timeline.value.length ? `${timeline.value.length} event${timeline.value.length === 1 ? '' : 's'}` : 'No events',
+    ready: timeline.value.length > 0
+  }
+])
 
 const sidebarSections = computed(() => [
   {
@@ -193,6 +268,46 @@ onMounted(async () => {
         @copy="() => {}"
         @action="showActionPanel = !showActionPanel"
       />
+
+      <section class="grid gap-3 lg:grid-cols-4 sm:grid-cols-2">
+        <article
+          v-for="card in inspectionCards"
+          :key="card.label"
+          class="rounded-lg border bg-white p-4 shadow-sm"
+          :class="card.tone || 'border-slate-200'"
+        >
+          <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{{ card.label }}</p>
+          <p class="mt-2 text-xl font-extrabold text-slate-900">{{ card.value }}</p>
+          <p class="mt-1 text-xs text-slate-500">{{ card.detail }}</p>
+        </article>
+      </section>
+
+      <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-base font-semibold text-slate-900">CAPA Review Readiness</h3>
+            <p class="text-sm text-slate-500">Fast check of actions, RCA, approvals, and timeline before closure or escalation.</p>
+          </div>
+          <button
+            type="button"
+            class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            @click="scrollToSection('timeline')"
+          >
+            View Timeline
+          </button>
+        </div>
+        <div class="mt-3 grid gap-2 md:grid-cols-4 sm:grid-cols-2">
+          <div
+            v-for="item in readinessItems"
+            :key="item.label"
+            class="rounded-lg border px-3 py-2"
+            :class="item.ready ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'"
+          >
+            <p class="text-xs font-semibold uppercase tracking-[0.08em]" :class="item.ready ? 'text-emerald-700' : 'text-amber-700'">{{ item.label }}</p>
+            <p class="mt-1 text-sm font-semibold text-slate-800">{{ item.value }}</p>
+          </div>
+        </div>
+      </section>
 
       <!-- Action Panel -->
       <div v-if="showActionPanel" class="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">

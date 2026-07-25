@@ -6,9 +6,10 @@ function serialize(value) {
   return JSON.stringify(value)
 }
 
-async function log(orgId, userId, userType, action, entityType, entityId, ip, beforeValue, afterValue, notes) {
+async function log(orgId, userId, userType, action, entityType, entityId, ip, beforeValue, afterValue, notes, connection = null) {
+  const db = connection || pool
   try {
-    await pool.execute(
+    await db.execute(
       `INSERT INTO vault_audit_log
        (org_id, user_id, user_type, action, entity_type, entity_id, ip_address, before_value, after_value, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -28,7 +29,7 @@ async function log(orgId, userId, userType, action, entityType, entityId, ip, be
     return true
   } catch (error) {
     console.error('Audit log write failed:', error.message)
-    return false
+    throw new Error(`Audit logging failed: ${error.message}. Transaction aborted for compliance integrity.`)
   }
 }
 

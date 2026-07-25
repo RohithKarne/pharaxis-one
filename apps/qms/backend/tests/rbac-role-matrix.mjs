@@ -86,7 +86,7 @@ for (const fileName of migratedRouteFiles) {
 
   check(
     `route-import-assertAnyRole-${fileName}`,
-    source.includes("import { assertAnyRole } from '../middleware/rbac.js';"),
+    /import\s+.*assertAnyRole.*from\s+['"]\.\.\/middleware\/rbac\.js['"]/.test(source),
     `${fileName} missing shared RBAC import`
   );
 

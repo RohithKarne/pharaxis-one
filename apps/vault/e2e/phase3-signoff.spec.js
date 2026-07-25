@@ -16,8 +16,8 @@ async function login(page, { email, password }) {
 
 async function loginByApi(page, request, { email, password }) {
   const response = await request.post('/api/auth/login', {
+    headers: { 'X-Org-Slug': ORG_SLUG },
     data: {
-      orgSlug: ORG_SLUG,
       email,
       password
     }

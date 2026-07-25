@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Only the keys Xcode cannot generate live here; GENERATE_INFOPLIST_FILE
+	     stays on, so the INFOPLIST_KEY_* build settings still merge in. -->
+
+	<!-- Base URL of the CP Portal Express backend. The local dev backend listens
+	     on :4000 (CP_MEMORY_SOP.md §3); override per environment at release. -->
+	<key>CPPortalBaseURL</key>
+	<string>http://localhost:4000</string>
+
+	<!-- App Transport Security blocks cleartext HTTP by default, which would kill
+	     every call to the dev backend on loopback. Allow local networking only:
+	     arbitrary cleartext stays disabled, so production traffic is still forced
+	     onto HTTPS. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

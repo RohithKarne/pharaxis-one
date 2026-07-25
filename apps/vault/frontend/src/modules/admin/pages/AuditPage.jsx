@@ -118,6 +118,20 @@ export default function AuditPage() {
             <button className="btn-secondary audit-apply-btn" type="submit">
               Apply Filters
             </button>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => {
+                const search = new URLSearchParams()
+                if (filters.action) search.set('action', filters.action)
+                if (filters.date_from) search.set('date_from', filters.date_from)
+                if (filters.date_to) search.set('date_to', filters.date_to)
+                window.open(`/api/audit/export?${search.toString()}`, '_blank')
+              }}
+              style={{ marginLeft: '8px' }}
+            >
+              Export GxP Audit Trail (CSV)
+            </button>
           </form>
 
           {error ? <div className="auth-error">{error}</div> : null}

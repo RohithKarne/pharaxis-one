@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getOrgSlug, saveOrgSlug } from '../../common/utils/session'
 
 export default function LoginPage() {
   const appIconUrl = `${import.meta.env.BASE_URL}vault-icon.svg`
-  const orgSlug = new URLSearchParams(window.location.search).get('org') || ''
-  const orgHeaders = orgSlug ? { 'X-Org-Slug': orgSlug } : {}
+  const [orgSlug, setOrgSlug] = useState(
+    new URLSearchParams(window.location.search).get('org') || getOrgSlug()
+  )
+  const normalizedOrgSlug = orgSlug.trim().toLowerCase()
+  const orgHeaders = normalizedOrgSlug ? { 'X-Org-Slug': normalizedOrgSlug } : {}
   const [form, setForm] = useState({ email: '', password: '', mfaCode: '' })
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
@@ -40,7 +44,7 @@ export default function LoginPage() {
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setOrgContext(data) })
       .catch(() => {})
-  }, [orgSlug])
+  }, [normalizedOrgSlug])
 
   const handleSubmit = async e => {
     e.preventDefault()
@@ -69,7 +73,7 @@ export default function LoginPage() {
       if (!res.ok) { setError(data.error || 'Login failed'); setLoading(false); return }
       localStorage.setItem('vault_token', data.token)
       localStorage.setItem('vault_user', JSON.stringify(data.user))
-      if (orgSlug) localStorage.setItem('vault_org_slug', orgSlug)
+      if (normalizedOrgSlug) saveOrgSlug(normalizedOrgSlug)
       navigate('/vault')
     } catch {
       setError('Network error. Please try again.')
@@ -99,6 +103,17 @@ export default function LoginPage() {
 
         <div className="vault-login-card-body">
           <form className="vault-login-form" onSubmit={handleSubmit}>
+            <div className="vault-form-group">
+              <label htmlFor="orgSlug">Organization Slug</label>
+              <input
+                id="orgSlug"
+                name="orgSlug"
+                value={orgSlug}
+                onChange={event => setOrgSlug(event.target.value)}
+                autoComplete="organization"
+                placeholder="e.g. novartis"
+              />
+            </div>
             <div className="vault-form-group">
               <label htmlFor="email">Email Address</label>
               <input

@@ -2,6 +2,8 @@
 const crypto = require('crypto')
 const bcrypt = require('bcrypt')
 const mysql = require('mysql2/promise')
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib')
+const storageService = require('../services/storageService')
 
 const config = {
   host: process.env.MYSQL_HOST || 'localhost',
@@ -38,6 +40,128 @@ function hoursFromNow(hours) {
 
 function snapshotHash(payload) {
   return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex')
+}
+
+async function createSeedPdf(title, lifecycleState) {
+  const pdf = await PDFDocument.create()
+  const page = pdf.addPage([612, 792])
+  const font = await pdf.embedFont(StandardFonts.Helvetica)
+  const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold)
+
+  page.drawText('Pharaxis Vault Test Document', {
+    x: 54,
+    y: 730,
+    size: 20,
+    font: boldFont,
+    color: rgb(0.12, 0.25, 0.16)
+  })
+  page.drawText(title, {
+    x: 54,
+    y: 682,
+    size: 14,
+    font: boldFont,
+    color: rgb(0.12, 0.12, 0.12),
+    maxWidth: 500
+  })
+  page.drawText(`Lifecycle: ${lifecycleState}`, {
+    x: 54,
+    y: 650,
+    size: 11,
+    font,
+    color: rgb(0.28, 0.28, 0.28)
+  })
+  page.drawText('This file is generated only for local Vault browser and workflow verification.', {
+    x: 54,
+    y: 612,
+    size: 10,
+    font,
+    color: rgb(0.28, 0.28, 0.28),
+    maxWidth: 500
+  })
+
+  return Buffer.from(await pdf.save())
+}
+
+async function ensureSeedVersionFile(connection, {
+  orgId,
+  contentId,
+  currentVersionId,
+  createdBy,
+  title,
+  lifecycleState
+}) {
+  let currentVersion = null
+  if (currentVersionId) {
+    const [[version]] = await connection.execute(
+      `SELECT id, file_name, file_path, s3_key, mime_type
+       FROM vault_versions
+       WHERE id = ? AND content_id = ? AND org_id = ?`,
+      [currentVersionId, contentId, orgId]
+    )
+    currentVersion = version || null
+  }
+
+  if (currentVersion) {
+    try {
+      await storageService.getObjectBuffer(currentVersion)
+      return currentVersion.id
+    } catch {
+      // Seed data from older runs used placeholder paths. Replace them below.
+    }
+  }
+
+  const fileName = `${title.replace(/[^a-zA-Z0-9]+/g, '_')}.pdf`
+  const buffer = await createSeedPdf(title, lifecycleState)
+  const storage = await storageService.uploadFile({
+    buffer,
+    originalname: fileName,
+    mimetype: 'application/pdf',
+    size: buffer.length
+  }, orgId, contentId, '1.0')
+
+  if (currentVersion) {
+    await connection.execute(
+      `UPDATE vault_versions
+       SET file_name = ?, file_path = ?, s3_key = ?, file_size_kb = ?, mime_type = ?, checksum = ?, uploaded_by = ?
+       WHERE id = ? AND org_id = ?`,
+      [
+        fileName,
+        storage.file_path,
+        storage.s3_key,
+        storage.file_size_kb,
+        storage.mime_type,
+        storage.checksum,
+        createdBy,
+        currentVersion.id,
+        orgId
+      ]
+    )
+    return currentVersion.id
+  }
+
+  const [versionInsert] = await connection.execute(
+    `INSERT INTO vault_versions
+       (org_id, content_id, version_number, file_name, file_path, s3_key, file_size_kb, mime_type, checksum, uploaded_by)
+     VALUES (?, ?, '1.0', ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      orgId,
+      contentId,
+      fileName,
+      storage.file_path,
+      storage.s3_key,
+      storage.file_size_kb,
+      storage.mime_type,
+      storage.checksum,
+      createdBy
+    ]
+  )
+  await connection.execute(
+    `UPDATE vault_content
+     SET current_version_id = ?
+     WHERE id = ? AND org_id = ?`,
+    [versionInsert.insertId, contentId, orgId]
+  )
+  return versionInsert.insertId
 }
 
 async function ensureOrg(connection) {
@@ -166,43 +290,38 @@ async function ensureContent(connection, {
     [orgId, title]
   )
 
-  if (existing) return existing.id
+  let contentId = existing?.id
+  let currentVersionId = existing?.current_version_id || null
+  if (!contentId) {
+    const docNumber = `${DOC_PREFIX}-P3-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`
+    const [contentInsert] = await connection.execute(
+      `INSERT INTO vault_content
+         (org_id, doc_number, title, folder_id, content_type_id, lifecycle_state, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [orgId, docNumber, title, folderId, contentTypeId, lifecycleState, createdBy]
+    )
+    contentId = contentInsert.insertId
+  }
 
-  const docNumber = `${DOC_PREFIX}-P3-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`
-  const [contentInsert] = await connection.execute(
-    `INSERT INTO vault_content
-       (org_id, doc_number, title, folder_id, content_type_id, lifecycle_state, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [orgId, docNumber, title, folderId, contentTypeId, lifecycleState, createdBy]
-  )
-  const contentId = contentInsert.insertId
-
-  const [versionInsert] = await connection.execute(
-    `INSERT INTO vault_versions
-       (org_id, content_id, version_number, file_name, file_path, s3_key, file_size_kb, mime_type, checksum, uploaded_by)
-     VALUES (?, ?, '1.0', ?, ?, ?, 120, 'application/pdf', ?, ?)`,
-    [
-      orgId,
-      contentId,
-      `${title.replace(/\s+/g, '_')}.pdf`,
-      `/seed/phase3/${contentId}.pdf`,
-      `seed/phase3/${contentId}.pdf`,
-      snapshotHash({ contentId, title, version: '1.0' }),
-      createdBy
-    ]
-  )
-
-  await connection.execute(
-    `UPDATE vault_content
-     SET current_version_id = ?
-     WHERE id = ? AND org_id = ?`,
-    [versionInsert.insertId, contentId, orgId]
-  )
+  currentVersionId = await ensureSeedVersionFile(connection, {
+    orgId,
+    contentId,
+    currentVersionId,
+    createdBy,
+    title,
+    lifecycleState
+  })
 
   await connection.execute(
     `INSERT INTO vault_metadata
        (org_id, content_id, description, language, country_region, audience, confidentiality, regulated, therapeutic_area, product_brand, department, keywords, effective_date, expiry_date, review_cycle_months)
-     VALUES (?, ?, ?, 'English', 'US', 'internal', 'confidential', 1, 'Oncology', 'Phase3Brand', 'Medical Affairs', ?, ?, ?, 12)`,
+     VALUES (?, ?, ?, 'English', 'US', 'internal', 'confidential', 1, 'Oncology', 'Phase3Brand', 'Medical Affairs', ?, ?, ?, 12)
+     ON DUPLICATE KEY UPDATE
+       description = VALUES(description),
+       keywords = VALUES(keywords),
+       effective_date = VALUES(effective_date),
+       expiry_date = VALUES(expiry_date),
+       review_cycle_months = VALUES(review_cycle_months)`,
     [
       orgId,
       contentId,
