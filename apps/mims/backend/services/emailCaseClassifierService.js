@@ -70,6 +70,22 @@ const MI_SIGNALS = [
   [/\b(can|could|may)\s+i\s+(take|use|combine)\b/, 3],
   [/\b(insurance|coverage|price|cost|copay)\b/, 2],
   [/\bpackage\s+insert|leaflet\b/, 2],
+  [/\b(can|could|would)\s+you\s+(send|tell|confirm|provide)\b/, 2],
+  [/\bwhat\s+(is|are|does|dose)\b/, 2],
+  [/\?/, 1],
+];
+
+// Conflict/hedge markers — the "conflicting content" and "forwarded thread"
+// failure modes named in the AI governance review (MIMS-33). Their presence
+// means the email argues against its own strongest signal, so confidence is
+// damped below the auto-create gate and a human decides.
+const HEDGE_SIGNALS = [
+  /\bno\s+adverse\s+event\b/,
+  /\b(un|not\s+)related\b/,
+  /\bmight\s+be\s+the\b/,
+  /\bprobably\b/,
+  /\bforwarded\b/,
+  /^\s*(fw|fwd)\s*:/i,
 ];
 
 const JUNK_SIGNALS = [
@@ -157,7 +173,17 @@ function extractFields(rawText, fieldDefs) {
 
 function computeConfidence({ topScore, totalScore, secondScore, bodyLength, extractedCount, requiredCount }) {
   if (topScore <= 0) return 0;
-  let confidence = topScore / (totalScore + 2); // +2 smoothing: one weak match never reaches the gate
+
+  // Two evidence dimensions:
+  //  - share:    how much of the total signal belongs to the winning type
+  //              (relative separation from competing types)
+  //  - strength: how much absolute evidence the winning type has at all
+  //              (one weak keyword ≠ five specific phrases)
+  // A clean, unambiguous email scores high on both; a mixed or thin email
+  // fails at least one and lands below the auto-create gate.
+  const share = topScore / (totalScore + 1);
+  const strength = Math.min(1, topScore / 5);
+  let confidence = share * 0.6 + strength * 0.4;
 
   // Near-tie between the top two types → genuinely ambiguous, damp hard.
   if (secondScore > 0 && topScore - secondScore <= 1) confidence *= 0.7;
@@ -233,7 +259,7 @@ function classifyEmail({ subject = '', body = '', fieldDefs = [] } = {}) {
   const secondScore = ranked.filter((r) => r.type !== caseType).reduce((m, r) => Math.max(m, r.score), 0);
   const totalScore = ae.score + pc.score + mi.score;
 
-  const confidence = isJunk ? 0 : computeConfidence({
+  let confidence = isJunk ? 0 : computeConfidence({
     topScore,
     totalScore,
     secondScore,
@@ -241,6 +267,12 @@ function classifyEmail({ subject = '', body = '', fieldDefs = [] } = {}) {
     extractedCount: requiredDefs.filter((d) => d.field_key in extracted).length,
     requiredCount: requiredDefs.length,
   });
+
+  // Conflict/hedge damper: the email contradicts or hedges its own signal
+  // (forwarded chains, "probably unrelated", "no adverse event") → below the
+  // gate, human decides.
+  const hedged = HEDGE_SIGNALS.some((re) => re.test(text) || re.test(String(subject || '').toLowerCase()));
+  if (hedged) confidence = Number((confidence * 0.6).toFixed(3));
 
   // Asymmetric AE rule (decision #2): moderate AE signal on a non-AE verdict
   // forces human review. The classifier itself never "resolves" the ambiguity.

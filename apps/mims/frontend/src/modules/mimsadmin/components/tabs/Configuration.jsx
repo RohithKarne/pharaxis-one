@@ -1,4 +1,12 @@
+import { lazy, Suspense } from 'react'
 import { CONFIG_NAV, findConfigLabel } from '../configItems'
+
+const EmailCaseImportConfig = lazy(() => import('../EmailCaseImportConfig'))
+
+// Topics with a real configuration surface (no longer placeholder tiles).
+const TOPIC_COMPONENTS = {
+  'imp-email-case': EmailCaseImportConfig,
+}
 
 function flattenNav(items, parent = []) {
   return items.flatMap((item) => {
@@ -11,6 +19,7 @@ function flattenNav(items, parent = []) {
 export default function Configuration({ selectedItem, onSelect }) {
   const items = flattenNav(CONFIG_NAV)
   const selectedLabel = selectedItem ? findConfigLabel(selectedItem) : null
+  const TopicComponent = selectedItem ? TOPIC_COMPONENTS[selectedItem] : null
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
@@ -27,10 +36,18 @@ export default function Configuration({ selectedItem, onSelect }) {
           <div style={{ marginTop: 8, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>
             {selectedLabel || 'Select a configuration topic'}
           </div>
-          <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>
-            The embedded admin now keeps this tab usable by exposing direct topic navigation instead of an empty stub screen.
-          </div>
+          {!TopicComponent && (
+            <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+              The embedded admin now keeps this tab usable by exposing direct topic navigation instead of an empty stub screen.
+            </div>
+          )}
         </div>
+
+        {TopicComponent && (
+          <Suspense fallback={<div style={{ padding: 24, color: 'var(--text-muted)' }}>Loading…</div>}>
+            <TopicComponent />
+          </Suspense>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
           {items.map((item) => (

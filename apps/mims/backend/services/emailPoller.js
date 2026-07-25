@@ -194,6 +194,31 @@ async function ingestAccount(account, sinceDt) {
               }
             }
           }
+
+          // Email Case Import (Epic MIMS-29): admin-flagged intake mailboxes
+          // feed the auto-case pipeline. Runs after attachments so the case
+          // sees the complete inquiry. An import failure must never break
+          // ingestion — the email simply remains in the Inbox (no-drop rule).
+          if (account.is_case_intake && inquiry?.id) {
+            try {
+              const eci = require('./emailCaseImportService')
+              const refsRaw = parsedEmail?.references
+              const outcome = await eci.processInquiry({
+                inquiryId: inquiry.id,
+                account,
+                parsed: {
+                  messageId,
+                  inReplyTo: parsedEmail?.inReplyTo ? [parsedEmail.inReplyTo] : [],
+                  references: Array.isArray(refsRaw) ? refsRaw : (refsRaw ? [refsRaw] : []),
+                  receivedAt: parsedEmail?.date || new Date(),
+                  source: msg.source,
+                },
+              })
+              logger.info({ inquiry_id: inquiry.id, outcome: outcome?.action }, 'Email case import processed')
+            } catch (e) {
+              logger.warn({ inquiry_id: inquiry.id, error: safeText(e?.message || e, 200) }, 'Email case import failed — email remains in Inbox')
+            }
+          }
         }
       }
     } finally {

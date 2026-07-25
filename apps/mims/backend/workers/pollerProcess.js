@@ -17,14 +17,19 @@
 try { process.loadEnvFile(); } catch (_) {}
 
 const { startPoller, stopPoller } = require('../services/emailPoller');
+const { startSlaScheduler, stopSlaScheduler } = require('../services/emailCaseImportService');
 const { logger } = require('../services/logger');
 
 logger.info({ pid: process.pid }, 'pollerProcess: email poller worker started');
 
 startPoller();
+// Email Case Import (MIMS-38): SLA sweep shares the poller lifecycle — cases
+// sitting unreviewed in "Email Intake" past the org window escalate to leads.
+startSlaScheduler();
 
 process.on('SIGTERM', async () => {
   logger.info({ pid: process.pid }, 'pollerProcess: SIGTERM received — stopping poller');
+  try { stopSlaScheduler(); } catch (_) {}
   // WP3: await stopPoller so an in-flight ingest can finish and persist its watermark.
   try { await stopPoller(); } catch (e) { logger.warn({ pid: process.pid, err: e.message }, 'pollerProcess: stopPoller error on SIGTERM'); }
   process.exit(0);

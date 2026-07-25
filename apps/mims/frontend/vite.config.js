@@ -15,16 +15,17 @@ export default defineConfig({
   },
   plugins: [react()],
   server: {
-    port: 5173,
-    strictPort: true,
-    // Proxy API + static backend assets to Express on port 3000 during local dev.
+    port: Number(process.env.MIMS_DEV_PORT) || 5173,
+    strictPort: !process.env.MIMS_DEV_PORT,
+    // Proxy API + static backend assets to Express during local dev.
+    // MIMS_API_PROXY overrides the backend target (default port 3000).
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3000',
+        target: process.env.MIMS_API_PROXY || 'http://127.0.0.1:3000',
         ws: true,
       },
-      '/storage': 'http://127.0.0.1:3000',
-      '/uploads': 'http://127.0.0.1:3000',
+      '/storage': process.env.MIMS_API_PROXY || 'http://127.0.0.1:3000',
+      '/uploads': process.env.MIMS_API_PROXY || 'http://127.0.0.1:3000',
     }
   },
   build: {

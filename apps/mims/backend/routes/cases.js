@@ -713,7 +713,7 @@ router.get('/cases/:id/comments', authenticate, async (req, res) => {
     if (!owned) return res.status(403).json({ error: 'Access denied' });
 
     const [rows] = await pool.execute(
-      `SELECT cc.id, cc.case_id, cc.user_id, cc.comment, cc.created_at, u.name AS user_name, u.email AS user_email
+      `SELECT cc.id, cc.case_id, cc.user_id, cc.comment, cc.created_at, COALESCE(u.name, 'System') AS user_name, u.email AS user_email
        FROM case_comments cc
        LEFT JOIN users u ON u.id = cc.user_id
        WHERE cc.case_id = ?
