@@ -59,6 +59,40 @@ for p in "${PLACEHOLDERS[@]}"; do
   fi
 done
 
+# Exact matching alone was not enough: "your message hersaasdasdasdsade" got
+# through on 2026-07-28 because it was not byte-identical to the placeholder.
+# Any message that merely *contains* a placeholder phrase is rejected too.
+# Keep these specific. "commit message" was here briefly and rejected the
+# perfectly valid subject "reject placeholder commit messages …" — a phrase
+# common in real English is not a safe placeholder marker.
+PLACEHOLDER_PHRASES=(
+  "your message"
+  "message here"
+  "enter message"
+  "no message"
+)
+for p in "${PLACEHOLDER_PHRASES[@]}"; do
+  case "$LOWER" in
+    *"$p"*) fail "\"$SUBJECT\" still contains the placeholder text \"$p\"." ;;
+  esac
+done
+
+# Keyboard mashing — runs of home-row noise or the same character repeated.
+if printf '%s' "$LOWER" | grep -qE '(asd|sda|dsa|qwe|wer|zxc|jkl|hjk){2,}'; then
+  fail "\"$SUBJECT\" looks like keyboard mashing, not a description."
+fi
+if printf '%s' "$LOWER" | grep -qE '(.)\1{4,}'; then
+  fail "\"$SUBJECT\" contains a run of repeated characters."
+fi
+
+# A "word" longer than 25 characters is almost always mashed input rather than
+# a real token, and real messages do not need one.
+for w in $SUBJECT; do
+  if [ "${#w}" -gt 25 ]; then
+    fail "\"$w\" is ${#w} characters with no break — that is not a real word."
+  fi
+done
+
 if [ -z "$SUBJECT" ]; then
   fail "the commit message is empty."
 fi
