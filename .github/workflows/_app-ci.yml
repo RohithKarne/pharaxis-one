@@ -32,6 +32,18 @@ on:
         required: false
         default: ''
         type: string
+      # Set to the app's test database name to spin up MySQL and run unit
+      # tests. Without it the app is only built and syntax-checked, which is
+      # what every app did before 2026-07-27 — a green tick meant "it
+      # compiled", not "it works".
+      test_database:
+        required: false
+        default: ''
+        type: string
+      test_command:
+        required: false
+        default: 'npm test'
+        type: string
 
 jobs:
   frontend-build:
@@ -132,3 +144,66 @@ jobs:
 
       - name: Run security scan
         run: ${{ inputs.security_command }}
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    # Only runs when the caller provides a test database. Apps without one are
+    # still built and syntax-checked, but their tests do not gate the build.
+    if: ${{ inputs.test_database != '' }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.app_root }}
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: devpass
+          MYSQL_DATABASE: ${{ inputs.test_database }}
+          MYSQL_USER: devuser
+          MYSQL_PASSWORD: devpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -udevuser -pdevpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: '3306'
+      MYSQL_USER: devuser
+      MYSQL_PASSWORD: devpass
+      MYSQL_DATABASE: ${{ inputs.test_database }}
+      NODE_ENV: test
+      JWT_SECRET: ci_test_secret_not_used_outside_ci
+      BOOTSTRAP_PLATFORM_ADMIN_EMAIL: platform_admin
+      BOOTSTRAP_PLATFORM_ADMIN_PASSWORD: Test@1234
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ${{ inputs.app_lockfile }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for MySQL
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -udevuser -pdevpass --silent 2>/dev/null; then
+              echo "MySQL is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL never became ready"; exit 1
+
+      - name: Run unit tests
+        run: ${{ inputs.test_command }}

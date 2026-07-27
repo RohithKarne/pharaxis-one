@@ -1,11 +1,27 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+// The split components fetch on mount with relative URLs, which jsdom cannot
+// resolve ("Failed to parse URL from /api/..."). These are render/navigation
+// tests, so the network is stubbed rather than exercised.
+beforeEach(() => {
+  global.fetch = vi.fn(() => Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({}),
+    text: () => Promise.resolve(''),
+  }))
+})
 
 vi.mock('../shared/context/AuthContext', () => ({
   useAuth: () => ({
     token: 'mock-token',
     user: { id: 7, name: 'QA User' },
+    // CaseOverviewTab destructures hasCapability from useAuth and calls it while
+    // building its section summaries. Without it the tab throws on render, which
+    // is what this mock was missing.
+    hasCapability: () => true,
   }),
 }))
 
@@ -43,6 +59,9 @@ vi.mock('../modules/cases/hooks/useCaseForm', () => ({
 
 vi.mock('../modules/cases/components/CaseInfoTab', () => ({ default: () => <div data-testid="case-info-tab">info</div> }))
 vi.mock('../modules/cases/components/CaseCommentsTab', () => ({ default: () => <div data-testid="case-comments-tab">comments</div> }))
+// The Sprint 21 split replaced the standalone comments tab with a combined
+// workspace; the Communications tab mounts this component now.
+vi.mock('../modules/cases/components/CaseCommunicationsWorkspace', () => ({ default: () => <div data-testid="case-communications-workspace">communications</div> }))
 vi.mock('../modules/cases/components/CaseContactsTab', () => ({ default: () => <div data-testid="case-contacts-tab">contacts</div> }))
 vi.mock('../modules/cases/components/CaseCorrespondenceTab', () => ({ default: () => <div data-testid="case-correspondence-tab">correspondence</div> }))
 vi.mock('../modules/cases/components/CaseMITab', () => ({ default: () => <div data-testid="case-mi-tab">mi</div> }))
@@ -79,39 +98,53 @@ describe('Sprint 21 split regression: CaseFormPage', () => {
     expect(screen.queryByTestId('case-info-tab')).not.toBeInTheDocument()
   })
 
-  it('switches tabs and renders split components', () => {
+  it('switches tabs and renders split components', async () => {
     renderCaseForm('/cases/42')
     expect(screen.getByTestId('case-info-tab')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Comments / Notes' }))
-    expect(screen.getByTestId('case-comments-tab')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Contacts' }))
-    expect(screen.getByTestId('case-contacts-tab')).toBeInTheDocument()
+
+    // Tab labels were renamed in the Sprint 21 split: "Comments / Notes" became
+    // "Communications" and "Contacts" became "People". Scope to the tab bar —
+    // the panels also render "Open Communications Workspace" buttons.
+    const tab = (name) =>
+      screen.getAllByRole('button', { name })
+        .find(el => el.classList.contains('cf-tabbar-btn'))
+
+    fireEvent.click(tab('Communications'))
+    expect(await screen.findByTestId('case-communications-workspace')).toBeInTheDocument()
+
+    fireEvent.click(tab('People'))
+    expect(await screen.findByTestId('case-contacts-tab')).toBeInTheDocument()
   })
 })
 
 describe('Sprint 21 split regression: ContentPage', () => {
-  it('renders top tabs and switches section components', () => {
+  // ContentPage loads its sections with React.lazy + Suspense, so every section
+  // assertion has to await resolution. The original synchronous getByTestId
+  // calls could never pass after that refactor.
+  it('renders top tabs and switches section components', async () => {
     render(
       <MemoryRouter>
         <ContentPage />
       </MemoryRouter>
     )
 
-    expect(screen.getByTestId('documents-section')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Browse Content' }))
-    expect(screen.getByTestId('browse-section')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '⚙ Settings' }))
-    expect(screen.getByTestId('settings-section')).toBeInTheDocument()
+    expect(await screen.findByTestId('documents-section')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Browse Content/ }))
+    expect(await screen.findByTestId('browse-section')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
+    expect(await screen.findByTestId('settings-section')).toBeInTheDocument()
   })
 
-  it('opens folder manager modal from header action', () => {
+  it('opens folder manager modal from header action', async () => {
     render(
       <MemoryRouter>
         <ContentPage />
       </MemoryRouter>
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '📁 Manage Folders' }))
-    expect(screen.getByTestId('folder-manager')).toBeInTheDocument()
+    // Header action is labelled "Folder Manager" — it was renamed from
+    // "📁 Manage Folders" and the test was never updated.
+    fireEvent.click(screen.getByRole('button', { name: 'Folder Manager' }))
+    expect(await screen.findByTestId('folder-manager')).toBeInTheDocument()
   })
 })

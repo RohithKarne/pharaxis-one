@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+#
+# commit-msg — reject placeholder and uninformative commit messages.
+#
+# Why: every commit in this repo through 2026-07-27 reads literally
+# "your message here". Under 21 CFR Part 11 the version history is part of
+# the change-control record, and "show me what changed and why" cannot be
+# answered by twenty identical placeholders. Once pushed, that becomes the
+# permanent external record and cannot be retrofitted.
+#
+# Enable for this repository:
+#   git config core.hooksPath .githooks
+#
+# Bypass for a genuine emergency:
+#   git commit --no-verify
+
+MSG_FILE="$1"
+SUBJECT="$(head -n1 "$MSG_FILE" | sed 's/[[:space:]]*$//')"
+
+# Merge, revert and fixup commits are generated — leave them alone.
+case "$SUBJECT" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+fail() {
+  echo "" >&2
+  echo "✗ Commit rejected: $1" >&2
+  echo "" >&2
+  echo "  Your message: \"$SUBJECT\"" >&2
+  echo "" >&2
+  echo "  Write what changed and why, e.g.:" >&2
+  echo "    fix(mims): stop .env overriding MYSQL_DATABASE so tests can target the test DB" >&2
+  echo "    test(mims): replace assertions that could never fail" >&2
+  echo "" >&2
+  echo "  Emergency bypass: git commit --no-verify" >&2
+  echo "" >&2
+  exit 1
+}
+
+PLACEHOLDERS=(
+  "your message here"
+  "message here"
+  "wip"
+  "update"
+  "updates"
+  "fix"
+  "fixes"
+  "changes"
+  "temp"
+  "asdf"
+  "test"
+  "."
+)
+
+LOWER="$(printf '%s' "$SUBJECT" | tr '[:upper:]' '[:lower:]')"
+for p in "${PLACEHOLDERS[@]}"; do
+  if [ "$LOWER" = "$p" ]; then
+    fail "\"$SUBJECT\" is a placeholder, not a description of the change."
+  fi
+done
+
+if [ -z "$SUBJECT" ]; then
+  fail "the commit message is empty."
+fi
+
+if [ "${#SUBJECT}" -lt 15 ]; then
+  fail "the subject is only ${#SUBJECT} characters — too short to describe a change (minimum 15)."
+fi
+
+if [ "$(printf '%s' "$SUBJECT" | wc -w | tr -d ' ')" -lt 3 ]; then
+  fail "the subject needs at least 3 words."
+fi
+
+exit 0

@@ -102,6 +102,17 @@ async function resolveLoginSession(request, candidates, fallbackRole, moduleHint
 
 async function hydrateStorage(page, session, prefix, entryUrl) {
   await page.goto(entryUrl)
+  // Auth is restored from the httpOnly `mims_token` cookie, not localStorage
+  // (F14 security hardening — see AuthContext.jsx). Without this the app is
+  // unauthenticated no matter what localStorage says.
+  await page.context().addCookies([{
+    name: 'mims_token',
+    value: session.token,
+    domain: new URL(page.url()).hostname,
+    path: '/',
+    httpOnly: true,
+    sameSite: 'Lax',
+  }])
   await page.evaluate(({ auth, pfx }) => {
     localStorage.setItem(`${pfx}_token`, auth.token)
     localStorage.setItem(`${pfx}_user`, JSON.stringify(auth.user || {}))

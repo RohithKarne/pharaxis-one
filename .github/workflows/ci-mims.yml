@@ -27,3 +27,7 @@ jobs:
       backend_working_directory: apps/mims
       backend_entrypoint: backend/server.js
       security_command: npm run security:scan
+      # 73 backend unit tests now gate the build. Before this, CI only built the
+      # frontend and syntax-checked the backend entrypoint — it never ran a test.
+      test_database: pharaxis_mims_test
+      test_command: npm test

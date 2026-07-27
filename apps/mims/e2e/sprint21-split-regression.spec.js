@@ -125,7 +125,21 @@ async function resolveLoginSession(request, candidates, fallbackRole, moduleHint
 }
 
 async function hydrateAuthStorage(page, session) {
+  // The app stopped reading the JWT from localStorage in the F14 security
+  // hardening — it is restored from the httpOnly `mims_token` cookie instead
+  // (see AuthContext.jsx). Setting only localStorage leaves the app
+  // unauthenticated, which is why every console test redirected to a login
+  // page and then skipped. The cookie is what actually authenticates.
   await page.goto(appPath('/'))
+  await page.context().addCookies([{
+    name: 'mims_token',
+    value: session.token,
+    domain: new URL(page.url()).hostname,
+    path: '/',
+    httpOnly: true,
+    sameSite: 'Lax',
+  }])
+
   await page.evaluate((auth) => {
     localStorage.setItem('mims_token',           auth.token)
     localStorage.setItem('mims_user',            JSON.stringify(auth.user || {}))
@@ -526,18 +540,21 @@ test.describe('Platform Admin — sidebar navigation', () => {
     await page.waitForLoadState('networkidle')
   })
 
+  // Sidebar was restructured — the previous list (Organizations, Users,
+  // 2FA / Security, Audit Log, Login Audit, Alerts, Notifications,
+  // Copy Division, Help Content, Reports) no longer exists as top-level
+  // sections. These are the actual ones the console renders today.
   const PLATFORM_ADMIN_SECTIONS = [
     'Dashboard',
-    'Organizations',
-    'Users',
-    '2FA / Security',
-    'Audit Log',
-    'Login Audit',
-    'Alerts',
-    'Notifications',
-    'Copy Division',
-    'Help Content',
-    'Reports',
+    'Service Log',
+    'System Activity',
+    'Service Dashboard',
+    'Configuration',
+    'Escalation',
+    'Documents',
+    'Tables',
+    'System',
+    'Help',
   ]
 
   for (const section of PLATFORM_ADMIN_SECTIONS) {
@@ -569,7 +586,17 @@ test.describe('401 auto-logout', () => {
 
     await hydrateAuthStorage(page, session)
 
-    // Corrupt the token so next API call returns 401
+    // Corrupt the session so the next API call returns 401. The cookie is the
+    // real credential (localStorage is no longer read for the JWT), so it has
+    // to be replaced too — clearing only localStorage leaves the user signed in.
+    await page.context().addCookies([{
+      name: 'mims_token',
+      value: 'expired.invalid.token',
+      domain: new URL(page.url()).hostname,
+      path: '/',
+      httpOnly: true,
+      sameSite: 'Lax',
+    }])
     await page.evaluate(() => {
       localStorage.setItem('mims_token', 'expired.invalid.token')
     })
@@ -587,7 +614,9 @@ test.describe('401 auto-logout', () => {
   test('cleared token redirects to login immediately', async ({ page }) => {
     requireSession(session, authErr, 'MIMS session')
 
-    // No auth at all — ProtectedRoute should redirect
+    // No auth at all — ProtectedRoute should redirect. Clear the cookie as
+    // well as localStorage; the cookie is what actually authenticates.
+    await page.context().clearCookies()
     await page.goto(appPath('/'))
     await page.evaluate(() => localStorage.clear())
     await page.goto(appPath('/dashboard'))

@@ -41,6 +41,18 @@ async function runMigrations(conn, dbName) {
   }
 
   // ── 3. Bootstrap detection — existing DB pre-migration-runner ────────────
+  // Presence of `users` alone is NOT sufficient evidence of a legacy database.
+  // A migration that fails partway (e.g. 001 creates `users`, then throws on a
+  // missing bootstrap password) leaves `users` behind on an otherwise empty
+  // schema. Treating that as "legacy" stamps every migration as applied, and
+  // the database is then permanently stuck with almost no tables while
+  // reporting itself fully migrated. Require a populated schema instead.
+  const [tableCount] = await conn.execute(
+    `SELECT COUNT(*) AS cnt
+       FROM information_schema.tables
+      WHERE table_schema = ? AND table_name <> 'schema_migrations'`,
+    [dbName]
+  );
   const [usersCheck] = await conn.execute(
     `SELECT COUNT(*) AS cnt
        FROM information_schema.tables
@@ -48,7 +60,18 @@ async function runMigrations(conn, dbName) {
       LIMIT 1`,
     [dbName]
   );
-  const dbAlreadyExists = usersCheck[0].cnt > 0;
+
+  const LEGACY_MIN_TABLES = 20;
+  const hasUsers    = usersCheck[0].cnt > 0;
+  const tablesFound = tableCount[0].cnt;
+  const dbAlreadyExists = hasUsers && tablesFound >= LEGACY_MIN_TABLES;
+
+  if (hasUsers && !dbAlreadyExists) {
+    console.log(
+      `[DB] "${dbName}" has a users table but only ${tablesFound} tables — treating as a ` +
+      `partially-migrated database and running all migrations, not stamping them as applied.`
+    );
+  }
 
   const [appliedRows] = await conn.execute(
     'SELECT filename FROM schema_migrations'
