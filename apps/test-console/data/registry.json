@@ -1,0 +1,206 @@
+{
+  "_comment": [
+    "The cumulative regression corpus. Every suite the team has written stays here",
+    "permanently, tagged with the release that contributed it. Nothing is removed",
+    "when a release ships \u2014 that is what makes a full regression run meaningful at",
+    "any point in the testing phase.",
+    "",
+    "Suites enter this file by promotion: a release run finishes clean, and its new",
+    "suites are appended with the release tag. Adding a suite by hand is allowed but",
+    "should be rare \u2014 the promotion flow is the intended path."
+  ],
+  "releases": [
+    "Sprint 14",
+    "Sprint 16",
+    "Sprint 17",
+    "Sprint 18",
+    "Sprint 19",
+    "Sprint 20",
+    "Sprint 21",
+    "2026.07-R1",
+    "2026.07-R2",
+    "2026.07-R3",
+    "2026.07-R4"
+  ],
+  "apps": [
+    {
+      "id": "mims",
+      "name": "MIMS",
+      "cwd": "apps/mims",
+      "env": {
+        "MYSQL_DATABASE": "pharaxis_mims_test"
+      },
+      "suites": [
+        {
+          "id": "mims-unit-backend",
+          "name": "backend unit (jest)",
+          "tier": 1,
+          "addedIn": "Sprint 14",
+          "cmd": "npx jest --testPathPatterns=backend/tests --forceExit --verbose",
+          "parser": "jest"
+        },
+        {
+          "id": "mims-unit-frontend",
+          "name": "frontend unit (vitest)",
+          "tier": 1,
+          "addedIn": "Sprint 18",
+          "cmd": "npx vitest run --reporter=verbose",
+          "cwd": "apps/mims/frontend",
+          "parser": "vitest"
+        },
+        {
+          "id": "mims-e2e-sprint21",
+          "name": "e2e/sprint21-split-regression.spec.js",
+          "tier": 3,
+          "addedIn": "Sprint 21",
+          "cmd": "npx playwright test e2e/sprint21-split-regression.spec.js --reporter=list",
+          "parser": "playwright"
+        },
+        {
+          "id": "mims-e2e-integration",
+          "name": "e2e/integration-screens.spec.js",
+          "tier": 3,
+          "addedIn": "Sprint 20",
+          "cmd": "npx playwright test e2e/integration-screens.spec.js --reporter=list",
+          "parser": "playwright"
+        },
+        {
+          "id": "mims-e2e-admin",
+          "name": "e2e/admin-console.spec.js",
+          "tier": 3,
+          "addedIn": "Sprint 19",
+          "cmd": "npx playwright test e2e/admin-console.spec.js --reporter=list",
+          "parser": "playwright"
+        },
+        {
+          "id": "mims-e2e-inbox",
+          "name": "e2e/inbox-saved-views.spec.js",
+          "tier": 3,
+          "addedIn": "Sprint 21",
+          "cmd": "npx playwright test e2e/inbox-saved-views.spec.js --reporter=list",
+          "parser": "playwright"
+        }
+      ]
+    },
+    {
+      "id": "cp-portal",
+      "name": "CP Portal",
+      "cwd": "apps/cp-portal",
+      "env": {
+        "MYSQL_DATABASE": "pharaxis_cp_portal_test"
+      },
+      "suites": [
+        {
+          "id": "cp-static",
+          "name": "backend syntax check",
+          "tier": 1,
+          "addedIn": "Sprint 16",
+          "cmd": "npm run --silent test:static",
+          "parser": "exitcode"
+        },
+        {
+          "id": "cp-e2e-smoke",
+          "name": "e2e/smoke.spec.js",
+          "tier": 3,
+          "addedIn": "2026.07-R1",
+          "cmd": "npx playwright test e2e/smoke.spec.js --reporter=list",
+          "parser": "playwright"
+        },
+        {
+          "id": "cp-e2e-negative",
+          "name": "e2e/negative.spec.js",
+          "tier": 3,
+          "addedIn": "2026.07-R2",
+          "cmd": "npx playwright test e2e/negative.spec.js --reporter=list",
+          "parser": "playwright"
+        }
+      ]
+    },
+    {
+      "id": "vault",
+      "name": "Vault",
+      "cwd": "apps/vault",
+      "env": {
+        "MYSQL_DATABASE": "pharaxis_vault_test"
+      },
+      "suites": [
+        {
+          "id": "vault-static",
+          "name": "backend syntax check",
+          "tier": 1,
+          "addedIn": "Sprint 17",
+          "cmd": "npm run --silent test:static",
+          "parser": "exitcode"
+        },
+        {
+          "id": "vault-e2e-auth",
+          "name": "e2e/vault-auth.spec.js",
+          "tier": 3,
+          "addedIn": "2026.07-R2",
+          "cmd": "npx playwright test e2e/vault-auth.spec.js --reporter=list",
+          "parser": "playwright"
+        },
+        {
+          "id": "vault-e2e-phase3",
+          "name": "e2e/phase3-signoff.spec.js",
+          "tier": 3,
+          "addedIn": "2026.07-R3",
+          "cmd": "npx playwright test e2e/phase3-signoff.spec.js --reporter=list",
+          "parser": "playwright"
+        },
+        {
+          "id": "vault-e2e-smoke",
+          "name": "e2e/smoke.spec.js",
+          "tier": 3,
+          "addedIn": "2026.07-R1",
+          "cmd": "npx playwright test e2e/smoke.spec.js --reporter=list",
+          "parser": "playwright"
+        }
+      ]
+    },
+    {
+      "id": "qms",
+      "name": "QMS",
+      "cwd": "apps/qms",
+      "env": {
+        "DATABASE_URL": "postgresql://qms_app:qms_dev_pass@localhost:5432/qms_test"
+      },
+      "suites": [
+        {
+          "id": "qms-static",
+          "name": "backend syntax check",
+          "tier": 1,
+          "addedIn": "Sprint 19",
+          "cmd": "npm run --silent test:static",
+          "parser": "exitcode"
+        },
+        {
+          "id": "qms-e2e-smoke",
+          "name": "e2e/smoke.spec.cjs",
+          "tier": 3,
+          "addedIn": "2026.07-R4",
+          "cmd": "npx playwright test --config=playwright.config.cjs --reporter=list",
+          "parser": "playwright"
+        }
+      ]
+    },
+    {
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "cwd": "apps/ai-agent",
+      "env": {
+        "MYSQL_DATABASE": "pharaxis_ai_agent_test"
+      },
+      "suites": [
+        {
+          "id": "ai-static",
+          "name": "backend syntax check",
+          "tier": 1,
+          "addedIn": "Sprint 20",
+          "cmd": "npm run --silent test:static",
+          "parser": "exitcode"
+        }
+      ]
+    }
+  ]
+}

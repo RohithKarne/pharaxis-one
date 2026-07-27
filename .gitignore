@@ -58,3 +58,6 @@ ecosystem.config.js
 
 # WP9: never commit DB dumps (e.g. mims_dev_backup_*.sql)
 *.sql
+
+# Test console run artifacts (registry.json IS committed — it is the corpus)
+apps/test-console/data/runs/

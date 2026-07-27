@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pharaxis Test Console</title>
+<style>
+  :root {
+    --ground:#0E1416; --surface:#151E21; --surface-2:#1B262A; --rule:#223035;
+    --ink:#DCE7E9; --ink-2:#93A6AA; --ink-3:#63777C;
+    --accent:#3FB8AF; --accent-dim:#245F5C;
+    --pass:#5FA85F; --pass-bg:#16251A;
+    --fail:#D9544D; --fail-bg:#2A1616;
+    --skip:#E0A030; --skip-bg:#2A2012;   /* as loud as fail, on purpose */
+    --idle:#55686D; --idle-bg:#1A2427;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --r:3px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground:#F2F5F5; --surface:#FFF; --surface-2:#E9EEEF; --rule:#D3DDDF;
+      --ink:#162124; --ink-2:#4C6065; --ink-3:#7A8D91;
+      --accent:#1F7C74; --accent-dim:#BEE0DC;
+      --pass:#2F7A38; --pass-bg:#E4F1E5; --fail:#B3352E; --fail-bg:#FBE7E5;
+      --skip:#9A6512; --skip-bg:#FBF0DC; --idle:#84969A; --idle-bg:#E5EBEC;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:#F2F5F5; --surface:#FFF; --surface-2:#E9EEEF; --rule:#D3DDDF;
+    --ink:#162124; --ink-2:#4C6065; --ink-3:#7A8D91;
+    --accent:#1F7C74; --accent-dim:#BEE0DC;
+    --pass:#2F7A38; --pass-bg:#E4F1E5; --fail:#B3352E; --fail-bg:#FBE7E5;
+    --skip:#9A6512; --skip-bg:#FBF0DC; --idle:#84969A; --idle-bg:#E5EBEC;
+  }
+  :root[data-theme="dark"] {
+    --ground:#0E1416; --surface:#151E21; --surface-2:#1B262A; --rule:#223035;
+    --ink:#DCE7E9; --ink-2:#93A6AA; --ink-3:#63777C;
+    --accent:#3FB8AF; --accent-dim:#245F5C;
+    --pass:#5FA85F; --pass-bg:#16251A; --fail:#D9544D; --fail-bg:#2A1616;
+    --skip:#E0A030; --skip-bg:#2A2012; --idle:#55686D; --idle-bg:#1A2427;
+  }
+
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:var(--sans);
+         font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1220px; margin:0 auto; padding:26px 20px 72px; }
+  .label { font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); }
+  .num { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+
+  header.mast { display:flex; align-items:flex-end; justify-content:space-between; gap:24px;
+                flex-wrap:wrap; padding-bottom:16px; margin-bottom:18px; border-bottom:1px solid var(--rule); }
+  .mast h1 { font-family:var(--mono); font-size:19px; font-weight:600; margin:0; letter-spacing:-.01em; }
+  .mast .sub { color:var(--ink-2); font-size:13px; margin-top:4px; max-width:62ch; }
+  .livechip { display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:11px;
+              letter-spacing:.08em; text-transform:uppercase; padding:5px 10px; border-radius:var(--r);
+              background:var(--surface-2); color:var(--ink-2); border:1px solid var(--rule); }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--idle); }
+  .livechip.on { color:var(--accent); border-color:var(--accent-dim); }
+  .livechip.on .dot { background:var(--accent); animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+  .modebar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
+  .seg { display:inline-flex; border:1px solid var(--rule); border-radius:var(--r); overflow:hidden; background:var(--surface); }
+  .seg button { font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+                font-weight:600; padding:9px 18px; border:0; border-right:1px solid var(--rule);
+                background:transparent; color:var(--ink-3); cursor:pointer; display:flex; align-items:center; gap:8px; }
+  .seg button:last-child { border-right:0; }
+  .seg button[aria-selected="true"] { background:var(--accent); color:var(--ground); }
+  .seg button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+  .seg .tag { font-size:9px; padding:1px 5px; border-radius:8px; background:rgba(0,0,0,.22); }
+  .seg button[aria-selected="false"] .tag { background:var(--surface-2); }
+
+  .picker { display:flex; align-items:center; gap:8px; }
+  .picker label { font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); }
+  select { font-family:var(--mono); font-size:12px; font-weight:600; background:var(--surface); color:var(--ink);
+           border:1px solid var(--rule); border-radius:var(--r); padding:8px 12px; cursor:pointer; }
+  select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  .btn { font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+         padding:7px 13px; border-radius:var(--r); background:var(--accent); color:var(--ground);
+         border:1px solid var(--accent); cursor:pointer; font-weight:600; }
+  .btn:hover { filter:brightness(1.08); }
+  .btn:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+  .btn[disabled] { opacity:.45; cursor:default; filter:none; }
+  .btn.ghost { background:transparent; color:var(--ink-2); border-color:var(--rule); }
+  .btn.stop { background:var(--fail); border-color:var(--fail); color:#fff; }
+
+  section { margin-bottom:28px; }
+  .sec-head { display:flex; align-items:baseline; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+  .sec-head h2 { font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.12em;
+                 text-transform:uppercase; margin:0; }
+  .sec-head .hint { font-size:12px; color:var(--ink-3); }
+
+  .agg { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); border:1px solid var(--rule);
+         border-radius:var(--r); background:var(--surface); overflow:hidden; margin-bottom:16px; }
+  .agg div { padding:12px 14px; border-right:1px solid var(--rule); }
+  .agg div:last-child { border-right:0; }
+  .agg .n { font-family:var(--mono); font-size:22px; font-variant-numeric:tabular-nums; line-height:1.25; }
+  .agg .p .n { color:var(--pass); } .agg .f .n { color:var(--fail); }
+  .agg .s .n { color:var(--skip); } .agg .t .n { color:var(--skip); }
+
+  .tablewrap { overflow-x:auto; border:1px solid var(--rule); border-radius:var(--r); background:var(--surface); }
+  table { border-collapse:collapse; width:100%; min-width:760px; }
+  th,td { text-align:left; padding:8px 13px; border-bottom:1px solid var(--rule); }
+  th { font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+       color:var(--ink-3); font-weight:600; background:var(--surface-2); }
+  td { font-size:13px; color:var(--ink-2); }
+  tr:last-child td { border-bottom:0; }
+  td.mono,th.r,td.r { font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:12px; }
+  th.r,td.r { text-align:right; }
+  td.suite { font-family:var(--mono); font-size:12px; color:var(--ink); }
+  tr.appgroup td { background:var(--surface-2); font-family:var(--mono); font-size:11px; letter-spacing:.1em;
+                   text-transform:uppercase; color:var(--ink); font-weight:600; }
+  td .p{color:var(--pass)} td .f{color:var(--fail)} td .s{color:var(--skip)} td .z{color:var(--ink-3)}
+
+  .pill { display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.08em;
+          padding:2px 7px; border-radius:10px; font-weight:600; }
+  .pill.green{background:var(--pass-bg);color:var(--pass)}
+  .pill.red{background:var(--fail-bg);color:var(--fail)}
+  .pill.amber{background:var(--skip-bg);color:var(--skip)}
+  .pill.grey{background:var(--idle-bg);color:var(--ink-3)}
+
+  .console { background:var(--surface); border:1px solid var(--rule); border-radius:var(--r); overflow:hidden; }
+  .console-head { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+                  padding:10px 14px; border-bottom:1px solid var(--rule); background:var(--surface-2); }
+  .runmeta { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .runmeta .k { font-family:var(--mono); font-size:11px; color:var(--ink-3); }
+  .runmeta .v { font-family:var(--mono); font-size:12px; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .progress { height:2px; background:var(--surface-2); }
+  .progress i { display:block; height:100%; background:var(--accent); width:0; transition:width .2s linear; }
+
+  .stream { max-height:400px; overflow-y:auto; overflow-x:auto; font-family:var(--mono); font-size:12px; }
+  .row { display:grid; grid-template-columns:64px 1fr auto; gap:12px; align-items:baseline;
+         padding:5px 14px; border-bottom:1px solid var(--rule); white-space:nowrap; }
+  .row:last-child { border-bottom:0; }
+  .row .st { font-size:10px; letter-spacing:.1em; font-weight:600; }
+  .row .nm { color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; }
+  .row .ms { color:var(--ink-3); font-variant-numeric:tabular-nums; font-size:11px; }
+  .row.pass .st{color:var(--pass)} .row.fail .st{color:var(--fail)} .row.skip .st{color:var(--skip)}
+  .row.fail{background:var(--fail-bg)} .row.fail .nm{color:var(--ink)}
+  .row.skip{background:var(--skip-bg)}
+  .row.suite { background:var(--surface-2); color:var(--ink); font-weight:600; grid-template-columns:1fr; }
+  .row.note { color:var(--ink-3); grid-template-columns:1fr; font-size:11px; }
+  .row.note.warn { color:var(--skip); background:var(--skip-bg); }
+  .empty { padding:34px 14px; text-align:center; color:var(--ink-3); font-family:var(--mono); font-size:12px; }
+
+  .tally { display:flex; border-top:1px solid var(--rule); background:var(--surface-2); }
+  .tally div { flex:1; padding:9px 14px; border-right:1px solid var(--rule); }
+  .tally div:last-child { border-right:0; }
+  .tally .n { font-family:var(--mono); font-size:18px; font-variant-numeric:tabular-nums; line-height:1.2; }
+  .tally .p .n{color:var(--pass)} .tally .f .n{color:var(--fail)} .tally .s .n{color:var(--skip)}
+
+  .note { color:var(--ink-3); font-size:12px; margin-top:10px; max-width:80ch; }
+  footer { border-top:1px solid var(--rule); margin-top:34px; padding-top:14px; color:var(--ink-3); font-size:12px; }
+  [hidden] { display:none !important; }
+  @media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important} }
+  @media (max-width:620px){ .row{grid-template-columns:56px 1fr} .row .ms{display:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="mast">
+    <div>
+      <h1>Pharaxis Test Console</h1>
+      <p class="sub">Live test status across all five applications. Internal engineering tool.</p>
+    </div>
+    <span class="livechip" id="livechip"><span class="dot"></span> Idle</span>
+  </header>
+
+  <div class="modebar">
+    <div class="seg" role="tablist">
+      <button type="button" role="tab" id="tab-reg" aria-selected="true">Regression <span class="tag">FULL</span></button>
+      <button type="button" role="tab" id="tab-rel" aria-selected="false">Current Release <span class="tag">LIVE</span></button>
+    </div>
+    <div class="picker">
+      <label for="appsel">Application</label>
+      <select id="appsel"><option value="all">All applications</option></select>
+    </div>
+    <div class="picker">
+      <label for="tiersel">Tier</label>
+      <select id="tiersel">
+        <option value="">All tiers</option>
+        <option value="1">1 — unit</option>
+        <option value="3">3 — browser</option>
+      </select>
+    </div>
+    <div style="margin-left:auto; display:flex; gap:8px">
+      <button class="btn ghost" id="btn-theme" type="button">Theme</button>
+      <button class="btn" id="btn-run" type="button">Run</button>
+      <button class="btn stop" id="btn-stop" type="button" hidden>Stop</button>
+    </div>
+  </div>
+
+  <div class="agg" id="agg"></div>
+
+  <section>
+    <div class="sec-head">
+      <h2 id="streamhead">Live run</h2>
+      <span class="hint" id="streamhint">Press Run to execute the selected suites.</span>
+    </div>
+    <div class="console">
+      <div class="console-head">
+        <div class="runmeta">
+          <span><span class="k">run</span> <span class="v" id="m-run">—</span></span>
+          <span><span class="k">commit</span> <span class="v" id="m-commit">—</span></span>
+          <span><span class="k">suites</span> <span class="v num" id="m-suites">—</span></span>
+          <span><span class="k">elapsed</span> <span class="v num" id="m-time">0.0s</span></span>
+        </div>
+      </div>
+      <div class="progress"><i id="bar"></i></div>
+      <div class="stream" id="stream"><p class="empty">No run yet.</p></div>
+      <div class="tally">
+        <div class="p"><div class="label">Passed</div><div class="n num" id="t-pass">0</div></div>
+        <div class="f"><div class="label">Failed</div><div class="n num" id="t-fail">0</div></div>
+        <div class="s"><div class="label">Skipped</div><div class="n num" id="t-skip">0</div></div>
+        <div><div class="label">Trust</div><div class="n num" id="t-trust">—</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-corpus">
+    <div class="sec-head">
+      <h2>Regression corpus</h2>
+      <span class="hint" id="corpushint"></span>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Suite</th><th>Tier</th><th>Added</th><th>Command</th></tr></thead>
+        <tbody id="corpus"></tbody>
+      </table>
+    </div>
+    <p class="note">Every suite stays here permanently, tagged with the release that contributed it. Nothing is removed when a release ships — that is what makes a full regression run meaningful at any point in the testing phase.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Run ledger</h2><span class="hint">Retained with commit reference</span></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Run</th><th>App</th><th>Commit</th><th class="r">Pass</th><th class="r">Fail</th><th class="r">Skip</th><th>Trust</th><th class="r">Duration</th><th>When</th></tr></thead>
+        <tbody id="ledger"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>Pharaxis Test Console · zero-dependency internal tool · results stored under <code>apps/test-console/data/runs</code></footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var registry = null, es = null, clock = null, started = 0;
+  var totalSuites = 0, doneSuites = 0;
+  var counts = { pass: 0, fail: 0, skip: 0 };
+
+  function fmt(ms) {
+    if (ms == null) return "";
+    return ms < 1000 ? ms + "ms" : (ms / 1000).toFixed(1) + "s";
+  }
+  function trustPill(t) {
+    if (t === 0 || t == null) return '<span class="pill grey">none</span>';
+    if (t < 60) return '<span class="pill red">' + t + '%</span>';
+    if (t < 90) return '<span class="pill amber">' + t + '%</span>';
+    return '<span class="pill green">' + t + '%</span>';
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function appId() { return $("appsel").value; }
+  function tier() { return $("tiersel").value; }
+
+  function selectedSuites() {
+    if (!registry) return [];
+    var apps = appId() === "all" ? registry.apps : registry.apps.filter(function (a) { return a.id === appId(); });
+    var out = [];
+    apps.forEach(function (a) {
+      (a.suites || []).forEach(function (s) {
+        if (tier() && String(s.tier) !== tier()) return;
+        out.push({ app: a, suite: s });
+      });
+    });
+    return out;
+  }
+
+  function renderAgg() {
+    var sel = selectedSuites();
+    var byTier = {};
+    sel.forEach(function (x) { byTier[x.suite.tier] = (byTier[x.suite.tier] || 0) + 1; });
+    $("agg").innerHTML =
+      '<div><div class="label">Applications</div><div class="n">' +
+        (appId() === "all" ? (registry ? registry.apps.length : 0) : 1) + '</div></div>' +
+      '<div><div class="label">Suites selected</div><div class="n">' + sel.length + '</div></div>' +
+      '<div><div class="label">Tier 1</div><div class="n">' + (byTier[1] || 0) + '</div></div>' +
+      '<div><div class="label">Tier 3</div><div class="n">' + (byTier[3] || 0) + '</div></div>' +
+      '<div><div class="label">Releases</div><div class="n">' + (registry ? registry.releases.length : 0) + '</div></div>';
+  }
+
+  function renderCorpus() {
+    var sel = selectedSuites(), out = "", last = null;
+    sel.forEach(function (x) {
+      if (x.app.name !== last) {
+        last = x.app.name;
+        out += '<tr class="appgroup"><td colspan="4">' + esc(x.app.name) + '</td></tr>';
+      }
+      out += '<tr><td class="suite">' + esc(x.suite.name) + '</td>' +
+             '<td class="mono">' + x.suite.tier + '</td>' +
+             '<td class="mono" style="color:var(--ink-3)">' + esc(x.suite.addedIn || "—") + '</td>' +
+             '<td class="mono" style="color:var(--ink-3)">' + esc(x.suite.cmd) + '</td></tr>';
+    });
+    $("corpus").innerHTML = out || '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--ink-3)">No suites match this selection.</td></tr>';
+    $("corpushint").textContent = sel.length + " suites";
+  }
+
+  function renderLedger() {
+    fetch("/api/runs").then(function (r) { return r.json(); }).then(function (runs) {
+      $("ledger").innerHTML = runs.length ? runs.map(function (r) {
+        return '<tr><td class="mono">' + esc(r.id.replace("run-", "#")) + '</td>' +
+          '<td>' + esc(r.app) + '</td><td class="mono">' + esc(r.commit) + '</td>' +
+          '<td class="r"><span class="' + (r.passed ? 'p' : 'z') + '">' + r.passed + '</span></td>' +
+          '<td class="r"><span class="' + (r.failed ? 'f' : 'z') + '">' + r.failed + '</span></td>' +
+          '<td class="r"><span class="' + (r.skipped ? 's' : 'z') + '">' + r.skipped + '</span></td>' +
+          '<td>' + trustPill(r.trust) + '</td>' +
+          '<td class="r mono">' + fmt(r.durationMs) + '</td>' +
+          '<td class="mono" style="color:var(--ink-3)">' + esc(String(r.startedAt).replace("T", " ").slice(0, 19)) + '</td></tr>';
+      }).join("") : '<tr><td colspan="9" style="padding:24px;text-align:center;color:var(--ink-3)">No runs recorded yet.</td></tr>';
+    });
+  }
+
+  function addRow(cls, cols) {
+    var stream = $("stream");
+    if (stream.querySelector(".empty")) stream.innerHTML = "";
+    var el = document.createElement("div");
+    el.className = "row " + cls;
+    el.innerHTML = cols;
+    stream.appendChild(el);
+    stream.scrollTop = stream.scrollHeight;
+  }
+
+  function stopRun() {
+    if (es) { es.close(); es = null; }
+    if (clock) { clearInterval(clock); clock = null; }
+    $("btn-run").disabled = false;
+    $("btn-stop").hidden = true;
+    $("livechip").className = "livechip";
+    $("livechip").innerHTML = '<span class="dot"></span> Idle';
+  }
+
+  function run() {
+    if (es) return;
+    counts = { pass: 0, fail: 0, skip: 0 };
+    doneSuites = 0;
+    totalSuites = selectedSuites().length;
+    if (!totalSuites) { alert("No suites match this selection."); return; }
+
+    $("stream").innerHTML = "";
+    $("bar").style.width = "0%";
+    $("t-pass").textContent = "0"; $("t-fail").textContent = "0";
+    $("t-skip").textContent = "0"; $("t-trust").textContent = "—";
+    $("m-suites").textContent = totalSuites;
+    $("btn-run").disabled = true;
+    $("btn-stop").hidden = false;
+    $("livechip").className = "livechip on";
+    $("livechip").innerHTML = '<span class="dot"></span> Running';
+
+    started = Date.now();
+    clock = setInterval(function () {
+      $("m-time").textContent = ((Date.now() - started) / 1000).toFixed(1) + "s";
+    }, 100);
+
+    var mode = $("tab-reg").getAttribute("aria-selected") === "true" ? "regression" : "release";
+    var url = "/api/run/stream?app=" + encodeURIComponent(appId()) +
+              "&tier=" + encodeURIComponent(tier()) + "&mode=" + mode;
+
+    es = new EventSource(url);
+
+    es.onmessage = function (e) {
+      var d;
+      try { d = JSON.parse(e.data); } catch (_) { return; }
+
+      if (d.type === "run-start") {
+        $("m-run").textContent = d.runId.replace("run-", "#");
+        $("m-commit").textContent = d.commit;
+        return;
+      }
+      if (d.type === "start") {
+        addRow("suite", '<span>' + esc(d.app) + ' — ' + esc(d.name) + '</span>');
+        return;
+      }
+      if (d.type === "test") {
+        counts[d.status === "pass" ? "pass" : d.status === "fail" ? "fail" : "skip"]++;
+        addRow(d.status,
+          '<span class="st">' + d.status.toUpperCase() + '</span>' +
+          '<span class="nm">' + esc(d.title) + '</span>' +
+          '<span class="ms">' + fmt(d.durationMs) + '</span>');
+        $("t-pass").textContent = counts.pass;
+        $("t-fail").textContent = counts.fail;
+        $("t-skip").textContent = counts.skip;
+        return;
+      }
+      if (d.type === "reconcile") {
+        addRow("note warn", '<span>counts corrected from the runner summary — ' +
+          d.streamed + ' streamed, ' + d.reported + ' actually reported</span>');
+        return;
+      }
+      if (d.type === "done") {
+        doneSuites++;
+        $("bar").style.width = (doneSuites / totalSuites * 100) + "%";
+        // The suite summary is authoritative; re-sync the tally to it.
+        return;
+      }
+      if (d.type === "run-done") {
+        $("t-pass").textContent = d.passed;
+        $("t-fail").textContent = d.failed;
+        $("t-skip").textContent = d.skipped;
+        $("t-trust").textContent = d.trust + "%";
+        $("bar").style.width = "100%";
+        addRow("note", '<span>run complete — ' + d.passed + ' passed, ' + d.failed +
+          ' failed, ' + d.skipped + ' skipped, trust ' + d.trust + '% in ' + fmt(d.durationMs) + '</span>');
+        stopRun();
+        $("livechip").innerHTML = '<span class="dot"></span> Complete';
+        renderLedger();
+        return;
+      }
+      if (d.type === "output" && /error|failed|✕|✘/i.test(d.line)) {
+        addRow("note", '<span>' + esc(d.line) + '</span>');
+      }
+    };
+
+    es.onerror = function () {
+      if (!es) return;
+      addRow("note warn", '<span>stream closed — check the console server is running</span>');
+      stopRun();
+    };
+  }
+
+  function setMode(reg) {
+    $("tab-reg").setAttribute("aria-selected", String(reg));
+    $("tab-rel").setAttribute("aria-selected", String(!reg));
+    $("sec-corpus").hidden = !reg;
+    $("streamhead").textContent = reg ? "Regression run" : "Current release run";
+    $("streamhint").textContent = reg
+      ? "The full cumulative suite for the current selection."
+      : "Scope the run with the Application and Tier selectors, then press Run.";
+  }
+
+  $("tab-reg").addEventListener("click", function () { setMode(true); });
+  $("tab-rel").addEventListener("click", function () { setMode(false); });
+  $("btn-run").addEventListener("click", run);
+  $("btn-stop").addEventListener("click", function () {
+    stopRun();
+    addRow("note warn", '<span>stopped by user — the runner finishes its current suite</span>');
+  });
+  $("appsel").addEventListener("change", function () { renderAgg(); renderCorpus(); });
+  $("tiersel").addEventListener("change", function () { renderAgg(); renderCorpus(); });
+  $("btn-theme").addEventListener("click", function () {
+    var r = document.documentElement;
+    var dark = r.getAttribute("data-theme") === "dark" ||
+      (!r.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+    r.setAttribute("data-theme", dark ? "light" : "dark");
+  });
+
+  fetch("/api/registry").then(function (r) { return r.json(); }).then(function (reg) {
+    registry = reg;
+    reg.apps.forEach(function (a) {
+      var o = document.createElement("option");
+      o.value = a.id; o.textContent = a.name;
+      $("appsel").appendChild(o);
+    });
+    renderAgg(); renderCorpus(); renderLedger(); setMode(true);
+  }).catch(function () {
+    $("stream").innerHTML = '<p class="empty">Could not reach the console API. Is the server running?</p>';
+  });
+})();
+</script>
+</body>
+</html>

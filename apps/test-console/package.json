@@ -1,0 +1,11 @@
+{
+  "name": "@pharaxis/test-console",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Internal engineering tool — live test status across all Pharaxis applications.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test:static": "node --check server.js && node --check src/runner.js && node --check src/store.js"
+  }
+}
