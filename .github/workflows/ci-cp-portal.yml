@@ -28,3 +28,5 @@ jobs:
       backend_entrypoint: server.js
       quality_command: npm run test:static
       security_command: npm run security:scan
+      test_database: pharaxis_cp_portal_test
+      test_command: npm test

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && if ! git diff --quiet HEAD -- apps/ 2>/dev/null; then ./scripts/test-tier.sh tier1 || echo '[tier1] FAILED — the change is not done until this passes.'; else echo '[tier1] skipped — no changes under apps/'; fi",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}
