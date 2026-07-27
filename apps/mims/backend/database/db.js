@@ -22,7 +22,10 @@ function loadLocalEnvFile() {
     const idx = trimmed.indexOf('=');
     const key = trimmed.slice(0, idx).trim();
     const value = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
-    if (key.startsWith('MYSQL_')) process.env[key] = value;
+    // .env is a fallback, never an override — an explicitly exported MYSQL_*
+    // must win, otherwise pointing a test run at pharaxis_*_test silently
+    // lands on the dev database instead.
+    if (key.startsWith('MYSQL_') && process.env[key] === undefined) process.env[key] = value;
   }
 }
 

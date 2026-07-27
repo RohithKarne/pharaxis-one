@@ -2,9 +2,10 @@
  * admin-console.spec.js — Playwright E2E: MIMS Admin Console Navigation
  */
 const { test, expect } = require('@playwright/test')
+const { requireSession, expectPageHealthy } = require('./_assertions')
 const adminRouteMap = require('../frontend/src/shared/config/adminRouteMap.json')
 
-const BACKEND = 'http://localhost:3000'
+const BACKEND = process.env.MIMS_BACKEND_URL || 'http://localhost:3000'
 const APP_BASE = '/mims'
 
 function appPath(path = '/') {
@@ -135,10 +136,7 @@ test.describe('MIMS Admin Console', () => {
   })
 
   test.beforeEach(async ({ page }) => {
-    if (!sharedSession) {
-      test.skip(true, `Auth session unavailable: ${sharedAuthError}`)
-      return
-    }
+    requireSession(sharedSession, sharedAuthError, 'Admin Console')
 
     await hydrateAuthStorage(page, sharedSession)
 

@@ -14,7 +14,7 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const pool = require('../backend/database/db');
 
-const BACKEND = 'http://localhost:3000';
+const BACKEND = process.env.MIMS_BACKEND_URL || 'http://localhost:3000';
 const EMAIL = 'e2e_savedviews@pharaxis.test';
 const PASSWORD = 'Test@1234!sv';
 const OUT = path.join(__dirname, '.savedviews-session.json');

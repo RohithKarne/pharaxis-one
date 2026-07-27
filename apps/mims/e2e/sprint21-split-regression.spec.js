@@ -12,10 +12,16 @@
  */
 const { test, expect } = require('@playwright/test')
 const adminRouteMap = require('../frontend/src/shared/config/adminRouteMap.json')
+const {
+  requireSession,
+  requireFixture,
+  expectPageHealthy,
+  expectNavigatesCleanly,
+} = require('./_assertions')
 
 // ─── helpers (same pattern as admin-console.spec.js) ─────────────────────────
 
-const BACKEND = 'http://localhost:3000'
+const BACKEND = process.env.MIMS_BACKEND_URL || 'http://localhost:3000'
 const APP_BASE = '/mims'
 
 function appPath(path = '/') {
@@ -152,7 +158,7 @@ test.describe('Admin Console — tab navigation', () => {
   })
 
   test.beforeEach(async ({ page }) => {
-    if (!session) { test.skip(true, `Auth unavailable: ${authErr}`); return }
+    requireSession(session, authErr, 'Admin Console tab navigation')
     await hydrateAuthStorage(page, session)
     await page.goto(appPath('/admin-console'))
     await page.waitForLoadState('networkidle')
@@ -169,11 +175,7 @@ test.describe('Admin Console — tab navigation', () => {
     test(`Admin Console → ${tab.label} section renders`, async ({ page }) => {
       await page.goto(tab.path)
       await page.waitForLoadState('networkidle')
-
-      // Page must show content — no blank body, no server error text
-      await expect(page.locator('body')).not.toContainText('Cannot GET', { timeout: 8000 })
-      const bodyText = await page.locator('body').innerText()
-      expect(bodyText.trim().length).toBeGreaterThan(20)
+      await expectPageHealthy(page, { label: `Admin Console → ${tab.label}` })
     })
   }
 })
@@ -274,8 +276,8 @@ test.describe('Picklist → CaseForm cross-feature', () => {
   })
 
   test('new picklist value appears in Admin Console picklist table', async ({ page }) => {
-    if (!session)             { test.skip(true, `Auth unavailable: ${authErr}`); return }
-    if (!createdPicklistId)   { test.skip(true, 'Picklist creation failed — skipping'); return }
+    requireSession(session, authErr, 'MIMS session')
+    requireFixture(createdPicklistId, 'a picklist value created in beforeAll')
 
     await hydrateAuthStorage(page, session)
     await page.goto(appPath(adminRouteMap.adminEntryRoutes.picklists))
@@ -294,9 +296,9 @@ test.describe('Picklist → CaseForm cross-feature', () => {
   })
 
   test('new picklist value appears as option in CaseForm dropdown', async ({ page, request }) => {
-    if (!session)           { test.skip(true, `Auth unavailable: ${authErr}`); return }
-    if (!createdPicklistId) { test.skip(true, 'Picklist creation failed — skipping'); return }
-    if (!targetFieldName)   { test.skip(true, 'No target field resolved — skipping'); return }
+    requireSession(session, authErr, 'MIMS session')
+    requireFixture(createdPicklistId, 'a picklist value created in beforeAll')
+    requireFixture(targetFieldName, 'a picklist-backed CaseForm field')
 
     // Verify via API: form-config returns the new value in options
     let caseType = targetCaseType
@@ -333,26 +335,31 @@ test.describe('Picklist → CaseForm cross-feature', () => {
       }
     }
 
-    // The newly created value should be present in options for that picklist_type
-    if (allOptions.length === 0) { test.skip(true, `Field "${targetFieldName}" has no options in form-config for tested case types`); return }
+    // The newly created value should be present in options for that picklist_type.
+    // Zero options means the picklist → form-config wiring is broken, which is
+    // exactly the cross-feature regression this test exists to catch.
+    expect(
+      allOptions.length,
+      `Field "${targetFieldName}" returned no options from form-config — the picklist is not reaching the CaseForm`
+    ).toBeGreaterThan(0)
     const found = allOptions.some(v => String(v).startsWith('E2E_TEST_'))
     expect(found, `Expected E2E_TEST_ value in form-config options for field "${targetFieldName}". Got: ${JSON.stringify(allOptions.slice(0, 10))}`).toBe(true)
   })
 
   test('CaseForm dropdown renders the new value for a real case', async ({ page, request }) => {
-    if (!session)           { test.skip(true, `Auth unavailable: ${authErr}`); return }
-    if (!createdPicklistId) { test.skip(true, 'Picklist creation failed — skipping'); return }
-    if (!targetFieldName)   { test.skip(true, 'No target field resolved — skipping'); return }
+    requireSession(session, authErr, 'MIMS session')
+    requireFixture(createdPicklistId, 'a picklist value created in beforeAll')
+    requireFixture(targetFieldName, 'a picklist-backed CaseForm field')
 
     // Find an existing case to open
     const casesRes = await request.get(`${BACKEND}/api/cases?limit=1&status=Open`, {
       headers: { Authorization: `Bearer ${session.token}` },
     })
-    if (!casesRes.ok()) { test.skip(true, 'Could not fetch cases list'); return }
+    expect(casesRes.ok(), `GET /api/cases failed with ${casesRes.status()}`).toBe(true)
     const casesData = await casesRes.json()
     const firstCase = (casesData.cases || casesData.rows || [])[0]
     const firstCaseId = firstCase?.id ?? firstCase?.case_id ?? null
-    if (!firstCaseId) { test.skip(true, 'No open cases available'); return }
+    requireFixture(firstCaseId, 'at least one Open case (seed the test data)')
 
     await hydrateAuthStorage(page, session)
     await page.goto(appPath(`/cases/${firstCaseId}`))
@@ -414,40 +421,47 @@ test.describe('CaseForm — tab navigation', () => {
   })
 
   test.beforeEach(async ({ page }) => {
-    if (!session)    { test.skip(true, `Auth unavailable: ${authErr}`); return }
-    if (!testCaseId) { test.skip(true, 'No cases available'); return }
+    requireSession(session, authErr, 'MIMS session')
+    requireFixture(testCaseId, 'at least one case in the database (seed the test data)')
     await hydrateAuthStorage(page, session)
     await page.goto(appPath(`/cases/${testCaseId}`))
     await page.waitForLoadState('networkidle')
-    // Wait for tab bar to appear
-    await page.waitForSelector('.cf-tabbar-btn', { timeout: 15000 }).catch(() => {})
+    // The tab bar failing to render is a real regression, so let this throw.
+    await page.waitForSelector('.cf-tabbar-btn', { timeout: 15000 })
   })
 
   const CASE_TABS = ['info', 'mi', 'ae', 'pc', 'dppr', 'contacts', 'correspondence', 'comments']
 
   for (const tab of CASE_TABS) {
     test(`CaseForm tab "${tab}" renders without error`, async ({ page }) => {
-      const tabBtn = page.locator(`.cf-tabbar-btn`).filter({ hasText: new RegExp(tab, 'i') }).first()
-      const tabExists = await tabBtn.isVisible().catch(() => false)
-      if (!tabExists) {
-        // Tab may not exist for this case type — skip silently
+      const tabBtn = page.locator('.cf-tabbar-btn').filter({ hasText: new RegExp(tab, 'i') }).first()
+
+      // Some tabs legitimately do not apply to every case type (an MI case has
+      // no AE tab). That is a real skip with a stated reason — not a silent
+      // early return that reports success.
+      if (!(await tabBtn.isVisible().catch(() => false))) {
+        test.skip(true, `Tab "${tab}" is not present for this case type`)
         return
       }
+
       await tabBtn.click()
       await page.waitForLoadState('networkidle')
+      await expectPageHealthy(page, { label: `CaseForm tab "${tab}"` })
 
-      // No JavaScript crash modal
-      await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 5000 }).catch(() => {})
-      // Tab content area must have rendered content
+      // The tab pane must actually render — previously this whole block was
+      // skipped when the pane was missing, so a broken tab passed.
       const content = page.locator('.cf-tab-content')
-      const contentVisible = await content.isVisible().catch(() => false)
-      if (contentVisible) {
-        const text = await content.innerText()
-        // At minimum some text or inputs should be present
-        const inputCount = await page.locator('.cf-tab-content input, .cf-tab-content select, .cf-tab-content textarea').count()
-        const hasContent = text.trim().length > 0 || inputCount > 0
-        expect(hasContent).toBe(true)
-      }
+      await expect(content, `CaseForm tab "${tab}" pane did not render`)
+        .toBeVisible({ timeout: 10000 })
+
+      const text = (await content.innerText()).trim()
+      const inputCount = await page
+        .locator('.cf-tab-content input, .cf-tab-content select, .cf-tab-content textarea')
+        .count()
+      expect(
+        text.length > 0 || inputCount > 0,
+        `CaseForm tab "${tab}" rendered an empty pane — no text and no form controls`
+      ).toBe(true)
     })
   }
 })
@@ -470,32 +484,21 @@ test.describe('Content page — section tabs', () => {
   })
 
   test.beforeEach(async ({ page }) => {
-    if (!session) { test.skip(true, `Auth unavailable: ${authErr}`); return }
+    requireSession(session, authErr, 'MIMS session')
     await hydrateAuthStorage(page, session)
     await page.goto(appPath('/content'))
     await page.waitForLoadState('networkidle')
   })
 
   test('Content page loads without error', async ({ page }) => {
-    await expect(page.locator('body')).not.toContainText('Cannot GET /content', { timeout: 8000 })
-    const bodyText = await page.locator('body').innerText()
-    expect(bodyText.trim().length).toBeGreaterThan(10)
+    await expectPageHealthy(page, { label: 'Content page' })
   })
 
   const CONTENT_SECTIONS = ['Documents', 'FAQs', 'Templates', 'Merge Reports']
 
   for (const section of CONTENT_SECTIONS) {
     test(`Content → ${section} section renders`, async ({ page }) => {
-      const navBtn = page.getByText(section, { exact: true }).first()
-      const visible = await navBtn.isVisible().catch(() => false)
-      if (!visible) return // section may not be configured for this org
-
-      await navBtn.click()
-      await page.waitForLoadState('networkidle')
-
-      await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 5000 }).catch(() => {})
-      const bodyText = await page.locator('body').innerText()
-      expect(bodyText.trim().length).toBeGreaterThan(10)
+      await expectNavigatesCleanly(page, section, { label: `Content → ${section}` })
     })
   }
 })
@@ -517,7 +520,7 @@ test.describe('Platform Admin — sidebar navigation', () => {
   })
 
   test.beforeEach(async ({ page }) => {
-    if (!session) { test.skip(true, `Platform Admin auth unavailable: ${authErr}`); return }
+    requireSession(session, authErr, 'Platform Admin')
     await hydrateAuthStorage(page, session)
     await page.goto(appPath('/mims-admin?standalone=1'))
     await page.waitForLoadState('networkidle')
@@ -539,16 +542,7 @@ test.describe('Platform Admin — sidebar navigation', () => {
 
   for (const section of PLATFORM_ADMIN_SECTIONS) {
     test(`Platform Admin -> ${section} renders without blank screen`, async ({ page }) => {
-      const navItem = page.getByText(section, { exact: true }).first()
-      const visible = await navItem.isVisible({ timeout: 8000 }).catch(() => false)
-      if (!visible) return // section may not exist in this build
-
-      await navItem.click()
-      await page.waitForLoadState('networkidle')
-
-      await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 5000 }).catch(() => {})
-      const bodyText = await page.locator('body').innerText()
-      expect(bodyText.trim().length).toBeGreaterThan(20)
+      await expectNavigatesCleanly(page, section, { label: `Platform Admin → ${section}` })
     })
   }
 })
@@ -571,7 +565,7 @@ test.describe('401 auto-logout', () => {
   })
 
   test('expired token triggers redirect to login page', async ({ page }) => {
-    if (!session) { test.skip(true, `Auth unavailable: ${authErr}`); return }
+    requireSession(session, authErr, 'MIMS session')
 
     await hydrateAuthStorage(page, session)
 
@@ -591,7 +585,7 @@ test.describe('401 auto-logout', () => {
   })
 
   test('cleared token redirects to login immediately', async ({ page }) => {
-    if (!session) { test.skip(true, `Auth unavailable: ${authErr}`); return }
+    requireSession(session, authErr, 'MIMS session')
 
     // No auth at all — ProtectedRoute should redirect
     await page.goto(appPath('/'))

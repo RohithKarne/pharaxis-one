@@ -6,7 +6,7 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
-const { requirePortalAuth, PORTAL_SECRET } = require('../../middleware/auth');
+const { requirePortalAuth, authenticatePortal } = require('../../middleware/auth');
 const crypto  = require('crypto');
 
 // Jurisdiction strictness ranking — highest index = strictest
@@ -55,22 +55,19 @@ router.get('/current', async (req, res) => {
 
 // GET /api/portal/consent/check?clientCode=xxx&version=xxx
 // Returns { consented: true/false } for the currently signed-in user
-router.get('/check', async (req, res) => {
+router.get('/check', authenticatePortal, async (req, res) => {
   try {
     const { clientCode, version } = req.query;
     if (!clientCode || !version) return res.status(400).json({ error: 'clientCode and version required.' });
 
-    // Must be authenticated
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) return res.json({ consented: false });
-
-    let userId = null;
-    try {
-      const jwt = require('jsonwebtoken');
-      const decoded = jwt.verify(authHeader.slice(7), PORTAL_SECRET);
-      userId = decoded.userId || null;
-    } catch (_) { return res.json({ consented: false }); }
-
+    // CP-XX: this used to read the JWT only from an `Authorization: Bearer` header.
+    // Portal login issues an httpOnly `cp_portal_token` cookie and deliberately never
+    // echoes the token, so the header was never present and every caller looked
+    // anonymous — this endpoint could not return `true` for anyone, and no consent
+    // record written since the cookie migration was attributable to a person.
+    // `authenticatePortal` accepts the cookie *and* a Bearer header, and additionally
+    // rejects deactivated users and stale token versions.
+    const userId = req.portalUser?.userId || null;
     if (!userId) return res.json({ consented: false });
 
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [clientCode]);
@@ -84,7 +81,7 @@ router.get('/check', async (req, res) => {
 });
 
 // POST /api/portal/consent — save consent record (auth optional)
-router.post('/', async (req, res) => {
+router.post('/', authenticatePortal, async (req, res) => {
   try {
     const { clientCode, choices, version } = req.body;
     if (!clientCode || !version) return res.status(400).json({ error: 'clientCode and version required.' });
@@ -92,16 +89,10 @@ router.post('/', async (req, res) => {
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [clientCode]);
     if (!client) return res.status(404).json({ error: 'Client not found.' });
 
-    // Resolve user_id from token if present
-    let userId = null;
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-      try {
-        const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(authHeader.slice(7), PORTAL_SECRET);
-        userId = decoded.userId || null;
-      } catch (_) {}
-    }
+    // Resolve user_id from the session. Auth is optional here on purpose — the
+    // portal is browsable anonymously and an anonymous visitor must still be able
+    // to record a consent choice (attributed by hashed IP below).
+    const userId = req.portalUser?.userId || null;
 
     // Hash IP for anonymous records (no PII stored)
     const rawIp  = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';

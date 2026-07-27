@@ -71,8 +71,19 @@ router.get('/:clientCode', async (req, res) => {
     try { language = JSON.parse(client.language_config_json || '{}'); } catch {}
 
     return {
-      // API-03: omit internal client.id — only public-safe identifiers
-      client:   { name: client.name, code: client.code },
+      // API-03: omit internal client.id — only public-safe identifiers.
+      // contact_email/contact_name are published points of contact for the portal
+      // (the Contact page exists to surface them); they are intended to be public.
+      // Without them the Contact page rendered "Contact information not available"
+      // in every slot, because this payload was the only source it had.
+      // NB: there is no contact_phone column on cp_clients — the phone block on the
+      // web Contact page can never populate until one is added.
+      client:   {
+        name:  client.name,
+        code:  client.code,
+        contact_email: client.contact_email || null,
+        contact_name:  client.contact_name  || null,
+      },
       branding: branding || {},
       features: featuresMap,
       chatbox,

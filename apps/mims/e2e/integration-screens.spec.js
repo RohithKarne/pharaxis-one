@@ -1,7 +1,8 @@
 const { test, expect } = require('@playwright/test')
+const { requireSession, expectPageHealthy } = require('./_assertions')
 const adminRouteMap = require('../frontend/src/shared/config/adminRouteMap.json')
 
-const BACKEND = 'http://localhost:3000'
+const BACKEND = process.env.MIMS_BACKEND_URL || 'http://localhost:3000'
 const APP_BASE = '/mims'
 
 function appPath(path = '/') {
@@ -175,10 +176,7 @@ test.describe('Phase 3 — Integration Screens', () => {
     })
 
     test.beforeEach(async ({ page }) => {
-      if (!adminSession) {
-        test.skip(true, `Admin login failed: ${adminAuthError}`)
-        return
-      }
+      requireSession(adminSession, adminAuthError, 'Integration Screens admin')
 
       await hydrateStorage(page, adminSession, 'mims', `http://localhost:5173${appPath('/')}`)
     })
@@ -274,10 +272,7 @@ test.describe('Phase 3 — Integration Screens', () => {
     })
 
     test.beforeEach(async ({ page }) => {
-      if (!superSession) {
-        test.skip(true, `Platform Admin login failed: ${superAuthError}`)
-        return
-      }
+      requireSession(superSession, superAuthError, 'Integration Screens platform admin')
 
       await hydrateStorage(page, superSession, 'mims', 'http://localhost:5173/mims-admin?standalone=1')
     })

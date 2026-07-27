@@ -17,7 +17,12 @@ const PREFERENCE_TOGGLES = [
 export default function ConsentBanner() {
   const { portalConfig, clientCode, user, portalFetch } = usePortal()
   const compliance = portalConfig?.compliance
-  const version    = (compliance?.version || '1.0').replace(/^v/i, '')
+  // Use the configured version verbatim. This used to strip a leading "v", so a
+  // config of "v1.1" was recorded as "1.1" here while other clients (and the
+  // config itself) used "v1.1" — two incomparable keys for the same notice, and
+  // re-consent could never match reliably. Existing browsers will be prompted
+  // once more as the storage key changes; re-asking is the safe direction.
+  const version    = compliance?.version || '1.0'
 
   const [show, setShow]       = useState(false)
   const [step, setStep]       = useState('banner') // 'banner' | 'preferences'

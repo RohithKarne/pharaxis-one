@@ -9,7 +9,7 @@ const { test, expect } = require('@playwright/test')
 const fs = require('fs')
 const path = require('path')
 
-const BACKEND = 'http://localhost:3000'
+const BACKEND = process.env.MIMS_BACKEND_URL || 'http://localhost:3000'
 const APP_BASE = '/mims'
 const SESSION_FILE = path.join(__dirname, '.savedviews-session.json')
 
