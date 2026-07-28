@@ -646,6 +646,8 @@
         $('t-pass').textContent = counts.pass;
         $('t-fail').textContent = counts.fail;
         $('t-skip').textContent = counts.skip;
+      } else if (d.type === 'blocked') {
+        add('msg warn', '<span><b>' + esc(d.suiteName) + ' skipped.</b> ' + esc(d.reason) + '</span>');
       } else if (d.type === 'reconcile') {
         add('msg warn', '<span><b>Counts corrected.</b> The runner streamed ' + d.streamed +
           ' results but reported ' + d.reported + '. Showing the reported figure — the streamed one would understate the suite.</span>');

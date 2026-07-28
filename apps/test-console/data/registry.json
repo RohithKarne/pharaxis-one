@@ -2,12 +2,14 @@
   "_comment": [
     "The cumulative regression corpus. Every suite the team has written stays here",
     "permanently, tagged with the release that contributed it. Nothing is removed",
-    "when a release ships — that is what makes a full regression run meaningful at",
+    "when a release ships \u2014 that is what makes a full regression run meaningful at",
     "any point in the testing phase.",
     "",
     "Suites enter this file by promotion: a release run finishes clean, and its new",
     "suites are appended with the release tag. Adding a suite by hand is allowed but",
-    "should be rare — the promotion flow is the intended path."
+    "should be rare \u2014 the promotion flow is the intended path.",
+    "",
+    "Each app carries an e2e block: the env var its playwright config reads for a base URL, and a health URL. Setting that env var also disables the config\u2019s webServer, so the console never starts or stops an application server \u2014 it verifies one is already running and fails fast if not."
   ],
   "releases": [
     "Sprint 14",
@@ -80,7 +82,12 @@
           "cmd": "npx playwright test e2e/inbox-saved-views.spec.js --reporter=list",
           "parser": "playwright"
         }
-      ]
+      ],
+      "e2e": {
+        "baseUrlEnv": "MIMS_BASE_URL",
+        "url": "http://localhost:5173",
+        "health": "http://localhost:5173/mims/"
+      }
     },
     {
       "id": "cp-portal",
@@ -114,7 +121,12 @@
           "cmd": "npx playwright test e2e/negative.spec.js --reporter=list",
           "parser": "playwright"
         }
-      ]
+      ],
+      "e2e": {
+        "baseUrlEnv": "CP_PORTAL_BASE_URL",
+        "url": "http://localhost:5174/",
+        "health": "http://localhost:5174/"
+      }
     },
     {
       "id": "vault",
@@ -156,7 +168,12 @@
           "cmd": "npx playwright test e2e/smoke.spec.js --reporter=list",
           "parser": "playwright"
         }
-      ]
+      ],
+      "e2e": {
+        "baseUrlEnv": "PLAYWRIGHT_BASE_URL",
+        "url": "http://127.0.0.1:5176/",
+        "health": "http://127.0.0.1:5176/"
+      }
     },
     {
       "id": "qms",
@@ -182,7 +199,12 @@
           "cmd": "npx playwright test --config=playwright.config.cjs --reporter=list",
           "parser": "playwright"
         }
-      ]
+      ],
+      "e2e": {
+        "baseUrlEnv": "QMS_FRONTEND_URL",
+        "url": "http://localhost:3146/qms/",
+        "health": "http://localhost:3146/qms/"
+      }
     },
     {
       "id": "ai-agent",
@@ -208,7 +230,12 @@
           "cmd": "npx playwright test e2e/smoke.spec.js --reporter=list",
           "parser": "playwright"
         }
-      ]
+      ],
+      "e2e": {
+        "baseUrlEnv": "AI_AGENT_BASE_URL",
+        "url": "http://localhost:5175/ai-agent/",
+        "health": "http://localhost:5175/ai-agent/"
+      }
     }
   ]
 }

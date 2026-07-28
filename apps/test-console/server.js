@@ -63,6 +63,30 @@ function serveStatic(req, res, pathname) {
   });
 }
 
+/**
+ * Is the application's own dev server up?
+ *
+ * The console must never start or stop an application server. Setting the
+ * app's base-URL env var disables its playwright config's webServer block, so
+ * Playwright reuses what is already running instead of managing a server whose
+ * lifetime we would then have to control — that is how a Tier 3 run previously
+ * took down two of the developer's running backends.
+ */
+function checkUp(healthUrl) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (ok) => { if (!settled) { settled = true; resolve(ok); } };
+    try {
+      const req = http.get(healthUrl, { timeout: 3000 }, (r) => {
+        r.resume();
+        done(r.statusCode > 0 && r.statusCode < 500);
+      });
+      req.on('error', () => done(false));
+      req.on('timeout', () => { req.destroy(); done(false); });
+    } catch { done(false); }
+  });
+}
+
 /** Suites selected by app id and optional tier. */
 function selectSuites(registry, appId, tier) {
   const apps = appId && appId !== 'all'
@@ -159,8 +183,31 @@ async function streamRun(req, res, url) {
 
   const started = Date.now();
 
+  // Preflight: a Tier 3 suite drives the real UI, so the app's dev server has
+  // to be up already. Checking once per app turns "every test failed for a
+  // reason unrelated to the code" into one clear message.
+  const upCache = new Map();
+  const appIsUp = async (app) => {
+    if (!app.e2e) return true;
+    if (!upCache.has(app.id)) upCache.set(app.id, await checkUp(app.e2e.health));
+    return upCache.get(app.id);
+  };
+
   for (const { app, suite } of selected) {
     if (cancelled) break;
+
+    if (Number(suite.tier) === 3) {
+      // eslint-disable-next-line no-await-in-loop
+      const up = await appIsUp(app);
+      if (!up) {
+        send({
+          type: 'blocked', suiteId: suite.id, suiteName: suite.name, app: app.name,
+          reason: app.name + ' is not running at ' + app.e2e.health +
+            ' — start it first. The console never starts or stops your servers.',
+        });
+        continue;
+      }
+    }
 
     const record = {
       id: suite.id, name: suite.name, app: app.name, tier: suite.tier,

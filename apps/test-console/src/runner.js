@@ -115,6 +115,14 @@ function runSuite(app, suite, onEvent, handle) {
       CI: '1',
     });
 
+    // Point the suite at the already-running app. This also disables the
+    // playwright config's webServer block, which is deliberate: the console
+    // must never own an application server's lifetime. Managing one is how a
+    // cancelled Tier 3 run previously killed a developer's running backends.
+    if (app.e2e && app.e2e.baseUrlEnv && Number(suite.tier) === 3) {
+      env[app.e2e.baseUrlEnv] = app.e2e.url;
+    }
+
     const started = Date.now();
     let passed = 0, failed = 0, skipped = 0;
 
