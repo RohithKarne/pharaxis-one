@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import CaseInfoTab from './CaseInfoTab'
+import AiCaseSummaryCard from './AiCaseSummaryCard'
 import CaseWorkflowPanel from './CaseWorkflowPanel'
 import CaseRegulatoryWorkspace from './CaseRegulatoryWorkspace'
+import CaseTimelineView from './CaseTimelineView'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import StickySectionNav from '../../../shared/components/StickySectionNav'
 import { useAuth } from '../../../shared/context/AuthContext'
+
+import SlaCountdownBadge from '../../../shared/components/SlaCountdownBadge'
 
 function formatDateTime(value) {
   if (!value) return 'Not available'
@@ -170,6 +174,7 @@ export default function CaseOverviewTab({
       { id: 'ov-snapshot', label: 'Case Snapshot', ...snapshotSummary },
       { id: 'ov-people', label: 'People Snapshot', ...peopleSummary },
       { id: 'ov-communications', label: 'Latest Activity', ...communicationsSummary },
+      { id: 'ov-timeline', label: 'Timeline View' },
       { id: 'ov-workflow', label: 'Workflow Actions', count: workflowSummary?.count, complete: workflowSummary?.complete },
       { id: 'ov-regulatory', label: 'Regulatory And Compliance', ...regulatorySummary },
     ]
@@ -198,6 +203,24 @@ export default function CaseOverviewTab({
     <div className="cf-case-workspace cf-overview-workspace">
       <StickySectionNav sections={overviewSections} />
       <div className="cf-case-workspace-main">
+        {caseData?.due_at && (
+          <div className="cf-sla-banner">
+            <div className="cf-sla-banner-content">
+              <strong>SLA Status:</strong>
+              <SlaCountdownBadge dueAt={caseData.due_at} />
+            </div>
+            {hasCapability('case.escalate') && (
+              <button 
+                type="button" 
+                className="cf-sla-banner-action"
+                onClick={() => onNavigateToTab?.('workflow')}
+              >
+                Escalate Case
+              </button>
+            )}
+          </div>
+        )}
+        <AiCaseSummaryCard caseId={id} caseData={caseData} headers={headers} />
         <div className="cf-overview-layout">
           <section id="ov-case-info" className="cf-overview-card">
             <div className="cf-overview-kicker">Case Overview</div>
@@ -299,6 +322,12 @@ export default function CaseOverviewTab({
             <div className="cf-overview-actions">
               <button type="button" className="cf-open-btn" onClick={() => onNavigateToTab?.('communications')}>Open Communications Workspace</button>
             </div>
+          </section>
+
+          <section id="ov-timeline" className="cf-overview-card">
+            <div className="cf-overview-kicker">Timeline</div>
+            <h3>Case Timeline</h3>
+            <CaseTimelineView caseId={id} headers={headers} />
           </section>
 
           <section id="ov-workflow">

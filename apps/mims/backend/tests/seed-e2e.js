@@ -155,6 +155,49 @@ async function provisionPlatformAdmin(conn, orgId, siteId) {
   return userId;
 }
 
+/**
+ * The v1 platform API (/api/v1/cases) authenticates with an API-platform access
+ * token, not a user JWT — that is the path CP Portal uses to push cases into
+ * MIMS. Without a seeded client and token the cross-app integration test cannot
+ * exercise the real integration route at all.
+ *
+ * The token is fixed and test-only, so the suite can present it without a
+ * separate issuance round-trip.
+ */
+const E2E_API_TOKEN = process.env.E2E_API_TOKEN || 'e2e-cross-app-token-do-not-use-outside-tests';
+
+async function upsertApiClient(conn, orgId, userId) {
+  const crypto = require('node:crypto');
+  const tokenHash = crypto.createHash('sha256').update(E2E_API_TOKEN).digest('hex');
+  const scopes = JSON.stringify(['*']);
+
+  const [existing] = await conn.query('SELECT id FROM api_clients WHERE client_id = ? LIMIT 1', ['e2e-cross-app']);
+  let clientRowId;
+  if (existing.length) {
+    clientRowId = existing[0].id;
+    await conn.query(
+      `UPDATE api_clients SET org_id = ?, name = 'E2E Cross-App', scopes = ?, status = 'active' WHERE id = ?`,
+      [orgId, scopes, clientRowId]
+    );
+  } else {
+    const secretHash = await bcrypt.hash('e2e-cross-app-secret', 10);
+    const [res] = await conn.query(
+      `INSERT INTO api_clients (org_id, client_id, client_secret_hash, name, scopes, rate_limit_per_min, status, created_by)
+       VALUES (?, 'e2e-cross-app', ?, 'E2E Cross-App', ?, 600, 'active', ?)`,
+      [orgId, secretHash, scopes, userId]
+    );
+    clientRowId = res.insertId;
+  }
+
+  await conn.query('DELETE FROM api_tokens WHERE client_id = ?', [clientRowId]);
+  await conn.query(
+    `INSERT INTO api_tokens (client_id, access_token_hash, expires_at, revoked)
+     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY), 0)`,
+    [clientRowId, tokenHash]
+  );
+  return clientRowId;
+}
+
 async function ensureWorkflowStates(conn) {
   const ids = {};
   for (const name of WORKFLOW_STATES) {
@@ -223,6 +266,9 @@ async function main() {
     console.log(platformAdminId
       ? `[seed-e2e] platform_admin=${platformAdminId} provisioned with modules + org access`
       : '[seed-e2e] platform_admin not found — skipped');
+
+    const apiClientId = await upsertApiClient(conn, orgId, userId);
+    console.log(`[seed-e2e] api client=${apiClientId} with a 30-day token for the cross-app suite`);
 
     const statusIds = await ensureWorkflowStates(conn);
     console.log(`[seed-e2e] workflow states: ${Object.keys(statusIds).join(', ')}`);

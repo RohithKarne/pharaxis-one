@@ -13,6 +13,7 @@
 
 const pool = require('../database/db');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
+const redisClient = require('./redisClient');
 
 const CACHE_TTL_MS = 60 * 1000;
 const _cache = new Map(); // key=`${flagKey}|${orgId}` → { value: bool, expiresAt: number }
@@ -21,18 +22,36 @@ function cacheKey(flagKey, orgId) {
   return `${flagKey}|${orgId == null ? 'null' : orgId}`;
 }
 
-function invalidate(flagKey = null, orgId = null) {
+function invalidate(flagKey = null, orgId = null, broadcast = true) {
   if (flagKey == null && orgId == null) {
     _cache.clear();
-    return;
+  } else {
+    for (const k of [..._cache.keys()]) {
+      const [fk, oid] = k.split('|');
+      const matchFlag = flagKey == null || fk === flagKey;
+      const matchOrg  = orgId  == null || oid === String(orgId);
+      if (matchFlag && matchOrg) _cache.delete(k);
+    }
   }
-  for (const k of [..._cache.keys()]) {
-    const [fk, oid] = k.split('|');
-    const matchFlag = flagKey == null || fk === flagKey;
-    const matchOrg  = orgId  == null || oid === String(orgId);
-    if (matchFlag && matchOrg) _cache.delete(k);
+
+  if (broadcast) {
+    redisClient.publish('mims:cache:feature_flags:invalidate', { flagKey, orgId });
   }
 }
+
+// Subscribe to invalidation broadcasts from other nodes
+const sub = redisClient.createSubscriber();
+sub.subscribe('mims:cache:feature_flags:invalidate').catch(() => {});
+sub.on('message', (channel, message) => {
+  if (channel === 'mims:cache:feature_flags:invalidate') {
+    try {
+      const { flagKey, orgId } = JSON.parse(message);
+      invalidate(flagKey, orgId, false);
+    } catch (e) {
+      // Ignore invalid payloads
+    }
+  }
+});
 
 /**
  * Returns true if `flagKey` is enabled for the given org_id.

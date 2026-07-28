@@ -1384,6 +1384,76 @@ router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
   }
 });
 
+// POST /api/cases/bulk-update — bulk operations on cases
+router.post('/cases/bulk-update', authenticate, requireOrg, async (req, res) => {
+  try {
+    const { case_ids, action, payload } = req.body;
+    if (!Array.isArray(case_ids) || case_ids.length === 0) {
+      return res.status(400).json({ error: 'case_ids must be a non-empty array' });
+    }
+    const orgId = req.user.orgId;
+    const placeholders = case_ids.map(() => '?').join(',');
+    const [validCases] = await pool.execute(
+      `SELECT id, case_number, status_id, priority, case_owner_id, is_deleted FROM cases WHERE id IN (${placeholders}) AND org_id = ?`,
+      [...case_ids, orgId]
+    );
+
+    const validIds = validCases.map(c => c.id);
+    const failedIds = case_ids.filter(id => !validIds.includes(id));
+    if (validIds.length === 0) {
+      return res.json({ ok: true, updated_count: 0, failed_ids: failedIds });
+    }
+
+    const validIdsStr = validIds.join(',');
+    let updatedCount = 0;
+
+    if (action === 'reassign') {
+      const newOwnerId = payload?.new_owner_id || null;
+      await pool.execute(`UPDATE cases SET case_owner_id = ?, updated_at = NOW() WHERE id IN (${validIdsStr})`, [newOwnerId]);
+      for (const c of validCases) {
+        await writeCaseAudit(c.id, req.user.userId, req.user.email, 'OWNER_CHANGED', 'case_owner_id', c.case_owner_id, newOwnerId);
+      }
+      updatedCount = validIds.length;
+    } else if (action === 'update_status') {
+      const statusId = payload?.status_id;
+      if (!statusId) return res.status(400).json({ error: 'status_id is required' });
+      await pool.execute(`UPDATE cases SET status_id = ?, updated_at = NOW() WHERE id IN (${validIdsStr})`, [statusId]);
+      for (const c of validCases) {
+        await writeCaseAudit(c.id, req.user.userId, req.user.email, 'STATUS_CHANGED', 'status_id', c.status_id, statusId);
+      }
+      updatedCount = validIds.length;
+    } else if (action === 'update_priority') {
+      const priority = payload?.priority;
+      if (!priority) return res.status(400).json({ error: 'priority is required' });
+      await pool.execute(`UPDATE cases SET priority = ?, updated_at = NOW() WHERE id IN (${validIdsStr})`, [priority]);
+      for (const c of validCases) {
+        await writeCaseAudit(c.id, req.user.userId, req.user.email, 'FIELD_UPDATED', 'priority', c.priority, priority);
+      }
+      updatedCount = validIds.length;
+    } else if (action === 'delete') {
+      await pool.execute(`UPDATE cases SET is_deleted = 1, updated_at = NOW() WHERE id IN (${validIdsStr})`);
+      for (const c of validCases) {
+        await writeCaseAudit(c.id, req.user.userId, req.user.email, 'CASE_DELETED', 'is_deleted', c.is_deleted, 1);
+      }
+      updatedCount = validIds.length;
+    } else {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    emitDataSync({
+      orgIds: [orgId],
+      domains: ['cases', 'dashboard'],
+      reason: 'case.bulk_update',
+      payload: { count: updatedCount, action }
+    });
+
+    return res.json({ ok: true, updated_count: updatedCount, failed_ids: failedIds });
+  } catch (err) {
+    logger.error({ err, route: '/api/cases/bulk-update', user_id: req.user?.userId }, 'Failed bulk update');
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/cases/:id/reassign — dedicated reassignment flow with audit + notifications
 router.post('/cases/:id/reassign', authenticate, requireScopedCapability('case.assign'), async (req, res) => {
   try {

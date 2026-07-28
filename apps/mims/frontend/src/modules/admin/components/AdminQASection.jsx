@@ -514,12 +514,107 @@ function QAOverridesPanel() {
   )
 }
 
+// ─── Automated Compliance Checks Dashboard ──────────────────────────────────
+function QACompliancePanel() {
+  const { token } = useAuth()
+  const headers = useMemo(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+    [token]
+  )
+
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
+  const [msg, setMsg] = useState('')
+
+  async function runScan() {
+    setLoading(true)
+    setMsg('')
+    try {
+      const res = await apiFetch(`${API}/admin/compliance/run-checks`, { method: 'POST', headers })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setResult(data)
+    } catch (err) {
+      setMsg(err.message || 'Failed to run scan')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+          Run an automated suite of compliance checks to verify system integrity and configuration.
+        </p>
+        <button className="btn btn-primary" onClick={runScan} disabled={loading}>
+          {loading ? 'Scanning...' : '▶ Run Compliance Scan'}
+        </button>
+      </div>
+      {msg && <div style={{ color: '#991b1b', marginBottom: 16 }}>{msg}</div>}
+      
+      {result && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <h3 style={{ margin: 0 }}>Overall Compliance Health</h3>
+            {result.overallStatus === 'pass' && (
+              <span style={{ background: '#d1fae5', color: '#065f46', padding: '4px 12px', borderRadius: 12, fontWeight: 600, fontSize: 14 }}>
+                {result.scorePct}% Pass
+              </span>
+            )}
+            {result.overallStatus === 'warning' && (
+              <span style={{ background: '#fef3c7', color: '#92400e', padding: '4px 12px', borderRadius: 12, fontWeight: 600, fontSize: 14 }}>
+                {result.scorePct}% Warning
+              </span>
+            )}
+            {result.overallStatus === 'fail' && (
+              <span style={{ background: '#fee2e2', color: '#991b1b', padding: '4px 12px', borderRadius: 12, fontWeight: 600, fontSize: 14 }}>
+                {result.scorePct}% Fail
+              </span>
+            )}
+          </div>
+          
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: 'var(--surface-alt)', borderBottom: '1px solid var(--border)' }}>
+                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Check Name</th>
+                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Category</th>
+                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Status</th>
+                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.checks.map(check => (
+                <tr key={check.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 500 }}>{check.name}</td>
+                  <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{check.category}</td>
+                  <td style={{ padding: '8px 12px' }}>
+                    {check.status === 'pass' && <span style={{ color: '#065f46', fontWeight: 600 }}>Pass</span>}
+                    {check.status === 'warning' && <span style={{ color: '#92400e', fontWeight: 600 }}>Warning</span>}
+                    {check.status === 'fail' && <span style={{ color: '#991b1b', fontWeight: 600 }}>Fail</span>}
+                  </td>
+                  <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>
+                    <div title={check.details} style={{ cursor: 'help' }}>
+                      {check.details}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 export default function AdminQASection({ contentSection, H }) {
   const tabMap = {
     'qa-reports':   { label: 'Retrospective QA Reports', Component: QAReportsPanel },
     'qa-rules':     { label: 'QA Rules Configuration',   Component: QARulesPanel   },
     'qa-overrides': { label: 'Override Dashboard',        Component: QAOverridesPanel },
+    'qa-compliance': { label: 'Automated Compliance Checks', Component: QACompliancePanel },
   }
 
   const active = tabMap[contentSection]
@@ -535,6 +630,7 @@ export default function AdminQASection({ contentSection, H }) {
           {contentSection === 'qa-reports'   && 'Run batch QA audits on historical cases. View quality scores per case.'}
           {contentSection === 'qa-rules'     && 'Configure QA rules for your organisation. Rules apply to all real-time and retrospective evaluations.'}
           {contentSection === 'qa-overrides' && 'View all QA flag overrides by users. Critical overrides without reasons are highlighted.'}
+          {contentSection === 'qa-compliance' && 'Run scheduled or ad-hoc scans for mandatory fields, e-signature integrity, PII rules, and access reviews.'}
         </p>
       </div>
       <Component H={H} />

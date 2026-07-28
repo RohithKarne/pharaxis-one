@@ -300,6 +300,25 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
     } catch (err) { flash?.(err.message, 'error') }
   }
 
+  async function downloadAuditReport() {
+    if (!selectedOrgId) return
+    try {
+      const res = await httpFetch(`/api/admin/access-config/audit-report?org_id=${selectedOrgId}&format=csv`, { headers: H })
+      if (!res.ok) throw new Error('Failed to download report')
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `access_audit_report_org_${selectedOrgId}.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      flash?.(err.message, 'error')
+    }
+  }
+
   function togglePrivilege(key) {
     setSelectedPrivilegeKeys(prev => prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key])
   }
@@ -310,6 +329,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <button style={buttonStyle()} onClick={() => loadOverview()} disabled={!selectedOrgId || loading}>{loading ? 'Loading...' : 'Refresh'}</button>
           <input className="form-control" style={{ maxWidth: 340 }} value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason for access changes" />
+          <button style={buttonStyle(true)} onClick={downloadAuditReport} disabled={!selectedOrgId}>Download Access Audit Report (GxP)</button>
         </div>
       )
     }
@@ -321,6 +341,7 @@ export default function AdminAccessConfigurationsPanel({ H, flash, contentSectio
         </select>
         <button style={buttonStyle()} onClick={() => loadOverview()} disabled={!selectedOrgId || loading}>{loading ? 'Loading...' : 'Refresh'}</button>
         <input className="form-control" style={{ maxWidth: 340 }} value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason for access changes" />
+        <button style={buttonStyle(true)} onClick={downloadAuditReport} disabled={!selectedOrgId}>Download Access Audit Report (GxP)</button>
       </div>
     )
   }

@@ -26,6 +26,7 @@ const router  = express.Router();
 const { authenticate, requireRole } = require('../../middleware/auth');
 const flags = require('../../services/featureFlagsService');
 const compliance = require('../../services/complianceService');
+const automatedComplianceService = require('../../services/automatedComplianceService');
 const { csvEscape } = require('../../shared/csvHelpers');
 
 const FLAG  = 'cf.theme9_compliance';
@@ -186,6 +187,14 @@ router.get('/compliance/audit-export.csv', authenticate, requireRole(...ADMIN), 
       ].map(csvEscape).join(','));
     }
     res.send(lines.join('\n'));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Automated Compliance Checks ──────────────────────────────────────────────
+router.post('/admin/compliance/run-checks', authenticate, requireRole(...ADMIN), async (req, res) => {
+  try {
+    const result = await automatedComplianceService.runComplianceCheckSuite(req.user.orgId);
+    res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

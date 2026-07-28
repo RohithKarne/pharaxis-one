@@ -10,6 +10,8 @@ export default function OrganisationsView({ H, flash }) {
   const [expanded, setExpanded] = useState(null)
   const [showOrgForm, setShowOrgForm] = useState(false)
   const [orgForm, setOrgForm] = useState({ name: '' })
+  const [showCloneForm, setShowCloneForm] = useState(false)
+  const [cloneForm, setCloneForm] = useState({ source_org_id: '', target_name: '' })
   const [editingOrg, setEditingOrg] = useState(null)
   const [editOrgName, setEditOrgName] = useState('')
   const [showSiteForm, setShowSiteForm] = useState(null)
@@ -48,6 +50,27 @@ export default function OrganisationsView({ H, flash }) {
     flash('Organisation created.')
     setShowOrgForm(false)
     setOrgForm({ name: '' })
+    load()
+  }
+
+  async function cloneOrg(e) {
+    e.preventDefault()
+    if (!cloneForm.target_name.trim()) return flash('Organisation name is required.', 'error')
+    if (!cloneForm.source_org_id) return flash('Source Organisation is required.', 'error')
+    
+    const res = await guardedFetch(`${API_BASE}/orgs/clone`, {
+      method: 'POST',
+      headers: H,
+      body: JSON.stringify({
+        source_org_id: cloneForm.source_org_id,
+        target_name: cloneForm.target_name
+      })
+    })
+    const data = await res.json()
+    if (!res.ok) return flash(data.error || 'Failed to clone.', 'error')
+    flash(`Organisation cloned into ${data.name}.`)
+    setShowCloneForm(false)
+    setCloneForm({ source_org_id: '', target_name: '' })
     load()
   }
 
@@ -212,6 +235,9 @@ export default function OrganisationsView({ H, flash }) {
                 <button className="btn btn-outline" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => bulkToggleOrgs(false)}>Deactivate Selected ({selectedOrgIds.size})</button>
               </>
             )}
+            <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={() => setShowCloneForm(v => !v)}>
+              + Clone Organisation
+            </button>
             <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => setShowOrgForm(v => !v)}>
               + New Organisation
             </button>
@@ -227,6 +253,27 @@ export default function OrganisationsView({ H, flash }) {
               </div>
               <button className="btn btn-primary" type="submit" style={{ fontSize: 12 }}>Create</button>
               <button className="btn btn-secondary" type="button" style={{ fontSize: 12 }} onClick={() => setShowOrgForm(false)}>Cancel</button>
+            </form>
+          </div>
+        )}
+        {showCloneForm && (
+          <div className="card-body" style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+            <form onSubmit={cloneOrg} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div>
+                <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Source Organisation *</label>
+                <select className="form-control" style={{ fontSize: 13 }} value={cloneForm.source_org_id}
+                  onChange={e => setCloneForm(f => ({ ...f, source_org_id: e.target.value }))}>
+                  <option value="">Select source org...</option>
+                  {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>New Organisation Name *</label>
+                <input className="form-control" style={{ fontSize: 13 }} value={cloneForm.target_name}
+                  onChange={e => setCloneForm(f => ({ ...f, target_name: e.target.value }))} placeholder="e.g. Pfizer US" />
+              </div>
+              <button className="btn btn-primary" type="submit" style={{ fontSize: 12 }}>Clone</button>
+              <button className="btn btn-secondary" type="button" style={{ fontSize: 12 }} onClick={() => setShowCloneForm(false)}>Cancel</button>
             </form>
           </div>
         )}

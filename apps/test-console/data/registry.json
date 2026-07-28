@@ -81,6 +81,14 @@
           "addedIn": "Sprint 21",
           "cmd": "npx playwright test e2e/inbox-saved-views.spec.js --reporter=list",
           "parser": "playwright"
+        },
+        {
+          "id": "mims-e2e-crossapp",
+          "name": "e2e/cross-app-cp-portal.spec.js",
+          "tier": 3,
+          "addedIn": "2026.07-R4",
+          "cmd": "npx playwright test e2e/cross-app-cp-portal.spec.js --reporter=list",
+          "parser": "playwright"
         }
       ],
       "e2e": {

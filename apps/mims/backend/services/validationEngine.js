@@ -30,6 +30,7 @@
 
 const pool = require('../database/db');
 const { logger } = require('./logger');
+const redisClient = require('./redisClient');
 
 const RULE_CACHE_TTL_MS = 60 * 1000;
 const _ruleCache = new Map(); // key=`${orgId}|${section}` → { rules, expiresAt }
@@ -38,15 +39,36 @@ function _cacheKey(orgId, section) {
   return `${orgId == null ? 'null' : orgId}|${section}`;
 }
 
-function invalidate(orgId = null, section = null) {
-  if (orgId == null && section == null) { _ruleCache.clear(); return; }
-  for (const k of [..._ruleCache.keys()]) {
-    const [oid, sec] = k.split('|');
-    const matchOrg = orgId == null || oid === String(orgId);
-    const matchSec = section == null || sec === section;
-    if (matchOrg && matchSec) _ruleCache.delete(k);
+function invalidate(orgId = null, section = null, broadcast = true) {
+  if (orgId == null && section == null) {
+    _ruleCache.clear();
+  } else {
+    for (const k of [..._ruleCache.keys()]) {
+      const [oid, sec] = k.split('|');
+      const matchOrg = orgId == null || oid === String(orgId);
+      const matchSec = section == null || sec === section;
+      if (matchOrg && matchSec) _ruleCache.delete(k);
+    }
+  }
+
+  if (broadcast) {
+    redisClient.publish('mims:cache:validation_rules:invalidate', { orgId, section });
   }
 }
+
+// Subscribe to invalidation broadcasts from other nodes
+const sub = redisClient.createSubscriber();
+sub.subscribe('mims:cache:validation_rules:invalidate').catch(() => {});
+sub.on('message', (channel, message) => {
+  if (channel === 'mims:cache:validation_rules:invalidate') {
+    try {
+      const { orgId, section } = JSON.parse(message);
+      invalidate(orgId, section, false);
+    } catch (e) {
+      // Ignore invalid payloads
+    }
+  }
+});
 
 async function loadRules(orgId, section) {
   const k = _cacheKey(orgId, section);

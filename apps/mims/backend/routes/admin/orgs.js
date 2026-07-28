@@ -10,6 +10,7 @@ const { bootstrapOrg, getOrgReadiness } = require('../../services/orgBootstrapSe
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { logAudit } = require('../../utils/auditLog');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { cloneOrgConfig } = require('../../services/orgCloningService');
 
 // WP1: non-platform admins may only access resources for their OWN org. Returns
 // true (and sends 403) when a tenant admin targets another org via the URL.
@@ -46,6 +47,25 @@ router.post('/', authenticate, requireRole('platform_admin'), async (req, res) =
     res.status(201).json({ id: result.insertId, name, is_active: 1, created_at: row.created_at, readiness });
   } catch (e) {
     res.status(409).json({ error: 'Organisation name already exists.' });
+  }
+});
+
+// POST /api/admin/orgs/clone — clone org (platform-admin only)
+router.post('/clone', authenticate, requireRole('platform_admin'), async (req, res) => {
+  const { source_org_id, target_name } = req.body;
+  if (!source_org_id || !target_name) {
+    return res.status(400).json({ error: 'source_org_id and target_name are required.' });
+  }
+  try {
+    const result = await cloneOrgConfig({
+      sourceOrgId: source_org_id,
+      targetName: target_name.trim(),
+      createdByUserId: req.user.userId,
+      createdByEmail: req.user.email
+    });
+    res.status(201).json({ newOrgId: result.newOrgId, name: result.targetName, message: `Successfully cloned into ${result.targetName}` });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to clone organisation.' });
   }
 });
 

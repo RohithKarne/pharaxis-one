@@ -20,20 +20,7 @@ const API = import.meta.env.VITE_API_URL || '/api'
 const CASE_TYPE_COLORS = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 const PRIORITY_COLORS  = { normal: '#6b7280', high: '#f59e0b', urgent: '#ef4444' }
 
-// S19-P0: SLA badge — computed from sla_due date returned by /my and /unassigned
-function SlaBadge({ slaDue }) {
-  if (!slaDue) return null
-  const due   = new Date(slaDue)
-  const now   = new Date()
-  const diffH = (due - now) / (1000 * 60 * 60)   // hours remaining
-  if (diffH < 0) {
-    return <span style={{ display:'inline-block', padding:'1px 7px', borderRadius:10, fontSize:11, fontWeight:700, background:'#fee2e2', color:'#dc2626', marginLeft:4 }}>SLA ✕</span>
-  }
-  if (diffH < 48) {
-    return <span style={{ display:'inline-block', padding:'1px 7px', borderRadius:10, fontSize:11, fontWeight:700, background:'#fef9c3', color:'#854d0e', marginLeft:4 }}>SLA ⚠</span>
-  }
-  return <span style={{ display:'inline-block', padding:'1px 7px', borderRadius:10, fontSize:11, fontWeight:600, background:'#dcfce7', color:'#15803d', marginLeft:4 }}>SLA ✓</span>
-}
+import SlaCountdownBadge from '../../../shared/components/SlaCountdownBadge'
 
 export default function CasesPage() {
   const navigate        = useNavigate()
@@ -53,6 +40,10 @@ export default function CasesPage() {
   const [viewsLoading, setViewsLoading] = useState(false)
   const [viewSaving, setViewSaving] = useState(false)
   const [activeViewId, setActiveViewId] = useState(null)
+
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   // New case modal state — multi-step intake form (CF-E1–E5)
   const [modalOpen, setModalOpen]     = useState(false)
@@ -81,6 +72,81 @@ export default function CasesPage() {
   const [dupCandidates, setDupCandidates] = useState([])
   const [dupCheckLoading, setDupCheckLoading] = useState(false)
   const [dupError, setDupError] = useState('')
+  
+  // Bulk update state
+  const [selectedCaseIds, setSelectedCaseIds] = useState([])
+  const [bulkUsers, setBulkUsers] = useState([])
+  const [bulkStatuses, setBulkStatuses] = useState([])
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
+  
+  const [bulkNewOwnerId, setBulkNewOwnerId] = useState('')
+  const [bulkStatusId, setBulkStatusId] = useState('')
+  const [bulkPriority, setBulkPriority] = useState('')
+
+  useEffect(() => {
+    if (selectedCaseIds.length > 0 && bulkUsers.length === 0 && !bulkLoading) {
+      setBulkLoading(true)
+      Promise.all([
+        httpFetch(`${API}/users${orgId ? `?org_id=${orgId}` : ''}`, { headers }),
+        httpFetch(`${API}/admin/workflow-states`, { headers })
+      ]).then(async ([uRes, sRes]) => {
+        const u = await uRes.json()
+        const s = await sRes.json()
+        if (Array.isArray(u)) setBulkUsers(u.filter(x => x.is_active !== false))
+        if (Array.isArray(s)) setBulkStatuses(s.filter(x => x.is_active !== false))
+      }).catch(err => console.error('Bulk load error:', err))
+      .finally(() => setBulkLoading(false))
+    }
+  }, [selectedCaseIds.length, bulkUsers.length, headers, orgId, bulkLoading])
+
+  function handleSelectAll(e) {
+    if (e.target.checked) setSelectedCaseIds(filteredCases.map(c => c.id))
+    else setSelectedCaseIds([])
+  }
+
+  function handleSelectRow(id, checked) {
+    if (checked) setSelectedCaseIds(prev => [...prev, id])
+    else setSelectedCaseIds(prev => prev.filter(x => x !== id))
+  }
+
+  async function applyBulkAction(action) {
+    if (!selectedCaseIds.length) return
+    let payload = {}
+    if (action === 'reassign') {
+      if (!bulkNewOwnerId) return toast.error('Select an owner')
+      payload = { new_owner_id: bulkNewOwnerId === 'null' ? null : Number(bulkNewOwnerId) }
+    } else if (action === 'update_status') {
+      if (!bulkStatusId) return toast.error('Select a status')
+      payload = { status_id: Number(bulkStatusId) }
+    } else if (action === 'update_priority') {
+      if (!bulkPriority) return toast.error('Select a priority')
+      payload = { priority: bulkPriority }
+    } else if (action === 'delete') {
+      if (!await confirm(`Delete ${selectedCaseIds.length} selected case(s)?`)) return
+    }
+
+    setBulkActionLoading(true)
+    try {
+      const res = await httpFetch(`${API}/cases/bulk-update`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ case_ids: selectedCaseIds, action, payload })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed bulk update')
+      toast.success(`Successfully updated ${data.updated_count} cases.`)
+      setSelectedCaseIds([])
+      setBulkStatusId('')
+      setBulkPriority('')
+      setBulkNewOwnerId('')
+      loadCases()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
 
   // ── Load cases ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -116,6 +182,7 @@ export default function CasesPage() {
       const res  = await httpFetch(endpoint, { headers })
       const data = await res.json()
       setCases(Array.isArray(data) ? data : [])
+      setSelectedCaseIds([])
     } catch (err) {
       console.error('loadCases error:', err)
       setCases([])
@@ -147,6 +214,9 @@ export default function CasesPage() {
     const filters = view?.filters || {}
     setSearch(filters.search || '')
     setSearchScope(filters.searchScope || 'all')
+    setTypeFilter(filters.typeFilter || 'all')
+    setPriorityFilter(filters.priorityFilter || 'all')
+    setStatusFilter(filters.statusFilter || 'all')
     setActiveViewId(view.id)
     if (filters.tab === 'my' || filters.tab === 'unassigned' || filters.tab === 'deleted') {
       handleTabChange(filters.tab, { preserveSavedView: true })
@@ -173,6 +243,9 @@ export default function CasesPage() {
             tab: activeTab,
             search,
             searchScope,
+            typeFilter,
+            priorityFilter,
+            statusFilter,
           },
         }),
       })
@@ -345,6 +418,26 @@ export default function CasesPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const filteredCases = useMemo(() => {
+    return cases.filter(c => {
+      if (typeFilter !== 'all' && c.case_type !== typeFilter) return false
+      
+      const p = c.priority || 'normal'
+      if (priorityFilter === 'high_urgent') {
+        if (p !== 'high' && p !== 'urgent') return false
+      } else if (priorityFilter !== 'all' && p !== priorityFilter) {
+        return false
+      }
+
+      if (statusFilter !== 'all' && (c.status_name || 'New') !== statusFilter) return false
+      return true
+    })
+  }, [cases, typeFilter, priorityFilter, statusFilter])
+
+  const uniqueStatuses = useMemo(() => {
+    return [...new Set(cases.map(c => c.status_name || 'New'))].sort()
+  }, [cases])
+
   const hasSearch = search.trim().length > 0
   const isGlobalSearch = hasSearch && searchScope === 'all'
 
@@ -422,6 +515,13 @@ export default function CasesPage() {
             </div>
           )}
         </div>
+        <div className="cf-cases-quick-presets" style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('AE'); setPriorityFilter('high_urgent'); setStatusFilter('all'); setActiveViewId(null) }}>High Priority AE</button>
+          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('all'); setPriorityFilter('urgent'); setStatusFilter('all'); setActiveViewId(null) }}>Urgent SLA</button>
+          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('MI'); setPriorityFilter('all'); setStatusFilter('all'); setActiveViewId(null) }}>MI Cases</button>
+          <button type="button" className="cf-cases-preset-btn" onClick={() => { setTypeFilter('all'); setPriorityFilter('all'); setStatusFilter('all'); setSearch(''); setActiveViewId(null) }}>Clear Filters</button>
+        </div>
+
         <div className="cf-cases-saved-views">
           <span className="cf-cases-saved-label">Saved Views</span>
           {viewsLoading && <span className="cf-cases-saved-empty">Loading…</span>}
@@ -442,25 +542,88 @@ export default function CasesPage() {
 
       {/* Case table */}
       <div className="cf-cases-body">
+        {selectedCaseIds.length > 0 && (
+          <div className="cf-cases-bulk-bar">
+            <span className="cf-cases-bulk-count">{selectedCaseIds.length} case(s) selected</span>
+            <div className="cf-cases-bulk-actions">
+              <div className="cf-cases-bulk-group">
+                <select className="cf-cases-bulk-select" value={bulkNewOwnerId} onChange={e => setBulkNewOwnerId(e.target.value)}>
+                  <option value="">— Reassign to —</option>
+                  <option value="null">Unassigned</option>
+                  {bulkUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+                <button className="cf-cases-bulk-apply" onClick={() => applyBulkAction('reassign')} disabled={bulkActionLoading}>Apply</button>
+              </div>
+              <div className="cf-cases-bulk-group">
+                <select className="cf-cases-bulk-select" value={bulkStatusId} onChange={e => setBulkStatusId(e.target.value)}>
+                  <option value="">— Change Status —</option>
+                  {bulkStatuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <button className="cf-cases-bulk-apply" onClick={() => applyBulkAction('update_status')} disabled={bulkActionLoading}>Apply</button>
+              </div>
+              <div className="cf-cases-bulk-group">
+                <select className="cf-cases-bulk-select" value={bulkPriority} onChange={e => setBulkPriority(e.target.value)}>
+                  <option value="">— Change Priority —</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+                <button className="cf-cases-bulk-apply" onClick={() => applyBulkAction('update_priority')} disabled={bulkActionLoading}>Apply</button>
+              </div>
+              <button className="cf-cases-bulk-delete" onClick={() => applyBulkAction('delete')} disabled={bulkActionLoading}>Delete Selected</button>
+              <button className="cf-cases-bulk-cancel" onClick={() => setSelectedCaseIds([])}>Deselect All</button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="cf-cases-loading">Loading…</div>
-        ) : cases.length === 0 ? (
+        ) : filteredCases.length === 0 ? (
           <div className="cf-cases-empty">
-            {search
+            {search || typeFilter !== 'all' || priorityFilter !== 'all' || statusFilter !== 'all'
               ? (isGlobalSearch
-                ? 'No active cases match your global search.'
-                : 'No cases in this tab match your search.')
+                ? 'No active cases match your global search and filters.'
+                : 'No cases match your filters/search.')
               : `No ${activeTab === 'my' ? 'cases assigned to you' : activeTab + ' cases'} yet.`}
           </div>
         ) : (
           <table className="cf-cases-table">
             <thead>
               <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>
+                  <input type="checkbox" className="cf-cases-checkbox" 
+                    checked={filteredCases.length > 0 && selectedCaseIds.length === filteredCases.length}
+                    onChange={handleSelectAll} 
+                  />
+                </th>
                 <th>Case #</th>
-                <th>Type</th>
+                <th>
+                  Type
+                  <select className="cf-th-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+                    <option value="all">All</option>
+                    <option value="MI">MI</option>
+                    <option value="AE">AE</option>
+                    <option value="PC">PC</option>
+                  </select>
+                </th>
                 <th>Organisation</th>
-                <th>Status</th>
-                <th>Priority</th>
+                <th>
+                  Status
+                  <select className="cf-th-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                    <option value="all">All</option>
+                    {uniqueStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </th>
+                <th>
+                  Priority
+                  <select className="cf-th-filter-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
+                    <option value="all">All</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="high_urgent">High/Urgent</option>
+                  </select>
+                </th>
                 <th>SLA</th>
                 <th>Date Received</th>
                 <th>Owner</th>
@@ -468,8 +631,14 @@ export default function CasesPage() {
               </tr>
             </thead>
             <tbody>
-              {cases.map(c => (
-                <tr key={c.id} className="cf-cases-row" onClick={() => navigate(`/cases/${c.id}`, { state: { from: '/cases' } })}>
+              {filteredCases.map(c => (
+                <tr key={c.id} className={`cf-cases-row ${selectedCaseIds.includes(c.id) ? 'selected' : ''}`} onClick={() => navigate(`/cases/${c.id}`, { state: { from: '/cases' } })}>
+                  <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                    <input type="checkbox" className="cf-cases-checkbox"
+                      checked={selectedCaseIds.includes(c.id)}
+                      onChange={e => handleSelectRow(c.id, e.target.checked)}
+                    />
+                  </td>
                   <td className="cf-case-num">
                     {c.case_number || <span className="cf-draft-badge">DRAFT</span>}
                   </td>
@@ -488,7 +657,7 @@ export default function CasesPage() {
                       {c.priority || 'normal'}
                     </span>
                   </td>
-                  <td><SlaBadge slaDue={c.sla_due} /></td>
+                  <td><SlaCountdownBadge dueAt={c.sla_due || c.due_at} compact /></td>
                   <td>{c.date_received ? c.date_received.slice(0, 10) : '—'}</td>
                   <td>{c.owner_name || '—'}</td>
                   <td>
