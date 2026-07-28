@@ -79,7 +79,7 @@
           "name": "e2e/inbox-saved-views.spec.js",
           "tier": 3,
           "addedIn": "Sprint 21",
-          "cmd": "npx playwright test e2e/inbox-saved-views.spec.js --reporter=list",
+          "cmd": "node --env-file=.env e2e/_savedviews-setup.js && npx playwright test e2e/inbox-saved-views.spec.js --reporter=list",
           "parser": "playwright"
         },
         {

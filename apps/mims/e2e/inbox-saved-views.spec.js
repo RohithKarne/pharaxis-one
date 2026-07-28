@@ -53,7 +53,19 @@ async function gotoInbox(page) {
 
 test.describe('Inbox Saved Views', () => {
   test.beforeAll(() => {
-    if (!session) test.skip(true, 'No session file — run e2e/_savedviews-setup.js first.')
+    // Previously this skipped, and so all seven tests quietly reported nothing
+    // for weeks — the only coverage this feature has, silently switched off by
+    // a missing setup step. The corpus now runs _savedviews-setup.js ahead of
+    // this spec, so an absent session means that setup failed and must be seen.
+    if (!session) {
+      throw new Error(
+        '[E2E] No session file at e2e/.savedviews-session.json. It is produced by ' +
+        'e2e/_savedviews-setup.js, which the suite command runs first — so this means ' +
+        'setup failed (backend down, or the database it provisions into is not reachable). ' +
+        'Reported as a failure, not a skip: a silent skip here is why this suite went ' +
+        'unnoticed for weeks.'
+      )
+    }
   })
 
   test.beforeEach(async ({ request }) => {
