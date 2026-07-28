@@ -30,7 +30,8 @@
       "name": "MIMS",
       "cwd": "apps/mims",
       "env": {
-        "MYSQL_DATABASE": "pharaxis_mims_test"
+        "MYSQL_DATABASE": "pharaxis_mims_test",
+        "MIMS_BACKEND_URL": "http://localhost:3001"
       },
       "suites": [
         {
@@ -92,9 +93,10 @@
         }
       ],
       "e2e": {
+        "_comment": "The isolated e2e stack from scripts/e2e-stack.sh, not the dev stack on :3000/:5173. The fixtures these suites log in as exist only in pharaxis_mims_test, and the dev backend serves pharaxis_mims_dev — pointing here is what stops 46 tests failing on a rejected login.",
         "baseUrlEnv": "MIMS_BASE_URL",
-        "url": "http://localhost:5173",
-        "health": "http://localhost:5173/mims/"
+        "url": "http://localhost:5273",
+        "health": "http://localhost:5273/mims/"
       }
     },
     {

@@ -61,3 +61,4 @@ ecosystem.config.js
 
 # Test console run artifacts (registry.json IS committed — it is the corpus)
 apps/test-console/data/runs/
+.e2e-stack/

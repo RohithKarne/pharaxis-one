@@ -31,6 +31,14 @@ async function clearAllViews(request) {
 
 async function hydrate(page) {
   await page.goto(`${APP_BASE}/`)
+  // F14 moved the JWT out of localStorage and into an httpOnly cookie, so
+  // seeding localStorage alone no longer authenticates the app — the Inbox
+  // rendered unauthenticated and every selector below was missing. The other
+  // specs set the cookie; this one had not been updated.
+  await page.context().addCookies([{
+    name: 'mims_token', value: session.token, domain: new URL(page.url()).hostname,
+    path: '/', httpOnly: true, sameSite: 'Lax',
+  }])
   await page.evaluate((s) => {
     localStorage.setItem('mims_token', s.token)
     localStorage.setItem('mims_user', JSON.stringify(s.user || {}))
