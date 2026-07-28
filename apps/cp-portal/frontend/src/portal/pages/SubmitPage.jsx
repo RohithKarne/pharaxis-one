@@ -161,6 +161,13 @@ export default function SubmitPage() {
 
           {error && <div className="pp-error-msg">{error}</div>}
 
+          {Object.keys(formValues).length > 0 && (
+            <div style={{ padding: '10px 14px', borderRadius: '6px', background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', fontSize: '0.85rem' }}>
+              <span>💾 <strong>Draft Auto-Saved</strong> — Your in-progress form entries are saved locally.</span>
+              <button type="button" onClick={() => { clearDraft(); setFormValues({}) }} style={{ background: 'none', border: 'none', color: '#0284c7', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Clear draft</button>
+            </div>
+          )}
+
           {fieldsLoading ? (
             <div className="pp-loading">Loading form…</div>
           ) : formFields.length === 0 ? (

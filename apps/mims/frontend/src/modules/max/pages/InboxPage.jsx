@@ -11,6 +11,10 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
+import EmailBody, { compactEmailBodyText, normalizeEmailBodyText } from '../components/EmailBody'
+import InboxFilterBar from '../components/InboxFilterBar'
+import InboxBulkBar from '../components/InboxBulkBar'
+
 const PAGE_SIZE = 50
 const TABS = ['Inbox', 'Pending', 'Processed', 'Non-Processed', 'Outbox']
 const TAB_STATUS = { Outbox: 'outbox' }
@@ -19,119 +23,7 @@ const PRIORITIES = ['high', 'medium', 'low']
 const TRIAGE_STATES = ['new', 'in_review', 'linked', 'converted', 'no_action', 'closed']
 const PRIORITY_ICON = { high: '🔴', medium: '🟡', low: '🟢' }
 const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
-const EMAIL_URL_PATTERN = /<?https?:\/\/[^\s<>]+>?/gi
 
-function normalizeEmailUrl(rawUrl) {
-  let href = String(rawUrl || '').trim()
-  let suffix = ''
-
-  if (href.startsWith('<')) href = href.slice(1)
-  if (href.endsWith('>')) href = href.slice(0, -1)
-
-  while (/[.,;:!?)]$/.test(href)) {
-    suffix = href.slice(-1) + suffix
-    href = href.slice(0, -1)
-  }
-
-  return { href, suffix }
-}
-
-function getEmailLinkLabel(href) {
-  try {
-    const url = new URL(href)
-    const host = url.hostname.replace(/^www\./, '')
-    return `${host} link`
-  } catch {
-    return 'email link'
-  }
-}
-
-function compactEmailBodyText(body) {
-  const urlPattern = new RegExp(EMAIL_URL_PATTERN.source, 'gi')
-  return normalizeEmailBodyText(body)
-    .replace(/\r\n/g, '\n')
-    .replace(urlPattern, rawUrl => {
-      const { href, suffix } = normalizeEmailUrl(rawUrl)
-      return ` [${getEmailLinkLabel(href)}]${suffix}`
-    })
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
-function decodeEmailEntities(text) {
-  if (typeof document === 'undefined') return String(text || '')
-  const el = document.createElement('textarea')
-  el.innerHTML = String(text || '')
-  return el.value
-}
-
-function normalizeEmailBodyText(body) {
-  return decodeEmailEntities(body)
-    .replace(/=\r?\n/g, '')
-    .replace(/=3D/gi, '=')
-    .replace(/\u00a0/g, ' ')
-    .replace(/\r\n/g, '\n')
-}
-
-function renderEmailBodySegments(text) {
-  const urlPattern = new RegExp(EMAIL_URL_PATTERN.source, 'gi')
-  const segments = []
-  let lastIndex = 0
-
-  for (const match of text.matchAll(urlPattern)) {
-    const rawUrl = match[0]
-    const matchIndex = match.index ?? 0
-    if (matchIndex > lastIndex) {
-      segments.push(text.slice(lastIndex, matchIndex))
-    }
-
-    const { href, suffix } = normalizeEmailUrl(rawUrl)
-    segments.push(
-      <a
-        key={`email-link-${matchIndex}`}
-        className="email-body-link"
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        title={href}
-      >
-        {getEmailLinkLabel(href)}
-      </a>
-    )
-    if (suffix) segments.push(suffix)
-    lastIndex = matchIndex + rawUrl.length
-  }
-
-  if (lastIndex < text.length) {
-    segments.push(text.slice(lastIndex))
-  }
-
-  return segments
-}
-
-function EmailBody({ body }) {
-  const normalized = normalizeEmailBodyText(body)
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/[ \t]{3,}/g, ' ')
-    .trim()
-
-  if (!normalized) {
-    return <div className="inbox-detail-body inbox-detail-body-empty">No email body available.</div>
-  }
-
-  const blocks = normalized.split(/\n{2,}/).map(block => block.trim()).filter(Boolean)
-
-  return (
-    <div className="inbox-detail-body">
-      {blocks.map((block, index) => (
-        <p key={`email-body-block-${index}`} className="email-body-paragraph">
-          {renderEmailBodySegments(block.replace(/\n/g, ' '))}
-        </p>
-      ))}
-    </div>
-  )
-}
 
 export default function InboxPage() {
   const location = useLocation()
@@ -1240,133 +1132,43 @@ export default function InboxPage() {
                   value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
               </div>
 
-              <div className="inbox-adv-filter-toggle">
-                <button className={`inbox-sort-btn ${hasAdvFilters ? 'adv-active' : ''}`} onClick={() => setShowAdvFilters(a => !a)}>
-                  Filters {hasAdvFilters ? '●' : (showAdvFilters ? '▾' : '▸')}
-                </button>
-                {hasAdvFilters && (
-                  <button className="inbox-sort-btn" style={{ fontSize: 11 }} onClick={clearAllFilters}>
-                    Clear
-                  </button>
-                )}
-              </div>
-
-              {activeFilterChips.length > 0 && (
-                <div className="inbox-active-filters">
-                  {activeFilterChips.map(chip => (
-                    <button key={chip.key} className="inbox-active-filter-chip" onClick={() => clearFilterChip(chip.key)}>
-                      {chip.label} <span>✕</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {showAdvFilters && (
-                <div className="inbox-adv-filter-panel">
-                  <div className="inbox-date-filter">
-                    {tenantOptions.length > 0 && (
-                      <>
-                        <span className="date-filter-label">Tenant</span>
-                        <select
-                          value={tenantFilterOrgId}
-                          onChange={e => { setTenantFilterOrgId(e.target.value); setPage(1) }}
-                          className="inbox-tenant-select"
-                        >
-                          <option value="">All Assigned Tenants</option>
-                          {tenantOptions.map(org => (
-                            <option key={org.id} value={String(org.id)}>{org.name}</option>
-                          ))}
-                        </select>
-                      </>
-                    )}
-                    <span className="date-filter-label">From</span>
-                    <input type="date" value={filterFrom} onChange={e => { setFilterFrom(e.target.value); setPage(1) }} />
-                    <span className="date-filter-label">To</span>
-                    <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }} />
-                  </div>
-                  <div className="adv-filter-row">
-                    <select value={advFilters.color}
-                      onChange={e => { setAdvFilters(f => ({ ...f, color: e.target.value })); setPage(1) }}>
-                      <option value="">All Colors</option>
-                      {COLORS.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-                    </select>
-                    <select value={advFilters.priority}
-                      onChange={e => { setAdvFilters(f => ({ ...f, priority: e.target.value })); setPage(1) }}>
-                      <option value="">All Priorities</option>
-                      {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_ICON[p]} {p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
-                    </select>
-                    <select value={advFilters.readStatus}
-                      onChange={e => { setAdvFilters(f => ({ ...f, readStatus: e.target.value })); setPage(1) }}>
-                      <option value="">All Read Status</option>
-                      <option value="unread">Unread</option>
-                      <option value="read">Read</option>
-                    </select>
-                    <select value={advFilters.isLocked}
-                      onChange={e => { setAdvFilters(f => ({ ...f, isLocked: e.target.value })); setPage(1) }}>
-                      <option value="">All Lock Status</option>
-                      <option value="locked">Locked</option>
-                      <option value="unlocked">Unlocked</option>
-                    </select>
-                    <select value={advFilters.assignee}
-                      onChange={e => { setAdvFilters(f => ({ ...f, assignee: e.target.value })); setPage(1) }}>
-                      <option value="">All Assignees</option>
-                      <option value="__UNASSIGNED__">Unassigned</option>
-                      {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
-                    </select>
-                    <select value={advFilters.triageState}
-                      onChange={e => { setAdvFilters(f => ({ ...f, triageState: e.target.value })); setPage(1) }}>
-                      <option value="">All Triage States</option>
-                      {TRIAGE_STATES.map(state => <option key={state} value={state}>{state.replace(/_/g, ' ')}</option>)}
-                    </select>
-                    <select value={advFilters.queueName}
-                      onChange={e => { setAdvFilters(f => ({ ...f, queueName: e.target.value })); setPage(1) }}>
-                      <option value="">All Queues</option>
-                      {queueOptions.map(queue => <option key={queue} value={queue}>{queue}</option>)}
-                    </select>
-                    <select value={advFilters.firstTouchSla}
-                      onChange={e => { setAdvFilters(f => ({ ...f, firstTouchSla: e.target.value })); setPage(1) }}>
-                      <option value="">First Touch SLA</option>
-                      <option value="breached">Breached</option>
-                      <option value="at_risk">At Risk</option>
-                      <option value="on_track">On Track</option>
-                      <option value="met">Met</option>
-                    </select>
-                    <select value={advFilters.responseSla}
-                      onChange={e => { setAdvFilters(f => ({ ...f, responseSla: e.target.value })); setPage(1) }}>
-                      <option value="">Response SLA</option>
-                      <option value="breached">Breached</option>
-                      <option value="at_risk">At Risk</option>
-                      <option value="on_track">On Track</option>
-                      <option value="met">Met</option>
-                    </select>
-                  </div>
-                  {/* F9: Save current view moved to the always-visible Saved Views bar above for discoverability */}
-                </div>
-              )}
+              <InboxFilterBar
+                advFilters={advFilters}
+                setAdvFilters={setAdvFilters}
+                showAdvFilters={showAdvFilters}
+                setShowAdvFilters={setShowAdvFilters}
+                filterFrom={filterFrom}
+                setFilterFrom={setFilterFrom}
+                filterTo={filterTo}
+                setFilterTo={setFilterTo}
+                users={users}
+                activeFilterChips={activeFilterChips}
+                clearFilterChip={clearFilterChip}
+                clearAllFilters={clearAllFilters}
+                hasAdvFilters={hasAdvFilters}
+                tenantOptions={tenantOptions}
+                tenantFilterOrgId={tenantFilterOrgId}
+                setTenantFilterOrgId={setTenantFilterOrgId}
+                queueOptions={queueOptions}
+                setPage={setPage}
+              />
 
               {/* Bulk action bar (F13) */}
-              {selectionMode && (
-                <div className="inbox-bulk-bar">
-                  <span className="bulk-count">{bulkSelected.size} selected</span>
-                  <select value={bulkTriageState} onChange={e => setBulkTriageState(e.target.value)} className="meta-select" style={{ minWidth: 130 }}>
-                    <option value="">Triage State</option>
-                    {TRIAGE_STATES.map(state => <option key={state} value={state}>{state.replace(/_/g, ' ')}</option>)}
-                  </select>
-                  <select value={bulkAssignee} onChange={e => setBulkAssignee(e.target.value)} className="meta-select" style={{ minWidth: 140 }}>
-                    <option value="">Assign To</option>
-                    <option value="__UNASSIGNED__">Unassigned</option>
-                    {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
-                  </select>
-                  <select value={bulkPriority} onChange={e => setBulkPriority(e.target.value)} className="meta-select" style={{ minWidth: 120 }}>
-                    <option value="">Priority</option>
-                    {PRIORITIES.map(priority => <option key={priority} value={priority}>{priority}</option>)}
-                  </select>
-                  <input type="date" value={bulkSnoozeUntil} onChange={e => setBulkSnoozeUntil(e.target.value)} className="meta-date-input" />
-                  <button className="inbox-bulk-action" disabled={bulkSelected.size === 0} onClick={() => applyBulkUpdates()}>Apply</button>
-                  <button className="inbox-bulk-action" disabled={bulkSelected.size === 0} onClick={() => applyBulkUpdates({ status: 'processed', triage_state: 'closed', closed_at: new Date().toISOString() })}>Close</button>
-                  <button className="inbox-bulk-action inbox-bulk-action-ghost" onClick={toggleSelectionMode}>Done</button>
-                </div>
-              )}
+              <InboxBulkBar
+                selectionMode={selectionMode}
+                bulkSelected={bulkSelected}
+                bulkTriageState={bulkTriageState}
+                setBulkTriageState={setBulkTriageState}
+                bulkAssignee={bulkAssignee}
+                setBulkAssignee={setBulkAssignee}
+                bulkPriority={bulkPriority}
+                setBulkPriority={setBulkPriority}
+                bulkSnoozeUntil={bulkSnoozeUntil}
+                setBulkSnoozeUntil={setBulkSnoozeUntil}
+                users={users}
+                applyBulkUpdates={applyBulkUpdates}
+                toggleSelectionMode={toggleSelectionMode}
+              />
 
               {/* Sort + Count + Export */}
               {loadError && (

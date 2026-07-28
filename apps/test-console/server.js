@@ -21,6 +21,8 @@ const { URL } = require('node:url');
 
 const { runSuite } = require('./src/runner');
 const store = require('./src/store');
+const impact = require('./src/impact');
+const discover = require('./src/discover');
 
 const PORT = Number(process.env.TEST_CONSOLE_PORT || 4300);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -85,10 +87,26 @@ async function streamRun(req, res, url) {
   const appId = url.searchParams.get('app') || 'all';
   const tier = url.searchParams.get('tier') || '';
   const mode = url.searchParams.get('mode') || 'regression';
-  const selected = selectSuites(registry, appId, tier);
+
+  // Regression runs the whole cumulative corpus. Current Release runs only what
+  // the change in flight can affect — that difference is the point of the mode.
+  let selected;
+  let changeInfo = null;
+  if (mode === 'release') {
+    changeInfo = impact.summarise(registry, url.searchParams.get('base') || '');
+    const ids = new Set(changeInfo.suites.map((s) => s.id));
+    selected = selectSuites(registry, appId, tier).filter((x) => ids.has(x.suite.id));
+  } else {
+    selected = selectSuites(registry, appId, tier);
+  }
 
   if (!selected.length) {
-    return sendJson(res, 400, { error: 'No suites match that selection.' });
+    return sendJson(res, 400, {
+      error: mode === 'release'
+        ? 'Nothing in flight affects the selected application and tier.'
+        : 'No suites match that selection.',
+      changedFiles: changeInfo ? changeInfo.fileCount : undefined,
+    });
   }
 
   res.writeHead(200, {
@@ -127,7 +145,17 @@ async function streamRun(req, res, url) {
     if (typeof handle.kill === 'function') handle.kill();
   });
 
-  send({ type: 'run-start', runId, app: appId, mode, commit: run.commit, total: selected.length });
+  send({
+    type: 'run-start', runId, app: appId, mode, commit: run.commit,
+    total: selected.length,
+    changedFiles: changeInfo ? changeInfo.files : null,
+    reasons: changeInfo
+      ? selected.map((x) => {
+          const m = changeInfo.suites.find((s) => s.id === x.suite.id);
+          return { id: x.suite.id, reason: m ? m.reason : '' };
+        })
+      : null,
+  });
 
   const started = Date.now();
 
@@ -218,6 +246,15 @@ const server = http.createServer((req, res) => {
   if (p.startsWith('/api/runs/')) {
     const run = store.getRun(p.slice('/api/runs/'.length));
     return run ? sendJson(res, 200, run) : sendJson(res, 404, { error: 'No such run.' });
+  }
+  if (p === '/api/discover') {
+    const found = discover.unregistered(store.readRegistry());
+    const appFilter = url.searchParams.get('app');
+    return sendJson(res, 200, appFilter && appFilter !== 'all'
+      ? found.filter((s) => s.appId === appFilter) : found);
+  }
+  if (p === '/api/changes') {
+    return sendJson(res, 200, impact.summarise(store.readRegistry(), url.searchParams.get('base') || ''));
   }
   if (p === '/api/run/stream') return streamRun(req, res, url);
   if (p === '/api/promote' && req.method === 'POST') return promote(req, res);

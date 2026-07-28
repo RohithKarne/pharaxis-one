@@ -92,15 +92,18 @@ function renderCaseForm(initial = '/cases/42') {
 }
 
 describe('Sprint 21 split regression: CaseFormPage', () => {
-  it('honors section deep-link and shows MI tab content', () => {
+  // CaseFormPage moved its tabs to React.lazy + Suspense, so every tab
+  // assertion has to await resolution — a synchronous query runs while the
+  // fallback is still showing and finds nothing.
+  it('honors section deep-link and shows MI tab content', async () => {
     renderCaseForm('/cases/42?section=mi')
-    expect(screen.getByTestId('case-mi-tab')).toBeInTheDocument()
+    expect(await screen.findByTestId('case-mi-tab')).toBeInTheDocument()
     expect(screen.queryByTestId('case-info-tab')).not.toBeInTheDocument()
   })
 
   it('switches tabs and renders split components', async () => {
     renderCaseForm('/cases/42')
-    expect(screen.getByTestId('case-info-tab')).toBeInTheDocument()
+    expect(await screen.findByTestId('case-info-tab')).toBeInTheDocument()
 
     // Tab labels were renamed in the Sprint 21 split: "Comments / Notes" became
     // "Communications" and "Contacts" became "People". Scope to the tab bar —

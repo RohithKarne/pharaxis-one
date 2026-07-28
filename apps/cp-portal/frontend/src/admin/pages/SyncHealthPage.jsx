@@ -96,9 +96,14 @@ export default function SyncHealthPage() {
                     <td style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.sync_error || '—'}</td>
                     <td>{f.updated_at ? new Date(f.updated_at).toLocaleString() : '—'}</td>
                     <td>
-                      <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retry(f.id)} disabled={retrying === f.id}>
-                        {retrying === f.id ? 'Retrying…' : '↻ Retry'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <button className="cp-btn cp-btn-sm cp-btn-outline" onClick={() => alert(`Sync Error Payload Details:\n\nReference: ${f.reference}\nType: ${f.submission_type}\nAttempts: ${f.sync_attempts}\nError: ${f.sync_error || 'None'}`)}>
+                          🔍 Inspect
+                        </button>
+                        <button className="cp-btn cp-btn-sm cp-btn-primary" onClick={() => retry(f.id)} disabled={retrying === f.id}>
+                          {retrying === f.id ? 'Retrying…' : '↻ Retry'}
+                        </button>
+                      </div>
                       {retryResult[f.id] && (
                         <div style={{ fontSize: 12, marginTop: 4, color: retryResult[f.id].status === 'synced' ? '#16a34a' : '#dc2626' }}>
                           {retryResult[f.id].status === 'synced' ? `✓ Synced → case ${retryResult[f.id].external_ref}` : `✗ ${retryResult[f.id].error || retryResult[f.id].status || 'failed'}`}

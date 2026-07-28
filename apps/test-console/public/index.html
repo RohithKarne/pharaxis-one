@@ -433,9 +433,11 @@
   var INITIAL = { mims:'M', 'cp-portal':'CP', vault:'V', qms:'Q', 'ai-agent':'AI' };
 
   var registry = null, es = null, clock = null, started = 0;
-  var totalSuites = 0, doneSuites = 0, lastFail = null, newSuites = [];
+  var totalSuites = 0, doneSuites = 0;
   var counts = { pass:0, fail:0, skip:0 };
-  var health = {};   // appId -> last known {pass,fail,skip,trust}
+  var health = {};        // appId -> last known {pass,fail,skip,trust}
+  var failDetail = {};    // test title -> error text, attributed by the runner
+  var failRows = [];      // rows waiting for their detail to arrive
 
   function fmt(ms) {
     if (ms == null) return '';
@@ -583,12 +585,17 @@
   }
 
   function run() {
-    if (es) return;
+    // Returning silently here meant pressing Run did nothing with no
+    // explanation whenever a stream was left open. Say so instead.
+    if (es) {
+      add('msg warn', '<span>A run is already in progress. Press <b>Stop</b> first.</span>');
+      return;
+    }
     var sel = suitesFor(appId());
     if (!sel.length) { add('msg warn', '<span>Nothing to run — no suites match this selection.</span>'); return; }
 
     counts = { pass:0, fail:0, skip:0 };
-    doneSuites = 0; totalSuites = sel.length; lastFail = null; newSuites = [];
+    doneSuites = 0; totalSuites = sel.length; failDetail = {}; failRows = [];
     $('log').innerHTML = '';
     $('detail').innerHTML = '';
     $('promote').innerHTML = '';
@@ -613,6 +620,15 @@
       if (d.type === 'run-start') {
         $('m-run').textContent = d.runId.replace('run-','#');
         $('m-commit').textContent = d.commit;
+        $('m-suites').textContent = d.total;
+        totalSuites = d.total;
+        if (d.changedFiles) {
+          add('msg', '<span><b>' + d.changedFiles.length + ' changed file' +
+            (d.changedFiles.length === 1 ? '' : 's') + '</b> → ' + d.total +
+            ' impacted suite' + (d.total === 1 ? '' : 's') + '. ' +
+            esc(d.changedFiles.slice(0, 4).join(', ')) +
+            (d.changedFiles.length > 4 ? ' and ' + (d.changedFiles.length - 4) + ' more' : '') + '</span>');
+        }
       } else if (d.type === 'start') {
         add('suite', '<span>' + esc(d.app) + ' — ' + esc(d.name) + '</span>');
       } else if (d.type === 'test') {
@@ -624,7 +640,8 @@
           '<span class="ms">' + fmt(d.durationMs) + '</span>');
         if (d.status === 'fail') {
           var t = d.title;
-          row.addEventListener('click', function () { showDetail(t, lastFail); });
+          failRows.push(t);
+          row.addEventListener('click', function () { showDetail(t, failDetail[t]); });
         }
         $('t-pass').textContent = counts.pass;
         $('t-fail').textContent = counts.fail;
@@ -649,19 +666,88 @@
         stopRun(d.failed ? 'Failures' : 'All passed');
         $('status').className = 'status ' + (d.failed ? 'bad' : 'ok');
         renderLedger();
-      } else if (d.type === 'output') {
-        // Keep the most recent error text so a failure row can show something useful.
-        if (/error|expect|assert/i.test(d.line)) {
-          lastFail = (lastFail && lastFail.length < 900 ? lastFail + '\n' : '') + d.line;
-        }
+        checkPromotable(d.failed);
+      } else if (d.type === 'details') {
+        // The runner attributes each failure block to its own test, so a suite
+        // with several failures shows the right message against each row.
+        Object.keys(d.map).forEach(function (title) {
+          failDetail[title] = d.map[title];
+          var exact = failRows.indexOf(title) !== -1;
+          if (!exact) {
+            // Playwright's failure header carries file:line; the streamed row
+            // may not. Match on the trailing test name when it differs.
+            failRows.forEach(function (r) {
+              if (title.indexOf(r) !== -1 || r.indexOf(title) !== -1) failDetail[r] = d.map[title];
+            });
+          }
+        });
       }
     };
 
     es.onerror = function () {
       if (!es) return;
-      add('msg warn', '<span>Connection to the console server was lost.</span>');
-      stopRun('Disconnected');
+      // A non-SSE reply (the server refusing the run) also lands here, so check
+      // whether it declined and say why rather than blaming the connection.
+      fetch('/api/status').then(function (r) { return r.json(); }).then(function (s) {
+        add('msg warn', s.activeRun
+          ? '<span>The server is already running <b>' + esc(s.activeRun) + '</b>. Wait for it to finish.</span>'
+          : '<span>The run could not start — nothing in flight affects this selection, or the connection dropped.</span>');
+      }).catch(function () {
+        add('msg warn', '<span>Connection to the console server was lost.</span>');
+      });
+      stopRun('Stopped');
     };
+  }
+
+  /**
+   * Suites that exist on disk but are not in the corpus. Promotion adds them
+   * permanently, tagged with the release — and is blocked while the run has
+   * failures, because a corpus filled with tests that were red when they went
+   * in is a corpus nobody trusts.
+   */
+  function checkPromotable(failed) {
+    fetch('/api/discover?app=' + encodeURIComponent(appId()))
+      .then(function (r) { return r.json(); })
+      .then(function (found) {
+        if (!found.length) { $('promote').innerHTML = ''; return; }
+        var rel = (registry.releases || []).slice(-1)[0] || 'unreleased';
+        var list = found.map(function (s) {
+          return '<li><span class="mono">' + esc(s.name) + '</span> · ' + esc(s.appName) +
+                 ' · Tier ' + s.tier + '</li>';
+        }).join('');
+        $('promote').innerHTML =
+          '<div class="detail" style="border-left-color:var(--primary)">' +
+          '<h3>' + found.length + ' suite' + (found.length === 1 ? '' : 's') +
+            ' found on disk but not in the regression corpus</h3>' +
+          '<div class="sub">They will never run in a regression until promoted.</div>' +
+          '<ul style="margin:0 0 12px; padding-left:20px; color:var(--ink-2); font-size:13px">' + list + '</ul>' +
+          (failed
+            ? '<p class="note" style="margin:0 0 12px"><b>Promotion is blocked while this run has failures.</b> ' +
+              'Clear them first — a suite that was red when it entered the corpus is one nobody will trust.</p>' +
+              '<button class="btn" type="button" disabled>Promote — blocked</button>'
+            : '<button class="btn" type="button" id="p-go">Promote to corpus as ' + esc(rel) + '</button>') +
+          '</div>';
+        if (failed) return;
+        $('p-go').addEventListener('click', function () {
+          var byApp = {};
+          found.forEach(function (s) { (byApp[s.appId] = byApp[s.appId] || []).push(s); });
+          Promise.all(Object.keys(byApp).map(function (id) {
+            return fetch('/api/promote', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ appId: id, release: rel, suites: byApp[id] }),
+            }).then(function (r) { return r.json(); });
+          })).then(function (results) {
+            var n = results.reduce(function (a, r) { return a + ((r.promoted || []).length); }, 0);
+            $('promote').innerHTML =
+              '<div class="detail" style="border-left-color:var(--pass)">' +
+              '<h3>' + n + ' suite' + (n === 1 ? '' : 's') + ' promoted, tagged ' + esc(rel) + '</h3>' +
+              '<div class="sub">They are now part of the permanent corpus and run in every regression.</div>' +
+              '</div>';
+            return fetch('/api/registry').then(function (r) { return r.json(); });
+          }).then(function (reg) { registry = reg; renderCorpus(); renderFleet(); });
+        });
+      })
+      .catch(function () { /* discovery is advisory — never block a run on it */ });
   }
 
   function onScopeChange() {

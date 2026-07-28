@@ -2,12 +2,12 @@
   "_comment": [
     "The cumulative regression corpus. Every suite the team has written stays here",
     "permanently, tagged with the release that contributed it. Nothing is removed",
-    "when a release ships \u2014 that is what makes a full regression run meaningful at",
+    "when a release ships — that is what makes a full regression run meaningful at",
     "any point in the testing phase.",
     "",
     "Suites enter this file by promotion: a release run finishes clean, and its new",
     "suites are appended with the release tag. Adding a suite by hand is allowed but",
-    "should be rare \u2014 the promotion flow is the intended path."
+    "should be rare — the promotion flow is the intended path."
   ],
   "releases": [
     "Sprint 14",
@@ -199,6 +199,14 @@
           "addedIn": "Sprint 20",
           "cmd": "npm run --silent test:static",
           "parser": "exitcode"
+        },
+        {
+          "id": "ai-e2e-smoke",
+          "name": "e2e/smoke.spec.js",
+          "tier": 3,
+          "addedIn": "2026.07-R4",
+          "cmd": "npx playwright test e2e/smoke.spec.js --reporter=list",
+          "parser": "playwright"
         }
       ]
     }

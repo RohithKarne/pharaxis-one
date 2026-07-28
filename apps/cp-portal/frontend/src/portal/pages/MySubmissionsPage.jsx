@@ -76,21 +76,54 @@ export default function MySubmissionsPage() {
         <div className="pp-submissions-list">
           {subs.map(s => {
             const status = STATUS_LABELS[s.status] || { label: s.status, cls: 'pp-status-pending' }
+            const steps = [
+              { key: 'submitted', label: 'Submitted' },
+              { key: 'triage', label: 'Triage' },
+              { key: 'in_review', label: 'In Review' },
+              { key: 'completed', label: 'Resolved' },
+            ]
+            const currentStepIdx = s.status === 'completed' || s.status === 'closed' ? 3 : s.status === 'in_review' ? 2 : s.status === 'triage' ? 1 : 0
+
             return (
-              <div key={s.id} className="pp-submission-card">
+              <div key={s.id} className="pp-submission-card" style={{ padding: '20px', borderRadius: '10px', background: 'var(--pp-card-bg, #ffffff)', border: '1px solid var(--pp-border-color, #e2e8f0)', marginBottom: '16px' }}>
                 <div className="pp-submission-header">
                   <div>
-                    <div className="pp-submission-ref">CP-{String(s.id).padStart(6, '0')}</div>
-                    <div className="pp-submission-type">{TYPE_LABELS[s.submission_type] || s.submission_type}</div>
+                    <div className="pp-submission-ref" style={{ fontWeight: 700, fontSize: '1.1rem' }}>CP-{String(s.id).padStart(6, '0')}</div>
+                    <div className="pp-submission-type" style={{ color: '#64748b' }}>{TYPE_LABELS[s.submission_type] || s.submission_type}</div>
                   </div>
                   <span className={`pp-status-badge ${status.cls}`}>{status.label}</span>
                 </div>
-                <div className="pp-submission-meta">
+                <div className="pp-submission-meta" style={{ marginTop: '8px', color: '#64748b', fontSize: '0.85rem' }}>
                   <span>Submitted {formatDate(s.submitted_at)}</span>
-                  {s.external_ref && <span>· Ref: {s.external_ref}</span>}
+                  {s.external_ref && <span> · MIMS Ref: {s.external_ref}</span>}
                 </div>
+
+                {/* Milestone Progress Bar */}
+                <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
+                    {steps.map((st, idx) => {
+                      const isDone = idx <= currentStepIdx
+                      return (
+                        <div key={st.key} style={{ flex: 1, textAlign: 'center', position: 'relative' }}>
+                          <div style={{
+                            width: '24px', height: '24px', borderRadius: '50%', margin: '0 auto 6px',
+                            background: isDone ? 'var(--pp-primary, #0284c7)' : '#e2e8f0',
+                            color: isDone ? '#ffffff' : '#64748b',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold'
+                          }}>
+                            {isDone ? '✓' : idx + 1}
+                          </div>
+                          <span style={{ fontSize: '12px', color: isDone ? '#0f172a' : '#94a3b8', fontWeight: isDone ? 600 : 400 }}>
+                            {st.label}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 {s.status && !['submitted', 'closed'].includes(s.status) && (
-                  <div className={`pp-sync-tag pp-sync-${s.status}`}>
+                  <div className={`pp-sync-tag pp-sync-${s.status}`} style={{ marginTop: '12px', fontSize: '0.8rem' }}>
                     {s.status === 'synced' ? '✓ Synced to system' : s.status === 'pending_sync' ? '⏳ Sync pending' : s.status === 'failed_sync' ? '⚠️ Sync failed' : ''}
                   </div>
                 )}

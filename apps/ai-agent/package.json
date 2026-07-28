@@ -10,7 +10,9 @@
     "build": "cd frontend && npm run build",
     "security:scan": "bash ./scripts/security-scan.sh",
     "test": "npm run test:static",
-    "test:static": "node backend/tests/syntax-check.js"
+    "test:static": "node backend/tests/syntax-check.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
@@ -26,6 +28,7 @@
     "openai": "^4.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "nodemon": "^3.0.2"
   }
 }

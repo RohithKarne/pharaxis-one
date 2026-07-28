@@ -176,7 +176,25 @@ export default function AuditTrailPage() {
 
       {/* Audit Table */}
       <div className="cp-card cp-table-card" style={{ marginTop: 24, padding: 0 }}>
-        <div className="cp-card-title">Audit Records</div>
+        <div className="cp-card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px' }}>
+          <span>Audit Records ({total})</span>
+          <button
+            className="cp-btn cp-btn-sm cp-btn-outline"
+            onClick={() => {
+              const csvHeader = 'Timestamp,Admin,Action,Entity,EntityID,Details\n';
+              const csvRows = records.map(r => `"${r.created_at}","${r.admin_name || ''}","${r.action}","${r.entity}","${r.entity_id || ''}","${(r.details || '').replace(/"/g, '""')}"`).join('\n');
+              const blob = new Blob([csvHeader + csvRows], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `gxp_audit_package_${clientId}_${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            📥 Export GxP Audit Package (CSV)
+          </button>
+        </div>
 
         {error && <div className="cp-error">{error}</div>}
 

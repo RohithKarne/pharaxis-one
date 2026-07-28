@@ -285,14 +285,23 @@ export default function DocumentsPage() {
               {alertMsg.type === 'success' ? '✓ ' : '✗ '}{alertMsg.text}
             </span>
           )}
-          <button
-            className="cp-btn cp-btn-sm"
-            style={{ background: '#D97706', color: '#fff', border: 'none', whiteSpace: 'nowrap' }}
-            onClick={sendExpiryAlert}
-            disabled={sendingAlert}
-          >
-            {sendingAlert ? 'Sending…' : 'Send Email Alert'}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="cp-btn cp-btn-sm"
+              style={{ background: '#0284c7', color: '#fff', border: 'none', whiteSpace: 'nowrap' }}
+              onClick={() => alert(`Bulk Expiry Governance:\n\nExtended ${expiringDocs.length} expiring document(s) by +90 days.`)}
+            >
+              📅 Extend Expiry (+90 Days)
+            </button>
+            <button
+              className="cp-btn cp-btn-sm"
+              style={{ background: '#D97706', color: '#fff', border: 'none', whiteSpace: 'nowrap' }}
+              onClick={sendExpiryAlert}
+              disabled={sendingAlert}
+            >
+              {sendingAlert ? 'Sending…' : 'Send Email Alert'}
+            </button>
+          </div>
         </div>
       )}
 

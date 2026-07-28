@@ -140,6 +140,16 @@ function runSuite(app, suite, onEvent, handle) {
       };
     }
 
+    // Playwright prints failure detail in numbered blocks *after* the run:
+    //   1) [chromium] › e2e/x.spec.js:4:3 › suite › title ───────────
+    //      Error: …
+    // Attributing those blocks to the right test is what makes the failure
+    // panel trustworthy; scraping "whatever was printed nearby" showed the
+    // wrong message when a suite had several failures.
+    const FAIL_HEADER = /^\s*(\d+)\)\s+(?:\[[^\]]+\]\s*›\s*)?(.+?)(?:\s*─{3,}.*)?$/;
+    let detailFor = null;                 // title currently being described
+    const details = new Map();            // title -> error text
+
     let buf = '';
     let summary = null;
     const consume = (chunk) => {
@@ -157,10 +167,31 @@ function runSuite(app, suite, onEvent, handle) {
           if (evt.status === 'pass') passed++;
           else if (evt.status === 'fail') failed++;
           else skipped++;
+          detailFor = null;                       // a new result ends any block
           onEvent(Object.assign({ type: 'test' }, evt));
         } else {
           const clean = stripAnsi(line).replace(/\s+$/, '');
-          if (clean.trim()) onEvent({ type: 'output', line: clean });
+          // Blank lines sit inside failure blocks — skip them without ending
+          // the block we are currently attributing output to.
+          if (!clean.trim()) continue;
+
+          const header = FAIL_HEADER.exec(clean);
+          if (header && /›/.test(header[2])) {
+            // Normalise to the same shape parseLine produces, so the title
+            // matches the row the user clicked.
+            detailFor = header[2].replace(/^\d+\s+/, '').trim();
+            details.set(detailFor, '');
+            onEvent({ type: 'output', line: clean });
+            continue;
+          }
+
+          if (detailFor) {
+            const prev = details.get(detailFor) || '';
+            if (prev.length < 1200) details.set(detailFor, prev ? prev + '\n' + clean : clean);
+            onEvent({ type: 'detail', title: detailFor, line: clean });
+          } else {
+            onEvent({ type: 'output', line: clean });
+          }
         }
       }
     };
@@ -193,6 +224,12 @@ function runSuite(app, suite, onEvent, handle) {
         const status = code === 0 ? 'pass' : 'fail';
         if (status === 'pass') passed = 1; else failed = 1;
         onEvent({ type: 'test', status, title: suite.name + ' (exit ' + code + ')', durationMs });
+      }
+
+      // Ship the collected failure blocks so the UI can attach the right error
+      // to the right test rather than guessing from nearby output.
+      if (details.size) {
+        onEvent({ type: 'details', map: Object.fromEntries(details) });
       }
 
       // Named `result`, not `summary` — `summary` is the outer variable holding

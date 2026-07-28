@@ -1,15 +1,15 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, lazy, Suspense } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
 import useCaseForm from '../hooks/useCaseForm'
-import CaseContactsTab      from '../components/CaseContactsTab'
-import CaseOverviewTab      from '../components/CaseOverviewTab'
-import CaseCommunicationsWorkspace from '../components/CaseCommunicationsWorkspace'
-import CaseMITab            from '../components/CaseMITab'
-import CaseAETab            from '../components/CaseAETab'
-import CasePCTab            from '../components/CasePCTab'
+const CaseOverviewTab = lazy(() => import('../components/CaseOverviewTab'))
+const CaseContactsTab = lazy(() => import('../components/CaseContactsTab'))
+const CaseCommunicationsWorkspace = lazy(() => import('../components/CaseCommunicationsWorkspace'))
+const CaseMITab = lazy(() => import('../components/CaseMITab'))
+const CaseAETab = lazy(() => import('../components/CaseAETab'))
+const CasePCTab = lazy(() => import('../components/CasePCTab'))
 import CaseFormShell        from '../../../shared/components/CaseFormShell'
 import useUnsavedChangesGuard from '../../../shared/hooks/useUnsavedChangesGuard'
 
@@ -155,6 +155,7 @@ export default function CaseFormPage() {
           else if (key === 'product' || key === 'event') safeSetActiveTab('ae')
         }}
       >
+      <Suspense fallback={<div className="cf-tab-loading">Loading…</div>}>
       <div className="cf-tab-content">
         {currentTab === 'overview' && (
           <CaseOverviewTab
@@ -247,6 +248,7 @@ export default function CaseFormPage() {
           />
         )}
       </div>
+      </Suspense>
       </CaseFormShell>
 
       {/* PARK: AI Assistant panel removed from the case form — the AI suite ships as a

@@ -3511,3 +3511,15 @@
     gap: 6px;
   }
 }
+
+/* ── Lazy tab loading state ─────────────────────────────────────────── */
+.cf-tab-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--text-secondary, #6b7280);
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+}
+
