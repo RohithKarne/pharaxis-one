@@ -371,7 +371,8 @@ test.describe('Picklist → CaseForm cross-feature', () => {
     })
     expect(casesRes.ok(), `GET /api/cases failed with ${casesRes.status()}`).toBe(true)
     const casesData = await casesRes.json()
-    const firstCase = (casesData.cases || casesData.rows || [])[0]
+    const caseList = Array.isArray(casesData) ? casesData : (casesData.cases || casesData.rows || [])
+    const firstCase = caseList[0]
     const firstCaseId = firstCase?.id ?? firstCase?.case_id ?? null
     requireFixture(firstCaseId, 'at least one Open case (seed the test data)')
 
@@ -429,7 +430,12 @@ test.describe('CaseForm — tab navigation', () => {
     })
     if (casesRes.ok()) {
       const data = await casesRes.json()
-      const first = (data.cases || data.rows || [])[0] || null
+      // GET /api/cases returns a bare JSON array. Reading only data.cases /
+      // data.rows found nothing, so the suite reported "no cases in the
+      // database" while the database held eight and the endpoint returned
+      // them. Accept both shapes rather than assuming one.
+      const list = Array.isArray(data) ? data : (data.cases || data.rows || [])
+      const first = list[0] || null
       testCaseId = first?.id ?? first?.case_id ?? null
     }
   })

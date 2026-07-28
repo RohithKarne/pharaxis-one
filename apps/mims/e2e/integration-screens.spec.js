@@ -11,7 +11,13 @@ function appPath(path = '/') {
   return `${APP_BASE}${raw.startsWith('/') ? raw : `/${raw}`}`
 }
 
-test.use({ baseURL: `http://localhost:5173${APP_BASE}` })
+// The frontend origin must follow MIMS_BASE_URL. Hardcoding :5173 pinned this
+// suite to the dev stack (dev database) whatever the runner was told, so the
+// session cookie landed on the wrong origin and every page rendered the admin
+// login screen instead of the integration screens.
+const FRONTEND = process.env.MIMS_BASE_URL || 'http://localhost:5173'
+
+test.use({ baseURL: `${FRONTEND}${APP_BASE}` })
 
 async function buildSession(request, loginData, token, email, fallbackRole, moduleHints = []) {
   let meData = null
@@ -189,7 +195,7 @@ test.describe('Phase 3 — Integration Screens', () => {
     test.beforeEach(async ({ page }) => {
       requireSession(adminSession, adminAuthError, 'Integration Screens admin')
 
-      await hydrateStorage(page, adminSession, 'mims', `http://localhost:5173${appPath('/')}`)
+      await hydrateStorage(page, adminSession, 'mims', `${FRONTEND}${appPath('/')}`)
     })
 
     test('Integration Setup sidebar shows MIR Integration page', async ({ page }) => {
@@ -285,7 +291,10 @@ test.describe('Phase 3 — Integration Screens', () => {
     test.beforeEach(async ({ page }) => {
       requireSession(superSession, superAuthError, 'Integration Screens platform admin')
 
-      await hydrateStorage(page, superSession, 'mims', 'http://localhost:5173/mims-admin?standalone=1')
+      // Vite serves the app under APP_BASE, so the standalone superadmin console
+        // is /mims/mims-admin, not /mims-admin — the bare path returns Vite's
+        // "did you mean" page and the sidebar the test clicks never exists.
+        await hydrateStorage(page, superSession, 'mims', `${FRONTEND}${APP_BASE}/mims-admin?standalone=1`)
     })
 
     test('Platform Admin Integrations page loads with org table', async ({ page }) => {

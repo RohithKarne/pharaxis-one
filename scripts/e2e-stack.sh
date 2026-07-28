@@ -30,6 +30,27 @@ mkdir -p "$RUN_DIR"
 
 port_pid() { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1; }
 
+# Start a long-lived server in its OWN session, not as a child of this shell.
+#
+# nohup alone was not enough: the process stayed in the calling shell's process
+# group, so when that shell went away the whole group took a SIGTERM and the
+# stack died in the middle of a regression run — 26 failures that were really
+# one killed backend. setsid(2) via perl detaches it properly; macOS has no
+# setsid binary, but perl is always present.
+detach() {  # detach <logfile> <command...>
+  local log=$1; shift
+  DETACH_LOG="$log" perl -e '
+    use POSIX qw(setsid);
+    exit if fork;          # leave the caller
+    setsid();              # new session — no longer in the shell process group
+    exit if fork;          # never reacquire a controlling terminal
+    open(STDIN,  "<",  "/dev/null");
+    open(STDOUT, ">>", $ENV{DETACH_LOG});
+    open(STDERR, ">&", \*STDOUT);
+    exec @ARGV or die "exec failed: $!";
+  ' -- "$@"
+}
+
 wait_for() {   # wait_for <url> <seconds>
   local url=$1 secs=$2 i=0
   while [ "$i" -lt "$secs" ]; do
@@ -57,8 +78,7 @@ start() {
     PORT="$BACKEND_PORT" \
     NODE_ENV=development \
     CORS_ALLOWED_ORIGINS="http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_PORT" \
-    nohup node --env-file=.env backend/server.js > "$RUN_DIR/backend.log" 2>&1 < /dev/null & \
-    echo $! > "$RUN_DIR/backend.pid" )
+    detach "$RUN_DIR/backend.log" node --env-file=.env backend/server.js )
 
   if ! wait_for "http://localhost:$BACKEND_PORT/api/health" 45; then
     echo "Backend did not come up. Last lines of $RUN_DIR/backend.log:"; tail -15 "$RUN_DIR/backend.log"; return 1
@@ -69,8 +89,7 @@ start() {
   ( cd "$MIMS_DIR/frontend" && \
     MIMS_DEV_PORT="$FRONTEND_PORT" \
     MIMS_API_PROXY="http://127.0.0.1:$BACKEND_PORT" \
-    nohup npm run dev > "$RUN_DIR/frontend.log" 2>&1 < /dev/null & \
-    echo $! > "$RUN_DIR/frontend.pid" )
+    detach "$RUN_DIR/frontend.log" npm run dev )
 
   if ! wait_for "http://localhost:$FRONTEND_PORT/mims/" 45; then
     echo "Frontend did not come up. Last lines of $RUN_DIR/frontend.log:"; tail -15 "$RUN_DIR/frontend.log"; return 1
