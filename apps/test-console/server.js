@@ -118,8 +118,14 @@ async function streamRun(req, res, url) {
     res.write('data: ' + JSON.stringify(event) + '\n\n');
   };
 
+  // Closing the stream must actually stop the work, not just stop reporting it.
+  // The handle is populated by runSuite with a killer for the live child.
   let cancelled = false;
-  req.on('close', () => { cancelled = true; });
+  const handle = {};
+  req.on('close', () => {
+    cancelled = true;
+    if (typeof handle.kill === 'function') handle.kill();
+  });
 
   send({ type: 'run-start', runId, app: appId, mode, commit: run.commit, total: selected.length });
 
@@ -134,12 +140,12 @@ async function streamRun(req, res, url) {
     };
 
     // eslint-disable-next-line no-await-in-loop
-    const summary = await runSuite(app, suite, (evt) => {
+    const summary = await runSuite(app, suite, (evt) => {   // eslint-disable-line no-loop-func
       if (evt.type === 'test') {
         record.tests.push({ status: evt.status, title: evt.title, durationMs: evt.durationMs });
       }
       send(Object.assign({ suiteId: suite.id, suiteName: suite.name, app: app.name }, evt));
-    });
+    }, handle);
 
     record.passed = summary.passed;
     record.failed = summary.failed;

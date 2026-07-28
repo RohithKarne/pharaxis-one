@@ -84,13 +84,6 @@
       "runtimeArgs": ["start"],
       "cwd": "apps/test-console",
       "port": 4300
-    },
-    {
-      "name": "Interior Designer",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "/Users/rohithkarne/interior-designer", "run", "dev"],
-      "port": 5180,
-      "autoPort": true
     }
   ]
 }

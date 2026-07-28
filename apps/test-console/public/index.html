@@ -5,475 +5,708 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pharaxis Test Console</title>
 <style>
+  /* ─── Design tokens ──────────────────────────────────────────────────────
+     Light is the default: this is an enterprise tool people open in daylight
+     to answer "is it healthy". Dark is a preference, kept behind the toggle.
+
+     Two colour systems, deliberately separate:
+       · identity  — one hue per application, so the fleet is scannable
+       · semantic  — pass / fail / skip, never reused for identity            */
   :root {
-    --ground:#0E1416; --surface:#151E21; --surface-2:#1B262A; --rule:#223035;
-    --ink:#DCE7E9; --ink-2:#93A6AA; --ink-3:#63777C;
-    --accent:#3FB8AF; --accent-dim:#245F5C;
-    --pass:#5FA85F; --pass-bg:#16251A;
-    --fail:#D9544D; --fail-bg:#2A1616;
-    --skip:#E0A030; --skip-bg:#2A2012;   /* as loud as fail, on purpose */
-    --idle:#55686D; --idle-bg:#1A2427;
-    --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-    --r:3px;
+    --canvas:#F5F8F9;
+    --surface:#FFFFFF;
+    --surface-2:#EEF3F5;
+    --border:#DCE5E8;
+    --border-2:#C6D3D8;
+    --ink:#0E1D23;
+    --ink-2:#4E626B;
+    --ink-3:#7B8E96;
+
+    --primary:#0D6E86;
+    --primary-soft:#E2F1F5;
+
+    --pass:#1B7F45;   --pass-soft:#E3F4E9;
+    --fail:#C13B2E;   --fail-soft:#FCE9E7;
+    --skip:#B57508;   --skip-soft:#FCF1DC;   /* as prominent as fail, by design */
+    --idle:#8698A0;   --idle-soft:#EDF1F3;
+
+    --app-mims:#6A46C0;
+    --app-cp:#1C6FB4;
+    --app-vault:#0C8574;
+    --app-qms:#B06722;
+    --app-ai:#AC3A61;
+
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    --r:8px; --r-sm:5px;
+    --shadow:0 1px 2px rgba(14,29,35,.06), 0 2px 8px rgba(14,29,35,.04);
   }
-  @media (prefers-color-scheme: light) {
+  @media (prefers-color-scheme: dark) {
     :root {
-      --ground:#F2F5F5; --surface:#FFF; --surface-2:#E9EEEF; --rule:#D3DDDF;
-      --ink:#162124; --ink-2:#4C6065; --ink-3:#7A8D91;
-      --accent:#1F7C74; --accent-dim:#BEE0DC;
-      --pass:#2F7A38; --pass-bg:#E4F1E5; --fail:#B3352E; --fail-bg:#FBE7E5;
-      --skip:#9A6512; --skip-bg:#FBF0DC; --idle:#84969A; --idle-bg:#E5EBEC;
+      --canvas:#0D1518; --surface:#141F23; --surface-2:#1B282D; --border:#25353B; --border-2:#33474E;
+      --ink:#E4EDEF; --ink-2:#9DB0B7; --ink-3:#6E848C;
+      --primary:#3FB2C9; --primary-soft:#12313A;
+      --pass:#5FB97C; --pass-soft:#152A1D;
+      --fail:#E4695C; --fail-soft:#2E1815;
+      --skip:#E0A63C; --skip-soft:#2C2212;
+      --idle:#6E848C; --idle-soft:#1B282D;
+      --app-mims:#9B7BE8; --app-cp:#5FA3E0; --app-vault:#43B7A3; --app-qms:#D89A57; --app-ai:#DB7A9B;
+      --shadow:0 1px 2px rgba(0,0,0,.3);
     }
   }
-  :root[data-theme="light"] {
-    --ground:#F2F5F5; --surface:#FFF; --surface-2:#E9EEEF; --rule:#D3DDDF;
-    --ink:#162124; --ink-2:#4C6065; --ink-3:#7A8D91;
-    --accent:#1F7C74; --accent-dim:#BEE0DC;
-    --pass:#2F7A38; --pass-bg:#E4F1E5; --fail:#B3352E; --fail-bg:#FBE7E5;
-    --skip:#9A6512; --skip-bg:#FBF0DC; --idle:#84969A; --idle-bg:#E5EBEC;
-  }
   :root[data-theme="dark"] {
-    --ground:#0E1416; --surface:#151E21; --surface-2:#1B262A; --rule:#223035;
-    --ink:#DCE7E9; --ink-2:#93A6AA; --ink-3:#63777C;
-    --accent:#3FB8AF; --accent-dim:#245F5C;
-    --pass:#5FA85F; --pass-bg:#16251A; --fail:#D9544D; --fail-bg:#2A1616;
-    --skip:#E0A030; --skip-bg:#2A2012; --idle:#55686D; --idle-bg:#1A2427;
+    --canvas:#0D1518; --surface:#141F23; --surface-2:#1B282D; --border:#25353B; --border-2:#33474E;
+    --ink:#E4EDEF; --ink-2:#9DB0B7; --ink-3:#6E848C;
+    --primary:#3FB2C9; --primary-soft:#12313A;
+    --pass:#5FB97C; --pass-soft:#152A1D;
+    --fail:#E4695C; --fail-soft:#2E1815;
+    --skip:#E0A63C; --skip-soft:#2C2212;
+    --idle:#6E848C; --idle-soft:#1B282D;
+    --app-mims:#9B7BE8; --app-cp:#5FA3E0; --app-vault:#43B7A3; --app-qms:#D89A57; --app-ai:#DB7A9B;
+    --shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+  :root[data-theme="light"] {
+    --canvas:#F5F8F9; --surface:#FFFFFF; --surface-2:#EEF3F5; --border:#DCE5E8; --border-2:#C6D3D8;
+    --ink:#0E1D23; --ink-2:#4E626B; --ink-3:#7B8E96;
+    --primary:#0D6E86; --primary-soft:#E2F1F5;
+    --pass:#1B7F45; --pass-soft:#E3F4E9;
+    --fail:#C13B2E; --fail-soft:#FCE9E7;
+    --skip:#B57508; --skip-soft:#FCF1DC;
+    --idle:#8698A0; --idle-soft:#EDF1F3;
+    --app-mims:#6A46C0; --app-cp:#1C6FB4; --app-vault:#0C8574; --app-qms:#B06722; --app-ai:#AC3A61;
+    --shadow:0 1px 2px rgba(14,29,35,.06), 0 2px 8px rgba(14,29,35,.04);
   }
 
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--ground); color:var(--ink); font-family:var(--sans);
-         font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased; }
-  .wrap { max-width:1220px; margin:0 auto; padding:26px 20px 72px; }
-  .label { font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); }
-  .num { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  body {
+    margin:0; background:var(--canvas); color:var(--ink);
+    font-family:var(--sans); font-size:14.5px; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1240px; margin:0 auto; padding:0 24px 80px; }
+  .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
 
-  header.mast { display:flex; align-items:flex-end; justify-content:space-between; gap:24px;
-                flex-wrap:wrap; padding-bottom:16px; margin-bottom:18px; border-bottom:1px solid var(--rule); }
-  .mast h1 { font-family:var(--mono); font-size:19px; font-weight:600; margin:0; letter-spacing:-.01em; }
-  .mast .sub { color:var(--ink-2); font-size:13px; margin-top:4px; max-width:62ch; }
-  .livechip { display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:11px;
-              letter-spacing:.08em; text-transform:uppercase; padding:5px 10px; border-radius:var(--r);
-              background:var(--surface-2); color:var(--ink-2); border:1px solid var(--rule); }
-  .dot { width:7px; height:7px; border-radius:50%; background:var(--idle); }
-  .livechip.on { color:var(--accent); border-color:var(--accent-dim); }
-  .livechip.on .dot { background:var(--accent); animation:pulse 1.4s ease-in-out infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+  /* ─── Top bar ─────────────────────────────────────────────────────────── */
+  .topbar {
+    background:var(--surface); border-bottom:1px solid var(--border);
+    position:sticky; top:0; z-index:20;
+  }
+  .topbar .inner {
+    max-width:1240px; margin:0 auto; padding:14px 24px;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  }
+  .brand { display:flex; align-items:center; gap:11px; }
+  .brand .mark {
+    width:30px; height:30px; border-radius:7px; flex:none;
+    background:linear-gradient(140deg, var(--primary), var(--app-vault));
+    display:grid; place-items:center; color:#fff; font-weight:700; font-size:14px;
+  }
+  .brand h1 { font-size:16px; font-weight:650; margin:0; letter-spacing:-.01em; }
+  .brand p { margin:0; font-size:12.5px; color:var(--ink-3); }
 
-  .modebar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
-  .seg { display:inline-flex; border:1px solid var(--rule); border-radius:var(--r); overflow:hidden; background:var(--surface); }
-  .seg button { font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
-                font-weight:600; padding:9px 18px; border:0; border-right:1px solid var(--rule);
-                background:transparent; color:var(--ink-3); cursor:pointer; display:flex; align-items:center; gap:8px; }
-  .seg button:last-child { border-right:0; }
-  .seg button[aria-selected="true"] { background:var(--accent); color:var(--ground); }
-  .seg button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
-  .seg .tag { font-size:9px; padding:1px 5px; border-radius:8px; background:rgba(0,0,0,.22); }
-  .seg button[aria-selected="false"] .tag { background:var(--surface-2); }
+  .status {
+    display:inline-flex; align-items:center; gap:8px; padding:6px 12px;
+    border-radius:999px; font-size:12.5px; font-weight:600;
+    background:var(--idle-soft); color:var(--ink-2);
+  }
+  .status .dot { width:8px; height:8px; border-radius:50%; background:var(--idle); flex:none; }
+  .status.running { background:var(--primary-soft); color:var(--primary); }
+  .status.running .dot { background:var(--primary); animation:pulse 1.3s ease-in-out infinite; }
+  .status.ok { background:var(--pass-soft); color:var(--pass); }
+  .status.ok .dot { background:var(--pass); }
+  .status.bad { background:var(--fail-soft); color:var(--fail); }
+  .status.bad .dot { background:var(--fail); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-  .picker { display:flex; align-items:center; gap:8px; }
-  .picker label { font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); }
-  select { font-family:var(--mono); font-size:12px; font-weight:600; background:var(--surface); color:var(--ink);
-           border:1px solid var(--rule); border-radius:var(--r); padding:8px 12px; cursor:pointer; }
-  select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  /* ─── Buttons & inputs ────────────────────────────────────────────────── */
+  .btn {
+    font:inherit; font-size:13.5px; font-weight:600; padding:8px 16px;
+    border-radius:var(--r-sm); border:1px solid transparent; cursor:pointer;
+    background:var(--primary); color:#fff; display:inline-flex; align-items:center; gap:7px;
+  }
+  .btn:hover { filter:brightness(1.07); }
+  .btn:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+  .btn[disabled] { opacity:.5; cursor:default; filter:none; }
+  .btn.secondary { background:var(--surface); color:var(--ink-2); border-color:var(--border-2); }
+  .btn.secondary:hover { background:var(--surface-2); filter:none; }
+  .btn.danger { background:var(--fail); }
 
-  .btn { font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
-         padding:7px 13px; border-radius:var(--r); background:var(--accent); color:var(--ground);
-         border:1px solid var(--accent); cursor:pointer; font-weight:600; }
-  .btn:hover { filter:brightness(1.08); }
-  .btn:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
-  .btn[disabled] { opacity:.45; cursor:default; filter:none; }
-  .btn.ghost { background:transparent; color:var(--ink-2); border-color:var(--rule); }
-  .btn.stop { background:var(--fail); border-color:var(--fail); color:#fff; }
+  .field { display:flex; flex-direction:column; gap:5px; }
+  .field > span { font-size:11.5px; font-weight:600; color:var(--ink-3); letter-spacing:.02em; }
+  select {
+    font:inherit; font-size:13.5px; font-weight:500; color:var(--ink);
+    background:var(--surface); border:1px solid var(--border-2);
+    border-radius:var(--r-sm); padding:8px 12px; cursor:pointer; min-width:170px;
+  }
+  select:focus-visible { outline:2px solid var(--primary); outline-offset:1px; }
 
-  section { margin-bottom:28px; }
-  .sec-head { display:flex; align-items:baseline; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
-  .sec-head h2 { font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.12em;
-                 text-transform:uppercase; margin:0; }
-  .sec-head .hint { font-size:12px; color:var(--ink-3); }
+  .seg { display:inline-flex; background:var(--surface-2); border-radius:var(--r-sm); padding:3px; gap:3px; }
+  .seg button {
+    font:inherit; font-size:13px; font-weight:600; padding:7px 15px;
+    border:0; border-radius:4px; background:transparent; color:var(--ink-3); cursor:pointer;
+  }
+  .seg button[aria-selected="true"] { background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
+  .seg button:focus-visible { outline:2px solid var(--primary); outline-offset:-1px; }
 
-  .agg { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); border:1px solid var(--rule);
-         border-radius:var(--r); background:var(--surface); overflow:hidden; margin-bottom:16px; }
-  .agg div { padding:12px 14px; border-right:1px solid var(--rule); }
-  .agg div:last-child { border-right:0; }
-  .agg .n { font-family:var(--mono); font-size:22px; font-variant-numeric:tabular-nums; line-height:1.25; }
-  .agg .p .n { color:var(--pass); } .agg .f .n { color:var(--fail); }
-  .agg .s .n { color:var(--skip); } .agg .t .n { color:var(--skip); }
+  /* ─── Fleet cards ─────────────────────────────────────────────────────── */
+  h2.sec {
+    font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--ink-3); margin:30px 0 12px;
+  }
+  .sec-row { display:flex; align-items:center; gap:12px; margin:30px 0 12px; flex-wrap:wrap; }
+  .sec-row h2.sec { margin:0; }
+  .sec-row .hint { font-size:13px; color:var(--ink-3); }
 
-  .tablewrap { overflow-x:auto; border:1px solid var(--rule); border-radius:var(--r); background:var(--surface); }
-  table { border-collapse:collapse; width:100%; min-width:760px; }
-  th,td { text-align:left; padding:8px 13px; border-bottom:1px solid var(--rule); }
-  th { font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase;
-       color:var(--ink-3); font-weight:600; background:var(--surface-2); }
-  td { font-size:13px; color:var(--ink-2); }
+  .fleet { display:grid; grid-template-columns:repeat(auto-fit,minmax(212px,1fr)); gap:12px; }
+  .card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--r); padding:15px 16px; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; gap:11px; text-align:left;
+    font:inherit; color:inherit; cursor:pointer; width:100%;
+    transition:border-color .14s, transform .14s, box-shadow .14s;
+  }
+  .card:hover { transform:translateY(-1px); border-color:var(--hue); }
+  .card:focus-visible { outline:2px solid var(--hue); outline-offset:2px; }
+  .card[aria-pressed="true"] { border-color:var(--hue); box-shadow:0 0 0 1px var(--hue), var(--shadow); }
+
+  .card .head { display:flex; align-items:center; gap:9px; }
+  .card .chip {
+    width:26px; height:26px; border-radius:6px; flex:none;
+    background:var(--hue); color:#fff; display:grid; place-items:center;
+    font-size:11px; font-weight:700;
+  }
+  .card .name { font-weight:650; font-size:14.5px; }
+  .card .metrics { display:flex; align-items:baseline; gap:5px; }
+  .card .big { font-size:26px; font-weight:680; line-height:1; letter-spacing:-.02em; }
+  .card .of { font-size:13px; color:var(--ink-3); }
+  .card .foot { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+
+  .track { height:5px; border-radius:3px; background:var(--surface-2); display:flex; overflow:hidden; }
+  .track i { display:block; height:100%; }
+  .track .p{background:var(--pass)} .track .f{background:var(--fail)}
+  .track .s{background:var(--skip)} .track .n{background:var(--idle)}
+
+  .tag {
+    font-size:11.5px; font-weight:650; padding:2px 8px; border-radius:999px;
+    display:inline-block; white-space:nowrap;
+  }
+  .tag.pass{background:var(--pass-soft);color:var(--pass)}
+  .tag.fail{background:var(--fail-soft);color:var(--fail)}
+  .tag.skip{background:var(--skip-soft);color:var(--skip)}
+  .tag.idle{background:var(--idle-soft);color:var(--ink-3)}
+  .tag.brand{background:var(--primary-soft);color:var(--primary)}
+
+  /* ─── Control bar ─────────────────────────────────────────────────────── */
+  .controls {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+    padding:14px 16px; box-shadow:var(--shadow);
+    display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;
+  }
+  .controls .grow { margin-left:auto; display:flex; gap:9px; align-items:flex-end; }
+
+  /* ─── Run panel ───────────────────────────────────────────────────────── */
+  .panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+           box-shadow:var(--shadow); overflow:hidden; }
+  .panel-head {
+    padding:13px 16px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+  }
+  .meta { display:flex; gap:5px; align-items:baseline; font-size:13px; }
+  .meta b { font-weight:600; color:var(--ink-3); font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; }
+  .meta span { font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--ink); font-size:13px; }
+
+  .progress { height:3px; background:var(--surface-2); }
+  .progress i { display:block; height:100%; background:var(--primary); width:0; transition:width .25s ease; }
+
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--border); }
+  .stats > div { padding:14px 16px; border-right:1px solid var(--border); }
+  .stats > div:last-child { border-right:0; }
+  .stats .k { font-size:11.5px; font-weight:600; color:var(--ink-3); letter-spacing:.03em; text-transform:uppercase; }
+  .stats .v { font-size:25px; font-weight:680; line-height:1.25; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .stats .pass .v{color:var(--pass)} .stats .fail .v{color:var(--fail)} .stats .skip .v{color:var(--skip)}
+
+  .log { max-height:430px; overflow:auto; }
+  .item {
+    display:grid; grid-template-columns:64px 1fr auto; gap:12px; align-items:center;
+    padding:7px 16px; border-bottom:1px solid var(--border); font-size:13px;
+  }
+  .item:last-child { border-bottom:0; }
+  .item .badge {
+    font-size:10.5px; font-weight:700; letter-spacing:.05em; text-align:center;
+    padding:2px 0; border-radius:4px;
+  }
+  .item.pass .badge{background:var(--pass-soft);color:var(--pass)}
+  .item.fail .badge{background:var(--fail-soft);color:var(--fail)}
+  .item.skip .badge{background:var(--skip-soft);color:var(--skip)}
+  .item .title { font-family:var(--mono); font-size:12.5px; color:var(--ink-2);
+                 overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item.fail .title { color:var(--ink); }
+  .item .ms { font-family:var(--mono); font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+  .item.fail { background:var(--fail-soft); cursor:pointer; }
+  .item.skip { background:var(--skip-soft); }
+  .item.suite {
+    grid-template-columns:1fr; background:var(--surface-2);
+    font-weight:650; font-size:13px; color:var(--ink); font-family:var(--sans);
+  }
+  .item.msg { grid-template-columns:1fr; color:var(--ink-3); font-size:12.5px; }
+  .item.msg.warn { background:var(--skip-soft); color:var(--skip); font-weight:550; }
+  .item.msg.good { background:var(--pass-soft); color:var(--pass); font-weight:550; }
+
+  .blank { padding:52px 20px; text-align:center; }
+  .blank .icon { font-size:26px; opacity:.4; }
+  .blank h3 { margin:10px 0 4px; font-size:15px; font-weight:650; }
+  .blank p { margin:0 auto; max-width:44ch; color:var(--ink-3); font-size:13.5px; }
+
+  /* ─── Tables ──────────────────────────────────────────────────────────── */
+  .tablecard { background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+               box-shadow:var(--shadow); overflow:hidden; }
+  .scroll { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; min-width:680px; }
+  th,td { text-align:left; padding:10px 16px; border-bottom:1px solid var(--border); }
+  th { font-size:11.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+       color:var(--ink-3); background:var(--surface-2); }
+  td { font-size:13.5px; color:var(--ink-2); }
   tr:last-child td { border-bottom:0; }
-  td.mono,th.r,td.r { font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:12px; }
+  td.m { font-family:var(--mono); font-size:12.5px; font-variant-numeric:tabular-nums; }
   th.r,td.r { text-align:right; }
-  td.suite { font-family:var(--mono); font-size:12px; color:var(--ink); }
-  tr.appgroup td { background:var(--surface-2); font-family:var(--mono); font-size:11px; letter-spacing:.1em;
-                   text-transform:uppercase; color:var(--ink); font-weight:600; }
-  td .p{color:var(--pass)} td .f{color:var(--fail)} td .s{color:var(--skip)} td .z{color:var(--ink-3)}
+  tr.group td { background:var(--surface-2); font-weight:650; color:var(--ink); font-size:13px; }
+  tr.group .swatch { display:inline-block; width:9px; height:9px; border-radius:2px;
+                     background:var(--hue); margin-right:8px; vertical-align:middle; }
+  tbody tr:hover td { background:var(--surface-2); }
+  tbody tr.group:hover td { background:var(--surface-2); }
 
-  .pill { display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.08em;
-          padding:2px 7px; border-radius:10px; font-weight:600; }
-  .pill.green{background:var(--pass-bg);color:var(--pass)}
-  .pill.red{background:var(--fail-bg);color:var(--fail)}
-  .pill.amber{background:var(--skip-bg);color:var(--skip)}
-  .pill.grey{background:var(--idle-bg);color:var(--ink-3)}
+  /* ─── Failure detail ──────────────────────────────────────────────────── */
+  .detail {
+    margin-top:12px; background:var(--surface); border:1px solid var(--border);
+    border-left:3px solid var(--fail); border-radius:var(--r);
+    padding:16px 18px; box-shadow:var(--shadow);
+  }
+  .detail h3 { margin:0 0 3px; font-size:14.5px; font-weight:650; }
+  .detail .sub { font-family:var(--mono); font-size:12px; color:var(--ink-3); margin-bottom:11px; }
+  .detail pre {
+    margin:0 0 12px; background:var(--fail-soft); color:var(--fail);
+    border-radius:var(--r-sm); padding:11px 13px; overflow-x:auto;
+    font-family:var(--mono); font-size:12.5px; white-space:pre-wrap; line-height:1.5;
+  }
+  .detail .actions { display:flex; gap:8px; flex-wrap:wrap; }
 
-  .console { background:var(--surface); border:1px solid var(--rule); border-radius:var(--r); overflow:hidden; }
-  .console-head { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
-                  padding:10px 14px; border-bottom:1px solid var(--rule); background:var(--surface-2); }
-  .runmeta { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-  .runmeta .k { font-family:var(--mono); font-size:11px; color:var(--ink-3); }
-  .runmeta .v { font-family:var(--mono); font-size:12px; color:var(--ink); font-variant-numeric:tabular-nums; }
-  .progress { height:2px; background:var(--surface-2); }
-  .progress i { display:block; height:100%; background:var(--accent); width:0; transition:width .2s linear; }
-
-  .stream { max-height:400px; overflow-y:auto; overflow-x:auto; font-family:var(--mono); font-size:12px; }
-  .row { display:grid; grid-template-columns:64px 1fr auto; gap:12px; align-items:baseline;
-         padding:5px 14px; border-bottom:1px solid var(--rule); white-space:nowrap; }
-  .row:last-child { border-bottom:0; }
-  .row .st { font-size:10px; letter-spacing:.1em; font-weight:600; }
-  .row .nm { color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; }
-  .row .ms { color:var(--ink-3); font-variant-numeric:tabular-nums; font-size:11px; }
-  .row.pass .st{color:var(--pass)} .row.fail .st{color:var(--fail)} .row.skip .st{color:var(--skip)}
-  .row.fail{background:var(--fail-bg)} .row.fail .nm{color:var(--ink)}
-  .row.skip{background:var(--skip-bg)}
-  .row.suite { background:var(--surface-2); color:var(--ink); font-weight:600; grid-template-columns:1fr; }
-  .row.note { color:var(--ink-3); grid-template-columns:1fr; font-size:11px; }
-  .row.note.warn { color:var(--skip); background:var(--skip-bg); }
-  .empty { padding:34px 14px; text-align:center; color:var(--ink-3); font-family:var(--mono); font-size:12px; }
-
-  .tally { display:flex; border-top:1px solid var(--rule); background:var(--surface-2); }
-  .tally div { flex:1; padding:9px 14px; border-right:1px solid var(--rule); }
-  .tally div:last-child { border-right:0; }
-  .tally .n { font-family:var(--mono); font-size:18px; font-variant-numeric:tabular-nums; line-height:1.2; }
-  .tally .p .n{color:var(--pass)} .tally .f .n{color:var(--fail)} .tally .s .n{color:var(--skip)}
-
-  .note { color:var(--ink-3); font-size:12px; margin-top:10px; max-width:80ch; }
-  footer { border-top:1px solid var(--rule); margin-top:34px; padding-top:14px; color:var(--ink-3); font-size:12px; }
-  [hidden] { display:none !important; }
-  @media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important} }
-  @media (max-width:620px){ .row{grid-template-columns:56px 1fr} .row .ms{display:none} }
+  .note { color:var(--ink-3); font-size:13px; margin-top:11px; max-width:82ch; }
+  .banner {
+    display:flex; gap:11px; align-items:flex-start;
+    background:var(--skip-soft); border:1px solid var(--skip);
+    border-radius:var(--r); padding:12px 15px; margin-top:12px; font-size:13.5px; color:var(--ink-2);
+  }
+  .banner b { color:var(--ink); }
+  footer { margin-top:40px; padding-top:18px; border-top:1px solid var(--border);
+           color:var(--ink-3); font-size:12.5px; }
+  [hidden]{display:none!important}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  @media (max-width:680px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .item{grid-template-columns:58px 1fr}
+    .item .ms{display:none}
+  }
 </style>
 </head>
 <body>
+
+<div class="topbar">
+  <div class="inner">
+    <div class="brand">
+      <div class="mark">P</div>
+      <div>
+        <h1>Test Console</h1>
+        <p>Pharaxis One · internal engineering tool</p>
+      </div>
+    </div>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:12px">
+      <span class="status" id="status"><span class="dot"></span> Idle</span>
+      <button class="btn secondary" id="btn-theme" type="button">Theme</button>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
 
-  <header class="mast">
-    <div>
-      <h1>Pharaxis Test Console</h1>
-      <p class="sub">Live test status across all five applications. Internal engineering tool.</p>
-    </div>
-    <span class="livechip" id="livechip"><span class="dot"></span> Idle</span>
-  </header>
+  <div class="sec-row">
+    <h2 class="sec">Applications</h2>
+    <span class="hint" id="fleethint">Select one to scope the run</span>
+  </div>
+  <div class="fleet" id="fleet"></div>
 
-  <div class="modebar">
-    <div class="seg" role="tablist">
-      <button type="button" role="tab" id="tab-reg" aria-selected="true">Regression <span class="tag">FULL</span></button>
-      <button type="button" role="tab" id="tab-rel" aria-selected="false">Current Release <span class="tag">LIVE</span></button>
+  <div class="sec-row"><h2 class="sec">Run</h2></div>
+  <div class="controls">
+    <div class="field">
+      <span>Mode</span>
+      <div class="seg" role="tablist">
+        <button type="button" role="tab" id="tab-reg" aria-selected="true">Regression</button>
+        <button type="button" role="tab" id="tab-rel" aria-selected="false">Current release</button>
+      </div>
     </div>
-    <div class="picker">
-      <label for="appsel">Application</label>
+    <label class="field">
+      <span>Application</span>
       <select id="appsel"><option value="all">All applications</option></select>
-    </div>
-    <div class="picker">
-      <label for="tiersel">Tier</label>
+    </label>
+    <label class="field">
+      <span>Tier</span>
       <select id="tiersel">
         <option value="">All tiers</option>
-        <option value="1">1 — unit</option>
-        <option value="3">3 — browser</option>
+        <option value="1">Tier 1 — unit &amp; syntax</option>
+        <option value="3">Tier 3 — browser</option>
       </select>
-    </div>
-    <div style="margin-left:auto; display:flex; gap:8px">
-      <button class="btn ghost" id="btn-theme" type="button">Theme</button>
-      <button class="btn" id="btn-run" type="button">Run</button>
-      <button class="btn stop" id="btn-stop" type="button" hidden>Stop</button>
+    </label>
+    <div class="grow">
+      <button class="btn" id="btn-run" type="button">Run tests</button>
+      <button class="btn danger" id="btn-stop" type="button" hidden>Stop</button>
     </div>
   </div>
 
-  <div class="agg" id="agg"></div>
+  <div class="banner" id="tierbanner" hidden>
+    <span>⚠</span>
+    <div><b>Tier 3 runs need the application's own servers running.</b>
+      Browser tests drive the real UI, so start the app first — otherwise every test fails for the wrong reason.</div>
+  </div>
 
-  <section>
-    <div class="sec-head">
-      <h2 id="streamhead">Live run</h2>
-      <span class="hint" id="streamhint">Press Run to execute the selected suites.</span>
-    </div>
-    <div class="console">
-      <div class="console-head">
-        <div class="runmeta">
-          <span><span class="k">run</span> <span class="v" id="m-run">—</span></span>
-          <span><span class="k">commit</span> <span class="v" id="m-commit">—</span></span>
-          <span><span class="k">suites</span> <span class="v num" id="m-suites">—</span></span>
-          <span><span class="k">elapsed</span> <span class="v num" id="m-time">0.0s</span></span>
-        </div>
-      </div>
-      <div class="progress"><i id="bar"></i></div>
-      <div class="stream" id="stream"><p class="empty">No run yet.</p></div>
-      <div class="tally">
-        <div class="p"><div class="label">Passed</div><div class="n num" id="t-pass">0</div></div>
-        <div class="f"><div class="label">Failed</div><div class="n num" id="t-fail">0</div></div>
-        <div class="s"><div class="label">Skipped</div><div class="n num" id="t-skip">0</div></div>
-        <div><div class="label">Trust</div><div class="n num" id="t-trust">—</div></div>
-      </div>
-    </div>
-  </section>
+  <div class="sec-row"><h2 class="sec" id="runhead">Regression run</h2><span class="hint" id="runhint"></span></div>
 
-  <section id="sec-corpus">
-    <div class="sec-head">
-      <h2>Regression corpus</h2>
-      <span class="hint" id="corpushint"></span>
+  <div class="panel">
+    <div class="panel-head">
+      <div class="meta"><b>Run</b><span id="m-run">—</span></div>
+      <div class="meta"><b>Commit</b><span id="m-commit">—</span></div>
+      <div class="meta"><b>Suites</b><span id="m-suites">—</span></div>
+      <div class="meta"><b>Elapsed</b><span id="m-time">0.0s</span></div>
     </div>
-    <div class="tablewrap">
+    <div class="progress"><i id="bar"></i></div>
+    <div class="stats">
+      <div class="pass"><div class="k">Passed</div><div class="v" id="t-pass">0</div></div>
+      <div class="fail"><div class="k">Failed</div><div class="v" id="t-fail">0</div></div>
+      <div class="skip"><div class="k">Skipped</div><div class="v" id="t-skip">0</div></div>
+      <div><div class="k">Trust</div><div class="v" id="t-trust">—</div></div>
+    </div>
+    <div class="log" id="log">
+      <div class="blank">
+        <div class="icon">▶</div>
+        <h3>No run yet</h3>
+        <p>Choose an application and tier above, then press <b>Run tests</b>. Results stream in as each test finishes.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="detail"></div>
+  <div id="promote"></div>
+
+  <div class="sec-row" id="corpus-head">
+    <h2 class="sec">Regression corpus</h2>
+    <span class="hint" id="corpushint"></span>
+  </div>
+  <div class="tablecard" id="corpus-card">
+    <div class="scroll">
       <table>
-        <thead><tr><th>Suite</th><th>Tier</th><th>Added</th><th>Command</th></tr></thead>
+        <thead><tr><th>Suite</th><th>Tier</th><th>Added in release</th><th>Command</th></tr></thead>
         <tbody id="corpus"></tbody>
       </table>
     </div>
-    <p class="note">Every suite stays here permanently, tagged with the release that contributed it. Nothing is removed when a release ships — that is what makes a full regression run meaningful at any point in the testing phase.</p>
-  </section>
+  </div>
+  <p class="note" id="corpusnote">Every suite stays here permanently, tagged with the release that added it. Nothing is removed when a release ships — that is what makes a full regression meaningful at any point in the testing phase.</p>
 
-  <section>
-    <div class="sec-head"><h2>Run ledger</h2><span class="hint">Retained with commit reference</span></div>
-    <div class="tablewrap">
+  <div class="sec-row"><h2 class="sec">Run history</h2><span class="hint">Each run retained with the commit it ran against</span></div>
+  <div class="tablecard">
+    <div class="scroll">
       <table>
-        <thead><tr><th>Run</th><th>App</th><th>Commit</th><th class="r">Pass</th><th class="r">Fail</th><th class="r">Skip</th><th>Trust</th><th class="r">Duration</th><th>When</th></tr></thead>
+        <thead><tr><th>Run</th><th>Application</th><th>Commit</th><th class="r">Passed</th><th class="r">Failed</th><th class="r">Skipped</th><th>Trust</th><th class="r">Duration</th><th>When</th></tr></thead>
         <tbody id="ledger"></tbody>
       </table>
     </div>
-  </section>
+  </div>
 
-  <footer>Pharaxis Test Console · zero-dependency internal tool · results stored under <code>apps/test-console/data/runs</code></footer>
+  <footer>Zero-dependency internal tool · results stored under <span class="mono">apps/test-console/data/runs</span></footer>
 </div>
 
 <script>
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
+
+  var HUE = { mims:'var(--app-mims)', 'cp-portal':'var(--app-cp)', vault:'var(--app-vault)',
+              qms:'var(--app-qms)', 'ai-agent':'var(--app-ai)' };
+  var INITIAL = { mims:'M', 'cp-portal':'CP', vault:'V', qms:'Q', 'ai-agent':'AI' };
+
   var registry = null, es = null, clock = null, started = 0;
-  var totalSuites = 0, doneSuites = 0;
-  var counts = { pass: 0, fail: 0, skip: 0 };
+  var totalSuites = 0, doneSuites = 0, lastFail = null, newSuites = [];
+  var counts = { pass:0, fail:0, skip:0 };
+  var health = {};   // appId -> last known {pass,fail,skip,trust}
 
   function fmt(ms) {
-    if (ms == null) return "";
-    return ms < 1000 ? ms + "ms" : (ms / 1000).toFixed(1) + "s";
-  }
-  function trustPill(t) {
-    if (t === 0 || t == null) return '<span class="pill grey">none</span>';
-    if (t < 60) return '<span class="pill red">' + t + '%</span>';
-    if (t < 90) return '<span class="pill amber">' + t + '%</span>';
-    return '<span class="pill green">' + t + '%</span>';
+    if (ms == null) return '';
+    return ms < 1000 ? ms + 'ms' : (ms/1000).toFixed(1) + 's';
   }
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
     });
   }
+  function trustTag(t) {
+    if (t == null) return '<span class="tag idle">not run</span>';
+    if (t === 0)   return '<span class="tag idle">no coverage</span>';
+    if (t < 60)    return '<span class="tag fail">' + t + '% trust</span>';
+    if (t < 90)    return '<span class="tag skip">' + t + '% trust</span>';
+    return '<span class="tag pass">' + t + '% trust</span>';
+  }
+  function appId()  { return $('appsel').value; }
+  function tier()   { return $('tiersel').value; }
+  function isReg()  { return $('tab-reg').getAttribute('aria-selected') === 'true'; }
 
-  function appId() { return $("appsel").value; }
-  function tier() { return $("tiersel").value; }
-
-  function selectedSuites() {
+  function suitesFor(id) {
     if (!registry) return [];
-    var apps = appId() === "all" ? registry.apps : registry.apps.filter(function (a) { return a.id === appId(); });
+    var apps = id === 'all' ? registry.apps : registry.apps.filter(function (a) { return a.id === id; });
     var out = [];
     apps.forEach(function (a) {
       (a.suites || []).forEach(function (s) {
         if (tier() && String(s.tier) !== tier()) return;
-        out.push({ app: a, suite: s });
+        out.push({ app:a, suite:s });
       });
     });
     return out;
   }
 
-  function renderAgg() {
-    var sel = selectedSuites();
-    var byTier = {};
-    sel.forEach(function (x) { byTier[x.suite.tier] = (byTier[x.suite.tier] || 0) + 1; });
-    $("agg").innerHTML =
-      '<div><div class="label">Applications</div><div class="n">' +
-        (appId() === "all" ? (registry ? registry.apps.length : 0) : 1) + '</div></div>' +
-      '<div><div class="label">Suites selected</div><div class="n">' + sel.length + '</div></div>' +
-      '<div><div class="label">Tier 1</div><div class="n">' + (byTier[1] || 0) + '</div></div>' +
-      '<div><div class="label">Tier 3</div><div class="n">' + (byTier[3] || 0) + '</div></div>' +
-      '<div><div class="label">Releases</div><div class="n">' + (registry ? registry.releases.length : 0) + '</div></div>';
+  function setStatus(cls, text) {
+    $('status').className = 'status' + (cls ? ' ' + cls : '');
+    $('status').innerHTML = '<span class="dot"></span> ' + text;
+  }
+
+  function renderFleet() {
+    if (!registry) return;
+    $('fleet').innerHTML = registry.apps.map(function (a) {
+      var h = health[a.id];
+      var suites = (a.suites || []).length;
+      var total = h ? h.pass + h.fail + h.skip : 0;
+      var track = total
+        ? '<i class="p" style="width:' + (h.pass/total*100) + '%"></i>' +
+          '<i class="f" style="width:' + (h.fail/total*100) + '%"></i>' +
+          '<i class="s" style="width:' + (h.skip/total*100) + '%"></i>'
+        : '<i class="n" style="width:100%"></i>';
+      return '<button class="card" style="--hue:' + HUE[a.id] + '" data-app="' + a.id + '"' +
+        ' aria-pressed="' + (appId() === a.id) + '">' +
+        '<span class="head"><span class="chip">' + INITIAL[a.id] + '</span>' +
+          '<span class="name">' + esc(a.name) + '</span></span>' +
+        '<span class="metrics">' +
+          (h ? '<span class="big">' + h.pass + '</span><span class="of">/ ' + total +
+               (total === 1 ? ' test' : ' tests') + '</span>'
+             : '<span class="of">' + suites + (suites === 1 ? ' suite' : ' suites') +
+               ', not yet run</span>') +
+        '</span>' +
+        '<span class="track">' + track + '</span>' +
+        '<span class="foot">' + trustTag(h ? h.trust : null) +
+          (h && h.fail ? '<span class="tag fail">' + h.fail + ' failed</span>' :
+           h && h.skip ? '<span class="tag skip">' + h.skip + ' skipped</span>' : '') +
+        '</span></button>';
+    }).join('');
+    Array.prototype.forEach.call(document.querySelectorAll('.card'), function (el) {
+      el.addEventListener('click', function () {
+        var id = el.getAttribute('data-app');
+        $('appsel').value = (appId() === id) ? 'all' : id;
+        onScopeChange();
+      });
+    });
   }
 
   function renderCorpus() {
-    var sel = selectedSuites(), out = "", last = null;
+    var sel = suitesFor(appId()), out = '', last = null;
     sel.forEach(function (x) {
       if (x.app.name !== last) {
         last = x.app.name;
-        out += '<tr class="appgroup"><td colspan="4">' + esc(x.app.name) + '</td></tr>';
+        out += '<tr class="group" style="--hue:' + HUE[x.app.id] + '"><td colspan="4">' +
+               '<span class="swatch"></span>' + esc(x.app.name) + '</td></tr>';
       }
-      out += '<tr><td class="suite">' + esc(x.suite.name) + '</td>' +
-             '<td class="mono">' + x.suite.tier + '</td>' +
-             '<td class="mono" style="color:var(--ink-3)">' + esc(x.suite.addedIn || "—") + '</td>' +
-             '<td class="mono" style="color:var(--ink-3)">' + esc(x.suite.cmd) + '</td></tr>';
+      out += '<tr><td class="m" style="color:var(--ink)">' + esc(x.suite.name) + '</td>' +
+        '<td><span class="tag idle">Tier ' + x.suite.tier + '</span></td>' +
+        '<td class="m">' + esc(x.suite.addedIn || '—') + '</td>' +
+        '<td class="m" style="color:var(--ink-3)">' + esc(x.suite.cmd) + '</td></tr>';
     });
-    $("corpus").innerHTML = out || '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--ink-3)">No suites match this selection.</td></tr>';
-    $("corpushint").textContent = sel.length + " suites";
+    $('corpus').innerHTML = out ||
+      '<tr><td colspan="4" style="padding:26px;text-align:center;color:var(--ink-3)">No suites match this selection.</td></tr>';
+    $('corpushint').textContent = sel.length + ' suites' +
+      (appId() === 'all' ? ' across ' + registry.apps.length + ' applications' : '');
   }
 
   function renderLedger() {
-    fetch("/api/runs").then(function (r) { return r.json(); }).then(function (runs) {
-      $("ledger").innerHTML = runs.length ? runs.map(function (r) {
-        return '<tr><td class="mono">' + esc(r.id.replace("run-", "#")) + '</td>' +
-          '<td>' + esc(r.app) + '</td><td class="mono">' + esc(r.commit) + '</td>' +
-          '<td class="r"><span class="' + (r.passed ? 'p' : 'z') + '">' + r.passed + '</span></td>' +
-          '<td class="r"><span class="' + (r.failed ? 'f' : 'z') + '">' + r.failed + '</span></td>' +
-          '<td class="r"><span class="' + (r.skipped ? 's' : 'z') + '">' + r.skipped + '</span></td>' +
-          '<td>' + trustPill(r.trust) + '</td>' +
-          '<td class="r mono">' + fmt(r.durationMs) + '</td>' +
-          '<td class="mono" style="color:var(--ink-3)">' + esc(String(r.startedAt).replace("T", " ").slice(0, 19)) + '</td></tr>';
-      }).join("") : '<tr><td colspan="9" style="padding:24px;text-align:center;color:var(--ink-3)">No runs recorded yet.</td></tr>';
+    fetch('/api/runs').then(function (r) { return r.json(); }).then(function (runs) {
+      $('ledger').innerHTML = runs.length ? runs.map(function (r) {
+        return '<tr><td class="m">' + esc(r.id.replace('run-','#')) + '</td>' +
+          '<td>' + esc(r.app) + '</td><td class="m">' + esc(r.commit) + '</td>' +
+          '<td class="r m" style="color:var(--pass)">' + r.passed + '</td>' +
+          '<td class="r m" style="color:' + (r.failed ? 'var(--fail)' : 'var(--ink-3)') + '">' + r.failed + '</td>' +
+          '<td class="r m" style="color:' + (r.skipped ? 'var(--skip)' : 'var(--ink-3)') + '">' + r.skipped + '</td>' +
+          '<td>' + trustTag(r.trust) + '</td><td class="r m">' + fmt(r.durationMs) + '</td>' +
+          '<td class="m" style="color:var(--ink-3)">' + esc(String(r.startedAt).replace('T',' ').slice(0,16)) + '</td></tr>';
+      }).join('') :
+        '<tr><td colspan="9" style="padding:26px;text-align:center;color:var(--ink-3)">No runs recorded yet.</td></tr>';
     });
   }
 
-  function addRow(cls, cols) {
-    var stream = $("stream");
-    if (stream.querySelector(".empty")) stream.innerHTML = "";
-    var el = document.createElement("div");
-    el.className = "row " + cls;
-    el.innerHTML = cols;
-    stream.appendChild(el);
-    stream.scrollTop = stream.scrollHeight;
+  function add(cls, html) {
+    var log = $('log');
+    if (log.querySelector('.blank')) log.innerHTML = '';
+    var el = document.createElement('div');
+    el.className = 'item ' + cls;
+    el.innerHTML = html;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
   }
 
-  function stopRun() {
+  function showDetail(title, message) {
+    $('detail').innerHTML =
+      '<div class="detail"><h3>' + esc(title) + '</h3>' +
+      '<div class="sub">' + esc($('m-commit').textContent) + ' · ' + esc($('m-run').textContent) + '</div>' +
+      '<pre>' + esc(message || 'No error output was captured for this test.') + '</pre>' +
+      '<div class="actions">' +
+        '<button class="btn secondary" type="button" id="d-copy">Copy for Kiranmai</button>' +
+        '<button class="btn secondary" type="button" id="d-close">Dismiss</button>' +
+      '</div></div>';
+    $('d-close').addEventListener('click', function () { $('detail').innerHTML = ''; });
+    $('d-copy').addEventListener('click', function (e) {
+      navigator.clipboard.writeText(title + '\n\n' + (message || '')).then(function () {
+        e.target.textContent = 'Copied';
+      });
+    });
+    $('detail').scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
+
+  function stopRun(text) {
     if (es) { es.close(); es = null; }
     if (clock) { clearInterval(clock); clock = null; }
-    $("btn-run").disabled = false;
-    $("btn-stop").hidden = true;
-    $("livechip").className = "livechip";
-    $("livechip").innerHTML = '<span class="dot"></span> Idle';
+    $('btn-run').disabled = false;
+    $('btn-stop').hidden = true;
+    setStatus('', text || 'Idle');
   }
 
   function run() {
     if (es) return;
-    counts = { pass: 0, fail: 0, skip: 0 };
-    doneSuites = 0;
-    totalSuites = selectedSuites().length;
-    if (!totalSuites) { alert("No suites match this selection."); return; }
+    var sel = suitesFor(appId());
+    if (!sel.length) { add('msg warn', '<span>Nothing to run — no suites match this selection.</span>'); return; }
 
-    $("stream").innerHTML = "";
-    $("bar").style.width = "0%";
-    $("t-pass").textContent = "0"; $("t-fail").textContent = "0";
-    $("t-skip").textContent = "0"; $("t-trust").textContent = "—";
-    $("m-suites").textContent = totalSuites;
-    $("btn-run").disabled = true;
-    $("btn-stop").hidden = false;
-    $("livechip").className = "livechip on";
-    $("livechip").innerHTML = '<span class="dot"></span> Running';
+    counts = { pass:0, fail:0, skip:0 };
+    doneSuites = 0; totalSuites = sel.length; lastFail = null; newSuites = [];
+    $('log').innerHTML = '';
+    $('detail').innerHTML = '';
+    $('promote').innerHTML = '';
+    $('bar').style.width = '0%';
+    $('t-pass').textContent = '0'; $('t-fail').textContent = '0';
+    $('t-skip').textContent = '0'; $('t-trust').textContent = '—';
+    $('m-suites').textContent = totalSuites;
+    $('btn-run').disabled = true; $('btn-stop').hidden = false;
+    setStatus('running', 'Running');
 
     started = Date.now();
     clock = setInterval(function () {
-      $("m-time").textContent = ((Date.now() - started) / 1000).toFixed(1) + "s";
+      $('m-time').textContent = ((Date.now() - started)/1000).toFixed(1) + 's';
     }, 100);
 
-    var mode = $("tab-reg").getAttribute("aria-selected") === "true" ? "regression" : "release";
-    var url = "/api/run/stream?app=" + encodeURIComponent(appId()) +
-              "&tier=" + encodeURIComponent(tier()) + "&mode=" + mode;
-
-    es = new EventSource(url);
+    es = new EventSource('/api/run/stream?app=' + encodeURIComponent(appId()) +
+      '&tier=' + encodeURIComponent(tier()) + '&mode=' + (isReg() ? 'regression' : 'release'));
 
     es.onmessage = function (e) {
-      var d;
-      try { d = JSON.parse(e.data); } catch (_) { return; }
+      var d; try { d = JSON.parse(e.data); } catch (_) { return; }
 
-      if (d.type === "run-start") {
-        $("m-run").textContent = d.runId.replace("run-", "#");
-        $("m-commit").textContent = d.commit;
-        return;
-      }
-      if (d.type === "start") {
-        addRow("suite", '<span>' + esc(d.app) + ' — ' + esc(d.name) + '</span>');
-        return;
-      }
-      if (d.type === "test") {
-        counts[d.status === "pass" ? "pass" : d.status === "fail" ? "fail" : "skip"]++;
-        addRow(d.status,
-          '<span class="st">' + d.status.toUpperCase() + '</span>' +
-          '<span class="nm">' + esc(d.title) + '</span>' +
+      if (d.type === 'run-start') {
+        $('m-run').textContent = d.runId.replace('run-','#');
+        $('m-commit').textContent = d.commit;
+      } else if (d.type === 'start') {
+        add('suite', '<span>' + esc(d.app) + ' — ' + esc(d.name) + '</span>');
+      } else if (d.type === 'test') {
+        var k = d.status === 'pass' ? 'pass' : d.status === 'fail' ? 'fail' : 'skip';
+        counts[k]++;
+        var row = add(d.status,
+          '<span class="badge">' + d.status.toUpperCase() + '</span>' +
+          '<span class="title">' + esc(d.title) + '</span>' +
           '<span class="ms">' + fmt(d.durationMs) + '</span>');
-        $("t-pass").textContent = counts.pass;
-        $("t-fail").textContent = counts.fail;
-        $("t-skip").textContent = counts.skip;
-        return;
-      }
-      if (d.type === "reconcile") {
-        addRow("note warn", '<span>counts corrected from the runner summary — ' +
-          d.streamed + ' streamed, ' + d.reported + ' actually reported</span>');
-        return;
-      }
-      if (d.type === "done") {
+        if (d.status === 'fail') {
+          var t = d.title;
+          row.addEventListener('click', function () { showDetail(t, lastFail); });
+        }
+        $('t-pass').textContent = counts.pass;
+        $('t-fail').textContent = counts.fail;
+        $('t-skip').textContent = counts.skip;
+      } else if (d.type === 'reconcile') {
+        add('msg warn', '<span><b>Counts corrected.</b> The runner streamed ' + d.streamed +
+          ' results but reported ' + d.reported + '. Showing the reported figure — the streamed one would understate the suite.</span>');
+      } else if (d.type === 'done') {
         doneSuites++;
-        $("bar").style.width = (doneSuites / totalSuites * 100) + "%";
-        // The suite summary is authoritative; re-sync the tally to it.
-        return;
-      }
-      if (d.type === "run-done") {
-        $("t-pass").textContent = d.passed;
-        $("t-fail").textContent = d.failed;
-        $("t-skip").textContent = d.skipped;
-        $("t-trust").textContent = d.trust + "%";
-        $("bar").style.width = "100%";
-        addRow("note", '<span>run complete — ' + d.passed + ' passed, ' + d.failed +
-          ' failed, ' + d.skipped + ' skipped, trust ' + d.trust + '% in ' + fmt(d.durationMs) + '</span>');
-        stopRun();
-        $("livechip").innerHTML = '<span class="dot"></span> Complete';
+        $('bar').style.width = (doneSuites/totalSuites*100) + '%';
+      } else if (d.type === 'run-done') {
+        $('t-pass').textContent = d.passed; $('t-fail').textContent = d.failed;
+        $('t-skip').textContent = d.skipped; $('t-trust').textContent = d.trust + '%';
+        $('bar').style.width = '100%';
+        add(d.failed ? 'msg warn' : 'msg good',
+          '<span>Run complete — ' + d.passed + ' passed, ' + d.failed + ' failed, ' +
+          d.skipped + ' skipped · trust ' + d.trust + '% · ' + fmt(d.durationMs) + '</span>');
+        if (appId() !== 'all') {
+          health[appId()] = { pass:d.passed, fail:d.failed, skip:d.skipped, trust:d.trust };
+          renderFleet();
+        }
+        stopRun(d.failed ? 'Failures' : 'All passed');
+        $('status').className = 'status ' + (d.failed ? 'bad' : 'ok');
         renderLedger();
-        return;
-      }
-      if (d.type === "output" && /error|failed|✕|✘/i.test(d.line)) {
-        addRow("note", '<span>' + esc(d.line) + '</span>');
+      } else if (d.type === 'output') {
+        // Keep the most recent error text so a failure row can show something useful.
+        if (/error|expect|assert/i.test(d.line)) {
+          lastFail = (lastFail && lastFail.length < 900 ? lastFail + '\n' : '') + d.line;
+        }
       }
     };
 
     es.onerror = function () {
       if (!es) return;
-      addRow("note warn", '<span>stream closed — check the console server is running</span>');
-      stopRun();
+      add('msg warn', '<span>Connection to the console server was lost.</span>');
+      stopRun('Disconnected');
     };
   }
 
-  function setMode(reg) {
-    $("tab-reg").setAttribute("aria-selected", String(reg));
-    $("tab-rel").setAttribute("aria-selected", String(!reg));
-    $("sec-corpus").hidden = !reg;
-    $("streamhead").textContent = reg ? "Regression run" : "Current release run";
-    $("streamhint").textContent = reg
-      ? "The full cumulative suite for the current selection."
-      : "Scope the run with the Application and Tier selectors, then press Run.";
+  function onScopeChange() {
+    renderFleet(); renderCorpus();
+    $('tierbanner').hidden = tier() !== '3';
   }
 
-  $("tab-reg").addEventListener("click", function () { setMode(true); });
-  $("tab-rel").addEventListener("click", function () { setMode(false); });
-  $("btn-run").addEventListener("click", run);
-  $("btn-stop").addEventListener("click", function () {
-    stopRun();
-    addRow("note warn", '<span>stopped by user — the runner finishes its current suite</span>');
+  function setMode(reg) {
+    $('tab-reg').setAttribute('aria-selected', String(reg));
+    $('tab-rel').setAttribute('aria-selected', String(!reg));
+    $('runhead').textContent = reg ? 'Regression run' : 'Current release run';
+    $('runhint').textContent = reg
+      ? 'The full cumulative suite for the current selection.'
+      : 'Same selection, recorded against this release so its new suites can be promoted afterwards.';
+    ['corpus-head','corpus-card','corpusnote'].forEach(function (id) { $(id).hidden = !reg; });
+  }
+
+  $('tab-reg').addEventListener('click', function () { setMode(true); });
+  $('tab-rel').addEventListener('click', function () { setMode(false); });
+  $('btn-run').addEventListener('click', run);
+  $('btn-stop').addEventListener('click', function () {
+    stopRun('Stopped');
+    add('msg warn', '<span>Stopped — the running test process was terminated.</span>');
   });
-  $("appsel").addEventListener("change", function () { renderAgg(); renderCorpus(); });
-  $("tiersel").addEventListener("change", function () { renderAgg(); renderCorpus(); });
-  $("btn-theme").addEventListener("click", function () {
+  $('appsel').addEventListener('change', onScopeChange);
+  $('tiersel').addEventListener('change', onScopeChange);
+  $('btn-theme').addEventListener('click', function () {
     var r = document.documentElement;
-    var dark = r.getAttribute("data-theme") === "dark" ||
-      (!r.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
-    r.setAttribute("data-theme", dark ? "light" : "dark");
+    var dark = r.getAttribute('data-theme') === 'dark' ||
+      (!r.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+    r.setAttribute('data-theme', dark ? 'light' : 'dark');
   });
 
-  fetch("/api/registry").then(function (r) { return r.json(); }).then(function (reg) {
+  fetch('/api/registry').then(function (r) { return r.json(); }).then(function (reg) {
     registry = reg;
     reg.apps.forEach(function (a) {
-      var o = document.createElement("option");
+      var o = document.createElement('option');
       o.value = a.id; o.textContent = a.name;
-      $("appsel").appendChild(o);
+      $('appsel').appendChild(o);
     });
-    renderAgg(); renderCorpus(); renderLedger(); setMode(true);
+    setMode(true); onScopeChange(); renderLedger();
   }).catch(function () {
-    $("stream").innerHTML = '<p class="empty">Could not reach the console API. Is the server running?</p>';
+    $('log').innerHTML = '<div class="blank"><div class="icon">⚠</div>' +
+      '<h3>Cannot reach the console server</h3>' +
+      '<p>Start it with <b>npm start</b> in apps/test-console, then reload.</p></div>';
   });
 })();
 </script>

@@ -106,7 +106,7 @@ function parseLine(raw) {
  * Resolves with the summary. Never rejects on a failing suite — a suite that
  * fails is a result, not an error.
  */
-function runSuite(app, suite, onEvent) {
+function runSuite(app, suite, onEvent, handle) {
   return new Promise((resolve) => {
     const cwd = path.resolve(REPO_ROOT, suite.cwd || app.cwd);
     const env = Object.assign({}, process.env, app.env || {}, suite.env || {}, {
@@ -120,12 +120,25 @@ function runSuite(app, suite, onEvent) {
 
     onEvent({ type: 'start', suite: suite.id, name: suite.name, cmd: suite.cmd, cwd });
 
+    // detached so the whole process group can be signalled — `shell: true`
+    // means the child is a shell, and killing only the shell leaves the real
+    // test runner orphaned and still writing to the databases.
     const child = spawn(suite.cmd, {
       cwd,
       env,
       shell: true,
+      detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+
+    // Let the caller stop a run that is genuinely in flight, rather than only
+    // declining to start the next suite.
+    if (handle) {
+      handle.kill = () => {
+        try { process.kill(-child.pid, 'SIGTERM'); }
+        catch { try { child.kill('SIGTERM'); } catch { /* already gone */ } }
+      };
+    }
 
     let buf = '';
     let summary = null;
