@@ -446,47 +446,40 @@ test.describe('CaseForm — tab navigation', () => {
     await hydrateAuthStorage(page, session)
     await page.goto(appPath(`/cases/${testCaseId}`))
     await page.waitForLoadState('networkidle')
-    // The tab bar failing to render is a real regression, so let this throw.
-    await page.waitForSelector('.cf-tabbar-btn', { timeout: 15000 })
+    // The case form is a 4-step wizard now, not a tab strip. Its container
+    // failing to render is a real regression, so let this throw.
+    await page.waitForSelector('.cf-wizard-container', { timeout: 15000 })
   })
 
-  const CASE_TABS = ['info', 'mi', 'ae', 'pc', 'dppr', 'contacts', 'correspondence', 'comments']
+  // Each of these is a ?section= value the product still routes on — see the
+  // sectionMap in CaseFormPage, which maps a section to a wizard step. The old
+  // version of this block clicked .cf-tabbar-btn, which no longer exists since
+  // the tab strip was replaced by the wizard, so every one of these failed on a
+  // control that is gone rather than on anything being wrong with the case.
+  const CASE_SECTIONS = ['info', 'mi', 'ae', 'pc', 'dppr', 'contacts', 'correspondence', 'comments']
 
-  for (const tab of CASE_TABS) {
-    test(`CaseForm tab "${tab}" renders without error`, async ({ page }) => {
-      const tabBtn = page.locator('.cf-tabbar-btn').filter({ hasText: new RegExp(tab, 'i') }).first()
-
-      // Some tabs legitimately do not apply to every case type (an MI case has
-      // no AE tab). That is a real skip with a stated reason — not a silent
-      // early return that reports success.
-      if (!(await tabBtn.isVisible().catch(() => false))) {
-        test.skip(true, `Tab "${tab}" is not present for this case type`)
-        return
-      }
-
-      await tabBtn.click()
+  for (const section of CASE_SECTIONS) {
+    test(`CaseForm section "${section}" renders without error`, async ({ page }) => {
+      await page.goto(appPath(`/cases/${testCaseId}?section=${section}`))
       await page.waitForLoadState('networkidle')
-      await expectPageHealthy(page, { label: `CaseForm tab "${tab}"` })
+      await expectPageHealthy(page, { label: `CaseForm section "${section}"` })
 
-      // The tab pane must actually render — previously this whole block was
-      // skipped when the pane was missing, so a broken tab passed.
-      const content = page.locator('.cf-tab-content')
-      await expect(content, `CaseForm tab "${tab}" pane did not render`)
+      // The wizard must render, and the step body must contain something —
+      // an empty body is how a broken section used to pass unnoticed.
+      const wizard = page.locator('.cf-wizard-container')
+      await expect(wizard, `CaseForm section "${section}" did not render the wizard`)
         .toBeVisible({ timeout: 10000 })
 
-      const text = (await content.innerText()).trim()
-      const inputCount = await page
-        .locator('.cf-tab-content input, .cf-tab-content select, .cf-tab-content textarea')
-        .count()
+      const body = page.locator('.cf-wizard-step-body')
+      const text = (await body.innerText().catch(() => '')).trim()
+      const controls = await page.locator('.cf-wizard-step-body input, .cf-wizard-step-body select, .cf-wizard-step-body textarea').count()
       expect(
-        text.length > 0 || inputCount > 0,
-        `CaseForm tab "${tab}" rendered an empty pane — no text and no form controls`
+        text.length > 0 || controls > 0,
+        `CaseForm section "${section}" rendered an empty step body — no text and no form controls`
       ).toBe(true)
     })
   }
 })
-
-// ─── 4. Content page — section switching ─────────────────────────────────────
 
 test.describe('Content page — section tabs', () => {
   let session = null

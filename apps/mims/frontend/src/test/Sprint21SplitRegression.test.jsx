@@ -101,22 +101,21 @@ describe('Sprint 21 split regression: CaseFormPage', () => {
     expect(screen.queryByTestId('case-info-tab')).not.toBeInTheDocument()
   })
 
-  it('switches tabs and renders split components', async () => {
+  it('switches wizard steps and renders split components', async () => {
     renderCaseForm('/cases/42')
     expect(await screen.findByTestId('case-info-tab')).toBeInTheDocument()
 
-    // Tab labels were renamed in the Sprint 21 split: "Comments / Notes" became
-    // "Communications" and "Contacts" became "People". Scope to the tab bar —
-    // the panels also render "Open Communications Workspace" buttons.
-    const tab = (name) =>
-      screen.getAllByRole('button', { name })
-        .find(el => el.classList.contains('cf-tabbar-btn'))
+    // The tab strip is gone — the case form is a 4-step wizard now, and the
+    // steps are what navigate between the split components. This used to click
+    // .cf-tabbar-btn, a control that no longer exists.
+    const step = (n) =>
+      screen.getAllByRole('button', { name: new RegExp(`Step ${n}:`) })[0]
 
-    fireEvent.click(tab('Communications'))
-    expect(await screen.findByTestId('case-communications-workspace')).toBeInTheDocument()
-
-    fireEvent.click(tab('People'))
+    fireEvent.click(step(2))
     expect(await screen.findByTestId('case-contacts-tab')).toBeInTheDocument()
+
+    fireEvent.click(step(4))
+    expect(await screen.findByTestId('case-communications-workspace')).toBeInTheDocument()
   })
 })
 
