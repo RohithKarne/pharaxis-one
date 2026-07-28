@@ -10,6 +10,8 @@
  *   GET  /api/registry            apps and their suites
  *   GET  /api/runs                run history, newest first
  *   GET  /api/runs/:id            one run, with per-test detail
+ *   GET  /api/runs/:id/report.md   sendable report — Markdown, for pasting
+ *   GET  /api/runs/:id/report.html sendable report — HTML, for attaching
  *   GET  /api/run/stream?…        execute and stream results over SSE
  *   POST /api/promote             add release suites to the regression corpus
  */
@@ -23,6 +25,7 @@ const { runSuite } = require('./src/runner');
 const store = require('./src/store');
 const impact = require('./src/impact');
 const discover = require('./src/discover');
+const report = require('./src/report');
 
 const PORT = Number(process.env.TEST_CONSOLE_PORT || 4300);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -151,6 +154,7 @@ async function streamRun(req, res, url) {
     commit: store.currentCommit(),
     startedAt: new Date().toISOString(),
     suites: [],
+    blocked: [],
     passed: 0, failed: 0, skipped: 0,
     durationMs: 0, trust: 0,
   };
@@ -200,24 +204,44 @@ async function streamRun(req, res, url) {
       // eslint-disable-next-line no-await-in-loop
       const up = await appIsUp(app);
       if (!up) {
-        send({
-          type: 'blocked', suiteId: suite.id, suiteName: suite.name, app: app.name,
-          reason: app.name + ' is not running at ' + app.e2e.health +
-            ' — start it first. The console never starts or stops your servers.',
-        });
+        const reason = app.name + ' is not running at ' + app.e2e.health +
+          ' — start it first. The console never starts or stops your servers.';
+        // Recorded on the run, not only streamed to the screen: a suite that
+        // never executed is the single most misread line in any report, and it
+        // has to reach the reader labelled as environment rather than defect.
+        run.blocked.push({ suiteId: suite.id, suiteName: suite.name, app: app.name, reason });
+        send({ type: 'blocked', suiteId: suite.id, suiteName: suite.name, app: app.name, reason });
         continue;
       }
     }
 
     const record = {
-      id: suite.id, name: suite.name, app: app.name, tier: suite.tier,
-      addedIn: suite.addedIn, tests: [], passed: 0, failed: 0, skipped: 0, durationMs: 0,
+      id: suite.id, name: suite.name, app: app.name, appId: app.id, tier: suite.tier,
+      addedIn: suite.addedIn,
+      // Kept so a report can print the command that reproduces this suite alone.
+      cmd: suite.cmd,
+      cwd: suite.cwd || app.cwd,
+      env: Object.assign({}, app.env || {}, suite.env || {}),
+      tests: [], details: {}, passed: 0, failed: 0, skipped: 0, durationMs: 0,
     };
 
     // eslint-disable-next-line no-await-in-loop
     const summary = await runSuite(app, suite, (evt) => {   // eslint-disable-line no-loop-func
       if (evt.type === 'test') {
-        record.tests.push({ status: evt.status, title: evt.title, durationMs: evt.durationMs });
+        // A retry replaces the attempt before it rather than joining it, so the
+        // stored record holds one entry per test with its final verdict.
+        if (evt.supersedes) {
+          const i = record.tests.findIndex((t) => (t.base || t.title) === evt.base);
+          if (i !== -1) record.tests.splice(i, 1);
+        }
+        record.tests.push({
+          status: evt.status, title: evt.title, base: evt.base,
+          retry: evt.retry || 0, durationMs: evt.durationMs,
+        });
+      } else if (evt.type === 'details') {
+        // Error text per failing test, so the report carries the reason and not
+        // just the name of what went red.
+        Object.assign(record.details, evt.map);
       }
       send(Object.assign({ suiteId: suite.id, suiteName: suite.name, app: app.name }, evt));
     }, handle);
@@ -291,7 +315,28 @@ const server = http.createServer((req, res) => {
   if (p === '/api/registry') return sendJson(res, 200, store.readRegistry());
   if (p === '/api/runs') return sendJson(res, 200, store.listRuns());
   if (p.startsWith('/api/runs/')) {
-    const run = store.getRun(p.slice('/api/runs/'.length));
+    const rest = p.slice('/api/runs/'.length);
+
+    // /api/runs/:id/report.md|html — a sendable rendering of a stored run.
+    // Generated on demand from the record rather than written at run time, so
+    // an old run can be exported long after it finished.
+    const asReport = /^([^/]+)\/report\.(md|html)$/.exec(rest);
+    if (asReport) {
+      const run = store.getRun(asReport[1]);
+      if (!run) return sendJson(res, 404, { error: 'No such run.' });
+      const md = asReport[2] === 'md';
+      const body = md ? report.markdown(run) : report.html(run);
+      const disp = url.searchParams.get('download') === '1' ? 'attachment' : 'inline';
+      res.writeHead(200, {
+        'Content-Type': (md ? 'text/markdown' : 'text/html') + '; charset=utf-8',
+        'Content-Length': Buffer.byteLength(body),
+        'Content-Disposition': disp + '; filename="' + report.filename(run, asReport[2]) + '"',
+        'Cache-Control': 'no-store',
+      });
+      return res.end(body);
+    }
+
+    const run = store.getRun(rest);
     return run ? sendJson(res, 200, run) : sendJson(res, 404, { error: 'No such run.' });
   }
   if (p === '/api/discover') {

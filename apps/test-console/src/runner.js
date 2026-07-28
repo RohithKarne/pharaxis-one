@@ -158,6 +158,19 @@ function runSuite(app, suite, onEvent, handle) {
     let detailFor = null;                 // title currently being described
     const details = new Map();            // title -> error text
 
+    // Playwright prints every retry as its own result line:
+    //   ✘  1 … › Templates section renders (177ms)
+    //   ✘  2 … › Templates section renders (retry #1) (161ms)
+    // Counting both doubles the failure count and halves trust, and a report
+    // built on that sends someone chasing twice the work that exists. A retry
+    // supersedes the attempt before it — only the final attempt is the verdict.
+    //
+    // Only a line that actually carries the retry suffix supersedes anything.
+    // Deduplicating on title alone would silently merge the same test run under
+    // two Playwright projects, which are genuinely two results.
+    const RETRY_SUFFIX = /\s*\(retry\s*#(\d+)\)\s*$/i;
+    const attempts = new Map();           // base title -> status of last attempt
+
     let buf = '';
     let summary = null;
     const consume = (chunk) => {
@@ -172,11 +185,25 @@ function runSuite(app, suite, onEvent, handle) {
 
         const evt = parseLine(line);
         if (evt) {
+          const rm = RETRY_SUFFIX.exec(evt.title);
+          const base = rm ? evt.title.replace(RETRY_SUFFIX, '').trim() : evt.title;
+
+          let supersedes = false;
+          if (rm && attempts.has(base)) {
+            const prev = attempts.get(base);
+            if (prev === 'pass') passed--;
+            else if (prev === 'fail') failed--;
+            else skipped--;
+            supersedes = true;
+          }
+          attempts.set(base, evt.status);
+
           if (evt.status === 'pass') passed++;
           else if (evt.status === 'fail') failed++;
           else skipped++;
+
           detailFor = null;                       // a new result ends any block
-          onEvent(Object.assign({ type: 'test' }, evt));
+          onEvent(Object.assign({ type: 'test', base, retry: rm ? Number(rm[1]) : 0, supersedes }, evt));
         } else {
           const clean = stripAnsi(line).replace(/\s+$/, '');
           // Blank lines sit inside failure blocks — skip them without ending

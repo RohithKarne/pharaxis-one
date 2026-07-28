@@ -208,6 +208,9 @@
   .meta b { font-weight:600; color:var(--ink-3); font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; }
   .meta span { font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--ink); font-size:13px; }
 
+  .exports { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .exports .btn { padding:6px 12px; font-size:12.5px; text-decoration:none; line-height:1.5; }
+
   .progress { height:3px; background:var(--surface-2); }
   .progress i { display:block; height:100%; background:var(--primary); width:0; transition:width .25s ease; }
 
@@ -368,6 +371,11 @@
       <div class="meta"><b>Commit</b><span id="m-commit">—</span></div>
       <div class="meta"><b>Suites</b><span id="m-suites">—</span></div>
       <div class="meta"><b>Elapsed</b><span id="m-time">0.0s</span></div>
+      <div class="exports" id="exports" hidden>
+        <button class="btn secondary" type="button" id="x-copy">Copy report</button>
+        <button class="btn secondary" type="button" id="x-download">Download</button>
+        <a class="btn secondary" id="x-open" target="_blank" rel="noopener">Open</a>
+      </div>
     </div>
     <div class="progress"><i id="bar"></i></div>
     <div class="stats">
@@ -406,7 +414,7 @@
   <div class="tablecard">
     <div class="scroll">
       <table>
-        <thead><tr><th>Run</th><th>Application</th><th>Commit</th><th class="r">Passed</th><th class="r">Failed</th><th class="r">Skipped</th><th>Trust</th><th class="r">Duration</th><th>When</th></tr></thead>
+        <thead><tr><th>Run</th><th>Application</th><th>Commit</th><th class="r">Passed</th><th class="r">Failed</th><th class="r">Skipped</th><th>Trust</th><th class="r">Duration</th><th>When</th><th>Report</th></tr></thead>
         <tbody id="ledger"></tbody>
       </table>
     </div>
@@ -430,6 +438,8 @@
   var health = {};        // appId -> last known {pass,fail,skip,trust}
   var failDetail = {};    // test title -> error text, attributed by the runner
   var failRows = [];      // rows waiting for their detail to arrive
+  var rowsByBase = {};    // base test title -> {el, k}, so a retry reuses its row
+  var lastRunId = null;   // the run the export buttons point at
 
   function fmt(ms) {
     if (ms == null) return '';
@@ -533,9 +543,13 @@
           '<td class="r m" style="color:' + (r.failed ? 'var(--fail)' : 'var(--ink-3)') + '">' + r.failed + '</td>' +
           '<td class="r m" style="color:' + (r.skipped ? 'var(--skip)' : 'var(--ink-3)') + '">' + r.skipped + '</td>' +
           '<td>' + trustTag(r.trust) + '</td><td class="r m">' + fmt(r.durationMs) + '</td>' +
-          '<td class="m" style="color:var(--ink-3)">' + esc(String(r.startedAt).replace('T',' ').slice(0,16)) + '</td></tr>';
+          '<td class="m" style="color:var(--ink-3)">' + esc(String(r.startedAt).replace('T',' ').slice(0,16)) + '</td>' +
+          // Reports are generated on demand from the stored record, so any past
+          // run stays exportable — not just the one currently on screen.
+          '<td class="m"><a href="/api/runs/' + encodeURIComponent(r.id) + '/report.html" target="_blank" rel="noopener">Open</a>' +
+          ' · <a href="/api/runs/' + encodeURIComponent(r.id) + '/report.md?download=1">MD</a></td></tr>';
       }).join('') :
-        '<tr><td colspan="9" style="padding:26px;text-align:center;color:var(--ink-3)">No runs recorded yet.</td></tr>';
+        '<tr><td colspan="10" style="padding:26px;text-align:center;color:var(--ink-3)">No runs recorded yet.</td></tr>';
     });
   }
 
@@ -556,14 +570,12 @@
       '<div class="sub">' + esc($('m-commit').textContent) + ' · ' + esc($('m-run').textContent) + '</div>' +
       '<pre>' + esc(message || 'No error output was captured for this test.') + '</pre>' +
       '<div class="actions">' +
-        '<button class="btn secondary" type="button" id="d-copy">Copy for Kiranmai</button>' +
+        '<button class="btn secondary" type="button" id="d-copy">Copy this failure</button>' +
         '<button class="btn secondary" type="button" id="d-close">Dismiss</button>' +
       '</div></div>';
     $('d-close').addEventListener('click', function () { $('detail').innerHTML = ''; });
     $('d-copy').addEventListener('click', function (e) {
-      navigator.clipboard.writeText(title + '\n\n' + (message || '')).then(function () {
-        e.target.textContent = 'Copied';
-      });
+      copyText(title + '\n\n' + (message || ''), e.target);
     });
     $('detail').scrollIntoView({ behavior:'smooth', block:'nearest' });
   }
@@ -588,9 +600,13 @@
 
     counts = { pass:0, fail:0, skip:0 };
     doneSuites = 0; totalSuites = sel.length; failDetail = {}; failRows = [];
+    rowsByBase = {}; lastRunId = null;
     $('log').innerHTML = '';
     $('detail').innerHTML = '';
     $('promote').innerHTML = '';
+    // Hidden while a run is in flight: a report of a half-finished run is worse
+    // than no report, because it reads as complete.
+    $('exports').hidden = true;
     $('bar').style.width = '0%';
     $('t-pass').textContent = '0'; $('t-fail').textContent = '0';
     $('t-skip').textContent = '0'; $('t-trust').textContent = '—';
@@ -625,15 +641,38 @@
         add('suite', '<span>' + esc(d.app) + ' — ' + esc(d.name) + '</span>');
       } else if (d.type === 'test') {
         var k = d.status === 'pass' ? 'pass' : d.status === 'fail' ? 'fail' : 'skip';
+        var base = d.base || d.title;
+        var prior = rowsByBase[base];
+
+        // A retry is the same test attempted again, not a second test. It takes
+        // over the row it retried and the count that row contributed, so the
+        // totals show tests rather than attempts.
+        var row;
+        if (d.supersedes && prior) {
+          counts[prior.k]--;
+          row = prior.el;
+          row.className = 'item ' + d.status;
+          row.innerHTML =
+            '<span class="badge">' + d.status.toUpperCase() + '</span>' +
+            '<span class="title">' + esc(base) +
+              ' <span style="color:var(--ink-3)">· retry #' + esc(d.retry) + '</span></span>' +
+            '<span class="ms">' + fmt(d.durationMs) + '</span>';
+        } else {
+          row = add(d.status,
+            '<span class="badge">' + d.status.toUpperCase() + '</span>' +
+            '<span class="title">' + esc(d.title) + '</span>' +
+            '<span class="ms">' + fmt(d.durationMs) + '</span>');
+        }
         counts[k]++;
-        var row = add(d.status,
-          '<span class="badge">' + d.status.toUpperCase() + '</span>' +
-          '<span class="title">' + esc(d.title) + '</span>' +
-          '<span class="ms">' + fmt(d.durationMs) + '</span>');
+        rowsByBase[base] = { el: row, k: k };
+
+        // Replacing innerHTML above also drops the previous click handler, so
+        // the detail binding is re-applied here rather than only on first sight.
+        row.onclick = null;
         if (d.status === 'fail') {
-          var t = d.title;
-          failRows.push(t);
-          row.addEventListener('click', function () { showDetail(t, failDetail[t]); });
+          var t = base;
+          if (failRows.indexOf(t) === -1) failRows.push(t);
+          row.onclick = function () { showDetail(t, failDetail[t]); };
         }
         $('t-pass').textContent = counts.pass;
         $('t-fail').textContent = counts.fail;
@@ -647,6 +686,10 @@
         doneSuites++;
         $('bar').style.width = (doneSuites/totalSuites*100) + '%';
       } else if (d.type === 'run-done') {
+        lastRunId = d.runId;
+        $('x-open').href = '/api/runs/' + encodeURIComponent(d.runId) + '/report.html';
+        $('x-copy').textContent = 'Copy report';
+        $('exports').hidden = false;
         $('t-pass').textContent = d.passed; $('t-fail').textContent = d.failed;
         $('t-skip').textContent = d.skipped; $('t-trust').textContent = d.trust + '%';
         $('bar').style.width = '100%';
@@ -758,6 +801,74 @@
       : 'Same selection, recorded against this release so its new suites can be promoted afterwards.';
     ['corpus-head','corpus-card','corpusnote'].forEach(function (id) { $(id).hidden = !reg; });
   }
+
+  /**
+   * Export the finished run.
+   *
+   * Markdown to the clipboard is the fast path — it pastes into Slack, Teams or
+   * an email and stays readable. The HTML file is for attaching or printing.
+   * Both are the same content, generated server-side from the stored record, so
+   * what gets sent is exactly what was saved rather than a scrape of the page.
+   */
+  /**
+   * navigator.clipboard is refused often enough — a non-secure origin, a denied
+   * permission, an embedded browser — that a copy button relying on it alone is
+   * a button that sometimes just does not work. Fall back to the old execCommand
+   * path, and if that is gone too, show the text selected so it can be copied by
+   * hand. Never leave the person with nothing.
+   */
+  function copyText(text, btn) {
+    var done = function () { btn.textContent = 'Copied ✓'; };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { legacy(); });
+    } else { legacy(); }
+
+    function legacy() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:0;left:-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) return done();
+      manual(text);
+      btn.textContent = 'Copy report';
+    }
+  }
+
+  /** Last resort: hand the text over, selected and ready for Cmd+C. */
+  function manual(text) {
+    $('detail').innerHTML =
+      '<div class="detail"><h3>Copy the report</h3>' +
+      '<div class="sub">This browser blocked the clipboard. The report is selected below — ' +
+      'press Cmd+C, or use <b>Download</b> to save it as a file instead.</div>' +
+      '<textarea id="d-text" readonly style="width:100%;height:220px;font-family:var(--mono);' +
+      'font-size:12px;padding:10px;border-radius:8px;border:1px solid var(--border);' +
+      'background:var(--surface-2);color:var(--ink)"></textarea>' +
+      '<div class="actions"><button class="btn secondary" type="button" id="d-close">Dismiss</button></div></div>';
+    $('d-text').value = text;
+    $('d-text').select();
+    $('d-close').addEventListener('click', function () { $('detail').innerHTML = ''; });
+    $('detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  $('x-copy').addEventListener('click', function () {
+    if (!lastRunId) return;
+    var btn = $('x-copy');
+    btn.textContent = 'Copying…';
+    fetch('/api/runs/' + encodeURIComponent(lastRunId) + '/report.md')
+      .then(function (r) { return r.text(); })
+      .then(function (md) { copyText(md, btn); })
+      .catch(function () { btn.textContent = 'Could not build report'; });
+  });
+
+  $('x-download').addEventListener('click', function () {
+    if (!lastRunId) return;
+    window.location.href = '/api/runs/' + encodeURIComponent(lastRunId) + '/report.html?download=1';
+  });
 
   $('tab-reg').addEventListener('click', function () { setMode(true); });
   $('tab-rel').addEventListener('click', function () { setMode(false); });
