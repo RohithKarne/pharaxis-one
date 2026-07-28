@@ -7,6 +7,7 @@
 > Revision update: 2026-04-14 (Team restructured by Rohith. Reduced to 5-person team. Full names added. Roles updated.)
 > Revision update: 2026-07-10 (Team expanded to 11 by Rohith. Bala Kaviti promoted to COO. New C-suite: Chief Compliance Officer, Chief AI Officer, Chief Medical Officer. New engineering roles: Director of QA, Lead Test Engineer, Solution Architect. Bhavya Bobba is Engineering Manager only — QA function transferred to Kiranmai Avuluri. External client contact added: Katrina.)
 > Revision update: 2026-07-22 (Section 26 added — Pre-Development Discussion & Feature Lock Process, mandated by Rohith. Applies to all Pharaxis applications. First application under this process: MIMS.)
+> Revision update: 2026-07-28 (Section 28 added — Communication Brevity Standard. Section 29 added — New Feature Test Automation & Regression Promotion. Both mandated by Rohith.)
 > Revision update: 2026-07-11 (Section 26 added — Functional Verification Standard. Mandated by Rohith after a defect reached the CEO: data was written to the database and returned by the API, but did not render in the MIMS case screen the user actually opens. DB/API evidence alone no longer counts as verification. Definition of Done (§22) and "What Does Not Count as Evidence" (§15) strengthened accordingly.)
 
 ---
@@ -1263,6 +1264,95 @@ and tracks it to closure — but **the owner gives the answer, never Aditi.**
 - Answer a compliance, AI, or clinical question in place of Vasu, Mark, or Sowmya
 - Become a bottleneck once an owner is engaged
 - Duplicate Bala's remit — Bala continues to own gate governance, delivery cadence, and escalation
+
+---
+
+## 28. Communication Brevity Standard (Mandatory)
+
+> Established: 2026-07-28. Mandated by Rohith Karne.
+> Applies to: every reply to Rohith, from every team member.
+
+### Principle
+
+**Short, clear answers. The point first, the detail only if it changes what Rohith does.**
+
+Long replies bury the decision. A reply Rohith has to mine for the answer has failed, however accurate it is.
+
+### The rule
+
+- Lead with the conclusion. Background comes after, or not at all.
+- Include only what Rohith needs to decide or act on.
+- Use a table or short list for anything with more than one item — not prose.
+- Give numbers, not narration.
+- Close with the one thing you need from him, if anything.
+
+### What brevity does not permit
+
+- Dropping accuracy, uncertainty, or bad news. Say it briefly — do not omit it.
+- Skipping evidence. File paths, counts, and pass/fail figures stay; they are short and they are the substance.
+- Refusing depth. If Rohith asks for detail, give it fully. Brevity is the default, not a limit.
+
+### Enforcement
+
+Aditi enforces this on every reply routed through her. Bala flags a bloated reply as a process issue.
+
+---
+
+## 29. New Feature Test Automation & Regression Promotion (Mandatory)
+
+> Established: 2026-07-28. Mandated by Rohith Karne.
+> Applies to: every application — MIMS, CP Portal, Vault, QMS, AI Agent.
+
+### Principle
+
+**Every new feature ships with automated tests, and those tests become part of the permanent regression suite once they pass.** Test automation is part of building the feature, not a task that follows it.
+
+If three features are built, three sets of tests are written, and all three join regression. No feature is signed off without them.
+
+### Ownership
+
+- **Kiranmai Avuluri (Director of QA)** — owns test coverage per feature; decides what needs a browser test versus a unit/API test; approves promotion into regression.
+- **Krishnapriya (Lead Test Engineer)** — writes and executes the test scripts.
+- **Bhavya Bobba (Engineering Manager)** — makes the feature testable: stable selectors, seedable fixtures, no reliance on manual setup.
+- **Bala Kaviti** — blocks Gate 2 for any feature with no automated tests.
+
+### The procedure
+
+**1. Test design — with the feature, before Gate 1**
+Kiranmai drafts the test plan from Saad's acceptance criteria (Section 8, step 4). Each acceptance criterion maps to at least one automated test. Kiranmai states which tier each test belongs to:
+
+| Tier | What it covers | Runs in |
+|------|----------------|---------|
+| Tier 1 | Unit, API, syntax | Seconds — on every change |
+| Tier 3 | Browser, real UI | Full regression |
+
+**2. Test authoring — during the build**
+Krishnapriya writes the scripts while Bhavya builds. Tests must:
+- assert real behaviour — an assertion that cannot fail is not coverage
+- fail loudly rather than skip when a precondition is missing
+- provision their own fixtures; never depend on a manual setup step
+- run against the app's test database, never dev
+
+**3. Green before Gate 2**
+Kiranmai confirms in chat: tests written, tests passing, what they cover, what they do not. Gate 2 is blocked without it.
+
+**4. Promotion to the regression corpus — after sign-off**
+Once the feature passes QA and Rohith signs off, the suite is promoted in the Test Console (`apps/test-console`), tagged with the release that added it. Promotion is blocked while the run has failures — a corpus filled with tests that were red on entry is a corpus nobody trusts.
+
+**5. Permanent from then on**
+Nothing is removed from regression when a release ships. The corpus is cumulative — that is what makes a full regression meaningful at any point.
+
+### Current release view
+
+The Test Console's **Current release** screen shows the test scripts for the **most recent three features only** — a rolling window. When a fourth feature releases, the oldest drops off that screen. It is not lost: it was already promoted to the regression suite and continues to run there.
+
+### What is not acceptable
+
+- A feature signed off with no automated tests
+- Tests written after release "when there is time"
+- Tests that skip when a precondition is missing — a skip is invisible and protects nothing
+- Promoting a suite into regression while it is failing
+- Removing a suite from regression because a release shipped
 
 ---
 

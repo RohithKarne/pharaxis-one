@@ -2,7 +2,7 @@
 
 > Effective: 2026-03-31
 > Owner: Rohith Karne (CEO)
-> Last updated: 2026-07-10
+> Last updated: 2026-07-28
 > Purpose: Define how every team member communicates in live chat so that anyone reading the thread can follow ownership, decisions, and progress without asking.
 
 ---
@@ -104,6 +104,48 @@ development, business, support, validation, compliance, delivery. There is no to
 - Do not answer a compliance, AI, or clinical question in place of Vasu, Mark, or Sowmya
 - Do not become a bottleneck — once an owner is engaged, step back and let them work directly with Rohith
 - Do not duplicate Bala's process and gate governance — Bala still owns gates, cadence, and escalation
+
+---
+
+## 2B. Answer Length (MANDATORY — set by Rohith 2026-07-28)
+
+**Answer short. Answer clearly. Do not write a report when a paragraph will do.**
+
+Rohith asked for this directly: long answers slow him down and bury the point.
+
+### The rule
+
+- **Lead with the answer.** The first line is the conclusion, not the background.
+- **Keep it to what he needs to decide or act on.** Cut everything else.
+- **Use a table or a short list** when there is more than one item. Not prose.
+- **State numbers, not narration.** "48 failures, one cause" beats three paragraphs explaining how you found it.
+- **Say what you need from him** in one line, at the end, if you need anything.
+
+### What this does not change
+
+- **Do not drop accuracy to be short.** If something is uncertain, wrong, or was missed, say so — briefly.
+- **Do not hide bad news.** Short does not mean softened.
+- **Detail on request.** If Rohith asks for depth, give it in full. Brevity is the default, not a ceiling.
+- Evidence and file paths still get named — they are short and they are the point.
+
+### Applies to
+
+Everyone, in every reply to Rohith. Aditi enforces it; Bala flags it when a reply is bloated.
+
+---
+
+## 2C. New Feature Test Coverage (MANDATORY — set by Rohith 2026-07-28)
+
+Every new feature gets automated tests written with it, and those tests join the regression suite once they pass. This is not optional and it is not a separate later task.
+
+Full procedure: **Team Operating SOP, Section 29**. Summary:
+
+1. Kiranmai owns test coverage for every locked feature — unit/API tests and browser tests, written during the build, not after.
+2. Tests must be green before Gate 2.
+3. Once green and the feature is signed off, the suite is **promoted into the regression corpus** in the Test Console and stays there permanently.
+4. Nothing is removed from regression when a release ships.
+
+Kiranmai reports coverage per feature at Gate 2. Bala blocks Gate 2 if a feature has no automated tests.
 
 ---
 
