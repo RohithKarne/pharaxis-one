@@ -42,19 +42,9 @@
     --r:8px; --r-sm:5px;
     --shadow:0 1px 2px rgba(14,29,35,.06), 0 2px 8px rgba(14,29,35,.04);
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --canvas:#0D1518; --surface:#141F23; --surface-2:#1B282D; --border:#25353B; --border-2:#33474E;
-      --ink:#E4EDEF; --ink-2:#9DB0B7; --ink-3:#6E848C;
-      --primary:#3FB2C9; --primary-soft:#12313A;
-      --pass:#5FB97C; --pass-soft:#152A1D;
-      --fail:#E4695C; --fail-soft:#2E1815;
-      --skip:#E0A63C; --skip-soft:#2C2212;
-      --idle:#6E848C; --idle-soft:#1B282D;
-      --app-mims:#9B7BE8; --app-cp:#5FA3E0; --app-vault:#43B7A3; --app-qms:#D89A57; --app-ai:#DB7A9B;
-      --shadow:0 1px 2px rgba(0,0,0,.3);
-    }
-  }
+  /* Light is the default regardless of the operating system's preference —
+     this is a daylight tool and most people open it to answer "is it healthy".
+     Dark applies only when explicitly chosen, and the choice is remembered. */
   :root[data-theme="dark"] {
     --canvas:#0D1518; --surface:#141F23; --surface-2:#1B282D; --border:#25353B; --border-2:#33474E;
     --ink:#E4EDEF; --ink-2:#9DB0B7; --ink-3:#6E848C;
@@ -84,7 +74,9 @@
     font-family:var(--sans); font-size:14.5px; line-height:1.55;
     -webkit-font-smoothing:antialiased;
   }
-  .wrap { max-width:1240px; margin:0 auto; padding:0 24px 80px; }
+  /* Full viewport width — this is a monitoring surface, and the suite tables
+     and live log benefit from every pixel rather than sitting in a column. */
+  .wrap { width:100%; margin:0; padding:0 28px 80px; }
   .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
 
   /* ─── Top bar ─────────────────────────────────────────────────────────── */
@@ -93,7 +85,7 @@
     position:sticky; top:0; z-index:20;
   }
   .topbar .inner {
-    max-width:1240px; margin:0 auto; padding:14px 24px;
+    width:100%; margin:0; padding:14px 28px;
     display:flex; align-items:center; gap:16px; flex-wrap:wrap;
   }
   .brand { display:flex; align-items:center; gap:11px; }
@@ -776,11 +768,19 @@
   });
   $('appsel').addEventListener('change', onScopeChange);
   $('tiersel').addEventListener('change', onScopeChange);
+  // Light unless the person has explicitly chosen dark before. The OS
+  // preference is deliberately not consulted — Rohith asked for light by
+  // default with dark on request, so the stored choice is the only input.
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    $('btn-theme').textContent = theme === 'dark' ? 'Light theme' : 'Dark theme';
+  }
+  applyTheme(localStorage.getItem('tc_theme') === 'dark' ? 'dark' : 'light');
+
   $('btn-theme').addEventListener('click', function () {
-    var r = document.documentElement;
-    var dark = r.getAttribute('data-theme') === 'dark' ||
-      (!r.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
-    r.setAttribute('data-theme', dark ? 'light' : 'dark');
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('tc_theme', next); } catch (_) { /* private mode */ }
+    applyTheme(next);
   });
 
   fetch('/api/registry').then(function (r) { return r.json(); }).then(function (reg) {
