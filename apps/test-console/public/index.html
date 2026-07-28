@@ -210,6 +210,10 @@
 
   .exports { margin-left:auto; display:flex; gap:8px; align-items:center; }
   .exports .btn { padding:6px 12px; font-size:12.5px; text-decoration:none; line-height:1.5; }
+  .exports .btn[disabled] { opacity:.45; cursor:not-allowed; }
+  th.cb, td.cb { width:34px; padding-right:0; text-align:center; }
+  td.cb input, th.cb input { cursor:pointer; accent-color:var(--primary); }
+  tr.picked td { background:var(--surface-2); }
 
   .progress { height:3px; background:var(--surface-2); }
   .progress i { display:block; height:100%; background:var(--primary); width:0; transition:width .25s ease; }
@@ -410,11 +414,19 @@
   </div>
   <p class="note" id="corpusnote">Every suite stays here permanently, tagged with the release that added it. Nothing is removed when a release ships — that is what makes a full regression meaningful at any point in the testing phase.</p>
 
-  <div class="sec-row"><h2 class="sec">Run history</h2><span class="hint">Each run retained with the commit it ran against</span></div>
+  <div class="sec-row">
+    <h2 class="sec">Run history</h2>
+    <span class="hint" id="relhint">Tick runs to combine them into one release report</span>
+    <div class="exports" id="relbar">
+      <button class="btn secondary" type="button" id="r-copy">Copy release report</button>
+      <button class="btn secondary" type="button" id="r-download">Download</button>
+      <a class="btn secondary" id="r-open" target="_blank" rel="noopener">Open</a>
+    </div>
+  </div>
   <div class="tablecard">
     <div class="scroll">
       <table>
-        <thead><tr><th>Run</th><th>Application</th><th>Commit</th><th class="r">Passed</th><th class="r">Failed</th><th class="r">Skipped</th><th>Trust</th><th class="r">Duration</th><th>When</th><th>Report</th></tr></thead>
+        <thead><tr><th class="cb"><input type="checkbox" id="sel-all" title="Select all runs"></th><th>Run</th><th>Application</th><th>Commit</th><th class="r">Passed</th><th class="r">Failed</th><th class="r">Skipped</th><th>Trust</th><th class="r">Duration</th><th>When</th><th>Report</th></tr></thead>
         <tbody id="ledger"></tbody>
       </table>
     </div>
@@ -534,10 +546,69 @@
       (appId() === 'all' ? ' across ' + registry.apps.length + ' applications' : '');
   }
 
+  /**
+   * The runs a release report would be built from.
+   *
+   * Defaults to the newest run per application and tier — that is the release as
+   * it currently stands, with a re-run superseding the run it replaced. Once the
+   * person touches a checkbox their selection is kept across refreshes, because
+   * silently re-deciding it under them after every run would be maddening.
+   */
+  function defaultSelection(runs) {
+    var seen = {}, out = [];
+    runs.forEach(function (r) {                 // runs arrive newest first
+      var key = r.app + '|' + (r.tier == null ? 'all' : r.tier);
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push(r.id);
+    });
+    return out;
+  }
+
+  function updateRelBar() {
+    var ids = relSelection();
+    var n = ids.length;
+    ['r-copy','r-download'].forEach(function (id) { $(id).disabled = !n; });
+    var open = $('r-open');
+    if (n) {
+      open.href = '/api/reports/release?format=html&runs=' + encodeURIComponent(ids.join(','));
+      open.removeAttribute('aria-disabled');
+      open.style.pointerEvents = '';
+    } else {
+      open.removeAttribute('href');
+      open.style.pointerEvents = 'none';
+    }
+    open.style.opacity = n ? '' : '.45';
+    $('relhint').textContent = n
+      ? n + (n === 1 ? ' run' : ' runs') + ' selected — newest result wins per suite'
+      : 'Tick runs to combine them into one release report';
+    Array.prototype.forEach.call(document.querySelectorAll('.rsel'), function (cb) {
+      cb.closest('tr').classList.toggle('picked', cb.checked);
+    });
+    var all = document.querySelectorAll('.rsel').length;
+    $('sel-all').checked = all > 0 && n === all;
+    $('sel-all').indeterminate = n > 0 && n < all;
+  }
+
+  function relSelection() {
+    return Array.prototype.filter.call(document.querySelectorAll('.rsel'), function (cb) {
+      return cb.checked;
+    }).map(function (cb) { return cb.value; });
+  }
+
   function renderLedger() {
     fetch('/api/runs').then(function (r) { return r.json(); }).then(function (runs) {
+      // Preserve a hand-made selection; fall back to the default when there is
+      // none yet or when everything previously ticked has scrolled out of view.
+      var keep = relSelection();
+      var ids = runs.map(function (r) { return r.id; });
+      keep = keep.filter(function (id) { return ids.indexOf(id) !== -1; });
+      var picked = keep.length ? keep : defaultSelection(runs);
+
       $('ledger').innerHTML = runs.length ? runs.map(function (r) {
-        return '<tr><td class="m">' + esc(r.id.replace('run-','#')) + '</td>' +
+        return '<tr><td class="cb"><input type="checkbox" class="rsel" value="' + esc(r.id) + '"' +
+          (picked.indexOf(r.id) !== -1 ? ' checked' : '') + '></td>' +
+          '<td class="m">' + esc(r.id.replace('run-','#')) + '</td>' +
           '<td>' + esc(r.app) + '</td><td class="m">' + esc(r.commit) + '</td>' +
           '<td class="r m" style="color:var(--pass)">' + r.passed + '</td>' +
           '<td class="r m" style="color:' + (r.failed ? 'var(--fail)' : 'var(--ink-3)') + '">' + r.failed + '</td>' +
@@ -549,7 +620,12 @@
           '<td class="m"><a href="/api/runs/' + encodeURIComponent(r.id) + '/report.html" target="_blank" rel="noopener">Open</a>' +
           ' · <a href="/api/runs/' + encodeURIComponent(r.id) + '/report.md?download=1">MD</a></td></tr>';
       }).join('') :
-        '<tr><td colspan="10" style="padding:26px;text-align:center;color:var(--ink-3)">No runs recorded yet.</td></tr>';
+        '<tr><td colspan="11" style="padding:26px;text-align:center;color:var(--ink-3)">No runs recorded yet.</td></tr>';
+
+      Array.prototype.forEach.call(document.querySelectorAll('.rsel'), function (cb) {
+        cb.addEventListener('change', updateRelBar);
+      });
+      updateRelBar();
     });
   }
 
@@ -575,7 +651,7 @@
       '</div></div>';
     $('d-close').addEventListener('click', function () { $('detail').innerHTML = ''; });
     $('d-copy').addEventListener('click', function (e) {
-      copyText(title + '\n\n' + (message || ''), e.target);
+      copyText(title + '\n\n' + (message || ''), e.target, 'Copy this failure');
     });
     $('detail').scrollIntoView({ behavior:'smooth', block:'nearest' });
   }
@@ -817,8 +893,13 @@
    * path, and if that is gone too, show the text selected so it can be copied by
    * hand. Never leave the person with nothing.
    */
-  function copyText(text, btn) {
-    var done = function () { btn.textContent = 'Copied ✓'; };
+  function copyText(text, btn, restore) {
+    var done = function () {
+      btn.textContent = 'Copied ✓';
+      // Put the label back, otherwise the button reads "Copied" forever and the
+      // next person cannot tell whether pressing it did anything.
+      if (restore) setTimeout(function () { btn.textContent = restore; }, 2000);
+    };
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done, function () { legacy(); });
@@ -835,7 +916,7 @@
       document.body.removeChild(ta);
       if (ok) return done();
       manual(text);
-      btn.textContent = 'Copy report';
+      if (restore) btn.textContent = restore;
     }
   }
 
@@ -861,13 +942,38 @@
     btn.textContent = 'Copying…';
     fetch('/api/runs/' + encodeURIComponent(lastRunId) + '/report.md')
       .then(function (r) { return r.text(); })
-      .then(function (md) { copyText(md, btn); })
+      .then(function (md) { copyText(md, btn, 'Copy report'); })
       .catch(function () { btn.textContent = 'Could not build report'; });
   });
 
   $('x-download').addEventListener('click', function () {
     if (!lastRunId) return;
     window.location.href = '/api/runs/' + encodeURIComponent(lastRunId) + '/report.html?download=1';
+  });
+
+  $('sel-all').addEventListener('change', function (e) {
+    Array.prototype.forEach.call(document.querySelectorAll('.rsel'), function (cb) {
+      cb.checked = e.target.checked;
+    });
+    updateRelBar();
+  });
+
+  $('r-copy').addEventListener('click', function () {
+    var ids = relSelection();
+    if (!ids.length) return;
+    var btn = $('r-copy');
+    btn.textContent = 'Copying…';
+    fetch('/api/reports/release?format=md&runs=' + encodeURIComponent(ids.join(',')))
+      .then(function (r) { return r.text(); })
+      .then(function (md) { copyText(md, btn, 'Copy release report'); })
+      .catch(function () { btn.textContent = 'Could not build report'; });
+  });
+
+  $('r-download').addEventListener('click', function () {
+    var ids = relSelection();
+    if (!ids.length) return;
+    window.location.href = '/api/reports/release?format=html&download=1&runs=' +
+      encodeURIComponent(ids.join(','));
   });
 
   $('tab-reg').addEventListener('click', function () { setMode(true); });

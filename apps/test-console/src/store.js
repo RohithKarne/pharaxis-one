@@ -58,7 +58,10 @@ function listRuns(limit = 50) {
       try {
         const r = JSON.parse(fs.readFileSync(path.join(RUNS_DIR, f), 'utf8'));
         return {
-          id: r.id, app: r.app, mode: r.mode, commit: r.commit,
+          // tier travels with the summary so the release picker can default to
+          // the newest run per application and tier rather than per application,
+          // which would silently drop the Tier 1 run whenever Tier 3 ran later.
+          id: r.id, app: r.app, mode: r.mode, tier: r.tier, commit: r.commit,
           startedAt: r.startedAt, durationMs: r.durationMs,
           passed: r.passed, failed: r.failed, skipped: r.skipped,
           trust: r.trust, suites: (r.suites || []).length,

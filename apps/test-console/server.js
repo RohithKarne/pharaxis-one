@@ -12,6 +12,7 @@
  *   GET  /api/runs/:id            one run, with per-test detail
  *   GET  /api/runs/:id/report.md   sendable report — Markdown, for pasting
  *   GET  /api/runs/:id/report.html sendable report — HTML, for attaching
+ *   GET  /api/reports/release      several runs rolled into one release report
  *   GET  /api/run/stream?…        execute and stream results over SSE
  *   POST /api/promote             add release suites to the regression corpus
  */
@@ -26,6 +27,7 @@ const store = require('./src/store');
 const impact = require('./src/impact');
 const discover = require('./src/discover');
 const report = require('./src/report');
+const release = require('./src/release');
 
 const PORT = Number(process.env.TEST_CONSOLE_PORT || 4300);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -339,6 +341,33 @@ const server = http.createServer((req, res) => {
     const run = store.getRun(rest);
     return run ? sendJson(res, 200, run) : sendJson(res, 404, { error: 'No such run.' });
   }
+  // /api/reports/release?runs=a,b,c&format=md|html — several runs rolled into
+  // one document, newest result per suite. This is what gets sent at the end of
+  // a release, when the testing happened across four or five separate runs.
+  if (p === '/api/reports/release') {
+    const ids = (url.searchParams.get('runs') || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (!ids.length) return sendJson(res, 400, { error: 'Select at least one run.' });
+
+    const rel = release.build(ids);
+    if (!rel.runs.length) {
+      return sendJson(res, 404, { error: 'None of the selected runs could be read.', missing: rel.missing });
+    }
+
+    const format = url.searchParams.get('format') || 'html';
+    if (format === 'json') return sendJson(res, 200, rel);
+
+    const md = format === 'md';
+    const body = md ? report.releaseMarkdown(rel) : report.releaseHtml(rel);
+    const disp = url.searchParams.get('download') === '1' ? 'attachment' : 'inline';
+    res.writeHead(200, {
+      'Content-Type': (md ? 'text/markdown' : 'text/html') + '; charset=utf-8',
+      'Content-Length': Buffer.byteLength(body),
+      'Content-Disposition': disp + '; filename="' + report.releaseFilename(rel, md ? 'md' : 'html') + '"',
+      'Cache-Control': 'no-store',
+    });
+    return res.end(body);
+  }
+
   if (p === '/api/discover') {
     const found = discover.unregistered(store.readRegistry());
     const appFilter = url.searchParams.get('app');

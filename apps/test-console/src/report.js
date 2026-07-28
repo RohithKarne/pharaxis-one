@@ -105,6 +105,71 @@ function headline(run) {
   return 'All ' + total + ' ' + tests + ' passed.';
 }
 
+/**
+ * One suite's failures, with the error text and the command that reproduces it.
+ *
+ * Shared by the run report and the release report. When the suite carries
+ * provenance — it does in a release rollup, where suites come from different
+ * runs — that line is printed, because "which run said this, at which commit"
+ * is the first question anyone asks of a stitched-together document.
+ */
+function suiteFailuresMd(s, L) {
+  L.push('### ' + s.app + ' · ' + s.name);
+  L.push('');
+  L.push('Tier ' + s.tier + ' · added in ' + (s.addedIn || 'unknown release') +
+    ' · ' + s.passed + ' passed, ' + s.failed + ' failed, ' + s.skipped + ' skipped');
+  if (s.fromRun) {
+    L.push('');
+    L.push('_Result from run `' + s.fromRun + '` at commit `' + s.fromCommit +
+      '`, ' + fmtWhen(s.ranAt) + '._');
+  }
+  L.push('');
+  L.push('Reproduce:');
+  L.push('');
+  L.push('```bash');
+  L.push(repro(s));
+  L.push('```');
+  L.push('');
+  testsWith(s, 'fail').forEach((t, i) => {
+    L.push('**' + (i + 1) + '. ' + (t.base || t.title) + '**' +
+      (t.retry ? ' _(failed again on retry #' + t.retry + ')_' : '') +
+      (t.durationMs != null ? ' — ' + fmtMs(t.durationMs) : ''));
+    const err = detailFor(s, t.base || t.title);
+    L.push('');
+    if (err) {
+      L.push('```');
+      L.push(err.trim());
+      L.push('```');
+    } else {
+      L.push('_No error output was captured for this test._');
+    }
+    L.push('');
+  });
+}
+
+function suiteFailuresHtml(s, parts) {
+  parts.push('<section class="suite"><h3>' + esc(s.app) + ' · ' + esc(s.name) + '</h3>');
+  parts.push('<p class="sub">Tier ' + esc(s.tier) + ' · added in ' + esc(s.addedIn || 'unknown release') +
+    ' · ' + s.passed + ' passed, ' + s.failed + ' failed, ' + s.skipped + ' skipped</p>');
+  if (s.fromRun) {
+    parts.push('<p class="sub">Result from run <code>' + esc(s.fromRun) + '</code> at commit <code>' +
+      esc(s.fromCommit) + '</code>, ' + esc(fmtWhen(s.ranAt)) + '</p>');
+  }
+  parts.push('<p class="sub">Reproduce:</p><pre class="cmd">' + esc(repro(s)) + '</pre>');
+  testsWith(s, 'fail').forEach((t, i) => {
+    const err = detailFor(s, t.base || t.title);
+    parts.push('<div class="fail-item"><div class="ft"><span class="n">' + (i + 1) + '</span>' +
+      esc(t.base || t.title) +
+      (t.retry ? '<span class="pill">failed again on retry #' + esc(t.retry) + '</span>' : '') +
+      (t.durationMs != null ? '<span class="ms">' + esc(fmtMs(t.durationMs)) + '</span>' : '') +
+      '</div>' +
+      (err ? '<pre>' + esc(err.trim()) + '</pre>'
+           : '<p class="note">No error output was captured for this test.</p>') +
+      '</div>');
+  });
+  parts.push('</section>');
+}
+
 function markdown(run) {
   const L = [];
   const failingSuites = (run.suites || []).filter((s) => s.failed > 0);
@@ -152,34 +217,7 @@ function markdown(run) {
     L.push('## Failures — ' + run.failed + ' across ' + failingSuites.length +
       ' suite' + (failingSuites.length === 1 ? '' : 's'));
     L.push('');
-    failingSuites.forEach((s) => {
-      L.push('### ' + s.app + ' · ' + s.name);
-      L.push('');
-      L.push('Tier ' + s.tier + ' · added in ' + (s.addedIn || 'unknown release') +
-        ' · ' + s.passed + ' passed, ' + s.failed + ' failed, ' + s.skipped + ' skipped');
-      L.push('');
-      L.push('Reproduce:');
-      L.push('');
-      L.push('```bash');
-      L.push(repro(s));
-      L.push('```');
-      L.push('');
-      testsWith(s, 'fail').forEach((t, i) => {
-        L.push('**' + (i + 1) + '. ' + (t.base || t.title) + '**' +
-          (t.retry ? ' _(failed again on retry #' + t.retry + ')_' : '') +
-          (t.durationMs != null ? ' — ' + fmtMs(t.durationMs) : ''));
-        const err = detailFor(s, t.base || t.title);
-        L.push('');
-        if (err) {
-          L.push('```');
-          L.push(err.trim());
-          L.push('```');
-        } else {
-          L.push('_No error output was captured for this test._');
-        }
-        L.push('');
-      });
-    });
+    failingSuites.forEach((s) => suiteFailuresMd(s, L));
   }
 
   if (skippingSuites.length) {
@@ -265,24 +303,7 @@ function html(run) {
   if (!failingSuites.length) {
     parts.push('<p class="note">None.</p>');
   } else {
-    failingSuites.forEach((s) => {
-      parts.push('<section class="suite"><h3>' + esc(s.app) + ' · ' + esc(s.name) + '</h3>');
-      parts.push('<p class="sub">Tier ' + esc(s.tier) + ' · added in ' + esc(s.addedIn || 'unknown release') +
-        ' · ' + s.passed + ' passed, ' + s.failed + ' failed, ' + s.skipped + ' skipped</p>');
-      parts.push('<p class="sub">Reproduce:</p><pre class="cmd">' + esc(repro(s)) + '</pre>');
-      testsWith(s, 'fail').forEach((t, i) => {
-        const err = detailFor(s, t.base || t.title);
-        parts.push('<div class="fail-item"><div class="ft"><span class="n">' + (i + 1) + '</span>' +
-          esc(t.base || t.title) +
-          (t.retry ? '<span class="pill">failed again on retry #' + esc(t.retry) + '</span>' : '') +
-          (t.durationMs != null ? '<span class="ms">' + esc(fmtMs(t.durationMs)) + '</span>' : '') +
-          '</div>' +
-          (err ? '<pre>' + esc(err.trim()) + '</pre>'
-               : '<p class="note">No error output was captured for this test.</p>') +
-          '</div>');
-      });
-      parts.push('</section>');
-    });
+    failingSuites.forEach((s) => suiteFailuresHtml(s, parts));
   }
 
   if (skippingSuites.length) {
@@ -355,6 +376,8 @@ border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:12p
 .stat .v{font-size:24px;font-weight:700;margin-top:2px}
 .stat.pass .v{color:var(--pass)}.stat.fail .v{color:var(--fail)}.stat.skip .v{color:var(--skip)}
 .note{color:var(--ink-2);font-size:13px;margin:8px 0 0}
+.callout{background:#fffbeb;border:1px solid #fcd34d;border-left-width:4px;border-radius:7px;
+padding:11px 14px;font-size:13px;color:#78350f;margin:14px 0}
 .sub{color:var(--ink-3);font-size:12px;margin:4px 0}
 .suite{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:18px}
 .suite h3{margin-top:0}
@@ -373,6 +396,280 @@ footer{margin-top:36px;padding-top:14px;border-top:1px solid var(--line);color:v
 @media print{body{padding:0}.suite{break-inside:avoid}}
 `;
 
+/* ------------------------------------------------------------------ release */
+
+function releaseTitle(rel) {
+  return rel.apps.length === 1 ? rel.apps[0]
+    : rel.apps.length ? rel.apps.length + ' applications'
+    : 'Release';
+}
+
+function releaseHeadline(rel) {
+  const total = rel.passed + rel.failed + rel.skipped;
+  if (!rel.runs.length) return 'NO RUNS SELECTED.';
+  if (rel.failed) {
+    return rel.failed + ' failure' + (rel.failed === 1 ? '' : 's') + ' still open across ' +
+      rel.suites.filter((s) => s.failed > 0).length + ' suite' +
+      (rel.suites.filter((s) => s.failed > 0).length === 1 ? '' : 's') + '.';
+  }
+  if (rel.notCovered.length || rel.blocked.length) {
+    return 'Nothing that ran failed — but ' + (rel.notCovered.length + rel.blocked.length) +
+      ' suite' + (rel.notCovered.length + rel.blocked.length === 1 ? '' : 's') + ' never ran.';
+  }
+  return 'All ' + total + ' test' + (total === 1 ? '' : 's') + ' passed.';
+}
+
+function releaseMarkdown(rel) {
+  const L = [];
+  const failing = rel.suites.filter((s) => s.failed > 0);
+
+  L.push('# Release report — ' + releaseTitle(rel));
+  L.push('');
+  L.push('**' + releaseHeadline(rel) + '**');
+  L.push('');
+  L.push('| | |');
+  L.push('|---|---|');
+  L.push('| Runs combined | ' + rel.runs.length + ' |');
+  L.push('| Period | ' + fmtWhen(rel.startedAt) + ' → ' + fmtWhen(rel.endedAt) + ' |');
+  L.push('| Newest commit | `' + rel.headCommit + '` |');
+  L.push('| Suites covered | ' + rel.suites.length + ' |');
+  L.push('');
+  L.push('| Passed | Failed | Skipped | Trust |');
+  L.push('|---:|---:|---:|---:|');
+  L.push('| ' + rel.passed + ' | ' + rel.failed + ' | ' + rel.skipped + ' | ' + rel.trust + '% |');
+  L.push('');
+  L.push('_Each suite shows its newest result. Where a suite ran more than once, the later run ' +
+    'supersedes the earlier one._');
+  if (rel.mixedCommits) {
+    L.push('');
+    L.push('> **These results are not from a single point in time.** The runs below ran against ' +
+      'different commits, so a suite reported green may have last run against older code. Each ' +
+      'suite states the commit it ran at.');
+  }
+  L.push('');
+
+  if (rel.missing.length) {
+    L.push('> ' + rel.missing.length + ' selected run' + (rel.missing.length === 1 ? ' was' : 's were') +
+      ' not found on disk and are absent from this report: ' +
+      rel.missing.map((m) => '`' + m + '`').join(', '));
+    L.push('');
+  }
+
+  // Coverage before verdict. An all-green report that quietly omits half the
+  // corpus is the exact failure this section exists to prevent.
+  if (rel.notCovered.length || rel.blocked.length) {
+    L.push('## Not covered — ' + (rel.notCovered.length + rel.blocked.length) + ' suite' +
+      (rel.notCovered.length + rel.blocked.length === 1 ? '' : 's'));
+    L.push('');
+    L.push('No selected run reached these, so this report says nothing about them either way:');
+    L.push('');
+    rel.blocked.forEach((b) => {
+      L.push('- **' + b.suiteName + '** (' + b.app + ') — blocked: ' + b.reason);
+    });
+    rel.notCovered.forEach((s) => {
+      L.push('- **' + s.name + '** (' + s.app + ', Tier ' + s.tier + ') — not run');
+    });
+    L.push('');
+  }
+
+  if (!failing.length) {
+    L.push('## Open failures');
+    L.push('');
+    L.push('None.');
+    L.push('');
+  } else {
+    L.push('## Open failures — ' + rel.failed + ' across ' + failing.length +
+      ' suite' + (failing.length === 1 ? '' : 's'));
+    L.push('');
+    failing.forEach((s) => suiteFailuresMd(s, L));
+  }
+
+  if (rel.fixed.length) {
+    L.push('## Fixed during this release — ' + rel.fixed.length);
+    L.push('');
+    L.push('These failed in an earlier run and are no longer failing in the newest result for ' +
+      'their suite:');
+    L.push('');
+    rel.fixed.forEach((f) => {
+      L.push('- **' + f.title + '** — ' + f.app + ' · ' + f.suite +
+        ' (failed in `' + f.failedIn + '`, passing in `' + f.laterRun + '`)');
+    });
+    L.push('');
+  }
+
+  // Kept apart from "fixed" on purpose. A test that went from failing to
+  // skipped, or that stopped appearing, has stopped reporting — which is not
+  // the same as working, and counting it as a fix is how a release talks itself
+  // into being greener than it is.
+  if ((rel.stoppedFailing || []).length) {
+    L.push('## No longer failing, but not verified — ' + rel.stoppedFailing.length);
+    L.push('');
+    L.push('These failed earlier and are not failing now, but they did not pass either — they ' +
+      'were skipped or did not run at all. Treat them as unverified, not as fixed:');
+    L.push('');
+    rel.stoppedFailing.forEach((f) => {
+      L.push('- **' + f.title + '** — ' + f.app + ' · ' + f.suite +
+        ' (failed in `' + f.failedIn + '`, now **' + f.now + '** in `' + f.laterRun + '`)');
+    });
+    L.push('');
+  }
+
+  L.push('## Suite status');
+  L.push('');
+  L.push('| Application | Suite | Tier | Passed | Failed | Skipped | Trust | From run | Commit |');
+  L.push('|---|---|---|---:|---:|---:|---:|---|---|');
+  rel.suites.forEach((s) => {
+    L.push('| ' + s.app + ' | ' + s.name + ' | ' + s.tier + ' | ' + s.passed + ' | ' +
+      s.failed + ' | ' + s.skipped + ' | ' + (s.trust == null ? '—' : s.trust + '%') +
+      ' | `' + s.fromRun + '` | `' + s.fromCommit + '`' +
+      (s.fromCommit !== rel.headCommit ? ' ⚠ older' : '') + ' |');
+  });
+  L.push('');
+
+  L.push('## Runs in this report');
+  L.push('');
+  L.push('| Run | Scope | Commit | Passed | Failed | Skipped | Started |');
+  L.push('|---|---|---|---:|---:|---:|---|');
+  rel.runs.forEach((r) => {
+    L.push('| `' + r.id + '` | ' + r.app + ', ' +
+      (r.tier === 'all' ? 'all tiers' : 'Tier ' + r.tier) + ' | `' + r.commit + '` | ' +
+      r.passed + ' | ' + r.failed + ' | ' + r.skipped + ' | ' + fmtWhen(r.startedAt) + ' |');
+  });
+  L.push('');
+  L.push('---');
+  L.push('');
+  L.push('Generated by the Pharaxis Test Console by combining ' + rel.runs.length +
+    ' run' + (rel.runs.length === 1 ? '' : 's') + '. Full records are stored under ' +
+    '`apps/test-console/data/runs/`.');
+  L.push('');
+
+  return L.join('\n');
+}
+
+function releaseHtml(rel) {
+  const failing = rel.suites.filter((s) => s.failed > 0);
+  const parts = [];
+  const title = 'Release report — ' + releaseTitle(rel);
+
+  parts.push('<!doctype html><html lang="en"><head><meta charset="utf-8">');
+  parts.push('<meta name="viewport" content="width=device-width,initial-scale=1">');
+  parts.push('<title>' + esc(title) + '</title><style>' + CSS + '</style></head><body>');
+  parts.push('<header><div class="mark">P</div><div><h1>' + esc(releaseTitle(rel)) +
+    '</h1><p>Pharaxis One · release report</p></div></header>');
+
+  parts.push('<p class="headline ' + (rel.failed ? 'bad' :
+    (rel.notCovered.length || rel.blocked.length) ? 'warn' : 'good') + '">' +
+    esc(releaseHeadline(rel)) + '</p>');
+
+  parts.push('<table class="kv"><tbody>' +
+    row('Runs combined', String(rel.runs.length)) +
+    row('Period', esc(fmtWhen(rel.startedAt)) + ' → ' + esc(fmtWhen(rel.endedAt))) +
+    row('Newest commit', '<code>' + esc(rel.headCommit) + '</code>') +
+    row('Suites covered', String(rel.suites.length)) +
+    '</tbody></table>');
+
+  parts.push('<div class="stats">' +
+    stat('Passed', rel.passed, 'pass') +
+    stat('Failed', rel.failed, rel.failed ? 'fail' : '') +
+    stat('Skipped', rel.skipped, rel.skipped ? 'skip' : '') +
+    stat('Trust', rel.trust + '%', '') +
+    '</div>');
+  parts.push('<p class="note">Each suite shows its newest result. Where a suite ran more than ' +
+    'once, the later run supersedes the earlier one.</p>');
+
+  if (rel.mixedCommits) {
+    parts.push('<p class="callout"><b>These results are not from a single point in time.</b> ' +
+      'The runs below ran against different commits, so a suite reported green may have last run ' +
+      'against older code. Each suite states the commit it ran at.</p>');
+  }
+  if (rel.missing.length) {
+    parts.push('<p class="callout">' + rel.missing.length + ' selected run' +
+      (rel.missing.length === 1 ? ' was' : 's were') + ' not found on disk and are absent: ' +
+      rel.missing.map((m) => '<code>' + esc(m) + '</code>').join(', ') + '</p>');
+  }
+
+  if (rel.notCovered.length || rel.blocked.length) {
+    parts.push('<h2>Not covered — ' + (rel.notCovered.length + rel.blocked.length) +
+      ' suite' + (rel.notCovered.length + rel.blocked.length === 1 ? '' : 's') + '</h2>');
+    parts.push('<p class="note">No selected run reached these, so this report says nothing ' +
+      'about them either way.</p><ul class="blocked">');
+    rel.blocked.forEach((b) => {
+      parts.push('<li><b>' + esc(b.suiteName) + '</b> (' + esc(b.app) + ') — blocked: ' +
+        esc(b.reason) + '</li>');
+    });
+    rel.notCovered.forEach((s) => {
+      parts.push('<li><b>' + esc(s.name) + '</b> (' + esc(s.app) + ', Tier ' + esc(s.tier) +
+        ') — not run</li>');
+    });
+    parts.push('</ul>');
+  }
+
+  parts.push('<h2>Open failures' + (rel.failed ? ' — ' + rel.failed + ' across ' +
+    failing.length + ' suite' + (failing.length === 1 ? '' : 's') : '') + '</h2>');
+  if (!failing.length) parts.push('<p class="note">None.</p>');
+  else failing.forEach((s) => suiteFailuresHtml(s, parts));
+
+  if (rel.fixed.length) {
+    parts.push('<h2>Fixed during this release — ' + rel.fixed.length + '</h2>');
+    parts.push('<p class="note">These failed in an earlier run and are no longer failing in the ' +
+      'newest result for their suite.</p><ul class="skips">');
+    rel.fixed.forEach((f) => {
+      parts.push('<li><b>' + esc(f.title) + '</b> — ' + esc(f.app) + ' · ' + esc(f.suite) +
+        ' (failed in <code>' + esc(f.failedIn) + '</code>, passing in <code>' +
+        esc(f.laterRun) + '</code>)</li>');
+    });
+    parts.push('</ul>');
+  }
+
+  if ((rel.stoppedFailing || []).length) {
+    parts.push('<h2>No longer failing, but not verified — ' + rel.stoppedFailing.length + '</h2>');
+    parts.push('<p class="note">These failed earlier and are not failing now, but they did not ' +
+      'pass either — they were skipped or did not run at all. Treat them as unverified, not as ' +
+      'fixed.</p><ul class="skips">');
+    rel.stoppedFailing.forEach((f) => {
+      parts.push('<li><b>' + esc(f.title) + '</b> — ' + esc(f.app) + ' · ' + esc(f.suite) +
+        ' (failed in <code>' + esc(f.failedIn) + '</code>, now <b>' + esc(f.now) +
+        '</b> in <code>' + esc(f.laterRun) + '</code>)</li>');
+    });
+    parts.push('</ul>');
+  }
+
+  parts.push('<h2>Suite status</h2><table class="grid"><thead><tr>' +
+    '<th>Application</th><th>Suite</th><th>Tier</th><th class="r">Passed</th>' +
+    '<th class="r">Failed</th><th class="r">Skipped</th><th class="r">Trust</th>' +
+    '<th>From run</th><th>Commit</th></tr></thead><tbody>');
+  rel.suites.forEach((s) => {
+    parts.push('<tr><td>' + esc(s.app) + '</td><td class="m">' + esc(s.name) + '</td>' +
+      '<td>' + esc(s.tier) + '</td><td class="r">' + s.passed + '</td>' +
+      '<td class="r' + (s.failed ? ' bad' : '') + '">' + s.failed + '</td>' +
+      '<td class="r' + (s.skipped ? ' warn' : '') + '">' + s.skipped + '</td>' +
+      '<td class="r">' + (s.trust == null ? '—' : s.trust + '%') + '</td>' +
+      '<td class="m">' + esc(s.fromRun) + '</td>' +
+      '<td class="m">' + esc(s.fromCommit) +
+      (s.fromCommit !== rel.headCommit ? ' <span class="pill">older</span>' : '') + '</td></tr>');
+  });
+  parts.push('</tbody></table>');
+
+  parts.push('<h2>Runs in this report</h2><table class="grid"><thead><tr>' +
+    '<th>Run</th><th>Scope</th><th>Commit</th><th class="r">Passed</th>' +
+    '<th class="r">Failed</th><th class="r">Skipped</th><th>Started</th></tr></thead><tbody>');
+  rel.runs.forEach((r) => {
+    parts.push('<tr><td class="m">' + esc(r.id) + '</td><td>' + esc(r.app) + ', ' +
+      esc(r.tier === 'all' ? 'all tiers' : 'Tier ' + r.tier) + '</td>' +
+      '<td class="m">' + esc(r.commit) + '</td><td class="r">' + r.passed + '</td>' +
+      '<td class="r' + (r.failed ? ' bad' : '') + '">' + r.failed + '</td>' +
+      '<td class="r">' + r.skipped + '</td><td class="m">' + esc(fmtWhen(r.startedAt)) +
+      '</td></tr>');
+  });
+  parts.push('</tbody></table>');
+
+  parts.push('<footer>Generated by the Pharaxis Test Console by combining ' + rel.runs.length +
+    ' run' + (rel.runs.length === 1 ? '' : 's') +
+    '. Full records: <code>apps/test-console/data/runs/</code></footer>');
+  parts.push('</body></html>');
+  return parts.join('\n');
+}
+
 /** A filename that says what it is without being opened. */
 function filename(run, ext) {
   const app = (run.app === 'all' ? 'all-apps' : run.app).toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -380,4 +677,11 @@ function filename(run, ext) {
   return path.basename('pharaxis-test-report-' + app + '-' + when + '-' + run.id + '.' + ext);
 }
 
-module.exports = { markdown, html, filename };
+/** Same idea for a rollup, named by what it covers rather than by one run id. */
+function releaseFilename(rel, ext) {
+  const who = releaseTitle(rel).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const when = String(rel.endedAt || '').slice(0, 10) || 'undated';
+  return path.basename('pharaxis-release-report-' + who + '-' + when + '.' + ext);
+}
+
+module.exports = { markdown, html, filename, releaseMarkdown, releaseHtml, releaseFilename };
