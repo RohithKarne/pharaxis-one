@@ -73,6 +73,30 @@ export default function FindMSLPage() {
     setBookingBusy(false)
   }
 
+  function downloadIcsCalendar(msl, form) {
+    const title = `MSL Medical Discussion — ${msl.name}`
+    const desc = `Meeting request with ${msl.name} (${msl.specialty || 'Medical Affairs'}). Topic: ${form.topic || 'Medical Inquiry'}`
+    const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Pharaxis Medical Affairs//CP Portal//EN
+BEGIN:VEVENT
+SUMMARY:${title}
+DESCRIPTION:${desc}
+LOCATION:Virtual / Microsoft Teams
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR`
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `msl-meeting-${msl.name.toLowerCase().replace(/\s+/g, '-')}.ics`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="pp-container pp-page-content">
       <div className="pp-page-header">
@@ -98,7 +122,12 @@ export default function FindMSLPage() {
             <div key={m.id} className="pp-msl-card">
               <div className="pp-msl-avatar">{(m.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
               <div className="pp-msl-info">
-                <div className="pp-msl-name">{m.name}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                  <div className="pp-msl-name">{m.name}</div>
+                  <span style={{ background: '#DEF7EC', color: '#03543F', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12 }}>
+                    🟢 Available Today
+                  </span>
+                </div>
                 {m.title     && <div className="pp-msl-title">{m.title}</div>}
                 {m.specialty && <div className="pp-msl-specialty">🔬 {m.specialty}</div>}
                 {m.region    && <div className="pp-msl-region">📍 {m.region}{m.territory ? ` · ${m.territory}` : ''}</div>}
@@ -128,8 +157,13 @@ export default function FindMSLPage() {
               <div className="cp-modal-body" style={{ textAlign: 'center', padding: '32px 24px' }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
                 <div style={{ fontWeight: 700, fontSize: 17, color: '#1A1A2E', marginBottom: 8 }}>Meeting request sent!</div>
-                <div style={{ color: '#6B7280', fontSize: 14, marginBottom: 24 }}>
+                <div style={{ color: '#6B7280', fontSize: 14, marginBottom: 16 }}>
                   Your request has been received. The MSL team will follow up with you shortly.
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <button className="cp-btn cp-btn-outline" onClick={() => downloadIcsCalendar(bookingMSL, bookingForm)} style={{ fontSize: 13, fontWeight: 600 }}>
+                    📅 Add to Calendar (.ics)
+                  </button>
                 </div>
                 <button className="cp-btn cp-btn-primary" onClick={() => setBookingMSL(null)}>Close</button>
               </div>

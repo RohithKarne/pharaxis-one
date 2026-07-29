@@ -64,14 +64,15 @@ const schemas = {
     org_id:            id().optional(),
     site_id:           id().optional(),
     inquiry_id:        id().optional(),
-    subject:           str(500).optional(),
-    description:       str(5000).optional(),
-    intake_channel:    str(50).optional(),
+    // Same trap as updateCase: an "optional" string that cannot be empty.
+    subject:           str(500).optional().allow('', null),
+    description:       str(5000).optional().allow('', null),
+    intake_channel:    str(50).optional().allow('', null),
     date_received:     isoDate().optional().allow('', null),
     awareness_date:     isoDate().optional().allow('', null),
     learn_of_validity_date: isoDate().optional().allow('', null),
     follow_up_received_date: isoDate().optional().allow('', null),
-    priority:          str(20).optional(),
+    priority:          str(20).optional().allow('', null),
     source_type_id:    id().optional(),
     product_id:        id().optional(),
     workflow_state_id: id().optional(),
@@ -79,10 +80,20 @@ const schemas = {
   }),
 
   updateCase: Joi.object({
-    subject:           str(500).optional(),
-    description:       str(5000).optional(),
-    priority:          str(20).optional(),
-    status:            str(50).optional(),
+    // `str()` is Joi.string(), and Joi rejects '' by default — so `.optional()`
+    // alone means "you may omit it, but you may not clear it". The case form
+    // always sends every field, empty ones included, so saving a case whose
+    // description was never filled in failed with
+    // "description is not allowed to be empty".
+    //
+    // The app's own New Case flow creates a case WITHOUT a description, so this
+    // made a freshly created case unsaveable until the user found the right
+    // step. `.allow('', null)` was already on the neighbouring fields — added
+    // one at a time as each was hit — and never reached these four.
+    subject:           str(500).optional().allow('', null),
+    description:       str(5000).optional().allow('', null),
+    priority:          str(20).optional().allow('', null),
+    status:            str(50).optional().allow('', null),
     workflow_state_id: id().optional(),
     assigned_to:       id().optional(),
     product_id:        id().optional(),

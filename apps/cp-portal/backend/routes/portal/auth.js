@@ -343,12 +343,19 @@ router.get('/sso/:provider/callback', async (req, res) => {
     if (!client || !client.is_active) return fail('portal_unavailable');
     if (sso.normalizeLoginMode(client.login_mode) === 'local_only') return fail('sso_disabled');
 
-    const tokens = await sso.exchangeCodeForTokens(client.id, providerKey, code);
+    let tokens;
+    try {
+      tokens = await sso.exchangeCodeForTokens(client.id, providerKey, code);
+    } catch (tokErr) {
+      console.error('❌ SSO Token Exchange Failure:', tokErr?.message || tokErr);
+      return fail('idp_declined');
+    }
 
     let identity;
     try {
       identity = await sso.verifyIdToken(client.id, providerKey, tokens.id_token, parsed.nonce);
     } catch (verr) {
+      console.error('❌ SSO ID Token Verification Failure:', verr?.message || verr);
       return fail(verr.code === 'DOMAIN_NOT_ALLOWED' ? 'domain_not_allowed' : 'verification_failed');
     }
 
@@ -370,8 +377,18 @@ router.get('/sso/:provider/callback', async (req, res) => {
         'SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ? AND is_active = 1 LIMIT 1',
         [client.id, identity.email]
       );
-      if (!byEmail) return fail('no_account');
-      user = byEmail;
+      if (!byEmail) {
+        // Auto-provision verified SSO user for seamless onboarding
+        const [resIns] = await pool.execute(
+          `INSERT INTO cp_portal_users (client_id, email, first_name, last_name, email_verified, is_active)
+           VALUES (?, ?, ?, ?, 1, 1)`,
+          [client.id, identity.email, identity.name || 'SSO User', '']
+        );
+        const [[createdUser]] = await pool.execute('SELECT * FROM cp_portal_users WHERE id = ?', [resIns.insertId]);
+        user = createdUser;
+      } else {
+        user = byEmail;
+      }
       // Link this IdP identity to the matched account for future logins.
       await pool.execute(
         `INSERT INTO cp_sso_identities (client_id, portal_user_id, provider_key, subject, email, last_login_at)
@@ -400,6 +417,7 @@ router.get('/sso/:provider/callback', async (req, res) => {
       : '';
     res.redirect(sso.ssoCompleteUrl(client.code, safeReturn ? { return_to: safeReturn } : {}));
   } catch (err) {
+    console.error('❌ SSO Callback Processing Error:', err);
     fail('server_error');
   }
 });

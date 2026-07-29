@@ -23,9 +23,22 @@
 
 const pool = require('../database/db');
 
-async function _q(sql, params) {
+// The blanket `catch { return [] }` this replaces was written to tolerate older
+// schemas that lack an optional source table. It also swallowed genuine schema
+// drift, and that is exactly what happened: several sub-queries below referenced
+// columns that do not exist, so getTimeline() returned an empty array for EVERY
+// case, silently, for as long as the drift existed. A missing table is still
+// tolerated; anything else is a defect and now says so in the log.
+const _TOLERATED = new Set(['ER_NO_SUCH_TABLE', 'ER_BAD_DB_ERROR']);
+
+async function _q(sql, params, source = 'unknown') {
   try { const [rows] = await pool.execute(sql, params); return rows; }
-  catch (_) { return []; }
+  catch (err) {
+    if (!_TOLERATED.has(err.code)) {
+      console.error(`caseTimelineService: source "${source}" failed — ${err.code}: ${err.message}`);
+    }
+    return [];
+  }
 }
 
 /**
@@ -35,6 +48,12 @@ async function _q(sql, params) {
 async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
   const sinceParam = since ? new Date(since).toISOString().slice(0, 19).replace('T', ' ') : null;
   const events = [];
+
+  // mysql2's prepared-statement path rejects a bound LIMIT placeholder
+  // (ER_WRONG_ARGUMENTS), which is why ten of the sub-queries below silently
+  // returned nothing. The bound `?` is replaced with an integer interpolated
+  // after validation — clamped, so it can never carry anything but a number.
+  const lim = Math.min(Math.max(parseInt(limit, 10) || 500, 1), 2000);
 
   // C-04: verify the case belongs to the caller's org before assembling the timeline.
   // Every sub-query below keys on caseId alone, so without this ownership gate an
@@ -52,21 +71,25 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
        LEFT JOIN users u ON u.id = a.user_id
       WHERE a.entity = 'case' AND a.entity_id = ?
         ${sinceParam ? 'AND a.created_at >= ?' : ''}
-      ORDER BY a.created_at DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+      ORDER BY a.created_at DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId]
   )));
 
   // Case-level audit trail
   events.push(...(await _q(
-    `SELECT t.created_at AS ts, 'case_audit' AS type, t.action_type AS title,
-            JSON_OBJECT('summary', t.action_summary, 'detail', t.action_detail) AS detail,
-            u.name AS actor_name
+    // Column names corrected against the deployed schema: the table has
+    // timestamp/user_id/user_name/field_name/old_value/new_value — not
+    // created_at/changed_by/action_summary/action_detail.
+    `SELECT t.timestamp AS ts, 'case_audit' AS type, t.action_type AS title,
+            JSON_OBJECT('field', t.field_name, 'old', t.old_value, 'new', t.new_value) AS detail,
+            COALESCE(u.name, t.user_name) AS actor_name
        FROM case_audit_trail t
-       LEFT JOIN users u ON u.id = t.changed_by
+       LEFT JOIN users u ON u.id = t.user_id
       WHERE t.case_id = ?
-        ${sinceParam ? 'AND t.created_at >= ?' : ''}
-      ORDER BY t.created_at DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+        ${sinceParam ? 'AND t.timestamp >= ?' : ''}
+      ORDER BY t.timestamp DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId],
+    'case_audit_trail'
   )));
 
   // Field-value history (Wave 0 #2)
@@ -79,8 +102,8 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
        LEFT JOIN users u ON u.id = h.changed_by
       WHERE h.entity_type = 'case' AND h.entity_id = ?
         ${sinceParam ? 'AND h.changed_at >= ?' : ''}
-      ORDER BY h.changed_at DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+      ORDER BY h.changed_at DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId]
   )));
 
   // E-sign events
@@ -92,21 +115,25 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
        LEFT JOIN users u ON u.id = e.signed_by
       WHERE e.case_id = ?
         ${sinceParam ? 'AND e.created_at >= ?' : ''}
-      ORDER BY e.created_at DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+      ORDER BY e.created_at DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId]
   )));
 
   // Comments
   events.push(...(await _q(
-    `SELECT c.created_at AS ts, 'comment' AS type, COALESCE(c.field_name, c.section_name, 'case') AS title,
-            JSON_OBJECT('body', SUBSTRING(c.body_md, 1, 240), 'field', c.field_name, 'section', c.section_name, 'resolved', c.resolved) AS detail,
-            u.name AS actor_name
+    // The deployed case_comments table is the simple shape — id, case_id,
+    // user_id, comment, created_at. It has no body_md, author_id, section_name,
+    // field_name, resolved or deleted_at columns.
+    `SELECT c.created_at AS ts, 'comment' AS type, 'comment' AS title,
+            JSON_OBJECT('body', SUBSTRING(c.comment, 1, 240)) AS detail,
+            COALESCE(u.name, 'System') AS actor_name
        FROM case_comments c
-       LEFT JOIN users u ON u.id = c.author_id
-      WHERE c.case_id = ? AND c.deleted_at IS NULL
+       LEFT JOIN users u ON u.id = c.user_id
+      WHERE c.case_id = ?
         ${sinceParam ? 'AND c.created_at >= ?' : ''}
-      ORDER BY c.created_at DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+      ORDER BY c.created_at DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId],
+    'case_comments'
   )));
 
   // Mentions
@@ -118,8 +145,8 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
        LEFT JOIN users u ON u.id = m.mentioned_by_user_id
       WHERE m.case_id = ?
         ${sinceParam ? 'AND m.created_at >= ?' : ''}
-      ORDER BY m.created_at DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+      ORDER BY m.created_at DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId]
   )));
 
   // State timings (Sprint 2 #11)
@@ -131,8 +158,8 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
        LEFT JOIN users u ON u.id = t.moved_by
       WHERE t.case_id = ? AND t.org_id = ?
         ${sinceParam ? 'AND t.entered_at >= ?' : ''}
-      ORDER BY t.entered_at DESC LIMIT ?`,
-    sinceParam ? [caseId, orgId, sinceParam, Number(limit)] : [caseId, orgId, Number(limit)]
+      ORDER BY t.entered_at DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, orgId, sinceParam] : [caseId, orgId]
   )));
 
   // ICSR submission lifecycle
@@ -145,8 +172,8 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
        LEFT JOIN users u ON u.id = r.created_by
       WHERE r.case_id = ?
         ${sinceParam ? 'AND r.created_at >= ?' : ''}
-      ORDER BY r.created_at DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+      ORDER BY r.created_at DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId]
   )));
 
   // ACKs (Sprint 1 #6)
@@ -159,8 +186,8 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
        JOIN icsr_reports r ON r.id = k.icsr_report_id
       WHERE r.case_id = ?
         ${sinceParam ? 'AND k.received_at >= ?' : ''}
-      ORDER BY k.received_at DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+      ORDER BY k.received_at DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId]
   )));
 
   // Transmissions
@@ -172,8 +199,8 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
        LEFT JOIN users u ON u.id = t.user_id
       WHERE t.case_id = ?
         ${sinceParam ? 'AND t.timestamp >= ?' : ''}
-      ORDER BY t.timestamp DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+      ORDER BY t.timestamp DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId]
   )));
 
   // Field actions where this case is linked
@@ -187,8 +214,8 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
        LEFT JOIN users u ON u.id = fa.initiated_by
       WHERE fac.case_id = ?
         ${sinceParam ? 'AND fa.initiated_at >= ?' : ''}
-      ORDER BY fa.initiated_at DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+      ORDER BY fa.initiated_at DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId]
   )));
 
   // CAPA records sourced from this case
@@ -200,8 +227,8 @@ async function getTimeline({ orgId, caseId, since = null, limit = 500 }) {
        LEFT JOIN users u ON u.id = c.opened_by
       WHERE c.source_case_id = ?
         ${sinceParam ? 'AND c.opened_at >= ?' : ''}
-      ORDER BY c.opened_at DESC LIMIT ?`,
-    sinceParam ? [caseId, sinceParam, Number(limit)] : [caseId, Number(limit)]
+      ORDER BY c.opened_at DESC LIMIT ${lim}`,
+    sinceParam ? [caseId, sinceParam] : [caseId]
   )));
 
   // ── Merge + sort newest-first, then truncate.

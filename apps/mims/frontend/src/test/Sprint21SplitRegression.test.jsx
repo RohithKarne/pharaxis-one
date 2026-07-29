@@ -57,7 +57,9 @@ vi.mock('../modules/cases/hooks/useCaseForm', () => ({
   }),
 }))
 
-vi.mock('../modules/cases/components/CaseInfoTab', () => ({ default: () => <div data-testid="case-info-tab">info</div> }))
+// The "Case Meta" step was deleted in the 2026-07-28 form restructure; its
+// workflow fields moved into CaseWorkflowStep, which is now the final step.
+vi.mock('../modules/cases/components/CaseWorkflowStep', () => ({ default: () => <div data-testid="case-workflow-step">workflow</div> }))
 vi.mock('../modules/cases/components/CaseCommentsTab', () => ({ default: () => <div data-testid="case-comments-tab">comments</div> }))
 // The Sprint 21 split replaced the standalone comments tab with a combined
 // workspace; the Communications tab mounts this component now.
@@ -98,24 +100,47 @@ describe('Sprint 21 split regression: CaseFormPage', () => {
   it('honors section deep-link and shows MI tab content', async () => {
     renderCaseForm('/cases/42?section=mi')
     expect(await screen.findByTestId('case-mi-tab')).toBeInTheDocument()
-    expect(screen.queryByTestId('case-info-tab')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('case-workflow-step')).not.toBeInTheDocument()
+  })
+
+  // Deep links from before the restructure must still land somewhere valid —
+  // notifications raised by Email Case Import point at ?section=info.
+  it('remaps a retired ?section=info deep link onto the workflow step', async () => {
+    renderCaseForm('/cases/42?section=info')
+    expect(await screen.findByTestId('case-workflow-step')).toBeInTheDocument()
   })
 
   it('switches wizard steps and renders split components', async () => {
     renderCaseForm('/cases/42')
-    expect(await screen.findByTestId('case-info-tab')).toBeInTheDocument()
+    // Step 1 is Reporter & Patient now — the Case Meta step was deleted.
+    expect(await screen.findByTestId('case-contacts-tab')).toBeInTheDocument()
 
-    // The tab strip is gone — the case form is a 4-step wizard now, and the
-    // steps are what navigate between the split components. This used to click
-    // .cf-tabbar-btn, a control that no longer exists.
     const step = (n) =>
       screen.getAllByRole('button', { name: new RegExp(`Step ${n}:`) })[0]
 
     fireEvent.click(step(2))
-    expect(await screen.findByTestId('case-contacts-tab')).toBeInTheDocument()
+    expect(await screen.findByTestId('case-mi-tab')).toBeInTheDocument()
 
-    fireEvent.click(step(4))
-    expect(await screen.findByTestId('case-communications-workspace')).toBeInTheDocument()
+    fireEvent.click(step(3))
+    expect(await screen.findByTestId('case-workflow-step')).toBeInTheDocument()
+  })
+
+  it('renders a 3-step wizard, not 4', async () => {
+    renderCaseForm('/cases/42')
+    await screen.findByTestId('case-contacts-tab')
+    expect(screen.queryAllByRole('button', { name: /Step 4:/ })).toHaveLength(0)
+    expect(screen.getAllByRole('button', { name: /Step 3:/ }).length).toBeGreaterThan(0)
+  })
+
+  // The five read-only panels were removed from the form; the header strip
+  // carries the same facts on one line and must render them read-only.
+  it('shows the read-only header strip instead of the deleted panels', async () => {
+    renderCaseForm('/cases/42')
+    await screen.findByTestId('case-contacts-tab')
+    expect(screen.getByText('Last activity')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Audit trail/ })).toBeInTheDocument()
+    expect(screen.queryByText('Case Status At A Glance')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reporter And Patient Snapshot')).not.toBeInTheDocument()
   })
 })
 

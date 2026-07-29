@@ -61,6 +61,12 @@ import EmailSettingsPage        from './admin/pages/EmailSettingsPage'
 import FAQAdminPage            from './admin/pages/FAQPage'
 import FAQPortalPage           from './portal/pages/FAQPage'
 
+import ClinicalTrialsPage      from './portal/pages/ClinicalTrialsPage'
+import TrainingPage            from './portal/pages/TrainingPage'
+
+import TrialsAdminPage         from './admin/pages/TrialsAdminPage'
+import TrainingAdminPage       from './admin/pages/TrainingAdminPage'
+
 function AdminGuard({ children }) {
   const { admin, authLoading } = useAdminAuth()
   const location = useLocation()
@@ -113,6 +119,8 @@ function PortalRoutes() {
           <Route path="profile"          element={<PortalAuthGuard><ProfilePage /></PortalAuthGuard>} />
           <Route path="faq"             element={<FAQPortalPage />} />
           <Route path="search"          element={<SearchResultsPage />} />
+          <Route path="trials"          element={<ClinicalTrialsPage />} />
+          <Route path="training"        element={<TrainingPage />} />
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
       </PortalLayout>
@@ -153,6 +161,8 @@ export default function App() {
         <Route path="/admin/clients/:clientId/review-queue"    element={<AdminGuard><ReviewQueuePage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/email-settings" element={<AdminGuard><EmailSettingsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/faq"           element={<AdminGuard><FAQAdminPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/trials"        element={<AdminGuard><TrialsAdminPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/training"      element={<AdminGuard><TrainingAdminPage /></AdminGuard>} />
 
         {/* Public Portal — multi-tenant by clientCode */}
         <Route path="/portal/:clientCode/*" element={<PortalRoutes />} />

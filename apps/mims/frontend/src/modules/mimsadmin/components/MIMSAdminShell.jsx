@@ -4,10 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { hasGlobalAdminScope } from '../../../shared/utils/adminScope.js'
-// import Organizations from './tabs/Organizations' // retired — see TABS note (Division Parameters replaces it)
 import { CONFIG_NAV, ESCALATION_NAV, DOCUMENTS_NAV, TABLES_NAV, SYSTEM_NAV, HELP_NAV } from './configItems'
-// Legacy nav-key permission map retired — admin gating is now capability-based.
-// groupSecurityConfig kept on disk for rollback. (import removed)
 import { AdminTenantProvider, useAdminTenant } from '../utils/AdminTenantContext'
 import HelpHint from '../../../shared/components/HelpHint'
 import { helpKeyFor, helpLabelFor } from '../utils/helpKeys'
@@ -36,7 +33,7 @@ function createResolvedAdminAccess(data = {}) {
 }
 
 function createUnresolvedAdminAccess() {
-  return { resolved: false, unrestricted: false, system_options: {} }
+  return { resolved: false, unrestricted: false, system_options: {}, privileges: [] }
 }
 
 function findFirstLeafValue(nav, predicate = () => true) {
@@ -76,8 +73,6 @@ function AdminTenantPicker() {
 
 const TABS = [
   { key: 'dashboard',         label: 'Dashboard',         component: DashboardTab        },
-  // Organizations retired — replaced by System > Division Parameters (division-only model).
-  // Component file kept for rollback; remove import + file once parity is fully confirmed.
   { key: 'service-log',       label: 'Service Log',       component: ServiceLogTab       },
   { key: 'system-activity',   label: 'System Activity',   component: SystemActivityTab   },
   { key: 'service-dashboard', label: 'Service Dashboard', component: ServiceDashboardTab },
@@ -99,10 +94,8 @@ const SYSTEM_ACTIVITY_NAV = [
   { label: 'System Activity Overview', value: 'system-activity-overview' },
 ]
 
-// ── Capability-based admin gating (replaces legacy nav-key system_options) ──
-// Coarse map: admin nav value → capability key. Anything UNMAPPED fails OPEN
-// (stays visible) — combined with the unrestricted/unresolved fail-open in
-// effHasCap, this guarantees an admin can never be locked out of the console.
+// ── Capability-based admin gating ──
+// Coarse map: admin nav value → capability key.
 const SYSTEM_VALUE_CAP = {
   'sys-division-params': 'admin.division_parameters',
   'sys-view-data':       'admin.view_data',
@@ -119,25 +112,17 @@ function capForSystemValue(value) {
   if (value.startsWith('sys-setup-')) return 'admin.setup'
   return SYSTEM_VALUE_CAP[value] || null
 }
-// Fail-open: no mapping, unrestricted (superadmin), or privileges not yet
-// resolved → allowed. Only an explicitly-resolved list lacking the cap hides it.
 function effHasCap(effectiveAccess, cap) {
   if (!cap) return true
-  if (!effectiveAccess || effectiveAccess.unrestricted) return true
-  if (effectiveAccess.privileges == null) return true
-  return Array.isArray(effectiveAccess.privileges) && effectiveAccess.privileges.includes(cap)
+  if (!effectiveAccess) return false
+  if (effectiveAccess.unrestricted) return true
+  if (!Array.isArray(effectiveAccess.privileges)) return false
+  return effectiveAccess.privileges.includes(cap)
 }
 
 function isSystemItemAllowed(effectiveAccess, value) {
   if (!value) return true
   return effHasCap(effectiveAccess, capForSystemValue(value))
-}
-
-// Admin tabs stay visible; granular control lives at the System sub-item level.
-function isAdminTabAllowed(tabKey, effectiveAccess) {
-  if (tabKey === 'dashboard' || tabKey === 'help') return true
-  if (!effectiveAccess || effectiveAccess.unrestricted || effectiveAccess.privileges == null) return true
-  return true
 }
 
 function AdminAccessDenied({ label = 'this admin screen' }) {
@@ -756,9 +741,8 @@ function MIMSAdminShellInner() {
     setAuditItem(nextAuditItem)
   }, [location.search])
 
-  // Capability-based filtering with fail-open: unresolved / unrestricted / no
-  // resolved privilege list → show full nav (never lock an admin out).
-  const systemNav = (!effectiveAccess || effectiveAccess.resolved === false || effectiveAccess.unrestricted || effectiveAccess.privileges == null)
+  // Capability-based filtering
+  const systemNav = (effectiveAccess?.unrestricted)
     ? SYSTEM_NAV
     : filterSystemNav(SYSTEM_NAV, effectiveAccess)
   const defaultConfigItem = findFirstLeafValue(CONFIG_NAV)
@@ -931,7 +915,7 @@ function MIMSAdminShellInner() {
   const ActiveComponent = TABS.find(t => t.key === activeTab)?.component || DashboardTab
   const visibleTabs = TABS.filter(t => {
     if (t.key === 'system') return systemNav.length > 0
-    return isAdminTabAllowed(t.key, effectiveAccess)
+    return true
   })
   useEffect(() => {
     if (activeTab === 'system' && systemNav.length === 0) activateTab('dashboard')
@@ -1063,8 +1047,6 @@ function MIMSAdminShellInner() {
         <Suspense fallback={<AdminTabLoader />}>
           {activeTab === 'system' && systemItem && !isSystemItemAllowed(effectiveAccess, systemItem)
             ? <AdminAccessDenied label={helpLabelFor({ activeTab, systemItem }) || 'this system option'} />
-            : activeTab !== 'system' && !isAdminTabAllowed(activeTab, effectiveAccess)
-            ? <AdminAccessDenied label={TABS.find(t => t.key === activeTab)?.label || 'this admin tab'} />
             : activeTab === 'service-log'
             ? <ServiceLogTab selectedItem={serviceItem} />
             : activeTab === 'system-activity'

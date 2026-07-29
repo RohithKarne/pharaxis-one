@@ -26,6 +26,8 @@ const InboxPage                = lazy(() => import('./pages/InboxPage'))
 const SessionManagementPage    = lazy(() => import('./pages/SessionManagementPage'))
 const CasesPage                = lazy(() => import('../cases/pages/CasesPage'))
 const CaseFormPage             = lazy(() => import('../cases/pages/CaseFormPage'))
+const CaseTransmissionPage     = lazy(() => import('../cases/pages/CaseTransmissionPage'))
+const CaseResponsePage         = lazy(() => import('../cases/pages/CaseResponsePage'))
 const ICSRBuilderPage          = lazy(() => import('../cases/pages/ICSRBuilderPage'))
 const CaseQueryPage            = lazy(() => import('../cases/pages/CaseQueryPage'))
 const ContentPage              = lazy(() => import('../content/pages/ContentPage'))
@@ -35,6 +37,7 @@ const TransmissionsPage        = lazy(() => import('../transmissions/pages/Trans
 const BrowseContentPage        = lazy(() => import('../browse/pages/BrowseContentPage'))
 const ResponseLogPage          = lazy(() => import('../responselog/pages/ResponseLogPage'))
 const MIMSAdminPage            = lazy(() => import('../mimsadmin/pages/MIMSAdminPage'))
+const UnifiedTrackingDashboardPage = lazy(() => import('../transmissions/pages/UnifiedTrackingDashboardPage'))
 
 // Shared Suspense fallback — minimal spinner so Suspense boundary doesn't flash
 function PageLoader() {
@@ -275,6 +278,22 @@ function AppRoutes() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
+          {/* AE/PC handoff lives on its own screen, after the case is saved —
+              the wizard captures, this screen acts. */}
+          <Route path="/cases/:id/transmission" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="mims_core">
+                <CaseTransmissionPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/cases/:id/response" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="mims_core">
+                <CaseResponsePage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
           <Route path="/icsr/:id" element={
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="admin_console">
@@ -342,6 +361,13 @@ function AppRoutes() {
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">
                 <TransmissionsPage />
+              </ModuleAccessGuard>
+            </ProtectedRoute>
+          } />
+          <Route path="/unified-tracking" element={
+            <ProtectedRoute>
+              <ModuleAccessGuard moduleKey="mims_core">
+                <UnifiedTrackingDashboardPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />

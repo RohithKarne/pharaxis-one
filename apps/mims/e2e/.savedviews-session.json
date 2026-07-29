@@ -1,0 +1,43 @@
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjcsImVtYWlsIjoiZTJlX3NhdmVkdmlld3NAcGhhcmF4aXMudGVzdCIsInJvbGUiOiJwbGF0Zm9ybV9hZG1pbiIsIm9yZ0lkIjoxLCJzaXRlSWQiOm51bGwsInBsYXRmb3JtQWRtaW4iOnRydWUsImlhdCI6MTc4NTI0MTYzMSwiZXhwIjoxNzg1MjcwNDMxfQ.IeVNaVLXILKBp7_-7WMQGkddTUpXW5j1T4Jli8fkGxY",
+  "userId": 7,
+  "user": {
+    "id": 7,
+    "name": "E2E SavedViews",
+    "email": "e2e_savedviews@pharaxis.test",
+    "role": "admin",
+    "is_active": 1,
+    "email_verified": 1,
+    "email_verified_at": null,
+    "password_reset_required": 0,
+    "org_id": 1,
+    "created_at": "2026-07-28T12:27:11.000Z",
+    "updated_at": "2026-07-28T12:27:11.000Z",
+    "user_id": null,
+    "initials": null,
+    "security_group_id": null,
+    "network_user_id": null,
+    "department": null,
+    "is_primary_ref": 0,
+    "is_disabled": 0,
+    "access_admin_site": 0,
+    "case_admin": 0,
+    "password_expires_at": null,
+    "platformAdmin": true
+  },
+  "modules": [],
+  "orgId": 1,
+  "siteId": "",
+  "orgName": "E2E Review Co.",
+  "siteName": "",
+  "allOrgs": [
+    {
+      "orgId": 1,
+      "orgName": "E2E Review Co.",
+      "siteId": null,
+      "siteName": null,
+      "roleAtOrg": "admin"
+    }
+  ],
+  "sessionTimeout": 60
+}

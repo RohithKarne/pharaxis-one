@@ -157,7 +157,18 @@ export default function useCaseForm(id, token) {
         conflictErr.isConflict = true  // WP6: so the catch keeps this actionable message
         throw conflictErr
       }
-      if (!res.ok) throw new Error(data.error)
+      if (!res.ok) {
+        // The server returns field-level validation detail, but this used to be
+        // collapsed into a bare "Save failed". With the wizard split across
+        // steps the offending field is often on a step the user is not looking
+        // at, so the field name has to reach them or the message is useless.
+        const detail = Array.isArray(data.details) && data.details.length
+          ? data.details.map(d => `${d.field}: ${String(d.message).replace(/"/g, '')}`).join('; ')
+          : null
+        const saveErr = new Error(detail || data.error || 'Save failed')
+        saveErr.isValidation = !!detail
+        throw saveErr
+      }
       setCaseData(prev => ({ ...prev, ...data }))
       setInfoForm(prev => ({
         ...prev,
@@ -179,6 +190,10 @@ export default function useCaseForm(id, token) {
       // the generic "Save failed" — the user needs the actionable instruction on a conflict.
       if (err?.isConflict) {
         setTimeout(() => setSavedMsg(''), 6000)
+      } else if (err?.isValidation) {
+        setSavedMsg(`Save failed — ${err.message}`)
+        toast.error(`Save failed — ${err.message}`)
+        setTimeout(() => setSavedMsg(''), 8000)
       } else {
         setSavedMsg('Save failed')
         setTimeout(() => setSavedMsg(''), 3000)

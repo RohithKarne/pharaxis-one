@@ -5,9 +5,10 @@ import AdminContentIntPanel from './AdminContentIntPanel'
 import AdminEmirIntPanel from './AdminEmirIntPanel'
 import AdminCaseImportPanel from './AdminCaseImportPanel'
 import AdminRoutingRulesPanel from './AdminRoutingRulesPanel'
+import AdminIntegrationHealthPanel from './AdminIntegrationHealthPanel'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
-const INTEGRATION_SECTIONS = ['mir-int', 'crm-int', 'content-int', 'emir-int', 'case-import', 'inbox-routing']
+const INTEGRATION_SECTIONS = ['mir-int', 'crm-int', 'content-int', 'emir-int', 'case-import', 'inbox-routing', 'health-monitor']
 const INTEGRATION_TYPES = ['mir', 'crm', 'content', 'emir', 'case_import']
 
 export default function AdminIntegrationSection({ contentSection, H }) {
@@ -73,6 +74,8 @@ export default function AdminIntegrationSection({ contentSection, H }) {
       return <AdminCaseImportPanel H={H} />
     case 'inbox-routing':
       return <AdminRoutingRulesPanel H={H} />
+    case 'health-monitor':
+      return <AdminIntegrationHealthPanel H={H} />
     default:
       return null
   }

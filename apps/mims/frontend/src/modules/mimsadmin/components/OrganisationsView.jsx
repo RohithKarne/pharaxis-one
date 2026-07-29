@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import React from 'react'
 import { guardedFetch } from '../utils/guardedFetch'
+import AdminGuidedSetupWizardModal from './AdminGuidedSetupWizardModal'
 
 const API_BASE = '/api/admin/platform'
 
@@ -24,6 +25,7 @@ export default function OrganisationsView({ H, flash }) {
   const [orgLogos, setOrgLogos] = useState({})
   const logoInputRefs = useRef({})
   const [pendingOrgAction, setPendingOrgAction] = useState(null)
+  const [wizardOrg, setWizardOrg] = useState(null)
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -344,6 +346,16 @@ export default function OrganisationsView({ H, flash }) {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button
                 className="btn btn-outline"
+                style={{ fontSize: 11, padding: '3px 10px', color: '#6f42c1', borderColor: '#6f42c1' }}
+                onClick={e => {
+                  e.stopPropagation()
+                  setWizardOrg(org)
+                }}
+              >
+                🪄 Setup Wizard
+              </button>
+              <button
+                className="btn btn-outline"
                 style={{ fontSize: 11, padding: '3px 10px' }}
                 onClick={e => {
                   e.stopPropagation()
@@ -390,13 +402,18 @@ export default function OrganisationsView({ H, flash }) {
                 marginBottom: 12,
                 border: '1px solid var(--border)',
                 borderRadius: 10,
-                padding: 12,
+                padding: 16,
                 background: '#fff',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Readiness Score</div>
-                    <div style={{ fontSize: 24, fontWeight: 700 }}>{org.readiness?.score || 0}%</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Readiness Dashboard</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ flex: 1, height: 8, background: '#eee', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ width: `${org.readiness?.score || 0}%`, height: '100%', background: (org.readiness?.score || 0) === 100 ? '#28a745' : '#007bff' }} />
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 700 }}>{org.readiness?.score || 0}%</div>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button
@@ -417,26 +434,67 @@ export default function OrganisationsView({ H, flash }) {
                     </button>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginTop: 12 }}>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Workflow</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>{org.readiness?.counts?.workflowStates || 0}</div>
-                  </div>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Help Coverage</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>{org.readiness?.counts?.helpCoverage || 0}/{org.readiness?.counts?.helpTotal || 0}</div>
-                  </div>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Content Pack</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>{org.readiness?.counts?.folders || 0}/{org.readiness?.counts?.modules || 0}/{org.readiness?.counts?.documents || 0}</div>
-                  </div>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Data Quality</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>{org.readiness?.counts?.missingCaseNumbers || 0}/{org.readiness?.counts?.missingStatusLinks || 0}</div>
-                  </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                  {[
+                    {
+                      name: 'Workflow States',
+                      desc: 'State count, baseline states present',
+                      passed: (org.readiness?.counts?.workflowStates || 0) > 0,
+                      link: '#/admin/workflow'
+                    },
+                    {
+                      name: 'Picklists',
+                      desc: 'Custom picklists configured',
+                      passed: (org.readiness?.counts?.picklists || 0) > 0,
+                      link: '#/admin/picklists'
+                    },
+                    {
+                      name: 'Form Rules & Validation',
+                      desc: 'Active form rules count',
+                      passed: (org.readiness?.counts?.formRules || 0) > 0,
+                      link: '#/admin/forms'
+                    },
+                    {
+                      name: 'Security Groups',
+                      desc: 'Active security groups & privilege templates',
+                      passed: (org.readiness?.counts?.securityGroups || 0) > 0,
+                      link: '#/admin/security'
+                    },
+                    {
+                      name: 'Case Numbering',
+                      desc: 'Prefix, sequence, format defined',
+                      passed: ((org.readiness?.counts?.caseNumbering || 0) > 0 || org.readiness?.counts?.missingCaseNumbers === 0),
+                      link: '#/admin/casenumbering'
+                    },
+                    {
+                      name: 'Content Pack & Help',
+                      desc: 'Baseline help articles & starter folders',
+                      passed: ((org.readiness?.counts?.folders || 0) > 0 || (org.readiness?.counts?.helpTotal || 0) > 0),
+                      link: '#/admin/content'
+                    }
+                  ].map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${item.passed ? '#c3e6cb' : '#ffeeba'}`, borderRadius: 8, padding: 12, background: item.passed ? '#f8fff9' : '#fffaf0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ fontSize: 18 }}>
+                          {item.passed ? '✅' : '❌'}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: item.passed ? '#155724' : '#856404' }}>{item.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.desc}</div>
+                        </div>
+                      </div>
+                      {!item.passed && (
+                        <a href={item.link} className="btn btn-outline" style={{ fontSize: 11, textDecoration: 'none', padding: '4px 8px', borderColor: '#856404', color: '#856404' }}>
+                          Setup Now
+                        </a>
+                      )}
+                    </div>
+                  ))}
                 </div>
+
                 {!!org.readiness?.blockers?.length && (
-                  <div style={{ marginTop: 12 }}>
+                  <div style={{ marginTop: 16 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#7a1f1f', marginBottom: 6 }}>Blockers</div>
                     <div style={{ display: 'grid', gap: 6 }}>
                       {org.readiness.blockers.map((item) => (
@@ -624,6 +682,16 @@ export default function OrganisationsView({ H, flash }) {
             </div>
           </div>
         </div>
+      )}
+
+      {wizardOrg && (
+        <AdminGuidedSetupWizardModal
+          org={wizardOrg}
+          onClose={() => setWizardOrg(null)}
+          H={H}
+          flash={flash}
+          onComplete={() => load()}
+        />
       )}
     </>
   )

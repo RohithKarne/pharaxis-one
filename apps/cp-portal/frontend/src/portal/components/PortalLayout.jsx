@@ -159,6 +159,8 @@ export default function PortalLayout({ children }) {
   const resourceItems = [
     isFeatureEnabled('resources')        && { label: t('nav.resources'),  path: 'resources' },
     isFeatureEnabled('document_library') && { label: t('nav.documents'),  path: 'documents' },
+    { label: 'Clinical Trials', path: 'trials' },
+    { label: 'CME & Training',  path: 'training' },
   ].filter(Boolean)
 
   const flatNavItems = [

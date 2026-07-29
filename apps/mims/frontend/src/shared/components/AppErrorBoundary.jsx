@@ -12,6 +12,7 @@ export default class AppErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
+    console.error('AppErrorBoundary caught error:', error, info)
     sendClientError({
       app: this.props.app || 'mims',
       severity: 'error',

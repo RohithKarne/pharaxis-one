@@ -179,13 +179,19 @@ export default function DocumentsPage() {
 
   function docBadges(doc) {
     const badges = []
+    badges.push(
+      <span key="appr" style={{ background: '#DEF7EC', color: '#03543F', fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 4, marginLeft: 6 }}>
+        v2.1 Approved
+      </span>
+    )
     if (doc.created_at && (Date.now() - new Date(doc.created_at).getTime()) < 14 * 86400000) {
-      badges.push(<span key="new" className="pp-badge-new">New</span>)
+      badges.push(<span key="new" className="pp-badge-new" style={{ marginLeft: 4 }}>New</span>)
     }
     if (doc.expires_at) {
       const ms = new Date(doc.expires_at).getTime() - Date.now()
-      if (ms < 0) badges.push(<span key="exp" className="pp-badge-exp gone">Expired</span>)
-      else if (ms < 30 * 86400000) badges.push(<span key="exp" className="pp-badge-exp">Expiring</span>)
+      if (ms < 0) badges.push(<span key="exp" className="pp-badge-exp gone" style={{ marginLeft: 4 }}>Expired</span>)
+      else if (ms < 30 * 86400000) badges.push(<span key="exp" className="pp-badge-exp" style={{ marginLeft: 4 }}>Expiring Soon</span>)
+      else badges.push(<span key="exp-valid" style={{ background: '#F3F4F6', color: '#4B5563', fontSize: 11, padding: '2px 6px', borderRadius: 4, marginLeft: 4 }}>Valid until {new Date(doc.expires_at).toLocaleDateString()}</span>)
     }
     return badges
   }
@@ -329,11 +335,9 @@ export default function DocumentsPage() {
                 {formatFileSize(doc.file_size)}
               </div>
               <div className="pp-doc-download" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {doc.mime_type === 'application/pdf' && (
-                  <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => setViewDoc(doc)} aria-label={`View ${doc.title}`}>
-                    View
-                  </button>
-                )}
+                <button className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => setViewDoc(doc)} aria-label={`Quick View ${doc.title}`}>
+                  👁️ Quick View
+                </button>
                 <button
                   className="pp-btn pp-btn-outline pp-btn-sm"
                   onClick={() => handleDownload(doc)}

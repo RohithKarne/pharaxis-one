@@ -437,14 +437,19 @@ router.get('/picklists', authenticate, requireRole('admin', 'platform_admin'), r
   }
 });
 
-// GET /api/admin/picklists/export — returns full list as JSON for Excel export
+// GET /api/admin/picklists/export — Exports all picklist categories, fields, and values for the org as a CSV file
 router.get('/picklists/export', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
     const where = [];
     const params = [];
+    const orgId = hasGlobalAdminScope(req.user) ? (req.query.org_id || 0) : req.user.orgId;
+
     if (!hasGlobalAdminScope(req.user)) {
       where.push('p.org_id = ?');
       params.push(req.user.orgId);
+    } else if (orgId) {
+      where.push('p.org_id = ?');
+      params.push(orgId);
     }
 
     const [picklists] = await pool.execute(
@@ -467,7 +472,24 @@ router.get('/picklists/export', authenticate, requireRole('admin', 'platform_adm
        ORDER BY category, field_type, value`,
       params
     );
-    res.json({ picklists });
+
+    const header = 'id,category,field_type,name,value,description,status,effective_from,effective_to,governance_note';
+    const csvRows = picklists.map(r => [
+      r.id,
+      `"${(r.category||'').replace(/"/g,'""')}"`,
+      `"${(r.field_type||'').replace(/"/g,'""')}"`,
+      `"${(r.name||'').replace(/"/g,'""')}"`,
+      `"${(r.value||'').replace(/"/g,'""')}"`,
+      `"${(r.description||'').replace(/"/g,'""')}"`,
+      r.status,
+      r.effective_from || '',
+      r.effective_to || '',
+      `"${String(r.governance_note || '').replace(/"/g, '""')}"`
+    ].join(','));
+    const csv = [header, ...csvRows].join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="picklists_export_org_${orgId}.csv"`);
+    res.send(csv);
   } catch (err) {
     console.error('GET /picklists/export error:', err);
     res.status(500).json({ error: 'Server error.' });
@@ -855,6 +877,83 @@ router.post('/picklists/bulk', authenticate, requireRole('admin', 'platform_admi
     res.json({ message: 'Bulk import complete.', imported, errors });
   } catch (err) {
     console.error('POST /picklists/bulk error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/picklists/import — Bulk import picklists
+router.post('/picklists/import', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
+  try {
+    let rows = req.body.rows;
+    if (req.is('multipart/form-data') || req.is('text/csv')) {
+      // Very basic multipart/csv handling if needed, though typically done with multer
+      // In this system, assume we might get raw CSV if parsed by body-parser text middleware
+      // but according to requirements JSON is { rows: [] }. We'll just handle JSON for now.
+    }
+    if (!Array.isArray(rows)) {
+      return res.status(400).json({ error: 'rows array is required.' });
+    }
+
+    const orgId = resolveOrgScope(req, req.body.org_id);
+    let imported_count = 0;
+    const errors = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const category = normalizeStr(row.category, 'General');
+      const field = normalizeStr(row.field, 'General');
+      const value = normalizeStr(row.value);
+      const label = normalizeStr(row.label, value);
+      const sortOrder = Number(row.sort_order || 0);
+      const isActive = row.is_active === undefined ? 1 : (row.is_active ? 1 : 0);
+      const status = isActive ? 'Active' : 'Inactive';
+      const description = row.description || null;
+
+      if (!value) {
+        errors.push({ index: i, error: 'value is required' });
+        continue;
+      }
+
+      try {
+        const ensured = await ensureCategoryAndField({
+          orgId,
+          categoryName: category,
+          fieldName: field,
+          userId: req.user.userId,
+        });
+
+        await pool.execute(
+          `INSERT INTO picklists (name, category, field_type, field_id, value, description, status, created_by, org_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             name = VALUES(name),
+             category = VALUES(category),
+             field_type = VALUES(field_type),
+             field_id = VALUES(field_id),
+             description = VALUES(description),
+             status = VALUES(status)`,
+          [
+            label,
+            ensured.categoryName,
+            ensured.fieldName,
+            ensured.fieldId,
+            value,
+            description,
+            status,
+            req.user.userId,
+            orgId,
+          ]
+        );
+        imported_count++;
+      } catch (err) {
+        errors.push({ index: i, error: err.message });
+      }
+    }
+
+    await audit(req.user.userId, req.user.email, 'BULK_IMPORT', 'picklist', null, { imported_count, errors: errors.length });
+    res.json({ imported_count, errors });
+  } catch (err) {
+    console.error('POST /picklists/import error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });

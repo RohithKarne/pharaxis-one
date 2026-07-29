@@ -26,7 +26,7 @@ const { encryptSecret, decryptSecret } = require('../utils/secretCrypto');
 const { PORTAL_SECRET } = require('../middleware/auth');
 
 const FRONTEND_BASE_URL = (process.env.CP_FRONTEND_BASE_URL || 'http://localhost:5174').replace(/\/+$/, '');
-const BACKEND_BASE_URL = (process.env.CP_BACKEND_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
+const BACKEND_BASE_URL = (process.env.CP_BACKEND_BASE_URL || `http://localhost:${process.env.CP_PORT || 4000}`).replace(/\/+$/, '');
 
 const PROVIDER_LABELS = { google: 'Google', microsoft: 'Microsoft' };
 const MICROSOFT_DEFAULT_TENANT = 'common';

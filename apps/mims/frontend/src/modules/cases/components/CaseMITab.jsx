@@ -57,6 +57,7 @@ export default function CaseMITab({
   id, token, headers, setSavedMsg, onCountChange,
   formConfig, getPicklistOptions, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
   saveDynFields, caseType,
+  view = 'full',
 }) {
   const ctx = useCaseFieldContext()
   // B8 — Draft storage MUST be scoped by both case and MI tab id, otherwise a
@@ -478,14 +479,26 @@ export default function CaseMITab({
   const miStatusOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Response', 'MI Status') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
   const responseChannelOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Response', 'Response Channel') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
 
+  // The MI response was moved off the case form onto its own screen (locked with
+  // Rohith 2026-07-28): the wizard captures the enquiry, the Response screen
+  // answers it. `view` selects which half renders — 'capture' in the wizard,
+  // 'response' on /cases/:id/response. 'full' keeps the original behaviour for
+  // any caller that has not been split yet.
+  const showCapture = view !== 'response'
+  const showResponse = view !== 'capture'
+
   return (
     <div id="tab-mi" className="cf-tab-pane">
       <div className="cf-section-header-row">
-        <button className="cf-add-btn" onClick={addMITab}>+ Add MI</button>
-        <button className="cf-open-btn" style={{ marginLeft: 8 }} onClick={openResponseBuilder}>Build MI Response</button>
+        {showCapture && <button className="cf-add-btn" onClick={addMITab}>+ Add MI</button>}
+        {showResponse && (
+          <button className="cf-open-btn" style={{ marginLeft: showCapture ? 8 : 0 }} onClick={openResponseBuilder}>
+            Build MI Response
+          </button>
+        )}
       </div>
 
-      {miTabs.length === 0 ? (
+      {!showCapture ? null : miTabs.length === 0 ? (
         <div className="cf-empty-msg">No MI components yet. Click "+ Add MI" to start.</div>
       ) : (
         <>
@@ -579,6 +592,7 @@ export default function CaseMITab({
         </>
       )}
 
+      {showResponse && (
       <div className="cf-response-history">
         <div className="cf-response-history-title">Response History</div>
         {miRespLoading && <div className="cf-empty-msg">Loading responses...</div>}
@@ -638,6 +652,7 @@ export default function CaseMITab({
           )
         })}
       </div>
+      )}
 
       {miRespModal && (
         <div className="cf-corr-compose-overlay" onClick={() => !miRespSaving && setMiRespModal(false)}>
@@ -828,8 +843,9 @@ export default function CaseMITab({
         </div>
       )}
 
-      {/* B1 fix — admin-configured MI fields render here, scoped to displayTab='mi' */}
-      {formConfig && Array.isArray(formConfig.sections) && (
+      {/* B1 fix — admin-configured MI fields render here, scoped to displayTab='mi'.
+          These are capture fields, so they stay with the wizard, not the Response screen. */}
+      {showCapture && formConfig && Array.isArray(formConfig.sections) && (
         <div className="cf-overview-card">
           <div className="cf-overview-kicker">Additional Fields</div>
           <h3>MI Configured Fields</h3>

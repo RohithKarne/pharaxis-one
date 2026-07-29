@@ -111,6 +111,7 @@ export default function PortalHomePage() {
       path:  'submit',
       action: 'Start request',
       tone: 'primary',
+      subChips: ['⚡ Quick AE Report', '❓ Product Inquiry', '📋 Complaint Form'],
     },
     {
       key:   'document_library',
@@ -120,6 +121,7 @@ export default function PortalHomePage() {
       path:  'documents',
       action: 'Browse documents',
       tone: 'teal',
+      subChips: ['📄 Prescribing Info (SmPC)', '🔬 Clinical Papers', '💡 Patient Leaflets'],
     },
     {
       key:   'find_msl',
@@ -129,6 +131,7 @@ export default function PortalHomePage() {
       path:  'find-msl',
       action: 'Find an MSL',
       tone: 'primary',
+      subChips: ['🟢 Available Today', '📅 Book 1-on-1', '💬 Medical Discussion'],
     },
   ].filter(c => isFeatureEnabled(c.key))
 
@@ -245,6 +248,20 @@ export default function PortalHomePage() {
                 <button key={term} type="button" onClick={() => runSearch(term)}>{term}</button>
               ))}
             </div>
+            <div className="pp-quick-filter-pills" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+              <button type="button" onClick={() => navigate(`${base}/documents`)} className="pp-chip" style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>
+                📁 Prescribing Info
+              </button>
+              <button type="button" onClick={() => navigate(`${base}/submit`)} className="pp-chip" style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>
+                ⚠️ AE Report
+              </button>
+              <button type="button" onClick={() => navigate(`${base}/find-msl`)} className="pp-chip" style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>
+                👨‍⚕️ Find MSL
+              </button>
+              <button type="button" onClick={() => navigate(`${base}/drug-info`)} className="pp-chip" style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 600 }}>
+                💊 Product Catalog
+              </button>
+            </div>
           </div>
           <aside className="pp-hero-panel" aria-label="Portal shortcuts">
             <div className="pp-safety-card">
@@ -303,6 +320,15 @@ export default function PortalHomePage() {
                 <div className="pp-top-task-body">
                   <h3>{card.title}</h3>
                   <p>{card.desc}</p>
+                  {card.subChips && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0 10px' }}>
+                      {card.subChips.map((chip, idx) => (
+                        <span key={idx} style={{ background: '#F3F4F6', color: '#4B5563', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 12 }}>
+                          {chip}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <span>{card.action} <span aria-hidden="true">→</span></span>
                 </div>
               </Link>

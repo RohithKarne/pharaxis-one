@@ -23,7 +23,7 @@
  *     transitions={['submit','approve','close']}
  *     onTransition={(t) => ...}
  *   >
- *     <CaseInfoTab ... />
+ *     <CaseFormWizard ... />
  *   </CaseFormShell>
  *
  * All chrome is feature-flag-gated; if a flag is off, that piece is invisible.

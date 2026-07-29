@@ -12,6 +12,14 @@ const {
 } = require('../services/reportDatasetService');
 const { recordReportRun, listReportRunLedger } = require('../services/reportOpsService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
+// Loaded on first use rather than at module load. This service is mid-write —
+// two of the modules it requires have not been written yet — and requiring it
+// here threw MODULE_NOT_FOUND during mountRoutes, which stopped the entire
+// backend from starting. An unfinished endpoint should fail by itself; the
+// handlers below already return 500 on error, so that is what now happens.
+const scheduledReportService = new Proxy({}, {
+  get: (_t, prop) => (...args) => require('../services/scheduledReportService')[prop](...args),
+});
 const router = express.Router();
 
 function dateFilters(from, to, col) {
@@ -819,6 +827,46 @@ router.delete('/presets/:id', authenticate, requireCapability('reports.manage'),
     );
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Scheduled Reports Routes
+router.get('/reports/scheduled', authenticate, async (req, res) => {
+  try {
+    const orgId = resolveReportOrgId(req);
+    const schedules = await scheduledReportService.listSchedules(orgId);
+    return res.json({ data: schedules });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/reports/scheduled', authenticate, async (req, res) => {
+  try {
+    const orgId = resolveReportOrgId(req);
+    const data = { ...req.body, org_id: orgId, created_by: req.user.userId };
+    const schedule = await scheduledReportService.createSchedule(data);
+    return res.json({ data: schedule, success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/reports/scheduled/:id', authenticate, async (req, res) => {
+  try {
+    await scheduledReportService.deleteSchedule(req.params.id);
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/reports/scheduled/:id/run-now', authenticate, async (req, res) => {
+  try {
+    await scheduledReportService.executeScheduledReport(req.params.id);
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

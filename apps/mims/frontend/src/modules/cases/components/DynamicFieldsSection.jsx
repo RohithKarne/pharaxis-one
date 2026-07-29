@@ -65,6 +65,13 @@ export default function DynamicFieldsSection({
     return (sections || [])
       .map(s => {
         const fields = (s.fields || []).filter(f => {
+          // A field with a core_key is a platform field the wizard already
+          // renders itself (Status, Priority, Description…). Rendering it here
+          // too produced two boxes for one field, and values written to both —
+          // case 482695 stored "test" against field_setup 20 AND 1702, both
+          // named "Description". The wizard owns core fields; this section owns
+          // everything the org added.
+          if (f.core_key) return false
           const scope = String(f.case_type_scope || 'shared').toLowerCase()
           const tab   = f.display_tab || null
           if (lcType && scope !== 'shared' && scope !== lcType) return false

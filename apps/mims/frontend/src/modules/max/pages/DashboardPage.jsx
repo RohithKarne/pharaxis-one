@@ -20,6 +20,7 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
   if (isAdmin) {
     return [
       {
+        id: 'unassigned_intake',
         title: 'Unassigned intake',
         value: Number(summary.stats.unassigned_cases || 0),
         body: 'Claim new work quickly so the queue does not age without an owner.',
@@ -28,6 +29,7 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
         tone: 'warning',
       },
       {
+        id: 'approval_queue',
         title: 'Approval queue',
         value: Number(summary.mi_stats.pending_approval || 0),
         body: 'Keep approval bottlenecks visible before they turn into SLA misses.',
@@ -36,6 +38,7 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
         tone: 'accent',
       },
       {
+        id: 'platform_watch',
         title: canSeeObservability ? 'Platform watch' : 'Session watch',
         value: canSeeObservability ? Number(summary.alerts.length || 0) : Number(sessions.activeSessionCount || 0),
         body: canSeeObservability
@@ -50,6 +53,7 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
 
   return [
     {
+      id: 'my_queue',
       title: 'My queue',
       value: Number(summary.stats.my_cases || 0),
       body: 'Jump directly into the cases already assigned to you.',
@@ -58,6 +62,7 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
       tone: 'accent',
     },
     {
+      id: 'response_work',
       title: 'Response work',
       value: Number(summary.mi_stats.pending_responses || 0),
       body: 'Track draft and ready responses without searching through the full queue.',
@@ -66,6 +71,7 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
       tone: 'warning',
     },
     {
+      id: 'session_health',
       title: 'Session health',
       value: Number(sessions.activeSessionCount || 0),
       body: 'Confirm the current session window before longer drafting or review work.',
@@ -112,6 +118,30 @@ export default function DashboardPage() {
   const [showWebauthnBanner, setShowWebauthnBanner] = useState(false)
   const [webauthnSetupLoading, setWebauthnSetupLoading] = useState(false)
   const [webauthnSetupError, setWebauthnSetupError] = useState('')
+  const [showPersonalise, setShowPersonalise] = useState(false)
+
+  const defaultWidgets = [
+    'unassigned_intake', 'approval_queue', 'platform_watch',
+    'my_queue', 'response_work', 'session_health', 'workspace_launchpad', 'pinned_reports'
+  ]
+
+  const [preferences, setPreferences] = useState(() => {
+    const saved = localStorage.getItem(`mims_dashboard_pref_${user?.id}`)
+    if (saved) {
+      try { return JSON.parse(saved) } catch (e) {}
+    }
+    return {
+      visibleWidgets: defaultWidgets,
+      pinnedReports: [],
+      defaultLandingView: 'Dashboard'
+    }
+  })
+
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem(`mims_dashboard_pref_${user.id}`, JSON.stringify(preferences))
+    }
+  }, [preferences, user?.id])
 
   const loadDashboard = useCallback(async () => {
     if (token == null) return
@@ -335,13 +365,84 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="mims-home-hero-actions">
-              <button className="btn btn-outline" onClick={loadDashboard} disabled={loading}>Refresh</button>
+            <button className="btn btn-outline" onClick={() => setShowPersonalise(true)}>Personalise Dashboard</button>
+            <button className="btn btn-outline" onClick={loadDashboard} disabled={loading}>Refresh</button>
             <button className="btn btn-primary" onMouseEnter={() => prefetchRoutePath('/cases')} onFocus={() => prefetchRoutePath('/cases')} onClick={() => navigate('/cases')}>Open Case Management</button>
           </div>
         </div>
 
+        {showPersonalise && (
+          <div className="mims-drawer-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999 }} onClick={() => setShowPersonalise(false)}>
+            <div className="mims-drawer" onClick={e => e.stopPropagation()} style={{ width: 400, background: 'var(--bg, #fff)', borderLeft: '1px solid var(--border)', padding: 20, height: '100vh', position: 'fixed', right: 0, top: 0, zIndex: 1000, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <h2>Personalise Dashboard</h2>
+                <button className="btn btn-outline" onClick={() => setShowPersonalise(false)}>Close</button>
+              </div>
+              
+              <div style={{ marginBottom: 20 }}>
+                <h4>Default Landing View</h4>
+                <select 
+                  className="form-control"
+                  value={preferences.defaultLandingView}
+                  onChange={e => setPreferences({...preferences, defaultLandingView: e.target.value})}
+                  style={{ width: '100%', marginTop: 8 }}
+                >
+                  <option value="Dashboard">Dashboard</option>
+                  <option value="Cases">Cases</option>
+                  <option value="Inbox">Inbox</option>
+                  <option value="Reports">Reports</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h4>Visible Widgets</h4>
+                {defaultWidgets.map(w => (
+                  <label key={w} style={{ display: 'block', marginTop: 8 }}>
+                    <input 
+                      type="checkbox" 
+                      checked={preferences.visibleWidgets.includes(w)}
+                      onChange={e => {
+                        const next = e.target.checked 
+                          ? [...preferences.visibleWidgets, w]
+                          : preferences.visibleWidgets.filter(x => x !== w)
+                        setPreferences({...preferences, visibleWidgets: next})
+                      }}
+                    /> {w.replace(/_/g, ' ')}
+                  </label>
+                ))}
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h4>Pinned Reports</h4>
+                <input 
+                  type="text" 
+                  placeholder="Report ID (e.g. rep_123)" 
+                  className="form-control"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && e.target.value) {
+                      setPreferences({
+                        ...preferences,
+                        pinnedReports: [...new Set([...preferences.pinnedReports, e.target.value])]
+                      })
+                      e.target.value = ''
+                    }
+                  }}
+                  style={{ width: '100%', marginTop: 8 }}
+                />
+                <ul style={{ marginTop: 8, paddingLeft: 20 }}>
+                  {preferences.pinnedReports.map(rp => (
+                    <li key={rp} style={{ marginBottom: 4 }}>
+                      {rp} <button style={{ background: 'none', border: 'none', color: 'var(--danger, red)', cursor: 'pointer', marginLeft: 8 }} onClick={() => setPreferences({...preferences, pinnedReports: preferences.pinnedReports.filter(x => x !== rp)})}>x</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         <section className="mims-home-focus-grid" aria-label="Today focus">
-          {focusCards.map((item) => (
+          {focusCards.filter(item => preferences.visibleWidgets.includes(item.id)).map((item) => (
             <article key={item.title} className={`mims-home-focus-card ${item.tone || ''}`}>
               <div className="mims-home-focus-top">
                 <div>
@@ -359,32 +460,60 @@ export default function DashboardPage() {
 
         {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
 
-        <section className="mims-workbench-grid" aria-label="Workspace launchpad" style={{ gridTemplateColumns: '1fr' }}>
-          <article className="card mims-workbench-panel">
-            <div className="card-header">
-              <h3>Workspace Launchpad</h3>
-              <span className="mims-workbench-panel-note">Open the module you need and get to work.</span>
-            </div>
-            <div className="card-body">
-              <div className="mims-workbench-card-grid">
-                {moduleLaunchers.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className="mims-workbench-card"
-                    onMouseEnter={() => prefetchRoutePath(item.to)}
-                    onFocus={() => prefetchRoutePath(item.to)}
-                    onClick={() => navigate(item.to)}
-                  >
-                    <strong>{item.title}</strong>
-                    <span>{item.body}</span>
-                    <small>Open workspace</small>
-                  </button>
-                ))}
+        {preferences.visibleWidgets.includes('workspace_launchpad') && (
+          <section className="mims-workbench-grid" aria-label="Workspace launchpad" style={{ gridTemplateColumns: '1fr' }}>
+            <article className="card mims-workbench-panel">
+              <div className="card-header">
+                <h3>Workspace Launchpad</h3>
+                <span className="mims-workbench-panel-note">Open the module you need and get to work.</span>
               </div>
-            </div>
-          </article>
-        </section>
+              <div className="card-body">
+                <div className="mims-workbench-card-grid">
+                  {moduleLaunchers.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className="mims-workbench-card"
+                      onMouseEnter={() => prefetchRoutePath(item.to)}
+                      onFocus={() => prefetchRoutePath(item.to)}
+                      onClick={() => navigate(item.to)}
+                    >
+                      <strong>{item.title}</strong>
+                      <span>{item.body}</span>
+                      <small>Open workspace</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </article>
+          </section>
+        )}
+
+        {preferences.visibleWidgets.includes('pinned_reports') && preferences.pinnedReports.length > 0 && (
+          <section className="mims-workbench-grid" aria-label="Pinned Reports" style={{ gridTemplateColumns: '1fr', marginTop: 24 }}>
+            <article className="card mims-workbench-panel">
+              <div className="card-header">
+                <h3>Pinned Reports</h3>
+                <span className="mims-workbench-panel-note">Quick access to your saved reports.</span>
+              </div>
+              <div className="card-body">
+                <div className="mims-workbench-card-grid">
+                  {preferences.pinnedReports.map((rp) => (
+                    <button
+                      key={rp}
+                      type="button"
+                      className="mims-workbench-card"
+                      onClick={() => navigate(`/reports?preset=${rp}`)}
+                    >
+                      <strong>Report {rp}</strong>
+                      <small>Open report</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </article>
+          </section>
+        )}
       </div>
     </MIMSLayout>
   )

@@ -3,96 +3,247 @@ import { confirm } from '../../../shared/utils/confirm'
 import { SectionHeader, StatusPill } from './AdminShared'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 
-function WorkflowDiagram({ states, rules }) {
+function WorkflowDiagram({ states, rules, H, onRefreshStates, onRefreshRules, flash }) {
   const activeStates = (states || []).filter(s => s.is_active)
   const NODE_R = 36
   const W = 760
-  const H = 480
+  const H_canvas = 480
   const PADDING = 80
 
-  const nodes = useMemo(() => {
-    if (!activeStates.length) return []
+  const [nodePositions, setNodePositions] = useState({})
+  
+  useEffect(() => {
+    if (!activeStates.length) return
     const cx = W / 2
-    const cy = H / 2
-    const r = Math.min(W, H) / 2 - PADDING
-    return activeStates.map((s, i) => {
-      const angle = (2 * Math.PI * i) / activeStates.length - Math.PI / 2
-      return { ...s, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }
+    const cy = H_canvas / 2
+    const r = Math.min(W, H_canvas) / 2 - PADDING
+    
+    setNodePositions(prev => {
+      const newPos = { ...prev }
+      let changed = false
+      activeStates.forEach((s, i) => {
+        if (!newPos[s.id]) {
+          const angle = (2 * Math.PI * i) / activeStates.length - Math.PI / 2
+          newPos[s.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }
+          changed = true
+        }
+      })
+      return changed ? newPos : prev
     })
   }, [activeStates])
 
+  const nodes = activeStates.map(s => ({
+    ...s,
+    x: nodePositions[s.id]?.x || W/2,
+    y: nodePositions[s.id]?.y || H_canvas/2
+  }))
   const nodeMap = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes])
 
-  if (!activeStates.length) {
-    return (
-      <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: 40, marginBottom: 8 }}>⬡</div>
-        <p>No active workflow states. Add states first to view the diagram.</p>
-      </div>
-    )
+  const [draggedNode, setDraggedNode] = useState(null)
+  const [selectedFrom, setSelectedFrom] = useState(null)
+  const [editingRule, setEditingRule] = useState(null)
+
+  const handleMouseMove = (e) => {
+    if (!draggedNode) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    setNodePositions(prev => ({ ...prev, [draggedNode]: { x, y } }))
+  }
+
+  const handleMouseUp = () => setDraggedNode(null)
+
+  const handleNodeMouseDown = (e, nodeId) => {
+    e.stopPropagation()
+    setDraggedNode(nodeId)
+  }
+
+  const handleNodeClick = (nodeId) => {
+    if (!selectedFrom) {
+      setSelectedFrom(nodeId)
+    } else {
+      if (selectedFrom !== nodeId) {
+        setEditingRule({ from_state_id: selectedFrom, to_state_id: nodeId, isNew: true, require_password: false, require_checklist: false, require_comment: false })
+      }
+      setSelectedFrom(null)
+    }
+  }
+
+  const saveRule = async (e) => {
+    e.preventDefault()
+    const isNew = editingRule.isNew
+    const payload = {
+      from_state_id: editingRule.from_state_id,
+      to_state_id: editingRule.to_state_id,
+      require_password: editingRule.require_password || false,
+      require_checklist: editingRule.require_checklist || false,
+      require_comment: editingRule.require_comment || false,
+      transition_name: editingRule.transition_name || '',
+      required_role: editingRule.required_role || '',
+      sla_hours: editingRule.sla_hours || ''
+    }
+
+    let url = '/api/admin/workflow-rules'
+    let method = 'POST'
+    if (!isNew && editingRule.id) {
+      url = `/api/admin/workflow-rules/${editingRule.id}`
+      method = 'PUT'
+    }
+
+    try {
+      const res = await httpFetch(url, { method, headers: H, body: JSON.stringify(payload) })
+      if (!res.ok) {
+        const d = await res.json()
+        flash(d.error || 'Failed to save rule.', 'error')
+        return
+      }
+      flash('Transition saved.')
+      setEditingRule(null)
+      if (onRefreshRules) onRefreshRules()
+    } catch (err) {
+      flash('Error saving rule.', 'error')
+    }
+  }
+  
+  const handleDeleteRuleClick = async (id) => {
+    if (!await confirm('Delete transition?')) return
+    const res = await httpFetch(`/api/admin/workflow-rules/${id}`, { method: 'DELETE', headers: H })
+    if (res.ok) {
+      flash('Transition deleted.')
+      setEditingRule(null)
+      if (onRefreshRules) onRefreshRules()
+    }
+  }
+
+  const handleAddState = async () => {
+    const name = window.prompt('Enter new state name:')
+    if (!name) return
+    const res = await httpFetch('/api/admin/workflow-states', { method: 'POST', headers: H, body: JSON.stringify({ name, is_active: true }) })
+    if (res.ok) {
+      flash('State added.')
+      if (onRefreshStates) onRefreshStates()
+    } else {
+      const d = await res.json()
+      flash(d.error || 'Failed to add state.', 'error')
+    }
   }
 
   return (
-    <div className="card">
+    <div className="card" style={{ position: 'relative' }}>
       <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3>State Transition Diagram</h3>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          {activeStates.length} states · {(rules || []).filter(r => r.is_active).length} active transitions
-        </span>
+        <h3>Interactive Workflow Builder</h3>
+        <div>
+          <button className="btn btn-primary" style={{ fontSize: 12, marginRight: 10 }} onClick={handleAddState}>+ Add New State Node</button>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {activeStates.length} states · {(rules || []).filter(r => r.is_active).length} transitions
+          </span>
+        </div>
       </div>
-      <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-        <svg width={W} height={H} style={{ display: 'block', maxWidth: '100%' }}>
-          <defs>
-            <marker id="wf-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="var(--primary, #4f6ef7)" />
-            </marker>
-            <marker id="wf-arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="#aaa" />
-            </marker>
-          </defs>
-          {(rules || []).map(rule => {
-            const from = nodeMap[rule.from_state_id]
-            const to = nodeMap[rule.to_state_id]
-            if (!from || !to) return null
-            const dx = to.x - from.x
-            const dy = to.y - from.y
-            const dist = Math.sqrt(dx * dx + dy * dy)
-            if (dist === 0) return null
-            const ux = dx / dist; const uy = dy / dist
-            const sx = from.x + ux * NODE_R; const sy = from.y + uy * NODE_R
-            const ex = to.x - ux * (NODE_R + 2); const ey = to.y - uy * (NODE_R + 2)
-            const midX = (sx + ex) / 2 - uy * 24; const midY = (sy + ey) / 2 + ux * 24
-            const active = rule.is_active
-            return (
-              <g key={rule.id}>
-                <path d={`M ${sx} ${sy} Q ${midX} ${midY} ${ex} ${ey}`} fill="none" stroke={active ? 'var(--primary, #4f6ef7)' : '#ccc'} strokeWidth={active ? 2 : 1.5} strokeDasharray={active ? undefined : '5,4'} markerEnd={active ? 'url(#wf-arrow)' : 'url(#wf-arrow-gray)'} opacity={active ? 0.85 : 0.45} />
-                {(rule.require_password || rule.require_checklist || rule.require_comment) && (
-                  <text x={(sx + ex) / 2 - uy * 16} y={(sy + ey) / 2 + ux * 16} textAnchor="middle" fontSize="10" fill="var(--warning, #f59e0b)" fontWeight="700">
-                    {[rule.require_password && '🔑', rule.require_checklist && '✅', rule.require_comment && '💬'].filter(Boolean).join('')}
-                  </text>
-                )}
+      <div className="card-body" style={{ padding: 0, overflowX: 'auto', background: '#fafafa', position: 'relative' }}>
+        {!activeStates.length ? (
+           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+             <div style={{ fontSize: 40, marginBottom: 8 }}>⬡</div>
+             <p>No active workflow states. Add states first to view the diagram.</p>
+           </div>
+        ) : (
+          <svg width={W} height={H_canvas} style={{ display: 'block', maxWidth: '100%', cursor: draggedNode ? 'grabbing' : 'default' }} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onClick={() => setSelectedFrom(null)}>
+            <defs>
+              <marker id="wf-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="var(--primary, #4f6ef7)" />
+              </marker>
+              <marker id="wf-arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#aaa" />
+              </marker>
+            </defs>
+            {(rules || []).map(rule => {
+              const from = nodeMap[rule.from_state_id]
+              const to = nodeMap[rule.to_state_id]
+              if (!from || !to) return null
+              const dx = to.x - from.x
+              const dy = to.y - from.y
+              const dist = Math.sqrt(dx * dx + dy * dy)
+              if (dist === 0) return null
+              const ux = dx / dist; const uy = dy / dist
+              const sx = from.x + ux * NODE_R; const sy = from.y + uy * NODE_R
+              const ex = to.x - ux * (NODE_R + 2); const ey = to.y - uy * (NODE_R + 2)
+              const midX = (sx + ex) / 2 - uy * 24; const midY = (sy + ey) / 2 + ux * 24
+              const active = rule.is_active
+              
+              // Condition Badges
+              const badges = []
+              if (rule.require_password || rule.e_signature_required) badges.push('✍️')
+              if (rule.require_checklist || rule.required_role) badges.push('👤')
+              if (rule.require_comment || rule.sla_hours) badges.push('⏱️')
+
+              return (
+                <g key={rule.id} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setEditingRule({...rule, isNew: false}) }}>
+                  <path d={`M ${sx} ${sy} Q ${midX} ${midY} ${ex} ${ey}`} fill="none" stroke={active ? 'var(--primary, #4f6ef7)' : '#ccc'} strokeWidth={active ? 3 : 2} strokeDasharray={active ? undefined : '5,4'} markerEnd={active ? 'url(#wf-arrow)' : 'url(#wf-arrow-gray)'} opacity={active ? 0.85 : 0.45} />
+                  {badges.length > 0 && (
+                    <text x={(sx + ex) / 2 - uy * 16} y={(sy + ey) / 2 + ux * 16} textAnchor="middle" fontSize="12" fill="var(--warning, #f59e0b)" fontWeight="700">
+                      {badges.join('')}
+                    </text>
+                  )}
+                  {/* Invisible wider path for easier clicking */}
+                  <path d={`M ${sx} ${sy} Q ${midX} ${midY} ${ex} ${ey}`} fill="none" stroke="transparent" strokeWidth={15} />
+                </g>
+              )
+            })}
+            
+            {/* Draw pending transition line if selectedFrom is active */}
+            {selectedFrom && nodeMap[selectedFrom] && (
+              <circle cx={nodeMap[selectedFrom].x} cy={nodeMap[selectedFrom].y} r={NODE_R + 4} fill="none" stroke="var(--warning, #f59e0b)" strokeWidth={3} strokeDasharray="4,4" />
+            )}
+
+            {nodes.map(n => (
+              <g key={n.id} style={{ cursor: 'grab' }} onMouseDown={(e) => handleNodeMouseDown(e, n.id)} onClick={(e) => { e.stopPropagation(); handleNodeClick(n.id) }}>
+                <circle cx={n.x} cy={n.y} r={NODE_R} fill="var(--surface, #fff)" stroke={selectedFrom === n.id ? 'var(--warning, #f59e0b)' : 'var(--primary, #4f6ef7)'} strokeWidth={selectedFrom === n.id ? 3 : 2} style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.12))' }} />
+                <text x={n.x} y={n.y + 1} textAnchor="middle" dominantBaseline="middle" fontSize={n.name.length > 10 ? 9 : 11} fontWeight="600" fill="var(--text-primary, #1a1a2e)" style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                  {n.name.length > 14 ? n.name.slice(0, 13) + '…' : n.name}
+                </text>
               </g>
-            )
-          })}
-          {nodes.map(n => (
-            <g key={n.id}>
-              <circle cx={n.x} cy={n.y} r={NODE_R} fill="var(--surface, #fff)" stroke="var(--primary, #4f6ef7)" strokeWidth={2} style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.12))' }} />
-              <text x={n.x} y={n.y + 1} textAnchor="middle" dominantBaseline="middle" fontSize={n.name.length > 10 ? 9 : 11} fontWeight="600" fill="var(--text-primary, #1a1a2e)" style={{ userSelect: 'none' }}>
-                {n.name.length > 14 ? n.name.slice(0, 13) + '…' : n.name}
-              </text>
-            </g>
-          ))}
-        </svg>
+            ))}
+          </svg>
+        )}
+
+        {/* Inline Config Editor */}
+        {editingRule && (
+          <div style={{ position: 'absolute', top: 20, right: 20, background: 'var(--surface)', borderRadius: 8, padding: 16, width: 300, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', border: '1px solid var(--border)', zIndex: 10 }}>
+            <h4 style={{ marginTop: 0, marginBottom: 12 }}>{editingRule.isNew ? 'New Transition' : 'Edit Transition'}</h4>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+              {nodeMap[editingRule.from_state_id]?.name} → {nodeMap[editingRule.to_state_id]?.name}
+            </div>
+            <form onSubmit={saveRule}>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Transition Name</label>
+                <input className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. Submit for Review" value={editingRule.transition_name || ''} onChange={e => setEditingRule(r => ({ ...r, transition_name: e.target.value }))} />
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Required Role 👤</label>
+                <input className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. QA Manager" value={editingRule.required_role || ''} onChange={e => setEditingRule(r => ({ ...r, required_role: e.target.value, require_checklist: !!e.target.value }))} />
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>SLA Hours ⏱️</label>
+                <input type="number" className="form-control" style={{ fontSize: 12, padding: '4px 8px' }} placeholder="e.g. 24" value={editingRule.sla_hours || ''} onChange={e => setEditingRule(r => ({ ...r, sla_hours: e.target.value, require_comment: !!e.target.value }))} />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={editingRule.require_password} onChange={e => setEditingRule(r => ({ ...r, require_password: e.target.checked }))} /> E-Signature Required ✍️
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
+                {!editingRule.isNew && <button type="button" className="btn btn-danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => handleDeleteRuleClick(editingRule.id)}>Delete</button>}
+                <div style={{ display: 'flex', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-outline" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => setEditingRule(null)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" style={{ fontSize: 11, padding: '4px 8px' }}>Save</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 20, padding: '12px 20px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <svg width="28" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="var(--primary, #4f6ef7)" strokeWidth="2" markerEnd="url(#wf-arrow)" /></svg>
-            Active transition
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <svg width="28" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="#ccc" strokeWidth="1.5" strokeDasharray="4,3" /></svg>
-            Inactive rule
-          </span>
-          <span>🔑 = password required &nbsp; ✅ = checklist &nbsp; 💬 = comment</span>
+          <span><strong>Hint:</strong> Click a node to select, then click another to link. Drag nodes to reposition.</span>
+          <span style={{ marginLeft: 'auto' }}>✍️ = E-Sign &nbsp; 👤 = Role &nbsp; ⏱️ = SLA</span>
         </div>
       </div>
     </div>
@@ -507,7 +658,7 @@ export default function AdminWorkflowPanel({ H, flash }) {
         </>
       )}
 
-      {wfTab === 'diagram' && <WorkflowDiagram states={workflowStates} rules={wfRules} />}
+      {wfTab === 'diagram' && <WorkflowDiagram states={workflowStates} rules={wfRules} H={H} onRefreshStates={loadWorkflowStates} onRefreshRules={loadWfRules} flash={flash} />}
 
       <ImpactPreviewModal panel={impactPanel} onClose={() => setImpactPanel(null)} />
 

@@ -93,9 +93,12 @@ export default function MySubmissionsPage() {
                   </div>
                   <span className={`pp-status-badge ${status.cls}`}>{status.label}</span>
                 </div>
-                <div className="pp-submission-meta" style={{ marginTop: '8px', color: '#64748b', fontSize: '0.85rem' }}>
+                <div className="pp-submission-meta" style={{ marginTop: '8px', color: '#64748b', fontSize: '0.85rem', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span>Submitted {formatDate(s.submitted_at)}</span>
                   {s.external_ref && <span> · MIMS Ref: {s.external_ref}</span>}
+                  <span style={{ background: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: 12, fontSize: '11px', fontWeight: 600 }}>
+                    ⚡ SLA Target: &lt; 24h Response
+                  </span>
                 </div>
 
                 {/* Milestone Progress Bar */}
@@ -121,6 +124,22 @@ export default function MySubmissionsPage() {
                     })}
                   </div>
                 </div>
+
+                {/* Expandable Activity Details */}
+                <details style={{ marginTop: '12px', fontSize: '0.85rem', color: '#475569' }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--pp-primary, #0284c7)' }}>
+                    🔍 View Request Details & Activity History
+                  </summary>
+                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: 4 }}>Submission Summary:</div>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+                      {s.form_data?.inquiry_details || s.form_data?.event_description || s.form_data?.complaint_details || 'Request submitted successfully to Medical Affairs team.'}
+                    </p>
+                    <div style={{ marginTop: 8, fontSize: '11px', color: '#94a3b8' }}>
+                      Assigned Agent: Medical Safety & Triage Specialist · Last update: {formatDate(s.submitted_at)}
+                    </div>
+                  </div>
+                </details>
 
                 {s.status && !['submitted', 'closed'].includes(s.status) && (
                   <div className={`pp-sync-tag pp-sync-${s.status}`} style={{ marginTop: '12px', fontSize: '0.8rem' }}>

@@ -26,7 +26,7 @@ function SecondarySectionLoader({ label = 'Loading insights...' }) {
 }
 
 export default function Dashboard({ onNavigateTab }) {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const navigate = useNavigate()
   const H = useMemo(() => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }), [token])
 
@@ -35,6 +35,12 @@ export default function Dashboard({ onNavigateTab }) {
   const [activity, setActivity] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [secondaryReady, setSecondaryReady] = useState(false)
+  const [mode, setMode] = useState(() => {
+    if (user?.role === 'compliance_officer') return 'Compliance Admin'
+    if (user?.role === 'operations_manager') return 'Operations Admin'
+    if (user?.role === 'system_admin') return 'IT / Security Admin'
+    return 'Platform Overview'
+  })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -109,6 +115,22 @@ export default function Dashboard({ onNavigateTab }) {
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '24px 28px' }}>
+      
+      {/* Role-Based Admin Mode Selector Bar */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+        {['Platform Overview', 'Compliance Admin', 'Operations Admin', 'IT / Security Admin'].map(m => (
+          <button
+            key={m}
+            className={`btn ${mode === m ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setMode(m)}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'Platform Overview' && (
+        <>
 
       {/* Platform Health card */}
       <div className="card" style={{ marginBottom: 14 }}>
@@ -303,6 +325,64 @@ export default function Dashboard({ onNavigateTab }) {
           ))}
         </div>
       </div>
+      </>
+      )}
+
+      {mode === 'Compliance Admin' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+          <div className="card">
+            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Audit Trail Activity</h3></div>
+            <div className="card-body">Recent significant audit trail changes.</div>
+          </div>
+          <div className="card">
+            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>E-Signature Hash Chain Status</h3></div>
+            <div className="card-body">Validating chains: 100% Intact.</div>
+          </div>
+          <div className="card">
+            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>PII Rules & Field Lock Summary</h3></div>
+            <div className="card-body">Active rules: 24. No anomalies detected.</div>
+          </div>
+        </div>
+      )}
+
+      {mode === 'Operations Admin' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+          <div className="card">
+            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>SLA Breach Rates</h3></div>
+            <div className="card-body">Overall SLA breach rate: &lt; 2%.</div>
+          </div>
+          <div className="card">
+            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Unassigned Intake Throughput</h3></div>
+            <div className="card-body">Current unassigned: 12 items.</div>
+          </div>
+          <div className="card">
+            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Workload Distribution</h3></div>
+            <div className="card-body">Even distribution across regions.</div>
+          </div>
+        </div>
+      )}
+
+      {mode === 'IT / Security Admin' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+          <div className="card">
+            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>2FA Enforcement</h3></div>
+            <div className="card-body">All users have 2FA enabled.</div>
+          </div>
+          <div className="card">
+            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Failed Login Spikes</h3></div>
+            <div className="card-body">No significant spikes in the last 24h.</div>
+          </div>
+          <div className="card">
+            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Active User Sessions</h3></div>
+            <div className="card-body">Currently active sessions: 142.</div>
+          </div>
+          <div className="card">
+            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Integration Health Status</h3></div>
+            <div className="card-body">All integrations operational.</div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

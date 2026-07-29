@@ -5,6 +5,16 @@ const router = express.Router();
 const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 
+pool.execute(`
+  CREATE TABLE IF NOT EXISTS change_approval_policies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    org_id INT NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    requires_dual_approval TINYINT(1) DEFAULT 0,
+    UNIQUE KEY uq_cap_org_category (org_id, category)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+`).catch(() => {});
+
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
     await pool.execute(
@@ -13,6 +23,35 @@ async function audit(userId, userName, action, entity, entityId, details) {
     );
   } catch (_) {}
 }
+
+// GET /api/admin/change-approvals/policy
+router.get('/change-approvals/policy', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT category, requires_dual_approval FROM change_approval_policies WHERE org_id = ?',
+      [req.user.orgId]
+    );
+    res.json({ policies: rows });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
+
+// POST /api/admin/change-approvals/policy
+router.post('/change-approvals/policy', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
+  try {
+    const { policies } = req.body;
+    if (Array.isArray(policies)) {
+      for (const p of policies) {
+        await pool.execute(
+          `INSERT INTO change_approval_policies (org_id, category, requires_dual_approval) 
+           VALUES (?, ?, ?) 
+           ON DUPLICATE KEY UPDATE requires_dual_approval = VALUES(requires_dual_approval)`,
+          [req.user.orgId, p.category, p.requires_dual_approval ? 1 : 0]
+        );
+      }
+    }
+    res.json({ message: 'Policies updated.' });
+  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+});
 
 // POST /api/admin/change-approvals — submit a change for approval
 router.post('/change-approvals', authenticate, requireOrg, async (req, res) => {

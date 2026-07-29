@@ -21,6 +21,7 @@ const CASE_TYPE_COLORS = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 const PRIORITY_COLORS  = { normal: '#6b7280', high: '#f59e0b', urgent: '#ef4444' }
 
 import SlaCountdownBadge from '../../../shared/components/SlaCountdownBadge'
+import CrossCaseSearchModal from '../components/CrossCaseSearchModal'
 
 export default function CasesPage() {
   const navigate        = useNavigate()
@@ -44,6 +45,8 @@ export default function CasesPage() {
   const [typeFilter, setTypeFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+
+  const [crossCaseModalOpen, setCrossCaseModalOpen] = useState(false)
 
   // New case modal state — multi-step intake form (CF-E1–E5)
   const [modalOpen, setModalOpen]     = useState(false)
@@ -449,11 +452,16 @@ export default function CasesPage() {
       <div className="cf-cases-header">
         <div className="cf-cases-title-row">
           <h1 className="cf-cases-title">Case Management</h1>
-          <button className="cf-new-case-btn" onClick={openModal}
-            disabled={!hasCapability('case.create')}
-            title={!hasCapability('case.create') ? 'Your security group does not allow creating cases.' : undefined}>
-            + New Case
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="cf-cases-view-btn" onClick={() => setCrossCaseModalOpen(true)}>
+              🔍 Cross-Case Search
+            </button>
+            <button className="cf-new-case-btn" onClick={openModal}
+              disabled={!hasCapability('case.create')}
+              title={!hasCapability('case.create') ? 'Your security group does not allow creating cases.' : undefined}>
+              + New Case
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -887,10 +895,13 @@ export default function CasesPage() {
                   </div>
                 </div>
               )}
-
             </div>
           </div>
         </div>
+      )}
+
+      {crossCaseModalOpen && (
+        <CrossCaseSearchModal onClose={() => setCrossCaseModalOpen(false)} />
       )}
     </div>
     </MIMSLayout>

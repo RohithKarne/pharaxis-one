@@ -128,6 +128,7 @@ export const SYSTEM_NAV = [
           { label: 'EMIR Integration',              value: 'sys-setup-int-emir'         },
           { label: 'Case Import',                   value: 'sys-setup-int-case-import'  },
           { label: 'Inbox Routing Rules',           value: 'sys-setup-int-routing'      },
+          { label: 'Integration Health Monitor',    value: 'sys-setup-int-health'       },
           { label: 'Transmission Setup',            value: 'sys-setup-int-transmission' },
           { label: 'Developer API Clients',         value: 'sys-setup-developer-api'    },
           { label: 'Email Accounts',                value: 'sys-setup-email-accounts'   },
@@ -178,6 +179,8 @@ export const SYSTEM_NAV = [
     label: 'UAT & QA', value: 'sys-uat-qa', children: [
       { label: 'Bug Reports',      value: 'sys-uat-bugs'     },
       { label: 'Feature Requests', value: 'sys-uat-features' },
+      { label: 'Automated Compliance Checks', value: 'sys-ai-qa-compliance' },
+      { label: 'E-Signature Verification', value: 'sys-ai-qa-esign' },
       // CUT: in-app Regression Testing runner removed (dev tooling → CI).
     ],
   },

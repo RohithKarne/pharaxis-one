@@ -79,11 +79,24 @@ export default function CaseTimelineView({ caseId, headers }) {
                   <strong>{ev.title}</strong>
                   <span className="cf-timeline-time">{formatTimeRel(ev.ts)}</span>
                 </div>
-                <div className="cf-timeline-actor">{ev.actor_name || 'System'}</div>
+                {/* getTimeline() returns the actor as `actor`; `actor_name` is the
+                  raw row shape and never reaches the client. Reading only
+                  actor_name made every event show as "System". */}
+              <div className="cf-timeline-actor">{ev.actor || ev.actor_name || 'System'}</div>
               </div>
+              {/* `detail` arrives as a parsed object (JSON_OBJECT in the query),
+                  and rendering an object directly throws "Objects are not valid
+                  as a React child" — which only surfaced once events actually
+                  started flowing. Render the populated keys as label/value. */}
               {expanded[idx] && ev.detail && (
                 <div className="cf-timeline-details">
-                  {ev.detail}
+                  {typeof ev.detail === 'object'
+                    ? Object.entries(ev.detail)
+                        .filter(([, v]) => v !== null && v !== '')
+                        .map(([k, v]) => (
+                          <div key={k}><strong>{k}:</strong> {String(v)}</div>
+                        ))
+                    : String(ev.detail)}
                 </div>
               )}
             </div>

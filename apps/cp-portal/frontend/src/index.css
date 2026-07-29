@@ -2064,9 +2064,9 @@ body { background: var(--cp-bg); }
 .pp-dropdown-item-danger:hover { background: #FEE2E2; }
 
 /* ── Main content ────────────────────────────────────────── */
-.pp-main { flex: 1; }
-.pp-container { max-width: 1320px; margin: 0 auto; padding: 0 24px; }
-.pp-page-content { padding: 48px 24px; max-width: 1200px; margin: 0 auto; }
+.pp-main { flex: 1; width: 100%; }
+.pp-container { max-width: 1600px; width: 100%; margin: 0 auto; padding: 0 32px; }
+.pp-page-content { padding: 48px 32px; max-width: 1600px; width: 100%; margin: 0 auto; }
 .pp-page-header { margin-bottom: 36px; }
 .pp-page-header h1 { font-size: 28px; font-weight: 700; color: var(--pp-text); margin-bottom: 8px; }
 .pp-page-header p { color: var(--pp-text-muted); font-size: 15px; }

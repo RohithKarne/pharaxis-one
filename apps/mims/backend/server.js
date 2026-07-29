@@ -329,10 +329,12 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/loggedInUsers'));
   r.use(`${prefix}/admin`, require('./routes/integrations/schedulerAdmin'));
   r.use(`${prefix}/admin`, require('./routes/integrations/oauth2Admin'));
+  r.use(`${prefix}/admin`, require('./routes/admin/integrationMonitor'));
   r.use(`${prefix}/admin`, require('./routes/admin/help'));
   r.use(`${prefix}/admin`, require('./routes/admin/icsr'));
   r.use(prefix || '/', require('./routes/admin/haClock'));
   r.use(prefix || '/', require('./routes/admin/caseValidity'));
+  r.use(prefix || '/', require('./routes/caseHandoff'));
   r.use(prefix || '/', require('./routes/admin/meddra'));
   r.use(prefix || '/', require('./routes/admin/causality'));
   r.use(prefix || '/', require('./routes/admin/caseDrugs'));

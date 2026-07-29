@@ -1,0 +1,8 @@
+/* CrossCaseSearchModal specific styles */
+.cross-case-modal {
+  /* Inherits from cf-modal */
+}
+
+.cross-case-results table tbody tr:hover {
+  background-color: #f9fafb;
+}

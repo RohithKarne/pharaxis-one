@@ -36,6 +36,8 @@ const CLIENT_NAV_GROUPS = (id) => [
       { to: `/admin/clients/${id}/news`,         label: 'News',          icon: 'news' },
       { to: `/admin/clients/${id}/safety`,       label: 'Safety Alerts', icon: 'shield' },
       { to: `/admin/clients/${id}/documents`,    label: 'Documents',     icon: 'folder' },
+      { to: `/admin/clients/${id}/trials`,       label: 'Clinical Trials', icon: 'beaker' },
+      { to: `/admin/clients/${id}/training`,     label: 'CME & Training',  icon: 'book' },
       { to: `/admin/clients/${id}/msls`,         label: 'MSL Directory', icon: 'users' },
       { to: `/admin/clients/${id}/faq`,          label: 'FAQ',           icon: 'help' },
       { to: `/admin/clients/${id}/review-queue`, label: 'Review Queue',  icon: 'search', badge: true },

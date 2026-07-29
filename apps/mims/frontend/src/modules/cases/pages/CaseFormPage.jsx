@@ -4,12 +4,15 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
 import useCaseForm from '../hooks/useCaseForm'
-const CaseOverviewTab = lazy(() => import('../components/CaseOverviewTab'))
 const CaseContactsTab = lazy(() => import('../components/CaseContactsTab'))
-const CaseCommunicationsWorkspace = lazy(() => import('../components/CaseCommunicationsWorkspace'))
+const CaseWorkflowStep = lazy(() => import('../components/CaseWorkflowStep'))
 const CaseMITab = lazy(() => import('../components/CaseMITab'))
 const CaseAETab = lazy(() => import('../components/CaseAETab'))
 const CasePCTab = lazy(() => import('../components/CasePCTab'))
+import CaseHeaderStrip     from '../components/CaseHeaderStrip'
+import CaseFormWizard      from '../components/CaseFormWizard'
+import { WiredTextarea }   from '../../../shared/components/WiredField'
+import useCoreFields       from '../hooks/useCoreFields'
 import CaseFormShell        from '../../../shared/components/CaseFormShell'
 import useUnsavedChangesGuard from '../../../shared/hooks/useUnsavedChangesGuard'
 
@@ -37,25 +40,39 @@ export default function CaseFormPage() {
   const routeTarget = useMemo(() => {
     const params = new URLSearchParams(location.search || '')
     const targetSection = params.get('section')
+    // The wizard dropped from 4 steps to 3 when "Case Meta" was deleted. Existing
+    // deep links — saved URLs and Email Case Import notifications — must still
+    // land somewhere valid, so the retired sections remap rather than 404.
+    //   overview/info → step 3 (the workflow fields moved there)
+    //   icsr/dppr     → step 3 (regulatory panels left the form; DPPR is Admin now)
     const sectionMap = {
-      overview: { tab: 'overview' },
-      info: { tab: 'overview' },
-      people: { tab: 'people' },
-      contacts: { tab: 'people' },
-      communications: { tab: 'communications' },
-      comments: { tab: 'communications', communicationsPane: 'threads' },
-      correspondence: { tab: 'communications', communicationsPane: 'correspondence' },
-      mi: { tab: 'mi' },
-      ae: { tab: 'ae' },
-      pc: { tab: 'pc' },
-      icsr: { tab: 'overview', regulatoryPane: 'icsr' },
-      dppr: { tab: 'overview', regulatoryPane: 'privacy' },
+      overview: { step: 3, tab: 'workflow' },
+      info: { step: 3, tab: 'workflow' },
+      people: { step: 1, tab: 'people' },
+      contacts: { step: 1, tab: 'people' },
+      patient: { step: 1, tab: 'people' },
+      reporter: { step: 1, tab: 'people' },
+      mi: { step: 2, tab: 'mi' },
+      ae: { step: 2, tab: 'ae' },
+      pc: { step: 2, tab: 'pc' },
+      communications: { step: 3, tab: 'workflow' },
+      comments: { step: 3, tab: 'workflow', communicationsPane: 'threads' },
+      correspondence: { step: 3, tab: 'workflow', communicationsPane: 'correspondence' },
+      icsr: { step: 3, tab: 'workflow' },
+      dppr: { step: 3, tab: 'workflow' },
     }
-    return sectionMap[targetSection] || null
+    return sectionMap[targetSection] || { step: 1, tab: 'people' }
   }, [location.search])
-  const [activeTab,  setActiveTab]  = useState(routeTarget?.tab || 'overview')
+
+  const [activeStep, setActiveStep] = useState(routeTarget?.step || 1)
+
+  useEffect(() => {
+    if (routeTarget?.step) setActiveStep(routeTarget.step)
+  }, [routeTarget?.step])
   const [tabCounts,  setTabCounts]  = useState({})
-  const currentTab = routeTarget?.tab || activeTab
+
+  // Core field presentation is backend-driven (field_setup → formConfig.core).
+  const coreField = useCoreFields(formConfig)
 
   // B19 — unsaved-changes guard. `draftStatus` is set by useCaseForm whenever
   // there's an in-flight autosave; we treat that as the canonical "dirty" signal.
@@ -63,44 +80,14 @@ export default function CaseFormPage() {
   useEffect(() => { guard.setDirty(!!draftStatus && draftStatus !== 'Saved') },
     [draftStatus, guard])
 
-  function syncTabInUrl(next) {
-    const params = new URLSearchParams(location.search || '')
-    params.set('section', next)
-    navigate(
-      {
-        pathname: location.pathname,
-        search: params.toString() ? `?${params.toString()}` : '',
-      },
-      { replace: true, state: location.state }
-    )
-  }
-
-  function safeSetActiveTab(next) {
-    if (guard.isDirty.current &&
-        !window.confirm('You have unsaved changes. Switch tabs and lose them?')) return
-    setActiveTab(next)
-    syncTabInUrl(next)
-  }
-
   function handleBackNavigation() {
     const from = location.state?.from
     if (from && typeof from === 'string') { navigate(from); return }
     navigate('/cases')
   }
 
-  function countFor(key) { return tabCounts[key] > 0 ? tabCounts[key] : null }
-
   if (loading) return <div className="cf-form-loading">Loading case…</div>
   if (!caseData) return <div className="cf-form-error">Case not found. <button onClick={handleBackNavigation}>Back</button></div>
-
-  const TABS = [
-    { key: 'overview',       label: 'Overview' },
-    { key: 'people',         label: 'People',           badge: countFor('contacts') },
-    { key: 'communications', label: 'Communications',   badge: countFor('correspondence') || countFor('comments') },
-    { key: 'mi',             label: 'MI Workspace',     badge: countFor('mi') },
-    { key: 'ae',             label: 'AE Workspace',     badge: countFor('ae') },
-    { key: 'pc',             label: 'PC Workspace',     badge: countFor('pc') },
-  ]
 
   return (
     <MIMSLayout showStatStrip={false} bodyClassName="no-scroll mims-ops-page-body" surfaceVariant="workspace" compact>
@@ -122,26 +109,56 @@ export default function CaseFormPage() {
         <div className="cf-form-header-right">
           {draftStatus && <span className="cf-draft-save-chip">{draftStatus}</span>}
           {savedMsg && <span className="cf-saved-msg">{savedMsg}</span>}
+          {/* The type-specific action screen. Only offered once the case is
+              actually saved — there is nothing to transmit or respond to
+              before that. */}
+          {caseData.case_number && ['AE', 'PC'].includes(caseData.case_type) && (
+            <button
+              type="button"
+              className="cf-action-screen-btn"
+              onClick={() => navigate(`/cases/${id}/transmission`)}
+            >
+              Transmission →
+            </button>
+          )}
+          {caseData.case_number && caseData.case_type === 'MI' && (
+            <button
+              type="button"
+              className="cf-action-screen-btn"
+              onClick={() => navigate(`/cases/${id}/response`)}
+            >
+              Response →
+            </button>
+          )}
           <button className="cf-save-btn" onClick={() => saveInfo(false)} disabled={saving}>
             {saving ? 'Saving…' : 'Save Case'}
           </button>
         </div>
       </div>
 
-      <div className="cf-tabbar">
-        {TABS.map(t => (
-          <button key={t.key} className={`cf-tabbar-btn${currentTab === t.key ? ' active' : ''}`} onClick={() => safeSetActiveTab(t.key)}>
-            {t.label}
-            {t.badge != null && <span className="cf-tabbar-badge">{t.badge}</span>}
-          </button>
-        ))}
-      </div>
+      {/* Read-only summary. Replaces the five panels that used to occupy the
+          deleted "Case Meta" step — one line, no extra queries, visible on
+          every step. */}
+      <CaseHeaderStrip
+        caseData={caseData}
+        infoForm={infoForm}
+        statuses={statuses}
+        users={users}
+        caseId={id}
+        headers={headers}
+      />
 
+      {/* cf-form-main is the page's scroll container. This wrapper was left as
+          cf-tabbar when the tab strip was replaced by the wizard — that class is
+          the horizontal tab strip (flex row, flex-shrink:0, no vertical
+          overflow), so anything below the fold was simply clipped and the case
+          form could not be scrolled. */}
+      <div className="cf-form-main">
       <CaseFormShell
         caseId={id}
         caseStatus={caseData?.status}
         caseType={caseData?.case_type}
-        sections={TABS.map(t => ({ id: `tab-${t.key}`, label: t.label, count: t.badge, complete: t.badge }))}
+        sections={[]}
         showHeader={false}
         requiredFields={[]}
         payload={infoForm || {}}
@@ -150,110 +167,120 @@ export default function CaseFormPage() {
         transitions={[]}
         onTransition={() => { /* Wired by future workflow engine */ }}
         onCloned={(newId) => navigate(`/cases/${newId}`)}
-        onValidityNavigate={(key) => {
-          if (key === 'reporter' || key === 'patient') safeSetActiveTab('people')
-          else if (key === 'product' || key === 'event') safeSetActiveTab('ae')
-        }}
       >
-      <Suspense fallback={<div className="cf-tab-loading">Loading…</div>}>
-      <div className="cf-tab-content">
-        {currentTab === 'overview' && (
-          <CaseOverviewTab
-            key={routeTarget?.regulatoryPane || 'overview'}
-            id={id}
-            headers={headers}
-            caseData={caseData}
-            users={users}
-            statuses={statuses}
-            getPicklistOptions={getPicklistOptions}
-            infoForm={infoForm}
-            setInfoForm={setInfoForm}
-            formConfig={formConfig}
-            dynFieldValues={dynFieldValues}
-            setDynFieldValues={setDynFieldValues}
-            dynFieldSaving={dynFieldSaving}
-            dynFieldErrors={dynFieldErrors}
-            scheduleAutoSave={scheduleAutoSave}
-            saveDynFields={saveDynFields}
-            caseType={caseData?.case_type}
-            reassignForm={reassignForm}
-            setReassignForm={setReassignForm}
-            reassignSaving={reassignSaving}
-            reassignCase={reassignCase}
-            escalateForm={escalateForm}
-            setEscalateForm={setEscalateForm}
-            escalateSaving={escalateSaving}
-            escalateCase={escalateCase}
-            setSavedMsg={setSavedMsg}
-            onNavigateToTab={safeSetActiveTab}
-            routeRegulatoryPane={routeTarget?.regulatoryPane || ''}
-          />
-        )}
-        {currentTab === 'people' && (
-          <CaseContactsTab
-            id={id} headers={headers}
-            formConfig={formConfig}
-            getFieldConfig={getFieldConfig}
-            getPicklistOptions={getPicklistOptions}
-            onCountChange={n => setTabCounts(p => ({ ...p, contacts: n }))}
-          />
-        )}
-        {currentTab === 'communications' && (
-          <CaseCommunicationsWorkspace
-            key={routeTarget?.communicationsPane || 'communications'}
-            id={id}
-            headers={headers}
-            token={token}
-            currentUserId={user?.id || user?.userId || null}
-            setSavedMsg={setSavedMsg}
-            routePane={routeTarget?.communicationsPane || ''}
-            onCommentCount={n => setTabCounts(p => ({ ...p, comments: n }))}
-            onCorrespondenceCount={n => setTabCounts(p => ({ ...p, correspondence: n }))}
-          />
-        )}
-        {currentTab === 'mi' && (
-          <CaseMITab
-            id={id} token={token} headers={headers} setSavedMsg={setSavedMsg}
-            onCountChange={n => setTabCounts(p => ({ ...p, mi: n }))}
-            formConfig={formConfig}
-            getPicklistOptions={getPicklistOptions}
-            dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}
-            dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
-            saveDynFields={saveDynFields}
-            caseType={caseData?.case_type}
-          />
-        )}
-        {currentTab === 'ae' && (
-          <CaseAETab
-            id={id} headers={headers} setSavedMsg={setSavedMsg}
-            users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
-            onCountChange={n => setTabCounts(p => ({ ...p, ae: n }))}
-            formConfig={formConfig}
-            dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}
-            dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
-            saveDynFields={saveDynFields}
-            caseType={caseData?.case_type}
-          />
-        )}
-        {currentTab === 'pc' && (
-          <CasePCTab
-            id={id} headers={headers} setSavedMsg={setSavedMsg}
-            users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
-            onCountChange={n => setTabCounts(p => ({ ...p, pc: n }))}
-            formConfig={formConfig}
-            dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}
-            dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
-            saveDynFields={saveDynFields}
-            caseType={caseData?.case_type}
-          />
-        )}
-      </div>
+      <Suspense fallback={<div className="cf-tab-loading">Loading wizard step…</div>}>
+        <CaseFormWizard
+          activeStep={activeStep}
+          setActiveStep={setActiveStep}
+          caseType={caseData?.case_type}
+          caseNumber={caseData?.case_number}
+          saving={saving}
+          onSave={saveInfo}
+        >
+          {activeStep === 1 && (
+            <CaseContactsTab
+              id={id} headers={headers}
+              formConfig={formConfig}
+              getFieldConfig={getFieldConfig}
+              getPicklistOptions={getPicklistOptions}
+              onCountChange={n => setTabCounts(p => ({ ...p, contacts: n }))}
+            />
+          )}
+
+          {activeStep === 2 && (
+            <>
+              {/* Description moved off the deleted Case Meta step — it describes
+                  the case detail, so it sits with the detail. Label and
+                  visibility come from field_setup, not from here. */}
+              {!coreField('description', 'Description').hidden && (
+                <WiredTextarea
+                  label={coreField('description', 'Description').label}
+                  section="case_meta" field="description" rows={4}
+                  value={infoForm.description}
+                  placeholder="Case description…"
+                  onChange={v => { setInfoForm(p => ({ ...p, description: v })); scheduleAutoSave() }} />
+              )}
+              {caseData?.case_type === 'MI' && (
+                <CaseMITab
+                  view="capture"
+                  id={id} token={token} headers={headers} setSavedMsg={setSavedMsg}
+                  onCountChange={n => setTabCounts(p => ({ ...p, mi: n }))}
+                  formConfig={formConfig}
+                  getPicklistOptions={getPicklistOptions}
+                  dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}
+                  dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
+                  saveDynFields={saveDynFields}
+                  caseType={caseData?.case_type}
+                />
+              )}
+              {caseData?.case_type === 'AE' && (
+                <CaseAETab
+                  id={id} headers={headers} setSavedMsg={setSavedMsg}
+                  users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
+                  onCountChange={n => setTabCounts(p => ({ ...p, ae: n }))}
+                  formConfig={formConfig}
+                  dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}
+                  dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
+                  saveDynFields={saveDynFields}
+                  caseType={caseData?.case_type}
+                />
+              )}
+              {caseData?.case_type === 'PC' && (
+                <CasePCTab
+                  id={id} headers={headers} setSavedMsg={setSavedMsg}
+                  users={users} getFieldConfig={getFieldConfig} getPicklistOptions={getPicklistOptions}
+                  onCountChange={n => setTabCounts(p => ({ ...p, pc: n }))}
+                  formConfig={formConfig}
+                  dynFieldValues={dynFieldValues} setDynFieldValues={setDynFieldValues}
+                  dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
+                  saveDynFields={saveDynFields}
+                  caseType={caseData?.case_type}
+                />
+              )}
+            </>
+          )}
+
+          {activeStep === 3 && (
+            <CaseWorkflowStep
+              key={routeTarget?.communicationsPane || 'workflow'}
+              id={id}
+              headers={headers}
+              token={token}
+              currentUserId={user?.id || user?.userId || null}
+              setSavedMsg={setSavedMsg}
+              infoForm={infoForm}
+              setInfoForm={setInfoForm}
+              statuses={statuses}
+              users={users}
+              getPicklistOptions={getPicklistOptions}
+              scheduleAutoSave={scheduleAutoSave}
+              reassignForm={reassignForm}
+              setReassignForm={setReassignForm}
+              reassignSaving={reassignSaving}
+              reassignCase={reassignCase}
+              escalateForm={escalateForm}
+              setEscalateForm={setEscalateForm}
+              escalateSaving={escalateSaving}
+              escalateCase={escalateCase}
+              dynFieldValues={dynFieldValues}
+              setDynFieldValues={setDynFieldValues}
+              dynFieldSaving={dynFieldSaving}
+              dynFieldErrors={dynFieldErrors}
+              formConfig={formConfig}
+              saveDynFields={saveDynFields}
+              caseType={caseData?.case_type}
+              routePane={routeTarget?.communicationsPane || ''}
+              onCommentCount={n => setTabCounts(p => ({ ...p, comments: n }))}
+              onCorrespondenceCount={n => setTabCounts(p => ({ ...p, correspondence: n }))}
+            />
+          )}
+        </CaseFormWizard>
       </Suspense>
       </CaseFormShell>
 
       {/* PARK: AI Assistant panel removed from the case form — the AI suite ships as a
           deterministic-local mock (canned output). Re-surface once a real provider is standard. */}
-
+      </div>
     </div>
     </MIMSLayout>
   )

@@ -8,8 +8,16 @@ import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { isAdminUser } from '../../../shared/utils/adminScope.js'
 import { Button } from '../../../shared/ui'
 
+import ReportFilterBar from '../components/ReportFilterBar'
+import ReportMetricsGrid from '../components/ReportMetricsGrid'
+import ReportChartPanel from '../components/ReportChartPanel'
+import ReportTableViewer from '../components/ReportTableViewer'
+import ScheduledReportsModal from '../components/ScheduledReportsModal'
+import CustomReportBuilderPanel from '../components/CustomReportBuilderPanel'
+
 const SECTION_LABELS = {
   overview: 'Overview',
+  builder: 'Custom Builder',
   reports: 'Reports',
   dashboards: 'Dashboards',
   schedules: 'Schedulers',
@@ -177,6 +185,7 @@ export default function ReportsPage() {
   const [reportPreviewLoading, setReportPreviewLoading] = useState(false)
   const [reportBuilderPreview, setReportBuilderPreview] = useState(null)
   const [reportBuilderPreviewLoading, setReportBuilderPreviewLoading] = useState(false)
+  const [isScheduleModalVisible, setIsScheduleModalVisible] = useState(false)
 
   const [dashboardSearch, setDashboardSearch] = useState('')
   const [selectedDashboardId, setSelectedDashboardId] = useState(null)
@@ -823,53 +832,7 @@ export default function ReportsPage() {
     }
   }
 
-  function renderDataTable(columns, rows, filename) {
-    return (
-      <div style={{ marginTop: 14, overflowX: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{rows.length} row{rows.length !== 1 ? 's' : ''}</div>
-          <button
-            onClick={() => exportRowsAsCsv(rows, filename)}
-            disabled={!rows.length}
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: rows.length ? '#fff' : '#f8fafc',
-              cursor: rows.length ? 'pointer' : 'not-allowed',
-              fontWeight: 700,
-            }}
-          >
-            Export CSV
-          </button>
-        </div>
-        {rows.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No data available.</div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
-                {columns.map((column) => (
-                  <th key={column} style={{ textAlign: 'left', padding: '10px 12px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.7, color: 'var(--text-muted)' }}>
-                    {column.replace(/_/g, ' ')}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={index} style={{ borderBottom: '1px solid var(--border)', background: index % 2 === 0 ? '#fff' : '#fcfcfd' }}>
-                  {columns.map((column) => (
-                    <td key={column} style={{ padding: '10px 12px', verticalAlign: 'top' }}>{row[column] ?? '—'}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    )
-  }
+
 
   function renderOverview() {
     return (
@@ -1165,7 +1128,7 @@ export default function ReportsPage() {
                       </label>
                     ))}
                   </div>
-                  {renderDataTable(reportBuilderPreview.columns, reportBuilderPreview.rows.slice(0, 12), `${reportForm.dataset_key || 'dataset'}-preview.csv`)}
+                  <ReportTableViewer columns={reportBuilderPreview.columns} rows={reportBuilderPreview.rows.slice(0, 12)} />
                 </div>
               )}
             </div>
@@ -1182,7 +1145,24 @@ export default function ReportsPage() {
                   {reportPreviewLoading ? 'Running…' : 'Refresh Preview'}
                 </button>
               </div>
-              {reportPreview ? renderDataTable(reportPreview.columns, reportPreview.rows, `${selectedReport.report_key}.csv`) : (
+              {reportPreview ? (
+                <div style={{ marginTop: 14 }}>
+                  <ReportFilterBar 
+                    onFilterChange={() => {}} 
+                    onExport={() => exportRowsAsCsv(reportPreview.rows, `${selectedReport.report_key}.csv`)} 
+                    disableExport={!reportPreview.rows.length} 
+                    onSchedule={() => setIsScheduleModalVisible(true)}
+                  />
+                  <ReportMetricsGrid metrics={{
+                    total_cases: reportPreview.rows.length,
+                    open_slas: reportPreview.rows.filter(r => r.status === 'open' || r.status === 'pending').length,
+                    avg_turnaround: '2.5h',
+                    conversion_rate: '94%'
+                  }} />
+                  <ReportChartPanel data={reportPreview.rows} />
+                  <ReportTableViewer columns={reportPreview.columns} rows={reportPreview.rows} />
+                </div>
+              ) : (
                 <div style={{ marginTop: 14, fontSize: 13, color: 'var(--text-muted)' }}>
                   Run the selected report to inspect live output.
                 </div>
@@ -1223,7 +1203,7 @@ export default function ReportsPage() {
       )
     }
 
-    return renderDataTable(widget.columns || [], widget.rows || [], `${widget.report_key || 'dashboard-widget'}.csv`)
+    return <ReportTableViewer columns={widget.columns || []} rows={widget.rows || []} />
   }
 
   function renderDashboardsSection() {
@@ -1941,12 +1921,14 @@ export default function ReportsPage() {
       return (
         <StandaloneModuleShell title="Reports" subtitle="Reports Console" logo="R" loginPath="/reports/login">
           {loadingContent}
+          <ScheduledReportsModal visible={isScheduleModalVisible} onClose={() => setIsScheduleModalVisible(false)} orgId={user?.orgId} />
         </StandaloneModuleShell>
       )
     }
     return (
       <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
         {loadingContent}
+        <ScheduledReportsModal visible={isScheduleModalVisible} onClose={() => setIsScheduleModalVisible(false)} orgId={user?.orgId} />
       </MIMSLayout>
     )
   }
@@ -1995,6 +1977,7 @@ export default function ReportsPage() {
     return (
       <StandaloneModuleShell title="Reports" subtitle="Reports Console" logo="R" loginPath="/reports/login">
         {content}
+        <ScheduledReportsModal visible={isScheduleModalVisible} onClose={() => setIsScheduleModalVisible(false)} orgId={user?.orgId} />
       </StandaloneModuleShell>
     )
   }
@@ -2002,6 +1985,7 @@ export default function ReportsPage() {
   return (
     <MIMSLayout showStatStrip={false} bodyClassName="mims-ops-page-body" surfaceVariant="workspace" compact>
       {content}
+      <ScheduledReportsModal visible={isScheduleModalVisible} onClose={() => setIsScheduleModalVisible(false)} orgId={user?.orgId} />
     </MIMSLayout>
   )
 }

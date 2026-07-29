@@ -626,11 +626,11 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
     );
 
     const caseTypeLc = String(case_type || '').toLowerCase();
-    const [fields] = await pool.execute(
-      `SELECT id, section_name, field_name, field_type, is_required, is_hidden, is_disabled,
+    const [fieldRows] = await pool.execute(
+      `SELECT id, org_id, section_name, field_name, field_type, is_required, is_hidden, is_disabled,
               custom_label, help_text, picklist_type, lookup_target, sort_order,
               max_length, default_value, is_sensitive, masking_pattern, unmask_roles,
-              case_type_scope, display_tab
+              case_type_scope, display_tab, core_key
        FROM field_setup
        WHERE (org_id = ? OR org_id IS NULL) AND is_hidden = 0 AND is_disabled = 0
          AND section_name != '__customize_placeholder__'
@@ -638,6 +638,66 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
        ORDER BY section_name, sort_order, id`,
       [orgId, caseTypeLc]
     );
+
+    // field_setup holds BOTH a platform default (org_id IS NULL) and the org's
+    // own row for the same field, and `org_id = ? OR org_id IS NULL` returns
+    // both — so the form rendered every field twice. That is the duplicate
+    // Priority/Description on the case screen, and there is proof in the data:
+    // case 482695 stored "test" against field_setup id 20 (platform) AND id 1702
+    // (org 1), two rows both named "Description", from one user action.
+    //
+    // The org's row wins. The platform default is only a fallback for fields the
+    // org has not overridden.
+    const fieldsByKey = new Map();
+    for (const row of fieldRows) {
+      const key = `${row.section_name}::${String(row.field_name).trim().toLowerCase()}`;
+      const existing = fieldsByKey.get(key);
+      // Keep the org-specific row over the org_id IS NULL default.
+      if (!existing || (existing.org_id === null && row.org_id !== null)) {
+        fieldsByKey.set(key, row);
+      }
+    }
+    const fields = [...fieldsByKey.values()].sort((a, b) =>
+      a.section_name.localeCompare(b.section_name) ||
+      (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
+      a.id - b.id
+    );
+
+    // Core (platform) fields — Status, Owner, Priority, Date Received,
+    // Description, Internal Notes. The wizard renders these itself; this map is
+    // how field_setup drives their label, required flag and visibility, so an
+    // admin controls them from the backend without the form drawing them twice.
+    //
+    // Deliberately NOT filtered by is_hidden: a hidden core field still has to
+    // reach the client, otherwise the wizard has no way to know it should stop
+    // rendering its own control for it.
+    const [coreRows] = await pool.execute(
+      `SELECT core_key, field_name, custom_label, help_text, is_required, is_hidden,
+              is_disabled, sort_order, default_value, max_length,
+              org_id IS NULL AS is_platform_default
+         FROM field_setup
+        WHERE core_key IS NOT NULL
+          AND (org_id = ? OR org_id IS NULL)
+          AND (case_type_scope = 'shared' OR case_type_scope = ?)
+        ORDER BY org_id IS NULL DESC, sort_order, id`,
+      [orgId, caseTypeLc]
+    );
+
+    // The org's own row wins over the org_id IS NULL platform default. The ORDER
+    // BY puts platform defaults first, so a later org row overwrites the entry.
+    const core = coreRows.reduce((acc, row) => {
+      acc[row.core_key] = {
+        core_key: row.core_key,
+        label: row.custom_label || row.field_name,
+        help_text: row.help_text || null,
+        is_required: !!row.is_required,
+        is_hidden: !!row.is_hidden || !!row.is_disabled,
+        sort_order: row.sort_order ?? 0,
+        default_value: row.default_value ?? null,
+        max_length: row.max_length ?? null,
+      };
+      return acc;
+    }, {});
 
     const today = toDateOnlyOrNull(new Date());
     const [picklists] = await pool.execute(
@@ -699,7 +759,7 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
       };
     });
 
-    return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields, rules: normalizedRules });
+    return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields, rules: normalizedRules, core });
   } catch (err) {
     logger.error({ err, route: '/api/cases/form-config', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to load case form config');
     return res.status(500).json({ error: err.message });

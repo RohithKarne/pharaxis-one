@@ -31,6 +31,129 @@ function getScopedOrgId(req, providedOrgId = null) {
 
 // ─── CONTACTS ────────────────────────────────────────────────────────────────
 
+// GET /api/admin/contacts/cross-case-search — cross-case search for patients/reporters
+router.get('/cross-case-search', authenticate, requireOrg, async (req, res) => {
+  try {
+    const { name, email, phone, initials } = req.query;
+    const orgId = getScopedOrgId(req);
+
+    if (!name && !email && !phone && !initials) {
+      return res.json({ query: req.query, matches: [] });
+    }
+
+    const matches = [];
+
+    // Search Reporters
+    if (name || email || phone) {
+      let rQuery = `
+        SELECT cr.first_name, cr.last_name, cr.email, cr.phone,
+               c.id as case_id, c.case_number, c.case_type, ws.name as status_name, c.date_received
+        FROM case_reporter cr
+        JOIN cases c ON cr.case_id = c.id
+        LEFT JOIN workflow_states ws ON c.status_id = ws.id
+        WHERE c.org_id = ? AND c.is_deleted = 0
+      `;
+      const rParams = [orgId];
+
+      if (name) {
+        rQuery += ' AND (cr.first_name LIKE ? OR cr.last_name LIKE ? OR CONCAT(cr.first_name, \' \', cr.last_name) LIKE ?)';
+        const likeName = `%${name}%`;
+        rParams.push(likeName, likeName, likeName);
+      }
+      if (email) {
+        rQuery += ' AND cr.email LIKE ?';
+        rParams.push(`%${email}%`);
+      }
+      if (phone) {
+        rQuery += ' AND cr.phone LIKE ?';
+        rParams.push(`%${phone}%`);
+      }
+
+      const [rRows] = await pool.execute(rQuery, rParams);
+
+      const rMap = {};
+      rRows.forEach(row => {
+        const fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim();
+        const key = `${fullName}|${row.email || ''}|${row.phone || ''}`;
+        if (!rMap[key]) {
+          rMap[key] = {
+            entity_type: 'reporter',
+            name: fullName,
+            email: row.email,
+            phone: row.phone,
+            cases_map: new Map()
+          };
+        }
+        rMap[key].cases_map.set(row.case_id, {
+          id: row.case_id,
+          case_number: row.case_number,
+          case_type: row.case_type,
+          status: row.status_name || 'New',
+          date_received: row.date_received
+        });
+      });
+
+      for (const val of Object.values(rMap)) {
+        matches.push({
+          entity_type: val.entity_type,
+          name: val.name,
+          email: val.email,
+          phone: val.phone,
+          case_count: val.cases_map.size,
+          cases: Array.from(val.cases_map.values())
+        });
+      }
+    }
+
+    // Search Patients
+    if (initials) {
+      let pQuery = `
+        SELECT cp.initials,
+               c.id as case_id, c.case_number, c.case_type, ws.name as status_name, c.date_received
+        FROM case_patient cp
+        JOIN cases c ON cp.case_id = c.id
+        LEFT JOIN workflow_states ws ON c.status_id = ws.id
+        WHERE c.org_id = ? AND c.is_deleted = 0 AND cp.initials LIKE ?
+      `;
+      const pParams = [orgId, `%${initials}%`];
+      
+      const [pRows] = await pool.execute(pQuery, pParams);
+      const pMap = {};
+      pRows.forEach(row => {
+        const key = row.initials || '';
+        if (!pMap[key]) {
+          pMap[key] = {
+            entity_type: 'patient',
+            name: key,
+            cases_map: new Map()
+          };
+        }
+        pMap[key].cases_map.set(row.case_id, {
+          id: row.case_id,
+          case_number: row.case_number,
+          case_type: row.case_type,
+          status: row.status_name || 'New',
+          date_received: row.date_received
+        });
+      });
+
+      for (const val of Object.values(pMap)) {
+        matches.push({
+          entity_type: val.entity_type,
+          name: val.name,
+          case_count: val.cases_map.size,
+          cases: Array.from(val.cases_map.values())
+        });
+      }
+    }
+
+    res.json({ query: req.query, matches });
+  } catch (err) {
+    console.error('GET /cross-case-search error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // GET /api/admin/contacts — list contacts with filters and pagination
 router.get('/contacts', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {

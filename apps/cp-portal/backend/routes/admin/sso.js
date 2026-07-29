@@ -49,7 +49,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
         // Never send the secret; a hint only so the admin knows one is stored.
         client_secret_masked: row?.client_secret_encrypted ? maskSecret(decryptSecret(row.client_secret_encrypted)) : null,
         // The redirect URI the client must register with their IdP.
-        redirect_uri: `${(process.env.CP_BACKEND_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '')}/api/portal/auth/sso/${key}/callback`,
+        redirect_uri: `${(process.env.CP_BACKEND_BASE_URL || `http://localhost:${process.env.CP_PORT || 4000}`).replace(/\/+$/, '')}/api/portal/auth/sso/${key}/callback`,
         updated_at: row?.updated_at || null,
       };
     });

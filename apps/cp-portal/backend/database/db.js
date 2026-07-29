@@ -689,6 +689,81 @@ async function initializeDatabase() {
   `);
   await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_notif_user ON cp_notifications(portal_user_id, is_read)`);
 
+  // ── SSO PROVIDER CONFIGS & IDENTITIES ─────────────────────────
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_sso_provider_configs (
+      id                      INT          NOT NULL AUTO_INCREMENT,
+      client_id               INT          NOT NULL,
+      provider_key            VARCHAR(50)  NOT NULL,
+      provider_type           VARCHAR(50)  NOT NULL DEFAULT 'oidc',
+      oidc_client_id          VARCHAR(255) NULL,
+      client_secret_encrypted TEXT         NULL,
+      tenant_id               VARCHAR(255) NULL,
+      allowed_domains         TEXT         NULL,
+      is_active               TINYINT(1)   NOT NULL DEFAULT 1,
+      updated_by              INT          NULL,
+      created_at              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_client_provider (client_id, provider_key),
+      CONSTRAINT fk_sso_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_sso_identities (
+      id             INT          NOT NULL AUTO_INCREMENT,
+      client_id      INT          NOT NULL,
+      portal_user_id INT          NOT NULL,
+      provider_key   VARCHAR(50)  NOT NULL,
+      subject        VARCHAR(255) NOT NULL,
+      email          VARCHAR(255) NOT NULL,
+      last_login_at  DATETIME     NULL,
+      created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_sso_identity (client_id, provider_key, subject),
+      CONSTRAINT fk_sso_ident_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE,
+      CONSTRAINT fk_sso_ident_user   FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_clinical_trials (
+      id            INT          NOT NULL AUTO_INCREMENT,
+      client_id     INT          NOT NULL,
+      nct_id        VARCHAR(50)  NOT NULL,
+      title         VARCHAR(500) NOT NULL,
+      phase         VARCHAR(50)  NOT NULL,
+      indication    VARCHAR(255) NOT NULL,
+      status        VARCHAR(50)  NOT NULL DEFAULT 'Recruiting',
+      site_location VARCHAR(500) NULL,
+      pi            VARCHAR(255) NULL,
+      is_active     TINYINT(1)   NOT NULL DEFAULT 1,
+      created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      CONSTRAINT fk_trials_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_training_modules (
+      id          INT          NOT NULL AUTO_INCREMENT,
+      client_id   INT          NOT NULL,
+      title       VARCHAR(500) NOT NULL,
+      type        VARCHAR(100) NOT NULL DEFAULT 'CME Accredited',
+      duration    VARCHAR(50)  NOT NULL DEFAULT '30 mins',
+      credits     VARCHAR(50)  NOT NULL DEFAULT '1.5 CME',
+      pass_score  INT          NOT NULL DEFAULT 80,
+      status      VARCHAR(50)  NOT NULL DEFAULT 'Available',
+      is_active   TINYINT(1)   NOT NULL DEFAULT 1,
+      created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      CONSTRAINT fk_training_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   // ── EMAIL CONFIG ───────────────────────────────────────────────
   await run(`
     CREATE TABLE IF NOT EXISTS cp_email_config (

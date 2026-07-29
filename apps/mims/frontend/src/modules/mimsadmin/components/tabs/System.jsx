@@ -93,6 +93,7 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     : selectedItem === 'sys-ai-qa-rules' ? <AdminQASection contentSection="qa-rules" H={H} />
     : selectedItem === 'sys-ai-qa-overrides' ? <AdminQASection contentSection="qa-overrides" H={H} />
     : selectedItem === 'sys-ai-qa-compliance' ? <AdminQASection contentSection="qa-compliance" H={H} />
+    : selectedItem === 'sys-ai-qa-esign' ? <AdminQASection contentSection="qa-esign" H={H} />
     : null
   )
 

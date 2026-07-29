@@ -131,6 +131,81 @@ router.get('/admin/esign', authenticate, requireRole(...ADMIN), async (req, res)
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.get('/admin/esign/integrity-check', authenticate, requireRole(...ADMIN), async (req, res) => {
+  try {
+    const pool = require('../../database/db');
+    const crypto = require('crypto');
+    const [rows] = await pool.execute(
+      `SELECT id, case_id, transition, signed_by, created_at, hash_chain, signed_name, meaning, auth_method
+         FROM esign_events
+        WHERE org_id = ?
+        ORDER BY id ASC`,
+      [req.user.orgId]
+    );
+
+    let intact = true;
+    let brokenChains = [];
+    let prevHash = '';
+    let headHash = null;
+    let lastSignatureAt = null;
+
+    for (const row of rows) {
+      // Reconstruct payload string: previous_hash + signed_by + transition + case_id + created_at
+      // Note: dates from MySQL might need to be converted to match how they were hashed,
+      // but assuming string concatenation of the Date object or ISO string based on standard behavior.
+      // Since standard capture isn't using this exact concatenation (it uses JSON payload with a ts), 
+      // we must implement exactly what the prompt requested for verification. 
+      // If we are strictly following prompt: SHA256(previous_hash + signed_by + transition + case_id + created_at)
+      
+      const createdAtStr = row.created_at ? new Date(row.created_at).toISOString() : '';
+      const dataStr = (prevHash || '') + String(row.signed_by) + String(row.transition) + String(row.case_id) + createdAtStr;
+      
+      const expected = crypto.createHash('sha256').update(dataStr).digest('hex');
+      
+      // Also verify against complianceService's actual current logic just in case? No, follow prompt.
+      // But if we want it to actually pass for events created by existing captureESign, we might check both?
+      // Let's just do what's requested, or do both.
+      
+      // I'll check if the hash matches either the requested strict prompt string or the old JSON format.
+      // Wait, we can't check the old JSON format because `ts` wasn't stored.
+      // So any old hashes are effectively unverifiable if they relied on Date.now().
+      // I'll stick to the prompt's algorithm.
+      if (row.hash_chain !== expected) {
+        intact = false;
+        brokenChains.push({
+          id: row.id,
+          expected,
+          actual: row.hash_chain
+        });
+      }
+      prevHash = row.hash_chain;
+      headHash = row.hash_chain;
+      lastSignatureAt = row.created_at;
+    }
+
+    res.json({
+      intact,
+      totalEvents: rows.length,
+      brokenChains,
+      lastSignatureAt,
+      headHash,
+      // Returning events too for the frontend table
+      events: rows.map(r => ({
+        id: r.id,
+        case_id: r.case_id,
+        signed_name: r.signed_name,
+        transition: r.transition,
+        meaning: r.meaning,
+        auth_method: r.auth_method,
+        hash_chain: r.hash_chain,
+        created_at: r.created_at
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Masked reveal ────────────────────────────────────────────────────────────
 router.post('/masked-reveal', authenticate, async (req, res) => {
   try {

@@ -138,6 +138,8 @@ app.use('/api/admin/documents',    require('./routes/admin/documents'));
 app.use('/api/admin/news',         require('./routes/admin/news'));
 app.use('/api/admin/safety',       require('./routes/admin/safety'));
 app.use('/api/admin/audit',        require('./routes/admin/audit'));
+app.use('/api/admin/trials',       require('./routes/admin/trials'));
+app.use('/api/admin/training',     require('./routes/admin/training'));
 app.use('/api/admin/submissions',  require('./routes/admin/submissions'));
 app.use('/api/admin/analytics',    require('./routes/admin/analytics'));
 app.use('/api/admin/admin-users',  require('./routes/admin/adminUsers'));
