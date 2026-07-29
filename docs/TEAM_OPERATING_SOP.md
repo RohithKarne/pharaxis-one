@@ -8,6 +8,7 @@
 > Revision update: 2026-07-10 (Team expanded to 11 by Rohith. Bala Kaviti promoted to COO. New C-suite: Chief Compliance Officer, Chief AI Officer, Chief Medical Officer. New engineering roles: Director of QA, Lead Test Engineer, Solution Architect. Bhavya Bobba is Engineering Manager only — QA function transferred to Kiranmai Avuluri. External client contact added: Katrina.)
 > Revision update: 2026-07-22 (Section 26 added — Pre-Development Discussion & Feature Lock Process, mandated by Rohith. Applies to all Pharaxis applications. First application under this process: MIMS.)
 > Revision update: 2026-07-28 (Section 28 added — Communication Brevity Standard. Section 29 added — New Feature Test Automation & Regression Promotion. Both mandated by Rohith.)
+> Revision update: 2026-07-29 (Section 30 added — Daily Product Intelligence Routine. Mandated by Rohith. An automated cloud agent files evidenced candidates into Jira each weekday; nothing it raises may enter development without passing through Section 26.)
 > Revision update: 2026-07-11 (Section 26 added — Functional Verification Standard. Mandated by Rohith after a defect reached the CEO: data was written to the database and returned by the API, but did not render in the MIMS case screen the user actually opens. DB/API evidence alone no longer counts as verification. Definition of Done (§22) and "What Does Not Count as Evidence" (§15) strengthened accordingly.)
 
 ---
@@ -1387,3 +1388,58 @@ Test it like a human would: open the app, do the thing, look at the result on sc
 ### What this prevents
 
 A change that "works" in the database or the API but shows nothing (or the wrong thing) to the user — the exact failure that reached the CEO on 2026-07-11. Presence of data is never a substitute for a user being able to see and use it.
+
+---
+
+## 30. Daily Product Intelligence Routine (Mandatory)
+
+> Established: 2026-07-29. Mandated by Rohith Karne.
+> Applies to: MIMS and CP Portal. Vault and QMS to be added on Rohith's instruction.
+
+### Principle
+
+**An automated agent reads our own code every weekday morning and files evidenced candidates into Jira.** It is an advisor, not a decision-maker. Everything it raises is a *candidate* — it becomes work only when Rohith says so.
+
+### What it is
+
+A Claude cloud routine (`pharaxis-daily-candidates`, `trig_01DzUqoqUby33yTKsrXw3gvs`) that runs in Anthropic's cloud against a fresh checkout of `main`. It has **no access to any running application** — it reads source code and public web sources only.
+
+| Item | Value |
+|------|-------|
+| Runs | **07:00 IST, Monday–Friday** |
+| Scope | `apps/mims` → Jira project `MIMS`; `apps/cp-portal` → Jira project `CP` |
+| Produces | 1 epic per app + **up to** 4 children each |
+| Child types | Feature (`Feature`), Enhancement (`Story`), Bug (`Bug`), Query (`Task`) |
+| Lands in | Status **To Do**, assigned to Rohith |
+| Console | https://claude.ai/code/routines/trig_01DzUqoqUby33yTKsrXw3gvs |
+
+Epics are named by date — `MIMS Epic 30th Jul 2026` — so any day's completeness can be read at a glance. Child summaries and descriptions both begin with the type tag (`[Bug]` / `**Bug**`), because the Jira type name does not always match the item's role.
+
+### The rules that must hold
+
+1. **Evidence or nothing.** Every item cites a real file path and line range in this repo, or a public URL. The agent may not invent a client request, a user complaint, or a defect it has not located in the code.
+2. **Quality overrides quantity.** Four per app is a **ceiling, not a quota.** When no genuine candidate exists for a type, the agent files nothing and records why in the epic's *Not raised today*. Filing a weak item to fill the slot is a failure, not a success.
+3. **No rubber-stamp reviews.** On the following run the agent re-reads the code for any ticket that moved or was commented on, and posts `Checked / Found / Not checked`. A bare "perfect" or "looks good" is not acceptable — it is the same non-evidence §15 already rules out. Untouched tickets get no comment at all.
+4. **It cannot verify the UI.** Every review comment must state that UI and functional behaviour were not verified. **Section 26 still applies in full** — only Krishnapriya's browser pass closes that gap.
+5. **No customers.** Pharaxis One has none. The agent may never describe any company as a customer, user, or reference.
+6. **Read-only on the repo.** No commits, no pull requests, no file changes.
+7. **Deduplication covers the whole backlog** — human-raised tickets included — so it cannot re-raise work the team has already specced.
+
+### Relationship to Section 26 — read this before acting on any ticket
+
+**A ticket filed by this routine is not approved work.** It is a candidate. It still goes through the discussion-and-lock process in Section 26 before anything is built. Saad owns that step.
+
+Treating a filed ticket as a green light would bypass the feature-lock process entirely. Bala blocks any work item that reaches Gate 1 without having been locked.
+
+### Ownership
+
+- **Rohith Karne** — reads the tickets each morning, promotes what is real, closes what is not.
+- **Saad Rahman** — takes promoted items into the Section 26 discussion phase.
+- **Bala Kaviti** — owns the routine's configuration, schedule, and prompt; blocks work that skipped Section 26.
+- **Vasu Ranabothu** — has flagged that the agent files under Rohith's own Atlassian and GitHub identity, so automated and human actions are not distinguishable in the audit history. Accepted for now; to be revisited before any client audit.
+
+### Known constraints
+
+- The agent only sees code **pushed to `main`**. Unpushed local work is invisible to it, and it will analyse stale code without erroring.
+- It cannot reach local dev servers, databases, or any running instance.
+- Each run is an isolated session with no memory of the previous one — continuity comes entirely from Jira.
