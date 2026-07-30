@@ -1402,11 +1402,11 @@ A change that "works" in the database or the API but shows nothing (or the wrong
 
 ### What it is
 
-A Claude cloud routine (`pharaxis-daily-candidates`, `trig_01DzUqoqUby33yTKsrXw3gvs`) that runs in Anthropic's cloud against a fresh checkout of `main`. It has **no access to any running application** — it reads source code and public web sources only.
+A Claude cloud routine (**Daily Product Intelligence**, `trig_01DzUqoqUby33yTKsrXw3gvs`) that runs in Anthropic's cloud against a fresh checkout of `main`. It has **no access to any running application** — it reads source code and public web sources only.
 
 | Item | Value |
 |------|-------|
-| Runs | **07:00 IST, Monday–Friday** |
+| Runs | **03:30 IST, Monday–Friday** (cron `0 22 * * 0-4` UTC — note 03:30 IST is 22:00 UTC the *previous* day, so the UTC day range is Sun–Thu) |
 | Scope | `apps/mims` → Jira project `MIMS`; `apps/cp-portal` → Jira project `CP` |
 | Produces | 1 epic per app + **up to** 4 children each |
 | Child types | Feature (`Feature`), Enhancement (`Story`), Bug (`Bug`), Query (`Task`) |
