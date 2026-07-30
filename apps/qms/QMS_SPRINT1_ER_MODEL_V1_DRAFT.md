@@ -173,4 +173,4 @@ This provides tamper evidence for sequence integrity.
 
 1. Vinay acceptance criteria final text mapped to table-level rules.
 2. Karthik QA matrix mapped to module entities and negative-path checks.
-3. Codex prompt pack generated from this ER baseline after review.
+3. Implementation task pack generated from this ER baseline after review.

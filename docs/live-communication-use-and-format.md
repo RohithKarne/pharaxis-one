@@ -229,10 +229,10 @@ once you have checked.
 
 ---
 
-### Example 2 — Technical Discovery Using Codex (Expiry Enforcement)
+### Example 2 — Technical Discovery in the Codebase (Expiry Enforcement)
 *Real conversation — 2026-03-31*
 
-This shows how a product-level observation from Rohith is turned into a technical investigation, using Codex to answer a code-level question.
+This shows how a product-level observation from Rohith is turned into a technical investigation, reading the code to answer a code-level question.
 
 ```
 Rohith:
@@ -246,12 +246,12 @@ the current data flow across Admin Console, Content Management, and Case Forms
 and tell us what is connected today versus what is missing?
 
 Bhavya:
-On it Varun. I am running Codex to trace the content management data model
+On it Varun. I am tracing the content management data model
 before I give the full picture.
 
-[Codex runs — scans cm_documents, cm_faqs, db.js schema]
+[scans cm_documents, cm_faqs, db.js schema]
 
-Varun, Codex confirmed. expiry_date already exists — no new column needed.
+Varun, confirmed. expiry_date already exists — no new column needed.
 
   Table: cm_documents — column expiry_date (DATE) — db.js ~line 653
   Table: cm_faqs      — column expiry_date (DATE) — db.js ~line 739
@@ -280,7 +280,7 @@ Awesome, thanks for the information Varun. I will get back to you.
 
 **What this shows:**
 - Rohith raises a product concern — Varun drives the investigation
-- Bhavya uses Codex as a tool to answer a code-level question quickly
+- Bhavya reads the code directly to answer a code-level question quickly
 - Bhavya reports findings clearly — what exists, what is missing, what the risk is
 - Varun synthesises the findings into a clear build summary and asks one clarifying question back to Rohith
 - The whole thread is visible — anyone reading it knows the current state

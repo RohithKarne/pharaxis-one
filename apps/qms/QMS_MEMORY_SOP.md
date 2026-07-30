@@ -142,7 +142,7 @@ Sprint 2 scope not yet defined. Build sequence priority: Pharaxis Vault first.
 | Rule | Detail |
 |------|--------|
 | **org_id everywhere** | Every table must have `org_id`. No exceptions. |
-| **Codex mandatory** | ALL code via `codex:codex-rescue`. Never Claude Code Edit/Write on app code. |
+| **Claude Code writes all code** | ALL code, edits and test scripts via Claude Code's own Edit/Write tools. |
 | **No hard deletes** | Status flags only. |
 | **ESM backend** | Must use `node --env-file=.env server.js` — not `node server.js` alone. |
 | **Migrations only** | Schema changes via migration files — never manual ALTER TABLE on dev DB without a migration file. |

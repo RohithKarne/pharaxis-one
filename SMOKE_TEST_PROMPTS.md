@@ -1,25 +1,25 @@
-# Pharaxis One — Smoke Test Codex Prompts
+# Pharaxis One — Smoke Test Prompts
 
 ## Section 1 — File Header
-- Title: Pharaxis One — Smoke Test Codex Prompts
+- Title: Pharaxis One — Smoke Test Prompts
 - Date: 2026-04-12
 - Platform context: Pharaxis One — 5 apps deployed on AWS EC2 at permanent IP 13.205.213.128
 - All backends: Node.js + Express APIs (app-specific DB backends)
 - All frontends: React (Vue for QMS) served as static files via Nginx
 - Backend health check pattern: `GET /appname/api/health` → HTTP 200
-- Note: Codex smoke tests use Node.js native `fetch` (Node 22) to hit live API endpoints directly — no browser needed
+- Note: these smoke tests use Node.js native `fetch` (Node 22) to hit live API endpoints directly — no browser needed
 
 ### QA Team Instructions
 1. For each app section, copy only the text between the `---` delimiters.
-2. Paste it into Codex exactly as-is.
-3. Let Codex create the Node.js script, run it immediately, and print PASS/FAIL output.
+2. Paste it into Claude Code exactly as-is.
+3. Let Claude Code create the Node.js script, run it immediately, and print PASS/FAIL output.
 4. Capture the console output and summary for your QA report.
 5. Use the final combined prompt for a quick all-app health snapshot.
 
 ## Section 2 — 5 App Smoke Test Prompts
 
 ## App 1 — MIMS Smoke Test
-### Codex Prompt (copy everything below this line into Codex)
+### Prompt (copy everything below this line into Claude Code)
 ---
 [PROMPT STARTS HERE]
 You are running a live API smoke test for the MIMS app.
@@ -166,7 +166,7 @@ Return:
 ---
 
 ## App 2 — CP Portal Smoke Test
-### Codex Prompt (copy everything below this line into Codex)
+### Prompt (copy everything below this line into Claude Code)
 ---
 [PROMPT STARTS HERE]
 You are running a live API smoke test for the CP Portal app.
@@ -297,7 +297,7 @@ Return:
 ---
 
 ## App 3 — Pharaxis Vault Smoke Test
-### Codex Prompt (copy everything below this line into Codex)
+### Prompt (copy everything below this line into Claude Code)
 ---
 [PROMPT STARTS HERE]
 You are running a live API smoke test for the Pharaxis Vault app.
@@ -426,7 +426,7 @@ Return:
 ---
 
 ## App 4 — AI Agent Smoke Test
-### Codex Prompt (copy everything below this line into Codex)
+### Prompt (copy everything below this line into Claude Code)
 ---
 [PROMPT STARTS HERE]
 You are running a live API smoke test for the AI Agent app.
@@ -528,7 +528,7 @@ Return:
 ---
 
 ## App 5 — QMS Smoke Test
-### Codex Prompt (copy everything below this line into Codex)
+### Prompt (copy everything below this line into Claude Code)
 ---
 [PROMPT STARTS HERE]
 You are running a live API smoke test for the QMS app.
@@ -658,7 +658,7 @@ Return:
 ## Section 3 — All Apps Combined Prompt
 
 ## All Apps Combined — Quick Health Check
-### Codex Prompt (copy everything below this line into Codex)
+### Prompt (copy everything below this line into Claude Code)
 ---
 [PROMPT STARTS HERE]
 You are running a quick health smoke test across all Pharaxis One apps.

@@ -91,7 +91,7 @@ export function LoginScreen({
             </View>
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>Preview mode</Text>
-              <Text style={styles.metricValue}>Expo web via Codex browser</Text>
+              <Text style={styles.metricValue}>Expo web preview</Text>
             </View>
           </View>
         </View>

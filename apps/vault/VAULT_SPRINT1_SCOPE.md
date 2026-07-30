@@ -932,7 +932,7 @@ These are non-negotiable and must be followed for every line of code delivered.
 
 | Rule | Detail |
 |------|--------|
-| **Codex for all code** | All backend routes, services, frontend pages must be written via Codex CLI. Do not write code directly in the editor. |
+| **Claude Code for all code** | All backend routes, services and frontend pages are written with Claude Code's Edit/Write tools. |
 | **No git push** | Git push is disabled for this project. Commit locally only. |
 | **org_id on every query** | Every SELECT, INSERT, UPDATE must include `org_id = req.user.orgId`. Never trust org from request body. |
 | **Role enforcement** | Always check `req.user.role` from the JWT middleware. Never trust role from request body. |

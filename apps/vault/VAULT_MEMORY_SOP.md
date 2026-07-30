@@ -134,7 +134,7 @@ Tier 3 — Org Users (authors, reviewers, approvers, viewers)
 | Rohith Karne | CEO & Co-Founder | All gates, final sign-off, product direction |
 | Varun Karne | CTO & Co-Founder | Architecture review, engineering lead, code review, Gate 2 sign-off |
 | Saad Rahman | CPO | Product strategy, feature prioritisation, requirement quality |
-| Bhavya Bobba | Engineering Manager + QA Manager | Schema owner, Codex prompt author, root cause, implementation, QA sign-off |
+| Bhavya Bobba | Engineering Manager + QA Manager | Schema owner, root cause, implementation, QA sign-off |
 | Bala Kaviti | Head of PMO, Business & Operations | Sprint facilitation, blockers, gate coordination |
 
 ---
@@ -269,7 +269,7 @@ Awaiting Gate 1 approval from Rohith.
 | **Org user JWT prefix** | `vault_` |
 | **Check-out lock is server-side** | Lock enforced at API level — not just UI. Direct API calls return 423 Locked. |
 | **Watermark at render time** | Source file NEVER modified. Watermark applied on-the-fly. |
-| **Codex mandatory** | ALL code writes, edits, test scripts via codex:codex-rescue. Never Claude Code Edit/Write tools on app code. |
+| **Claude Code writes all code** | ALL code writes, edits and test scripts via Claude Code's own Edit/Write tools. |
 | **No hard deletes** | Content uses status flags only — active/inactive/archived. |
 | **Schema owner** | Bhavya. No schema changes without Bhavya sign-off. |
 
@@ -279,7 +279,7 @@ Awaiting Gate 1 approval from Rohith.
 
 > Full gate flow, browser verification protocol, and team communication rules in:
 > - `memory/protocols.md` — gate approvals, dev standards, QA standards
-> - `memory/feedback.md` — Codex workflow, git push disabled, browser-first verification
+> - `memory/feedback.md` — development workflow, git push disabled, browser-first verification
 > - `TEAM_OPERATING_SOP.md` — role boundaries, escalation SOP
 
 ---

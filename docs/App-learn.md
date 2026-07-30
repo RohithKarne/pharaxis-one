@@ -219,5 +219,5 @@ While learning Part 6, Rohith asked whether the JWT expiry could be dropped and 
 - **Katrina** (Senior Director, Client Excellence) is an external client, not an employee. Never in internal approval gates.
 - Portfolio is **5 products**: CP Portal, MIMS, Pharaxis Vault, QMS, AI-Agent. Safety, IEG, and Publications were eliminated 2026-07-10. Build priority: CP Portal + MIMS first, Vault + QMS next.
 - Live communication, targeted communication (only the addressed person responds), and the gate workflow all apply per `docs/TEAM_OPERATING_SOP.md` and `docs/live-communication-use-and-format.md`.
-- Dev tooling: use Claude Code Edit/Write directly (Codex is OFF since 2026-05-11). Git push is DISABLED. No feature is "Done" until browser-verified.
+- Dev tooling: use Claude Code Edit/Write directly for all code. Git push is DISABLED. No feature is "Done" until browser-verified.
 </content>
