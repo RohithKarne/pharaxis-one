@@ -139,21 +139,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div style={{ marginTop: 20, marginBottom: 20, padding: '14px', borderRadius: '8px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>HCP License Verification</span>
-            <span style={{ padding: '2px 8px', borderRadius: 10, background: '#DCFCE7', color: '#15803D', fontSize: 11, fontWeight: 600 }}>
-              Verified HCP
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input style={{ ...inputStyle, flex: 1, fontSize: 13 }} defaultValue="NPI-1948205810" readOnly />
-            <button type="button" className="pp-btn pp-btn-outline pp-btn-sm" onClick={() => toast.success('HCP License Verified successfully.')}>
-              Re-Verify
-            </button>
-          </div>
-        </div>
-
         <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
             <label style={labelStyle} htmlFor="pf-country">Country</label>
