@@ -8,6 +8,7 @@
 > Revision update: 2026-07-10 (Team expanded to 11 by Rohith. Bala Kaviti promoted to COO. New C-suite: Chief Compliance Officer, Chief AI Officer, Chief Medical Officer. New engineering roles: Director of QA, Lead Test Engineer, Solution Architect. Bhavya Bobba is Engineering Manager only — QA function transferred to Kiranmai Avuluri. External client contact added: Katrina.)
 > Revision update: 2026-07-22 (Section 26 added — Pre-Development Discussion & Feature Lock Process, mandated by Rohith. Applies to all Pharaxis applications. First application under this process: MIMS.)
 > Revision update: 2026-07-28 (Section 28 added — Communication Brevity Standard. Section 29 added — New Feature Test Automation & Regression Promotion. Both mandated by Rohith.)
+> Revision update: 2026-07-31 (Section 31 added — Code Craftsmanship Standard. Mandated by Rohith. Ten rules for how code gets written now live in `CLAUDE.md` at the repository root, read by the coding agent at the start of every session. This SOP remains the source of truth: where a rule appears in both, this SOP wins.)
 > Revision update: 2026-07-29 (Section 30 added — Daily Product Intelligence Routine. Mandated by Rohith. An automated cloud agent files evidenced candidates into Jira each weekday; nothing it raises may enter development without passing through Section 26.)
 > Revision update: 2026-07-11 (Section 26 added — Functional Verification Standard. Mandated by Rohith after a defect reached the CEO: data was written to the database and returned by the API, but did not render in the MIMS case screen the user actually opens. DB/API evidence alone no longer counts as verification. Definition of Done (§22) and "What Does Not Count as Evidence" (§15) strengthened accordingly.)
 
@@ -1406,7 +1407,7 @@ A Claude cloud routine (**Daily Product Intelligence**, `trig_01DzUqoqUby33yTKsr
 
 | Item | Value |
 |------|-------|
-| Runs | **03:30 IST, Monday–Friday** (cron `0 22 * * 0-4` UTC — note 03:30 IST is 22:00 UTC the *previous* day, so the UTC day range is Sun–Thu) |
+| Runs | **03:30 IST, every day including weekends** (cron `0 22 * * *` UTC — note 03:30 IST is 22:00 UTC the *previous* day). Changed from Monday–Friday by Rohith on 2026-07-31. |
 | Scope | `apps/mims` → Jira project `MIMS`; `apps/cp-portal` → Jira project `CP` |
 | Produces | 1 epic per app + **up to** 4 children each |
 | Child types | Feature (`Feature`), Enhancement (`Story`), Bug (`Bug`), Query (`Task`) |
@@ -1443,3 +1444,51 @@ Treating a filed ticket as a green light would bypass the feature-lock process e
 - The agent only sees code **pushed to `main`**. Unpushed local work is invisible to it, and it will analyse stale code without erroring.
 - It cannot reach local dev servers, databases, or any running instance.
 - Each run is an isolated session with no memory of the previous one — continuity comes entirely from Jira.
+
+---
+
+## 31. Code Craftsmanship Standard — `CLAUDE.md` (Mandatory)
+
+> Established: 2026-07-31. Mandated by Rohith Karne.
+> Applies to: every application in the repository, and to every person or agent writing code in it.
+
+### Principle
+
+**A coding agent is fast at producing plausible code and slow to notice that plausible is not the same as correct.** The discipline therefore has to come from the process around it. `CLAUDE.md` at the repository root holds ten rules that close that gap.
+
+### The two files, and which one wins
+
+| File | Reader | Contains |
+|---|---|---|
+| `docs/TEAM_OPERATING_SOP.md` | **people** | gates, approvals, roles, escalation, evidence standards |
+| `CLAUDE.md` | **the coding agent**, at the start of every session | how code gets written: reading, scoping, diff size, testing, debugging, dependencies |
+
+**This SOP is the source of truth. Where a rule appears in both, the SOP wins**, and `CLAUDE.md` says so in its own opening lines. `CLAUDE.md` cross-references SOP sections rather than restating them — deliberately, so the two cannot drift apart and contradict each other.
+
+> This risk is not theoretical. `MEMORY.md` carried a development-tooling rule for eleven weeks after Rohith had reversed it, and the team repeated the stale version back to him because it was written down in the wrong place. One rule, one home.
+
+### The ten rules, in brief
+
+I Read before you write · II Think before you code · III Simplicity · IV Surgical changes · V Verification · VI Goal-driven execution · VII Debugging · VIII Dependencies · IX Communication · X Common failure modes
+
+Full text in `CLAUDE.md`. Four carry direct SOP weight:
+
+- **Rule V (Verification)** is Section 26 stated for the agent: write the failing test first, watch it fail, then fix. *An unrun test in the repository is worse than no test — it reads as evidence to an auditor and is not.*
+- **Rule VI (Goal-driven execution)** is the Section 26 Pre-Development Feature Lock: a success criterion exists before code is written.
+- **Rule VIII (Dependencies)** carries a Pharaxis-specific addition from Vasu: **in a regulated app, a new dependency needs a named reason in the commit message.** A supply-chain control, not a style note.
+- **Rule IX (Communication)** extends Section 28: be precise about uncertainty. "I am not sure this library supports streaming" tells the reader what to verify; "I think this should work" does not.
+
+### The hard constraints restated in `CLAUDE.md`
+
+Never `git push` · nothing is Done until browser-verified · Pharaxis One has no customers · evidence or nothing.
+
+### Ownership
+
+- **Varun Karne** — owns the technical content of `CLAUDE.md`.
+- **Kiranmai Avuluri** — owns the boundary: raises it whenever `CLAUDE.md` and this SOP begin to say different things.
+- **Vasu Ranabothu** — owns the compliance additions, currently the dependency-justification rule in VIII.
+- **Bala Kaviti** — reviews both files together at each SOP revision, so neither is updated alone.
+
+### Provenance
+
+Rules I–X are adapted from field notes on LLM-assisted programming circulated as `CLAUDE.md`. **We adopted them on their merits, not on attribution** — the authorship as presented has not been independently verified. The hard constraints, the SOP cross-references, and the compliance addition to Rule VIII are ours.
