@@ -18,7 +18,7 @@ const { parseAck } = require('../../services/pv/ackParser');
 const { getGatewayConfig } = require('../../services/pv/gatewayConfig');
 const { resolveGateway } = require('../../services/pv/gateways');
 const { generatePeriodicReport } = require('../../services/pv/periodicReportService');
-const { runSignalDetection } = require('../../services/pv/signalDetectionService');
+const { runSignalDetection, DISABLED_REASON } = require('../../services/pv/signalDetectionService');
 const { createESignManifest } = require('../../services/eSignManifestService');
 const { assess: assessCaseValidity } = require('../../services/caseValidityService');
 const { redact: redactPii } = require('../../services/piiRedactionService');
@@ -403,11 +403,22 @@ router.get('/pv/periodic-reports', ...adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// MIMS-46 Option B: automatic PRR/ROR detection is disabled until a real
+// background-rate comparator exists. The endpoint stays so callers get a clear
+// answer instead of a 404, and the attempt is still audited — a request to run
+// safety-signal detection is worth recording even when it does nothing.
 router.post('/pv/signals/run', ...adminOnly, async (req, res) => {
   try {
-    const created = await runSignalDetection(req.body.org_id || req.user.orgId);
-    await audit(req, 'RUN', 'pv_signal_detection', null, { created: created.length });
-    res.json({ created });
+    const result = await runSignalDetection(req.body.org_id || req.user.orgId);
+    await audit(req, 'RUN', 'pv_signal_detection', null, {
+      created: result.created.length,
+      enabled: result.enabled,
+      reason: result.reason,
+    });
+    // 409, not 200: nothing ran. Returning 200 with an empty `created` array
+    // would read as "detection ran and found nothing", which is the opposite of
+    // the truth and exactly the false confidence Option B exists to remove.
+    return res.status(409).json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -415,7 +426,15 @@ router.get('/pv/signals', ...adminOnly, async (req, res) => {
   try {
     const scope = orgScope(req, 's');
     const [rows] = await pool.execute(`SELECT * FROM pv_signal_reviews s WHERE ${scope.sql} ORDER BY created_at DESC LIMIT 100`, scope.params);
-    res.json({ rows });
+    // Every stored row predates the Option B decision and came from the
+    // hardcoded-comparator calculation. They are returned (deleting a PV audit
+    // record is not ours to do) but never as valid signals.
+    return res.json({
+      rows: rows.map(r => ({ ...r, is_statistically_validated: r.is_statistically_validated === 1 })),
+      signal_detection_enabled: false,
+      statistically_validated: false,
+      notice: DISABLED_REASON,
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

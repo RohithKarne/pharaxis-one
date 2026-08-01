@@ -306,6 +306,7 @@ function mountRoutes(r, prefix = '') {
   r.use(`${prefix}/admin`, require('./routes/admin/rtbf'));
   r.use(`${prefix}/admin`, require('./routes/admin/consent'));
   r.use(`${prefix}/admin`, require('./routes/admin/emailCaseImport'));
+  r.use(`${prefix}/admin`, require('./routes/admin/caseFields'));
   r.use(`${prefix}/admin`, require('./routes/admin/users'));
   r.use(`${prefix}/admin`, require('./routes/admin/systemParams'));
   r.use(`${prefix}/admin`, require('./routes/admin/customizeForms'));

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
-const API_BASE = import.meta.env.VITE_AI_AGENT_URL || 'http://localhost:6000'
+const API_BASE = import.meta.env.VITE_AI_AGENT_URL || ''
 const TOKENS = {
   primary: '#6B3FA0',
   navy: '#0f172a',

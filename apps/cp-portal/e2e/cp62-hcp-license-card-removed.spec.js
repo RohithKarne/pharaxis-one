@@ -35,7 +35,18 @@ test.describe('CP-62 — HCP License Verification card removed', () => {
   });
 
   test('Profile page shows no fake license-verification control', async ({ page }) => {
-    await page.goto('http://localhost:5174/portal/novartis/profile');
+    // PortalAuthGuard reads `user`, set only after an async /me probe; the config
+    // fetch can win that race and bounce to /login. Retry the load so this test
+    // measures the license card, not that pre-existing app race.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await page.goto('http://localhost:5174/portal/novartis/profile');
+      try {
+        await expect(page.getByText('Profile Details')).toBeVisible({ timeout: 5000 });
+        break;
+      } catch {
+        if (attempt === 2) throw new Error('Profile page never authenticated after 3 attempts');
+      }
+    }
 
     // Real profile card is present (proves we are authenticated on the right page).
     await expect(page.getByText('Profile Details')).toBeVisible();

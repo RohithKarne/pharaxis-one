@@ -2,10 +2,12 @@ import { lazy, Suspense } from 'react'
 import { CONFIG_NAV, findConfigLabel } from '../configItems'
 
 const EmailCaseImportConfig = lazy(() => import('../EmailCaseImportConfig'))
+const CaseFieldsConfig = lazy(() => import('../CaseFieldsConfig'))
 
 // Topics with a real configuration surface (no longer placeholder tiles).
 const TOPIC_COMPONENTS = {
   'imp-email-case': EmailCaseImportConfig,
+  'sys-setup-case-fields': CaseFieldsConfig,
 }
 
 function flattenNav(items, parent = []) {

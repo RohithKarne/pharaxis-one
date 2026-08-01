@@ -1,5 +1,11 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AdminAuthProvider, useAdminAuth } from './admin/context/AdminAuthContext'
+import IdleTimeout from './shared/components/IdleTimeout'
+
+// CP-64 — HIPAA §164.312(a)(2)(iii) automatic-logoff idle timeouts (minutes).
+// Admin console carries higher privilege → shorter idle window than the portal.
+const ADMIN_IDLE_MINUTES  = 15
+const PORTAL_IDLE_MINUTES = 30
 
 // Admin pages
 import AdminLoginPage       from './admin/pages/LoginPage'
@@ -13,6 +19,7 @@ import FormsPage            from './admin/pages/FormsPage'
 import MSLPage              from './admin/pages/MSLPage'
 import IntegrationPage      from './admin/pages/IntegrationPage'
 import SyncHealthPage       from './admin/pages/SyncHealthPage'
+import DataRequestsPage     from './admin/pages/DataRequestsPage'
 import SsoConfigPage        from './admin/pages/SsoConfigPage'
 import PortalUsersPage      from './admin/pages/PortalUsersPage'
 import ChatboxConfigPage    from './admin/pages/ChatboxConfigPage'
@@ -68,10 +75,12 @@ import TrialsAdminPage         from './admin/pages/TrialsAdminPage'
 import TrainingAdminPage       from './admin/pages/TrainingAdminPage'
 
 function AdminGuard({ children }) {
-  const { admin, authLoading } = useAdminAuth()
+  const { admin, authLoading, logout } = useAdminAuth()
   const location = useLocation()
   if (authLoading) return <div className="cp-loading">Restoring admin session...</div>
-  return admin ? children : <Navigate to="/admin/login" replace state={{ from: location.pathname + location.search }} />
+  if (!admin) return <Navigate to="/admin/login" replace state={{ from: location.pathname + location.search }} />
+  // CP-64: idle auto-logoff active only while authenticated in the admin console.
+  return <><IdleTimeout timeoutMinutes={ADMIN_IDLE_MINUTES} onTimeout={logout} />{children}</>
 }
 
 function FeatureGuard({ featureKey, children }) {
@@ -89,10 +98,18 @@ function PortalAuthGuard({ children }) {
   return children
 }
 
+// CP-64: portal idle auto-logoff — active only when a portal user is logged in
+// (anonymous browsing has no session to expire). Reads user/logout from context.
+function PortalIdleTimeout() {
+  const { user, logout } = usePortal()
+  return <IdleTimeout timeoutMinutes={user ? PORTAL_IDLE_MINUTES : 0} onTimeout={logout} />
+}
+
 function PortalRoutes() {
   return (
     <PortalProvider>
       <ToastProvider>
+      <PortalIdleTimeout />
       <PortalLayout>
         <Routes>
           <Route index                    element={<PortalHomePage />} />
@@ -145,6 +162,7 @@ export default function App() {
         <Route path="/admin/clients/:clientId/msls" element={<AdminGuard><MSLPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/integration" element={<AdminGuard><IntegrationPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/sync-health" element={<AdminGuard><SyncHealthPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/data-requests" element={<AdminGuard><DataRequestsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/sso" element={<AdminGuard><SsoConfigPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/users" element={<AdminGuard><PortalUsersPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/chatbox" element={<AdminGuard><ChatboxConfigPage /></AdminGuard>} />

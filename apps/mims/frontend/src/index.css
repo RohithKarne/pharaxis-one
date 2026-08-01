@@ -5911,3 +5911,67 @@ a.nav-item { text-decoration: none; color: inherit; }
     font-size: 1.8rem;
   }
 }
+
+/* ── Case Form Fields admin (Phase 3) ─────────────────────────────────────
+   Admin surface for field_setup: label, required, visibility, order per org
+   and case type. Locked with Rohith 2026-07-28.                             */
+
+.cf-fieldcfg { display: grid; gap: 16px; }
+
+.cf-fieldcfg-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 20px; flex-wrap: wrap;
+  background: #fff; border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px; padding: 16px 18px;
+}
+.cf-fieldcfg-head h3 { margin: 0; font-size: 16px; font-weight: 800; }
+.cf-fieldcfg-head p { margin: 6px 0 0; font-size: 12.5px; color: var(--text-muted, #6b7280); max-width: 620px; line-height: 1.5; }
+
+.cf-fieldcfg-controls { display: flex; align-items: center; gap: 12px; font-size: 12.5px; }
+.cf-fieldcfg-controls select {
+  padding: 6px 10px; border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px; font-size: 13px;
+}
+.cf-fieldcfg-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+.cf-fieldcfg-note {
+  font-size: 12.5px; line-height: 1.55; color: var(--text-muted, #6b7280);
+  background: #f9fafb; border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px; padding: 10px 12px;
+}
+.cf-fieldcfg-note--warn { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+
+.cf-fieldcfg-count { font-size: 12px; color: var(--text-muted, #6b7280); }
+
+.cf-fieldcfg-section {
+  background: #fff; border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px; padding: 14px 16px;
+}
+.cf-fieldcfg-section h4 { margin: 0 0 10px; font-size: 13.5px; font-weight: 800; }
+
+.cf-fieldcfg-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.cf-fieldcfg-table th {
+  text-align: left; font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--text-muted, #6b7280); padding: 6px 8px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.cf-fieldcfg-table td { padding: 7px 8px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+.cf-fieldcfg-table tr.is-hidden-row { opacity: 0.55; }
+.cf-fieldcfg-centre { text-align: center; }
+
+.cf-fieldcfg-table input[type="text"],
+.cf-fieldcfg-table input[type="number"] {
+  width: 100%; padding: 5px 8px; font-size: 12.5px;
+  border: 1px solid var(--border, #e5e7eb); border-radius: 6px;
+}
+.cf-fieldcfg-table input[type="number"] { width: 76px; }
+
+.cf-fieldcfg-name { font-weight: 700; }
+.cf-fieldcfg-type { margin-left: 8px; font-size: 11px; color: var(--text-muted, #6b7280); }
+
+.cf-fieldcfg-badge {
+  margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af;
+}
+.cf-fieldcfg-badge--inherit { background: #fffbeb; border-color: #fde68a; color: #92400e; }

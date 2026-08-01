@@ -1407,7 +1407,7 @@ A Claude cloud routine (**Daily Product Intelligence**, `trig_01DzUqoqUby33yTKsr
 
 | Item | Value |
 |------|-------|
-| Runs | **03:30 IST, every day including weekends** (cron `0 22 * * *` UTC — note 03:30 IST is 22:00 UTC the *previous* day). Changed from Monday–Friday by Rohith on 2026-07-31. |
+| Runs | **03:30 IST, Monday–Friday only** (cron `0 22 * * 0-4` UTC — the UTC days are Sunday–Thursday because 03:30 IST is 22:00 UTC the *previous* day). Weekends dropped by Rohith on 2026-08-01, reverting the 2026-07-31 change to every day. |
 | Scope | `apps/mims` → Jira project `MIMS`; `apps/cp-portal` → Jira project `CP` |
 | Produces | 1 epic per app + **up to** 4 children each |
 | Child types | Feature (`Feature`), Enhancement (`Story`), Bug (`Bug`), Query (`Task`) |

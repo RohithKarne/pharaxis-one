@@ -5,8 +5,11 @@ import OrgsPage from './pages/OrgsPage'
 import UsagePage from './pages/UsagePage'
 
 export default function App() {
+  // basename must track Vite's `base` (/ai-agent/). Without it the router
+  // redirected to a bare /dashboard, which renders on the client but 404s on
+  // reload or when the URL is shared.
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
         <Route path="/" element={<SuperadminLayout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />

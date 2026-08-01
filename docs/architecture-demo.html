@@ -224,7 +224,7 @@
     <div class="top-row">
       <div>
         <h1>Pharaxis One — Architecture Viewer</h1>
-        <div class="subtitle">8 Apps · Full Platform View · Sprint Status Live</div>
+        <div class="subtitle">5 Apps · Full Platform View</div>
       </div>
       <span class="env-badge"><span class="env-dot"></span>ENV: Development</span>
     </div>
@@ -379,145 +379,145 @@
           <g id="n-superadmin" data-layer="user-roles" data-tip="Superadmin&#10;Full system access — no org filter&#10;Routes: /api/superadmin/*&#10;DB: All tables&#10;Token: role = superadmin" onclick="filterLayer(this)">
             <rect x="40" y="100" width="150" height="70" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow)"/>
             <svg x="50" y="124" width="22" height="22" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" fill="#e53935"/></svg>
-            <text class="n-label" x="80" y="122">Superadmin</text>
-            <text class="n-sub" x="80" y="138">Full Access</text>
+            <text class="n-label" x="130" y="122">Superadmin</text>
+            <text class="n-sub" x="130" y="138">Full Access</text>
           </g>
 
           <g id="n-orguser" data-layer="user-roles" data-tip="Org User&#10;Role-based access within org&#10;Routes: /api/vault/*, /api/content/*&#10;DB: Org-scoped (org_id filter)&#10;Token: role = admin | manager | viewer" onclick="filterLayer(this)">
             <rect x="40" y="240" width="150" height="70" rx="10" fill="#fce4ec" stroke="#f48fb1" stroke-width="1.5" filter="url(#shadow)"/>
             <svg x="50" y="264" width="22" height="22" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" fill="#c62828"/></svg>
-            <text class="n-label" x="80" y="262">Org User</text>
-            <text class="n-sub" x="80" y="278">Role-based Access</text>
+            <text class="n-label" x="130" y="262">Org User</text>
+            <text class="n-sub" x="130" y="278">Role-based Access</text>
           </g>
 
-          <g id="n-frontend" data-layer="frontend" data-tip="React Frontend&#10;Port 5173 (Vite dev server)&#10;State: React hooks + Context API&#10;Auth: JWT stored in localStorage&#10;Keys: vault_token, vault_user" onclick="filterLayer(this)">
+          <g id="n-frontend" data-layer="frontend" data-tip="React Frontend&#10;Port 5176 (Vite dev server)&#10;Superadmin console runs separately on port 5177&#10;State: React hooks + Context API&#10;Auth: JWT stored in localStorage&#10;Keys: vault_token, vault_user" onclick="filterLayer(this)">
             <rect x="260" y="100" width="160" height="70" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow)"/>
             <image href="https://cdn.simpleicons.org/react/61DAFB" x="270" y="124" width="22" height="22"/>
-            <text class="n-label" x="300" y="122">React Frontend</text>
-            <text class="n-sub" x="300" y="138">Port 5173 · Dev</text>
+            <text class="n-label" x="355" y="122">React Frontend</text>
+            <text class="n-sub" x="355" y="138">Port 5176 · Dev</text>
           </g>
 
-          <g id="n-vite" data-layer="frontend" data-tip="Vite&#10;Dev server with Hot Module Replacement&#10;Builds optimised bundle for production&#10;Config: vite.config.js&#10;Serves on http://localhost:5173" onclick="filterLayer(this)">
+          <g id="n-vite" data-layer="frontend" data-tip="Vite&#10;Dev server with Hot Module Replacement&#10;Builds optimised bundle for production&#10;Config: vite.config.js&#10;Serves on http://localhost:5176" onclick="filterLayer(this)">
             <rect x="260" y="240" width="160" height="70" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow)"/>
             <image href="https://cdn.simpleicons.org/vite/646CFF" x="270" y="264" width="22" height="22"/>
-            <text class="n-label" x="300" y="262">Vite</text>
-            <text class="n-sub" x="300" y="278">Dev Server</text>
+            <text class="n-label" x="355" y="262">Vite</text>
+            <text class="n-sub" x="355" y="278">Dev Server</text>
           </g>
 
           <g id="n-localstorage" data-layer="frontend" data-tip="Browser LocalStorage&#10;Stores: vault_token (JWT)&#10;Stores: vault_user (user object)&#10;Read on every API call&#10;Cleared on logout or token expiry" onclick="filterLayer(this)">
             <rect x="260" y="400" width="160" height="70" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow)"/>
             <svg x="270" y="424" width="22" height="22" viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z" fill="#1565c0"/></svg>
-            <text class="n-label" x="300" y="422">LocalStorage</text>
-            <text class="n-sub" x="300" y="438">JWT Token</text>
+            <text class="n-label" x="355" y="422">LocalStorage</text>
+            <text class="n-sub" x="355" y="438">JWT Token</text>
           </g>
 
           <g id="n-cors" data-layer="middleware" data-tip="CORS Middleware&#10;Allows: http://localhost:5173&#10;Blocks unauthorized origins&#10;Headers: Access-Control-Allow-Origin&#10;Configured via cors() in server.js" onclick="filterLayer(this)">
             <rect x="500" y="60" width="130" height="60" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow)"/>
             <svg x="510" y="79" width="22" height="22" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="#f57c00"/></svg>
-            <text class="n-label" x="540" y="82">CORS</text>
-            <text class="n-sub" x="540" y="98">Middleware</text>
+            <text class="n-label" x="580" y="82">CORS</text>
+            <text class="n-sub" x="580" y="98">Middleware</text>
           </g>
 
           <g id="n-jwtmw" data-layer="middleware" data-tip="JWT Check Middleware&#10;Verifies Bearer token from Authorization header&#10;Decodes payload: userId, role, orgId&#10;Token expired → 401 Unauthorized&#10;Invalid token → 401 Unauthorized" onclick="filterLayer(this)">
             <rect x="500" y="160" width="130" height="60" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow)"/>
             <image href="https://cdn.simpleicons.org/jsonwebtokens/f59e0b" x="510" y="179" width="22" height="22"/>
-            <text class="n-label" x="540" y="182">JWT Check</text>
-            <text class="n-sub" x="540" y="198">Middleware</text>
+            <text class="n-label" x="580" y="182">JWT Check</text>
+            <text class="n-sub" x="580" y="198">Middleware</text>
           </g>
 
           <g id="n-rolecheck" data-layer="middleware" data-tip="Role Check Middleware&#10;Validates decoded role against route requirement&#10;SA routes: role must be superadmin&#10;Org routes: valid orgId required in token&#10;Fail → 403 Forbidden" onclick="filterLayer(this)">
             <rect x="500" y="260" width="130" height="60" rx="10" fill="#fff8e1" stroke="#ffe082" stroke-width="1.5" filter="url(#shadow)"/>
             <svg x="510" y="279" width="22" height="22" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1 1.7 0 3.1 1.4 3.1 3.1v2z" fill="#f57c00"/></svg>
-            <text class="n-label" x="540" y="282">Role Check</text>
-            <text class="n-sub" x="540" y="298">Middleware</text>
+            <text class="n-label" x="580" y="282">Role Check</text>
+            <text class="n-sub" x="580" y="298">Middleware</text>
           </g>
 
           <g id="n-backend" data-layer="backend" data-tip="Node.js + Express&#10;Port 5100&#10;13 route modules registered&#10;initializeDatabase() on startup&#10;expiryAlertCron registered on boot" onclick="filterLayer(this)">
             <rect x="695" y="210" width="170" height="80" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
             <image href="https://cdn.simpleicons.org/nodedotjs/339933" x="705" y="239" width="22" height="22"/>
-            <text class="n-label" x="735" y="232">Node.js + Express</text>
-            <text class="n-sub" x="735" y="248">Port 5100</text>
+            <text class="n-label" x="795" y="232">Node.js + Express</text>
+            <text class="n-sub" x="795" y="248">Port 5100</text>
           </g>
 
           <g id="n-health" data-layer="backend" data-tip="Health Check Endpoint&#10;GET /api/health&#10;No authentication required&#10;Returns: { status: ok, app: pharaxis-vault, time }" onclick="filterLayer(this)">
             <rect x="695" y="450" width="170" height="60" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
             <svg x="705" y="469" width="22" height="22" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="#2e7d32"/></svg>
-            <text class="n-label" x="735" y="470">Health Check</text>
-            <text class="n-sub" x="735" y="486">/api/health · 200 OK</text>
+            <text class="n-label" x="795" y="470">Health Check</text>
+            <text class="n-sub" x="795" y="486">/api/health · 200 OK</text>
           </g>
 
           <g id="n-grp-auth" data-layer="backend" data-tip="Auth &amp; Users&#10;/api/auth/* — Login, /me, token refresh&#10;/api/superadmin/* — SA user management&#10;/api/users/* — Org user CRUD" onclick="filterLayer(this)">
             <rect x="890" y="82" width="275" height="58" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
-            <text class="n-label" x="906" y="104">Auth &amp; Users</text>
-            <text class="n-sub" x="906" y="120">/auth · /superadmin · /users</text>
+            <text class="n-label" x="1028" y="104">Auth &amp; Users</text>
+            <text class="n-sub" x="1028" y="120">/auth · /superadmin · /users</text>
           </g>
 
           <g id="n-grp-content" data-layer="backend" data-tip="Content &amp; Lifecycle&#10;/api/content/* — Document CRUD&#10;/api/folders/* — Folder tree management&#10;/api/lifecycle/* — Draft→Approved→Published" onclick="filterLayer(this)">
             <rect x="890" y="154" width="275" height="58" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
-            <text class="n-label" x="906" y="176">Content &amp; Lifecycle</text>
-            <text class="n-sub" x="906" y="192">/content · /folders · /lifecycle · /upload</text>
+            <text class="n-label" x="1028" y="176">Content &amp; Lifecycle</text>
+            <text class="n-sub" x="1028" y="192">/content · /folders · /lifecycle · /upload</text>
           </g>
 
           <g id="n-grp-search" data-layer="backend" data-tip="Search &amp; Taxonomy&#10;/api/search/* — Full-text search across content&#10;/api/taxonomy/* — Tags, categories, classifications" onclick="filterLayer(this)">
             <rect x="890" y="226" width="275" height="58" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
-            <text class="n-label" x="906" y="248">Search &amp; Taxonomy</text>
-            <text class="n-sub" x="906" y="264">/search · /taxonomy</text>
+            <text class="n-label" x="1028" y="248">Search &amp; Taxonomy</text>
+            <text class="n-sub" x="1028" y="264">/search · /taxonomy</text>
           </g>
 
           <g id="n-grp-dossiers" data-layer="backend" data-tip="Dossiers &amp; Slots&#10;/api/dossiers/* — Dossier package management&#10;/api/slots/* — Slot assignment and tracking" onclick="filterLayer(this)">
             <rect x="890" y="298" width="275" height="58" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
-            <text class="n-label" x="906" y="320">Dossiers &amp; Slots</text>
-            <text class="n-sub" x="906" y="336">/dossiers · /slots</text>
+            <text class="n-label" x="1028" y="320">Dossiers &amp; Slots</text>
+            <text class="n-sub" x="1028" y="336">/dossiers · /slots</text>
           </g>
 
           <g id="n-grp-admin" data-layer="backend" data-tip="Admin &amp; Audit&#10;/api/admin/* — System config, org settings&#10;/api/audit/* — Full audit trail (read-only)" onclick="filterLayer(this)">
             <rect x="890" y="370" width="275" height="58" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow)"/>
-            <text class="n-label" x="906" y="392">Admin &amp; Audit</text>
-            <text class="n-sub" x="906" y="408">/admin · /audit</text>
+            <text class="n-label" x="1028" y="392">Admin &amp; Audit</text>
+            <text class="n-sub" x="1028" y="408">/admin · /audit</text>
           </g>
 
           <g id="n-upload" data-layer="frontend" data-tip="Upload Store&#10;Path: backend/uploads/&#10;Stores files uploaded via /api/upload&#10;Served as static from Express" onclick="filterLayer(this)">
             <rect x="890" y="448" width="275" height="58" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow)"/>
             <svg x="900" y="467" width="22" height="22" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z" fill="#1565c0"/></svg>
-            <text class="n-label" x="930" y="470">Upload Store</text>
-            <text class="n-sub" x="930" y="486">backend/uploads/ · Local Disk</text>
+            <text class="n-label" x="1043" y="470">Upload Store</text>
+            <text class="n-sub" x="1043" y="486">backend/uploads/ · Local Disk</text>
           </g>
 
           <g id="n-mysql" data-layer="database" data-tip="MySQL — Primary Database&#10;DB: pharaxis_vault_dev · Port 3306&#10;All app data stored here&#10;Connection pool: 10 connections" onclick="filterLayer(this)">
             <rect x="1184" y="192" width="220" height="110" rx="10" fill="#ffe0b2" stroke="#f57c00" stroke-width="2.5" filter="url(#db-glow)"/>
             <image href="https://cdn.simpleicons.org/mysql/4479A1" x="1194" y="236" width="22" height="22"/>
-            <text class="n-label" x="1224" y="220" font-size="15">MySQL</text>
-            <text class="n-sub" x="1224" y="238">pharaxis_vault_dev</text>
-            <text class="n-sub2" x="1224" y="254">Primary Database</text>
+            <text class="n-label" x="1309" y="220" font-size="15">MySQL</text>
+            <text class="n-sub" x="1309" y="238">pharaxis_vault_dev</text>
+            <text class="n-sub2" x="1309" y="254">Primary Database</text>
           </g>
 
           <g id="n-smtp" data-layer="external" data-tip="Nodemailer — SMTP Email&#10;Triggered by expiry alerts &amp; notifications&#10;Config: SMTP_HOST, SMTP_PORT, SMTP_USER" onclick="filterLayer(this)">
             <rect x="1422" y="82" width="170" height="75" rx="10" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow)"/>
             <image href="https://cdn.simpleicons.org/maildotru/ea4335" x="1432" y="108" width="22" height="22"/>
-            <text class="n-label" x="1462" y="107">Nodemailer</text>
-            <text class="n-sub" x="1462" y="123">SMTP Email</text>
+            <text class="n-label" x="1522" y="107">Nodemailer</text>
+            <text class="n-sub" x="1522" y="123">SMTP Email</text>
           </g>
 
           <g id="n-aiagent" data-layer="external" data-tip="AI Agent Service&#10;Port 6000 (internal)&#10;Provides AI completions for Vault&#10;Called via REST from Vault backend" onclick="filterLayer(this)">
             <rect x="1422" y="232" width="170" height="75" rx="10" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow)"/>
             <image href="https://cdn.simpleicons.org/openai/412991" x="1432" y="258" width="22" height="22"/>
-            <text class="n-label" x="1462" y="257">AI Agent</text>
-            <text class="n-sub" x="1462" y="273">Port 6000</text>
+            <text class="n-label" x="1522" y="257">AI Agent</text>
+            <text class="n-sub" x="1522" y="273">Port 6000</text>
           </g>
 
           <g id="n-cron" data-layer="background" data-tip="Expiry Alert Cron&#10;Registered via registerExpiryAlertCron()&#10;Checks document expiry dates on schedule&#10;Triggers Nodemailer for near-expiry items" onclick="filterLayer(this)">
             <rect x="1422" y="402" width="170" height="75" rx="10" fill="#e0f2f1" stroke="#80cbc4" stroke-width="1.5" filter="url(#shadow)"/>
             <svg x="1432" y="428" width="22" height="22" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z" fill="#00897b"/></svg>
-            <text class="n-label" x="1462" y="427">Expiry Alert Cron</text>
-            <text class="n-sub" x="1462" y="443">Background Service</text>
+            <text class="n-label" x="1522" y="427">Expiry Alert Cron</text>
+            <text class="n-sub" x="1522" y="443">Background Service</text>
           </g>
 
           <g id="n-integration" data-layer="integration" data-tip="Other Pharaxis Apps&#10;QMS · CP Portal · MIMS · AI-Agent&#10;Connected via REST when client requires" onclick="filterLayer(this)">
             <rect x="1422" y="535" width="190" height="70" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="5 3" filter="url(#shadow)"/>
             <svg x="1432" y="557" width="22" height="22" viewBox="0 0 24 24"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" fill="#64748b"/></svg>
-            <text class="n-label" x="1462" y="560">Other Pharaxis Apps</text>
-            <text class="n-sub" x="1462" y="576">QMS · CP Portal · MIMS</text>
-            <text class="n-sub2" x="1462" y="591">Integration when required</text>
+            <text class="n-label" x="1532" y="560">Other Pharaxis Apps</text>
+            <text class="n-sub" x="1532" y="576">QMS · CP Portal · MIMS</text>
+            <text class="n-sub2" x="1532" y="591">Integration when required</text>
           </g>
         </svg>
       </div>
@@ -612,20 +612,20 @@
 
           <g id="n-m-frontend" class="node" data-layer="frontend" data-tip="React frontend on 5173" onclick="filterLayer(this)">
             <rect x="260" y="80" width="110" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-mims)"/>
-            <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="88" width="20" height="20"/>
-            <text class="n-label" x="315" y="102">React Frontend</text>
-            <text class="n-sub" x="315" y="118">Port 5173</text>
+            <image href="https://cdn.simpleicons.org/react/61dafb" x="266" y="88" width="16" height="16"/>
+            <text class="n-label" x="326" y="102">React Frontend</text>
+            <text class="n-sub" x="326" y="118">Port 5173</text>
           </g>
           <g id="n-m-vite" class="node" data-layer="frontend" data-tip="Vite dev server" onclick="filterLayer(this)">
             <rect x="260" y="200" width="110" height="55" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-mims)"/>
-            <image href="https://cdn.simpleicons.org/vite/646cff" x="268" y="208" width="20" height="20"/>
-            <text class="n-label" x="315" y="222">Vite</text>
-            <text class="n-sub" x="315" y="238">Dev Server</text>
+            <image href="https://cdn.simpleicons.org/vite/646cff" x="266" y="208" width="16" height="16"/>
+            <text class="n-label" x="326" y="222">Vite</text>
+            <text class="n-sub" x="326" y="238">Dev Server</text>
           </g>
-          <g id="n-m-localstorage" class="node" data-layer="frontend" data-tip="Stores mims_token" onclick="filterLayer(this)">
+          <g id="n-m-localstorage" class="node" data-layer="frontend" data-tip="httpOnly cookie — mims_token (session JWT)&#10;SECURITY (F14): the raw JWT is NEVER written to localStorage.&#10;The cookie is sent automatically on same-origin requests and is&#10;unreadable from JavaScript, so XSS cannot exfiltrate the session.&#10;localStorage holds non-secret profile data only:&#10;mims_user · mims_modules · mims_org_id · mims_site_id" onclick="filterLayer(this)">
             <rect x="260" y="320" width="110" height="55" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-mims)"/>
-            <text class="n-label" x="315" y="340">LocalStorage</text>
-            <text class="n-sub" x="315" y="356">mims_token</text>
+            <text class="n-label" x="315" y="340">httpOnly Cookie</text>
+            <text class="n-sub" x="315" y="356">mims_token · JWT</text>
           </g>
 
           <g id="n-m-cors" class="node" data-layer="middleware" data-tip="Origin filter" onclick="filterLayer(this)">
@@ -653,8 +653,8 @@
           <g id="n-m-backend" class="node" data-layer="backend" data-tip="Node backend on 3000" onclick="filterLayer(this)">
             <rect x="695" y="240" width="130" height="64" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow-mims)"/>
             <image href="https://cdn.simpleicons.org/nodedotjs/339933" x="703" y="248" width="20" height="20"/>
-            <text class="n-label" x="760" y="262">Node.js + Express</text>
-            <text class="n-sub" x="760" y="278">Port 3000</text>
+            <text class="n-label" x="773" y="262">Node.js + Express</text>
+            <text class="n-sub" x="773" y="278">Port 3000</text>
           </g>
 
           <g id="n-m-admin" class="node" data-layer="modules" data-tip="Picklists, fields, workflow" onclick="filterLayer(this)">
@@ -688,12 +688,12 @@
             <text class="n-sub" x="1025" y="454">GET /api/health</text>
           </g>
 
-          <g id="n-m-mysql" class="node" data-layer="database" data-tip="pharaxis_mims_dev, 105 tables" onclick="filterLayer(this)">
+          <g id="n-m-mysql" class="node" data-layer="database" data-tip="pharaxis_mims_dev, 280 tables" onclick="filterLayer(this)">
             <rect x="1195" y="240" width="130" height="72" rx="10" fill="#fff3e0" stroke="#ffcc80" stroke-width="1.5" filter="url(#db-glow-mims)"/>
             <image href="https://cdn.simpleicons.org/mysql/4479a1" x="1203" y="248" width="22" height="22"/>
-            <text class="n-label" x="1260" y="265">MySQL 8.0</text>
-            <text class="n-sub" x="1260" y="281">pharaxis_mims_dev</text>
-            <text class="n-sub2" x="1260" y="297">105 tables</text>
+            <text class="n-label" x="1274" y="265">MySQL 8.0</text>
+            <text class="n-sub" x="1274" y="281">pharaxis_mims_dev</text>
+            <text class="n-sub2" x="1274" y="297">280 tables</text>
           </g>
 
           <g id="n-m-smtp" class="node" data-layer="external" data-tip="SMTP notifications" onclick="filterLayer(this)">
@@ -798,15 +798,15 @@
 
           <g id="n-cp-admin-fe" class="node" data-layer="frontend" data-tip="Admin frontend" onclick="filterLayer(this)">
             <rect x="260" y="80" width="110" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-cp)"/>
-            <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="88" width="20" height="20"/>
-            <text class="n-label" x="315" y="102">Admin Frontend</text>
-            <text class="n-sub" x="315" y="118">Port 5174</text>
+            <image href="https://cdn.simpleicons.org/react/61dafb" x="266" y="88" width="16" height="16"/>
+            <text class="n-label" x="326" y="102">Admin Frontend</text>
+            <text class="n-sub" x="326" y="118">Port 5174</text>
           </g>
           <g id="n-cp-portal-fe" class="node" data-layer="frontend" data-tip="Client portal route" onclick="filterLayer(this)">
             <rect x="260" y="200" width="110" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-cp)"/>
-            <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="208" width="20" height="20"/>
-            <text class="n-label" x="315" y="222">Client Portal</text>
-            <text class="n-sub" x="315" y="238">/portal/:clientCode</text>
+            <image href="https://cdn.simpleicons.org/react/61dafb" x="266" y="208" width="16" height="16"/>
+            <text class="n-label" x="326" y="222">Client Portal</text>
+            <text class="n-sub" x="326" y="238">/portal/:clientCode</text>
           </g>
           <g id="n-cp-ls" class="node" data-layer="frontend" data-tip="Stores cp_admin_token" onclick="filterLayer(this)">
             <rect x="260" y="340" width="110" height="55" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-cp)"/>
@@ -833,8 +833,8 @@
           <g id="n-cp-backend" class="node" data-layer="backend" data-tip="CP backend" onclick="filterLayer(this)">
             <rect x="695" y="220" width="130" height="64" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow-cp)"/>
             <image href="https://cdn.simpleicons.org/nodedotjs/339933" x="703" y="228" width="20" height="20"/>
-            <text class="n-label" x="760" y="242">Node.js + Express</text>
-            <text class="n-sub" x="760" y="258">Port 4000</text>
+            <text class="n-label" x="773" y="242">Node.js + Express</text>
+            <text class="n-sub" x="773" y="258">Port 4000</text>
           </g>
 
           <g id="n-cp-clients" class="node" data-layer="modules" data-tip="Branding and config" onclick="filterLayer(this)">
@@ -863,12 +863,12 @@
             <text class="n-sub" x="1025" y="386">GET /api/health</text>
           </g>
 
-          <g id="n-cp-mysql" class="node" data-layer="database" data-tip="pharaxis_cp_portal_dev, 34 tables" onclick="filterLayer(this)">
+          <g id="n-cp-mysql" class="node" data-layer="database" data-tip="pharaxis_cp_portal_dev, 46 tables" onclick="filterLayer(this)">
             <rect x="1195" y="220" width="130" height="72" rx="10" fill="#fff3e0" stroke="#ffcc80" stroke-width="1.5" filter="url(#db-glow-cp)"/>
             <image href="https://cdn.simpleicons.org/mysql/4479a1" x="1203" y="228" width="22" height="22"/>
-            <text class="n-label" x="1260" y="245">MySQL 8.0</text>
-            <text class="n-sub" x="1260" y="261">pharaxis_cp_portal_dev</text>
-            <text class="n-sub2" x="1260" y="277">34 tables</text>
+            <text class="n-label" x="1274" y="245">MySQL 8.0</text>
+            <text class="n-sub" x="1274" y="261">pharaxis_cp_portal_dev</text>
+            <text class="n-sub2" x="1274" y="277">46 tables</text>
           </g>
 
           <g id="n-cp-mymemory" class="node" data-layer="external" data-tip="Auto-translation API" onclick="filterLayer(this)">
@@ -981,15 +981,15 @@
 
           <g id="n-ai-adminfe" class="node" data-layer="frontend" data-tip="Admin panel" onclick="filterLayer(this)">
             <rect x="260" y="80" width="110" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-ai)"/>
-            <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="88" width="20" height="20"/>
-            <text class="n-label" x="315" y="102">Admin Panel</text>
-            <text class="n-sub" x="315" y="118">Port 5175</text>
+            <image href="https://cdn.simpleicons.org/react/61dafb" x="266" y="88" width="16" height="16"/>
+            <text class="n-label" x="326" y="102">Admin Panel</text>
+            <text class="n-sub" x="326" y="118">Port 5175</text>
           </g>
           <g id="n-ai-widget" class="node" data-layer="frontend" data-tip="Embeddable agent widget" onclick="filterLayer(this)">
             <rect x="260" y="240" width="110" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-ai)"/>
-            <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="248" width="20" height="20"/>
-            <text class="n-label" x="315" y="262">Agent Widget</text>
-            <text class="n-sub" x="315" y="278">Embeddable component</text>
+            <image href="https://cdn.simpleicons.org/react/61dafb" x="266" y="248" width="16" height="16"/>
+            <text class="n-label" x="326" y="262">Agent Widget</text>
+            <text class="n-sub" x="326" y="278">Embeddable</text>
           </g>
 
           <g id="n-ai-cors" class="node" data-layer="middleware" data-tip="Only suite apps allowed" onclick="filterLayer(this)">
@@ -1011,8 +1011,8 @@
           <g id="n-ai-backend" class="node" data-layer="backend" data-tip="AI backend" onclick="filterLayer(this)">
             <rect x="695" y="220" width="130" height="64" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow-ai)"/>
             <image href="https://cdn.simpleicons.org/nodedotjs/339933" x="703" y="228" width="20" height="20"/>
-            <text class="n-label" x="760" y="242">Node.js + Express</text>
-            <text class="n-sub" x="760" y="258">Port 6000</text>
+            <text class="n-label" x="773" y="242">Node.js + Express</text>
+            <text class="n-sub" x="773" y="258">Port 6000</text>
           </g>
 
           <g id="n-ai-promptbuilder" class="node" data-layer="modules" data-tip="Prompt templates per query type" onclick="filterLayer(this)">
@@ -1047,19 +1047,19 @@
             <text class="n-sub" x="1025" y="522">Large doc handling</text>
           </g>
 
-          <g id="n-ai-mysql" class="node" data-layer="database" data-tip="pharaxis_ai_agent_dev, 3 tables" onclick="filterLayer(this)">
+          <g id="n-ai-mysql" class="node" data-layer="database" data-tip="pharaxis_ai_agent_dev, 4 tables" onclick="filterLayer(this)">
             <rect x="1195" y="280" width="130" height="72" rx="10" fill="#fff3e0" stroke="#ffcc80" stroke-width="1.5" filter="url(#db-glow-ai)"/>
             <image href="https://cdn.simpleicons.org/mysql/4479a1" x="1203" y="288" width="22" height="22"/>
-            <text class="n-label" x="1260" y="305">MySQL 8.0</text>
-            <text class="n-sub" x="1260" y="321">pharaxis_ai_agent_dev</text>
-            <text class="n-sub2" x="1260" y="337">3 tables</text>
+            <text class="n-label" x="1274" y="305">MySQL 8.0</text>
+            <text class="n-sub" x="1274" y="321">pharaxis_ai_agent_dev</text>
+            <text class="n-sub2" x="1274" y="337">4 tables</text>
           </g>
 
           <g id="n-ai-openai" class="node" data-layer="external" data-tip="OpenAI provider via BYOK" onclick="filterLayer(this)">
             <rect x="1440" y="80" width="240" height="62" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-ai)"/>
             <image href="https://cdn.simpleicons.org/openai/412991" x="1450" y="88" width="22" height="22"/>
-            <text class="n-label" x="1560" y="102">OpenAI</text>
-            <text class="n-sub" x="1560" y="118">GPT-4o · BYOK</text>
+            <text class="n-label" x="1575" y="102">OpenAI</text>
+            <text class="n-sub" x="1575" y="118">GPT-4o · BYOK</text>
           </g>
           <g id="n-ai-claude" class="node" data-layer="external" data-tip="Anthropic provider via BYOK" onclick="filterLayer(this)">
             <rect x="1440" y="220" width="240" height="62" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-ai)"/>
@@ -1067,14 +1067,14 @@
               <circle cx="11" cy="11" r="10" fill="#7c3aed"/>
               <text x="11" y="15" font-size="12" text-anchor="middle" fill="#ffffff" font-weight="700">A</text>
             </svg>
-            <text class="n-label" x="1560" y="242">Anthropic Claude</text>
-            <text class="n-sub" x="1560" y="258">claude-3 · BYOK</text>
+            <text class="n-label" x="1575" y="242">Anthropic Claude</text>
+            <text class="n-sub" x="1575" y="258">claude-sonnet-4-6 · BYOK</text>
           </g>
           <g id="n-ai-gemini" class="node" data-layer="external" data-tip="Gemini provider via BYOK" onclick="filterLayer(this)">
             <rect x="1440" y="360" width="240" height="62" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-ai)"/>
             <image href="https://cdn.simpleicons.org/google/4285f4" x="1450" y="368" width="22" height="22"/>
-            <text class="n-label" x="1560" y="382">Google Gemini</text>
-            <text class="n-sub" x="1560" y="398">gemini-pro · BYOK</text>
+            <text class="n-label" x="1575" y="382">Google Gemini</text>
+            <text class="n-sub" x="1575" y="398">gemini-1.5-pro · BYOK</text>
           </g>
           <g id="n-ai-keyvault" class="node" data-layer="external" data-tip="Encrypted key store" onclick="filterLayer(this)">
             <rect x="1440" y="500" width="240" height="62" rx="10" fill="#f3e5f5" stroke="#ce93d8" stroke-width="1.5" filter="url(#shadow-ai)"/>
@@ -1164,8 +1164,8 @@
           <g class="node" data-layer="frontend" data-tip="React + Vite SPA on port 3146" onclick="filterLayer(this)">
             <rect x="260" y="80" width="140" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-qms)"/>
             <image href="https://cdn.simpleicons.org/react/61dafb" x="268" y="88" width="20" height="20"/>
-            <text class="n-label" x="330" y="104">React / Vite</text>
-            <text class="n-sub" x="330" y="120">Port 3146</text>
+            <text class="n-label" x="343" y="104">React / Vite</text>
+            <text class="n-sub" x="343" y="120">Port 3146</text>
           </g>
           <g class="node" data-layer="frontend" data-tip="Dashboard, Document Control, CAPA, Deviations UI" onclick="filterLayer(this)">
             <rect x="260" y="200" width="140" height="64" rx="10" fill="#e3f2fd" stroke="#90caf9" stroke-width="1.5" filter="url(#shadow-qms)"/>
@@ -1202,8 +1202,8 @@
           <g class="node" data-layer="backend" data-tip="Node.js + Express on port 3145 · ESM modules" onclick="filterLayer(this)">
             <rect x="735" y="228" width="130" height="64" rx="10" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="1.5" filter="url(#shadow-qms)"/>
             <image href="https://cdn.simpleicons.org/nodedotjs/339933" x="743" y="236" width="20" height="20"/>
-            <text class="n-label" x="800" y="252">Node.js + Express</text>
-            <text class="n-sub" x="800" y="268">Port 3145 · ESM</text>
+            <text class="n-label" x="813" y="252">Node.js + Express</text>
+            <text class="n-sub" x="813" y="268">Port 3145 · ESM</text>
           </g>
 
           <g class="node" data-layer="modules" data-tip="SOPs, policies, controlled documents" onclick="filterLayer(this)">
@@ -1237,12 +1237,12 @@
             <text class="n-sub" x="1110" y="454">Orgs · Users · Billing · /api/superadmin</text>
           </g>
 
-          <g class="node" data-layer="database" data-tip="PostgreSQL 14 — pharaxis_qms_dev · pgcrypto · citext" onclick="filterLayer(this)">
+          <g class="node" data-layer="database" data-tip="PostgreSQL 16 — qms_dev · pgcrypto · citext" onclick="filterLayer(this)">
             <rect x="1355" y="60" width="145" height="80" rx="10" fill="#fff3e0" stroke="#ffcc80" stroke-width="1.5" filter="url(#db-glow-qms)"/>
             <image href="https://cdn.simpleicons.org/postgresql/4169e1" x="1363" y="68" width="22" height="22"/>
-            <text class="n-label" x="1427" y="90">PostgreSQL 14</text>
-            <text class="n-sub" x="1427" y="106">pharaxis_qms_dev</text>
-            <text class="n-sub2" x="1427" y="120">pgcrypto · citext · 49 tables</text>
+            <text class="n-label" x="1442" y="90">PostgreSQL 16</text>
+            <text class="n-sub" x="1442" y="106">qms_dev</text>
+            <text class="n-sub2" x="1442" y="120">pgcrypto · citext · 93 tables</text>
           </g>
 
           <g class="node" data-layer="external" data-tip="Gmail SMTP — quality event notifications" onclick="filterLayer(this)">

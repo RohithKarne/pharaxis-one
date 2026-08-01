@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
-const AI_AGENT_BASE = import.meta.env.VITE_AI_AGENT_URL || 'http://localhost:6000'
+const AI_AGENT_BASE = import.meta.env.VITE_AI_AGENT_URL || ''
 const PROVIDERS = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'claude', label: 'Claude' },

@@ -32,6 +32,11 @@ export default function ProfilePage() {
   const [pwdMsg, setPwdMsg]       = useState('')
   const [pwdErr, setPwdErr]       = useState('')
 
+  // CP-63 — GDPR data-subject rights (declared with the other hooks, before any early return)
+  const [exporting, setExporting]           = useState(false)
+  const [showDelete, setShowDelete]         = useState(false)
+  const [deleteRequesting, setDeleteRequesting] = useState(false)
+
   useEffect(() => {
     if (!user) { navigate(`${base}/login`); return }
     fetch('/api/portal/auth/me', { credentials: 'include' })
@@ -105,6 +110,34 @@ export default function ProfilePage() {
   if (loading) return <div className="pp-container pp-page-content"><div className="pp-loading">Loading…</div></div>
 
   const memberSince = meta.created_at ? formatLongDate(meta.created_at) : '—'
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const res = await fetch(`/api/portal/personal/export?clientCode=${encodeURIComponent(clientCode)}`, { credentials: 'include' })
+      if (!res.ok) { toast.error('Could not generate your export. Please try again.'); return }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url; a.download = `my-data-export.json`; document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+      toast.success('Your data export has downloaded.')
+    } catch { toast.error('Network error — please try again.') } finally { setExporting(false) }
+  }
+
+  async function handleDeleteRequest() {
+    setDeleteRequesting(true)
+    try {
+      const res = await fetch(`/api/portal/personal/erasure-request`, {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientCode }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error || 'Could not submit your request.'); return }
+      setShowDelete(false)
+      toast.success('Your account-deletion request has been submitted.')
+    } catch { toast.error('Network error — please try again.') } finally { setDeleteRequesting(false) }
+  }
 
   return (
     <div className="pp-container pp-page-content" style={{ maxWidth: 640, paddingTop: 40, paddingBottom: 60 }}>
@@ -197,6 +230,46 @@ export default function ProfilePage() {
           {pwdErr && <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 500 }}>{pwdErr}</span>}
         </div>
       </form>
+
+      {/* CP-63 — GDPR data-subject rights: self-service export + deletion request */}
+      <div style={cardStyle}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 6 }}>Privacy &amp; Your Data</h2>
+        <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 18 }}>
+          Under data-protection law you can download a copy of your personal data, or request that your account be deleted.
+        </p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <button type="button" className="pp-btn pp-btn-outline" onClick={handleExport} disabled={exporting}>
+            {exporting ? 'Preparing…' : '⬇ Download my data'}
+          </button>
+          <button type="button" className="pp-btn pp-btn-outline" style={{ borderColor: '#DC2626', color: '#DC2626' }}
+            onClick={() => setShowDelete(true)}>
+            Request account deletion
+          </button>
+        </div>
+        <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 12 }}>
+          Deletion is reviewed by our team. Some records (e.g. adverse-event and safety reports) must be retained under
+          pharmacovigilance law and will be de-identified rather than deleted.
+        </p>
+      </div>
+
+      {showDelete && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 440, width: '90%' }}>
+            <h3 style={{ margin: '0 0 8px', color: '#1A1A2E' }}>Request account deletion?</h3>
+            <p style={{ fontSize: 14, color: '#4B5563', marginBottom: 20 }}>
+              This submits a request for our team to delete your account and personal data. Records we're legally
+              required to keep will be de-identified instead. You can't undo this request from here.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" className="pp-btn pp-btn-outline" onClick={() => setShowDelete(false)}>Cancel</button>
+              <button type="button" className="pp-btn pp-btn-primary" style={{ background: '#DC2626' }}
+                onClick={handleDeleteRequest} disabled={deleteRequesting}>
+                {deleteRequesting ? 'Submitting…' : 'Submit deletion request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

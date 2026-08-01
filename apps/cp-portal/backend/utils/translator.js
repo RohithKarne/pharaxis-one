@@ -23,6 +23,19 @@ function chunkText(text, max = 450) {
   return chunks;
 }
 
+// CP-65 protective gate (Option A, compliance-approved by Vasu 2026-07-31).
+// The free MyMemory endpoint has no DPA and can retain submitted text in a PUBLIC
+// translation-memory corpus, so regulated medical/safety content must not be sent
+// to it. Only content types confirmed non-regulated may auto-translate through the
+// free API; regulated types are blocked here until a vetted, contracted vendor
+// path exists. Tighten this set only with compliance (Vasu) + product (Saad) sign-off.
+//   Allowed  : cp_news_posts, cp_faq_items      (non-regulated, pending Saad's confirmation they carry no drug/safety claims)
+//   Blocked  : cp_safety_alerts, cp_documents   (regulated) — and any type not on the allowlist, fail-closed by default
+const FREE_TRANSLATION_ALLOWLIST = new Set(['cp_news_posts', 'cp_faq_items']);
+
+/** Whether a content type may use the free translation API (CP-65). Unknown types are blocked. */
+function isTranslatableEntity(table) { return FREE_TRANSLATION_ALLOWLIST.has(table); }
+
 // MyMemory uses zh-CN for Simplified Chinese
 const LANG_REMAP = { zh: 'zh-CN' };
 function apiLang(code) { return LANG_REMAP[code] || code; }
@@ -82,6 +95,12 @@ async function getTargetLangs(clientId) {
  * @param {string} sourceLang - language the content was written in (default 'en')
  */
 async function autoTranslate(clientId, table, rowId, fields, sourceLang = 'en') {
+  // CP-65 protective gate: block regulated content from the free API before any
+  // outbound call. Logged (not silent) so a skipped translation is visible.
+  if (!isTranslatableEntity(table)) {
+    console.info(`[translator] skipped free-API translation for regulated content type "${table}" (CP-65 gate).`);
+    return;
+  }
   const targetLangs = await getTargetLangs(clientId);
   if (!targetLangs.length) return;
   try {
@@ -122,4 +141,4 @@ function applyTranslation(row, lang, fields) {
   return result;
 }
 
-module.exports = { autoTranslate, translateText, applyTranslation };
+module.exports = { autoTranslate, translateText, applyTranslation, isTranslatableEntity };

@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
+import MIMSLayout from '../../../shared/components/MIMSLayout';
 
+// QA 2026-07-31 (DEF-2): this page rendered with no application chrome at all —
+// no sidebar, no header, browser-default styling — while every other route in
+// MIMS is wrapped in MIMSLayout. A user landing here from the nav appeared to
+// have left the product. Wrapping it restores the shell; the page body itself
+// is unchanged.
 export default function UnifiedTrackingDashboardPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -15,6 +21,7 @@ export default function UnifiedTrackingDashboardPage() {
   ];
 
   return (
+    <MIMSLayout showStatStrip={false} surfaceVariant="workspace" compact>
     <div className="unified-tracking-dashboard" style={{ padding: '24px' }}>
       <h1>Response Log & Transmissions Unified Tracking</h1>
       
@@ -68,5 +75,6 @@ export default function UnifiedTrackingDashboardPage() {
         {activeTab === 'audit' && <div>Chronological transmission event log.</div>}
       </div>
     </div>
+    </MIMSLayout>
   );
 }

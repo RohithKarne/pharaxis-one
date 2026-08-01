@@ -84,6 +84,9 @@ export const SYSTEM_NAV = [
       // Leaf `value`s are unchanged — only grouping changed. 2FA moved to Security.
       {
         label: 'Forms & Fields', value: 'sys-setup-grp-forms', children: [
+          // Phase 3 — the real per-field configuration surface. Drives the case
+          // form's labels, required flags, visibility and order from field_setup.
+          { label: 'Case Form Fields',                 value: 'sys-setup-case-fields'     },
           { label: 'Customize Forms',                  value: 'sys-setup-customize-forms' },
           { label: 'Smart Field Rules',                value: 'sys-setup-smart-fields'    },
           { label: 'Validation Rules',                 value: 'sys-setup-validation'      },
@@ -254,12 +257,16 @@ export function findEscalationLabel(value) {
   return item ? item.label : value
 }
 
-export function findConfigLabel(value) {
-  for (const item of CONFIG_NAV) {
+// Walks the tree to any depth. The previous version only checked two levels, so
+// any topic nested deeper — System > Setup > Forms & Fields > Case Form Fields,
+// for instance — fell through and the UI displayed the raw slug instead of the
+// label.
+export function findConfigLabel(value, items = CONFIG_NAV) {
+  for (const item of items) {
     if (item.value === value) return item.label
     if (item.children) {
-      const child = item.children.find(c => c.value === value)
-      if (child) return child.label
+      const found = findConfigLabel(value, item.children)
+      if (found !== value) return found
     }
   }
   return value

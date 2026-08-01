@@ -49,7 +49,23 @@ describe('enterprise platform service layer', () => {
   test('transition returns updated report', () => expect(transition({ status: 'draft' }, 'validated').status).toBe('validated'));
   test('invalid transition throws', () => expect(() => transition({ status: 'superseded' }, 'draft')).toThrow());
   test('periodic summary counts serious reports', () => expect(buildPeriodicSafetySummary({ product: 'A', reports: [{ serious: 'serious' }, {}] }).serious_cases).toBe(1));
-  test('signal detection computes PRR/ROR', () => expect(computePrRor({ a: 10, b: 5, c: 3, d: 30 }).review_required).toBe(true));
+  // MIMS-46: this used to assert `review_required === true` for
+  // {a:10,b:5,c:3,d:30}. That pinned the arithmetic of the hardcoded
+  // comparators, not any methodology — it passed precisely BECAUSE the flag was
+  // always true, so it could never have caught the defect. Replaced with a test
+  // of the property that actually mattered: with those comparators the flag
+  // carries no information.
+  test('hardcoded comparators make the flag unconditional — why detection is disabled', () => {
+    const alwaysFlagged = [1, 2, 3, 10, 50].every(
+      a => computePrRor({ a, b: 5, c: 3, d: 30 }).review_required === true
+    );
+    expect(alwaysFlagged).toBe(true);
+  });
+  test('the maths itself still discriminates when comparators are real', () => {
+    // Sanity: computePrRor is not broken, it was being fed constants.
+    expect(computePrRor({ a: 1, b: 500, c: 300, d: 30000 }).review_required).toBe(false);
+    expect(computePrRor({ a: 400, b: 100, c: 50, d: 30000 }).review_required).toBe(true);
+  });
 
   test('AI classifier detects AE', () => expect(classifyText('patient had serious adverse reaction').caseType).toBe('AE'));
   test('AI classifier detects PC', () => expect(classifyText('packaging defect complaint').caseType).toBe('PC'));

@@ -44,8 +44,14 @@ async function main() {
   console.log(`Email Case Import smoke — org ${ORG_ID}, tag ${TAG}\n`);
 
   // ── Seed org config + intake field definitions ────────────────────────────
+  // Capture the org's real settings, not just whether a row exists. The smoke
+  // forces confidence_threshold to 0.750 for its fixtures, and an earlier
+  // version restored only `is_enabled` — so every run silently left the org on a
+  // threshold nobody had evaluated (the governance gate is run at 0.850).
+  // Found in QA 2026-07-31: org 1 was sitting at 0.750 because of this.
   const [[existingCfg]] = await pool.execute(
-    'SELECT id FROM email_case_import_config WHERE org_id = ?', [ORG_ID]);
+    'SELECT id, is_enabled, confidence_threshold, ack_enabled FROM email_case_import_config WHERE org_id = ?',
+    [ORG_ID]);
   await pool.execute(
     `INSERT INTO email_case_import_config (org_id, is_enabled, confidence_threshold, ack_enabled)
      VALUES (?, 1, 0.750, 0)
@@ -201,7 +207,13 @@ async function main() {
     await pool.execute('DELETE FROM intake_field_definitions WHERE org_id = ? AND field_key IN (?, ?, ?)',
       [ORG_ID, 'reporter_name', 'reporter_email_field', 'product_name']);
     if (existingCfg) {
-      await pool.execute('UPDATE email_case_import_config SET is_enabled = 0 WHERE org_id = ?', [ORG_ID]);
+      // Restore every value the smoke overwrote, not just is_enabled.
+      await pool.execute(
+        `UPDATE email_case_import_config
+            SET is_enabled = 0, confidence_threshold = ?, ack_enabled = ?
+          WHERE org_id = ?`,
+        [existingCfg.confidence_threshold, existingCfg.ack_enabled, ORG_ID]
+      );
     } else {
       await pool.execute('DELETE FROM email_case_import_config WHERE org_id = ?', [ORG_ID]);
     }

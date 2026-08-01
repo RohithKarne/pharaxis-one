@@ -7,6 +7,8 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
+const { buildExport } = require('../../services/dataSubject');
+const { systemAudit } = require('../../utils/audit');
 
 const FOLLOW_TYPES = ['therapeutic_area', 'drug'];
 
@@ -88,6 +90,64 @@ router.get('/activity', authenticatePortal, requirePortalAuth, async (req, res) 
       specialty: u?.specialty || null,
     });
   } catch { res.status(500).json({ error: 'Server error.' }); }
+});
+
+// ── CP-63: GDPR data-subject rights ──────────────────────────────────────────
+
+// GET /api/portal/personal/export?clientCode= — self-service data export (Art. 15).
+// Streams a machine-readable JSON of everything we hold about the caller, and
+// records the request for the admin audit trail.
+router.get('/export', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const client = await resolveClient(req);
+    if (!client) return res.status(404).json({ error: 'Client not found.' });
+    const uid = req.portalUser.id;
+
+    const data = await buildExport(uid, client.id);
+    if (!data.profile) return res.status(404).json({ error: 'User not found.' });
+
+    // Record + audit (fulfilled immediately — export is self-service).
+    await pool.execute(
+      `INSERT INTO cp_data_requests (client_id, portal_user_id, request_type, status, requester_email, requester_name, requested_at, fulfilled_at, fulfilled_by)
+       VALUES (?, ?, 'export', 'fulfilled', ?, ?, NOW(), NOW(), 'self-service')`,
+      [client.id, uid, data.profile.email, `${data.profile.first_name || ''} ${data.profile.last_name || ''}`.trim()]
+    );
+    await systemAudit(`portal-user:${uid}`, client.id, 'DATA_EXPORT', 'portal_user', uid, { self_service: true });
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="my-data-export-${uid}.json"`);
+    res.send(JSON.stringify(data, null, 2));
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/portal/personal/erasure-request { clientCode } — request account deletion
+// (Art. 17). Creates a pending request for admin review (retention holds apply), not
+// an instant delete. Idempotent: one open request per user.
+router.post('/erasure-request', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const client = await resolveClient(req);
+    if (!client) return res.status(404).json({ error: 'Client not found.' });
+    const uid = req.portalUser.id;
+
+    const [[open]] = await pool.execute(
+      `SELECT id FROM cp_data_requests WHERE portal_user_id = ? AND request_type = 'erasure' AND status = 'pending' LIMIT 1`, [uid]);
+    if (open) return res.status(409).json({ error: 'You already have a pending deletion request.' });
+
+    const [[u]] = await pool.execute('SELECT email, first_name, last_name FROM cp_portal_users WHERE id = ? AND client_id = ?', [uid, client.id]);
+    if (!u) return res.status(404).json({ error: 'User not found.' });
+
+    const [r] = await pool.execute(
+      `INSERT INTO cp_data_requests (client_id, portal_user_id, request_type, status, requester_email, requester_name)
+       VALUES (?, ?, 'erasure', 'pending', ?, ?)`,
+      [client.id, uid, u.email, `${u.first_name || ''} ${u.last_name || ''}`.trim()]);
+    await systemAudit(`portal-user:${uid}`, client.id, 'ERASURE_REQUESTED', 'portal_user', uid, { request_id: r.insertId });
+
+    res.status(201).json({ id: r.insertId, message: 'Your deletion request has been submitted. Our team will process it in line with legal retention requirements.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 module.exports = router;

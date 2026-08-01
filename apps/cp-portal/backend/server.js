@@ -60,6 +60,11 @@ const authLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  // Successful requests don't count. GET /api/portal/auth/me is a session-restore
+  // probe fired on every page load, so counting successes locked legitimate users
+  // out of their own session after ~100 page views ("Too many requests"). Brute-force
+  // protection is unaffected — failed logins still consume the budget.
+  skipSuccessfulRequests: true,
   message: { error: 'Too many requests. Please try again later.' },
   store: makeStore(),
   skip: () => isDevEnv,
@@ -138,6 +143,7 @@ app.use('/api/admin/documents',    require('./routes/admin/documents'));
 app.use('/api/admin/news',         require('./routes/admin/news'));
 app.use('/api/admin/safety',       require('./routes/admin/safety'));
 app.use('/api/admin/audit',        require('./routes/admin/audit'));
+app.use('/api/admin/data-requests', require('./routes/admin/dataRequests'));
 app.use('/api/admin/trials',       require('./routes/admin/trials'));
 app.use('/api/admin/training',     require('./routes/admin/training'));
 app.use('/api/admin/submissions',  require('./routes/admin/submissions'));
