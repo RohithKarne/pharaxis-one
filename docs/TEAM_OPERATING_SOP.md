@@ -13,6 +13,7 @@
 > Revision update: 2026-07-11 (Section 26 added — Functional Verification Standard. Mandated by Rohith after a defect reached the CEO: data was written to the database and returned by the API, but did not render in the MIMS case screen the user actually opens. DB/API evidence alone no longer counts as verification. Definition of Done (§22) and "What Does Not Count as Evidence" (§15) strengthened accordingly.)
 > Revision update: 2026-08-03 (Section 32 added — Daily Client Intelligence Routine. Mandated by Rohith. A second cloud agent reads the same code through a client lens and files candidates into Jira project `DCI` in a **simulated** persona. Governance lives here; the operational spec lives in `docs/DAILY_CLIENT_INTELLIGENCE.md`. Nothing it raises may enter development without passing through Section 26.)
 > Revision update: 2026-08-03 (Section 33 added — CEO Meeting Routine. Mandated by Rohith. A third cloud agent produces a round of one-to-one meetings between the CEO and his seven direct leaders, filed into Jira project `CEO`. **All three routines converted from scheduled to manual on the same date** — none now runs on a cron; each is fired by Rohith when he wants it. Section 30 and Section 32 updated accordingly.)
+> Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
 
 ---
 
@@ -1426,7 +1427,7 @@ Epics are named by date — `MIMS Epic 30th Jul 2026` — so any day's completen
 4. **It cannot verify the UI.** Every review comment must state that UI and functional behaviour were not verified. **Section 26 still applies in full** — only Krishnapriya's browser pass closes that gap.
 5. **No customers.** Pharaxis One has none. The agent may never describe any company as a customer, user, or reference.
 6. **Read-only on the repo.** No commits, no pull requests, no file changes.
-7. **Deduplication covers the whole backlog** — human-raised tickets included — so it cannot re-raise work the team has already specced.
+7. **Deduplication covers the whole backlog** — human-raised tickets included — so it cannot re-raise work the team has already specced. It reads `MIMS`, `CP`, `DCI` and `ASUP`, and writes only to `MIMS` and `CP`. `DCI` belongs to §32 and `ASUP` to §34; both are read-only to this routine.
 
 ### Relationship to Section 26 — read this before acting on any ticket
 
@@ -1547,7 +1548,7 @@ Full operational detail — the eight Request types, the ten Query classes, the 
 6. **Quality overrides quantity.** 1 Request + 2 Queries is a **ceiling, not a quota.** Where no genuine candidate exists the agent files fewer and records why under *Not raised today*.
 7. **It cannot verify the UI.** Every ticket states this. **Section 26 applies in full** — only Krishnapriya's browser pass closes that gap.
 8. **Read-only on the repository.** No commits, no pull requests, no file changes.
-9. **Read-only across the boundary.** This routine may read `MIMS` and `CP` for deduplication and must never write to them. §30's routine may read `DCI` and must never write to it. Deduplication is symmetric — neither can re-raise the other's work.
+9. **Read-only across the boundary.** This routine may read `MIMS`, `CP` and `ASUP` for deduplication and must never write to them. §30's routine may read `DCI`, and §34's may read `DCI`, without writing to it. Deduplication is symmetric across all three — none can re-raise another's work. **The boundary against §34:** `DCI` is the client *organisation* addressing its vendor — requests, questionnaires, audit and validation queries. `ASUP` is one *end user* who hit something while doing their job. A candidate that reads like day-to-day friction with a screen belongs to `ASUP`.
 10. **Flag, never resolve, a clinical question.** Anything touching adverse events routes to Sowmya. The agent may raise it; it may not decide it.
 
 ### The audit answer
@@ -1588,7 +1589,7 @@ If that count is ever lower than the number of issues in `DCI`, an item has esca
 
 > Established: 2026-08-03. Mandated by Rohith Karne.
 > Applies to: the CEO and his seven direct leaders.
-> Third of the three cloud routines, alongside Section 30 and Section 32. All three are **manual**.
+> Third of the four cloud routines, alongside Section 30, Section 32 and Section 34. All four are **manual**.
 
 ### Principle
 
@@ -1677,7 +1678,7 @@ Each story closes with **Sources** (URLs, caveated) and **Internal evidence** (f
 
 ### Naming
 
-**All three routines are now manual, and two of them are still called "Daily."** `Daily Product Intelligence` and `Daily Client Intelligence` no longer run daily. The names are historical and the SOP says so rather than letting the documents drift from reality — the failure mode §31 exists to prevent.
+**All four routines are now manual, and two of them are still called "Daily."** `Daily Product Intelligence` and `Daily Client Intelligence` no longer run daily. The names are historical and the SOP says so rather than letting the documents drift from reality — the failure mode §31 exists to prevent. `CEO Meeting` and `Client Support Simulation` carry no cadence in their names and need no change.
 
 Renaming them is available and cheap; it was not done on 2026-08-03 because the names are referenced in both routine prompts, in existing epic descriptions, in ticket footers, and in the filename `docs/DAILY_CLIENT_INTELLIGENCE.md`. **Bala to raise it with Rohith as a decision rather than make it silently.**
 
@@ -1697,3 +1698,114 @@ Renaming them is available and cheap; it was not done on 2026-08-03 because the 
 - **Outbound web access is currently blocked in the cloud environment**, exactly as for §30 and §32. While that holds, the round runs on internal evidence alone. **Running it from an interactive session instead does have web access** — that is the better path until the platform issue is resolved.
 - Each run is an isolated session with no memory of previous rounds. Continuity comes entirely from Jira.
 - The agent sees only code pushed to `main`.
+
+---
+
+## 34. Client Support Simulation (Mandatory)
+
+> Established: 2026-08-03. Mandated by Rohith Karne.
+> Applies to: MIMS and CP Portal. Vault and QMS excluded, as in §30 and §32.
+> Fourth of the four cloud routines, alongside Sections 30, 32 and 33. All four are **manual**.
+
+### Principle
+
+**A simulated day of inbound support tickets from the people who would use our products if we had clients.** The purpose is to show what a real support inbox would look like — and, more usefully, **which questions we could not answer today.** Every ticket carries a yes/no on that, and the NOs are the finding.
+
+### What it is
+
+| Item | Value |
+|------|-------|
+| Routine | **Client Support Simulation**, `trig_01NexuM4Va1R7iNVnNjAKoth` |
+| Runs | **Manual only.** Held `enabled: false`; fired with the `run` action. The stored cron is a placeholder and never fires |
+| Files to | Jira project **`ASUP`** (id 10204) — the only project it writes to |
+| Produces | **2 epics + up to 2 tickets each.** `MIMS Support 3rd Aug 2026`, `CP Portal Support 3rd Aug 2026` |
+| Ticket type | Jira `Story`, summary tagged `[Support · <Class>]` |
+| Lands in | Status **To Do**, assigned to Rohith |
+| Repo access | **Read-only.** No commits, no pull requests, no file changes |
+| Console | https://claude.ai/code/routines/trig_01NexuM4Va1R7iNVnNjAKoth |
+
+### The personas
+
+Six simulated end users. **The designation is part of the name and appears everywhere the persona is named.** Two of the three file per app per run, rotating on who filed least recently, so the same voices do not repeat.
+
+| App | Persona | Brings |
+|---|---|---|
+| MIMS | **Thomas (MIMS Manager)** | Throughput, workload, reporting, SLAs, oversight of his team |
+| MIMS | **Richard (MIMS IT & Compliance Lead)** | Access control, audit trail, exports, retention, validation evidence |
+| MIMS | **Emily (MIMS Call Centre Agent)** | Frontline friction — small things repeated forty times a shift |
+| CP Portal | **Lauren (CP Portal Content Manager)** | Publishing and maintaining what HCPs see. **Also relays HCP complaints** |
+| CP Portal | **Warner (CP Portal IT & Identity Lead)** | SSO, portal user provisioning, consent, DSARs, audit |
+| CP Portal | **Diane (CP Portal Medical Reviewer)** | Approval queue and compliance sign-off before content reaches an HCP |
+
+**The HCP relay rule.** HCPs are not our client — they are our client's users. An HCP never files a ticket. Where the friction belongs to an HCP, **Lauren relays it**: *"Three doctors told us last week that…"*. This keeps the persona set accurate to who actually holds a support contract while still surfacing where end users get stuck.
+
+The persona split follows the shape of CP Portal itself: `backend/routes/admin` serves the client's own staff, `backend/routes/portal` serves visiting HCPs. Lauren, Warner and Diane sit on the admin side; no persona sits on the portal side.
+
+### Ticket shape
+
+Each ticket is the user's own account in 2–4 short paragraphs, an **Impact on my work** line, and then our side:
+
+| Section | Contains |
+|---|---|
+| **Our position** | **Can we answer this today? YES or NO** — then the actual answer. A NO states plainly what is missing |
+| **Evidence** | File path and line range read that run. Where a search found nothing, it says so and names who must confirm |
+| **Not verified** | UI and functional behaviour were not exercised. §26 applies in full |
+| **Route to** | The owner, and what specifically they must confirm or decide |
+
+Classes, one per ticket and never twice under the same epic: *Cannot find it · Not working · Can it do X · Access / permission · Data / export · Changed unexpectedly · Blocking us today.*
+
+### The rules that must hold
+
+1. **No customers.** Pharaxis One has none. All six personas are **simulated**, not real people, and nothing attributed to them is a real user report. No company may be described as a customer, user, or reference.
+2. **Evidence or nothing.** Every ticket cites a real file path and line range **read during that run**. The agent may not invent a defect, a screen, a field, or a behaviour it has not located. Where it cannot evidence a ticket, it files fewer.
+3. **The persona never overrides the evidence.** The voice is a writing style applied to a code-derived finding, not licence to invent an incident.
+4. **The simulation must stay visible.** Every issue carries the labels `asup-support` and `simulated` plus a persona label, and one italic line at the foot. The labels survive a description rewrite and are therefore the control that matters.
+5. **The user does not speak like an engineer.** No file paths, no regulation citations, no proposed implementations in their mouth. Those live in the evidence block.
+6. **It cannot verify the UI.** Every ticket states this. **Section 26 applies in full** — only Krishnapriya's browser pass closes that gap.
+7. **`ASUP` is the only project it writes to.** `MIMS`, `CP` and `DCI` are read for deduplication and never written to.
+8. **Duplicate guard.** The routine stops if a Support epic already exists for today. A manual routine can be fired twice by accident.
+9. **Flag, never resolve, a clinical question.** Anything touching adverse events routes to Sowmya.
+10. **Read-only on the repository.** No commits, no pull requests, no file changes.
+
+### The boundary against §32 — this is the one that matters
+
+`DCI` and `ASUP` are both client-voice, and without a hard line they collide.
+
+| | §32 `DCI` — Katrina | §34 `ASUP` — the six personas |
+|---|---|---|
+| Who is speaking | The client **organisation**, to its vendor | One **end user**, about their day |
+| What it sounds like | "Can you produce an audit trail across cases?" | "I clicked export and got fifty rows" |
+| Contains | Requests, enhancement asks, security questionnaires, audit and validation queries | Friction, suspected defects, capability questions, things that blocked them |
+
+A candidate that reads like a feature request or a procurement question belongs to `DCI`. One that reads *"I tried to do this and could not"* belongs to `ASUP`. Both routines carry this rule in their own prompt.
+
+### The audit answer
+
+One query returns every simulated item in the project:
+
+```text
+project = ASUP AND labels = simulated
+```
+
+If that count is ever lower than the number of issues in `ASUP`, an item has escaped the labelling control — the same check Kiranmai runs on `DCI` under §32.
+
+### Relationship to Section 26
+
+**A ticket filed by this routine is not approved work, and it is the weakest class of candidate of the four** — the user is simulated, the impact is inferred, and nothing has been verified in a running application. It is a prompt for a conversation, not a defect report. Anything arising from it enters through Section 26 like everything else. Saad owns that step; Bala blocks any item reaching Gate 1 that has not been locked.
+
+### Ownership
+
+- **Rohith Karne** — fires the routine, reads the inbox, decides what is real.
+- **Saad Rahman** — owns the persona set and their roles; takes promoted items into the §26 discussion phase.
+- **Bala Kaviti** — owns the routine's configuration and prompt, and the cross-routine deduplication boundary.
+- **Kiranmai Avuluri** — owns the labelling audit above.
+- **Vasu Ranabothu** — owns the simulation control in rule 4. His standing flag on §30 and §32 applies here too: the routine files under Rohith's own Atlassian identity, so automated and human actions are not distinguishable in the audit history. **With a fourth routine the volume of simulated tickets now exceeds human-raised ones**, which raises rather than repeats the concern. Accepted for now; to be revisited before any client audit.
+- **Sowmya** — owns the clinical boundary in rule 9.
+
+### Known constraints
+
+- **The user is invented; only the code is real.** Read the evidence first and the account second. The account exists to make the evidence land and is not itself evidence.
+- The agent sees only code **pushed to `main`**. Unpushed local work is invisible to it.
+- It cannot reach local dev servers, databases, or any running instance.
+- Each run is an isolated session with no memory of the previous one — continuity comes entirely from Jira, including the persona rotation.
+- No outbound web access is needed or used by this routine; it is code-reading only by design.
