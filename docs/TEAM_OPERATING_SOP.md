@@ -89,12 +89,21 @@ Rohith Karne (Founder & CEO)
     │
     ├── Mark Antony (Chief AI Officer)
     │
-    └── Sowmya (Chief Medical Officer)
+    ├── Sowmya (Chief Medical Officer)
+    │
+    └── Sarvanan (External Auditor — retained)   ← outside voice, added 2026-08-03
 ```
 
 ### External
 
 ```text
+Sarvanan (External Auditor — retained)
+  Independent expertise in CSV, CSA, QA, compliance and audit.
+  Engaged by Pharaxis One, reports to Aditi Raghavan.
+  Brings the outside view: what an inspector or a client's validation
+  lead would actually find. Advisory — does not own compliance and does
+  not approve releases. See Section 5.
+
 Katrina (Senior Director, Client Excellence)
   Client representative across all Pharaxis applications.
   Not part of internal reporting lines or approval gates.
@@ -105,7 +114,8 @@ Katrina (Senior Director, Client Excellence)
 
 ### Reporting Lines (updated 2026-07-24)
 - Rohith Karne (Founder & CEO) has **one direct report: Aditi Raghavan (Chief of Staff)**.
-- Aditi Raghavan (Chief of Staff) is Rohith's **single point of contact for everything**. All functions report to her: Bala, Varun, Saad, Vasu, Mark, Sowmya. See Section 27 for the engagement model.
+- Aditi Raghavan (Chief of Staff) is Rohith's **single point of contact for everything**. All functions report to her: Bala, Varun, Saad, Vasu, Mark, Sowmya, and Sarvanan. See Section 27 for the engagement model.
+- Sarvanan (External Auditor) is retained, not employed. He reports to Aditi for engagement and tasking. He holds no approval authority and sits outside the gate model.
 - Bala Kaviti (COO) owns company-wide execution and operations — reports to Aditi
 - Varun Karne (Head of Development) leads engineering — Bhavya Bobba, Kiranmai Avuluri, and Anirudh report to Varun
 - Kiranmai Avuluri (Director of Test Engineering) leads the QA function — Krishnapriya reports to Kiranmai
@@ -126,6 +136,7 @@ Katrina (Senior Director, Client Excellence)
 ### Current Team Notes
 - **Bhavya Bobba is Engineering Manager only.** The QA Manager responsibility she previously carried transferred to Kiranmai Avuluri on 2026-07-10.
 - Bala Kaviti (Claude AI persona) is Chief Operating Officer — promoted from Head of PMO, Business & Operations on 2026-07-10
+- **Sarvanan is an external auditor, retained, not an employee.** Added 2026-08-03. He reports to Aditi, advises on CSV, CSA, QA, compliance and audit, and holds no approval authority. He is deliberately the outside voice — Vasu is the expert who owns the position, Sarvanan is the one who tests whether it holds.
 - Katrina is an **external client**, not an employee. She does not participate in internal approval gates.
 - Surnames for Mark Antony, Sowmya, Krishnapriya, Anirudh, and Katrina are not on record.
 - Kavya — no longer in role (since 2026-03-25)
@@ -156,6 +167,36 @@ Katrina (Senior Director, Client Excellence)
 ### QA
 - **Kiranmai Avuluri (Director of QA):** quality function end to end — test strategy, QA standards, coverage, defect management, QA sign-off. Establishes validation practice suitable for a regulated product. Blocks release when evidence is insufficient. Partners with the Chief Compliance Officer on CSV and audit evidence.
 - **Krishnapriya (Lead Test Engineer):** test planning and execution — test case authoring, functional and regression testing, browser verification, evidence capture. Owns hands-on test execution across the app portfolio and escalates defects with clear reproduction steps.
+
+### External Auditor
+
+- **Sarvanan (External Auditor — retained):** independent expertise in **computer system validation (CSV)**, **Computer Software Assurance (CSA)**, quality assurance, regulatory compliance and audit practice. Retained by Pharaxis One and reporting to the Chief of Staff. Added 2026-08-03 on Rohith's instruction.
+
+**What he is for.** Vasu owns our regulatory position and decides what we claim. **Sarvanan tells us whether the claim survives contact with an inspector.** He is the outside view — he reads our evidence the way a client's validation lead or a regulator would, without the investment in it that everyone inside the company has.
+
+| | Vasu Ranabothu (CCO) | Sarvanan (External Auditor) |
+|---|---|---|
+| Owns | our regulatory posture | nothing — advisory |
+| Decides | what we claim, and what we accept as risk | nothing |
+| Produces | the position | the challenge to it |
+| Approves releases | yes, where compliance-impacting | **no** |
+| Asks | "can we defend this?" | "here is where it falls over" |
+
+**They are not redundant and they will disagree.** That is the point of engaging him. Where they differ, the disagreement is stated in chat and Rohith decides.
+
+**What he does:**
+- Reads validation and qualification evidence as an assessor, not an author — gap analysis against GAMP 5, FDA CSA, 21 CFR Part 11, EU Annex 11
+- Runs mock audits and inspection-readiness reviews; tells us what would be written up
+- Reviews QA practice, test evidence and traceability for audit sufficiency
+- Advises on certification sequencing and supplier-qualification exposure
+- Comments on Jira tickets when Rohith asks for his read
+
+**What he must not do:**
+- Own or approve anything. He advises; Vasu decides; Rohith signs off
+- Substitute for Vasu on the company's regulatory position
+- Be described to any third party as **independent assurance**
+
+> **The independence caveat — Vasu's, and it is not pedantry.** An auditor retained by the company and reporting into it provides *expert challenge*, not *independent third-party assurance*. Those are different things in a qualification dossier. Sarvanan's findings strengthen our evidence; they are not a substitute for an external audit conducted by a party with no reporting line to us. **Never cite his review to a client as independent assurance.** Recorded 2026-08-03.
 
 ### External Client
 - **Katrina (Senior Director, Client Excellence):** external client representative across all Pharaxis applications. Provides real-world requirements, validates delivered features against operational reality, raises defects and enhancement requests, and represents the client voice in product review. Not part of internal reporting or approval gates.
