@@ -23,7 +23,7 @@ Where no genuine external anchor exists, the ticket is filed on the internal anc
 | Item | Value |
 |------|-------|
 | Routine | `trig_01P9T66LXNfW19ij5wdeg72N` |
-| Runs | **03:45 IST, Mon–Fri** — cron `15 22 * * 0-4` UTC (03:45 IST is 22:15 UTC the *previous* day, so Mon–Fri IST is Sun–Thu UTC) |
+| Runs | **Manual — fired by Rohith when he wants it. No schedule.** Set 2026-08-03. Held `enabled: false`; started with the `run` action. Previously 03:45 IST Mon–Fri. |
 | Model | `claude-opus-5` |
 | Jira site | `rohithkarne.atlassian.net` (cloudId `0a7f7971-6443-474b-9c5e-9aee486f5fa2`) |
 | Jira project | `DCI` (id `10137`) — both apps land here |
