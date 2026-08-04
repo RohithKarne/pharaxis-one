@@ -244,6 +244,25 @@ export default function SubmissionsPage() {
                     <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{s.submitted_at ? s.submitted_at.slice(0, 16).replace('T', ' ') : '—'}</td>
                     <td>
                       <span style={{ fontSize: 12, fontWeight: 600 }}>{TYPE_LABELS[s.submission_type] || s.submission_type}</span>
+                      {/* PD-2: the submitter reported that someone became unwell.
+                          Shown here as well as in the Safety Queue so it is visible
+                          in the list an admin already works from. The type itself is
+                          never changed by the flag — that is a clinical decision. */}
+                      {s.ae_task_status && (
+                        <span
+                          title={s.ae_task_status === 'open'
+                            ? 'Reported harm — awaiting safety review'
+                            : 'Reported harm — safety review closed'}
+                          style={{
+                            marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px',
+                            borderRadius: 10, whiteSpace: 'nowrap',
+                            background: s.ae_task_status === 'open' ? '#FEE2E2' : '#F1F5F9',
+                            color:      s.ae_task_status === 'open' ? '#B91C1C' : '#475569',
+                          }}
+                        >
+                          {s.ae_task_status === 'open' ? '⚠ SAFETY REVIEW' : '✓ REVIEWED'}
+                        </span>
+                      )}
                     </td>
                     <td>{s.submitter_name || (s.first_name ? `${s.first_name} ${s.last_name}` : '—')}</td>
                     <td style={{ fontSize: 12 }}>{s.submitter_email || s.user_email || '—'}</td>

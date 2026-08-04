@@ -144,6 +144,7 @@ app.use('/api/admin/news',         require('./routes/admin/news'));
 app.use('/api/admin/safety',       require('./routes/admin/safety'));
 app.use('/api/admin/audit',        require('./routes/admin/audit'));
 app.use('/api/admin/data-requests', require('./routes/admin/dataRequests'));
+app.use('/api/admin/ae-review',    require('./routes/admin/aeReviewTasks'));
 app.use('/api/admin/trials',       require('./routes/admin/trials'));
 app.use('/api/admin/training',     require('./routes/admin/training'));
 app.use('/api/admin/submissions',  require('./routes/admin/submissions'));

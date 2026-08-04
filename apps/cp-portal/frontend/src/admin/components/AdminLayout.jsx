@@ -40,7 +40,7 @@ const CLIENT_NAV_GROUPS = (id) => [
       { to: `/admin/clients/${id}/training`,     label: 'CME & Training',  icon: 'book' },
       { to: `/admin/clients/${id}/msls`,         label: 'MSL Directory', icon: 'users' },
       { to: `/admin/clients/${id}/faq`,          label: 'FAQ',           icon: 'help' },
-      { to: `/admin/clients/${id}/review-queue`, label: 'Review Queue',  icon: 'search', badge: true },
+      { to: `/admin/clients/${id}/review-queue`, label: 'Review Queue',  icon: 'search', badge: 'review' },
     ],
   },
   {
@@ -58,6 +58,7 @@ const CLIENT_NAV_GROUPS = (id) => [
     items: [
       { to: `/admin/clients/${id}/users`,        label: 'Portal Users', icon: 'users' },
       { to: `/admin/clients/${id}/submissions`,  label: 'Submissions',  icon: 'inbox' },
+      { to: `/admin/clients/${id}/safety-queue`, label: 'Safety Queue', icon: 'shield', badge: 'safety' },
       { to: `/admin/clients/${id}/integration`,  label: 'Integration',  icon: 'link' },
       { to: `/admin/clients/${id}/sync-health`,  label: 'Sync Health',  icon: 'chart' },
       { to: `/admin/clients/${id}/audit`,        label: 'Audit Trail',    icon: 'list' },
@@ -85,6 +86,7 @@ const SEGMENT_TITLES = {
   compliance:     'Compliance',
   users:          'Portal Users',
   submissions:    'Submissions',
+  'safety-queue': 'Safety Queue',
   msls:           'MSL Management',
   clients:        'Clients',
   audit:          'Audit Trail',
@@ -122,14 +124,20 @@ export default function AdminLayout({ children }) {
     } catch { return { experience: true, content: true, compliance: true, operations: true } }
   })
 
-  // S4-8: Review queue badge count — fetch total items in 'review' status
-  const [reviewCount, setReviewCount] = useState(0)
+  // Sidebar badge counts, keyed by the `badge` name on each nav item.
+  //   review — S4-8: content awaiting editorial review
+  //   safety — PD-2: portal submissions where someone reported becoming unwell
+  const [badges, setBadges] = useState({ review: 0, safety: 0 })
   useEffect(() => {
     if (!clientId) return
-    fetch(`/api/admin/review-queue/${clientId}/count`, { headers: adminHeaders() })
+    const get = (url) => fetch(url, { headers: adminHeaders() })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.count != null) setReviewCount(d.count) })
-      .catch(() => {})
+      .then(d => (d?.count != null ? d.count : 0))
+      .catch(() => 0)
+    Promise.all([
+      get(`/api/admin/review-queue/${clientId}/count`),
+      get(`/api/admin/ae-review/${clientId}/count`),
+    ]).then(([review, safety]) => setBadges({ review, safety }))
   }, [clientId, location.pathname])
 
   // Client logo — fetch branding when a client is selected
@@ -245,12 +253,12 @@ export default function AdminLayout({ children }) {
                         >
                           <span className="cp-nav-icon"><Icon name={item.icon} size={17} /></span>
                           <span className="cp-nav-text">{item.label}</span>
-                          {item.badge && reviewCount > 0 && (
+                          {item.badge && badges[item.badge] > 0 && (
                             <span style={{
                               marginLeft: 'auto', background: '#DC2626', color: '#fff',
                               borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700,
                             }}>
-                              {reviewCount}
+                              {badges[item.badge]}
                             </span>
                           )}
                         </NavLink>

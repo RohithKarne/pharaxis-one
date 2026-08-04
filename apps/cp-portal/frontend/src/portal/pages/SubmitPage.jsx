@@ -69,14 +69,34 @@ export default function SubmitPage() {
     if (selectedType) localStorage.removeItem(`cp_draft_${clientCode}_${selectedType}`)
   }
 
+  // A field may declare show_when: { field, equals } and is only rendered when
+  // the controlling field holds that value. Used by the AE screening detail box,
+  // which appears only after the visitor answers "Yes".
+  function isVisible(field, values = formValues) {
+    const cond = field.show_when
+    if (!cond || !cond.field) return true
+    return String(values[cond.field] || '') === String(cond.equals)
+  }
+
   function handleFieldChange(key, value) {
-    setFormValues(v => ({ ...v, [key]: value }))
+    setFormValues(v => {
+      const next = { ...v, [key]: value }
+      // Clear anything this change has just hidden. Otherwise a visitor who
+      // answers Yes, types what happened, then switches to No would still submit
+      // the narrative alongside a "No" — a contradiction in a safety record.
+      formFields.forEach(f => {
+        if (f.show_when?.field === key && !isVisible(f, next)) delete next[f.field_key]
+      })
+      return next
+    })
     if (fieldErrors[key]) setFieldErrors(prev => ({ ...prev, [key]: undefined }))
   }
 
   function validate() {
     const errors = {}
-    formFields.filter(f => f.is_required).forEach(f => {
+    // Only validate what the visitor can actually see. A required-but-hidden
+    // field would block submission with no visible cause and no way to fix it.
+    formFields.filter(f => f.is_required && isVisible(f)).forEach(f => {
       if (!formValues[f.field_key] || String(formValues[f.field_key]).trim() === '') {
         errors[f.field_key] = `${f.field_label || f.label} is required.`
       }
@@ -174,13 +194,39 @@ export default function SubmitPage() {
             <div className="pp-info-box">No form fields have been configured for this submission type. Please contact your administrator.</div>
           ) : (
             <form onSubmit={handleSubmit} className="pp-submission-form">
-              {formFields.map(field => (
+              {formFields.filter(f => isVisible(f)).map(field => (
                 <div key={field.field_key} className={`pp-field${fieldErrors[field.field_key] ? ' pp-field-error' : ''}`}>
                   <label>
                     {field.label}
                     {field.is_required ? <span className="pp-required" aria-hidden="true"> *</span> : null}
                   </label>
-                  {field.field_type === 'textarea' ? (
+                  {/* Scoped to system-managed fields deliberately. help_text is
+                      configurable on every field but has never been rendered
+                      anywhere in the portal — fixing that generally is a separate
+                      change, not one to bundle into a safety feature. For the AE
+                      screening question the help text is the mitigation, so it
+                      has to appear. */}
+                  {field.system_managed && field.help_text
+                    ? <span className="pp-field-help">{field.help_text}</span> : null}
+                  {field.field_type === 'radio' ? (
+                    /* Radio, not a dropdown: for a safety question the question and
+                       both answers must be visible without interaction. A select
+                       shows "-- Select --" and reads as furniture to scroll past. */
+                    <div className="pp-radio-group" role="radiogroup" aria-label={field.label}>
+                      {String(field.options || '').split('\n').map(o => o.trim()).filter(Boolean).map(o => (
+                        <label key={o} className="pp-radio-label">
+                          <input
+                            type="radio"
+                            name={field.field_key}
+                            value={o}
+                            checked={formValues[field.field_key] === o}
+                            onChange={e => handleFieldChange(field.field_key, e.target.value)}
+                          />
+                          <span>{o}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : field.field_type === 'textarea' ? (
                     <textarea
                       rows={4}
                       value={formValues[field.field_key] || ''}

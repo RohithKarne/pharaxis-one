@@ -17,13 +17,17 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
   try {
     const { type, status, search } = req.query;
 
+    // PD-2: ae_task_status surfaces the safety flag inline, so a reviewer sees it
+    // in the list they already work from rather than only in the safety queue.
     let query = `
       SELECT s.id, s.submission_type, s.submitter_name, s.submitter_email,
              s.submitter_type, s.status, s.external_ref, s.submitted_at,
              s.sync_attempts, s.form_data,
-             u.first_name, u.last_name, u.email AS user_email
+             u.first_name, u.last_name, u.email AS user_email,
+             t.status AS ae_task_status
       FROM cp_submissions s
       LEFT JOIN cp_portal_users u ON s.user_id = u.id
+      LEFT JOIN cp_ae_review_tasks t ON t.submission_id = s.id
       WHERE s.client_id = ?
     `;
     const params = [req.params.clientId];

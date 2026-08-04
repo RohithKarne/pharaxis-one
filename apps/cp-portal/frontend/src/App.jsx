@@ -30,6 +30,7 @@ import DocumentsAdminPage   from './admin/pages/DocumentsPage'
 import CompliancePage       from './admin/pages/CompliancePage'
 import AuditTrailPage       from './admin/pages/AuditTrailPage'
 import SubmissionsPage      from './admin/pages/SubmissionsPage'
+import SafetyQueuePage      from './admin/pages/SafetyQueuePage'
 import AdminUsersPage      from './admin/pages/AdminUsersPage'
 import ReviewQueuePage     from './admin/pages/ReviewQueuePage'
 
@@ -173,6 +174,7 @@ export default function App() {
         <Route path="/admin/clients/:clientId/compliance"   element={<AdminGuard><CompliancePage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/audit"       element={<AdminGuard><AuditTrailPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/submissions" element={<AdminGuard><SubmissionsPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/safety-queue" element={<AdminGuard><SafetyQueuePage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/analytics"    element={<AdminGuard><AnalyticsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/feedback"     element={<AdminGuard><FeedbackPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/admin-users"  element={<AdminGuard><AdminUsersPage /></AdminGuard>} />

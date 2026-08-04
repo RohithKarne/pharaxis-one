@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal } = require('../../middleware/auth');
+const { withAeScreening } = require('../../services/aeScreening');
 
 async function getClient(code) {
   const [[row]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [code]);
@@ -145,7 +146,11 @@ router.get('/:clientCode/forms/:formType', async (req, res) => {
     if (rows.length === 0 && req.params.formType === 'adverse_event') {
       return res.json({ fields: DEFAULT_AE_FIELDS, default_template: true });
     }
-    res.json({ fields: rows });
+    // An unconfigured non-AE form has no usable form at all — the portal shows
+    // "not configured" and nothing can be submitted. Injecting into it would
+    // render a form consisting only of the screening question.
+    if (rows.length === 0) return res.json({ fields: rows });
+    res.json({ fields: withAeScreening(rows, req.params.formType) });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

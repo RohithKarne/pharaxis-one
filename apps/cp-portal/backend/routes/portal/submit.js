@@ -15,6 +15,7 @@ const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard')
 const { getAuthHeaders, invalidateAuth } = require('../../services/mimsAuth');
 const { validateUploads } = require('../../utils/fileValidation');
 const { enqueue } = require('../../utils/jobQueue');
+const { validateAnswer, isFlagged, AE_SCREEN_KEY, AE_SCREEN_DETAIL_KEY } = require('../../services/aeScreening');
 const { systemAudit } = require('../../utils/audit');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
@@ -100,6 +101,14 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     const formDataStr = typeof form_data === 'string' ? form_data : JSON.stringify(form_data);
     if (formDataStr.length > 50000) return res.status(400).json({ error: 'Input exceeds maximum length.' });
 
+    // PD-2: every non-AE submission must answer the adverse-event screening
+    // question. Enforced here as well as in the form config, because the form is
+    // only a suggestion to anyone posting directly to this endpoint.
+    let parsedForm = {};
+    try { parsedForm = JSON.parse(formDataStr); } catch { parsedForm = {}; }
+    const screenError = validateAnswer(formType, parsedForm);
+    if (screenError) return res.status(400).json({ error: screenError, field: AE_SCREEN_KEY });
+
     const rawIp = req.ip || '';
     const ip_address = rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
 
@@ -120,6 +129,24 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
 
     // A1: audit the inquiry lifecycle. 'submitted' is the first entry.
     systemAudit('portal', client.id, 'SUBMITTED', 'submission', submissionId, { type: formType });
+
+    // PD-2: the submitter said someone became unwell — raise a review task for
+    // the client's safety team. Deliberately non-fatal: a failure here must never
+    // cost the visitor their submission or their reference number. It is logged
+    // and audited so a missing task is visible rather than silent.
+    if (isFlagged(formType, parsedForm)) {
+      try {
+        await pool.execute(
+          `INSERT INTO cp_ae_review_tasks (client_id, submission_id, reported_detail) VALUES (?, ?, ?)`,
+          [client.id, submissionId, String(parsedForm[AE_SCREEN_DETAIL_KEY] || '').slice(0, 5000) || null]
+        );
+        systemAudit('portal', client.id, 'AE_REVIEW_TASK_CREATED', 'submission', submissionId, { type: formType });
+      } catch (taskErr) {
+        console.error(`[PD-2] AE review task NOT created for submission ${submissionId}:`, taskErr.message);
+        systemAudit('portal', client.id, 'AE_REVIEW_TASK_FAILED', 'submission', submissionId,
+          { type: formType, error: taskErr.message });
+      }
+    }
 
     // Save any uploaded attachments, linked to the new submission.
     if (req.files && req.files.length > 0) {
