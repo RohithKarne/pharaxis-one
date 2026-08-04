@@ -41,7 +41,7 @@ A Pharaxis One application for managing SOPs, validation documents, quality even
 | Schema management | SQL migration scripts | `apps/qms/backend/src/db/mysql/migrations/*.sql` |
 | Migration command | `npm run db:migrate:mysql` | Run once on a fresh DB |
 | Password hashing | `bcrypt` (cost 10) | Was pgcrypto `crypt()` inside the DB — MySQL has none |
-| Legacy Postgres | `src/db/migrations/*.sql`, `src/db/pool.js` | **Retained, read-only.** Source of record for migration verification. Do not delete. |
+| Legacy Postgres | `src/db/migrations/*.sql`, `src/db/pool.js` | Retained read-only. **Gate 2 (2026-08-04) permits decommissioning** — no runtime or test path depends on it. The source of record is now the hash-verified archive at `apps/qms/archive/`, not the live instance. |
 
 > **`.sql` files are gitignored** (`.gitignore:60`, added to block DB dumps). The
 > migration files are tracked only because they were force-added with `git add -f`.
@@ -158,7 +158,7 @@ Full org chart in `docs/TEAM_OPERATING_SOP.md`. Restructured 2026-04-14 — 5-me
 | Scale | 92 tables, 923 columns, 268 foreign keys |
 | Primary keys | `CHAR(36) DEFAULT (UUID())` — QMS keeps UUIDs; the other apps use `INT AUTO_INCREMENT` |
 | Timestamps | `DATETIME(3)` UTC. The pool pins `timezone: 'Z'` and `SET time_zone = '+00:00'` per connection |
-| Legacy | `qms_dev` on PostgreSQL — retained read-only |
+| Legacy | `qms_dev` on PostgreSQL — decommissioning permitted by Gate 2. Archive: `apps/qms/archive/` (1,049 rows, SHA-256 verified) |
 
 ---
 
