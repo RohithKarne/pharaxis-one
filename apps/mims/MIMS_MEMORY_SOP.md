@@ -771,6 +771,47 @@ Queries all active orgs, calls `seedNewOrg(org.id, 4)` for each, continues on er
 | 13 | MI email delivery depends on SMTP being configured in Admin Console → Email Accounts with `site_email_purpose` = 'response'. If not configured, email is silently skipped (SENT status is still committed). | Config dependency | High | Varun / Karthik |
 | 14 | DPPR scheduler runs at 02:00 UTC daily. Requires server restart after first deploy to register cron. DPPR Privacy (DPPR) tab in CaseFormPage visible to admin/platform-admin only — non-admin users will see 401 on load (handled silently). | Config / deploy | High | Varun |
 | 15 | After any backend route file change (e.g. `cmAuditTrail.js` entity_id filter), server must be restarted — nodemon or manual `node --env-file=.env backend/server.js`. | Ops | Medium | Varun |
+| 16 | **Inspector Export (cross-case)** — deferred candidate, see §12.1. Jira **MIMS-62** under the *MIMS Deferred* epic **MIMS-60**. Raised from DCI-4 (Katrina, 1 Aug 2026). Cross-case audit *query* exists; cross-case signed *export* does not. | Future feature | Deferred | Saad |
+
+### 12.1 Deferred candidate — Inspector Export (cross-case)
+
+> Source: DCI-4, 1 Aug 2026. Jira: **MIMS-62**, under the *MIMS Deferred* epic **MIMS-60**.
+> **Candidate only — NOT locked.** No development starts until it passes SOP §26 discussion and lock. Owner: Saad Rahman.
+
+**Problem.** An inspector asks for a body of records, not one enquiry. MIMS can answer that on screen but cannot produce it as one signed deliverable — the only Part 11-signed export is single-case. Assembling 400 individual exports by hand is where transcription errors enter, and that assembly is itself unauditable.
+
+**Current state (code read 4 Aug 2026, UI not verified):**
+
+| Capability | Today | Reference |
+|---|---|---|
+| Cross-case query by user + date range | Exists, JSON, paginated, no export | `backend/routes/admin/caseAuditTrail.js:84` |
+| CSV export | Exists but over `audit_logs`, not `case_audit_trail` | `backend/routes/admin/caseAuditTrail.js:187` |
+| e-Signature manifest on CSV | None | — |
+| Row cap on CSV | 10,000 | `backend/routes/admin/caseAuditTrail.js:201` |
+| Signed export | Single case only, 400s without `case_id` | `backend/routes/admin/auditInspectorExport.js:20` |
+| Export control in Audit Trail UI | None | `frontend/src/modules/audittrail/pages/CaseAuditTrailPage.jsx` |
+
+**Proposed scope — first pass:**
+
+| # | Item | Why |
+|---|---|---|
+| 1 | Cross-case export filtered by user, date range, case type, org | Katrina's primary question |
+| 2 | Export `case_audit_trail` (field-level), not only `audit_logs` | today's CSV exports the wrong table |
+| 3 | Part 11 e-signature manifest on the cross-case export | parity with the single-case export |
+| 4 | Remove or paginate past the 10,000-row cap | an inspection window will exceed it |
+| 5 | Async/queued generation with download-when-ready | a large range will exceed request timeout |
+| 6 | Export the export — log who ran it, filters used, row count, content hash | the export is itself a regulated action |
+| 7 | Human-readable **and** electronic form (PDF + CSV) | §11.10(b) names both |
+| 8 | Manifest states the filter applied and rows returned | an unstated filter makes a "complete copy" claim unprovable |
+| 9 | Org scoping enforced on every row | non-platform admins must not export across tenants |
+| 10 | Export control surfaced in the Audit Trail UI | there is no button today |
+
+**Explicitly out of first pass:** "every enquiry amended after it was sent." Needs a reliable send event to compare against; not yet confirmed we record one cleanly. Separate candidate.
+
+**Open questions for the §26 discussion:**
+- Does a send/transmission event exist that an "amended after send" query could anchor to? (Bhavya)
+- Do we need a retention guarantee on generated exports, or are they transient? (Vasu)
+- Is 10,000 rows actually being hit today, or is the cap theoretical? (Krishnapriya — needs a real data check)
 
 ---
 

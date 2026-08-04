@@ -216,10 +216,19 @@ async function runScheduledDppr() {
   }
 }
 
-// ── Register daily cron at 02:00 UTC ─────────────────────────────────────────
+// ── Scheduled enforcement — SUSPENDED 2026-08-03 ─────────────────────────────
+// Suspended on Rohith Karne's instruction (DCI-5). applyDpprRules() destroys
+// PII (Anonymize/Delete) with no legal-hold interlock — an unattended job can
+// overwrite a record that legal has placed under hold. No hold mechanism
+// exists anywhere in MIMS today.
+//
+// Re-enable ONLY when a hold can be placed, enforced on every destructive
+// path, released with recorded reason and authority, and audited.
+// The manual path (POST /api/admin/dppr/run-now) is deliberately left in
+// place — it requires an admin to trigger it and is not unattended.
 function startDpprScheduler() {
-  cron.schedule('0 2 * * *', runScheduledDppr, { timezone: 'UTC' });
-  console.log('[DPPR] Scheduler registered — daily 02:00 UTC');
+  console.log('[DPPR] Scheduler SUSPENDED — no legal-hold interlock (DCI-5). No scheduled run will occur.');
+  // cron.schedule('0 2 * * *', runScheduledDppr, { timezone: 'UTC' });
 }
 
 module.exports = { startDpprScheduler, applyDpprRules };

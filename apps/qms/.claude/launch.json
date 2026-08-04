@@ -2,6 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "QMS Backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3145,
+      "cwd": "/Users/rohithkarne/Pharaxis-One/apps/qms/backend"
+    },
+    {
       "name": "QMS Frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
