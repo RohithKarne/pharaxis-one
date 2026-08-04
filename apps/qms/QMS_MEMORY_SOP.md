@@ -12,6 +12,7 @@
 | 2026-04-06 | Bala | Initial creation — skeleton. QMS not started. Placeholder for future development. |
 | 2026-04-28 | Bala | Sprint 1 complete. Status updated from skeleton to active. Tech stack confirmed. Sprint history, local start command, ports, and DB details updated. |
 | 2026-08-04 | Bala | **PostgreSQL → MySQL migration.** QMS was the last app on Postgres; it now runs on MySQL 8, matching MIMS, CP Portal, Vault and AI Agent. Tech stack, start commands, architecture, DB reference, known issues and technical rules all updated. Status is code-complete and engineer-verified — **not validated**. See §16. |
+| 2026-08-04 | Bala | **Gate 2 approved by Rohith.** Section 16 status updated: QA complete, Gate 2 approved; CSV validation still outstanding. Gate 2 record filed at `apps/qms/QMS_GATE2_APPROVAL_MYSQL_MIGRATION_2026-08-04.md`. |
 
 ---
 
@@ -244,7 +245,12 @@ Format: Rohith says → "Bala, update the QMS Memory SOP — [what changed]"
 
 ## 16. PostgreSQL → MySQL Migration (2026-08-04)
 
-**Status: code-complete and engineer-verified. NOT validated. NOT approved for a client environment.**
+**Status: QA complete. Gate 2 APPROVED by Rohith 2026-08-04. NOT validated — NOT approved for a client environment.**
+
+Gate 2 record: `apps/qms/QMS_GATE2_APPROVAL_MYSQL_MIGRATION_2026-08-04.md`.
+Gate 2 permits product review and decommissioning the legacy PostgreSQL database.
+It does **not** permit deployment anywhere client-facing — that needs the CSV
+validation protocol, which has not been executed.
 
 Full CSV impact assessment: `apps/qms/QMS_CSV_IMPACT_POSTGRES_TO_MYSQL_2026-08-04.md`.
 
