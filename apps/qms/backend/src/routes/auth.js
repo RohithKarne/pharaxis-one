@@ -1,5 +1,6 @@
-import { randomInt, createHash } from 'crypto';
+import { randomInt, createHash, randomUUID } from 'crypto';
 import { Router } from 'express';
+import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { getDbPool } from '../db/pool.js';
 import { env } from '../config/env.js';
@@ -91,9 +92,22 @@ async function resetAuthRouteRlsContext(client) {
   }
 }
 
-async function validatePassword(client, passwordHash, passwordInput) {
-  const { rows } = await client.query('SELECT crypt($2, $1) = $1 AS valid', [passwordHash, passwordInput]);
-  return Boolean(rows[0]?.valid);
+/**
+ * Verify a password against its stored hash.
+ *
+ * Previously this ran `SELECT crypt($2, $1) = $1` — pgcrypto, which MySQL does
+ * not have, so every login would have failed at cutover. bcrypt reads the cost
+ * factor out of the hash itself, so the existing `$2a$06$` hashes written by
+ * `crypt(pw, gen_salt('bf'))` verify unchanged: no password resets, no
+ * migration step. Confirmed against real stored hashes before this change.
+ *
+ * Two incidental improvements: the plaintext password no longer travels to the
+ * database as a query parameter (where it could surface in query logs), and
+ * login no longer needs a database round-trip to check the password.
+ */
+async function validatePassword(passwordHash, passwordInput) {
+  if (!passwordHash || !passwordInput) return false;
+  return bcrypt.compare(String(passwordInput), String(passwordHash));
 }
 
 async function getUserSecurityContext(client, user) {
@@ -119,9 +133,10 @@ async function getUserSecurityContext(client, user) {
       SELECT email_otp_enabled, reset_required
       FROM qms_user_2fa_settings
       WHERE user_id = $1
+        AND org_id = $2
       LIMIT 1
     `,
-    [user.id]
+    [user.id, user.org_id]
   );
   const user2fa = user2faRows[0] || { email_otp_enabled: true, reset_required: false };
 
@@ -140,19 +155,25 @@ async function issueOtpChallenge(client, user) {
   const otpHash = hashOtp(otp);
   const expiresAt = new Date(Date.now() + OTP_VALIDITY_SECONDS * 1000);
 
-  const { rows } = await client.query(
+  // The challenge id is generated here rather than read back with RETURNING
+  // (which MySQL does not support). It is also the bearer secret handed to the
+  // client for step 2, so it must be unguessable — randomUUID() is a CSPRNG,
+  // the same source gen_random_uuid() used.
+  const challengeId = randomUUID();
+
+  await client.query(
     `
       INSERT INTO qms_login_otp_challenges (
+        id,
         org_id,
         user_id,
         recipient_email,
         otp_code_hash,
         expires_at
       )
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id
+      VALUES ($1, $2, $3, $4, $5, $6)
     `,
-    [user.org_id, user.id, user.email, otpHash, expiresAt.toISOString()]
+    [challengeId, user.org_id, user.id, user.email, otpHash, expiresAt.toISOString()]
   );
 
   await queueEmailNotification(client, {
@@ -163,7 +184,7 @@ async function issueOtpChallenge(client, user) {
   });
 
   return {
-    challengeId: rows[0].id,
+    challengeId,
     otp
   };
 }
@@ -291,7 +312,7 @@ authRouter.post('/login', authEndpointLimiter, async (req, res, next) => {
       return res.status(403).json({ error: 'User is inactive' });
     }
 
-    const validPassword = await validatePassword(client, user.password_hash, password);
+    const validPassword = await validatePassword(user.password_hash, password);
     if (!validPassword) {
       await recordLoginAudit(client, {
         orgId: user.org_id,
@@ -401,6 +422,10 @@ authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next)
           o.org_code,
           o.org_name,
           o.is_active AS org_is_active
+        -- tenant-scope-audit: cross-org — pre-auth. The challenge id is itself
+        -- the bearer secret issued at step 1; the caller has no session and no
+        -- org context yet. The org is derived FROM this row (c.org_id) and every
+        -- write that follows is scoped to it.
         FROM qms_login_otp_challenges c
         JOIN qms_users u ON u.id = c.user_id
         JOIN qms_orgs o ON o.id = c.org_id
@@ -435,10 +460,11 @@ authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next)
           UPDATE qms_login_otp_challenges
           SET
             attempt_count = $2,
-            consumed_at = CASE WHEN $3 THEN now() ELSE consumed_at END
+            consumed_at = CASE WHEN $3 THEN CURRENT_TIMESTAMP(3) ELSE consumed_at END
           WHERE id = $1
+            AND org_id = $4
         `,
-        [challenge.id, attempts, consume]
+        [challenge.id, attempts, consume, challenge.org_id]
       );
 
       await recordLoginAudit(client, {
@@ -457,10 +483,11 @@ authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next)
     await client.query(
       `
         UPDATE qms_login_otp_challenges
-        SET consumed_at = now(), attempt_count = attempt_count + 1
+        SET consumed_at = CURRENT_TIMESTAMP(3), attempt_count = attempt_count + 1
         WHERE id = $1
+          AND org_id = $2
       `,
-      [challenge.id]
+      [challenge.id, challenge.org_id]
     );
 
     await client.query(
@@ -473,12 +500,12 @@ authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next)
           last_verified_at,
           updated_at
         )
-        VALUES ($1, $2, true, false, now(), now())
+        VALUES ($1, $2, true, false, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3))
         ON CONFLICT (user_id)
         DO UPDATE SET
           reset_required = false,
-          last_verified_at = now(),
-          updated_at = now()
+          last_verified_at = CURRENT_TIMESTAMP(3),
+          updated_at = CURRENT_TIMESTAMP(3)
       `,
       [challenge.org_id, challenge.user_id]
     );
@@ -553,6 +580,9 @@ authRouter.post('/superadmin/login', authEndpointLimiter, async (req, res, next)
           o.org_code,
           o.org_name,
           o.is_active AS org_is_active
+        -- tenant-scope-audit: cross-org — superadmin login surface. A superadmin
+        -- is not bound to an org and supplies no orgCode, so there is no tenant
+        -- to scope to. Narrowed instead by role_key = 'superadmin'.
         FROM qms_users u
         JOIN qms_orgs o ON o.id = u.org_id
         WHERE (
@@ -606,7 +636,7 @@ authRouter.post('/superadmin/login', authEndpointLimiter, async (req, res, next)
       return res.status(403).json({ error: 'User is inactive' });
     }
 
-    const validPassword = await validatePassword(client, user.password_hash, password);
+    const validPassword = await validatePassword(user.password_hash, password);
     if (!validPassword) {
       await recordLoginAudit(client, {
         orgId: user.org_id,

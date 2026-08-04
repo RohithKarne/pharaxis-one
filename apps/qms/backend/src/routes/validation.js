@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { createInAppNotification } from '../services/platform/notificationService.js';
@@ -26,7 +27,7 @@ async function appendValidationHistoryEvent(client, {
         action_key,
         actor_user_id,
         payload_json
-      ) VALUES ($1, $2, $3, $4, $5::jsonb)
+      ) VALUES ($1, $2, $3, $4, $5)
     `,
     [orgId, systemId, actionKey, actorUserId, JSON.stringify(payloadJson)]
   );
@@ -61,9 +62,11 @@ validationRouter.post('/systems', async (req, res, next) => {
       dt.setUTCDate(dt.getUTCDate() + Number(reviewIntervalDays || 365));
       const due = dt.toISOString().slice(0, 10);
 
-      const { rows } = await client.query(
+      const systemIdNew = randomUUID();
+      await client.query(
         `
           INSERT INTO vs_system_inventory (
+            id,
             org_id,
             system_name,
             vendor,
@@ -77,10 +80,10 @@ validationRouter.post('/systems', async (req, res, next) => {
             next_review_due_date,
             created_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Planned', $10, $11)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Planned', $11, $12)
         `,
         [
+          systemIdNew,
           req.authContext.orgId,
           systemName,
           vendor || null,
@@ -94,14 +97,22 @@ validationRouter.post('/systems', async (req, res, next) => {
           req.authContext.userId
         ]
       );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM vs_system_inventory
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [systemIdNew, req.authContext.orgId]
+      );
 
       await client.query(
         `
           INSERT INTO vs_periodic_reviews (org_id, system_id, due_date)
           VALUES ($1, $2, $3)
-          RETURNING *
         `,
-        [req.authContext.orgId, rows[0].id, due]
+        [req.authContext.orgId, systemIdNew, due]
       );
 
       await appendValidationHistoryEvent(client, {
@@ -151,9 +162,11 @@ validationRouter.post('/systems/:systemId/requirements', async (req, res, next) 
     }
 
     const requirement = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const requirementIdNew = randomUUID();
+      await client.query(
         `
           INSERT INTO vs_requirement_specs (
+            id,
             org_id,
             system_id,
             requirement_code,
@@ -162,10 +175,10 @@ validationRouter.post('/systems/:systemId/requirements', async (req, res, next) 
             risk_level,
             created_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
         [
+          requirementIdNew,
           req.authContext.orgId,
           systemId,
           requirementCode,
@@ -174,6 +187,15 @@ validationRouter.post('/systems/:systemId/requirements', async (req, res, next) 
           riskLevel,
           req.authContext.userId
         ]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM vs_requirement_specs
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [requirementIdNew, req.authContext.orgId]
       );
 
       await appendValidationHistoryEvent(client, {
@@ -214,9 +236,10 @@ validationRouter.post('/systems/:systemId/traceability', async (req, res, next) 
     }
 
     const entry = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           INSERT INTO vs_trace_matrix_entries (
+            id,
             org_id,
             system_id,
             requirement_id,
@@ -228,7 +251,7 @@ validationRouter.post('/systems/:systemId/traceability', async (req, res, next) 
             notes,
             created_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           ON CONFLICT (requirement_id, COALESCE(step_id, '00000000-0000-0000-0000-000000000000'::uuid))
           DO UPDATE SET
             plan_id = EXCLUDED.plan_id,
@@ -237,10 +260,10 @@ validationRouter.post('/systems/:systemId/traceability', async (req, res, next) 
             step_id = EXCLUDED.step_id,
             trace_status = EXCLUDED.trace_status,
             notes = EXCLUDED.notes,
-            updated_at = now()
-          RETURNING *
+            updated_at = CURRENT_TIMESTAMP(3)
         `,
         [
+          randomUUID(),
           req.authContext.orgId,
           systemId,
           requirementId,
@@ -252,6 +275,18 @@ validationRouter.post('/systems/:systemId/traceability', async (req, res, next) 
           notes,
           req.authContext.userId
         ]
+      );
+      // Keyed on the upsert's natural key, not the generated id: an existing row
+      // keeps its own id and the generated one is discarded.
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM vs_trace_matrix_entries
+          WHERE requirement_id = $1
+            AND (step_id = $2 OR (step_id IS NULL AND $2 IS NULL))
+            AND org_id = $3
+        `,
+        [requirementId, stepId, req.authContext.orgId]
       );
 
       if (stepId) {
@@ -298,15 +333,16 @@ validationRouter.post('/systems/:systemId/plans', async (req, res, next) => {
     }
 
     const plan = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const planIdNew = randomUUID();
+      await client.query(
         `
           INSERT INTO vs_validation_plans (
-            org_id, system_id, scope, approach, responsibilities, protocol_types, status, created_by
+            id, org_id, system_id, scope, approach, responsibilities, protocol_types, status, created_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6::text[], 'Draft', $7)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7::text[], 'Draft', $8)
         `,
         [
+          planIdNew,
           req.authContext.orgId,
           systemId,
           scope,
@@ -315,6 +351,15 @@ validationRouter.post('/systems/:systemId/plans', async (req, res, next) => {
           protocolTypes || ['IQ', 'OQ', 'PQ', 'UAT'],
           req.authContext.userId
         ]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM vs_validation_plans
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [planIdNew, req.authContext.orgId]
       );
 
       await appendValidationHistoryEvent(client, {
@@ -348,9 +393,10 @@ validationRouter.post('/plans/:planId/protocols', async (req, res, next) => {
           SELECT system_id
           FROM vs_validation_plans
           WHERE id = $1
+            AND org_id = $2
           LIMIT 1
         `,
-        [planId]
+        [planId, req.authContext.orgId]
       );
       if (!planRows[0]) {
         const error = new Error('Validation plan not found');
@@ -358,17 +404,27 @@ validationRouter.post('/plans/:planId/protocols', async (req, res, next) => {
         throw error;
       }
 
-      const { rows } = await client.query(
+      const protocolIdNew = randomUUID();
+      await client.query(
         `
           INSERT INTO vs_protocol_instances (
+            id,
             org_id,
             plan_id,
             protocol_name,
             status
-          ) VALUES ($1, $2, $3, 'Draft')
-          RETURNING *
+          ) VALUES ($1, $2, $3, $4, 'Draft')
         `,
-        [req.authContext.orgId, planId, protocolName]
+        [protocolIdNew, req.authContext.orgId, planId, protocolName]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM vs_protocol_instances
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [protocolIdNew, req.authContext.orgId]
       );
 
       await appendValidationHistoryEvent(client, {
@@ -403,9 +459,10 @@ validationRouter.post('/protocols/:protocolId/scripts', async (req, res, next) =
           FROM vs_protocol_instances pi
           JOIN vs_validation_plans vp ON vp.id = pi.plan_id
           WHERE pi.id = $1
+            AND pi.org_id = $2
           LIMIT 1
         `,
-        [protocolId]
+        [protocolId, req.authContext.orgId]
       );
       if (!protocolRows[0]) {
         const error = new Error('Protocol not found');
@@ -413,27 +470,49 @@ validationRouter.post('/protocols/:protocolId/scripts', async (req, res, next) =
         throw error;
       }
 
-      const { rows: scripts } = await client.query(
+      const scriptIdNew = randomUUID();
+      const stepIdNew = randomUUID();
+
+      await client.query(
         `
-          INSERT INTO vs_test_scripts (org_id, protocol_instance_id, script_name)
-          VALUES ($1, $2, $3)
-          RETURNING *
+          INSERT INTO vs_test_scripts (id, org_id, protocol_instance_id, script_name)
+          VALUES ($1, $2, $3, $4)
         `,
-        [req.authContext.orgId, protocolId, scriptName]
+        [scriptIdNew, req.authContext.orgId, protocolId, scriptName]
       );
 
-      const { rows: steps } = await client.query(
+      await client.query(
         `
           INSERT INTO vs_test_script_steps (
+            id,
             org_id,
             script_id,
             step_no,
             expected_result,
             outcome
-          ) VALUES ($1, $2, 1, $3, 'N/A')
-          RETURNING *
+          ) VALUES ($1, $2, $3, 1, $4, 'N/A')
         `,
-        [req.authContext.orgId, scripts[0].id, expectedResult]
+        [stepIdNew, req.authContext.orgId, scriptIdNew, expectedResult]
+      );
+
+      const { rows: scripts } = await client.query(
+        `
+          SELECT *
+          FROM vs_test_scripts
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [scriptIdNew, req.authContext.orgId]
+      );
+
+      const { rows: steps } = await client.query(
+        `
+          SELECT *
+          FROM vs_test_script_steps
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [stepIdNew, req.authContext.orgId]
       );
 
       await appendValidationHistoryEvent(client, {
@@ -462,7 +541,7 @@ validationRouter.patch('/steps/:stepId/execute', async (req, res, next) => {
     }
 
     const result = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE vs_test_script_steps
           SET
@@ -470,11 +549,21 @@ validationRouter.patch('/steps/:stepId/execute', async (req, res, next) => {
             outcome = $3,
             evidence_ref = $4,
             executed_by = $5,
-            executed_at = now()
+            executed_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $6
         `,
-        [stepId, actualResult || null, outcome, evidenceRef || null, req.authContext.userId]
+        [stepId, actualResult || null, outcome, evidenceRef || null, req.authContext.userId, req.authContext.orgId]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM vs_test_script_steps
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [stepId, req.authContext.orgId]
       );
 
       if (!rows[0]) {
@@ -492,31 +581,43 @@ validationRouter.patch('/steps/:stepId/execute', async (req, res, next) => {
           JOIN vs_validation_plans vp ON vp.id = pi.plan_id
           JOIN vs_system_inventory si ON si.id = vp.system_id
           WHERE s.id = $1
+            AND s.org_id = $2
           LIMIT 1
         `,
-        [stepId]
+        [stepId, req.authContext.orgId]
       );
       const systemId = systemRows[0]?.system_id;
 
       if (outcome === 'Fail') {
-        const { rows: deviations } = await client.query(
+        const deviationIdNew = randomUUID();
+        await client.query(
           `
             INSERT INTO vs_validation_deviations (
+              id,
               org_id,
               system_id,
               protocol_step_id,
               deviation_text,
               status
             )
-            VALUES ($1, $2, $3, $4, 'Open')
-            RETURNING *
+            VALUES ($1, $2, $3, $4, $5, 'Open')
           `,
           [
+            deviationIdNew,
             req.authContext.orgId,
             systemId,
             stepId,
             `Validation step failed: ${actualResult || 'No actual result provided'}`
           ]
+        );
+        const { rows: deviations } = await client.query(
+          `
+            SELECT *
+            FROM vs_validation_deviations
+            WHERE id = $1
+              AND org_id = $2
+          `,
+          [deviationIdNew, req.authContext.orgId]
         );
 
         await appendTraceLink(client, {
@@ -582,19 +683,29 @@ validationRouter.post('/systems/:systemId/revalidation-flag', async (req, res, n
     }
 
     const flag = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const flagIdNew = randomUUID();
+      await client.query(
         `
           INSERT INTO vs_revalidation_flags (
+            id,
             org_id,
             system_id,
             change_type,
             is_revalidation_required,
             reason
           )
-          VALUES ($1, $2, $3, $4, $5)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6)
         `,
-        [req.authContext.orgId, systemId, changeType, isRevalidationRequired, reason || null]
+        [flagIdNew, req.authContext.orgId, systemId, changeType, isRevalidationRequired, reason || null]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM vs_revalidation_flags
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [flagIdNew, req.authContext.orgId]
       );
 
       await appendValidationHistoryEvent(client, {
@@ -631,9 +742,10 @@ validationRouter.post('/systems/:systemId/reviews/:reviewId/complete', async (re
           SELECT *
           FROM vs_periodic_reviews
           WHERE id = $1 AND system_id = $2
+            AND org_id = $3
           FOR UPDATE
         `,
-        [reviewId, systemId]
+        [reviewId, systemId, req.authContext.orgId]
       );
       if (!reviews[0]) {
         const error = new Error('Periodic review not found');
@@ -645,31 +757,43 @@ validationRouter.post('/systems/:systemId/reviews/:reviewId/complete', async (re
       const nextReview = new Date();
       nextReview.setUTCDate(today.getUTCDate() + 365);
 
-      const { rows: insertedRows } = await client.query(
+      const nextReviewIdNew = randomUUID();
+      await client.query(
         `
           INSERT INTO vs_periodic_reviews (
+            id,
             org_id,
             system_id,
             due_date,
             alert_schedule_days
-          ) VALUES ($1, $2, $3, $4)
-          RETURNING *
+          ) VALUES ($1, $2, $3, $4, $5)
         `,
         [
+          nextReviewIdNew,
           req.authContext.orgId,
           systemId,
           nextReview.toISOString().slice(0, 10),
           reviews[0].alert_schedule_days || [90, 60, 30, 7]
         ]
       );
+      const { rows: insertedRows } = await client.query(
+        `
+          SELECT *
+          FROM vs_periodic_reviews
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [nextReviewIdNew, req.authContext.orgId]
+      );
 
       await client.query(
         `
           UPDATE vs_system_inventory
-          SET next_review_due_date = $2, updated_at = now()
+          SET next_review_due_date = $2, updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
+            AND org_id = $3
         `,
-        [systemId, nextReview.toISOString().slice(0, 10)]
+        [systemId, nextReview.toISOString().slice(0, 10), req.authContext.orgId]
       );
 
       await appendValidationHistoryEvent(client, {
@@ -709,9 +833,10 @@ validationRouter.post('/systems/:systemId/complete', async (req, res, next) => {
           SELECT id, created_by
           FROM vs_system_inventory
           WHERE id = $1
+            AND org_id = $2
           FOR UPDATE
         `,
-        [systemId]
+        [systemId, req.authContext.orgId]
       );
       const current = currentRows[0];
       if (!current) {
@@ -725,18 +850,27 @@ validationRouter.post('/systems/:systemId/complete', async (req, res, next) => {
         throw error;
       }
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE vs_system_inventory
           SET
             validation_status = 'Validated',
-            validated_at = now(),
+            validated_at = CURRENT_TIMESTAMP(3),
             validated_by = $2,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $3
         `,
-        [systemId, req.authContext.userId]
+        [systemId, req.authContext.userId, req.authContext.orgId]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM vs_system_inventory
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [systemId, req.authContext.orgId]
       );
 
       await appendValidationHistoryEvent(client, {
@@ -766,9 +900,10 @@ validationRouter.get('/systems/:systemId/timeline', async (req, res, next) => {
           SELECT *
           FROM vs_history_events
           WHERE system_id = $1
+            AND org_id = $2
           ORDER BY occurred_at DESC
         `,
-        [systemId]
+        [systemId, req.authContext.orgId]
       );
       return rows;
     });
@@ -789,9 +924,10 @@ validationRouter.get('/systems/:systemId', async (req, res, next) => {
           SELECT *
           FROM vs_system_inventory
           WHERE id = $1
+            AND org_id = $2
           LIMIT 1
         `,
-        [systemId]
+        [systemId, req.authContext.orgId]
       );
 
       if (!systems[0]) {
@@ -807,18 +943,20 @@ validationRouter.get('/systems/:systemId', async (req, res, next) => {
               SELECT *
               FROM vs_requirement_specs
               WHERE system_id = $1
+                AND org_id = $2
               ORDER BY created_at DESC
             `,
-            [systemId]
+            [systemId, req.authContext.orgId]
           ),
           client.query(
             `
               SELECT *
               FROM vs_validation_plans
               WHERE system_id = $1
+                AND org_id = $2
               ORDER BY created_at DESC
             `,
-            [systemId]
+            [systemId, req.authContext.orgId]
           ),
           client.query(
             `
@@ -826,36 +964,40 @@ validationRouter.get('/systems/:systemId', async (req, res, next) => {
               FROM vs_protocol_instances pi
               JOIN vs_validation_plans vp ON vp.id = pi.plan_id
               WHERE vp.system_id = $1
+                AND pi.org_id = $2
               ORDER BY pi.created_at DESC
             `,
-            [systemId]
+            [systemId, req.authContext.orgId]
           ),
           client.query(
             `
               SELECT *
               FROM vs_validation_deviations
               WHERE system_id = $1
+                AND org_id = $2
               ORDER BY created_at DESC
             `,
-            [systemId]
+            [systemId, req.authContext.orgId]
           ),
           client.query(
             `
               SELECT *
               FROM vs_trace_matrix_entries
               WHERE system_id = $1
+                AND org_id = $2
               ORDER BY updated_at DESC
             `,
-            [systemId]
+            [systemId, req.authContext.orgId]
           ),
           client.query(
             `
               SELECT *
               FROM vs_history_events
               WHERE system_id = $1
+                AND org_id = $2
               ORDER BY occurred_at DESC
             `,
-            [systemId]
+            [systemId, req.authContext.orgId]
           )
         ]);
 
@@ -883,9 +1025,11 @@ validationRouter.get('/systems', async (req, res, next) => {
         `
           SELECT *
           FROM vs_system_inventory
+          WHERE org_id = $1
           ORDER BY created_at DESC
           LIMIT 200
-        `
+        `,
+        [req.authContext.orgId]
       );
       return rows;
     });
@@ -902,9 +1046,11 @@ validationRouter.get('/deviations', async (req, res, next) => {
         `
           SELECT *
           FROM vs_validation_deviations
+          WHERE org_id = $1
           ORDER BY created_at DESC
           LIMIT 200
-        `
+        `,
+        [req.authContext.orgId]
       );
       return rows;
     });
@@ -920,18 +1066,28 @@ validationRouter.post('/reports/:systemId/generate-vsr', async (req, res, next) 
     const { planId } = req.body || {};
 
     const vsr = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const reportIdNew = randomUUID();
+      await client.query(
         `
           INSERT INTO vs_validation_summary_reports (
+            id,
             org_id,
             system_id,
             plan_id,
             status
           )
-          VALUES ($1, $2, $3, 'Generated')
-          RETURNING *
+          VALUES ($1, $2, $3, $4, 'Generated')
         `,
-        [req.authContext.orgId, systemId, planId || null]
+        [reportIdNew, req.authContext.orgId, systemId, planId || null]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM vs_validation_summary_reports
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [reportIdNew, req.authContext.orgId]
       );
 
       await appendValidationHistoryEvent(client, {

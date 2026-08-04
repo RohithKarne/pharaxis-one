@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
@@ -12,6 +13,26 @@ const VALID_APPROVAL_DECISIONS = ['Approve', 'Reject'];
 const VALID_CAB_DECISIONS = ['Approve', 'Reject', 'ConditionalApprove'];
 const VALID_STEP_STATUSES = ['Planned', 'InProgress', 'Completed', 'Blocked'];
 const VALID_EFFECTIVENESS_RESULTS = ['Effective', 'PartiallyEffective', 'NotEffective'];
+
+/**
+ * Read a change record back after a write. MySQL has no RETURNING, so every
+ * UPDATE that used to return its row now re-selects it on the same id/org
+ * predicate the UPDATE ran with. No row here means the id did not match this
+ * org — the same 404 condition RETURNING used to signal with an empty result.
+ */
+async function fetchChangeRecord(client, orgId, changeId) {
+  const { rows } = await client.query(
+    `
+      SELECT *
+      FROM cc_change_records
+      WHERE id = $1
+        AND org_id = $2
+      LIMIT 1
+    `,
+    [changeId, orgId]
+  );
+  return rows[0] || null;
+}
 
 async function appendChangeHistoryEvent(client, {
   orgId,
@@ -28,7 +49,7 @@ async function appendChangeHistoryEvent(client, {
         action_key,
         actor_user_id,
         payload_json
-      ) VALUES ($1, $2, $3, $4, $5::jsonb)
+      ) VALUES ($1, $2, $3, $4, $5)
     `,
     [orgId, changeId, actionKey, actorUserId, JSON.stringify(payloadJson)]
   );
@@ -65,9 +86,11 @@ changeControlRouter.post('/', async (req, res, next) => {
     }
 
     const change = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const newChangeId = randomUUID();
+      await client.query(
         `
           INSERT INTO cc_change_records (
+            id,
             org_id,
             change_code,
             title,
@@ -83,10 +106,10 @@ changeControlRouter.post('/', async (req, res, next) => {
             cab_required,
             created_by
           )
-          VALUES ($1, $2, $3, $4, $5, 'Draft', $6, $7, $8, $9, $10, $11, $12, $8)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, 'Draft', $7, $8, $9, $10, $11, $12, $13, $9)
         `,
         [
+          newChangeId,
           req.authContext.orgId,
           makeEntityCode('CHG', title),
           title,
@@ -102,12 +125,14 @@ changeControlRouter.post('/', async (req, res, next) => {
         ]
       );
 
+      const created = await fetchChangeRecord(client, req.authContext.orgId, newChangeId);
+
       if (linkedDocumentId) {
         await appendTraceLink(client, {
           orgId: req.authContext.orgId,
           sourceModule: 'change_control',
           sourceTable: 'cc_change_records',
-          sourceId: rows[0].id,
+          sourceId: newChangeId,
           targetModule: 'document_control',
           targetTable: 'dc_documents',
           targetId: linkedDocumentId,
@@ -118,7 +143,7 @@ changeControlRouter.post('/', async (req, res, next) => {
 
       await appendChangeHistoryEvent(client, {
         orgId: req.authContext.orgId,
-        changeId: rows[0].id,
+        changeId: newChangeId,
         actionKey: 'create',
         actorUserId: req.authContext.userId,
         payloadJson: { changeType, riskLevel, cabRequired: Boolean(cabRequired) }
@@ -128,13 +153,13 @@ changeControlRouter.post('/', async (req, res, next) => {
         orgId: req.authContext.orgId,
         moduleKey: 'change_control',
         entityTable: 'cc_change_records',
-        entityId: rows[0].id,
+        entityId: newChangeId,
         actionKey: 'create',
         actorUserId: req.authContext.userId,
         payloadJson: { changeType, riskLevel }
       });
 
-      return rows[0];
+      return created;
     });
 
     return res.status(201).json({ change });
@@ -162,26 +187,27 @@ changeControlRouter.post('/:changeId/impact-assessment', async (req, res, next) 
       : [];
 
     const payload = await req.withRlsTransaction(async (client) => {
-      const { rows: changeRows } = await client.query(
+      await client.query(
         `
           UPDATE cc_change_records
           SET
             status = 'PendingApproval',
             risk_level = $2,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $3
         `,
-        [changeId, riskLevel]
+        [changeId, riskLevel, req.authContext.orgId]
       );
 
-      if (!changeRows[0]) {
+      const changeRecord = await fetchChangeRecord(client, req.authContext.orgId, changeId);
+      if (!changeRecord) {
         const error = new Error('Change request not found');
         error.statusCode = 404;
         throw error;
       }
 
-      const { rows: impactRows } = await client.query(
+      await client.query(
         `
           INSERT INTO cc_impact_assessments (
             org_id,
@@ -198,10 +224,22 @@ changeControlRouter.post('/:changeId/impact-assessment', async (req, res, next) 
             impacted_modules = EXCLUDED.impacted_modules,
             risk_level = EXCLUDED.risk_level,
             assessed_by = EXCLUDED.assessed_by,
-            updated_at = now()
-          RETURNING *
+            updated_at = CURRENT_TIMESTAMP(3)
         `,
         [req.authContext.orgId, changeId, assessmentSummary, safeModules, riskLevel, req.authContext.userId]
+      );
+
+      // Read back on change_id: the row is unique per change, and on the
+      // conflict path an app-generated id would not be the one that survived.
+      const { rows: impactRows } = await client.query(
+        `
+          SELECT *
+          FROM cc_impact_assessments
+          WHERE change_id = $1
+            AND org_id = $2
+          LIMIT 1
+        `,
+        [changeId, req.authContext.orgId]
       );
 
       await appendChangeHistoryEvent(client, {
@@ -224,7 +262,7 @@ changeControlRouter.post('/:changeId/impact-assessment', async (req, res, next) 
 
       return {
         impactAssessment: impactRows[0],
-        change: changeRows[0]
+        change: changeRecord
       };
     });
 
@@ -253,9 +291,10 @@ changeControlRouter.post('/:changeId/cab-review', async (req, res, next) => {
           SELECT id, status
           FROM cc_change_records
           WHERE id = $1
+            AND org_id = $2
           FOR UPDATE
         `,
-        [changeId]
+        [changeId, req.authContext.orgId]
       );
 
       if (!changes[0]) {
@@ -266,20 +305,22 @@ changeControlRouter.post('/:changeId/cab-review', async (req, res, next) => {
 
       const status = decision === 'Reject' ? 'Rejected' : 'CabReview';
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE cc_change_records
           SET
             status = $2,
             cab_decision = $3,
             cab_reviewed_by = $4,
-            cab_reviewed_at = now(),
-            updated_at = now()
+            cab_reviewed_at = CURRENT_TIMESTAMP(3),
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $5
         `,
-        [changeId, status, decision, req.authContext.userId]
+        [changeId, status, decision, req.authContext.userId, req.authContext.orgId]
       );
+
+      const reviewed = await fetchChangeRecord(client, req.authContext.orgId, changeId);
 
       await appendChangeHistoryEvent(client, {
         orgId: req.authContext.orgId,
@@ -292,7 +333,7 @@ changeControlRouter.post('/:changeId/cab-review', async (req, res, next) => {
         }
       });
 
-      return rows[0];
+      return reviewed;
     });
 
     return res.status(201).json({ change: payload });
@@ -318,9 +359,10 @@ changeControlRouter.post('/:changeId/approvals', async (req, res, next) => {
           SELECT id, status, created_by
           FROM cc_change_records
           WHERE id = $1
+            AND org_id = $2
           FOR UPDATE
         `,
-        [changeId]
+        [changeId, req.authContext.orgId]
       );
       if (!currentRows[0]) {
         const error = new Error('Change request not found');
@@ -344,36 +386,49 @@ changeControlRouter.post('/:changeId/approvals', async (req, res, next) => {
         throw error;
       }
 
-      const { rows: approvalRows } = await client.query(
+      const approvalId = randomUUID();
+      await client.query(
         `
           INSERT INTO cc_approval_records (
+            id,
             org_id,
             change_id,
             approver_user_id,
             decision,
             comments
           )
-          VALUES ($1, $2, $3, $4, $5)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6)
         `,
-        [req.authContext.orgId, changeId, approverUserId, decision, comments || null]
+        [approvalId, req.authContext.orgId, changeId, approverUserId, decision, comments || null]
       );
 
-      const { rows: changeRows } = await client.query(
+      const { rows: approvalRows } = await client.query(
+        `
+          SELECT *
+          FROM cc_approval_records
+          WHERE id = $1
+            AND org_id = $2
+          LIMIT 1
+        `,
+        [approvalId, req.authContext.orgId]
+      );
+
+      await client.query(
         `
           UPDATE cc_change_records
           SET
             status = $2,
-            approved_at = CASE WHEN $2 = 'Approved' THEN now() ELSE approved_at END,
-            closed_at = CASE WHEN $2 = 'Rejected' THEN now() ELSE closed_at END,
-            updated_at = now()
+            approved_at = CASE WHEN $2 = 'Approved' THEN CURRENT_TIMESTAMP(3) ELSE approved_at END,
+            closed_at = CASE WHEN $2 = 'Rejected' THEN CURRENT_TIMESTAMP(3) ELSE closed_at END,
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $3
         `,
-        [changeId, decision === 'Approve' ? 'Approved' : 'Rejected']
+        [changeId, decision === 'Approve' ? 'Approved' : 'Rejected', req.authContext.orgId]
       );
 
-      if (!changeRows[0]) {
+      const decidedChange = await fetchChangeRecord(client, req.authContext.orgId, changeId);
+      if (!decidedChange) {
         const error = new Error('Change request not found');
         error.statusCode = 404;
         throw error;
@@ -391,7 +446,7 @@ changeControlRouter.post('/:changeId/approvals', async (req, res, next) => {
         orgId: req.authContext.orgId,
         moduleKey: 'change_control',
         entityTable: 'cc_approval_records',
-        entityId: approvalRows[0].id,
+        entityId: approvalId,
         actionKey: 'decision',
         actorUserId: req.authContext.userId,
         payloadJson: { changeId, decision }
@@ -399,7 +454,7 @@ changeControlRouter.post('/:changeId/approvals', async (req, res, next) => {
 
       return {
         approval: approvalRows[0],
-        change: changeRows[0]
+        change: decidedChange
       };
     });
 
@@ -429,9 +484,10 @@ changeControlRouter.post('/:changeId/implementation', async (req, res, next) => 
           SELECT *
           FROM cc_change_records
           WHERE id = $1
+            AND org_id = $2
           FOR UPDATE
         `,
-        [changeId]
+        [changeId, req.authContext.orgId]
       );
 
       if (!changeRows[0]) {
@@ -450,14 +506,17 @@ changeControlRouter.post('/:changeId/implementation', async (req, res, next) => 
           SELECT COALESCE(MAX(step_no), 0) + 1 AS next_step_no
           FROM cc_implementation_steps
           WHERE change_id = $1
+            AND org_id = $2
         `,
-        [changeId]
+        [changeId, req.authContext.orgId]
       );
       const nextStepNo = Number(seqRows[0]?.next_step_no || 1);
 
-      const { rows: stepRows } = await client.query(
+      const stepId = randomUUID();
+      await client.query(
         `
           INSERT INTO cc_implementation_steps (
+            id,
             org_id,
             change_id,
             step_no,
@@ -468,10 +527,10 @@ changeControlRouter.post('/:changeId/implementation', async (req, res, next) => 
             evidence_ref,
             updated_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $5 = 'Completed' THEN now() ELSE NULL END, $7, $8)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $6 = 'Completed' THEN CURRENT_TIMESTAMP(3) ELSE NULL END, $8, $9)
         `,
         [
+          stepId,
           req.authContext.orgId,
           changeId,
           nextStepNo,
@@ -483,17 +542,30 @@ changeControlRouter.post('/:changeId/implementation', async (req, res, next) => 
         ]
       );
 
-      const { rows: updatedChangeRows } = await client.query(
+      const { rows: stepRows } = await client.query(
+        `
+          SELECT *
+          FROM cc_implementation_steps
+          WHERE id = $1
+            AND org_id = $2
+          LIMIT 1
+        `,
+        [stepId, req.authContext.orgId]
+      );
+
+      await client.query(
         `
           UPDATE cc_change_records
           SET
             status = 'Implementation',
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $2
         `,
-        [changeId]
+        [changeId, req.authContext.orgId]
       );
+
+      const implementingChange = await fetchChangeRecord(client, req.authContext.orgId, changeId);
 
       await appendChangeHistoryEvent(client, {
         orgId: req.authContext.orgId,
@@ -511,7 +583,7 @@ changeControlRouter.post('/:changeId/implementation', async (req, res, next) => 
         orgId: req.authContext.orgId,
         moduleKey: 'change_control',
         entityTable: 'cc_implementation_steps',
-        entityId: stepRows[0].id,
+        entityId: stepId,
         actionKey: 'create',
         actorUserId: req.authContext.userId,
         payloadJson: { changeId, stepNo: nextStepNo, stepStatus }
@@ -519,7 +591,7 @@ changeControlRouter.post('/:changeId/implementation', async (req, res, next) => 
 
       return {
         implementationStep: stepRows[0],
-        change: updatedChangeRows[0]
+        change: implementingChange
       };
     });
 
@@ -549,9 +621,10 @@ changeControlRouter.post('/:changeId/close', async (req, res, next) => {
           SELECT id, status
           FROM cc_change_records
           WHERE id = $1
+            AND org_id = $2
           FOR UPDATE
         `,
-        [changeId]
+        [changeId, req.authContext.orgId]
       );
       if (!currentRows[0]) {
         const error = new Error('Change request not found');
@@ -574,10 +647,11 @@ changeControlRouter.post('/:changeId/close', async (req, res, next) => {
           SELECT id
           FROM cc_approval_records
           WHERE change_id = $1 AND decision = 'Approve'
+            AND org_id = $2
           ORDER BY decided_at DESC
           LIMIT 1
         `,
-        [changeId]
+        [changeId, req.authContext.orgId]
       );
       if (!approvalRows[0]) {
         const error = new Error('Change request cannot be closed before an approval decision');
@@ -590,10 +664,11 @@ changeControlRouter.post('/:changeId/close', async (req, res, next) => {
           SELECT id
           FROM cc_implementation_steps
           WHERE change_id = $1 AND step_status = 'Completed'
+            AND org_id = $2
           ORDER BY step_no DESC
           LIMIT 1
         `,
-        [changeId]
+        [changeId, req.authContext.orgId]
       );
       if (!completedRows[0]) {
         const error = new Error('At least one completed implementation step is required before closure');
@@ -601,22 +676,23 @@ changeControlRouter.post('/:changeId/close', async (req, res, next) => {
         throw error;
       }
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE cc_change_records
           SET
             status = 'Closed',
             closure_summary = $2,
             effectiveness_result = $3,
-            closed_at = now(),
-            updated_at = now()
+            closed_at = CURRENT_TIMESTAMP(3),
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $4
         `,
-        [changeId, closureSummary, effectivenessResult]
+        [changeId, closureSummary, effectivenessResult, req.authContext.orgId]
       );
 
-      if (!rows[0]) {
+      const closedChange = await fetchChangeRecord(client, req.authContext.orgId, changeId);
+      if (!closedChange) {
         const error = new Error('Change request not found');
         error.statusCode = 404;
         throw error;
@@ -640,7 +716,7 @@ changeControlRouter.post('/:changeId/close', async (req, res, next) => {
         payloadJson: { effectivenessResult }
       });
 
-      return rows[0];
+      return closedChange;
     });
 
     return res.json({ change: closed });
@@ -660,21 +736,22 @@ changeControlRouter.post('/:changeId/reopen', async (req, res, next) => {
     }
 
     const change = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE cc_change_records
           SET
             status = 'Reopened',
             reopened_reason = $2,
-            reopened_at = now(),
-            updated_at = now()
+            reopened_at = CURRENT_TIMESTAMP(3),
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $3
         `,
-        [changeId, reason]
+        [changeId, reason, req.authContext.orgId]
       );
 
-      if (!rows[0]) {
+      const reopened = await fetchChangeRecord(client, req.authContext.orgId, changeId);
+      if (!reopened) {
         const error = new Error('Change request not found');
         error.statusCode = 404;
         throw error;
@@ -688,7 +765,7 @@ changeControlRouter.post('/:changeId/reopen', async (req, res, next) => {
         payloadJson: { reason }
       });
 
-      return rows[0];
+      return reopened;
     });
 
     return res.json({ change });
@@ -707,9 +784,10 @@ changeControlRouter.get('/:changeId/timeline', async (req, res, next) => {
           SELECT *
           FROM cc_history_events
           WHERE change_id = $1
+            AND org_id = $2
           ORDER BY occurred_at DESC
         `,
-        [changeId]
+        [changeId, req.authContext.orgId]
       );
 
       return rows;
@@ -731,9 +809,10 @@ changeControlRouter.get('/:changeId', async (req, res, next) => {
           SELECT *
           FROM cc_change_records
           WHERE id = $1
+            AND org_id = $2
           LIMIT 1
         `,
-        [changeId]
+        [changeId, req.authContext.orgId]
       );
 
       if (!changes[0]) {
@@ -748,46 +827,51 @@ changeControlRouter.get('/:changeId', async (req, res, next) => {
             SELECT *
             FROM cc_impact_assessments
             WHERE change_id = $1
+              AND org_id = $2
             LIMIT 1
           `,
-          [changeId]
+          [changeId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM cc_approval_records
             WHERE change_id = $1
+              AND org_id = $2
             ORDER BY decided_at DESC
           `,
-          [changeId]
+          [changeId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM cc_implementation_steps
             WHERE change_id = $1
+              AND org_id = $2
             ORDER BY step_no ASC
           `,
-          [changeId]
+          [changeId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM cc_history_events
             WHERE change_id = $1
+              AND org_id = $2
             ORDER BY occurred_at DESC
           `,
-          [changeId]
+          [changeId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM qms_trace_links
-            WHERE source_id = $1 OR target_id = $1
+            WHERE (source_id = $1 OR target_id = $1)
+              AND org_id = $2
             ORDER BY created_at DESC
             LIMIT 100
           `,
-          [changeId]
+          [changeId, req.authContext.orgId]
         )
       ]);
 
@@ -814,16 +898,25 @@ changeControlRouter.get('/', async (req, res, next) => {
         `
           SELECT
             c.*,
-            COUNT(s.id)::int AS total_steps,
-            COUNT(s.id) FILTER (WHERE s.step_status = 'Completed')::int AS completed_steps
+            COUNT(s.id) AS total_steps,
+            COALESCE(SUM(CASE WHEN s.step_status = 'Completed' THEN 1 ELSE 0 END), 0) AS completed_steps
           FROM cc_change_records c
-          LEFT JOIN cc_implementation_steps s ON s.change_id = c.id
+          LEFT JOIN cc_implementation_steps s ON s.change_id = c.id AND s.org_id = c.org_id
+          WHERE c.org_id = $1
           GROUP BY c.id
           ORDER BY c.created_at DESC
           LIMIT 200
-        `
+        `,
+        [req.authContext.orgId]
       );
-      return rows;
+      // COUNT/SUM are bigint and numeric in PostgreSQL, both of which
+      // node-postgres returns as JS strings. The dropped ::int casts used to
+      // do this coercion in SQL.
+      return rows.map((row) => ({
+        ...row,
+        total_steps: Number(row.total_steps || 0),
+        completed_steps: Number(row.completed_steps || 0)
+      }));
     });
 
     return res.json({ changes });

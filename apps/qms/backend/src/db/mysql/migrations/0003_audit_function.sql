@@ -1,0 +1,67 @@
+-- 0003_audit_function.sql (MySQL 8.0)
+-- Converted from src/db/migrations/0003_audit_function.sql (PostgreSQL source of truth).
+--
+-- ============================================================================
+-- THIS FILE INTENTIONALLY CREATES NOTHING. READ THE TODO BELOW BEFORE SIGN-OFF.
+-- ============================================================================
+--
+-- The Postgres source contains exactly one object: the plpgsql function
+-- qms_append_audit_event(...). It creates no tables — qms_audit_events is
+-- created in 0001_core_platform.sql — and no index, and it is NOT an RLS
+-- support function, so it cannot simply be dropped the way the RLS objects were.
+-- It implements a real, load-bearing control: the append-only SHA-256 hash
+-- chain over the audit ledger (21 CFR Part 11 / Annex 11 evidence).
+--
+-- It is NOT ported here, and no MySQL stored function has been invented in its
+-- place. Three parts of it have no faithful MySQL equivalent, and guessing at
+-- them would produce a ledger that looks verified and is not:
+--
+--   1. pg_advisory_xact_lock(hashtextextended(p_org_id::text, 0))
+--      A transaction-scoped advisory lock that serialises appenders per org so
+--      two concurrent writers cannot read the same prev_hash and fork the
+--      chain. MySQL's GET_LOCK() is SESSION-scoped, not transaction-scoped: it
+--      is not released by COMMIT/ROLLBACK, so it is not a drop-in substitute.
+--      The serialisation mechanism is a design decision, not a translation.
+--
+--   2. v_occurred_at::text inside the hash preimage
+--      The digest is computed over Postgres's own text rendering of a
+--      TIMESTAMPTZ ('2026-08-04 09:18:00.123+00'). Any MySQL or
+--      application-layer reimplementation must produce a byte-identical
+--      timestamp string, or every recomputed hash mismatches. Note this format
+--      is ALREADY inconsistent with the JS re-derivation in
+--      src/services/auditTrailService.js (verifyAuditChain), which uses
+--      occurred_at.toISOString() ('2026-08-04T09:18:00.123Z'). Pick one
+--      canonical form during the port and use it in both places.
+--
+--   3. RETURNING id INTO v_event_id
+--      MySQL has no RETURNING; the port needs LAST_INSERT_ID(), which only
+--      works if the INSERT and the read happen on the same connection.
+--
+-- Also unported: pgcrypto's digest(..., 'sha256') / encode(..., 'hex'). That
+-- part IS mechanical — MySQL's SHA2(preimage, 256) returns the same lowercase
+-- hex — but it is only useful once 1-3 above are decided.
+--
+-- TODO(phase-2): reimplement append-only audit event insertion for MySQL.
+--   Recommended surface: the application layer, not the database. Rewrite
+--   src/services/auditTrailService.js -> appendAuditEvent() so that, inside a
+--   single explicit transaction on one connection, it:
+--     a) serialises per org --- e.g.
+--        SELECT curr_hash FROM qms_audit_events WHERE org_id = ?
+--        ORDER BY id DESC LIMIT 1 FOR UPDATE
+--        (replaces the advisory lock; verify the gap-lock behaviour under
+--        REPEATABLE READ actually blocks a concurrent appender for the same
+--        org before relying on it),
+--     b) builds the preimage with an agreed canonical timestamp format,
+--     c) hashes it with the existing createSha256Hex() in src/utils/hash.js,
+--     d) INSERTs, then reads LAST_INSERT_ID() for the returned event id.
+--   That call site is the ONLY caller of qms_append_audit_event in the repo
+--   (src/services/auditTrailService.js:14), and it currently invokes it as
+--   `SELECT qms_append_audit_event($1..$7::jsonb)`, which is Postgres-only
+--   syntax and will fail against MySQL regardless of this file.
+--
+--   Until that is done, appendAuditEvent() is BROKEN on MySQL. The immutability
+--   guard is not: the BEFORE UPDATE / BEFORE DELETE triggers on
+--   qms_audit_events were ported in 0001_core_platform.sql and are enforced.
+--
+-- No RLS objects existed in this file, so there is nothing to remove under the
+-- Phase 0 application-layer tenant isolation decision.

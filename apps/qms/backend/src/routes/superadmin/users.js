@@ -1,6 +1,18 @@
+// tenant-scope-audit: cross-org — superadmin platform surface, mounted behind
+// superadminAuth (src/app.js:72). These are deliberate all-org aggregates and
+// cross-org user administration; scoping them to one org would break superadmin.
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
+import bcrypt from 'bcrypt';
 import { appendAuditEvent } from '../../services/auditTrailService.js';
 import { logSuperadminAction } from './_adminActions.js';
+
+// Password hashing moved out of the database: it used to be
+// crypt($5, gen_salt('bf')), which is pgcrypto and has no MySQL equivalent.
+// 10 matches the cost factor already used across the house (CP Portal). The
+// hashes pgcrypto wrote are $2a$06$ — bcrypt reads the cost from the hash, so
+// old passwords keep working while new ones are written stronger.
+const BCRYPT_COST = 10;
 import {
   ensureDefaultSecurityGroups,
   sanitizeRoleKeys,
@@ -40,7 +52,7 @@ superadminUsersRouter.get('/', async (req, res, next) => {
             u.id,
             u.org_id,
             o.org_code,
-            u.email::text AS email,
+            u.email,
             u.full_name,
             u.role_key,
             u.is_active,
@@ -86,13 +98,23 @@ superadminUsersRouter.post('/', async (req, res, next) => {
 
       const primaryRole = requestedRoleKeys.includes('admin') ? 'admin' : requestedRoleKeys[0];
 
+      const newUserId = randomUUID();
+      await client.query(
+        `
+          INSERT INTO qms_users (id, org_id, email, full_name, role_key, password_hash, is_active)
+          VALUES ($1, $2, $3, $4, $5, $6, true)
+        `,
+        [newUserId, orgId, email, fullName, primaryRole, await bcrypt.hash(password, BCRYPT_COST)]
+      );
+
       const { rows } = await client.query(
         `
-          INSERT INTO qms_users (org_id, email, full_name, role_key, password_hash, is_active)
-          VALUES ($1, $2, $3, $4, crypt($5, gen_salt('bf')), true)
-          RETURNING id, org_id, email::text AS email, full_name, role_key, is_active, created_at
+          SELECT id, org_id, email, full_name, role_key, is_active, created_at
+          FROM qms_users
+          WHERE id = $1
+            AND org_id = $2
         `,
-        [orgId, email, fullName, primaryRole, password]
+        [newUserId, orgId]
       );
 
       const assignedRoleKeys = await syncUserSecurityGroups(client, {
@@ -155,7 +177,7 @@ superadminUsersRouter.patch('/:userId/security-groups', async (req, res, next) =
     const updated = await req.withRlsTransaction(async (client) => {
       const { rows: userRows } = await client.query(
         `
-          SELECT id, org_id, email::text AS email
+          SELECT id, org_id, email
           FROM qms_users
           WHERE id = $1
         `,
@@ -216,21 +238,43 @@ superadminUsersRouter.patch('/:userId/status', async (req, res, next) => {
     }
 
     const updated = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      // RETURNING is gone, so the row has to be read back. Look the user up
+      // first: that gives both the 404 and the org_id the write-back and the
+      // read-back are scoped by, instead of leaving them on RLS alone.
+      const { rows: targetRows } = await client.query(
         `
-          UPDATE qms_users
-          SET is_active = $2, updated_at = now()
+          SELECT org_id
+          FROM qms_users
           WHERE id = $1
-          RETURNING id, org_id, email::text AS email, full_name, role_key, is_active, updated_at
         `,
-        [userId, isActive]
+        [userId]
       );
 
-      if (!rows[0]) {
+      if (!targetRows[0]) {
         const error = new Error('User not found');
         error.statusCode = 404;
         throw error;
       }
+
+      await client.query(
+        `
+          UPDATE qms_users
+          SET is_active = $2, updated_at = CURRENT_TIMESTAMP(3)
+          WHERE id = $1
+            AND org_id = $3
+        `,
+        [userId, isActive, targetRows[0].org_id]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT id, org_id, email, full_name, role_key, is_active, updated_at
+          FROM qms_users
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [userId, targetRows[0].org_id]
+      );
 
       await logSuperadminAction(client, {
         orgId: req.authContext.orgId,

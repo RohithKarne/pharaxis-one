@@ -32,15 +32,24 @@ superadminOrgsRouter.post('/', async (req, res, next) => {
     }
 
     const created = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           INSERT INTO qms_orgs (org_code, org_name, is_active)
           VALUES ($1, $2, true)
           ON CONFLICT (org_code)
-          DO UPDATE SET org_name = EXCLUDED.org_name, updated_at = now()
-          RETURNING id, org_code, org_name, is_active, created_at, updated_at
+          DO UPDATE SET org_name = EXCLUDED.org_name, updated_at = CURRENT_TIMESTAMP(3)
         `,
         [orgCode, orgName]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT id, org_code, org_name, is_active, created_at, updated_at
+          FROM qms_orgs
+          WHERE org_code = $1
+          LIMIT 1
+        `,
+        [orgCode]
       );
 
       await ensureDefaultSecurityGroups(client, rows[0].id);
@@ -99,14 +108,23 @@ superadminOrgsRouter.patch('/:orgId/status', async (req, res, next) => {
     }
 
     const updated = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE qms_orgs
-          SET is_active = $2, updated_at = now()
+          SET is_active = $2, updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING id, org_code, org_name, is_active, updated_at
         `,
         [orgId, isActive]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT id, org_code, org_name, is_active, updated_at
+          FROM qms_orgs
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [orgId]
       );
 
       if (!rows[0]) {

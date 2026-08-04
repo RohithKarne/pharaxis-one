@@ -1,10 +1,10 @@
 export async function searchDocuments(client, orgId, filters = {}) {
-  const clauses = ['d.org_id = $1'];
+  const clauses = [];
   const values = [orgId];
   let index = 2;
 
   if (filters.title) {
-    clauses.push(`d.title ILIKE $${index}`);
+    clauses.push(`LOWER(d.title) LIKE LOWER($${index})`);
     values.push(`%${filters.title}%`);
     index += 1;
   }
@@ -42,6 +42,8 @@ export async function searchDocuments(client, orgId, filters = {}) {
   const limit = Math.min(Number(filters.limit || 50), 200);
   values.push(limit);
 
+  const where = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : '';
+
   const sql = `
     SELECT
       d.id,
@@ -59,7 +61,8 @@ export async function searchDocuments(client, orgId, filters = {}) {
       v.effective_date
     FROM dc_documents d
     LEFT JOIN dc_document_versions v ON v.id = d.active_version_id
-    WHERE ${clauses.join(' AND ')}
+    WHERE d.org_id = $1
+    ${where}
     ORDER BY d.updated_at DESC
     LIMIT $${index}
   `;

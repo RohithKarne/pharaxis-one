@@ -3,6 +3,13 @@ import { assertAnyRole } from '../middleware/rbac.js';
 
 export const aiInsightsRouter = Router();
 
+// COUNT(*) is bigint in PostgreSQL, which node-postgres returns as a JS string.
+// The queries used to cast ::int (PostgreSQL-only) to get a number back; the
+// coercion now happens here so the JSON payload keeps the same shape.
+function countRows(rows) {
+  return rows.map((row) => ({ ...row, total: Number(row.total || 0) }));
+}
+
 function summarizeTop(items, key, limit = 3) {
   return items
     .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
@@ -13,22 +20,23 @@ function summarizeTop(items, key, limit = 3) {
 aiInsightsRouter.get('/event-hub', async (req, res, next) => {
   try {
     const summary = await req.withRlsTransaction(async (client) => {
-      const deviationRows = await client.query(`SELECT status, COUNT(*)::int AS total FROM dv_deviation_records GROUP BY status`);
-      const capaRows = await client.query(`SELECT status, COUNT(*)::int AS total FROM ca_capa_records GROUP BY status`);
-      const complaintRows = await client.query(`SELECT status, COUNT(*)::int AS total FROM qc_complaints GROUP BY status`);
-      const ncRows = await client.query(`SELECT status, COUNT(*)::int AS total FROM qn_nonconformance_records GROUP BY status`);
-      const changeRows = await client.query(`SELECT status, COUNT(*)::int AS total FROM cc_change_records GROUP BY status`);
-      const auditRows = await client.query(`SELECT status, COUNT(*)::int AS total FROM au_audits GROUP BY status`);
-      const riskRows = await client.query(`SELECT status, COUNT(*)::int AS total FROM rm_risk_register GROUP BY status`);
+      const orgParams = [req.authContext.orgId];
+      const deviationRows = await client.query(`SELECT status, COUNT(*) AS total FROM dv_deviation_records WHERE org_id = $1 GROUP BY status`, orgParams);
+      const capaRows = await client.query(`SELECT status, COUNT(*) AS total FROM ca_capa_records WHERE org_id = $1 GROUP BY status`, orgParams);
+      const complaintRows = await client.query(`SELECT status, COUNT(*) AS total FROM qc_complaints WHERE org_id = $1 GROUP BY status`, orgParams);
+      const ncRows = await client.query(`SELECT status, COUNT(*) AS total FROM qn_nonconformance_records WHERE org_id = $1 GROUP BY status`, orgParams);
+      const changeRows = await client.query(`SELECT status, COUNT(*) AS total FROM cc_change_records WHERE org_id = $1 GROUP BY status`, orgParams);
+      const auditRows = await client.query(`SELECT status, COUNT(*) AS total FROM au_audits WHERE org_id = $1 GROUP BY status`, orgParams);
+      const riskRows = await client.query(`SELECT status, COUNT(*) AS total FROM rm_risk_register WHERE org_id = $1 GROUP BY status`, orgParams);
 
       return {
-        deviations: deviationRows.rows,
-        capas: capaRows.rows,
-        complaints: complaintRows.rows,
-        nonconformances: ncRows.rows,
-        changes: changeRows.rows,
-        audits: auditRows.rows,
-        risks: riskRows.rows
+        deviations: countRows(deviationRows.rows),
+        capas: countRows(capaRows.rows),
+        complaints: countRows(complaintRows.rows),
+        nonconformances: countRows(ncRows.rows),
+        changes: countRows(changeRows.rows),
+        audits: countRows(auditRows.rows),
+        risks: countRows(riskRows.rows)
       };
     });
 
@@ -43,36 +51,43 @@ aiInsightsRouter.get('/quality-insights', async (req, res, next) => {
     assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin']);
 
     const insights = await req.withRlsTransaction(async (client) => {
-      const complaintBySeverity = await client.query(`SELECT severity, COUNT(*)::int AS total FROM qc_complaints GROUP BY severity`);
-      const ncBySource = await client.query(`SELECT source_type, COUNT(*)::int AS total FROM qn_nonconformance_records GROUP BY source_type`);
-      const overdueScars = await client.query(`SELECT COUNT(*)::int AS total FROM sq_scar_records WHERE status <> 'Closed' AND due_date IS NOT NULL AND due_date < CURRENT_DATE`);
-      const highRisk = await client.query(`SELECT COUNT(*)::int AS total FROM rm_risk_register WHERE risk_band IN ('High', 'Critical') AND status <> 'Closed'`);
+      const orgParams = [req.authContext.orgId];
+      const complaintBySeverity = await client.query(`SELECT severity, COUNT(*) AS total FROM qc_complaints WHERE org_id = $1 GROUP BY severity`, orgParams);
+      const ncBySource = await client.query(`SELECT source_type, COUNT(*) AS total FROM qn_nonconformance_records WHERE org_id = $1 GROUP BY source_type`, orgParams);
+      const overdueScars = await client.query(`SELECT COUNT(*) AS total FROM sq_scar_records WHERE status <> 'Closed' AND due_date IS NOT NULL AND due_date < CURRENT_DATE AND org_id = $1`, orgParams);
+      const highRisk = await client.query(`SELECT COUNT(*) AS total FROM rm_risk_register WHERE risk_band IN ('High', 'Critical') AND status <> 'Closed' AND org_id = $1`, orgParams);
       const trendDeviation = await client.query(
         `
           SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS bucket, COUNT(*)::int AS total
           FROM dv_deviation_records
-          WHERE created_at >= now() - interval '8 weeks'
+          WHERE created_at >= CURRENT_TIMESTAMP(3) - interval '8 weeks'
+            AND org_id = $1
           GROUP BY 1
           ORDER BY 1
-        `
+        `,
+        orgParams
       );
       const trendCapa = await client.query(
         `
           SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS bucket, COUNT(*)::int AS total
           FROM ca_capa_records
-          WHERE created_at >= now() - interval '8 weeks'
+          WHERE created_at >= CURRENT_TIMESTAMP(3) - interval '8 weeks'
+            AND org_id = $1
           GROUP BY 1
           ORDER BY 1
-        `
+        `,
+        orgParams
       );
       const trendComplaint = await client.query(
         `
           SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS bucket, COUNT(*)::int AS total
           FROM qc_complaints
-          WHERE created_at >= now() - interval '8 weeks'
+          WHERE created_at >= CURRENT_TIMESTAMP(3) - interval '8 weeks'
+            AND org_id = $1
           GROUP BY 1
           ORDER BY 1
-        `
+        `,
+        orgParams
       );
 
       const leadingComplaintSeverity = summarizeTop(complaintBySeverity.rows, 'severity', 3);
@@ -114,9 +129,9 @@ aiInsightsRouter.get('/quality-insights', async (req, res, next) => {
       await client.query(
         `
           INSERT INTO ai_quality_insights_cache (org_id, insight_key, insight_payload, generated_by)
-          VALUES ($1, $2, $3::jsonb, $4)
+          VALUES ($1, $2, $3, $4)
           ON CONFLICT (org_id, insight_key)
-          DO UPDATE SET insight_payload = EXCLUDED.insight_payload, generated_at = now(), generated_by = EXCLUDED.generated_by
+          DO UPDATE SET insight_payload = EXCLUDED.insight_payload, generated_at = CURRENT_TIMESTAMP(3), generated_by = EXCLUDED.generated_by
         `,
         [req.authContext.orgId, 'weekly-quality-insights', JSON.stringify(payload), req.authContext.userId]
       );
@@ -137,9 +152,11 @@ aiInsightsRouter.get('/quality-insights/cached', async (req, res, next) => {
         `
           SELECT insight_key, insight_payload, generated_at
           FROM ai_quality_insights_cache
+          WHERE org_id = $1
           ORDER BY generated_at DESC
           LIMIT 20
-        `
+        `,
+        [req.authContext.orgId]
       );
       return rows;
     });

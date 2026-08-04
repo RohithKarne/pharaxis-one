@@ -7,7 +7,7 @@ export async function logSuperadminAction(client, action) {
       target_entity_type,
       target_entity_id,
       details_json
-    ) VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+    ) VALUES ($1, $2, $3, $4, $5, $6)
   `;
 
   await client.query(sql, [

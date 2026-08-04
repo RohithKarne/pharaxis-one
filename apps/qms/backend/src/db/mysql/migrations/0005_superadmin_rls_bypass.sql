@@ -1,0 +1,24 @@
+-- 0005_superadmin_rls_bypass.sql — MySQL: intentionally empty.
+--
+-- The PostgreSQL original defined:
+--   * qms_is_superadmin() — a SQL function reading current_setting('app.is_superadmin')
+--   * ~30 rewritten isolation policies of the form
+--       USING (qms_is_superadmin() OR org_id = current_setting('app.current_org_id')::uuid)
+--   * RLS enablement on the sa_* superadmin tables
+--
+-- All of it exists only to serve Row Level Security, which MySQL does not have.
+-- qms_is_superadmin() has no caller outside those policies, so it is dropped
+-- rather than ported.
+--
+-- BEHAVIOUR CHANGE — deliberate, recorded here because it is not obvious:
+-- the `qms_is_superadmin() OR ...` branch meant a superadmin reading a
+-- tenant-scoped table saw EVERY org's rows merged together. The application now
+-- scopes those queries to the acting org unconditionally, so a superadmin sees
+-- the org they are acting in. Genuine cross-org access remains available on the
+-- dedicated superadmin surface (src/routes/superadmin/*, mounted behind
+-- superadminAuth in src/app.js), which is declared cross-org in
+-- tests/tenant-scope-audit.mjs and was confirmed working in the browser.
+--
+-- Kept rather than deleted so the migration sequence stays contiguous.
+
+SELECT 1;

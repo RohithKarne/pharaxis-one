@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { appendTraceLink } from '../services/traceabilityService.js';
@@ -50,7 +51,8 @@ riskManagementRouter.post('/register', async (req, res, next) => {
     const riskBand = computeRiskBand(riskScore);
 
     const risk = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const newRiskId = randomUUID();
+      await client.query(
         `
           INSERT INTO rm_risk_register (
             org_id,
@@ -65,10 +67,10 @@ riskManagementRouter.post('/register', async (req, res, next) => {
             mitigation_plan,
             owner_user_id,
             review_due_date,
-            created_by
+            created_by,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         `,
         [
           req.authContext.orgId,
@@ -83,8 +85,14 @@ riskManagementRouter.post('/register', async (req, res, next) => {
           mitigationPlan,
           ownerUserId,
           asDateString(reviewDueDate),
-          req.authContext.userId
+          req.authContext.userId,
+          newRiskId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM rm_risk_register WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [newRiskId, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -128,8 +136,8 @@ riskManagementRouter.patch('/register/:riskId', async (req, res, next) => {
 
     const risk = await req.withRlsTransaction(async (client) => {
       const { rows: existingRows } = await client.query(
-        `SELECT * FROM rm_risk_register WHERE id = $1 LIMIT 1`,
-        [riskId]
+        `SELECT * FROM rm_risk_register WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [riskId, req.authContext.orgId]
       );
       if (!existingRows[0]) {
         const error = new Error('Risk not found');
@@ -149,7 +157,7 @@ riskManagementRouter.patch('/register/:riskId', async (req, res, next) => {
       const riskScore = s * o * d;
       const riskBand = computeRiskBand(riskScore);
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE rm_risk_register
           SET
@@ -163,9 +171,9 @@ riskManagementRouter.patch('/register/:riskId', async (req, res, next) => {
             detectability = $9,
             risk_score = $10,
             risk_band = $11,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $12
         `,
         [
           riskId,
@@ -178,8 +186,14 @@ riskManagementRouter.patch('/register/:riskId', async (req, res, next) => {
           o,
           d,
           riskScore,
-          riskBand
+          riskBand,
+          req.authContext.orgId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM rm_risk_register WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [riskId, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -212,26 +226,32 @@ riskManagementRouter.post('/register/:riskId/review', async (req, res, next) => 
     }
 
     const review = await req.withRlsTransaction(async (client) => {
-      const { rows: riskRows } = await client.query(`SELECT * FROM rm_risk_register WHERE id = $1 LIMIT 1`, [riskId]);
+      const { rows: riskRows } = await client.query(`SELECT * FROM rm_risk_register WHERE id = $1 AND org_id = $2 LIMIT 1`, [riskId, req.authContext.orgId]);
       if (!riskRows[0]) {
         const error = new Error('Risk not found');
         error.statusCode = 404;
         throw error;
       }
 
-      const { rows } = await client.query(
+      const riskReviewId = randomUUID();
+      await client.query(
         `
           INSERT INTO rm_risk_reviews (
             org_id,
             risk_id,
             review_notes,
             residual_score,
-            reviewed_by
+            reviewed_by,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6)
         `,
-        [req.authContext.orgId, riskId, reviewNotes, residualScore, req.authContext.userId]
+        [req.authContext.orgId, riskId, reviewNotes, residualScore, req.authContext.userId, riskReviewId]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM rm_risk_reviews WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [riskReviewId, req.authContext.orgId]
       );
 
       if (linkedModule && linkedEntityTable && linkedEntityId) {
@@ -272,7 +292,7 @@ riskManagementRouter.get('/register/:riskId', async (req, res, next) => {
     const { riskId } = req.params;
 
     const payload = await req.withRlsTransaction(async (client) => {
-      const { rows: riskRows } = await client.query(`SELECT * FROM rm_risk_register WHERE id = $1 LIMIT 1`, [riskId]);
+      const { rows: riskRows } = await client.query(`SELECT * FROM rm_risk_register WHERE id = $1 AND org_id = $2 LIMIT 1`, [riskId, req.authContext.orgId]);
       if (!riskRows[0]) {
         const error = new Error('Risk not found');
         error.statusCode = 404;
@@ -280,8 +300,8 @@ riskManagementRouter.get('/register/:riskId', async (req, res, next) => {
       }
 
       const { rows: reviews } = await client.query(
-        `SELECT * FROM rm_risk_reviews WHERE risk_id = $1 ORDER BY reviewed_at DESC`,
-        [riskId]
+        `SELECT * FROM rm_risk_reviews WHERE risk_id = $1 AND org_id = $2 ORDER BY reviewed_at DESC`,
+        [riskId, req.authContext.orgId]
       );
 
       return {
@@ -300,7 +320,9 @@ riskManagementRouter.get('/', async (req, res, next) => {
   try {
     const { status, riskBand, limit = 200 } = req.query;
     const filters = [];
-    const values = [];
+    // $1 is always the org scope — it is written into the SQL below, not appended
+    // here, so the filter cannot be lost if this clause list is ever refactored.
+    const values = [req.authContext.orgId];
 
     if (status) {
       values.push(status);
@@ -315,13 +337,14 @@ riskManagementRouter.get('/', async (req, res, next) => {
     }
 
     values.push(Math.min(Number(limit) || 200, 500));
-    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const whereClause = filters.length ? `AND ${filters.join(' AND ')}` : '';
 
     const risks = await req.withRlsTransaction(async (client) => {
       const { rows } = await client.query(
         `
           SELECT *
           FROM rm_risk_register
+          WHERE org_id = $1
           ${whereClause}
           ORDER BY updated_at DESC
           LIMIT $${values.length}

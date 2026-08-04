@@ -45,7 +45,7 @@ superadminBillingRouter.put('/:orgId', async (req, res, next) => {
     }
 
     const billing = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           INSERT INTO sa_org_billing_controls (
             org_id,
@@ -62,10 +62,19 @@ superadminBillingRouter.put('/:orgId', async (req, res, next) => {
             license_limit = EXCLUDED.license_limit,
             reporting_email = EXCLUDED.reporting_email,
             notes = EXCLUDED.notes,
-            updated_at = now()
-          RETURNING org_id, plan_key, billing_status, license_limit, reporting_email, notes, updated_at
+            updated_at = CURRENT_TIMESTAMP(3)
         `,
         [orgId, planKey, billingStatus, licenseLimit || null, reportingEmail || null, notes || null]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT org_id, plan_key, billing_status, license_limit, reporting_email, notes, updated_at
+          FROM sa_org_billing_controls
+          WHERE org_id = $1
+          LIMIT 1
+        `,
+        [orgId]
       );
 
       await logSuperadminAction(client, {

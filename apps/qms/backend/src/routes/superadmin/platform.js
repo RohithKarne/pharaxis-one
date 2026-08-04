@@ -1,3 +1,6 @@
+// tenant-scope-audit: cross-org — superadmin platform surface, mounted behind
+// superadminAuth (src/app.js:72). These are deliberate all-org aggregates and
+// cross-org user administration; scoping them to one org would break superadmin.
 import { Router } from 'express';
 import { appendAuditEvent } from '../../services/auditTrailService.js';
 import { logSuperadminAction } from './_adminActions.js';
@@ -12,36 +15,36 @@ superadminPlatformRouter.get('/readiness', async (req, res, next) => {
           client.query(
             `
               SELECT
-                COUNT(*)::int AS total_orgs,
-                COUNT(*) FILTER (WHERE is_active = true)::int AS active_orgs
+                COUNT(*) AS total_orgs,
+                COALESCE(SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END), 0) AS active_orgs
               FROM qms_orgs
             `
           ),
           client.query(
             `
               SELECT
-                COUNT(*)::int AS total_users,
-                COUNT(*) FILTER (WHERE is_active = true)::int AS active_users
+                COUNT(*) AS total_users,
+                COALESCE(SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END), 0) AS active_users
               FROM qms_users
             `
           ),
           client.query(
             `
-              SELECT COUNT(*)::int AS total
+              SELECT COUNT(*) AS total
               FROM sa_org_upload_policies p
               JOIN qms_orgs o ON o.id = p.org_id
             `
           ),
           client.query(
             `
-              SELECT COUNT(*)::int AS total
+              SELECT COUNT(*) AS total
               FROM sa_org_security_policies s
               JOIN qms_orgs o ON o.id = s.org_id
             `
           ),
           client.query(
             `
-              SELECT COUNT(*)::int AS total
+              SELECT COUNT(*) AS total
               FROM sa_platform_email_config
               WHERE config_key = 'default'
                 AND is_active = true
@@ -49,10 +52,10 @@ superadminPlatformRouter.get('/readiness', async (req, res, next) => {
           ),
           client.query(
             `
-              SELECT COUNT(*)::int AS total
+              SELECT COUNT(*) AS total
               FROM qms_login_audit
               WHERE outcome = 'Failed'
-                AND occurred_at >= now() - interval '24 hours'
+                AND occurred_at >= CURRENT_TIMESTAMP(3) - interval '24 hours'
             `
           )
         ]);
@@ -99,7 +102,7 @@ superadminPlatformRouter.get('/email-config', async (req, res, next) => {
             smtp_host,
             smtp_port,
             smtp_username,
-            smtp_from_email::text AS smtp_from_email,
+            smtp_from_email,
             smtp_from_name,
             use_tls,
             is_active,
@@ -136,7 +139,7 @@ superadminPlatformRouter.put('/email-config', async (req, res, next) => {
     }
 
     const emailConfig = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           INSERT INTO sa_platform_email_config (
             config_key,
@@ -151,7 +154,7 @@ superadminPlatformRouter.put('/email-config', async (req, res, next) => {
             updated_by,
             updated_at
           )
-          VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+          VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP(3))
           ON CONFLICT (config_key)
           DO UPDATE SET
             smtp_host = EXCLUDED.smtp_host,
@@ -163,18 +166,7 @@ superadminPlatformRouter.put('/email-config', async (req, res, next) => {
             use_tls = EXCLUDED.use_tls,
             is_active = EXCLUDED.is_active,
             updated_by = EXCLUDED.updated_by,
-            updated_at = now()
-          RETURNING
-            id,
-            config_key,
-            smtp_host,
-            smtp_port,
-            smtp_username,
-            smtp_from_email::text AS smtp_from_email,
-            smtp_from_name,
-            use_tls,
-            is_active,
-            updated_at
+            updated_at = CURRENT_TIMESTAMP(3)
         `,
         [
           smtpHost,
@@ -187,6 +179,25 @@ superadminPlatformRouter.put('/email-config', async (req, res, next) => {
           Boolean(isActive),
           req.authContext.userId
         ]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT
+            id,
+            config_key,
+            smtp_host,
+            smtp_port,
+            smtp_username,
+            smtp_from_email,
+            smtp_from_name,
+            use_tls,
+            is_active,
+            updated_at
+          FROM sa_platform_email_config
+          WHERE config_key = 'default'
+          LIMIT 1
+        `
       );
 
       await logSuperadminAction(client, {
@@ -283,7 +294,7 @@ superadminPlatformRouter.put('/upload-policy/:orgId', async (req, res, next) => 
           ];
 
     const uploadPolicy = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           INSERT INTO sa_org_upload_policies (
             org_id,
@@ -294,7 +305,7 @@ superadminPlatformRouter.put('/upload-policy/:orgId', async (req, res, next) => 
             updated_by,
             updated_at
           )
-          VALUES ($1, $2, $3::text[], $4, $5, $6, now())
+          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP(3))
           ON CONFLICT (org_id)
           DO UPDATE SET
             max_upload_mb = EXCLUDED.max_upload_mb,
@@ -302,14 +313,7 @@ superadminPlatformRouter.put('/upload-policy/:orgId', async (req, res, next) => 
             viewer_default_can_download = EXCLUDED.viewer_default_can_download,
             viewer_download_requires_watermark = EXCLUDED.viewer_download_requires_watermark,
             updated_by = EXCLUDED.updated_by,
-            updated_at = now()
-          RETURNING
-            org_id,
-            max_upload_mb,
-            allowed_extensions,
-            viewer_default_can_download,
-            viewer_download_requires_watermark,
-            updated_at
+            updated_at = CURRENT_TIMESTAMP(3)
         `,
         [
           orgId,
@@ -319,6 +323,22 @@ superadminPlatformRouter.put('/upload-policy/:orgId', async (req, res, next) => 
           Boolean(viewerDownloadRequiresWatermark),
           req.authContext.userId
         ]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT
+            org_id,
+            max_upload_mb,
+            allowed_extensions,
+            viewer_default_can_download,
+            viewer_download_requires_watermark,
+            updated_at
+          FROM sa_org_upload_policies
+          WHERE org_id = $1
+          LIMIT 1
+        `,
+        [orgId]
       );
 
       await logSuperadminAction(client, {
@@ -393,7 +413,7 @@ superadminPlatformRouter.put('/security-policy/:orgId', async (req, res, next) =
     } = req.body || {};
 
     const securityPolicy = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           INSERT INTO sa_org_security_policies (
             org_id,
@@ -402,20 +422,29 @@ superadminPlatformRouter.put('/security-policy/:orgId', async (req, res, next) =
             updated_by,
             updated_at
           )
-          VALUES ($1, $2, $3, $4, now())
+          VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP(3))
           ON CONFLICT (org_id)
           DO UPDATE SET
             email_otp_required = EXCLUDED.email_otp_required,
             allow_org_admin_2fa_reset = EXCLUDED.allow_org_admin_2fa_reset,
             updated_by = EXCLUDED.updated_by,
-            updated_at = now()
-          RETURNING
+            updated_at = CURRENT_TIMESTAMP(3)
+        `,
+        [orgId, Boolean(emailOtpRequired), Boolean(allowOrgAdmin2faReset), req.authContext.userId]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT
             org_id,
             email_otp_required,
             allow_org_admin_2fa_reset,
             updated_at
+          FROM sa_org_security_policies
+          WHERE org_id = $1
+          LIMIT 1
         `,
-        [orgId, Boolean(emailOtpRequired), Boolean(allowOrgAdmin2faReset), req.authContext.userId]
+        [orgId]
       );
 
       await logSuperadminAction(client, {

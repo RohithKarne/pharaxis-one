@@ -14,13 +14,20 @@
     "smoke:postdeploy": "node tests/postdeploy-smoke.mjs",
     "smoke:rbac": "node tests/rbac-smoke.mjs",
     "smoke:workflow-notifications": "node tests/workflow-notifications-smoke.mjs",
-    "test:role-matrix": "node tests/rbac-role-matrix.mjs"
+    "test:role-matrix": "node tests/rbac-role-matrix.mjs",
+    "db:migrate:mysql": "node src/db/mysql/migrate.js",
+    "test:schema:mysql": "node tests/mysql-schema-check.mjs",
+    "db:copy:mysql": "node src/db/mysql/copyFromPostgres.js",
+    "test:dialect": "node tests/mysql-dialect-audit.mjs",
+    "test:tenant": "node tests/tenant-scope-audit.mjs"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
     "jose": "^6.0.11",
     "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.23.2",
     "pdfkit": "^0.16.0",
     "pg": "^8.16.0"
   }

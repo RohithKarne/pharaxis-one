@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { assertAnyRole, hasAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { createInAppNotification, queueEmailNotification } from '../services/platform/notificationService.js';
@@ -77,16 +78,17 @@ function calculateRiskPayload({ severity, occurrence, detectability }) {
   };
 }
 
-async function getCapaRecord(client, capaId, { forUpdate = false } = {}) {
+async function getCapaRecord(client, orgId, capaId, { forUpdate = false } = {}) {
   const { rows } = await client.query(
     `
       SELECT *
       FROM ca_capa_records
       WHERE id = $1
+        AND org_id = $2
       ${forUpdate ? 'FOR UPDATE' : ''}
       LIMIT 1
     `,
-    [capaId]
+    [capaId, orgId]
   );
 
   return rows[0] || null;
@@ -178,7 +180,9 @@ capaRouter.post('/', async (req, res, next) => {
         detectability: normalizeRiskFactor(detectability)
       });
 
-      const { rows } = await client.query(
+      const newCapaId = randomUUID();
+
+      await client.query(
         `
           INSERT INTO ca_capa_records (
             org_id,
@@ -198,14 +202,14 @@ capaRouter.post('/', async (req, res, next) => {
             detectability,
             risk_score,
             risk_band,
-            created_by
+            created_by,
+            id
           )
           VALUES (
             $1, $2, $3, $4, $5, $6, $7,
             $8, $9, $10, $11, $12,
-            $13, $14, $15, $16, $17, $18
+            $13, $14, $15, $16, $17, $18, $19
           )
-          RETURNING *
         `,
         [
           req.authContext.orgId,
@@ -225,13 +229,14 @@ capaRouter.post('/', async (req, res, next) => {
           riskPayload.detectability,
           riskPayload.riskScore,
           riskPayload.riskBand,
-          req.authContext.userId
+          req.authContext.userId,
+          newCapaId
         ]
       );
 
       await appendCapaHistory(client, {
         orgId: req.authContext.orgId,
-        capaId: rows[0].id,
+        capaId: newCapaId,
         actionKey: 'capa_created',
         actorUserId: req.authContext.userId,
         payloadJson: {
@@ -244,7 +249,7 @@ capaRouter.post('/', async (req, res, next) => {
       await appendCapaAudit(client, {
         orgId: req.authContext.orgId,
         entityTable: 'ca_capa_records',
-        entityId: rows[0].id,
+        entityId: newCapaId,
         actionKey: 'create',
         actorUserId: req.authContext.userId,
         payloadJson: {
@@ -255,7 +260,7 @@ capaRouter.post('/', async (req, res, next) => {
         }
       });
 
-      return rows[0];
+      return getCapaRecord(client, req.authContext.orgId, newCapaId);
     });
 
     return res.status(201).json({ capa });
@@ -287,7 +292,7 @@ capaRouter.patch('/:capaId', async (req, res, next) => {
     } = req.body || {};
 
     const capa = await req.withRlsTransaction(async (client) => {
-      const current = await getCapaRecord(client, capaId, { forUpdate: true });
+      const current = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!current) throw makeError('CAPA not found', 404);
 
       assertNotClosed(current);
@@ -319,7 +324,7 @@ capaRouter.patch('/:capaId', async (req, res, next) => {
             ? asDateString(dueDate)
             : current.due_date;
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE ca_capa_records
           SET
@@ -341,9 +346,9 @@ capaRouter.patch('/:capaId', async (req, res, next) => {
             detectability = $17,
             risk_score = $18,
             risk_band = $19,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $20
         `,
         [
           capaId,
@@ -364,7 +369,8 @@ capaRouter.patch('/:capaId', async (req, res, next) => {
           riskPayload.occurrence,
           riskPayload.detectability,
           riskPayload.riskScore,
-          riskPayload.riskBand
+          riskPayload.riskBand,
+          req.authContext.orgId
         ]
       );
 
@@ -394,7 +400,7 @@ capaRouter.patch('/:capaId', async (req, res, next) => {
         }
       });
 
-      return rows[0];
+      return getCapaRecord(client, req.authContext.orgId, capaId);
     });
 
     return res.json({ capa });
@@ -408,7 +414,7 @@ capaRouter.post('/:capaId/submit', async (req, res, next) => {
     const { capaId } = req.params;
 
     const capa = await req.withRlsTransaction(async (client) => {
-      const current = await getCapaRecord(client, capaId, { forUpdate: true });
+      const current = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!current) throw makeError('CAPA not found', 404);
 
       assertNotClosed(current);
@@ -418,14 +424,14 @@ capaRouter.post('/:capaId/submit', async (req, res, next) => {
         throw makeError('CAPA can be submitted only from Draft or Reopened status');
       }
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE ca_capa_records
-          SET status = $2, submitted_at = now(), updated_at = now()
+          SET status = $2, submitted_at = CURRENT_TIMESTAMP(3), updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $3
         `,
-        [capaId, STATUS.Submitted]
+        [capaId, STATUS.Submitted, req.authContext.orgId]
       );
 
       await appendCapaHistory(client, {
@@ -445,7 +451,7 @@ capaRouter.post('/:capaId/submit', async (req, res, next) => {
         payloadJson: { fromStatus: current.status, toStatus: STATUS.Submitted }
       });
 
-      return rows[0];
+      return getCapaRecord(client, req.authContext.orgId, capaId);
     });
 
     return res.json({ capa });
@@ -462,7 +468,7 @@ capaRouter.post('/:capaId/triage', async (req, res, next) => {
     assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin']);
 
     const capa = await req.withRlsTransaction(async (client) => {
-      const current = await getCapaRecord(client, capaId, { forUpdate: true });
+      const current = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!current) throw makeError('CAPA not found', 404);
       assertNotClosed(current);
 
@@ -470,19 +476,19 @@ capaRouter.post('/:capaId/triage', async (req, res, next) => {
         throw makeError('CAPA can be triaged only from Submitted, Reopened, or Draft status');
       }
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE ca_capa_records
           SET
             status = $2,
-            triaged_at = now(),
+            triaged_at = CURRENT_TIMESTAMP(3),
             triage_summary = $3,
             owner_user_id = COALESCE($4, owner_user_id),
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $5
         `,
-        [capaId, STATUS.Investigation, triageSummary, ownerUserId]
+        [capaId, STATUS.Investigation, triageSummary, ownerUserId, req.authContext.orgId]
       );
 
       await appendCapaHistory(client, {
@@ -509,7 +515,7 @@ capaRouter.post('/:capaId/triage', async (req, res, next) => {
         }
       });
 
-      return rows[0];
+      return getCapaRecord(client, req.authContext.orgId, capaId);
     });
 
     return res.json({ capa });
@@ -534,7 +540,7 @@ capaRouter.post('/:capaId/rca/5why', async (req, res, next) => {
     }
 
     const fiveWhys = await req.withRlsTransaction(async (client) => {
-      const capa = await getCapaRecord(client, capaId, { forUpdate: true });
+      const capa = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!capa) throw makeError('CAPA not found', 404);
       assertNotClosed(capa);
       assertCanModifyCapa(req, capa);
@@ -556,7 +562,7 @@ capaRouter.post('/:capaId/rca/5why', async (req, res, next) => {
             DO UPDATE SET
               answer = EXCLUDED.answer,
               created_by = EXCLUDED.created_by,
-              created_at = now()
+              created_at = CURRENT_TIMESTAMP(3)
           `,
           [req.authContext.orgId, capaId, level, item.answer, req.authContext.userId]
         );
@@ -567,9 +573,10 @@ capaRouter.post('/:capaId/rca/5why', async (req, res, next) => {
           SELECT *
           FROM ca_root_cause_5why
           WHERE capa_id = $1
+            AND org_id = $2
           ORDER BY why_level ASC
         `,
-        [capaId]
+        [capaId, req.authContext.orgId]
       );
 
       await appendCapaHistory(client, {
@@ -614,7 +621,7 @@ capaRouter.post('/:capaId/rca/fishbone', async (req, res, next) => {
     }
 
     const fishbone = await req.withRlsTransaction(async (client) => {
-      const capa = await getCapaRecord(client, capaId, { forUpdate: true });
+      const capa = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!capa) throw makeError('CAPA not found', 404);
       assertNotClosed(capa);
       assertCanModifyCapa(req, capa);
@@ -637,9 +644,10 @@ capaRouter.post('/:capaId/rca/fishbone', async (req, res, next) => {
           SELECT *
           FROM ca_root_cause_fishbone
           WHERE capa_id = $1
+            AND org_id = $2
           ORDER BY created_at DESC
         `,
-        [capaId]
+        [capaId, req.authContext.orgId]
       );
 
       await appendCapaHistory(client, {
@@ -687,14 +695,16 @@ capaRouter.post('/:capaId/actions', async (req, res, next) => {
     }
 
     const action = await req.withRlsTransaction(async (client) => {
-      const capa = await getCapaRecord(client, capaId, { forUpdate: true });
+      const capa = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!capa) throw makeError('CAPA not found', 404);
       assertNotClosed(capa);
       assertCanModifyCapa(req, capa);
 
       const owner = assignedOwnerUserId || capa.owner_user_id;
 
-      const { rows } = await client.query(
+      const newActionId = randomUUID();
+
+      await client.query(
         `
           INSERT INTO ca_action_items (
             org_id,
@@ -703,22 +713,33 @@ capaRouter.post('/:capaId/actions', async (req, res, next) => {
             description,
             assigned_owner_user_id,
             due_date,
-            status
+            status,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, 'NotStarted')
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, 'NotStarted', $7)
         `,
-        [req.authContext.orgId, capaId, actionType, description, owner, asDateString(dueDate)]
+        [req.authContext.orgId, capaId, actionType, description, owner, asDateString(dueDate), newActionId]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM ca_action_items
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [newActionId, req.authContext.orgId]
       );
 
       if ([STATUS.Submitted, STATUS.Draft, STATUS.Reopened].includes(capa.status)) {
         await client.query(
           `
             UPDATE ca_capa_records
-            SET status = $2, updated_at = now()
+            SET status = $2, updated_at = CURRENT_TIMESTAMP(3)
             WHERE id = $1
+              AND org_id = $3
           `,
-          [capaId, STATUS.Investigation]
+          [capaId, STATUS.Investigation, req.authContext.orgId]
         );
       }
 
@@ -775,7 +796,7 @@ capaRouter.patch('/:capaId/actions/:actionId', async (req, res, next) => {
     }
 
     const updated = await req.withRlsTransaction(async (client) => {
-      const capa = await getCapaRecord(client, capaId, { forUpdate: true });
+      const capa = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!capa) throw makeError('CAPA not found', 404);
       assertNotClosed(capa);
       assertCanModifyCapa(req, capa);
@@ -785,9 +806,10 @@ capaRouter.patch('/:capaId/actions/:actionId', async (req, res, next) => {
           SELECT *
           FROM ca_action_items
           WHERE id = $1 AND capa_id = $2
+            AND org_id = $3
           FOR UPDATE
         `,
-        [actionId, capaId]
+        [actionId, capaId, req.authContext.orgId]
       );
 
       const current = actionRows[0];
@@ -798,7 +820,7 @@ capaRouter.patch('/:capaId/actions/:actionId', async (req, res, next) => {
       const nextStatus = status || current.status;
       const nextDueDate = dueDate ? asDateString(dueDate) : current.due_date;
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE ca_action_items
           SET
@@ -806,10 +828,10 @@ capaRouter.patch('/:capaId/actions/:actionId', async (req, res, next) => {
             due_date = $4,
             completion_evidence_ref = $5,
             completion_notes = $6,
-            completed_at = CASE WHEN $3 = 'Complete' THEN now() ELSE NULL END,
-            updated_at = now()
+            completed_at = CASE WHEN $3 = 'Complete' THEN CURRENT_TIMESTAMP(3) ELSE NULL END,
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1 AND capa_id = $2
-          RETURNING *
+            AND org_id = $7
         `,
         [
           actionId,
@@ -817,8 +839,19 @@ capaRouter.patch('/:capaId/actions/:actionId', async (req, res, next) => {
           nextStatus,
           nextDueDate,
           completionEvidenceRef ?? current.completion_evidence_ref,
-          completionNotes ?? current.completion_notes
+          completionNotes ?? current.completion_notes,
+          req.authContext.orgId
         ]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM ca_action_items
+          WHERE id = $1 AND capa_id = $2
+            AND org_id = $3
+        `,
+        [actionId, capaId, req.authContext.orgId]
       );
 
       if (nextStatus !== 'Complete') {
@@ -895,7 +928,7 @@ capaRouter.patch('/:capaId/actions/:actionId/status', async (req, res, next) => 
     }
 
     const updated = await req.withRlsTransaction(async (client) => {
-      const capa = await getCapaRecord(client, capaId, { forUpdate: true });
+      const capa = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!capa) throw makeError('CAPA not found', 404);
       assertNotClosed(capa);
       assertCanModifyCapa(req, capa);
@@ -905,25 +938,36 @@ capaRouter.patch('/:capaId/actions/:actionId/status', async (req, res, next) => 
           SELECT *
           FROM ca_action_items
           WHERE id = $1 AND capa_id = $2
+            AND org_id = $3
           FOR UPDATE
         `,
-        [actionId, capaId]
+        [actionId, capaId, req.authContext.orgId]
       );
 
       const current = actionRows[0];
       if (!current) throw makeError('Action item not found', 404);
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE ca_action_items
           SET
             status = $3,
-            completed_at = CASE WHEN $3 = 'Complete' THEN now() ELSE NULL END,
-            updated_at = now()
+            completed_at = CASE WHEN $3 = 'Complete' THEN CURRENT_TIMESTAMP(3) ELSE NULL END,
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1 AND capa_id = $2
-          RETURNING *
+            AND org_id = $4
         `,
-        [actionId, capaId, status]
+        [actionId, capaId, status, req.authContext.orgId]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM ca_action_items
+          WHERE id = $1 AND capa_id = $2
+            AND org_id = $3
+        `,
+        [actionId, capaId, req.authContext.orgId]
       );
 
       await appendCapaHistory(client, {
@@ -980,7 +1024,7 @@ capaRouter.post('/:capaId/approve', async (req, res, next) => {
     assertAnyRole(req, ['approver', 'qa_reviewer', 'admin', 'superadmin']);
 
     const payload = await req.withRlsTransaction(async (client) => {
-      const capa = await getCapaRecord(client, capaId, { forUpdate: true });
+      const capa = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!capa) throw makeError('CAPA not found', 404);
       assertNotClosed(capa);
 
@@ -1003,10 +1047,11 @@ capaRouter.post('/:capaId/approve', async (req, res, next) => {
               SELECT id
               FROM ca_effectiveness_checks
               WHERE capa_id = $1 AND result = 'Pass'
+                AND org_id = $2
               ORDER BY checked_at DESC
               LIMIT 1
             `,
-            [capaId]
+            [capaId, req.authContext.orgId]
           );
           if (!checks[0]) {
             throw makeError('Closure approval requires a passing effectiveness check', 400);
@@ -1017,9 +1062,10 @@ capaRouter.post('/:capaId/approve', async (req, res, next) => {
               SELECT id
               FROM ca_action_items
               WHERE capa_id = $1 AND status <> 'Complete'
+                AND org_id = $2
               LIMIT 1
             `,
-            [capaId]
+            [capaId, req.authContext.orgId]
           );
           if (openActions[0]) {
             throw makeError('Closure approval requires all CAPA actions to be complete', 400);
@@ -1031,7 +1077,9 @@ capaRouter.post('/:capaId/approve', async (req, res, next) => {
         }
       }
 
-      const { rows: approvalRows } = await client.query(
+      const newApprovalId = randomUUID();
+
+      await client.query(
         `
           INSERT INTO ca_approvals (
             org_id,
@@ -1040,37 +1088,49 @@ capaRouter.post('/:capaId/approve', async (req, res, next) => {
             decision,
             comments,
             approver_user_id,
-            signature_id
+            signature_id,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
-        [req.authContext.orgId, capaId, stage, decision, comments, approverUserId, signatureId]
+        [req.authContext.orgId, capaId, stage, decision, comments, approverUserId, signatureId, newApprovalId]
       );
 
-      const { rows: capaRows } = await client.query(
+      const { rows: approvalRows } = await client.query(
+        `
+          SELECT *
+          FROM ca_approvals
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [newApprovalId, req.authContext.orgId]
+      );
+
+      await client.query(
         `
           UPDATE ca_capa_records
           SET
             status = $2,
             action_plan_approved_at = CASE
-              WHEN $3 = 'ActionPlan' AND $4 = 'Approve' THEN now()
+              WHEN $3 = 'ActionPlan' AND $4 = 'Approve' THEN CURRENT_TIMESTAMP(3)
               ELSE action_plan_approved_at
             END,
             closed_at = CASE
-              WHEN $3 = 'Closure' AND $4 = 'Approve' THEN now()
+              WHEN $3 = 'Closure' AND $4 = 'Approve' THEN CURRENT_TIMESTAMP(3)
               ELSE closed_at
             END,
             closed_by = CASE
               WHEN $3 = 'Closure' AND $4 = 'Approve' THEN $5
               ELSE closed_by
             END,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $6
         `,
-        [capaId, nextStatus, stage, decision, approverUserId]
+        [capaId, nextStatus, stage, decision, approverUserId, req.authContext.orgId]
       );
+
+      const updatedCapa = await getCapaRecord(client, req.authContext.orgId, capaId);
 
       await appendCapaHistory(client, {
         orgId: req.authContext.orgId,
@@ -1101,7 +1161,7 @@ capaRouter.post('/:capaId/approve', async (req, res, next) => {
 
       return {
         approval: approvalRows[0],
-        capa: capaRows[0]
+        capa: updatedCapa
       };
     });
 
@@ -1128,7 +1188,7 @@ capaRouter.post('/:capaId/effectiveness', async (req, res, next) => {
     }
 
     const payload = await req.withRlsTransaction(async (client) => {
-      const capa = await getCapaRecord(client, capaId, { forUpdate: true });
+      const capa = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!capa) throw makeError('CAPA not found', 404);
       assertNotClosed(capa);
       assertCanModifyCapa(req, capa);
@@ -1144,7 +1204,9 @@ capaRouter.post('/:capaId/effectiveness', async (req, res, next) => {
         .filter(Boolean)
         .join(' | ');
 
-      const { rows: checkRows } = await client.query(
+      const newCheckId = randomUUID();
+
+      await client.query(
         `
           INSERT INTO ca_effectiveness_checks (
             org_id,
@@ -1152,29 +1214,41 @@ capaRouter.post('/:capaId/effectiveness', async (req, res, next) => {
             criteria,
             evidence_ref,
             result,
-            checked_by
+            checked_by,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
         `,
-        [req.authContext.orgId, capaId, criteriaText, evidenceRef, result, req.authContext.userId]
+        [req.authContext.orgId, capaId, criteriaText, evidenceRef, result, req.authContext.userId, newCheckId]
+      );
+
+      const { rows: checkRows } = await client.query(
+        `
+          SELECT *
+          FROM ca_effectiveness_checks
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [newCheckId, req.authContext.orgId]
       );
 
       const nextStatus = result === 'Pass' ? STATUS.EffectivenessPending : STATUS.InExecution;
 
-      const { rows: capaRows } = await client.query(
+      await client.query(
         `
           UPDATE ca_capa_records
           SET
             effectiveness_result = $2,
-            effective_verified_at = now(),
+            effective_verified_at = CURRENT_TIMESTAMP(3),
             status = $3,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $4
         `,
-        [capaId, result, nextStatus]
+        [capaId, result, nextStatus, req.authContext.orgId]
       );
+
+      const updatedCapa = await getCapaRecord(client, req.authContext.orgId, capaId);
 
       await appendCapaHistory(client, {
         orgId: req.authContext.orgId,
@@ -1199,7 +1273,7 @@ capaRouter.post('/:capaId/effectiveness', async (req, res, next) => {
 
       return {
         effectivenessCheck: checkRows[0],
-        capa: capaRows[0]
+        capa: updatedCapa
       };
     });
 
@@ -1214,7 +1288,7 @@ capaRouter.post('/:capaId/close', async (req, res, next) => {
     const { capaId } = req.params;
 
     const capa = await req.withRlsTransaction(async (client) => {
-      const current = await getCapaRecord(client, capaId, { forUpdate: true });
+      const current = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!current) throw makeError('CAPA not found', 404);
 
       if (current.created_by && current.created_by === req.authContext.userId) {
@@ -1226,10 +1300,11 @@ capaRouter.post('/:capaId/close', async (req, res, next) => {
           SELECT id
           FROM ca_effectiveness_checks
           WHERE capa_id = $1 AND result = 'Pass'
+            AND org_id = $2
           ORDER BY checked_at DESC
           LIMIT 1
         `,
-        [capaId]
+        [capaId, req.authContext.orgId]
       );
       if (!checks[0]) {
         throw makeError('CAPA cannot be closed until effectiveness result is Pass', 400);
@@ -1240,9 +1315,10 @@ capaRouter.post('/:capaId/close', async (req, res, next) => {
           SELECT id
           FROM ca_action_items
           WHERE capa_id = $1 AND status <> 'Complete'
+            AND org_id = $2
           LIMIT 1
         `,
-        [capaId]
+        [capaId, req.authContext.orgId]
       );
       if (openActions[0]) {
         throw makeError('All CAPA actions must be complete before closure', 400);
@@ -1263,14 +1339,14 @@ capaRouter.post('/:capaId/close', async (req, res, next) => {
         [req.authContext.orgId, capaId, req.authContext.userId]
       );
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE ca_capa_records
-          SET status = 'Closed', closed_at = now(), closed_by = $2, updated_at = now()
+          SET status = 'Closed', closed_at = CURRENT_TIMESTAMP(3), closed_by = $2, updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $3
         `,
-        [capaId, req.authContext.userId]
+        [capaId, req.authContext.userId, req.authContext.orgId]
       );
 
       await appendCapaHistory(client, {
@@ -1290,7 +1366,7 @@ capaRouter.post('/:capaId/close', async (req, res, next) => {
         payloadJson: {}
       });
 
-      return rows[0];
+      return getCapaRecord(client, req.authContext.orgId, capaId);
     });
 
     return res.json({ capa });
@@ -1311,27 +1387,27 @@ capaRouter.post('/:capaId/reopen', async (req, res, next) => {
     assertAnyRole(req, ['qa_reviewer', 'admin', 'superadmin']);
 
     const capa = await req.withRlsTransaction(async (client) => {
-      const current = await getCapaRecord(client, capaId, { forUpdate: true });
+      const current = await getCapaRecord(client, req.authContext.orgId, capaId, { forUpdate: true });
       if (!current) throw makeError('CAPA not found', 404);
 
       if (![STATUS.Closed, STATUS.EffectivenessPending].includes(current.status)) {
         throw makeError('CAPA can be reopened only from Closed or EffectivenessPending status');
       }
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE ca_capa_records
           SET
             status = $2,
             reopened_reason = $3,
-            reopened_at = now(),
+            reopened_at = CURRENT_TIMESTAMP(3),
             closed_at = NULL,
             closed_by = NULL,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $4
         `,
-        [capaId, STATUS.Reopened, reason]
+        [capaId, STATUS.Reopened, reason, req.authContext.orgId]
       );
 
       await appendCapaHistory(client, {
@@ -1351,7 +1427,7 @@ capaRouter.post('/:capaId/reopen', async (req, res, next) => {
         payloadJson: { reason }
       });
 
-      return rows[0];
+      return getCapaRecord(client, req.authContext.orgId, capaId);
     });
 
     return res.json({ capa });
@@ -1374,14 +1450,15 @@ capaRouter.get('/:capaId/timeline', async (req, res, next) => {
             h.occurred_at,
             u.id AS actor_user_id,
             u.full_name AS actor_name,
-            u.email::text AS actor_email
+            u.email AS actor_email
           FROM ca_history_events h
           LEFT JOIN qms_users u ON u.id = h.actor_user_id
           WHERE h.capa_id = $1
+            AND h.org_id = $2
           ORDER BY h.occurred_at DESC, h.id DESC
           LIMIT 500
         `,
-        [capaId]
+        [capaId, req.authContext.orgId]
       );
       return rows;
     });
@@ -1397,7 +1474,7 @@ capaRouter.get('/:capaId', async (req, res, next) => {
     const { capaId } = req.params;
 
     const payload = await req.withRlsTransaction(async (client) => {
-      const capa = await getCapaRecord(client, capaId);
+      const capa = await getCapaRecord(client, req.authContext.orgId, capaId);
       if (!capa) throw makeError('CAPA not found', 404);
 
       const [actions, fiveWhys, fishbone, effectiveness, approvals, timeline] = await Promise.all([
@@ -1406,45 +1483,50 @@ capaRouter.get('/:capaId', async (req, res, next) => {
             SELECT *
             FROM ca_action_items
             WHERE capa_id = $1
+              AND org_id = $2
             ORDER BY created_at ASC
           `,
-          [capaId]
+          [capaId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM ca_root_cause_5why
             WHERE capa_id = $1
+              AND org_id = $2
             ORDER BY why_level ASC
           `,
-          [capaId]
+          [capaId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM ca_root_cause_fishbone
             WHERE capa_id = $1
+              AND org_id = $2
             ORDER BY created_at DESC
           `,
-          [capaId]
+          [capaId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM ca_effectiveness_checks
             WHERE capa_id = $1
+              AND org_id = $2
             ORDER BY checked_at DESC
           `,
-          [capaId]
+          [capaId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM ca_approvals
             WHERE capa_id = $1
+              AND org_id = $2
             ORDER BY decided_at DESC
           `,
-          [capaId]
+          [capaId, req.authContext.orgId]
         ),
         client.query(
           `
@@ -1454,14 +1536,15 @@ capaRouter.get('/:capaId', async (req, res, next) => {
               h.payload_json,
               h.occurred_at,
               u.full_name AS actor_name,
-              u.email::text AS actor_email
+              u.email AS actor_email
             FROM ca_history_events h
             LEFT JOIN qms_users u ON u.id = h.actor_user_id
             WHERE h.capa_id = $1
+              AND h.org_id = $2
             ORDER BY h.occurred_at DESC, h.id DESC
             LIMIT 300
           `,
-          [capaId]
+          [capaId, req.authContext.orgId]
         )
       ]);
 
@@ -1487,8 +1570,10 @@ capaRouter.get('/', async (req, res, next) => {
     const { status, ownerUserId, riskBand, q } = req.query;
 
     const capas = await req.withRlsTransaction(async (client) => {
+      // $1 is always the org scope — it is written into the SQL below, not appended
+      // here, so the filter cannot be lost if this clause list is ever refactored.
+      const params = [req.authContext.orgId];
       const clauses = [];
-      const params = [];
 
       if (status) {
         params.push(status);
@@ -1507,15 +1592,16 @@ capaRouter.get('/', async (req, res, next) => {
 
       if (q) {
         params.push(`%${String(q).trim()}%`);
-        clauses.push(`(title ILIKE $${params.length} OR capa_code ILIKE $${params.length})`);
+        clauses.push(`(LOWER(title) LIKE LOWER($${params.length}) OR LOWER(capa_code) LIKE LOWER($${params.length}))`);
       }
 
-      const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+      const where = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : '';
 
       const { rows } = await client.query(
         `
           SELECT *
           FROM ca_capa_records
+          WHERE org_id = $1
           ${where}
           ORDER BY updated_at DESC
           LIMIT 300

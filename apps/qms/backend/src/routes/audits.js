@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { generateInspectionBinder } from '../services/platform/binderService.js';
@@ -27,7 +28,7 @@ async function appendAuditHistoryEvent(client, {
         action_key,
         actor_user_id,
         payload_json
-      ) VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      ) VALUES ($1, $2, $3, $4, $5, $6)
     `,
     [orgId, auditId, findingId, actionKey, actorUserId, JSON.stringify(payloadJson)]
   );
@@ -46,9 +47,11 @@ auditsRouter.post('/', async (req, res, next) => {
     }
 
     const audit = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const auditIdNew = randomUUID();
+      await client.query(
         `
           INSERT INTO au_audits (
+            id,
             org_id,
             audit_code,
             audit_title,
@@ -58,10 +61,10 @@ auditsRouter.post('/', async (req, res, next) => {
             status,
             lead_auditor_user_id,
             created_by
-          ) VALUES ($1, $2, $3, $4, $5, $6, 'Planned', $7, $8)
-          RETURNING *
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Planned', $8, $9)
         `,
         [
+          auditIdNew,
           req.authContext.orgId,
           makeEntityCode('AUD', auditTitle),
           auditTitle,
@@ -71,6 +74,15 @@ auditsRouter.post('/', async (req, res, next) => {
           leadAuditorUserId || null,
           req.authContext.userId
         ]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM au_audits
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [auditIdNew, req.authContext.orgId]
       );
 
       await appendAuditHistoryEvent(client, {
@@ -105,17 +117,26 @@ auditsRouter.post('/:auditId/start', async (req, res, next) => {
     const { auditId } = req.params;
 
     const audit = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE au_audits
           SET
             status = 'InProgress',
-            started_at = now(),
-            updated_at = now()
+            started_at = CURRENT_TIMESTAMP(3),
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $2
         `,
-        [auditId]
+        [auditId, req.authContext.orgId]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM au_audits
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [auditId, req.authContext.orgId]
       );
       if (!rows[0]) {
         const error = new Error('Audit not found');
@@ -160,9 +181,11 @@ auditsRouter.post('/:auditId/findings', async (req, res, next) => {
     const finding = await req.withRlsTransaction(async (client) => {
       const findingCode = makeEntityCode('AF', `${findingType}-${description.slice(0, 24)}`);
 
-      const { rows } = await client.query(
+      const findingIdNew = randomUUID();
+      await client.query(
         `
           INSERT INTO au_findings (
+            id,
             org_id,
             audit_id,
             finding_code,
@@ -174,10 +197,10 @@ auditsRouter.post('/:auditId/findings', async (req, res, next) => {
             response_due_date,
             status
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Open')
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Open')
         `,
         [
+          findingIdNew,
           req.authContext.orgId,
           auditId,
           findingCode,
@@ -189,14 +212,24 @@ auditsRouter.post('/:auditId/findings', async (req, res, next) => {
           asDateString(responseDueDate)
         ]
       );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM au_findings
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [findingIdNew, req.authContext.orgId]
+      );
 
       await client.query(
         `
           UPDATE au_audits
-          SET status = 'FindingsCaptured', updated_at = now()
+          SET status = 'FindingsCaptured', updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
+            AND org_id = $2
         `,
-        [auditId]
+        [auditId, req.authContext.orgId]
       );
 
       await appendAuditHistoryEvent(client, {
@@ -240,15 +273,26 @@ auditsRouter.post('/:auditId/findings/:findingId/link-capa', async (req, res, ne
     }
 
     const payload = await req.withRlsTransaction(async (client) => {
+      await client.query(
+        `
+          INSERT INTO au_finding_capa_links (id, org_id, finding_id, capa_id)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (finding_id, capa_id)
+          DO UPDATE SET created_at = CURRENT_TIMESTAMP(3)
+        `,
+        [randomUUID(), req.authContext.orgId, findingId, capaId]
+      );
+      // Keyed on the natural key, not the generated id: on conflict the pre-existing
+      // row keeps its own id and the generated one is discarded.
       const { rows } = await client.query(
         `
-          INSERT INTO au_finding_capa_links (org_id, finding_id, capa_id)
-          VALUES ($1, $2, $3)
-          ON CONFLICT (finding_id, capa_id)
-          DO UPDATE SET created_at = now()
-          RETURNING *
+          SELECT *
+          FROM au_finding_capa_links
+          WHERE finding_id = $1
+            AND capa_id = $2
+            AND org_id = $3
         `,
-        [req.authContext.orgId, findingId, capaId]
+        [findingId, capaId, req.authContext.orgId]
       );
 
       const traceLink = await appendTraceLink(client, {
@@ -300,19 +344,29 @@ async function respondToFinding(req, res, next) {
     }
 
     const response = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const responseIdNew = randomUUID();
+      await client.query(
         `
           INSERT INTO au_auditee_responses (
+            id,
             org_id,
             finding_id,
             response_text,
             proposed_action,
             responded_by
           )
-          VALUES ($1, $2, $3, $4, $5)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6)
         `,
-        [req.authContext.orgId, findingId, responseText, proposedAction || null, req.authContext.userId]
+        [responseIdNew, req.authContext.orgId, findingId, responseText, proposedAction || null, req.authContext.userId]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM au_auditee_responses
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [responseIdNew, req.authContext.orgId]
       );
 
       await client.query(
@@ -320,17 +374,19 @@ async function respondToFinding(req, res, next) {
           UPDATE au_findings
           SET status = 'ResponseReceived'
           WHERE id = $1
+            AND org_id = $2
         `,
-        [findingId]
+        [findingId, req.authContext.orgId]
       );
 
       await client.query(
         `
           UPDATE au_audits
-          SET status = 'ResponseInProgress', updated_at = now()
+          SET status = 'ResponseInProgress', updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
+            AND org_id = $2
         `,
-        [auditId]
+        [auditId, req.authContext.orgId]
       );
 
       await appendAuditHistoryEvent(client, {
@@ -370,7 +426,7 @@ auditsRouter.post('/:auditId/findings/:findingId/close', async (req, res, next) 
     }
 
     const finding = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE au_findings
           SET
@@ -378,11 +434,20 @@ auditsRouter.post('/:auditId/findings/:findingId/close', async (req, res, next) 
             closure_summary = $2,
             effectiveness_result = $3,
             closed_by = $4,
-            closed_at = now()
+            closed_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $5
         `,
-        [findingId, closureSummary, effectivenessResult, req.authContext.userId]
+        [findingId, closureSummary, effectivenessResult, req.authContext.userId, req.authContext.orgId]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM au_findings
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [findingId, req.authContext.orgId]
       );
       if (!rows[0]) {
         const error = new Error('Finding not found');
@@ -425,9 +490,10 @@ auditsRouter.post('/:auditId/close', async (req, res, next) => {
           FROM au_findings
           WHERE audit_id = $1
             AND status <> 'Closed'
+            AND org_id = $2
           LIMIT 1
         `,
-        [auditId]
+        [auditId, req.authContext.orgId]
       );
       if (openRows[0]) {
         const error = new Error('All findings must be closed before audit closure');
@@ -435,7 +501,7 @@ auditsRouter.post('/:auditId/close', async (req, res, next) => {
         throw error;
       }
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE au_audits
           SET
@@ -443,12 +509,21 @@ auditsRouter.post('/:auditId/close', async (req, res, next) => {
             closure_summary = $2,
             actual_end_date = CURRENT_DATE,
             closed_by = $3,
-            closed_at = now(),
-            updated_at = now()
+            closed_at = CURRENT_TIMESTAMP(3),
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $4
         `,
-        [auditId, closureSummary, req.authContext.userId]
+        [auditId, closureSummary, req.authContext.userId, req.authContext.orgId]
+      );
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM au_audits
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [auditId, req.authContext.orgId]
       );
       if (!rows[0]) {
         const error = new Error('Audit not found');
@@ -483,9 +558,10 @@ auditsRouter.get('/:auditId/timeline', async (req, res, next) => {
           SELECT *
           FROM au_history_events
           WHERE audit_id = $1
+            AND org_id = $2
           ORDER BY occurred_at DESC
         `,
-        [auditId]
+        [auditId, req.authContext.orgId]
       );
       return rows;
     });
@@ -506,9 +582,10 @@ auditsRouter.get('/:auditId', async (req, res, next) => {
           SELECT *
           FROM au_audits
           WHERE id = $1
+            AND org_id = $2
           LIMIT 1
         `,
-        [auditId]
+        [auditId, req.authContext.orgId]
       );
       if (!audits[0]) {
         const error = new Error('Audit not found');
@@ -522,9 +599,10 @@ auditsRouter.get('/:auditId', async (req, res, next) => {
             SELECT *
             FROM au_findings
             WHERE audit_id = $1
+              AND org_id = $2
             ORDER BY created_at DESC
           `,
-          [auditId]
+          [auditId, req.authContext.orgId]
         ),
         client.query(
           `
@@ -532,9 +610,10 @@ auditsRouter.get('/:auditId', async (req, res, next) => {
             FROM au_auditee_responses r
             JOIN au_findings f ON f.id = r.finding_id
             WHERE f.audit_id = $1
+              AND r.org_id = $2
             ORDER BY r.responded_at DESC
           `,
-          [auditId]
+          [auditId, req.authContext.orgId]
         ),
         client.query(
           `
@@ -542,28 +621,31 @@ auditsRouter.get('/:auditId', async (req, res, next) => {
             FROM au_finding_capa_links l
             JOIN au_findings f ON f.id = l.finding_id
             WHERE f.audit_id = $1
+              AND l.org_id = $2
             ORDER BY l.created_at DESC
           `,
-          [auditId]
+          [auditId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM au_history_events
             WHERE audit_id = $1
+              AND org_id = $2
             ORDER BY occurred_at DESC
           `,
-          [auditId]
+          [auditId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM qms_trace_links
-            WHERE source_id = $1 OR target_id = $1
+            WHERE (source_id = $1 OR target_id = $1)
+              AND org_id = $2
             ORDER BY created_at DESC
             LIMIT 100
           `,
-          [auditId]
+          [auditId, req.authContext.orgId]
         )
       ]);
 
@@ -604,9 +686,11 @@ auditsRouter.get('/binder/jobs', async (req, res, next) => {
         `
           SELECT *
           FROM au_binder_jobs
+          WHERE org_id = $1
           ORDER BY requested_at DESC
           LIMIT 50
-        `
+        `,
+        [req.authContext.orgId]
       );
       return rows;
     });
@@ -623,16 +707,24 @@ auditsRouter.get('/', async (req, res, next) => {
         `
           SELECT
             a.*,
-            COUNT(f.id)::int AS total_findings,
-            COUNT(f.id) FILTER (WHERE f.status = 'Closed')::int AS closed_findings
+            COUNT(f.id) AS total_findings,
+            COALESCE(SUM(CASE WHEN f.status = 'Closed' THEN 1 ELSE 0 END), 0) AS closed_findings
           FROM au_audits a
-          LEFT JOIN au_findings f ON f.audit_id = a.id
+          LEFT JOIN au_findings f ON f.audit_id = a.id AND f.org_id = a.org_id
+          WHERE a.org_id = $1
           GROUP BY a.id
           ORDER BY a.created_at DESC
           LIMIT 200
-        `
+        `,
+        [req.authContext.orgId]
       );
-      return rows;
+      // The ::int casts were dropped for MySQL: both drivers hand back aggregates
+      // as strings, so the numbers are restored here rather than in SQL.
+      return rows.map((row) => ({
+        ...row,
+        total_findings: Number(row.total_findings),
+        closed_findings: Number(row.closed_findings)
+      }));
     });
     return res.json({ audits });
   } catch (error) {

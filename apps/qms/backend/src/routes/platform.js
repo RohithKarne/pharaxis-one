@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import { assertAnyRole } from '../middleware/rbac.js';
 import {
@@ -67,7 +68,9 @@ platformRouter.post('/notifications/email/:emailId/retry', async (req, res, next
     assertAnyRole(req, ['admin', 'superadmin', 'qa_reviewer']);
 
     const { emailId } = req.params;
-    const email = await req.withRlsTransaction((client) => retryEmailNotification(client, emailId));
+    const email = await req.withRlsTransaction((client) =>
+      retryEmailNotification(client, req.authContext.orgId, emailId)
+    );
     if (!email) {
       return res.status(404).json({ error: 'Email notification not found' });
     }
@@ -85,7 +88,7 @@ platformRouter.post('/notifications/email/:emailId/fail', async (req, res, next)
     const { errorMessage } = req.body || {};
 
     const email = await req.withRlsTransaction((client) =>
-      markEmailNotificationFailed(client, emailId, errorMessage)
+      markEmailNotificationFailed(client, req.authContext.orgId, emailId, errorMessage)
     );
     if (!email) {
       return res.status(404).json({ error: 'Email notification not found' });
@@ -101,7 +104,9 @@ platformRouter.post('/notifications/email/:emailId/mark-sent', async (req, res, 
     assertAnyRole(req, ['admin', 'superadmin']);
 
     const { emailId } = req.params;
-    const email = await req.withRlsTransaction((client) => markEmailNotificationSent(client, emailId));
+    const email = await req.withRlsTransaction((client) =>
+      markEmailNotificationSent(client, req.authContext.orgId, emailId)
+    );
     if (!email) {
       return res.status(404).json({ error: 'Email notification not found' });
     }
@@ -135,7 +140,9 @@ platformRouter.post('/events/outbox', async (req, res, next) => {
 platformRouter.post('/events/outbox/:eventId/publish', async (req, res, next) => {
   try {
     const { eventId } = req.params;
-    const event = await req.withRlsTransaction((client) => markOutboxPublished(client, eventId));
+    const event = await req.withRlsTransaction((client) =>
+      markOutboxPublished(client, req.authContext.orgId, eventId)
+    );
     if (!event) {
       return res.status(404).json({ error: 'Outbox event not found' });
     }
@@ -150,7 +157,9 @@ platformRouter.post('/events/outbox/:eventId/retry', async (req, res, next) => {
     assertAnyRole(req, ['admin', 'superadmin']);
 
     const { eventId } = req.params;
-    const event = await req.withRlsTransaction((client) => retryOutboxEvent(client, eventId));
+    const event = await req.withRlsTransaction((client) =>
+      retryOutboxEvent(client, req.authContext.orgId, eventId)
+    );
     if (!event) {
       return res.status(404).json({ error: 'Outbox event not found' });
     }
@@ -168,7 +177,7 @@ platformRouter.post('/events/outbox/:eventId/fail', async (req, res, next) => {
     const { errorMessage } = req.body || {};
 
     const event = await req.withRlsTransaction((client) =>
-      markOutboxFailed(client, eventId, errorMessage)
+      markOutboxFailed(client, req.authContext.orgId, eventId, errorMessage)
     );
     if (!event) {
       return res.status(404).json({ error: 'Outbox event not found' });
@@ -215,9 +224,11 @@ platformRouter.post('/training/catalog', async (req, res, next) => {
     }
 
     const training = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const newTrainingId = randomUUID();
+      await client.query(
         `
           INSERT INTO qms_training_catalog (
+            id,
             org_id,
             training_code,
             title,
@@ -227,8 +238,7 @@ platformRouter.post('/training/catalog', async (req, res, next) => {
             source_id,
             created_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-          RETURNING *
+          VALUES ($9, $1, $2, $3, $4, $5, $6, $7, $8)
         `,
         [
           req.authContext.orgId,
@@ -238,8 +248,14 @@ platformRouter.post('/training/catalog', async (req, res, next) => {
           sourceModule,
           sourceTable,
           sourceId,
-          req.authContext.userId
+          req.authContext.userId,
+          newTrainingId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM qms_training_catalog WHERE id = $1 AND org_id = $2`,
+        [newTrainingId, req.authContext.orgId]
       );
       return rows[0];
     });
@@ -261,9 +277,11 @@ platformRouter.post('/training/assignments', async (req, res, next) => {
     }
 
     const assignment = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const newAssignmentId = randomUUID();
+      await client.query(
         `
           INSERT INTO qms_training_assignments (
+            id,
             org_id,
             training_id,
             assigned_user_id,
@@ -271,8 +289,7 @@ platformRouter.post('/training/assignments', async (req, res, next) => {
             due_date,
             assigned_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING *
+          VALUES ($7, $1, $2, $3, $4, $5, $6)
         `,
         [
           req.authContext.orgId,
@@ -280,8 +297,14 @@ platformRouter.post('/training/assignments', async (req, res, next) => {
           assignedUserId,
           assignedRoleKey,
           dueDate || null,
-          req.authContext.userId
+          req.authContext.userId,
+          newAssignmentId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM qms_training_assignments WHERE id = $1 AND org_id = $2`,
+        [newAssignmentId, req.authContext.orgId]
       );
       return rows[0];
     });
@@ -298,14 +321,19 @@ platformRouter.post('/training/assignments/:assignmentId/complete', async (req, 
     const { completionNotes = null } = req.body || {};
 
     const payload = await req.withRlsTransaction(async (client) => {
-      const { rows: assignments } = await client.query(
+      await client.query(
         `
           UPDATE qms_training_assignments
           SET status = 'Completed'
           WHERE id = $1
-          RETURNING *
+            AND org_id = $2
         `,
-        [assignmentId]
+        [assignmentId, req.authContext.orgId]
+      );
+
+      const { rows: assignments } = await client.query(
+        `SELECT * FROM qms_training_assignments WHERE id = $1 AND org_id = $2`,
+        [assignmentId, req.authContext.orgId]
       );
 
       if (!assignments[0]) {
@@ -316,20 +344,35 @@ platformRouter.post('/training/assignments/:assignmentId/complete', async (req, 
 
       const completionUserId = assignments[0].assigned_user_id || req.authContext.userId;
 
-      const { rows: completions } = await client.query(
+      await client.query(
         `
           INSERT INTO qms_training_completions (
+            id,
             org_id,
             assignment_id,
             user_id,
             completion_notes
           )
-          VALUES ($1, $2, $3, $4)
+          VALUES ($5, $1, $2, $3, $4)
           ON CONFLICT (assignment_id, user_id)
-          DO UPDATE SET completed_at = now(), completion_notes = EXCLUDED.completion_notes
-          RETURNING *
+          DO UPDATE SET completed_at = CURRENT_TIMESTAMP(3), completion_notes = EXCLUDED.completion_notes
         `,
-        [req.authContext.orgId, assignmentId, completionUserId, completionNotes]
+        [req.authContext.orgId, assignmentId, completionUserId, completionNotes, randomUUID()]
+      );
+
+      // Read back on the natural key, not the generated id: on the conflict path
+      // the pre-existing row keeps its own id, so a lookup by the id we just
+      // generated would find nothing.
+      const { rows: completions } = await client.query(
+        `
+          SELECT *
+          FROM qms_training_completions
+          WHERE assignment_id = $1
+            AND user_id = $2
+            AND org_id = $3
+          LIMIT 1
+        `,
+        [assignmentId, completionUserId, req.authContext.orgId]
       );
 
       return {
@@ -350,17 +393,20 @@ platformRouter.get('/training/catalog', async (req, res, next) => {
 
     const trainingCatalog = await req.withRlsTransaction(async (client) => {
       const clauses = [];
-      const values = [];
+      // $1 is always the org scope — it is written into the SQL below, not appended
+      // here, so the filter cannot be lost if this clause list is ever refactored.
+      const values = [req.authContext.orgId];
       if (String(activeOnly) !== 'false') {
         clauses.push('is_active = true');
       }
       values.push(Math.min(Number(limit) || 300, 500));
 
-      const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+      const whereClause = clauses.length ? `AND ${clauses.join(' AND ')}` : '';
       const { rows } = await client.query(
         `
           SELECT *
           FROM qms_training_catalog
+          WHERE org_id = $1
           ${whereClause}
           ORDER BY created_at DESC
           LIMIT $${values.length}
@@ -382,8 +428,10 @@ platformRouter.get('/training/assignments', async (req, res, next) => {
 
     const payload = await req.withRlsTransaction(async (client) => {
       const where = [];
-      const params = [];
-      let idx = 1;
+      // $1 is always the org scope — it is written into the SQL below, not appended
+      // here, so the filter cannot be lost if this clause list is ever refactored.
+      const params = [req.authContext.orgId];
+      let idx = 2;
 
       if (status) {
         where.push(`a.status = $${idx}`);
@@ -397,8 +445,9 @@ platformRouter.get('/training/assignments', async (req, res, next) => {
           c.training_code,
           c.title AS training_title
         FROM qms_training_assignments a
-        JOIN qms_training_catalog c ON c.id = a.training_id
-        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+        JOIN qms_training_catalog c ON c.id = a.training_id AND c.org_id = a.org_id
+        WHERE a.org_id = $1
+        ${where.length ? `AND ${where.join(' AND ')}` : ''}
         ORDER BY a.assigned_at DESC
         LIMIT 200
       `;
@@ -420,25 +469,31 @@ platformRouter.get('/notifications', async (req, res, next) => {
         `
           SELECT *
           FROM qms_notifications
+          WHERE org_id = $1
           ORDER BY created_at DESC
           LIMIT 100
-        `
+        `,
+        [req.authContext.orgId]
       );
       const { rows: emails } = await client.query(
         `
           SELECT *
           FROM qms_email_notifications
+          WHERE org_id = $1
           ORDER BY created_at DESC
           LIMIT 100
-        `
+        `,
+        [req.authContext.orgId]
       );
       const { rows: outbox } = await client.query(
         `
           SELECT *
           FROM qms_event_outbox
+          WHERE org_id = $1
           ORDER BY created_at DESC
           LIMIT 100
-        `
+        `,
+        [req.authContext.orgId]
       );
       return { inApp, emails, outbox };
     });
@@ -453,14 +508,19 @@ platformRouter.patch('/notifications/:notificationId/read', async (req, res, nex
   try {
     const { notificationId } = req.params;
     const payload = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE qms_notifications
           SET is_read = true
           WHERE id = $1
-          RETURNING *
+            AND org_id = $2
         `,
-        [notificationId]
+        [notificationId, req.authContext.orgId]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM qms_notifications WHERE id = $1 AND org_id = $2`,
+        [notificationId, req.authContext.orgId]
       );
       return rows[0] || null;
     });
@@ -478,17 +538,19 @@ platformRouter.patch('/notifications/:notificationId/read', async (req, res, nex
 platformRouter.patch('/notifications/read-all', async (req, res, next) => {
   try {
     const payload = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      // rowCount, not RETURNING id: only the count was ever used, and the
+      // pgCompat adapter maps MySQL's affectedRows onto rowCount.
+      const { rowCount } = await client.query(
         `
           UPDATE qms_notifications
           SET is_read = true
           WHERE is_read = false
             AND (recipient_user_id IS NULL OR recipient_user_id = $1)
-          RETURNING id
+            AND org_id = $2
         `,
-        [req.authContext.userId]
+        [req.authContext.userId, req.authContext.orgId]
       );
-      return rows.length;
+      return rowCount;
     });
 
     return res.json({ updatedCount: payload });

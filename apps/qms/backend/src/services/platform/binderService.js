@@ -1,5 +1,5 @@
 import path from 'path';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { ensureStorageRoot, registerFileObject } from './blobService.js';
 import { createSimplePdf } from './pdfService.js';
 import { appendAuditEvent } from '../auditTrailService.js';
@@ -16,21 +16,22 @@ async function countRow(client, sql, orgId) {
 export async function generateInspectionBinder(client, params) {
   const startedAt = Date.now();
 
-  const { rows: jobRows } = await client.query(
+  // Generated here rather than read back: the only thing this insert needs from
+  // the new row is its id.
+  const jobId = randomUUID();
+  await client.query(
     `
-      INSERT INTO au_binder_jobs (org_id, job_status, requested_by)
-      VALUES ($1, 'Processing', $2)
-      RETURNING *
+      INSERT INTO au_binder_jobs (id, org_id, job_status, requested_by)
+      VALUES ($1, $2, 'Processing', $3)
     `,
-    [params.orgId, params.requestedBy]
+    [jobId, params.orgId, params.requestedBy]
   );
-  const job = jobRows[0];
 
   const counts = {
     documents: await countRow(
       client,
       `
-      SELECT count(*)::int AS count
+      SELECT count(*) AS count
       FROM dc_document_versions
       WHERE org_id = $1 AND status = 'Effective'
     `,
@@ -39,7 +40,7 @@ export async function generateInspectionBinder(client, params) {
     capas: await countRow(
       client,
       `
-      SELECT count(*)::int AS count
+      SELECT count(*) AS count
       FROM ca_capa_records
       WHERE org_id = $1
     `,
@@ -48,7 +49,7 @@ export async function generateInspectionBinder(client, params) {
     deviations: await countRow(
       client,
       `
-      SELECT count(*)::int AS count
+      SELECT count(*) AS count
       FROM dv_deviation_records
       WHERE org_id = $1
     `,
@@ -57,7 +58,7 @@ export async function generateInspectionBinder(client, params) {
     audits: await countRow(
       client,
       `
-      SELECT count(*)::int AS count
+      SELECT count(*) AS count
       FROM au_audits
       WHERE org_id = $1
     `,
@@ -66,7 +67,7 @@ export async function generateInspectionBinder(client, params) {
     validation: await countRow(
       client,
       `
-      SELECT count(*)::int AS count
+      SELECT count(*) AS count
       FROM vs_system_inventory
       WHERE org_id = $1
     `,
@@ -85,13 +86,13 @@ export async function generateInspectionBinder(client, params) {
       WHERE org_id = $1 AND status = 'Effective'
       LIMIT 50
     `,
-    [params.orgId, job.id]
+    [params.orgId, jobId]
   );
 
   const storageRoot = await ensureStorageRoot();
   const pdfFile = path.join(
     storageRoot,
-    `binder-${job.id}-${hashFileName(`${params.orgId}-${Date.now()}`)}.pdf`
+    `binder-${jobId}-${hashFileName(`${params.orgId}-${Date.now()}`)}.pdf`
   );
 
   await createSimplePdf(pdfFile, [
@@ -126,7 +127,7 @@ export async function generateInspectionBinder(client, params) {
 
   const durationMs = Date.now() - startedAt;
 
-  const { rows: completedRows } = await client.query(
+  await client.query(
     `
       UPDATE au_binder_jobs
       SET
@@ -134,18 +135,22 @@ export async function generateInspectionBinder(client, params) {
         total_records = $2,
         duration_ms = $3,
         file_object_id = $4,
-        completed_at = now()
-      WHERE id = $1
-      RETURNING *
+        completed_at = CURRENT_TIMESTAMP(3)
+      WHERE id = $1 AND org_id = $5
     `,
-    [job.id, totalRecords, durationMs, fileObject.id]
+    [jobId, totalRecords, durationMs, fileObject.id, params.orgId]
+  );
+
+  const { rows: completedRows } = await client.query(
+    'SELECT * FROM au_binder_jobs WHERE id = $1 AND org_id = $2',
+    [jobId, params.orgId]
   );
 
   await appendAuditEvent(client, {
     orgId: params.orgId,
     moduleKey: 'audit_management',
     entityTable: 'au_binder_jobs',
-    entityId: job.id,
+    entityId: jobId,
     actionKey: 'binder_generated',
     actorUserId: params.requestedBy,
     payloadJson: { totalRecords, durationMs, fileObjectId: fileObject.id }

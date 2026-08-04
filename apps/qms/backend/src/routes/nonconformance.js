@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { appendTraceLink } from '../services/traceabilityService.js';
@@ -36,7 +37,8 @@ nonconformanceRouter.post('/', async (req, res, next) => {
     }
 
     const nonconformance = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const nonconformanceId = randomUUID();
+      await client.query(
         `
           INSERT INTO qn_nonconformance_records (
             org_id,
@@ -48,10 +50,10 @@ nonconformanceRouter.post('/', async (req, res, next) => {
             details,
             due_date,
             assigned_to,
-            created_by
+            created_by,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         `,
         [
           req.authContext.orgId,
@@ -63,8 +65,14 @@ nonconformanceRouter.post('/', async (req, res, next) => {
           details,
           asDateString(dueDate),
           assignedTo,
-          req.authContext.userId
+          req.authContext.userId,
+          nonconformanceId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM qn_nonconformance_records WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [nonconformanceId, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -112,7 +120,7 @@ nonconformanceRouter.patch('/:recordId', async (req, res, next) => {
     }
 
     const nonconformance = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE qn_nonconformance_records
           SET
@@ -124,7 +132,7 @@ nonconformanceRouter.patch('/:recordId', async (req, res, next) => {
             assigned_to = COALESCE($7, assigned_to),
             disposition = COALESCE($8, disposition),
             closed_at = CASE
-              WHEN COALESCE($5, status) = 'Closed' AND closed_at IS NULL THEN now()
+              WHEN COALESCE($5, status) = 'Closed' AND closed_at IS NULL THEN CURRENT_TIMESTAMP(3)
               WHEN COALESCE($5, status) <> 'Closed' THEN NULL
               ELSE closed_at
             END,
@@ -133,11 +141,16 @@ nonconformanceRouter.patch('/:recordId', async (req, res, next) => {
               WHEN COALESCE($5, status) <> 'Closed' THEN NULL
               ELSE closed_by
             END,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $10
         `,
-        [recordId, summary, details, severity, status, asDateString(dueDate), assignedTo, disposition, req.authContext.userId]
+        [recordId, summary, details, severity, status, asDateString(dueDate), assignedTo, disposition, req.authContext.userId, req.authContext.orgId]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM qn_nonconformance_records WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [recordId, req.authContext.orgId]
       );
 
       if (!rows[0]) {
@@ -177,8 +190,8 @@ nonconformanceRouter.post('/:recordId/link-capa', async (req, res, next) => {
 
     const link = await req.withRlsTransaction(async (client) => {
       const { rows: ncRows } = await client.query(
-        `SELECT id FROM qn_nonconformance_records WHERE id = $1 LIMIT 1`,
-        [recordId]
+        `SELECT id FROM qn_nonconformance_records WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [recordId, req.authContext.orgId]
       );
       if (!ncRows[0]) {
         const error = new Error('Nonconformance record not found');
@@ -186,27 +199,40 @@ nonconformanceRouter.post('/:recordId/link-capa', async (req, res, next) => {
         throw error;
       }
 
-      const { rows: capaRows } = await client.query(`SELECT id FROM ca_capa_records WHERE id = $1 LIMIT 1`, [capaId]);
+      const { rows: capaRows } = await client.query(
+        `SELECT id FROM ca_capa_records WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [capaId, req.authContext.orgId]
+      );
       if (!capaRows[0]) {
         const error = new Error('CAPA not found');
         error.statusCode = 404;
         throw error;
       }
 
-      const { rows } = await client.query(
+      await client.query(
         `
           INSERT INTO qn_nonconformance_capa_links (org_id, nonconformance_id, capa_id, linked_by)
           VALUES ($1, $2, $3, $4)
           ON CONFLICT (nonconformance_id, capa_id)
-          DO UPDATE SET linked_at = now(), linked_by = EXCLUDED.linked_by
-          RETURNING *
+          DO UPDATE SET linked_at = CURRENT_TIMESTAMP(3), linked_by = EXCLUDED.linked_by
         `,
         [req.authContext.orgId, recordId, capaId, req.authContext.userId]
       );
 
+      // The upsert may have updated an existing link, so the row is read back by
+      // its natural key (nonconformance_id, capa_id) rather than an app-generated id.
+      const { rows } = await client.query(
+        `
+          SELECT * FROM qn_nonconformance_capa_links
+          WHERE nonconformance_id = $1 AND capa_id = $2 AND org_id = $3
+          LIMIT 1
+        `,
+        [recordId, capaId, req.authContext.orgId]
+      );
+
       await client.query(
-        `UPDATE qn_nonconformance_records SET status = 'CapaLinked', updated_at = now() WHERE id = $1`,
-        [recordId]
+        `UPDATE qn_nonconformance_records SET status = 'CapaLinked', updated_at = CURRENT_TIMESTAMP(3) WHERE id = $1 AND org_id = $2`,
+        [recordId, req.authContext.orgId]
       );
 
       await appendTraceLink(client, {
@@ -246,8 +272,8 @@ nonconformanceRouter.get('/:recordId', async (req, res, next) => {
 
     const payload = await req.withRlsTransaction(async (client) => {
       const { rows: recordRows } = await client.query(
-        `SELECT * FROM qn_nonconformance_records WHERE id = $1 LIMIT 1`,
-        [recordId]
+        `SELECT * FROM qn_nonconformance_records WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [recordId, req.authContext.orgId]
       );
       if (!recordRows[0]) {
         const error = new Error('Nonconformance record not found');
@@ -261,9 +287,10 @@ nonconformanceRouter.get('/:recordId', async (req, res, next) => {
           FROM qn_nonconformance_capa_links l
           JOIN ca_capa_records c ON c.id = l.capa_id
           WHERE l.nonconformance_id = $1
+            AND l.org_id = $2
           ORDER BY l.linked_at DESC
         `,
-        [recordId]
+        [recordId, req.authContext.orgId]
       );
 
       return {
@@ -282,7 +309,9 @@ nonconformanceRouter.get('/', async (req, res, next) => {
   try {
     const { status, severity, limit = 200 } = req.query;
     const filters = [];
-    const values = [];
+    // $1 is always the org scope — it is written into the SQL below, not appended
+    // here, so the filter cannot be lost if this clause list is ever refactored.
+    const values = [req.authContext.orgId];
 
     if (status) {
       values.push(status);
@@ -295,13 +324,14 @@ nonconformanceRouter.get('/', async (req, res, next) => {
 
     values.push(Math.min(Number(limit) || 200, 500));
 
-    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const whereClause = filters.length ? `AND ${filters.join(' AND ')}` : '';
 
     const nonconformances = await req.withRlsTransaction(async (client) => {
       const { rows } = await client.query(
         `
           SELECT *
           FROM qn_nonconformance_records
+          WHERE org_id = $1
           ${whereClause}
           ORDER BY updated_at DESC
           LIMIT $${values.length}

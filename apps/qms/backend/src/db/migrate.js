@@ -1,3 +1,6 @@
+// mysql-dialect-audit: postgres-only — this is the PostgreSQL migration runner.
+// Its qms_schema_migrations bookkeeping DDL is Postgres-specific by design;
+// the MySQL counterpart lives in src/db/mysql/migrate.js.
 import { readdir, readFile } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';

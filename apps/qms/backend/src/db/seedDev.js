@@ -1,10 +1,17 @@
+// tenant-scope-audit: cross-org — dev seed script, not a runtime request path.
+// Runs once against a dev database to provision fixture users.
 import dotenv from 'dotenv';
 import pg from 'pg';
+import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 
 dotenv.config();
 
 const { Pool } = pg;
+
+// Was crypt($5, gen_salt('bf')) — pgcrypto, which MySQL does not have.
+// 10 matches the house cost factor (CP Portal).
+const BCRYPT_COST = 10;
 
 const REQUIRED_ENV = ['DATABASE_URL'];
 for (const envName of REQUIRED_ENV) {
@@ -100,15 +107,21 @@ const ROLE_MAP = new Map([
 ]);
 
 async function upsertOrg(client, { orgCode, orgName }) {
-  const { rows } = await client.query(
+  await client.query(
     `
       INSERT INTO qms_orgs (org_code, org_name, is_active)
       VALUES ($1, $2, true)
       ON CONFLICT (org_code)
-      DO UPDATE SET org_name = EXCLUDED.org_name, is_active = true, updated_at = now()
-      RETURNING id, org_code, org_name
+      DO UPDATE SET org_name = EXCLUDED.org_name, is_active = true, updated_at = CURRENT_TIMESTAMP(3)
     `,
     [orgCode, orgName]
+  );
+
+  // Read back on the natural key, not a generated id: on the conflict branch the
+  // surviving row keeps its own id, so a generated one would match nothing.
+  const { rows } = await client.query(
+    'SELECT id, org_code, org_name FROM qms_orgs WHERE org_code = $1',
+    [orgCode]
   );
   return rows[0];
 }
@@ -146,27 +159,38 @@ async function ensureOrgDefaults(client, orgId) {
       DO UPDATE SET
         email_otp_required = EXCLUDED.email_otp_required,
         allow_org_admin_2fa_reset = EXCLUDED.allow_org_admin_2fa_reset,
-        updated_at = now()
+        updated_at = CURRENT_TIMESTAMP(3)
     `,
     [orgId, DEFAULT_EMAIL_OTP_REQUIRED, DEFAULT_ALLOW_ADMIN_2FA_RESET]
   );
 }
 
 async function upsertUser(client, orgId, userSpec) {
-  const { rows } = await client.query(
+  await client.query(
     `
       INSERT INTO qms_users (org_id, email, full_name, role_key, password_hash, is_active)
-      VALUES ($1, $2, $3, $4, crypt($5, gen_salt('bf')), true)
+      VALUES ($1, $2, $3, $4, $5, true)
       ON CONFLICT (org_id, email)
       DO UPDATE SET
         full_name = EXCLUDED.full_name,
         role_key = EXCLUDED.role_key,
-        password_hash = crypt($5, gen_salt('bf')),
+        password_hash = $5,
         is_active = true,
-        updated_at = now()
-      RETURNING id, email::text AS email, full_name, role_key
+        updated_at = CURRENT_TIMESTAMP(3)
     `,
-    [orgId, userSpec.email, userSpec.fullName, userSpec.primaryRole, userSpec.password]
+    [
+      orgId,
+      userSpec.email,
+      userSpec.fullName,
+      userSpec.primaryRole,
+      await bcrypt.hash(userSpec.password, BCRYPT_COST)
+    ]
+  );
+
+  // Natural key, not a generated id — the conflict branch keeps the existing row.
+  const { rows } = await client.query(
+    'SELECT id, email, full_name, role_key FROM qms_users WHERE org_id = $1 AND email = $2',
+    [orgId, userSpec.email]
   );
 
   return rows[0];
@@ -192,7 +216,7 @@ async function assignUserRoles(client, orgId, userId, roleKeys, primaryRole) {
   await client.query(
     `
       UPDATE qms_users
-      SET role_key = $3, updated_at = now()
+      SET role_key = $3, updated_at = CURRENT_TIMESTAMP(3)
       WHERE org_id = $1 AND id = $2
     `,
     [orgId, userId, primaryRole]
@@ -210,7 +234,7 @@ async function syncUser2fa(client, orgId, userId, otpEnabled) {
       INSERT INTO qms_user_2fa_settings (org_id, user_id, email_otp_enabled, reset_required)
       VALUES ($1, $2, true, false)
       ON CONFLICT (user_id)
-      DO UPDATE SET email_otp_enabled = true, reset_required = false, updated_at = now()
+      DO UPDATE SET email_otp_enabled = true, reset_required = false, updated_at = CURRENT_TIMESTAMP(3)
     `,
     [orgId, userId]
   );

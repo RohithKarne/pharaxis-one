@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
@@ -107,13 +108,15 @@ documentControlRouter.get('/documents/periodic-reviews/alerts', async (req, res,
             d.next_review_due_date,
             d.owner_user_id,
             u.full_name AS owner_name,
-            u.email::text AS owner_email,
-            (d.next_review_due_date::date - CURRENT_DATE) AS days_until_due
+            u.email AS owner_email,
+            (d.next_review_due_date - CURRENT_DATE) AS days_until_due
           FROM dc_documents d
           LEFT JOIN qms_users u ON u.id = d.owner_user_id
-          WHERE d.next_review_due_date <= (CURRENT_DATE + INTERVAL '90 days')
+          WHERE d.org_id = $1
+            AND d.next_review_due_date <= (CURRENT_DATE + INTERVAL '90 days')
           ORDER BY d.next_review_due_date ASC
-        `
+        `,
+        [req.authContext.orgId]
       );
       return rows;
     });
@@ -176,9 +179,11 @@ documentControlRouter.post('/documents', async (req, res, next) => {
       );
       const viewerDefaultCanDownload = Boolean(uploadPolicyRows[0]?.viewer_default_can_download);
 
-      const { rows: docs } = await client.query(
+      const newDocumentId = randomUUID();
+      await client.query(
         `
           INSERT INTO dc_documents (
+            id,
             org_id,
             document_code,
             title,
@@ -197,10 +202,9 @@ documentControlRouter.post('/documents', async (req, res, next) => {
             effective_to,
             created_by
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8,
+            $18, $1, $2, $3, $4, $5, $6, $7, $8,
             $9, $10, $11, $12, $13, $14, $15, $16, $17
           )
-          RETURNING *
         `,
         [
           req.authContext.orgId,
@@ -219,15 +223,23 @@ documentControlRouter.post('/documents', async (req, res, next) => {
           changeControlRefId,
           metadataJson || {},
           effectiveTo,
-          req.authContext.userId
+          req.authContext.userId,
+          newDocumentId
         ]
+      );
+
+      const { rows: docs } = await client.query(
+        `SELECT * FROM dc_documents WHERE id = $1 AND org_id = $2`,
+        [newDocumentId, req.authContext.orgId]
       );
 
       const document = docs[0];
 
-      const { rows: versions } = await client.query(
+      const newVersionId = randomUUID();
+      await client.query(
         `
           INSERT INTO dc_document_versions (
+            id,
             org_id,
             document_id,
             version_no,
@@ -235,10 +247,21 @@ documentControlRouter.post('/documents', async (req, res, next) => {
             content_summary,
             reason_for_change,
             created_by
-          ) VALUES ($1, $2, 1, 'Draft', $3, $4, $5)
-          RETURNING *
+          ) VALUES ($6, $1, $2, 1, 'Draft', $3, $4, $5)
         `,
-        [req.authContext.orgId, document.id, contentSummary || null, reasonForChange, req.authContext.userId]
+        [
+          req.authContext.orgId,
+          document.id,
+          contentSummary || null,
+          reasonForChange,
+          req.authContext.userId,
+          newVersionId
+        ]
+      );
+
+      const { rows: versions } = await client.query(
+        `SELECT * FROM dc_document_versions WHERE id = $1 AND org_id = $2`,
+        [newVersionId, req.authContext.orgId]
       );
 
       const version = versions[0];
@@ -246,24 +269,31 @@ documentControlRouter.post('/documents', async (req, res, next) => {
       await client.query(
         `
           UPDATE dc_documents
-          SET active_version_id = $2, updated_at = now()
+          SET active_version_id = $2, updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
+            AND org_id = $3
         `,
-        [document.id, version.id]
+        [document.id, version.id, req.authContext.orgId]
       );
       document.active_version_id = version.id;
 
-      const { rows: reviewRows } = await client.query(
+      const newReviewId = randomUUID();
+      await client.query(
         `
           INSERT INTO dc_document_periodic_reviews (
+            id,
             org_id,
             document_id,
             due_date,
             status
-          ) VALUES ($1, $2, $3, 'Pending')
-          RETURNING *
+          ) VALUES ($4, $1, $2, $3, 'Pending')
         `,
-        [req.authContext.orgId, document.id, nextReviewDueDate]
+        [req.authContext.orgId, document.id, nextReviewDueDate, newReviewId]
+      );
+
+      const { rows: reviewRows } = await client.query(
+        `SELECT * FROM dc_document_periodic_reviews WHERE id = $1 AND org_id = $2`,
+        [newReviewId, req.authContext.orgId]
       );
 
       await client.query(
@@ -353,8 +383,8 @@ documentControlRouter.post('/documents/:documentId/revisions', async (req, res, 
 
     const revision = await req.withRlsTransaction(async (client) => {
       const { rows: docs } = await client.query(
-        `SELECT id, document_code, active_version_id FROM dc_documents WHERE id = $1 FOR UPDATE`,
-        [documentId]
+        `SELECT id, document_code, active_version_id FROM dc_documents WHERE id = $1 AND org_id = $2 FOR UPDATE`,
+        [documentId, req.authContext.orgId]
       );
       if (!docs[0]) {
         const error = new Error('Document not found');
@@ -367,16 +397,19 @@ documentControlRouter.post('/documents/:documentId/revisions', async (req, res, 
           SELECT coalesce(max(version_no), 0) + 1 AS next_version
           FROM dc_document_versions
           WHERE document_id = $1
+            AND org_id = $2
         `,
-        [documentId]
+        [documentId, req.authContext.orgId]
       );
       const nextVersion = Number(seqRows[0].next_version);
 
       const nextSuperseded = supersedesVersionId || docs[0].active_version_id || null;
 
-      const { rows: versions } = await client.query(
+      const newVersionId = randomUUID();
+      await client.query(
         `
           INSERT INTO dc_document_versions (
+            id,
             org_id,
             document_id,
             version_no,
@@ -385,8 +418,7 @@ documentControlRouter.post('/documents/:documentId/revisions', async (req, res, 
             reason_for_change,
             supersedes_version_id,
             created_by
-          ) VALUES ($1, $2, $3, 'Draft', $4, $5, $6, $7)
-          RETURNING *
+          ) VALUES ($8, $1, $2, $3, 'Draft', $4, $5, $6, $7)
         `,
         [
           req.authContext.orgId,
@@ -395,8 +427,14 @@ documentControlRouter.post('/documents/:documentId/revisions', async (req, res, 
           contentSummary || null,
           reasonForChange,
           nextSuperseded,
-          req.authContext.userId
+          req.authContext.userId,
+          newVersionId
         ]
+      );
+
+      const { rows: versions } = await client.query(
+        `SELECT * FROM dc_document_versions WHERE id = $1 AND org_id = $2`,
+        [newVersionId, req.authContext.orgId]
       );
 
       await appendDocHistoryEvent(client, {
@@ -457,9 +495,10 @@ documentControlRouter.post('/documents/:documentId/versions/:versionId/transitio
           JOIN dc_documents d ON d.id = v.document_id
           WHERE v.id = $1
             AND v.document_id = $2
+            AND v.org_id = $3
           FOR UPDATE
         `,
-        [versionId, documentId]
+        [versionId, documentId, req.authContext.orgId]
       );
 
       const current = versions[0];
@@ -490,31 +529,37 @@ documentControlRouter.post('/documents/:documentId/versions/:versionId/transitio
         await client.query(
           `
             UPDATE dc_document_versions
-            SET status = 'Retired', retired_at = now(), retired_by = $3, updated_at = now()
+            SET status = 'Retired', retired_at = CURRENT_TIMESTAMP(3), retired_by = $3, updated_at = CURRENT_TIMESTAMP(3)
             WHERE document_id = $1
               AND id <> $2
               AND status = 'Effective'
+              AND org_id = $4
           `,
-          [documentId, versionId, req.authContext.userId]
+          [documentId, versionId, req.authContext.userId, req.authContext.orgId]
         );
       }
 
-      const { rows: updatedVersionRows } = await client.query(
+      await client.query(
         `
           UPDATE dc_document_versions
           SET
             status = $2,
             approved_by = CASE WHEN $2 = 'Approved' THEN $3 ELSE approved_by END,
-            approved_at = CASE WHEN $2 = 'Approved' THEN now() ELSE approved_at END,
+            approved_at = CASE WHEN $2 = 'Approved' THEN CURRENT_TIMESTAMP(3) ELSE approved_at END,
             effective_by = CASE WHEN $2 = 'Effective' THEN $3 ELSE effective_by END,
             effective_date = CASE WHEN $2 = 'Effective' THEN CURRENT_DATE ELSE effective_date END,
             retired_by = CASE WHEN $2 = 'Retired' THEN $3 ELSE retired_by END,
-            retired_at = CASE WHEN $2 = 'Retired' THEN now() ELSE retired_at END,
-            updated_at = now()
+            retired_at = CASE WHEN $2 = 'Retired' THEN CURRENT_TIMESTAMP(3) ELSE retired_at END,
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $4
         `,
-        [versionId, toStatus, req.authContext.userId]
+        [versionId, toStatus, req.authContext.userId, req.authContext.orgId]
+      );
+
+      const { rows: updatedVersionRows } = await client.query(
+        `SELECT * FROM dc_document_versions WHERE id = $1 AND org_id = $2`,
+        [versionId, req.authContext.orgId]
       );
 
       if (toStatus === 'Effective') {
@@ -526,20 +571,22 @@ documentControlRouter.post('/documents/:documentId/versions/:versionId/transitio
               active_version_id = $2,
               effective_from = CURRENT_DATE,
               next_review_due_date = $3,
-              updated_at = now()
+              updated_at = CURRENT_TIMESTAMP(3)
             WHERE id = $1
+              AND org_id = $4
           `,
-          [documentId, versionId, nextReviewDate]
+          [documentId, versionId, nextReviewDate, req.authContext.orgId]
         );
 
         await client.query(
           `
             UPDATE dc_document_periodic_reviews
-            SET due_date = $2, status = 'Pending', updated_at = now()
+            SET due_date = $2, status = 'Pending', updated_at = CURRENT_TIMESTAMP(3)
             WHERE document_id = $1
               AND status IN ('Pending', 'Overdue')
+              AND org_id = $3
           `,
-          [documentId, nextReviewDate]
+          [documentId, nextReviewDate, req.authContext.orgId]
         );
       }
 
@@ -547,10 +594,11 @@ documentControlRouter.post('/documents/:documentId/versions/:versionId/transitio
         await client.query(
           `
             UPDATE dc_documents
-            SET active_version_id = NULL, effective_to = CURRENT_DATE, updated_at = now()
+            SET active_version_id = NULL, effective_to = CURRENT_DATE, updated_at = CURRENT_TIMESTAMP(3)
             WHERE id = $1
+              AND org_id = $2
           `,
-          [documentId]
+          [documentId, req.authContext.orgId]
         );
       }
 
@@ -593,19 +641,34 @@ documentControlRouter.post('/documents/:documentId/versions/:versionId/acknowled
     const { documentId, versionId } = req.params;
 
     const ack = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           INSERT INTO dc_document_acknowledgements (
+            id,
             org_id,
             document_id,
             version_id,
             user_id
-          ) VALUES ($1, $2, $3, $4)
+          ) VALUES ($5, $1, $2, $3, $4)
           ON CONFLICT (version_id, user_id)
-          DO UPDATE SET acknowledged_at = now()
-          RETURNING *
+          DO UPDATE SET acknowledged_at = CURRENT_TIMESTAMP(3)
         `,
-        [req.authContext.orgId, documentId, versionId, req.authContext.userId]
+        [req.authContext.orgId, documentId, versionId, req.authContext.userId, randomUUID()]
+      );
+
+      // Read back on the natural key, not the generated id: on the conflict path
+      // the pre-existing row keeps its own id, so a lookup by the id we just
+      // generated would find nothing.
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM dc_document_acknowledgements
+          WHERE version_id = $1
+            AND user_id = $2
+            AND org_id = $3
+          LIMIT 1
+        `,
+        [versionId, req.authContext.userId, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -644,9 +707,10 @@ documentControlRouter.post('/documents/:documentId/versions/:versionId/export', 
           FROM dc_documents d
           LEFT JOIN sa_org_upload_policies p ON p.org_id = d.org_id
           WHERE d.id = $1
+            AND d.org_id = $2
           LIMIT 1
         `,
-        [documentId]
+        [documentId, req.authContext.orgId]
       );
 
       if (!docs[0]) {
@@ -659,10 +723,10 @@ documentControlRouter.post('/documents/:documentId/versions/:versionId/export', 
         `
           SELECT id, version_no, status
           FROM dc_document_versions
-          WHERE id = $1 AND document_id = $2
+          WHERE id = $1 AND document_id = $2 AND org_id = $3
           LIMIT 1
         `,
-        [versionId, documentId]
+        [versionId, documentId, req.authContext.orgId]
       );
 
       if (!versions[0]) {
@@ -671,17 +735,18 @@ documentControlRouter.post('/documents/:documentId/versions/:versionId/export', 
         throw error;
       }
 
-      const { rows: exportRows } = await client.query(
+      const newExportId = randomUUID();
+      await client.query(
         `
           INSERT INTO dc_document_exports (
+            id,
             org_id,
             document_id,
             version_id,
             binder_job_reference,
             exported_by,
             export_format
-          ) VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING *
+          ) VALUES ($7, $1, $2, $3, $4, $5, $6)
         `,
         [
           req.authContext.orgId,
@@ -689,8 +754,14 @@ documentControlRouter.post('/documents/:documentId/versions/:versionId/export', 
           versionId,
           binderJobReference,
           req.authContext.userId,
-          String(exportFormat || 'PDF').toUpperCase()
+          String(exportFormat || 'PDF').toUpperCase(),
+          newExportId
         ]
+      );
+
+      const { rows: exportRows } = await client.query(
+        `SELECT * FROM dc_document_exports WHERE id = $1 AND org_id = $2`,
+        [newExportId, req.authContext.orgId]
       );
 
       const watermarkLabel = docs[0].viewer_download_requires_watermark
@@ -742,33 +813,38 @@ documentControlRouter.put('/documents/:documentId/access-policies', async (req, 
     assertAnyRole(req, ['admin', 'superadmin', 'qa_reviewer']);
 
     const updated = await req.withRlsTransaction(async (client) => {
-      const { rows: docs } = await client.query('SELECT id FROM dc_documents WHERE id = $1 LIMIT 1', [
-        documentId
-      ]);
+      const { rows: docs } = await client.query(
+        'SELECT id FROM dc_documents WHERE id = $1 AND org_id = $2 LIMIT 1',
+        [documentId, req.authContext.orgId]
+      );
       if (!docs[0]) {
         const error = new Error('Document not found');
         error.statusCode = 404;
         throw error;
       }
 
-      await client.query('DELETE FROM dc_document_access_policies WHERE document_id = $1', [documentId]);
+      await client.query('DELETE FROM dc_document_access_policies WHERE document_id = $1 AND org_id = $2', [
+        documentId,
+        req.authContext.orgId
+      ]);
 
       const saved = [];
       for (const policy of policies) {
         const roleKey = String(policy.roleKey || '').trim();
         if (!roleKey) continue;
 
-        const { rows } = await client.query(
+        const newPolicyId = randomUUID();
+        await client.query(
           `
             INSERT INTO dc_document_access_policies (
+              id,
               org_id,
               document_id,
               role_key,
               can_view,
               can_download,
               can_print
-            ) VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING *
+            ) VALUES ($7, $1, $2, $3, $4, $5, $6)
           `,
           [
             req.authContext.orgId,
@@ -776,8 +852,14 @@ documentControlRouter.put('/documents/:documentId/access-policies', async (req, 
             roleKey,
             policy.canView !== false,
             Boolean(policy.canDownload),
-            Boolean(policy.canPrint)
+            Boolean(policy.canPrint),
+            newPolicyId
           ]
+        );
+
+        const { rows } = await client.query(
+          `SELECT * FROM dc_document_access_policies WHERE id = $1 AND org_id = $2`,
+          [newPolicyId, req.authContext.orgId]
         );
         saved.push(rows[0]);
       }
@@ -813,9 +895,10 @@ documentControlRouter.get('/documents/:documentId/versions', async (req, res, ne
           SELECT *
           FROM dc_document_versions
           WHERE document_id = $1
+            AND org_id = $2
           ORDER BY version_no DESC
         `,
-        [documentId]
+        [documentId, req.authContext.orgId]
       );
       return rows;
     });
@@ -835,54 +918,57 @@ documentControlRouter.get('/documents/:documentId/timeline', async (req, res, ne
         `
           SELECT
             e.id,
-            'workflow'::text AS event_type,
+            'workflow' AS event_type,
             e.from_status,
             e.to_status,
             e.notes,
             e.acted_at AS event_at,
             u.full_name AS actor_name,
-            u.email::text AS actor_email
+            u.email AS actor_email
           FROM dc_document_workflow_events e
           LEFT JOIN qms_users u ON u.id = e.acted_by
           WHERE e.document_id = $1
+            AND e.org_id = $2
         `,
-        [documentId]
+        [documentId, req.authContext.orgId]
       );
 
       const reviewPromise = client.query(
         `
           SELECT
             h.id,
-            'review'::text AS event_type,
-            NULL::text AS from_status,
-            h.result::text AS to_status,
+            'review' AS event_type,
+            NULL AS from_status,
+            h.result AS to_status,
             h.notes,
             h.completed_at AS event_at,
             u.full_name AS actor_name,
-            u.email::text AS actor_email
+            u.email AS actor_email
           FROM dc_document_review_history h
           LEFT JOIN qms_users u ON u.id = h.completed_by
           WHERE h.document_id = $1
+            AND h.org_id = $2
         `,
-        [documentId]
+        [documentId, req.authContext.orgId]
       );
 
       const exportPromise = client.query(
         `
           SELECT
             x.id,
-            'export'::text AS event_type,
-            NULL::text AS from_status,
-            x.export_format::text AS to_status,
-            x.binder_job_reference::text AS notes,
+            'export' AS event_type,
+            NULL AS from_status,
+            x.export_format AS to_status,
+            x.binder_job_reference AS notes,
             x.exported_at AS event_at,
             u.full_name AS actor_name,
-            u.email::text AS actor_email
+            u.email AS actor_email
           FROM dc_document_exports x
           LEFT JOIN qms_users u ON u.id = x.exported_by
           WHERE x.document_id = $1
+            AND x.org_id = $2
         `,
-        [documentId]
+        [documentId, req.authContext.orgId]
       );
 
       const [workflow, reviews, exports] = await Promise.all([
@@ -914,9 +1000,10 @@ documentControlRouter.get('/documents/:documentId/reviews', async (req, res, nex
           SELECT *
           FROM dc_document_periodic_reviews
           WHERE document_id = $1
+            AND org_id = $2
           ORDER BY due_date ASC
         `,
-        [documentId]
+        [documentId, req.authContext.orgId]
       );
       return rows;
     });
@@ -940,9 +1027,10 @@ documentControlRouter.post('/documents/:documentId/reviews/:reviewId/complete', 
           SELECT id, review_interval_days
           FROM dc_documents
           WHERE id = $1
+            AND org_id = $2
           LIMIT 1
         `,
-        [documentId]
+        [documentId, req.authContext.orgId]
       );
       const document = docRows[0];
       if (!document) {
@@ -955,10 +1043,10 @@ documentControlRouter.post('/documents/:documentId/reviews/:reviewId/complete', 
         `
           SELECT *
           FROM dc_document_periodic_reviews
-          WHERE id = $1 AND document_id = $2
+          WHERE id = $1 AND document_id = $2 AND org_id = $3
           FOR UPDATE
         `,
-        [reviewId, documentId]
+        [reviewId, documentId, req.authContext.orgId]
       );
       const currentReview = reviewRows[0];
       if (!currentReview) {
@@ -967,20 +1055,25 @@ documentControlRouter.post('/documents/:documentId/reviews/:reviewId/complete', 
         throw error;
       }
 
-      const { rows: completedRows } = await client.query(
+      await client.query(
         `
           UPDATE dc_document_periodic_reviews
           SET
             status = 'Completed',
-            completed_at = now(),
+            completed_at = CURRENT_TIMESTAMP(3),
             completed_by = $3,
             completion_notes = $4,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
             AND document_id = $2
-          RETURNING *
+            AND org_id = $5
         `,
-        [reviewId, documentId, req.authContext.userId, notes]
+        [reviewId, documentId, req.authContext.userId, notes, req.authContext.orgId]
+      );
+
+      const { rows: completedRows } = await client.query(
+        `SELECT * FROM dc_document_periodic_reviews WHERE id = $1 AND org_id = $2`,
+        [reviewId, req.authContext.orgId]
       );
 
       await client.query(
@@ -1007,26 +1100,33 @@ documentControlRouter.post('/documents/:documentId/reviews/:reviewId/complete', 
       );
 
       const nextReviewDueDate = buildNextReviewDate(document.review_interval_days);
-      const { rows: nextRows } = await client.query(
+      const nextReviewId = randomUUID();
+      await client.query(
         `
           INSERT INTO dc_document_periodic_reviews (
+            id,
             org_id,
             document_id,
             due_date,
             status
-          ) VALUES ($1, $2, $3, 'Pending')
-          RETURNING *
+          ) VALUES ($4, $1, $2, $3, 'Pending')
         `,
-        [req.authContext.orgId, documentId, nextReviewDueDate]
+        [req.authContext.orgId, documentId, nextReviewDueDate, nextReviewId]
+      );
+
+      const { rows: nextRows } = await client.query(
+        `SELECT * FROM dc_document_periodic_reviews WHERE id = $1 AND org_id = $2`,
+        [nextReviewId, req.authContext.orgId]
       );
 
       await client.query(
         `
           UPDATE dc_documents
-          SET next_review_due_date = $2, updated_at = now()
+          SET next_review_due_date = $2, updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
+            AND org_id = $3
         `,
-        [documentId, nextReviewDueDate]
+        [documentId, nextReviewDueDate, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -1094,8 +1194,9 @@ documentControlRouter.get('/documents/:documentId/versions/:versionId/controlled
           FROM dc_documents d
           LEFT JOIN sa_org_upload_policies p ON p.org_id = d.org_id
           WHERE d.id = $1
+            AND d.org_id = $2
         `,
-        [documentId]
+        [documentId, req.authContext.orgId]
       );
 
       if (!docs[0]) {
@@ -1108,9 +1209,9 @@ documentControlRouter.get('/documents/:documentId/versions/:versionId/controlled
         `
           SELECT id, status, version_no
           FROM dc_document_versions
-          WHERE id = $1 AND document_id = $2
+          WHERE id = $1 AND document_id = $2 AND org_id = $3
         `,
-        [versionId, documentId]
+        [versionId, documentId, req.authContext.orgId]
       );
 
       if (!versions[0]) {
@@ -1123,10 +1224,10 @@ documentControlRouter.get('/documents/:documentId/versions/:versionId/controlled
         `
           SELECT id
           FROM dc_document_acknowledgements
-          WHERE version_id = $1 AND user_id = $2
+          WHERE version_id = $1 AND user_id = $2 AND org_id = $3
           LIMIT 1
         `,
-        [versionId, req.authContext.userId]
+        [versionId, req.authContext.userId, req.authContext.orgId]
       );
 
       const userRoles = Array.isArray(req.authContext.roles) ? req.authContext.roles : [];
@@ -1177,9 +1278,10 @@ documentControlRouter.get('/documents/:documentId', async (req, res, next) => {
           FROM dc_documents d
           LEFT JOIN dc_document_versions v ON v.id = d.active_version_id
           WHERE d.id = $1
+            AND d.org_id = $2
           LIMIT 1
         `,
-        [documentId]
+        [documentId, req.authContext.orgId]
       );
 
       if (!docs[0]) {
@@ -1194,36 +1296,40 @@ documentControlRouter.get('/documents/:documentId', async (req, res, next) => {
             SELECT role_key, can_view, can_download, can_print
             FROM dc_document_access_policies
             WHERE document_id = $1
+              AND org_id = $2
             ORDER BY role_key ASC
           `,
-          [documentId]
+          [documentId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM dc_document_versions
             WHERE document_id = $1
+              AND org_id = $2
             ORDER BY version_no DESC
           `,
-          [documentId]
+          [documentId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM dc_document_periodic_reviews
             WHERE document_id = $1
+              AND org_id = $2
             ORDER BY due_date ASC
           `,
-          [documentId]
+          [documentId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT target_type, target_value, acknowledgement_required
             FROM dc_document_distribution_targets
             WHERE document_id = $1
+              AND org_id = $2
             ORDER BY target_type ASC, target_value ASC
           `,
-          [documentId]
+          [documentId, req.authContext.orgId]
         )
       ]);
 

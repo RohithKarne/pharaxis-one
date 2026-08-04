@@ -25,9 +25,10 @@ securityRouter.get('/me', async (req, res, next) => {
           SELECT email_otp_enabled, reset_required, last_verified_at, updated_at
           FROM qms_user_2fa_settings
           WHERE user_id = $1
+            AND org_id = $2
           LIMIT 1
         `,
-        [req.authContext.userId]
+        [req.authContext.userId, req.authContext.orgId]
       );
 
       return {
@@ -74,12 +75,13 @@ securityRouter.post('/users/:userId/2fa-reset', async (req, res, next) => {
 
       const { rows: userRows } = await client.query(
         `
-          SELECT id, org_id, email::text AS email
+          SELECT id, org_id, email
           FROM qms_users
           WHERE id = $1
+            AND ($2 OR org_id = $3)
           LIMIT 1
         `,
-        [userId]
+        [userId, isSuperadmin, req.authContext.orgId]
       );
 
       if (!userRows[0]) {
@@ -88,7 +90,7 @@ securityRouter.post('/users/:userId/2fa-reset', async (req, res, next) => {
         throw error;
       }
 
-      const { rows: settingsRows } = await client.query(
+      await client.query(
         `
           INSERT INTO qms_user_2fa_settings (
             org_id,
@@ -98,16 +100,26 @@ securityRouter.post('/users/:userId/2fa-reset', async (req, res, next) => {
             reset_by,
             updated_at
           )
-          VALUES ($1, $2, true, true, $3, now())
+          VALUES ($1, $2, true, true, $3, CURRENT_TIMESTAMP(3))
           ON CONFLICT (user_id)
           DO UPDATE SET
             email_otp_enabled = true,
             reset_required = true,
             reset_by = EXCLUDED.reset_by,
-            updated_at = now()
-          RETURNING user_id, email_otp_enabled, reset_required, updated_at
+            updated_at = CURRENT_TIMESTAMP(3)
         `,
         [userRows[0].org_id, userId, req.authContext.userId]
+      );
+
+      const { rows: settingsRows } = await client.query(
+        `
+          SELECT user_id, email_otp_enabled, reset_required, updated_at
+          FROM qms_user_2fa_settings
+          WHERE user_id = $1
+            AND org_id = $2
+          LIMIT 1
+        `,
+        [userId, userRows[0].org_id]
       );
 
       await appendAuditEvent(client, {

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { makeEntityCode, asDateString } from '../utils/codegen.js';
@@ -25,7 +26,8 @@ managementReviewRouter.post('/', async (req, res, next) => {
     }
 
     const review = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const newReviewId = randomUUID();
+      await client.query(
         `
           INSERT INTO mr_management_reviews (
             org_id,
@@ -35,10 +37,10 @@ managementReviewRouter.post('/', async (req, res, next) => {
             chairperson,
             summary,
             decisions,
-            created_by
+            created_by,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         `,
         [
           req.authContext.orgId,
@@ -48,8 +50,14 @@ managementReviewRouter.post('/', async (req, res, next) => {
           chairperson,
           summary,
           decisions,
-          req.authContext.userId
+          req.authContext.userId,
+          newReviewId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM mr_management_reviews WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [newReviewId, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -88,7 +96,7 @@ managementReviewRouter.patch('/:reviewId', async (req, res, next) => {
     }
 
     const review = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE mr_management_reviews
           SET
@@ -97,12 +105,17 @@ managementReviewRouter.patch('/:reviewId', async (req, res, next) => {
             summary = COALESCE($4, summary),
             decisions = COALESCE($5, decisions),
             approved_by = CASE WHEN COALESCE($2, status) = 'Approved' THEN $6 ELSE approved_by END,
-            approved_at = CASE WHEN COALESCE($2, status) = 'Approved' THEN COALESCE(approved_at, now()) ELSE approved_at END,
-            updated_at = now()
+            approved_at = CASE WHEN COALESCE($2, status) = 'Approved' THEN COALESCE(approved_at, CURRENT_TIMESTAMP(3)) ELSE approved_at END,
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $7
         `,
-        [reviewId, status, chairperson, summary, decisions, req.authContext.userId]
+        [reviewId, status, chairperson, summary, decisions, req.authContext.userId, req.authContext.orgId]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM mr_management_reviews WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [reviewId, req.authContext.orgId]
       );
 
       if (!rows[0]) {
@@ -141,26 +154,35 @@ managementReviewRouter.post('/:reviewId/actions', async (req, res, next) => {
     }
 
     const action = await req.withRlsTransaction(async (client) => {
-      const { rows: reviewRows } = await client.query(`SELECT id FROM mr_management_reviews WHERE id = $1 LIMIT 1`, [reviewId]);
+      const { rows: reviewRows } = await client.query(
+        `SELECT id FROM mr_management_reviews WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [reviewId, req.authContext.orgId]
+      );
       if (!reviewRows[0]) {
         const error = new Error('Management review not found');
         error.statusCode = 404;
         throw error;
       }
 
-      const { rows } = await client.query(
+      const newActionId = randomUUID();
+      await client.query(
         `
           INSERT INTO mr_review_actions (
             org_id,
             review_id,
             action_title,
             owner_user_id,
-            due_date
+            due_date,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6)
         `,
-        [req.authContext.orgId, reviewId, actionTitle, ownerUserId, asDateString(dueDate)]
+        [req.authContext.orgId, reviewId, actionTitle, ownerUserId, asDateString(dueDate), newActionId]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM mr_review_actions WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [newActionId, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -193,18 +215,23 @@ managementReviewRouter.patch('/actions/:actionId', async (req, res, next) => {
     }
 
     const action = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE mr_review_actions
           SET
             status = COALESCE($2, status),
             closure_notes = COALESCE($3, closure_notes),
             due_date = COALESCE($4, due_date),
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $5
         `,
-        [actionId, status, closureNotes, asDateString(dueDate)]
+        [actionId, status, closureNotes, asDateString(dueDate), req.authContext.orgId]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM mr_review_actions WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [actionId, req.authContext.orgId]
       );
 
       if (!rows[0]) {
@@ -238,8 +265,8 @@ managementReviewRouter.get('/:reviewId', async (req, res, next) => {
 
     const payload = await req.withRlsTransaction(async (client) => {
       const { rows: reviewRows } = await client.query(
-        `SELECT * FROM mr_management_reviews WHERE id = $1 LIMIT 1`,
-        [reviewId]
+        `SELECT * FROM mr_management_reviews WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [reviewId, req.authContext.orgId]
       );
       if (!reviewRows[0]) {
         const error = new Error('Management review not found');
@@ -248,8 +275,8 @@ managementReviewRouter.get('/:reviewId', async (req, res, next) => {
       }
 
       const { rows: actions } = await client.query(
-        `SELECT * FROM mr_review_actions WHERE review_id = $1 ORDER BY created_at DESC`,
-        [reviewId]
+        `SELECT * FROM mr_review_actions WHERE review_id = $1 AND org_id = $2 ORDER BY created_at DESC`,
+        [reviewId, req.authContext.orgId]
       );
 
       return {
@@ -268,10 +295,12 @@ managementReviewRouter.get('/', async (req, res, next) => {
   try {
     const snapshot = await req.withRlsTransaction(async (client) => {
       const reviewsRows = await client.query(
-        `SELECT * FROM mr_management_reviews ORDER BY review_period_end DESC, updated_at DESC LIMIT 200`
+        `SELECT * FROM mr_management_reviews WHERE org_id = $1 ORDER BY review_period_end DESC, updated_at DESC LIMIT 200`,
+        [req.authContext.orgId]
       );
       const actionsRows = await client.query(
-        `SELECT * FROM mr_review_actions ORDER BY updated_at DESC LIMIT 500`
+        `SELECT * FROM mr_review_actions WHERE org_id = $1 ORDER BY updated_at DESC LIMIT 500`,
+        [req.authContext.orgId]
       );
 
       return {

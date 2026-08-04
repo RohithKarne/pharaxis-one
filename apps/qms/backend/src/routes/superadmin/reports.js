@@ -1,3 +1,6 @@
+// tenant-scope-audit: cross-org — superadmin platform surface, mounted behind
+// superadminAuth (src/app.js:72). These are deliberate all-org aggregates and
+// cross-org user administration; scoping them to one org would break superadmin.
 import { Router } from 'express';
 
 export const superadminReportsRouter = Router();
@@ -10,14 +13,20 @@ superadminReportsRouter.get('/billing-summary', async (req, res, next) => {
           SELECT
             b.plan_key,
             b.billing_status,
-            count(*)::int AS org_count,
-            coalesce(sum(b.license_limit), 0)::int AS total_license_limit
+            count(*) AS org_count,
+            coalesce(sum(b.license_limit), 0) AS total_license_limit
           FROM sa_org_billing_controls b
           GROUP BY b.plan_key, b.billing_status
           ORDER BY b.plan_key, b.billing_status
         `
       );
-      return rows;
+      // count()/sum() come back as JS strings without the ::int cast — the API
+      // contract for these two fields is numeric, so coerce here instead.
+      return rows.map((row) => ({
+        ...row,
+        org_count: Number(row.org_count),
+        total_license_limit: Number(row.total_license_limit)
+      }));
     });
 
     return res.json({ summary });
@@ -35,11 +44,11 @@ superadminReportsRouter.get('/login-audit', async (req, res, next) => {
           SELECT
             id,
             org_id,
-            email::text AS email,
+            email,
             login_surface,
             outcome,
             reason,
-            ip_address::text AS ip_address,
+            ip_address,
             user_agent,
             occurred_at
           FROM qms_login_audit

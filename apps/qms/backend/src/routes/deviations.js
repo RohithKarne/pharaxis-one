@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { appendTraceLink } from '../services/traceabilityService.js';
@@ -10,6 +11,21 @@ const validTypes = new Set(['Product', 'Process', 'System', 'Environmental']);
 const validClassifications = new Set(['Critical', 'Major', 'Minor']);
 const validReportability = new Set(['Yes', 'No', 'Under Review']);
 const validImpactLevels = new Set(['Low', 'Medium', 'High', 'Critical']);
+
+async function getDeviationRecord(client, orgId, deviationId) {
+  const { rows } = await client.query(
+    `
+      SELECT *
+      FROM dv_deviation_records
+      WHERE id = $1
+        AND org_id = $2
+      LIMIT 1
+    `,
+    [deviationId, orgId]
+  );
+
+  return rows[0] || null;
+}
 
 async function appendDeviationHistoryEvent(client, {
   orgId,
@@ -26,7 +42,7 @@ async function appendDeviationHistoryEvent(client, {
         action_key,
         actor_user_id,
         payload_json
-      ) VALUES ($1, $2, $3, $4, $5::jsonb)
+      ) VALUES ($1, $2, $3, $4, $5)
     `,
     [orgId, deviationId, actionKey, actorUserId, JSON.stringify(payloadJson)]
   );
@@ -59,7 +75,9 @@ deviationsRouter.post('/', async (req, res, next) => {
     }
 
     const deviation = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const newDeviationId = randomUUID();
+
+      await client.query(
         `
           INSERT INTO dv_deviation_records (
             org_id,
@@ -73,10 +91,10 @@ deviationsRouter.post('/', async (req, res, next) => {
             department,
             due_date,
             detected_by,
-            created_by
+            created_by,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, 'Open', $7, $8, $9, $10, $10)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, 'Open', $7, $8, $9, $10, $10, $11)
         `,
         [
           req.authContext.orgId,
@@ -88,13 +106,14 @@ deviationsRouter.post('/', async (req, res, next) => {
           asDateString(dateOfOccurrence),
           department,
           asDateString(dueDate),
-          req.authContext.userId
+          req.authContext.userId,
+          newDeviationId
         ]
       );
 
       await appendDeviationHistoryEvent(client, {
         orgId: req.authContext.orgId,
-        deviationId: rows[0].id,
+        deviationId: newDeviationId,
         actionKey: 'create',
         actorUserId: req.authContext.userId,
         payloadJson: {
@@ -108,13 +127,13 @@ deviationsRouter.post('/', async (req, res, next) => {
         orgId: req.authContext.orgId,
         moduleKey: 'deviation',
         entityTable: 'dv_deviation_records',
-        entityId: rows[0].id,
+        entityId: newDeviationId,
         actionKey: 'create',
         actorUserId: req.authContext.userId,
         payloadJson: { classification, deviationType }
       });
 
-      return rows[0];
+      return getDeviationRecord(client, req.authContext.orgId, newDeviationId);
     });
 
     return res.status(201).json({ deviation });
@@ -147,7 +166,7 @@ deviationsRouter.patch('/:deviationId', async (req, res, next) => {
     }
 
     const deviation = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE dv_deviation_records
           SET
@@ -158,9 +177,9 @@ deviationsRouter.patch('/:deviationId', async (req, res, next) => {
             impact_level = COALESCE($6, impact_level),
             reportability_status = COALESCE($7, reportability_status),
             reportability_reason = COALESCE($8, reportability_reason),
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $9
         `,
         [
           deviationId,
@@ -170,11 +189,13 @@ deviationsRouter.patch('/:deviationId', async (req, res, next) => {
           asDateString(dueDate),
           impactLevel || null,
           reportabilityStatus || null,
-          reportabilityReason || null
+          reportabilityReason || null,
+          req.authContext.orgId
         ]
       );
 
-      if (!rows[0]) {
+      const updated = await getDeviationRecord(client, req.authContext.orgId, deviationId);
+      if (!updated) {
         const error = new Error('Deviation not found');
         error.statusCode = 404;
         throw error;
@@ -194,7 +215,7 @@ deviationsRouter.patch('/:deviationId', async (req, res, next) => {
         }
       });
 
-      return rows[0];
+      return updated;
     });
 
     return res.json({ deviation });
@@ -221,7 +242,7 @@ deviationsRouter.post('/:deviationId/triage', async (req, res, next) => {
     }
 
     const deviation = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE dv_deviation_records
           SET
@@ -230,21 +251,23 @@ deviationsRouter.post('/:deviationId/triage', async (req, res, next) => {
             impact_level = $3,
             assigned_qa_reviewer_user_id = COALESCE($4, assigned_qa_reviewer_user_id),
             due_date = COALESCE($5, due_date),
-            triaged_at = now(),
-            updated_at = now()
+            triaged_at = CURRENT_TIMESTAMP(3),
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $6
         `,
         [
           deviationId,
           triageSummary,
           impactLevel,
           assignedQaReviewerUserId,
-          asDateString(dueDate)
+          asDateString(dueDate),
+          req.authContext.orgId
         ]
       );
 
-      if (!rows[0]) {
+      const updated = await getDeviationRecord(client, req.authContext.orgId, deviationId);
+      if (!updated) {
         const error = new Error('Deviation not found');
         error.statusCode = 404;
         throw error;
@@ -262,7 +285,7 @@ deviationsRouter.post('/:deviationId/triage', async (req, res, next) => {
         }
       });
 
-      return rows[0];
+      return updated;
     });
 
     return res.json({ deviation });
@@ -280,27 +303,40 @@ deviationsRouter.post('/:deviationId/containment', async (req, res, next) => {
     }
 
     const containment = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const newContainmentId = randomUUID();
+
+      await client.query(
         `
           INSERT INTO dv_containment_actions (
             org_id,
             deviation_id,
             action_text,
-            recorded_by
+            recorded_by,
+            id
           )
-          VALUES ($1, $2, $3, $4)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5)
         `,
-        [req.authContext.orgId, deviationId, actionText, req.authContext.userId]
+        [req.authContext.orgId, deviationId, actionText, req.authContext.userId, newContainmentId]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM dv_containment_actions
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [newContainmentId, req.authContext.orgId]
       );
 
       await client.query(
         `
           UPDATE dv_deviation_records
-          SET status = 'Containment', updated_at = now()
+          SET status = 'Containment', updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
+            AND org_id = $2
         `,
-        [deviationId]
+        [deviationId, req.authContext.orgId]
       );
 
       await appendDeviationHistoryEvent(client, {
@@ -339,7 +375,9 @@ deviationsRouter.post('/:deviationId/investigation', async (req, res, next) => {
     }
 
     const investigation = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const newInvestigationId = randomUUID();
+
+      await client.query(
         `
           INSERT INTO dv_investigations (
             org_id,
@@ -348,10 +386,10 @@ deviationsRouter.post('/:deviationId/investigation', async (req, res, next) => {
             due_date,
             findings,
             evidence_ref,
-            status
+            status,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, 'InProgress')
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, 'InProgress', $7)
         `,
         [
           req.authContext.orgId,
@@ -359,8 +397,19 @@ deviationsRouter.post('/:deviationId/investigation', async (req, res, next) => {
           investigatorUserId,
           asDateString(dueDate),
           findings || null,
-          evidenceRef || null
+          evidenceRef || null,
+          newInvestigationId
         ]
+      );
+
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM dv_investigations
+          WHERE id = $1
+            AND org_id = $2
+        `,
+        [newInvestigationId, req.authContext.orgId]
       );
 
       await client.query(
@@ -370,10 +419,11 @@ deviationsRouter.post('/:deviationId/investigation', async (req, res, next) => {
             status = 'Investigation',
             root_cause = COALESCE($2, root_cause),
             due_date = COALESCE($3, due_date),
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
+            AND org_id = $4
         `,
-        [deviationId, rootCause || null, asDateString(dueDate)]
+        [deviationId, rootCause || null, asDateString(dueDate), req.authContext.orgId]
       );
 
       await appendDeviationHistoryEvent(client, {
@@ -432,9 +482,10 @@ deviationsRouter.post('/:deviationId/qa-review', async (req, res, next) => {
           SELECT id, status
           FROM dv_deviation_records
           WHERE id = $1
+            AND org_id = $2
           FOR UPDATE
         `,
-        [deviationId]
+        [deviationId, req.authContext.orgId]
       );
       if (!currentRows[0]) {
         const error = new Error('Deviation not found');
@@ -444,19 +495,19 @@ deviationsRouter.post('/:deviationId/qa-review', async (req, res, next) => {
 
       const nextStatus = decision === 'Approve' ? 'QAReview' : 'Investigation';
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE dv_deviation_records
           SET
             status = $2,
             reportability_status = $3,
             reportability_reason = COALESCE($4, reportability_reason),
-            qa_reviewed_at = now(),
-            updated_at = now()
+            qa_reviewed_at = CURRENT_TIMESTAMP(3),
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $5
         `,
-        [deviationId, nextStatus, reportabilityStatus, reportabilityReason]
+        [deviationId, nextStatus, reportabilityStatus, reportabilityReason, req.authContext.orgId]
       );
 
       await appendDeviationHistoryEvent(client, {
@@ -472,7 +523,7 @@ deviationsRouter.post('/:deviationId/qa-review', async (req, res, next) => {
         }
       });
 
-      return rows[0];
+      return getDeviationRecord(client, req.authContext.orgId, deviationId);
     });
 
     return res.json({ deviation });
@@ -490,29 +541,42 @@ deviationsRouter.post('/:deviationId/link-capa', async (req, res, next) => {
     }
 
     const payload = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           INSERT INTO dv_deviation_capa_links (
             org_id,
             deviation_id,
             capa_id,
-            created_by
+            created_by,
+            id
           )
-          VALUES ($1, $2, $3, $4)
+          VALUES ($1, $2, $3, $4, $5)
           ON CONFLICT (deviation_id, capa_id)
-          DO UPDATE SET created_at = now()
-          RETURNING *
+          DO UPDATE SET created_at = CURRENT_TIMESTAMP(3)
         `,
-        [req.authContext.orgId, deviationId, capaId, req.authContext.userId]
+        [req.authContext.orgId, deviationId, capaId, req.authContext.userId, randomUUID()]
+      );
+
+      // Read back on the natural key, not the id generated above: on the
+      // conflict branch the existing row is kept, so that id was never stored.
+      const { rows } = await client.query(
+        `
+          SELECT *
+          FROM dv_deviation_capa_links
+          WHERE deviation_id = $1 AND capa_id = $2
+            AND org_id = $3
+        `,
+        [deviationId, capaId, req.authContext.orgId]
       );
 
       await client.query(
         `
           UPDATE dv_deviation_records
-          SET status = 'CapaLinked', updated_at = now()
+          SET status = 'CapaLinked', updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
+            AND org_id = $2
         `,
-        [deviationId]
+        [deviationId, req.authContext.orgId]
       );
 
       const traceLink = await appendTraceLink(client, {
@@ -573,9 +637,10 @@ deviationsRouter.post('/:deviationId/close', async (req, res, next) => {
           SELECT id, created_by
           FROM dv_deviation_records
           WHERE id = $1
+            AND org_id = $2
           FOR UPDATE
         `,
-        [deviationId]
+        [deviationId, req.authContext.orgId]
       );
 
       const current = currentRows[0];
@@ -591,7 +656,7 @@ deviationsRouter.post('/:deviationId/close', async (req, res, next) => {
         throw error;
       }
 
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE dv_deviation_records
           SET
@@ -600,12 +665,12 @@ deviationsRouter.post('/:deviationId/close', async (req, res, next) => {
             reportability_reason = $3,
             closure_summary = COALESCE($4, closure_summary),
             closed_by = $5,
-            closed_at = now(),
-            updated_at = now()
+            closed_at = CURRENT_TIMESTAMP(3),
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $6
         `,
-        [deviationId, reportabilityStatus, reportabilityReason || null, closureSummary, req.authContext.userId]
+        [deviationId, reportabilityStatus, reportabilityReason || null, closureSummary, req.authContext.userId, req.authContext.orgId]
       );
 
       await appendDeviationHistoryEvent(client, {
@@ -630,7 +695,7 @@ deviationsRouter.post('/:deviationId/close', async (req, res, next) => {
         payloadJson: { reportabilityStatus }
       });
 
-      return rows[0];
+      return getDeviationRecord(client, req.authContext.orgId, deviationId);
     });
 
     return res.json({ deviation: closed });
@@ -650,21 +715,22 @@ deviationsRouter.post('/:deviationId/reopen', async (req, res, next) => {
     }
 
     const deviation = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE dv_deviation_records
           SET
             status = 'Reopened',
             reopened_reason = $2,
-            reopened_at = now(),
-            updated_at = now()
+            reopened_at = CURRENT_TIMESTAMP(3),
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $3
         `,
-        [deviationId, reason]
+        [deviationId, reason, req.authContext.orgId]
       );
 
-      if (!rows[0]) {
+      const updated = await getDeviationRecord(client, req.authContext.orgId, deviationId);
+      if (!updated) {
         const error = new Error('Deviation not found');
         error.statusCode = 404;
         throw error;
@@ -678,7 +744,7 @@ deviationsRouter.post('/:deviationId/reopen', async (req, res, next) => {
         payloadJson: { reason }
       });
 
-      return rows[0];
+      return updated;
     });
 
     return res.json({ deviation });
@@ -701,53 +767,57 @@ deviationsRouter.get('/:deviationId/timeline', async (req, res, next) => {
               occurred_at AS event_at,
               payload_json,
               actor_user_id,
-              'history'::text AS event_type
+              'history' AS event_type
             FROM dv_history_events
             WHERE deviation_id = $1
+              AND org_id = $2
           `,
-          [deviationId]
+          [deviationId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT
               id,
-              'containment'::text AS action_key,
+              'containment' AS action_key,
               recorded_at AS event_at,
               jsonb_build_object('actionText', action_text) AS payload_json,
               recorded_by AS actor_user_id,
-              'containment'::text AS event_type
+              'containment' AS event_type
             FROM dv_containment_actions
             WHERE deviation_id = $1
+              AND org_id = $2
           `,
-          [deviationId]
+          [deviationId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT
               id,
-              'investigation'::text AS action_key,
+              'investigation' AS action_key,
               updated_at AS event_at,
               jsonb_build_object('findings', findings, 'status', status) AS payload_json,
               investigator_user_id AS actor_user_id,
-              'investigation'::text AS event_type
+              'investigation' AS event_type
             FROM dv_investigations
             WHERE deviation_id = $1
+              AND org_id = $2
           `,
-          [deviationId]
+          [deviationId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT
               id,
-              'capa_link'::text AS action_key,
+              'capa_link' AS action_key,
               created_at AS event_at,
               jsonb_build_object('capaId', capa_id) AS payload_json,
               created_by AS actor_user_id,
-              'capa_link'::text AS event_type
+              'capa_link' AS event_type
             FROM dv_deviation_capa_links
             WHERE deviation_id = $1
+              AND org_id = $2
           `,
-          [deviationId]
+          [deviationId, req.authContext.orgId]
         )
       ]);
 
@@ -777,9 +847,10 @@ deviationsRouter.get('/:deviationId', async (req, res, next) => {
           SELECT *
           FROM dv_deviation_records
           WHERE id = $1
+            AND org_id = $2
           LIMIT 1
         `,
-        [deviationId]
+        [deviationId, req.authContext.orgId]
       );
 
       if (!deviationRows[0]) {
@@ -794,46 +865,51 @@ deviationsRouter.get('/:deviationId', async (req, res, next) => {
             SELECT *
             FROM dv_containment_actions
             WHERE deviation_id = $1
+              AND org_id = $2
             ORDER BY recorded_at DESC
           `,
-          [deviationId]
+          [deviationId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM dv_investigations
             WHERE deviation_id = $1
+              AND org_id = $2
             ORDER BY updated_at DESC
           `,
-          [deviationId]
+          [deviationId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM dv_deviation_capa_links
             WHERE deviation_id = $1
+              AND org_id = $2
             ORDER BY created_at DESC
           `,
-          [deviationId]
+          [deviationId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM dv_history_events
             WHERE deviation_id = $1
+              AND org_id = $2
             ORDER BY occurred_at DESC
           `,
-          [deviationId]
+          [deviationId, req.authContext.orgId]
         ),
         client.query(
           `
             SELECT *
             FROM qms_trace_links
-            WHERE source_id = $1 OR target_id = $1
+            WHERE (source_id = $1 OR target_id = $1)
+              AND org_id = $2
             ORDER BY created_at DESC
             LIMIT 100
           `,
-          [deviationId]
+          [deviationId, req.authContext.orgId]
         )
       ]);
 
@@ -860,9 +936,11 @@ deviationsRouter.get('/', async (req, res, next) => {
         `
           SELECT *
           FROM dv_deviation_records
+          WHERE org_id = $1
           ORDER BY created_at DESC
           LIMIT 200
-        `
+        `,
+        [req.authContext.orgId]
       );
       return rows;
     });

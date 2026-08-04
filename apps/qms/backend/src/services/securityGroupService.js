@@ -81,7 +81,7 @@ export async function syncUserSecurityGroups(client, { orgId, userId, roleKeys }
       SELECT id, role_key
       FROM qms_roles
       WHERE org_id = $1
-        AND role_key = ANY($2::text[])
+        AND role_key = ANY($2)
     `,
     [orgId, keys]
   );
@@ -109,7 +109,7 @@ export async function syncUserSecurityGroups(client, { orgId, userId, roleKeys }
   await client.query(
     `
       UPDATE qms_users
-      SET role_key = $3, updated_at = now()
+      SET role_key = $3, updated_at = CURRENT_TIMESTAMP(3)
       WHERE org_id = $1 AND id = $2
     `,
     [orgId, userId, primaryRole]

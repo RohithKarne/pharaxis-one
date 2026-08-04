@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { makeEntityCode, asDateString } from '../utils/codegen.js';
@@ -38,7 +39,8 @@ supplierQualityRouter.post('/suppliers', async (req, res, next) => {
     }
 
     const supplier = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const newSupplierId = randomUUID();
+      await client.query(
         `
           INSERT INTO sq_suppliers (
             org_id,
@@ -48,10 +50,10 @@ supplierQualityRouter.post('/suppliers', async (req, res, next) => {
             contact_email,
             qualification_status,
             risk_level,
-            created_by
+            created_by,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         `,
         [
           req.authContext.orgId,
@@ -61,8 +63,14 @@ supplierQualityRouter.post('/suppliers', async (req, res, next) => {
           contactEmail,
           qualificationStatus,
           riskLevel,
-          req.authContext.userId
+          req.authContext.userId,
+          newSupplierId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM sq_suppliers WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [newSupplierId, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -105,7 +113,7 @@ supplierQualityRouter.patch('/suppliers/:supplierId', async (req, res, next) => 
     }
 
     const supplier = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE sq_suppliers
           SET
@@ -114,12 +122,17 @@ supplierQualityRouter.patch('/suppliers/:supplierId', async (req, res, next) => 
             qualification_status = COALESCE($4, qualification_status),
             risk_level = COALESCE($5, risk_level),
             scorecard_rating = COALESCE($6, scorecard_rating),
-            approved_at = CASE WHEN COALESCE($4, qualification_status) = 'Qualified' THEN COALESCE(approved_at, now()) ELSE approved_at END,
-            updated_at = now()
+            approved_at = CASE WHEN COALESCE($4, qualification_status) = 'Qualified' THEN COALESCE(approved_at, CURRENT_TIMESTAMP(3)) ELSE approved_at END,
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $7
         `,
-        [supplierId, supplierName, contactEmail, qualificationStatus, riskLevel, scorecardRating]
+        [supplierId, supplierName, contactEmail, qualificationStatus, riskLevel, scorecardRating, req.authContext.orgId]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM sq_suppliers WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [supplierId, req.authContext.orgId]
       );
 
       if (!rows[0]) {
@@ -165,14 +178,15 @@ supplierQualityRouter.post('/suppliers/:supplierId/audits', async (req, res, nex
     }
 
     const audit = await req.withRlsTransaction(async (client) => {
-      const { rows: supplierRows } = await client.query(`SELECT id, supplier_name FROM sq_suppliers WHERE id = $1 LIMIT 1`, [supplierId]);
+      const { rows: supplierRows } = await client.query(`SELECT id, supplier_name FROM sq_suppliers WHERE id = $1 AND org_id = $2 LIMIT 1`, [supplierId, req.authContext.orgId]);
       if (!supplierRows[0]) {
         const error = new Error('Supplier not found');
         error.statusCode = 404;
         throw error;
       }
 
-      const { rows } = await client.query(
+      const supplierAuditId = randomUUID();
+      await client.query(
         `
           INSERT INTO sq_supplier_audits (
             org_id,
@@ -183,10 +197,10 @@ supplierQualityRouter.post('/suppliers/:supplierId/audits', async (req, res, nex
             outcome,
             findings_count,
             summary,
-            created_by
+            created_by,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         `,
         [
           req.authContext.orgId,
@@ -197,8 +211,14 @@ supplierQualityRouter.post('/suppliers/:supplierId/audits', async (req, res, nex
           outcome,
           Number(findingsCount || 0),
           summary,
-          req.authContext.userId
+          req.authContext.userId,
+          supplierAuditId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM sq_supplier_audits WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [supplierAuditId, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -231,14 +251,15 @@ supplierQualityRouter.post('/suppliers/:supplierId/scars', async (req, res, next
     }
 
     const scar = await req.withRlsTransaction(async (client) => {
-      const { rows: supplierRows } = await client.query(`SELECT id, supplier_name FROM sq_suppliers WHERE id = $1 LIMIT 1`, [supplierId]);
+      const { rows: supplierRows } = await client.query(`SELECT id, supplier_name FROM sq_suppliers WHERE id = $1 AND org_id = $2 LIMIT 1`, [supplierId, req.authContext.orgId]);
       if (!supplierRows[0]) {
         const error = new Error('Supplier not found');
         error.statusCode = 404;
         throw error;
       }
 
-      const { rows } = await client.query(
+      const newScarId = randomUUID();
+      await client.query(
         `
           INSERT INTO sq_scar_records (
             org_id,
@@ -246,10 +267,10 @@ supplierQualityRouter.post('/suppliers/:supplierId/scars', async (req, res, next
             scar_code,
             issue_summary,
             due_date,
-            created_by
+            created_by,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
         `,
         [
           req.authContext.orgId,
@@ -257,8 +278,14 @@ supplierQualityRouter.post('/suppliers/:supplierId/scars', async (req, res, next
           makeEntityCode('SCAR', supplierRows[0].supplier_name),
           issueSummary,
           asDateString(dueDate),
-          req.authContext.userId
+          req.authContext.userId,
+          newScarId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM sq_scar_records WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [newScarId, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -292,7 +319,7 @@ supplierQualityRouter.patch('/scars/:scarId', async (req, res, next) => {
     }
 
     const scar = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE sq_scar_records
           SET
@@ -300,7 +327,7 @@ supplierQualityRouter.patch('/scars/:scarId', async (req, res, next) => {
             due_date = COALESCE($3, due_date),
             effectiveness_result = COALESCE($4, effectiveness_result),
             closed_at = CASE
-              WHEN COALESCE($2, status) = 'Closed' AND closed_at IS NULL THEN now()
+              WHEN COALESCE($2, status) = 'Closed' AND closed_at IS NULL THEN CURRENT_TIMESTAMP(3)
               WHEN COALESCE($2, status) <> 'Closed' THEN NULL
               ELSE closed_at
             END,
@@ -309,11 +336,16 @@ supplierQualityRouter.patch('/scars/:scarId', async (req, res, next) => {
               WHEN COALESCE($2, status) <> 'Closed' THEN NULL
               ELSE closed_by
             END,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $6
         `,
-        [scarId, status, asDateString(dueDate), effectivenessResult, req.authContext.userId]
+        [scarId, status, asDateString(dueDate), effectivenessResult, req.authContext.userId, req.authContext.orgId]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM sq_scar_records WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [scarId, req.authContext.orgId]
       );
 
       if (!rows[0]) {
@@ -346,8 +378,8 @@ supplierQualityRouter.get('/suppliers/:supplierId', async (req, res, next) => {
     const { supplierId } = req.params;
     const data = await req.withRlsTransaction(async (client) => {
       const { rows: supplierRows } = await client.query(
-        `SELECT * FROM sq_suppliers WHERE id = $1 LIMIT 1`,
-        [supplierId]
+        `SELECT * FROM sq_suppliers WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [supplierId, req.authContext.orgId]
       );
       if (!supplierRows[0]) {
         const error = new Error('Supplier not found');
@@ -355,12 +387,12 @@ supplierQualityRouter.get('/suppliers/:supplierId', async (req, res, next) => {
         throw error;
       }
       const { rows: auditRows } = await client.query(
-        `SELECT * FROM sq_supplier_audits WHERE supplier_id = $1 ORDER BY updated_at DESC`,
-        [supplierId]
+        `SELECT * FROM sq_supplier_audits WHERE supplier_id = $1 AND org_id = $2 ORDER BY updated_at DESC`,
+        [supplierId, req.authContext.orgId]
       );
       const { rows: scarRows } = await client.query(
-        `SELECT * FROM sq_scar_records WHERE supplier_id = $1 ORDER BY updated_at DESC`,
-        [supplierId]
+        `SELECT * FROM sq_scar_records WHERE supplier_id = $1 AND org_id = $2 ORDER BY updated_at DESC`,
+        [supplierId, req.authContext.orgId]
       );
       return { supplier: supplierRows[0], supplierAudits: auditRows, scars: scarRows };
     });
@@ -373,24 +405,30 @@ supplierQualityRouter.get('/suppliers/:supplierId', async (req, res, next) => {
 supplierQualityRouter.get('/', async (req, res, next) => {
   try {
     const snapshot = await req.withRlsTransaction(async (client) => {
-      const supplierRows = await client.query(`SELECT * FROM sq_suppliers ORDER BY updated_at DESC LIMIT 300`);
+      const supplierRows = await client.query(`SELECT * FROM sq_suppliers WHERE org_id = $1 ORDER BY updated_at DESC LIMIT 300`, [
+        req.authContext.orgId
+      ]);
       const auditRows = await client.query(
         `
           SELECT a.*, s.supplier_name
           FROM sq_supplier_audits a
-          JOIN sq_suppliers s ON s.id = a.supplier_id
+          JOIN sq_suppliers s ON s.id = a.supplier_id AND s.org_id = a.org_id
+          WHERE a.org_id = $1
           ORDER BY a.updated_at DESC
           LIMIT 300
-        `
+        `,
+        [req.authContext.orgId]
       );
       const scarRows = await client.query(
         `
           SELECT r.*, s.supplier_name
           FROM sq_scar_records r
-          JOIN sq_suppliers s ON s.id = r.supplier_id
+          JOIN sq_suppliers s ON s.id = r.supplier_id AND s.org_id = r.org_id
+          WHERE r.org_id = $1
           ORDER BY r.updated_at DESC
           LIMIT 300
-        `
+        `,
+        [req.authContext.orgId]
       );
 
       return {

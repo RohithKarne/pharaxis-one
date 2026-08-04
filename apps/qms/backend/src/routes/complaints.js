@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { assertAnyRole } from '../middleware/rbac.js';
 import { appendAuditEvent } from '../services/auditTrailService.js';
 import { appendTraceLink } from '../services/traceabilityService.js';
@@ -37,7 +38,8 @@ complaintsRouter.post('/', async (req, res, next) => {
     }
 
     const complaint = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      const complaintId = randomUUID();
+      await client.query(
         `
           INSERT INTO qc_complaints (
             org_id,
@@ -51,10 +53,10 @@ complaintsRouter.post('/', async (req, res, next) => {
             details,
             due_date,
             assigned_to,
-            created_by
+            created_by,
+            id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-          RETURNING *
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         `,
         [
           req.authContext.orgId,
@@ -68,8 +70,14 @@ complaintsRouter.post('/', async (req, res, next) => {
           details,
           asDateString(dueDate),
           assignedTo,
-          req.authContext.userId
+          req.authContext.userId,
+          complaintId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM qc_complaints WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [complaintId, req.authContext.orgId]
       );
 
       await appendAuditEvent(client, {
@@ -113,7 +121,7 @@ complaintsRouter.patch('/:complaintId', async (req, res, next) => {
     }
 
     const complaint = await req.withRlsTransaction(async (client) => {
-      const { rows } = await client.query(
+      await client.query(
         `
           UPDATE qc_complaints
           SET
@@ -124,7 +132,7 @@ complaintsRouter.patch('/:complaintId', async (req, res, next) => {
             due_date = COALESCE($6, due_date),
             assigned_to = COALESCE($7, assigned_to),
             closed_at = CASE
-              WHEN COALESCE($5, status) = 'Closed' AND closed_at IS NULL THEN now()
+              WHEN COALESCE($5, status) = 'Closed' AND closed_at IS NULL THEN CURRENT_TIMESTAMP(3)
               WHEN COALESCE($5, status) <> 'Closed' THEN NULL
               ELSE closed_at
             END,
@@ -133,9 +141,9 @@ complaintsRouter.patch('/:complaintId', async (req, res, next) => {
               WHEN COALESCE($5, status) <> 'Closed' THEN NULL
               ELSE closed_by
             END,
-            updated_at = now()
+            updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
-          RETURNING *
+            AND org_id = $9
         `,
         [
           complaintId,
@@ -145,8 +153,14 @@ complaintsRouter.patch('/:complaintId', async (req, res, next) => {
           status,
           asDateString(dueDate),
           assignedTo,
-          req.authContext.userId
+          req.authContext.userId,
+          req.authContext.orgId
         ]
+      );
+
+      const { rows } = await client.query(
+        `SELECT * FROM qc_complaints WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [complaintId, req.authContext.orgId]
       );
 
       if (!rows[0]) {
@@ -186,8 +200,8 @@ complaintsRouter.post('/:complaintId/link-capa', async (req, res, next) => {
 
     const link = await req.withRlsTransaction(async (client) => {
       const { rows: complaintRows } = await client.query(
-        `SELECT id FROM qc_complaints WHERE id = $1 LIMIT 1`,
-        [complaintId]
+        `SELECT id FROM qc_complaints WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [complaintId, req.authContext.orgId]
       );
       if (!complaintRows[0]) {
         const error = new Error('Complaint not found');
@@ -195,31 +209,45 @@ complaintsRouter.post('/:complaintId/link-capa', async (req, res, next) => {
         throw error;
       }
 
-      const { rows: capaRows } = await client.query(`SELECT id FROM ca_capa_records WHERE id = $1 LIMIT 1`, [capaId]);
+      const { rows: capaRows } = await client.query(
+        `SELECT id FROM ca_capa_records WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [capaId, req.authContext.orgId]
+      );
       if (!capaRows[0]) {
         const error = new Error('CAPA not found');
         error.statusCode = 404;
         throw error;
       }
 
-      const { rows } = await client.query(
+      await client.query(
         `
           INSERT INTO qc_complaint_capa_links (org_id, complaint_id, capa_id, linked_by)
           VALUES ($1, $2, $3, $4)
           ON CONFLICT (complaint_id, capa_id)
-          DO UPDATE SET linked_at = now(), linked_by = EXCLUDED.linked_by
-          RETURNING *
+          DO UPDATE SET linked_at = CURRENT_TIMESTAMP(3), linked_by = EXCLUDED.linked_by
         `,
         [req.authContext.orgId, complaintId, capaId, req.authContext.userId]
+      );
+
+      // The upsert may have updated an existing link, so the row is read back by
+      // its natural key (complaint_id, capa_id) rather than an app-generated id.
+      const { rows } = await client.query(
+        `
+          SELECT * FROM qc_complaint_capa_links
+          WHERE complaint_id = $1 AND capa_id = $2 AND org_id = $3
+          LIMIT 1
+        `,
+        [complaintId, capaId, req.authContext.orgId]
       );
 
       await client.query(
         `
           UPDATE qc_complaints
-          SET status = 'CapaLinked', updated_at = now()
+          SET status = 'CapaLinked', updated_at = CURRENT_TIMESTAMP(3)
           WHERE id = $1
+            AND org_id = $2
         `,
-        [complaintId]
+        [complaintId, req.authContext.orgId]
       );
 
       await appendTraceLink(client, {
@@ -259,8 +287,8 @@ complaintsRouter.get('/:complaintId', async (req, res, next) => {
 
     const payload = await req.withRlsTransaction(async (client) => {
       const { rows: complaintRows } = await client.query(
-        `SELECT * FROM qc_complaints WHERE id = $1 LIMIT 1`,
-        [complaintId]
+        `SELECT * FROM qc_complaints WHERE id = $1 AND org_id = $2 LIMIT 1`,
+        [complaintId, req.authContext.orgId]
       );
       if (!complaintRows[0]) {
         const error = new Error('Complaint not found');
@@ -274,9 +302,10 @@ complaintsRouter.get('/:complaintId', async (req, res, next) => {
           FROM qc_complaint_capa_links l
           JOIN ca_capa_records c ON c.id = l.capa_id
           WHERE l.complaint_id = $1
+            AND l.org_id = $2
           ORDER BY l.linked_at DESC
         `,
-        [complaintId]
+        [complaintId, req.authContext.orgId]
       );
 
       return {
@@ -295,7 +324,9 @@ complaintsRouter.get('/', async (req, res, next) => {
   try {
     const { status, severity, limit = 200 } = req.query;
     const filters = [];
-    const values = [];
+    // $1 is always the org scope — it is written into the SQL below, not appended
+    // here, so the filter cannot be lost if this clause list is ever refactored.
+    const values = [req.authContext.orgId];
 
     if (status) {
       values.push(status);
@@ -308,13 +339,14 @@ complaintsRouter.get('/', async (req, res, next) => {
 
     values.push(Math.min(Number(limit) || 200, 500));
 
-    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const whereClause = filters.length ? `AND ${filters.join(' AND ')}` : '';
 
     const complaints = await req.withRlsTransaction(async (client) => {
       const { rows } = await client.query(
         `
           SELECT *
           FROM qc_complaints
+          WHERE org_id = $1
           ${whereClause}
           ORDER BY updated_at DESC
           LIMIT $${values.length}
