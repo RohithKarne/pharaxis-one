@@ -105,8 +105,9 @@ export async function syncUserSecurityGroups(client, { orgId, userId, roleKeys }
   for (const row of roleRows) {
     await client.query(
       `
-        INSERT IGNORE INTO qms_user_roles (org_id, user_id, role_id)
+        INSERT INTO qms_user_roles (org_id, user_id, role_id)
         VALUES ($1, $2, $3)
+        ON DUPLICATE KEY UPDATE role_id = role_id
       `,
       [orgId, userId, row.id]
     );

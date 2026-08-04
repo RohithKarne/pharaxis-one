@@ -62,15 +62,17 @@ superadminOrgsRouter.post('/', async (req, res, next) => {
       // DO NOTHING -> INSERT IGNORE, against UNIQUE(org_id) on both tables.
       await client.query(
         `
-          INSERT IGNORE INTO sa_org_upload_policies (org_id)
+          INSERT INTO sa_org_upload_policies (org_id)
           VALUES ($1)
+          ON DUPLICATE KEY UPDATE org_id = org_id
         `,
         [rows[0].id]
       );
       await client.query(
         `
-          INSERT IGNORE INTO sa_org_security_policies (org_id)
+          INSERT INTO sa_org_security_policies (org_id)
           VALUES ($1)
+          ON DUPLICATE KEY UPDATE org_id = org_id
         `,
         [rows[0].id]
       );

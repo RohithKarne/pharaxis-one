@@ -138,8 +138,9 @@ async function ensureRoles(client, orgId, roleKeys) {
 async function ensureOrgDefaults(client, orgId) {
   await client.query(
     `
-      INSERT IGNORE INTO sa_org_upload_policies (org_id)
+      INSERT INTO sa_org_upload_policies (org_id)
       VALUES ($1)
+      ON DUPLICATE KEY UPDATE org_id = org_id
     `,
     [orgId]
   );
@@ -193,11 +194,12 @@ async function assignUserRoles(client, orgId, userId, roleKeys, primaryRole) {
   for (const roleKey of roleKeys) {
     await client.query(
       `
-        INSERT IGNORE INTO qms_user_roles (org_id, user_id, role_id)
+        INSERT INTO qms_user_roles (org_id, user_id, role_id)
         SELECT $1, $2, id
         FROM qms_roles
         WHERE org_id = $1
           AND role_key = $3
+        ON DUPLICATE KEY UPDATE role_id = role_id
       `,
       [orgId, userId, roleKey]
     );

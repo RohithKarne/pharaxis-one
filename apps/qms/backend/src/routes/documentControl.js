@@ -298,7 +298,7 @@ documentControlRouter.post('/documents', async (req, res, next) => {
 
       await client.query(
         `
-          INSERT IGNORE INTO dc_document_access_policies (
+          INSERT INTO dc_document_access_policies (
             org_id,
             document_id,
             role_key,
@@ -312,13 +312,14 @@ documentControlRouter.post('/documents', async (req, res, next) => {
             ($1, $2, 'author', true, false, false),
             ($1, $2, 'approver', true, false, false),
             ($1, $2, 'viewer', true, $3, false)
+          ON DUPLICATE KEY UPDATE role_key = role_key
         `,
         [req.authContext.orgId, document.id, viewerDefaultCanDownload]
       );
 
       await client.query(
         `
-          INSERT IGNORE INTO dc_document_distribution_targets (
+          INSERT INTO dc_document_distribution_targets (
             org_id,
             document_id,
             target_type,
@@ -329,6 +330,7 @@ documentControlRouter.post('/documents', async (req, res, next) => {
             ($1, $2, 'User', $3, true, $4),
             ($1, $2, 'Role', 'qa_reviewer', true, $4),
             ($1, $2, 'Role', 'approver', true, $4)
+          ON DUPLICATE KEY UPDATE target_value = target_value
         `,
         [req.authContext.orgId, document.id, ownerUserId, req.authContext.userId]
       );

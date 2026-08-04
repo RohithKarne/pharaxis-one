@@ -144,8 +144,9 @@ superadminUsersRouter.post('/', async (req, res, next) => {
         // DO NOTHING -> INSERT IGNORE, against the UNIQUE(user_id) key.
         await client.query(
           `
-            INSERT IGNORE INTO qms_user_2fa_settings (org_id, user_id, email_otp_enabled)
+            INSERT INTO qms_user_2fa_settings (org_id, user_id, email_otp_enabled)
             VALUES ($1, $2, true)
+            ON DUPLICATE KEY UPDATE user_id = user_id
           `,
           [orgId, rows[0].id]
         );
