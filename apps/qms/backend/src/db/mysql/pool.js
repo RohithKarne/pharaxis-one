@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import { asPgClient } from './pgCompat.js';
 
 /**
  * MySQL connection pool for QMS.
@@ -37,4 +38,21 @@ export function getMysqlPool() {
   }
 
   return pool;
+}
+
+/**
+ * Check out a connection already wrapped in the pg-compatible interface.
+ *
+ * The auth routes (src/routes/auth.js) run BEFORE withRlsTransaction exists —
+ * login has no org context yet — so they take their own connection with
+ * `const client = await pool.connect()`. This is the MySQL counterpart, so those
+ * call sites change by one line each rather than being restructured, and they
+ * keep using `const { rows } = await client.query(sql, [$1, ...])` unchanged.
+ *
+ * The returned object exposes `release()`, so the existing try/finally blocks
+ * still return the connection to the pool correctly.
+ */
+export async function getMysqlClient() {
+  const connection = await getMysqlPool().getConnection();
+  return asPgClient(connection);
 }

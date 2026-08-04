@@ -26,9 +26,8 @@ export async function appendTraceLink(client, params) {
         target_id,
         link_type,
         created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT (source_module, source_table, source_id, target_module, target_table, target_id, link_type)
-      DO UPDATE SET created_at = CURRENT_TIMESTAMP(3)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) AS new
+      ON DUPLICATE KEY UPDATE created_at = CURRENT_TIMESTAMP(3)
     `,
     [
       randomUUID(),

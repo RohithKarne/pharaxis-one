@@ -550,9 +550,8 @@ deviationsRouter.post('/:deviationId/link-capa', async (req, res, next) => {
             created_by,
             id
           )
-          VALUES ($1, $2, $3, $4, $5)
-          ON CONFLICT (deviation_id, capa_id)
-          DO UPDATE SET created_at = CURRENT_TIMESTAMP(3)
+          VALUES ($1, $2, $3, $4, $5) AS new
+          ON DUPLICATE KEY UPDATE created_at = CURRENT_TIMESTAMP(3)
         `,
         [req.authContext.orgId, deviationId, capaId, req.authContext.userId, randomUUID()]
       );
@@ -780,7 +779,7 @@ deviationsRouter.get('/:deviationId/timeline', async (req, res, next) => {
               id,
               'containment' AS action_key,
               recorded_at AS event_at,
-              jsonb_build_object('actionText', action_text) AS payload_json,
+              JSON_OBJECT('actionText', action_text) AS payload_json,
               recorded_by AS actor_user_id,
               'containment' AS event_type
             FROM dv_containment_actions
@@ -795,7 +794,7 @@ deviationsRouter.get('/:deviationId/timeline', async (req, res, next) => {
               id,
               'investigation' AS action_key,
               updated_at AS event_at,
-              jsonb_build_object('findings', findings, 'status', status) AS payload_json,
+              JSON_OBJECT('findings', findings, 'status', status) AS payload_json,
               investigator_user_id AS actor_user_id,
               'investigation' AS event_type
             FROM dv_investigations
@@ -810,7 +809,7 @@ deviationsRouter.get('/:deviationId/timeline', async (req, res, next) => {
               id,
               'capa_link' AS action_key,
               created_at AS event_at,
-              jsonb_build_object('capaId', capa_id) AS payload_json,
+              JSON_OBJECT('capaId', capa_id) AS payload_json,
               created_by AS actor_user_id,
               'capa_link' AS event_type
             FROM dv_deviation_capa_links

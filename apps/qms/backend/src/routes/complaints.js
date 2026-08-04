@@ -222,9 +222,8 @@ complaintsRouter.post('/:complaintId/link-capa', async (req, res, next) => {
       await client.query(
         `
           INSERT INTO qc_complaint_capa_links (org_id, complaint_id, capa_id, linked_by)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (complaint_id, capa_id)
-          DO UPDATE SET linked_at = CURRENT_TIMESTAMP(3), linked_by = EXCLUDED.linked_by
+          VALUES ($1, $2, $3, $4) AS new
+          ON DUPLICATE KEY UPDATE linked_at = CURRENT_TIMESTAMP(3), linked_by = new.linked_by
         `,
         [req.authContext.orgId, complaintId, capaId, req.authContext.userId]
       );

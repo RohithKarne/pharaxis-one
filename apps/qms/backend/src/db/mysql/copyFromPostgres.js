@@ -1,3 +1,7 @@
+// mysql-dialect-audit: postgres-only — this script READS from PostgreSQL by
+// design; it is the migration tool itself. Its set_config calls are required to
+// defeat RLS while reading, and are the reason it does not silently copy an
+// empty database.
 import dotenv from 'dotenv';
 import pg from 'pg';
 import mysql from 'mysql2/promise';

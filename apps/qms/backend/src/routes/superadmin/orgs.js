@@ -32,12 +32,18 @@ superadminOrgsRouter.post('/', async (req, res, next) => {
     }
 
     const created = await req.withRlsTransaction(async (client) => {
+      // ON CONFLICT (org_code) DO UPDATE -> ON DUPLICATE KEY UPDATE, with the
+      // MySQL 8.0.20+ row alias standing in for EXCLUDED.
+      // qms_orgs has two unique keys, PRIMARY(id) and UNIQUE(org_code). MySQL
+      // fires on either, but id is not in the column list — it defaults to
+      // UUID() — so org_code is the only key this can collide on in practice.
       await client.query(
         `
           INSERT INTO qms_orgs (org_code, org_name, is_active)
-          VALUES ($1, $2, true)
-          ON CONFLICT (org_code)
-          DO UPDATE SET org_name = EXCLUDED.org_name, updated_at = CURRENT_TIMESTAMP(3)
+          VALUES ($1, $2, true) AS new
+          ON DUPLICATE KEY UPDATE
+            org_name = new.org_name,
+            updated_at = CURRENT_TIMESTAMP(3)
         `,
         [orgCode, orgName]
       );
@@ -53,19 +59,18 @@ superadminOrgsRouter.post('/', async (req, res, next) => {
       );
 
       await ensureDefaultSecurityGroups(client, rows[0].id);
+      // DO NOTHING -> INSERT IGNORE, against UNIQUE(org_id) on both tables.
       await client.query(
         `
-          INSERT INTO sa_org_upload_policies (org_id)
+          INSERT IGNORE INTO sa_org_upload_policies (org_id)
           VALUES ($1)
-          ON CONFLICT (org_id) DO NOTHING
         `,
         [rows[0].id]
       );
       await client.query(
         `
-          INSERT INTO sa_org_security_policies (org_id)
+          INSERT IGNORE INTO sa_org_security_policies (org_id)
           VALUES ($1)
-          ON CONFLICT (org_id) DO NOTHING
         `,
         [rows[0].id]
       );

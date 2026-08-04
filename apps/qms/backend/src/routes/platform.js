@@ -353,9 +353,8 @@ platformRouter.post('/training/assignments/:assignmentId/complete', async (req, 
             user_id,
             completion_notes
           )
-          VALUES ($5, $1, $2, $3, $4)
-          ON CONFLICT (assignment_id, user_id)
-          DO UPDATE SET completed_at = CURRENT_TIMESTAMP(3), completion_notes = EXCLUDED.completion_notes
+          VALUES ($5, $1, $2, $3, $4) AS new
+          ON DUPLICATE KEY UPDATE completed_at = CURRENT_TIMESTAMP(3), completion_notes = new.completion_notes
         `,
         [req.authContext.orgId, assignmentId, completionUserId, completionNotes, randomUUID()]
       );

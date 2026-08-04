@@ -236,6 +236,11 @@ validationRouter.post('/systems/:systemId/traceability', async (req, res, next) 
     }
 
     const entry = await req.withRlsTransaction(async (client) => {
+      // MySQL's ON DUPLICATE KEY names no target; it fires on any unique key.
+      // This table has two: PRIMARY (id), which is a fresh randomUUID and cannot
+      // collide, and uq_vs_trace_requirement_step_norm on
+      // (requirement_id, COALESCE(step_id, '00000000-...')) — the same functional
+      // index the Postgres ON CONFLICT target named. So the fired key is identical.
       await client.query(
         `
           INSERT INTO vs_trace_matrix_entries (
@@ -251,15 +256,14 @@ validationRouter.post('/systems/:systemId/traceability', async (req, res, next) 
             notes,
             created_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-          ON CONFLICT (requirement_id, COALESCE(step_id, '00000000-0000-0000-0000-000000000000'::uuid))
-          DO UPDATE SET
-            plan_id = EXCLUDED.plan_id,
-            protocol_instance_id = EXCLUDED.protocol_instance_id,
-            script_id = EXCLUDED.script_id,
-            step_id = EXCLUDED.step_id,
-            trace_status = EXCLUDED.trace_status,
-            notes = EXCLUDED.notes,
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) AS new
+          ON DUPLICATE KEY UPDATE
+            plan_id = new.plan_id,
+            protocol_instance_id = new.protocol_instance_id,
+            script_id = new.script_id,
+            step_id = new.step_id,
+            trace_status = new.trace_status,
+            notes = new.notes,
             updated_at = CURRENT_TIMESTAMP(3)
         `,
         [
@@ -339,7 +343,7 @@ validationRouter.post('/systems/:systemId/plans', async (req, res, next) => {
           INSERT INTO vs_validation_plans (
             id, org_id, system_id, scope, approach, responsibilities, protocol_types, status, created_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7::text[], 'Draft', $8)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, 'Draft', $8)
         `,
         [
           planIdNew,
@@ -348,7 +352,9 @@ validationRouter.post('/systems/:systemId/plans', async (req, res, next) => {
           scope,
           approach || null,
           responsibilities || null,
-          protocolTypes || ['IQ', 'OQ', 'PQ', 'UAT'],
+          // protocol_types is TEXT[] in Postgres but JSON in MySQL: mysql2 would
+          // flatten a JS array into a comma-separated SQL list, so bind the JSON text.
+          JSON.stringify(protocolTypes || ['IQ', 'OQ', 'PQ', 'UAT']),
           req.authContext.userId
         ]
       );
@@ -773,7 +779,9 @@ validationRouter.post('/systems/:systemId/reviews/:reviewId/complete', async (re
           req.authContext.orgId,
           systemId,
           nextReview.toISOString().slice(0, 10),
-          reviews[0].alert_schedule_days || [90, 60, 30, 7]
+          // alert_schedule_days is INT[] in Postgres but JSON in MySQL, and mysql2
+          // hands the SELECT above back as a parsed JS array — re-serialise to bind it.
+          JSON.stringify(reviews[0].alert_schedule_days || [90, 60, 30, 7])
         ]
       );
       const { rows: insertedRows } = await client.query(

@@ -2,7 +2,7 @@ import { randomInt, createHash, randomUUID } from 'crypto';
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { getDbPool } from '../db/pool.js';
+import { getMysqlClient } from '../db/mysql/pool.js';
 import { env } from '../config/env.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
 import { recordLoginAudit, readRequestMeta } from '../services/loginAuditService.js';
@@ -10,7 +10,6 @@ import { resolveUserSecurityGroups } from '../services/securityGroupService.js';
 import { queueEmailNotification } from '../services/platform/notificationService.js';
 
 const OTP_VALIDITY_SECONDS = 600;
-const EMPTY_RLS_ORG_ID = '00000000-0000-0000-0000-000000000000';
 
 export const authRouter = Router();
 
@@ -78,19 +77,19 @@ function makeUserAuthResponse(user, securityGroups, token) {
   };
 }
 
-async function applyAuthRouteRlsContext(client) {
-  await client.query("SELECT set_config('app.is_superadmin', 'true', false)");
-  await client.query("SELECT set_config('app.current_org_id', $1, false)", [EMPTY_RLS_ORG_ID]);
-}
-
-async function resetAuthRouteRlsContext(client) {
-  try {
-    await client.query("SELECT set_config('app.is_superadmin', 'false', false)");
-    await client.query("SELECT set_config('app.current_org_id', $1, false)", [EMPTY_RLS_ORG_ID]);
-  } catch {
-    // Ignore reset failures while returning the client to the pool.
-  }
-}
+/*
+ * applyAuthRouteRlsContext / resetAuthRouteRlsContext are gone.
+ *
+ * They existed only to set the Postgres RLS session variables
+ * (`app.is_superadmin`, `app.current_org_id`) that the 0002/0005 policies read.
+ * MySQL has no set_config and no row-level security, and the MySQL migrations
+ * dropped the policies outright, so there is nothing for them to talk to.
+ *
+ * The scoping they used to buy is not lost: Phase 0 put the tenant predicate in
+ * every query, so each statement below carries its own `org_id = $n` (or, for
+ * the two pre-auth lookups, a documented cross-org exemption). The RLS context
+ * was the second lock on a door that is still locked.
+ */
 
 /**
  * Verify a password against its stored hash.
@@ -173,7 +172,12 @@ async function issueOtpChallenge(client, user) {
       )
       VALUES ($1, $2, $3, $4, $5, $6)
     `,
-    [challengeId, user.org_id, user.id, user.email, otpHash, expiresAt.toISOString()]
+    // expiresAt is passed as a Date, not expiresAt.toISOString(). Postgres
+    // accepted the ISO-8601 string; MySQL rejects the trailing 'Z' outright —
+    // ER_TRUNCATED_WRONG_VALUE, so every OTP login would have 500'd at cutover.
+    // mysql2 serialises a Date itself, and the pool pins timezone 'Z' plus
+    // `SET time_zone = '+00:00'` per connection, so it still lands as UTC.
+    [challengeId, user.org_id, user.id, user.email, otpHash, expiresAt]
   );
 
   await queueEmailNotification(client, {
@@ -197,10 +201,8 @@ authRouter.get('/providers', (_req, res) => {
 });
 
 authRouter.get('/orgs', orgDiscoveryLimiter, async (req, res, next) => {
-  const pool = getDbPool();
-  const client = await pool.connect();
+  const client = await getMysqlClient();
   try {
-    await applyAuthRouteRlsContext(client);
     const query = String(req.query.q || '').trim();
     const searchPattern = query.length >= 2 ? `%${query}%` : '%';
     const { rows } = await client.query(
@@ -226,17 +228,14 @@ authRouter.get('/orgs', orgDiscoveryLimiter, async (req, res, next) => {
   } catch (error) {
     return next(error);
   } finally {
-    await resetAuthRouteRlsContext(client);
     client.release();
   }
 });
 
 authRouter.post('/login', authEndpointLimiter, async (req, res, next) => {
-  const pool = getDbPool();
-  const client = await pool.connect();
+  const client = await getMysqlClient();
 
   try {
-    await applyAuthRouteRlsContext(client);
     const { userId, email, password, orgCode } = req.body || {};
     const loginIdentifier = String(userId || email || '').trim();
     if (!loginIdentifier || !password || !orgCode) {
@@ -252,7 +251,7 @@ authRouter.post('/login', authEndpointLimiter, async (req, res, next) => {
         SELECT
           u.id,
           u.org_id,
-          u.email::text AS email,
+          u.email,
           u.full_name,
           u.role_key,
           u.password_hash,
@@ -263,8 +262,8 @@ authRouter.post('/login', authEndpointLimiter, async (req, res, next) => {
         FROM qms_users u
         JOIN qms_orgs o ON o.id = u.org_id
         WHERE (
-          lower(u.email::text) = lower($1)
-          OR split_part(lower(u.email::text), '@', 1) = lower($1)
+          LOWER(u.email) = LOWER($1)
+          OR SUBSTRING_INDEX(LOWER(u.email), '@', 1) = LOWER($1)
         )
           AND o.org_code = $2
         LIMIT 1
@@ -386,17 +385,14 @@ authRouter.post('/login', authEndpointLimiter, async (req, res, next) => {
   } catch (error) {
     return next(error);
   } finally {
-    await resetAuthRouteRlsContext(client);
     client.release();
   }
 });
 
 authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next) => {
-  const pool = getDbPool();
-  const client = await pool.connect();
+  const client = await getMysqlClient();
 
   try {
-    await applyAuthRouteRlsContext(client);
     const { challengeId, otp } = req.body || {};
     if (!challengeId || !otp) {
       return res.status(400).json({ error: 'challengeId and otp are required' });
@@ -410,7 +406,7 @@ authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next)
           c.id,
           c.org_id,
           c.user_id,
-          c.recipient_email::text AS recipient_email,
+          c.recipient_email,
           c.otp_code_hash,
           c.expires_at,
           c.attempt_count,
@@ -501,8 +497,7 @@ authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next)
           updated_at
         )
         VALUES ($1, $2, true, false, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3))
-        ON CONFLICT (user_id)
-        DO UPDATE SET
+        ON DUPLICATE KEY UPDATE
           reset_required = false,
           last_verified_at = CURRENT_TIMESTAMP(3),
           updated_at = CURRENT_TIMESTAMP(3)
@@ -546,17 +541,14 @@ authRouter.post('/login/verify-otp', authEndpointLimiter, async (req, res, next)
   } catch (error) {
     return next(error);
   } finally {
-    await resetAuthRouteRlsContext(client);
     client.release();
   }
 });
 
 authRouter.post('/superadmin/login', authEndpointLimiter, async (req, res, next) => {
-  const pool = getDbPool();
-  const client = await pool.connect();
+  const client = await getMysqlClient();
 
   try {
-    await applyAuthRouteRlsContext(client);
     const { userId, email, password } = req.body || {};
     const loginIdentifier = String(userId || email || '').trim();
     if (!loginIdentifier || !password) {
@@ -572,7 +564,7 @@ authRouter.post('/superadmin/login', authEndpointLimiter, async (req, res, next)
         SELECT
           u.id,
           u.org_id,
-          u.email::text AS email,
+          u.email,
           u.full_name,
           u.role_key,
           u.password_hash,
@@ -586,8 +578,8 @@ authRouter.post('/superadmin/login', authEndpointLimiter, async (req, res, next)
         FROM qms_users u
         JOIN qms_orgs o ON o.id = u.org_id
         WHERE (
-          lower(u.email::text) = lower($1)
-          OR split_part(lower(u.email::text), '@', 1) = lower($1)
+          LOWER(u.email) = LOWER($1)
+          OR SUBSTRING_INDEX(LOWER(u.email), '@', 1) = LOWER($1)
         )
           AND u.role_key = 'superadmin'
         ORDER BY u.created_at ASC
@@ -681,7 +673,6 @@ authRouter.post('/superadmin/login', authEndpointLimiter, async (req, res, next)
   } catch (error) {
     return next(error);
   } finally {
-    await resetAuthRouteRlsContext(client);
     client.release();
   }
 });

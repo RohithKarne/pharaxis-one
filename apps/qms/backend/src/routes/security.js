@@ -100,12 +100,11 @@ securityRouter.post('/users/:userId/2fa-reset', async (req, res, next) => {
             reset_by,
             updated_at
           )
-          VALUES ($1, $2, true, true, $3, CURRENT_TIMESTAMP(3))
-          ON CONFLICT (user_id)
-          DO UPDATE SET
+          VALUES ($1, $2, true, true, $3, CURRENT_TIMESTAMP(3)) AS new
+          ON DUPLICATE KEY UPDATE
             email_otp_enabled = true,
             reset_required = true,
-            reset_by = EXCLUDED.reset_by,
+            reset_by = new.reset_by,
             updated_at = CURRENT_TIMESTAMP(3)
         `,
         [userRows[0].org_id, userId, req.authContext.userId]

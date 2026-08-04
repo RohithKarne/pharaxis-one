@@ -45,6 +45,9 @@ superadminBillingRouter.put('/:orgId', async (req, res, next) => {
     }
 
     const billing = await req.withRlsTransaction(async (client) => {
+      // ON CONFLICT (org_id) DO UPDATE -> ON DUPLICATE KEY UPDATE. The unique
+      // keys on sa_org_billing_controls are PRIMARY(id) and UNIQUE(org_id); id
+      // is not supplied here, so org_id is the only reachable collision.
       await client.query(
         `
           INSERT INTO sa_org_billing_controls (
@@ -54,14 +57,13 @@ superadminBillingRouter.put('/:orgId', async (req, res, next) => {
             license_limit,
             reporting_email,
             notes
-          ) VALUES ($1, $2, $3, $4, $5, $6)
-          ON CONFLICT (org_id)
-          DO UPDATE SET
-            plan_key = EXCLUDED.plan_key,
-            billing_status = EXCLUDED.billing_status,
-            license_limit = EXCLUDED.license_limit,
-            reporting_email = EXCLUDED.reporting_email,
-            notes = EXCLUDED.notes,
+          ) VALUES ($1, $2, $3, $4, $5, $6) AS new
+          ON DUPLICATE KEY UPDATE
+            plan_key = new.plan_key,
+            billing_status = new.billing_status,
+            license_limit = new.license_limit,
+            reporting_email = new.reporting_email,
+            notes = new.notes,
             updated_at = CURRENT_TIMESTAMP(3)
         `,
         [orgId, planKey, billingStatus, licenseLimit || null, reportingEmail || null, notes || null]

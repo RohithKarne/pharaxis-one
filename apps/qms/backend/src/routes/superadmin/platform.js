@@ -55,7 +55,7 @@ superadminPlatformRouter.get('/readiness', async (req, res, next) => {
               SELECT COUNT(*) AS total
               FROM qms_login_audit
               WHERE outcome = 'Failed'
-                AND occurred_at >= CURRENT_TIMESTAMP(3) - interval '24 hours'
+                AND occurred_at >= CURRENT_TIMESTAMP(3) - INTERVAL 24 HOUR
             `
           )
         ]);
@@ -139,6 +139,12 @@ superadminPlatformRouter.put('/email-config', async (req, res, next) => {
     }
 
     const emailConfig = await req.withRlsTransaction(async (client) => {
+      // ON CONFLICT (config_key) DO UPDATE -> ON DUPLICATE KEY UPDATE. Unique
+      // keys here are PRIMARY(id) and UNIQUE(config_key); id is not in the
+      // column list, so config_key is the only reachable collision.
+      // The COALESCE keeps the stored password when the form submits none: the
+      // table-qualified name on the right-hand side is the existing row's value,
+      // which is what the Postgres form meant too.
       await client.query(
         `
           INSERT INTO sa_platform_email_config (
@@ -154,18 +160,17 @@ superadminPlatformRouter.put('/email-config', async (req, res, next) => {
             updated_by,
             updated_at
           )
-          VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP(3))
-          ON CONFLICT (config_key)
-          DO UPDATE SET
-            smtp_host = EXCLUDED.smtp_host,
-            smtp_port = EXCLUDED.smtp_port,
-            smtp_username = EXCLUDED.smtp_username,
-            smtp_password_encrypted = COALESCE(EXCLUDED.smtp_password_encrypted, sa_platform_email_config.smtp_password_encrypted),
-            smtp_from_email = EXCLUDED.smtp_from_email,
-            smtp_from_name = EXCLUDED.smtp_from_name,
-            use_tls = EXCLUDED.use_tls,
-            is_active = EXCLUDED.is_active,
-            updated_by = EXCLUDED.updated_by,
+          VALUES ('default', $1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP(3)) AS new
+          ON DUPLICATE KEY UPDATE
+            smtp_host = new.smtp_host,
+            smtp_port = new.smtp_port,
+            smtp_username = new.smtp_username,
+            smtp_password_encrypted = COALESCE(new.smtp_password_encrypted, sa_platform_email_config.smtp_password_encrypted),
+            smtp_from_email = new.smtp_from_email,
+            smtp_from_name = new.smtp_from_name,
+            use_tls = new.use_tls,
+            is_active = new.is_active,
+            updated_by = new.updated_by,
             updated_at = CURRENT_TIMESTAMP(3)
         `,
         [
@@ -294,6 +299,12 @@ superadminPlatformRouter.put('/upload-policy/:orgId', async (req, res, next) => 
           ];
 
     const uploadPolicy = await req.withRlsTransaction(async (client) => {
+      // ON CONFLICT (org_id) DO UPDATE -> ON DUPLICATE KEY UPDATE. Unique keys
+      // are PRIMARY(id) and UNIQUE(org_id); id is not supplied, so org_id is
+      // the only reachable collision.
+      // allowed_extensions was TEXT[] in Postgres and is JSON in MySQL, so the
+      // bind has to be JSON text — mysql2 would otherwise send a JS array as a
+      // comma-joined string and the column would reject it.
       await client.query(
         `
           INSERT INTO sa_org_upload_policies (
@@ -305,20 +316,19 @@ superadminPlatformRouter.put('/upload-policy/:orgId', async (req, res, next) => 
             updated_by,
             updated_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP(3))
-          ON CONFLICT (org_id)
-          DO UPDATE SET
-            max_upload_mb = EXCLUDED.max_upload_mb,
-            allowed_extensions = EXCLUDED.allowed_extensions,
-            viewer_default_can_download = EXCLUDED.viewer_default_can_download,
-            viewer_download_requires_watermark = EXCLUDED.viewer_download_requires_watermark,
-            updated_by = EXCLUDED.updated_by,
+          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP(3)) AS new
+          ON DUPLICATE KEY UPDATE
+            max_upload_mb = new.max_upload_mb,
+            allowed_extensions = new.allowed_extensions,
+            viewer_default_can_download = new.viewer_default_can_download,
+            viewer_download_requires_watermark = new.viewer_download_requires_watermark,
+            updated_by = new.updated_by,
             updated_at = CURRENT_TIMESTAMP(3)
         `,
         [
           orgId,
           Number(maxUploadMb),
-          effectiveExtensions,
+          JSON.stringify(effectiveExtensions),
           Boolean(viewerDefaultCanDownload),
           Boolean(viewerDownloadRequiresWatermark),
           req.authContext.userId
@@ -413,6 +423,9 @@ superadminPlatformRouter.put('/security-policy/:orgId', async (req, res, next) =
     } = req.body || {};
 
     const securityPolicy = await req.withRlsTransaction(async (client) => {
+      // ON CONFLICT (org_id) DO UPDATE -> ON DUPLICATE KEY UPDATE. Unique keys
+      // are PRIMARY(id) and UNIQUE(org_id); id is not supplied, so org_id is
+      // the only reachable collision.
       await client.query(
         `
           INSERT INTO sa_org_security_policies (
@@ -422,12 +435,11 @@ superadminPlatformRouter.put('/security-policy/:orgId', async (req, res, next) =
             updated_by,
             updated_at
           )
-          VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP(3))
-          ON CONFLICT (org_id)
-          DO UPDATE SET
-            email_otp_required = EXCLUDED.email_otp_required,
-            allow_org_admin_2fa_reset = EXCLUDED.allow_org_admin_2fa_reset,
-            updated_by = EXCLUDED.updated_by,
+          VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP(3)) AS new
+          ON DUPLICATE KEY UPDATE
+            email_otp_required = new.email_otp_required,
+            allow_org_admin_2fa_reset = new.allow_org_admin_2fa_reset,
+            updated_by = new.updated_by,
             updated_at = CURRENT_TIMESTAMP(3)
         `,
         [orgId, Boolean(emailOtpRequired), Boolean(allowOrgAdmin2faReset), req.authContext.userId]

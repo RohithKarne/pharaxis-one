@@ -35,9 +35,8 @@ export async function ensureDefaultSecurityGroups(client, orgId) {
     await client.query(
       `
         INSERT INTO qms_roles (org_id, role_key, role_name, is_system)
-        VALUES ($1, $2, $3, true)
-        ON CONFLICT (org_id, role_key)
-        DO UPDATE SET role_name = EXCLUDED.role_name
+        VALUES ($1, $2, $3, true) AS new
+        ON DUPLICATE KEY UPDATE role_name = new.role_name
       `,
       [orgId, role.roleKey, role.roleName]
     );
@@ -57,9 +56,8 @@ export async function ensureRoleRows(client, orgId, roleKeys) {
     await client.query(
       `
         INSERT INTO qms_roles (org_id, role_key, role_name, is_system)
-        VALUES ($1, $2, $3, true)
-        ON CONFLICT (org_id, role_key)
-        DO UPDATE SET role_name = EXCLUDED.role_name
+        VALUES ($1, $2, $3, true) AS new
+        ON DUPLICATE KEY UPDATE role_name = new.role_name
       `,
       [orgId, key, roleName]
     );
@@ -76,14 +74,24 @@ export async function syncUserSecurityGroups(client, { orgId, userId, roleKeys }
 
   await ensureRoleRows(client, orgId, keys);
 
+  // `role_key = ANY($2)` was PostgreSQL-only — MySQL has no ANY(array). The key
+  // list is expanded into one placeholder per key instead of leaning on mysql2's
+  // `IN (?)` array expansion, because that expansion only happens on the text
+  // protocol: on a prepared-statement path `IN (?)` would bind the array as a
+  // single value and silently match nothing. This is the login path, so a silent
+  // wrong answer here costs a user their roles.
+  // `keys` is guaranteed non-empty by the length check above, so `IN ()` — which
+  // is a syntax error in MySQL — cannot be produced.
+  const keyPlaceholders = keys.map((_, index) => `$${index + 2}`).join(', ');
+
   const { rows: roleRows } = await client.query(
     `
       SELECT id, role_key
       FROM qms_roles
       WHERE org_id = $1
-        AND role_key = ANY($2)
+        AND role_key IN (${keyPlaceholders})
     `,
-    [orgId, keys]
+    [orgId, ...keys]
   );
 
   if (roleRows.length === 0) {
@@ -97,9 +105,8 @@ export async function syncUserSecurityGroups(client, { orgId, userId, roleKeys }
   for (const row of roleRows) {
     await client.query(
       `
-        INSERT INTO qms_user_roles (org_id, user_id, role_id)
+        INSERT IGNORE INTO qms_user_roles (org_id, user_id, role_id)
         VALUES ($1, $2, $3)
-        ON CONFLICT (org_id, user_id, role_id) DO NOTHING
       `,
       [orgId, userId, row.id]
     );

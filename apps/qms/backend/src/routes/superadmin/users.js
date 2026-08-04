@@ -43,6 +43,26 @@ superadminUsersRouter.get('/security-groups/:orgId', async (req, res, next) => {
   }
 });
 
+// The Postgres aggregate was
+//   COALESCE(ARRAY_AGG(DISTINCT r.role_key) FILTER (WHERE r.role_key IS NOT NULL),
+//            ARRAY[u.role_key]::text[])
+// and MySQL's JSON_ARRAYAGG matches none of those three parts: it has no
+// DISTINCT, no FILTER, and it returns a JSON array rather than a text[]. It also
+// never returns NULL for a group that exists — a user with no roles comes back
+// from the LEFT JOIN as the single-element array [null], not as NULL — so a
+// COALESCE fallback in SQL would never fire. All three therefore have to be done
+// here, after the query, or the superadmin console's user list is wrong.
+//
+// Order: Postgres's ARRAY_AGG(DISTINCT ...) sorts ascending as a side effect of
+// the sort-based dedup, so the .sort() reproduces it rather than adding one.
+function normalizeSecurityGroups(row) {
+  const raw =
+    typeof row.security_groups === 'string' ? JSON.parse(row.security_groups) : row.security_groups;
+  const roleKeys = Array.isArray(raw) ? raw : [];
+  const groups = [...new Set(roleKeys.filter((key) => key !== null && key !== undefined))].sort();
+  return { ...row, security_groups: groups.length > 0 ? groups : [row.role_key] };
+}
+
 superadminUsersRouter.get('/', async (req, res, next) => {
   try {
     const users = await req.withRlsTransaction(async (client) => {
@@ -57,10 +77,7 @@ superadminUsersRouter.get('/', async (req, res, next) => {
             u.role_key,
             u.is_active,
             u.created_at,
-            COALESCE(
-              ARRAY_AGG(DISTINCT r.role_key) FILTER (WHERE r.role_key IS NOT NULL),
-              ARRAY[u.role_key]::text[]
-            ) AS security_groups
+            JSON_ARRAYAGG(r.role_key) AS security_groups
           FROM qms_users u
           JOIN qms_orgs o ON o.id = u.org_id
           LEFT JOIN qms_user_roles ur ON ur.user_id = u.id AND ur.org_id = u.org_id
@@ -70,7 +87,7 @@ superadminUsersRouter.get('/', async (req, res, next) => {
           LIMIT 200
         `
       );
-      return rows;
+      return rows.map(normalizeSecurityGroups);
     });
 
     return res.json({ users });
@@ -124,11 +141,11 @@ superadminUsersRouter.post('/', async (req, res, next) => {
       });
 
       if (!assignedRoleKeys.includes('superadmin')) {
+        // DO NOTHING -> INSERT IGNORE, against the UNIQUE(user_id) key.
         await client.query(
           `
-            INSERT INTO qms_user_2fa_settings (org_id, user_id, email_otp_enabled)
+            INSERT IGNORE INTO qms_user_2fa_settings (org_id, user_id, email_otp_enabled)
             VALUES ($1, $2, true)
-            ON CONFLICT (user_id) DO NOTHING
           `,
           [orgId, rows[0].id]
         );

@@ -58,34 +58,34 @@ aiInsightsRouter.get('/quality-insights', async (req, res, next) => {
       const highRisk = await client.query(`SELECT COUNT(*) AS total FROM rm_risk_register WHERE risk_band IN ('High', 'Critical') AND status <> 'Closed' AND org_id = $1`, orgParams);
       const trendDeviation = await client.query(
         `
-          SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS bucket, COUNT(*)::int AS total
+          SELECT DATE_FORMAT(DATE_SUB(DATE(created_at), INTERVAL WEEKDAY(created_at) DAY), '%Y-%m-%d') AS bucket, COUNT(*) AS total
           FROM dv_deviation_records
-          WHERE created_at >= CURRENT_TIMESTAMP(3) - interval '8 weeks'
+          WHERE created_at >= CURRENT_TIMESTAMP(3) - INTERVAL 8 WEEK
             AND org_id = $1
-          GROUP BY 1
-          ORDER BY 1
+          GROUP BY bucket
+          ORDER BY bucket
         `,
         orgParams
       );
       const trendCapa = await client.query(
         `
-          SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS bucket, COUNT(*)::int AS total
+          SELECT DATE_FORMAT(DATE_SUB(DATE(created_at), INTERVAL WEEKDAY(created_at) DAY), '%Y-%m-%d') AS bucket, COUNT(*) AS total
           FROM ca_capa_records
-          WHERE created_at >= CURRENT_TIMESTAMP(3) - interval '8 weeks'
+          WHERE created_at >= CURRENT_TIMESTAMP(3) - INTERVAL 8 WEEK
             AND org_id = $1
-          GROUP BY 1
-          ORDER BY 1
+          GROUP BY bucket
+          ORDER BY bucket
         `,
         orgParams
       );
       const trendComplaint = await client.query(
         `
-          SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS bucket, COUNT(*)::int AS total
+          SELECT DATE_FORMAT(DATE_SUB(DATE(created_at), INTERVAL WEEKDAY(created_at) DAY), '%Y-%m-%d') AS bucket, COUNT(*) AS total
           FROM qc_complaints
-          WHERE created_at >= CURRENT_TIMESTAMP(3) - interval '8 weeks'
+          WHERE created_at >= CURRENT_TIMESTAMP(3) - INTERVAL 8 WEEK
             AND org_id = $1
-          GROUP BY 1
-          ORDER BY 1
+          GROUP BY bucket
+          ORDER BY bucket
         `,
         orgParams
       );
@@ -129,9 +129,8 @@ aiInsightsRouter.get('/quality-insights', async (req, res, next) => {
       await client.query(
         `
           INSERT INTO ai_quality_insights_cache (org_id, insight_key, insight_payload, generated_by)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (org_id, insight_key)
-          DO UPDATE SET insight_payload = EXCLUDED.insight_payload, generated_at = CURRENT_TIMESTAMP(3), generated_by = EXCLUDED.generated_by
+          VALUES ($1, $2, $3, $4) AS new
+          ON DUPLICATE KEY UPDATE insight_payload = new.insight_payload, generated_at = CURRENT_TIMESTAMP(3), generated_by = new.generated_by
         `,
         [req.authContext.orgId, 'weekly-quality-insights', JSON.stringify(payload), req.authContext.userId]
       );

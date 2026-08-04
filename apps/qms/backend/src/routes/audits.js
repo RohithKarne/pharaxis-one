@@ -277,8 +277,7 @@ auditsRouter.post('/:auditId/findings/:findingId/link-capa', async (req, res, ne
         `
           INSERT INTO au_finding_capa_links (id, org_id, finding_id, capa_id)
           VALUES ($1, $2, $3, $4)
-          ON CONFLICT (finding_id, capa_id)
-          DO UPDATE SET created_at = CURRENT_TIMESTAMP(3)
+          ON DUPLICATE KEY UPDATE created_at = CURRENT_TIMESTAMP(3)
         `,
         [randomUUID(), req.authContext.orgId, findingId, capaId]
       );

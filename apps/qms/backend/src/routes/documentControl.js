@@ -109,11 +109,11 @@ documentControlRouter.get('/documents/periodic-reviews/alerts', async (req, res,
             d.owner_user_id,
             u.full_name AS owner_name,
             u.email AS owner_email,
-            (d.next_review_due_date - CURRENT_DATE) AS days_until_due
+            DATEDIFF(d.next_review_due_date, CURRENT_DATE) AS days_until_due
           FROM dc_documents d
           LEFT JOIN qms_users u ON u.id = d.owner_user_id
           WHERE d.org_id = $1
-            AND d.next_review_due_date <= (CURRENT_DATE + INTERVAL '90 days')
+            AND d.next_review_due_date <= (CURRENT_DATE + INTERVAL 90 DAY)
           ORDER BY d.next_review_due_date ASC
         `,
         [req.authContext.orgId]
@@ -298,7 +298,7 @@ documentControlRouter.post('/documents', async (req, res, next) => {
 
       await client.query(
         `
-          INSERT INTO dc_document_access_policies (
+          INSERT IGNORE INTO dc_document_access_policies (
             org_id,
             document_id,
             role_key,
@@ -312,14 +312,13 @@ documentControlRouter.post('/documents', async (req, res, next) => {
             ($1, $2, 'author', true, false, false),
             ($1, $2, 'approver', true, false, false),
             ($1, $2, 'viewer', true, $3, false)
-          ON CONFLICT (document_id, role_key) DO NOTHING
         `,
         [req.authContext.orgId, document.id, viewerDefaultCanDownload]
       );
 
       await client.query(
         `
-          INSERT INTO dc_document_distribution_targets (
+          INSERT IGNORE INTO dc_document_distribution_targets (
             org_id,
             document_id,
             target_type,
@@ -330,7 +329,6 @@ documentControlRouter.post('/documents', async (req, res, next) => {
             ($1, $2, 'User', $3, true, $4),
             ($1, $2, 'Role', 'qa_reviewer', true, $4),
             ($1, $2, 'Role', 'approver', true, $4)
-          ON CONFLICT (document_id, target_type, target_value) DO NOTHING
         `,
         [req.authContext.orgId, document.id, ownerUserId, req.authContext.userId]
       );
@@ -650,8 +648,7 @@ documentControlRouter.post('/documents/:documentId/versions/:versionId/acknowled
             version_id,
             user_id
           ) VALUES ($5, $1, $2, $3, $4)
-          ON CONFLICT (version_id, user_id)
-          DO UPDATE SET acknowledged_at = CURRENT_TIMESTAMP(3)
+          ON DUPLICATE KEY UPDATE acknowledged_at = CURRENT_TIMESTAMP(3)
         `,
         [req.authContext.orgId, documentId, versionId, req.authContext.userId, randomUUID()]
       );

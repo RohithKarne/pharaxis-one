@@ -43,13 +43,12 @@ integrationsRouter.put('/adapters/:adapterKey', async (req, res, next) => {
             config_json,
             created_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
-          ON CONFLICT (org_id, adapter_key)
-          DO UPDATE SET
-            endpoint_url = EXCLUDED.endpoint_url,
-            auth_mode = EXCLUDED.auth_mode,
-            status = EXCLUDED.status,
-            config_json = EXCLUDED.config_json,
+          VALUES ($1, $2, $3, $4, $5, $6, $7) AS new
+          ON DUPLICATE KEY UPDATE
+            endpoint_url = new.endpoint_url,
+            auth_mode = new.auth_mode,
+            status = new.status,
+            config_json = new.config_json,
             updated_at = CURRENT_TIMESTAMP(3)
         `,
         [

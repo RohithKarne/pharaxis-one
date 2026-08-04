@@ -19,7 +19,18 @@ import { aiInsightsRouter } from './routes/aiInsights.js';
 import { integrationsRouter } from './routes/integrations.js';
 import { authSelector } from './middleware/authSelector.js';
 import { resolveAuthContext } from './middleware/authContext.js';
-import { withRlsContext } from './middleware/rlsContext.js';
+// CUTOVER: the application now runs on MySQL.
+//
+// withRlsContext opened a Postgres transaction and set the RLS session variables
+// (app.current_org_id / app.is_superadmin) that the row-level security policies
+// read. MySQL has neither, and the MySQL schema drops the policies outright, so
+// there is nothing for that middleware to configure.
+//
+// withMysqlTransaction keeps the transaction and the org-context precondition,
+// and hands routes a pg-shaped client so no call site changed. The tenant
+// filtering the policies used to apply now lives in the queries themselves
+// (Phase 0), enforced by tests/tenant-scope-audit.mjs.
+import { withMysqlTransaction } from './db/mysql/transactionContext.js';
 import { superadminAuth } from './middleware/superadminAuth.js';
 import { requestContext } from './middleware/requestContext.js';
 import { inputSecurity } from './middleware/inputSecurity.js';
@@ -52,7 +63,7 @@ function applySecurityHeaders(req, res, next) {
 function mountApiRoutes(app, basePath) {
   app.use(`${basePath}/auth`, authRouter);
 
-  app.use(basePath, authSelector, resolveAuthContext, withRlsContext);
+  app.use(basePath, authSelector, resolveAuthContext, withMysqlTransaction);
   app.use(`${basePath}/protected`, protectedRouter);
   app.use(`${basePath}/document-control`, documentControlRouter);
   app.use(`${basePath}/capa`, capaRouter);

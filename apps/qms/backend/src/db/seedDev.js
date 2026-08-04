@@ -1,24 +1,19 @@
 // tenant-scope-audit: cross-org — dev seed script, not a runtime request path.
 // Runs once against a dev database to provision fixture users.
 import dotenv from 'dotenv';
-import pg from 'pg';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import { getMysqlPool, getMysqlClient } from './mysql/pool.js';
 
 dotenv.config();
-
-const { Pool } = pg;
 
 // Was crypt($5, gen_salt('bf')) — pgcrypto, which MySQL does not have.
 // 10 matches the house cost factor (CP Portal).
 const BCRYPT_COST = 10;
 
-const REQUIRED_ENV = ['DATABASE_URL'];
-for (const envName of REQUIRED_ENV) {
-  if (!process.env[envName]) {
-    throw new Error(`[qms-seed] Missing required environment variable: ${envName}`);
-  }
-}
+// The DATABASE_URL guard is gone with the `pg` driver: connection settings now
+// come from MYSQL_* (see src/db/mysql/pool.js), which supplies dev defaults, so
+// there is no longer an environment variable whose absence is fatal.
 
 const DEFAULT_ORG_CODE = process.env.QMS_SEED_ORG_CODE || 'PHA_DEV';
 const DEFAULT_ORG_NAME = process.env.QMS_SEED_ORG_NAME || 'Pharaxis Development';
@@ -110,9 +105,9 @@ async function upsertOrg(client, { orgCode, orgName }) {
   await client.query(
     `
       INSERT INTO qms_orgs (org_code, org_name, is_active)
-      VALUES ($1, $2, true)
-      ON CONFLICT (org_code)
-      DO UPDATE SET org_name = EXCLUDED.org_name, is_active = true, updated_at = CURRENT_TIMESTAMP(3)
+      VALUES ($1, $2, true) AS new
+      ON DUPLICATE KEY UPDATE
+        org_name = new.org_name, is_active = true, updated_at = CURRENT_TIMESTAMP(3)
     `,
     [orgCode, orgName]
   );
@@ -132,9 +127,8 @@ async function ensureRoles(client, orgId, roleKeys) {
     await client.query(
       `
         INSERT INTO qms_roles (org_id, role_key, role_name, is_system)
-        VALUES ($1, $2, $3, true)
-        ON CONFLICT (org_id, role_key)
-        DO UPDATE SET role_name = EXCLUDED.role_name, is_system = true
+        VALUES ($1, $2, $3, true) AS new
+        ON DUPLICATE KEY UPDATE role_name = new.role_name, is_system = true
       `,
       [orgId, roleKey, roleName]
     );
@@ -144,9 +138,8 @@ async function ensureRoles(client, orgId, roleKeys) {
 async function ensureOrgDefaults(client, orgId) {
   await client.query(
     `
-      INSERT INTO sa_org_upload_policies (org_id)
+      INSERT IGNORE INTO sa_org_upload_policies (org_id)
       VALUES ($1)
-      ON CONFLICT (org_id) DO NOTHING
     `,
     [orgId]
   );
@@ -154,11 +147,10 @@ async function ensureOrgDefaults(client, orgId) {
   await client.query(
     `
       INSERT INTO sa_org_security_policies (org_id, email_otp_required, allow_org_admin_2fa_reset)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (org_id)
-      DO UPDATE SET
-        email_otp_required = EXCLUDED.email_otp_required,
-        allow_org_admin_2fa_reset = EXCLUDED.allow_org_admin_2fa_reset,
+      VALUES ($1, $2, $3) AS new
+      ON DUPLICATE KEY UPDATE
+        email_otp_required = new.email_otp_required,
+        allow_org_admin_2fa_reset = new.allow_org_admin_2fa_reset,
         updated_at = CURRENT_TIMESTAMP(3)
     `,
     [orgId, DEFAULT_EMAIL_OTP_REQUIRED, DEFAULT_ALLOW_ADMIN_2FA_RESET]
@@ -169,12 +161,11 @@ async function upsertUser(client, orgId, userSpec) {
   await client.query(
     `
       INSERT INTO qms_users (org_id, email, full_name, role_key, password_hash, is_active)
-      VALUES ($1, $2, $3, $4, $5, true)
-      ON CONFLICT (org_id, email)
-      DO UPDATE SET
-        full_name = EXCLUDED.full_name,
-        role_key = EXCLUDED.role_key,
-        password_hash = $5,
+      VALUES ($1, $2, $3, $4, $5, true) AS new
+      ON DUPLICATE KEY UPDATE
+        full_name = new.full_name,
+        role_key = new.role_key,
+        password_hash = new.password_hash,
         is_active = true,
         updated_at = CURRENT_TIMESTAMP(3)
     `,
@@ -202,12 +193,11 @@ async function assignUserRoles(client, orgId, userId, roleKeys, primaryRole) {
   for (const roleKey of roleKeys) {
     await client.query(
       `
-        INSERT INTO qms_user_roles (org_id, user_id, role_id)
+        INSERT IGNORE INTO qms_user_roles (org_id, user_id, role_id)
         SELECT $1, $2, id
         FROM qms_roles
         WHERE org_id = $1
           AND role_key = $3
-        ON CONFLICT (org_id, user_id, role_id) DO NOTHING
       `,
       [orgId, userId, roleKey]
     );
@@ -233,26 +223,27 @@ async function syncUser2fa(client, orgId, userId, otpEnabled) {
     `
       INSERT INTO qms_user_2fa_settings (org_id, user_id, email_otp_enabled, reset_required)
       VALUES ($1, $2, true, false)
-      ON CONFLICT (user_id)
-      DO UPDATE SET email_otp_enabled = true, reset_required = false, updated_at = CURRENT_TIMESTAMP(3)
+      ON DUPLICATE KEY UPDATE
+        email_otp_enabled = true, reset_required = false, updated_at = CURRENT_TIMESTAMP(3)
     `,
     [orgId, userId]
   );
 }
 
 async function run() {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  const client = await pool.connect();
+  const client = await getMysqlClient();
 
   try {
     await client.query('BEGIN');
-    await client.query("SELECT set_config('app.is_superadmin', 'true', true)");
 
+    // The two set_config() calls that used to bracket this block are gone: they
+    // set the Postgres RLS session variables, and MySQL has neither. The seed
+    // reaches every row it needs because it is the only writer here, and each
+    // statement already names its org_id explicitly.
     const org = await upsertOrg(client, {
       orgCode: DEFAULT_ORG_CODE,
       orgName: DEFAULT_ORG_NAME
     });
-    await client.query("SELECT set_config('app.current_org_id', $1, true)", [org.id]);
 
     const allRoleKeys = Array.from(new Set(DEV_USERS.flatMap((user) => user.roleKeys)));
     await ensureRoles(client, org.id, allRoleKeys);
@@ -280,7 +271,7 @@ async function run() {
     throw error;
   } finally {
     client.release();
-    await pool.end();
+    await getMysqlPool().end();
   }
 }
 

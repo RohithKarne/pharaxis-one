@@ -212,9 +212,8 @@ nonconformanceRouter.post('/:recordId/link-capa', async (req, res, next) => {
       await client.query(
         `
           INSERT INTO qn_nonconformance_capa_links (org_id, nonconformance_id, capa_id, linked_by)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (nonconformance_id, capa_id)
-          DO UPDATE SET linked_at = CURRENT_TIMESTAMP(3), linked_by = EXCLUDED.linked_by
+          VALUES ($1, $2, $3, $4) AS new
+          ON DUPLICATE KEY UPDATE linked_at = CURRENT_TIMESTAMP(3), linked_by = new.linked_by
         `,
         [req.authContext.orgId, recordId, capaId, req.authContext.userId]
       );

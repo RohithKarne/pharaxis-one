@@ -557,11 +557,10 @@ capaRouter.post('/:capaId/rca/5why', async (req, res, next) => {
         await client.query(
           `
             INSERT INTO ca_root_cause_5why (org_id, capa_id, why_level, answer, created_by)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (capa_id, why_level)
-            DO UPDATE SET
-              answer = EXCLUDED.answer,
-              created_by = EXCLUDED.created_by,
+            VALUES ($1, $2, $3, $4, $5) AS new
+            ON DUPLICATE KEY UPDATE
+              answer = new.answer,
+              created_by = new.created_by,
               created_at = CURRENT_TIMESTAMP(3)
           `,
           [req.authContext.orgId, capaId, level, item.answer, req.authContext.userId]

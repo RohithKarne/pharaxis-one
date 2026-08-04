@@ -217,16 +217,24 @@ changeControlRouter.post('/:changeId/impact-assessment', async (req, res, next) 
             risk_level,
             assessed_by
           )
-          VALUES ($1, $2, $3, $4, $5, $6)
-          ON CONFLICT (change_id)
-          DO UPDATE SET
-            assessment_summary = EXCLUDED.assessment_summary,
-            impacted_modules = EXCLUDED.impacted_modules,
-            risk_level = EXCLUDED.risk_level,
-            assessed_by = EXCLUDED.assessed_by,
+          VALUES ($1, $2, $3, $4, $5, $6) AS new
+          ON DUPLICATE KEY UPDATE
+            assessment_summary = new.assessment_summary,
+            impacted_modules = new.impacted_modules,
+            risk_level = new.risk_level,
+            assessed_by = new.assessed_by,
             updated_at = CURRENT_TIMESTAMP(3)
         `,
-        [req.authContext.orgId, changeId, assessmentSummary, safeModules, riskLevel, req.authContext.userId]
+        // impacted_modules is TEXT[] in Postgres but JSON in MySQL: mysql2 would
+        // flatten a JS array into a comma-separated SQL list, so bind the JSON text.
+        [
+          req.authContext.orgId,
+          changeId,
+          assessmentSummary,
+          JSON.stringify(safeModules),
+          riskLevel,
+          req.authContext.userId
+        ]
       );
 
       // Read back on change_id: the row is unique per change, and on the
