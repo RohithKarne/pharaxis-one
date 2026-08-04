@@ -123,6 +123,15 @@ const CONSTRUCTS = [
     fix: 'DATEDIFF(a, b) — MySQL does not return days from a date subtraction'
   },
   {
+    // Found during the cutover, not by this audit — the aiInsights trend queries
+    // bucketed by week with to_char(date_trunc('week', ...)). Neither function
+    // exists in MySQL. Added so the gap cannot reopen.
+    key: 'pgdatefns',
+    pattern: /\b(?:to_char|date_trunc|age|generate_series)\s*\(/gi,
+    what: 'to_char / date_trunc / age / generate_series',
+    fix: 'DATE_FORMAT / DATE_SUB with WEEKDAY() / TIMESTAMPDIFF — no MySQL equivalents'
+  },
+  {
     key: 'jsonbuild',
     pattern: /\bjsonb?_build_(?:object|array)\s*\(/gi,
     what: 'jsonb_build_object / jsonb_build_array',
