@@ -1,0 +1,5754 @@
+{
+  "_comment": [
+    "Frozen snapshot of the PostgreSQL schema as it stood at the MySQL cutover.",
+    "Captured 2026-08-04 from the live qms_dev database.",
+    "This exists so tests/mysql-schema-check.mjs can prove MySQL parity WITHOUT a",
+    "live PostgreSQL server — it is what makes the legacy database disposable.",
+    "Do not hand-edit. Regenerate only from a PostgreSQL instance of record."
+  ],
+  "capturedAt": "2026-08-04",
+  "source": "postgresql qms_dev",
+  "columns": [
+    {
+      "table_name": "ai_quality_insights_cache",
+      "column_name": "generated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ai_quality_insights_cache",
+      "column_name": "generated_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ai_quality_insights_cache",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ai_quality_insights_cache",
+      "column_name": "insight_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ai_quality_insights_cache",
+      "column_name": "insight_payload",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "ai_quality_insights_cache",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audit_assignments",
+      "column_name": "assignment_role",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_audit_assignments",
+      "column_name": "audit_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audit_assignments",
+      "column_name": "auditor_user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audit_assignments",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_audit_assignments",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audit_assignments",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audit_reports",
+      "column_name": "audit_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audit_reports",
+      "column_name": "file_object_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audit_reports",
+      "column_name": "generated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_audit_reports",
+      "column_name": "generated_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audit_reports",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audit_reports",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_auditee_responses",
+      "column_name": "finding_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_auditee_responses",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_auditee_responses",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_auditee_responses",
+      "column_name": "proposed_action",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_auditee_responses",
+      "column_name": "responded_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_auditee_responses",
+      "column_name": "responded_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_auditee_responses",
+      "column_name": "response_text",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "actual_end_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "audit_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "audit_title",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "audit_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "closed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "closed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "closure_summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "lead_auditor_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "planned_date",
+      "is_nullable": "NO",
+      "data_type": "date"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "scope",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "started_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_audits",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_binder_items",
+      "column_name": "binder_job_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_binder_items",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_binder_items",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_binder_items",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_binder_items",
+      "column_name": "source_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_binder_items",
+      "column_name": "source_module",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_binder_items",
+      "column_name": "source_table",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_binder_jobs",
+      "column_name": "completed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_binder_jobs",
+      "column_name": "duration_ms",
+      "is_nullable": "YES",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "au_binder_jobs",
+      "column_name": "error_message",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_binder_jobs",
+      "column_name": "file_object_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_binder_jobs",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_binder_jobs",
+      "column_name": "job_status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_binder_jobs",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_binder_jobs",
+      "column_name": "requested_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_binder_jobs",
+      "column_name": "requested_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_binder_jobs",
+      "column_name": "total_records",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "au_finding_capa_links",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_finding_capa_links",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_finding_capa_links",
+      "column_name": "finding_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_finding_capa_links",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_finding_capa_links",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "audit_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "closed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "closed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "closure_summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "department",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "description",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "effectiveness_result",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "finding_code",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "finding_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "process_area",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "response_due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "au_findings",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_history_events",
+      "column_name": "action_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_history_events",
+      "column_name": "actor_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_history_events",
+      "column_name": "audit_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_history_events",
+      "column_name": "finding_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_history_events",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "au_history_events",
+      "column_name": "occurred_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_history_events",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_history_events",
+      "column_name": "payload_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "au_pre_audit_checklists",
+      "column_name": "audit_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_pre_audit_checklists",
+      "column_name": "checklist_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_pre_audit_checklists",
+      "column_name": "completed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "au_pre_audit_checklists",
+      "column_name": "completed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_pre_audit_checklists",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "au_pre_audit_checklists",
+      "column_name": "is_completed",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "au_pre_audit_checklists",
+      "column_name": "item_text",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "au_pre_audit_checklists",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "action_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "assigned_owner_user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "completed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "completion_evidence_ref",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "completion_notes",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "description",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "due_date",
+      "is_nullable": "NO",
+      "data_type": "date"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_action_items",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_approvals",
+      "column_name": "approver_user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_approvals",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_approvals",
+      "column_name": "comments",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_approvals",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_approvals",
+      "column_name": "decided_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_approvals",
+      "column_name": "decision",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_approvals",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_approvals",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_approvals",
+      "column_name": "signature_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_approvals",
+      "column_name": "stage",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "action_plan_approved_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "batch_lot_no",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "capa_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "classification",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "closed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "closed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "closure_summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "department",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "detectability",
+      "is_nullable": "YES",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "effective_verified_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "effectiveness_result",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "investigation_summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "occurrence",
+      "is_nullable": "YES",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "owner_user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "product_name",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "reopened_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "reopened_reason",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "risk_band",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "risk_score",
+      "is_nullable": "YES",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "root_cause_summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "severity",
+      "is_nullable": "YES",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "source_ref_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "source_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "submitted_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "title",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "triage_summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "triaged_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_capa_records",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_effectiveness_checks",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_effectiveness_checks",
+      "column_name": "checked_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_effectiveness_checks",
+      "column_name": "checked_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_effectiveness_checks",
+      "column_name": "criteria",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_effectiveness_checks",
+      "column_name": "evidence_ref",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_effectiveness_checks",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_effectiveness_checks",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_effectiveness_checks",
+      "column_name": "result",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_effectiveness_checks",
+      "column_name": "signature_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_escalations",
+      "column_name": "action_item_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_escalations",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_escalations",
+      "column_name": "escalated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_escalations",
+      "column_name": "escalated_to_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_escalations",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_escalations",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_escalations",
+      "column_name": "reason",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_history_events",
+      "column_name": "action_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_history_events",
+      "column_name": "actor_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_history_events",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_history_events",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "ca_history_events",
+      "column_name": "occurred_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_history_events",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_history_events",
+      "column_name": "payload_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "ca_root_cause_5why",
+      "column_name": "answer",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_root_cause_5why",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_root_cause_5why",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_root_cause_5why",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_root_cause_5why",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_root_cause_5why",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_root_cause_5why",
+      "column_name": "why_level",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "ca_root_cause_fishbone",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_root_cause_fishbone",
+      "column_name": "category",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_root_cause_fishbone",
+      "column_name": "cause",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "ca_root_cause_fishbone",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "ca_root_cause_fishbone",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_root_cause_fishbone",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "ca_root_cause_fishbone",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_approval_records",
+      "column_name": "approver_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_approval_records",
+      "column_name": "change_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_approval_records",
+      "column_name": "comments",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_approval_records",
+      "column_name": "decided_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_approval_records",
+      "column_name": "decision",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_approval_records",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_approval_records",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "approved_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "cab_decision",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "cab_required",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "cab_reviewed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "cab_reviewed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "change_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "change_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "closed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "closure_summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "effectiveness_result",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "linked_document_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "owner_user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "planned_end_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "planned_start_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "reason",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "reopened_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "reopened_reason",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "requested_by_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "risk_level",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "title",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_change_records",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_history_events",
+      "column_name": "action_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_history_events",
+      "column_name": "actor_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_history_events",
+      "column_name": "change_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_history_events",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "cc_history_events",
+      "column_name": "occurred_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_history_events",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_history_events",
+      "column_name": "payload_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "cc_impact_assessments",
+      "column_name": "assessed_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_impact_assessments",
+      "column_name": "assessed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_impact_assessments",
+      "column_name": "assessment_summary",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_impact_assessments",
+      "column_name": "change_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_impact_assessments",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_impact_assessments",
+      "column_name": "impacted_modules",
+      "is_nullable": "NO",
+      "data_type": "ARRAY"
+    },
+    {
+      "table_name": "cc_impact_assessments",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_impact_assessments",
+      "column_name": "risk_level",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_impact_assessments",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "change_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "completed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "evidence_ref",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "step_no",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "step_status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "step_title",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "cc_implementation_steps",
+      "column_name": "updated_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_access_policies",
+      "column_name": "can_download",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "dc_document_access_policies",
+      "column_name": "can_print",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "dc_document_access_policies",
+      "column_name": "can_view",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "dc_document_access_policies",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_access_policies",
+      "column_name": "document_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_access_policies",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_access_policies",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_access_policies",
+      "column_name": "role_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_access_policies",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_acknowledgements",
+      "column_name": "acknowledged_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_acknowledgements",
+      "column_name": "document_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_acknowledgements",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_acknowledgements",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_acknowledgements",
+      "column_name": "user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_acknowledgements",
+      "column_name": "version_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_distribution_targets",
+      "column_name": "acknowledgement_required",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "dc_document_distribution_targets",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_distribution_targets",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_distribution_targets",
+      "column_name": "document_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_distribution_targets",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_distribution_targets",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_distribution_targets",
+      "column_name": "target_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_distribution_targets",
+      "column_name": "target_value",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_exports",
+      "column_name": "binder_job_reference",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_exports",
+      "column_name": "document_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_exports",
+      "column_name": "export_format",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_exports",
+      "column_name": "exported_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_exports",
+      "column_name": "exported_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_exports",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_exports",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_exports",
+      "column_name": "version_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "alert_schedule_days",
+      "is_nullable": "NO",
+      "data_type": "ARRAY"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "completed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "completed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "completion_notes",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "document_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "due_date",
+      "is_nullable": "NO",
+      "data_type": "date"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "last_alert_sent_days",
+      "is_nullable": "YES",
+      "data_type": "ARRAY"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_periodic_reviews",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_review_history",
+      "column_name": "completed_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_review_history",
+      "column_name": "completed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_review_history",
+      "column_name": "document_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_review_history",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "dc_document_review_history",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_review_history",
+      "column_name": "notes",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_review_history",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_review_history",
+      "column_name": "periodic_review_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_review_history",
+      "column_name": "result",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "approved_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "approved_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "content_summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "document_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "effective_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "effective_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "reason_for_change",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "retired_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "retired_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "supersedes_version_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_versions",
+      "column_name": "version_no",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "dc_document_workflow_events",
+      "column_name": "acted_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_document_workflow_events",
+      "column_name": "acted_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_workflow_events",
+      "column_name": "document_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_workflow_events",
+      "column_name": "from_status",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_workflow_events",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "dc_document_workflow_events",
+      "column_name": "notes",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_workflow_events",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_workflow_events",
+      "column_name": "signature_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_document_workflow_events",
+      "column_name": "to_status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_document_workflow_events",
+      "column_name": "version_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "active_version_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "binder_includable",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "change_control_ref_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "controlled_copy_required",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "controlled_preview_enabled",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "criticality",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "department",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "document_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "document_subtype",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "document_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "download_allowed",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "effective_from",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "effective_to",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "metadata_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "next_review_due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "owner_user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "print_allowed",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "review_interval_days",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "site_code",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "title",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "training_required",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "dc_documents",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dv_containment_actions",
+      "column_name": "action_text",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_containment_actions",
+      "column_name": "deviation_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_containment_actions",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_containment_actions",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_containment_actions",
+      "column_name": "recorded_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dv_containment_actions",
+      "column_name": "recorded_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_capa_links",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_capa_links",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dv_deviation_capa_links",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_capa_links",
+      "column_name": "deviation_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_capa_links",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_capa_links",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "assigned_qa_reviewer_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "classification",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "closed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "closed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "closure_summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "date_of_occurrence",
+      "is_nullable": "NO",
+      "data_type": "date"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "department",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "description",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "detected_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "deviation_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "deviation_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "impact_level",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "qa_reviewed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "reopened_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "reopened_reason",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "reportability_reason",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "reportability_status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "root_cause",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "title",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "triage_summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "triaged_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dv_deviation_records",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dv_history_events",
+      "column_name": "action_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_history_events",
+      "column_name": "actor_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_history_events",
+      "column_name": "deviation_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_history_events",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "dv_history_events",
+      "column_name": "occurred_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "dv_history_events",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_history_events",
+      "column_name": "payload_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "dv_investigations",
+      "column_name": "deviation_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_investigations",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "dv_investigations",
+      "column_name": "evidence_ref",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_investigations",
+      "column_name": "findings",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_investigations",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_investigations",
+      "column_name": "investigator_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_investigations",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "dv_investigations",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "dv_investigations",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "approved_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "approved_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "chairperson",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "decisions",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "review_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "review_period_end",
+      "is_nullable": "NO",
+      "data_type": "date"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "review_period_start",
+      "is_nullable": "NO",
+      "data_type": "date"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "mr_management_reviews",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "mr_review_actions",
+      "column_name": "action_title",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "mr_review_actions",
+      "column_name": "closure_notes",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "mr_review_actions",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "mr_review_actions",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "mr_review_actions",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "mr_review_actions",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "mr_review_actions",
+      "column_name": "owner_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "mr_review_actions",
+      "column_name": "review_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "mr_review_actions",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "mr_review_actions",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qc_complaint_capa_links",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qc_complaint_capa_links",
+      "column_name": "complaint_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qc_complaint_capa_links",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qc_complaint_capa_links",
+      "column_name": "linked_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qc_complaint_capa_links",
+      "column_name": "linked_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qc_complaint_capa_links",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "assigned_to",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "batch_lot_no",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "closed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "closed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "complaint_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "customer_name",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "details",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "product_name",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "severity",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "source_channel",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "summary",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qc_complaints",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "action_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "actor_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "curr_hash",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "entity_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "entity_table",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "module_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "occurred_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "payload_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "qms_audit_events",
+      "column_name": "prev_hash",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_auth_accounts",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_auth_accounts",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_auth_accounts",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_auth_accounts",
+      "column_name": "provider",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_auth_accounts",
+      "column_name": "provider_subject",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_auth_accounts",
+      "column_name": "user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_e_signatures",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_e_signatures",
+      "column_name": "entity_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_e_signatures",
+      "column_name": "entity_table",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_e_signatures",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_e_signatures",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_e_signatures",
+      "column_name": "signature_meaning",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_e_signatures",
+      "column_name": "signed_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_e_signatures",
+      "column_name": "signed_payload_hash",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_e_signatures",
+      "column_name": "user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_email_notifications",
+      "column_name": "body",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_email_notifications",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_email_notifications",
+      "column_name": "delivery_status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_email_notifications",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_email_notifications",
+      "column_name": "last_error",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_email_notifications",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_email_notifications",
+      "column_name": "recipient_email",
+      "is_nullable": "NO",
+      "data_type": "USER-DEFINED"
+    },
+    {
+      "table_name": "qms_email_notifications",
+      "column_name": "retry_count",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "qms_email_notifications",
+      "column_name": "sent_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_email_notifications",
+      "column_name": "subject",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_event_outbox",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_event_outbox",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_event_outbox",
+      "column_name": "last_error",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_event_outbox",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_event_outbox",
+      "column_name": "payload_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "qms_event_outbox",
+      "column_name": "publish_status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_event_outbox",
+      "column_name": "published_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_event_outbox",
+      "column_name": "retry_count",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "qms_event_outbox",
+      "column_name": "topic_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_file_objects",
+      "column_name": "blob_uri",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_file_objects",
+      "column_name": "byte_size",
+      "is_nullable": "YES",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "qms_file_objects",
+      "column_name": "checksum_sha256",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_file_objects",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_file_objects",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_file_objects",
+      "column_name": "mime_type",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_file_objects",
+      "column_name": "object_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_file_objects",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_file_objects",
+      "column_name": "storage_provider",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_file_objects",
+      "column_name": "uploaded_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "adapter_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "auth_mode",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "config_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "endpoint_url",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "last_sync_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_integration_adapters",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "adapter_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "finished_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "job_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "payload_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "result_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "started_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_integration_sync_jobs",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_login_audit",
+      "column_name": "email",
+      "is_nullable": "YES",
+      "data_type": "USER-DEFINED"
+    },
+    {
+      "table_name": "qms_login_audit",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "qms_login_audit",
+      "column_name": "ip_address",
+      "is_nullable": "YES",
+      "data_type": "inet"
+    },
+    {
+      "table_name": "qms_login_audit",
+      "column_name": "login_surface",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_login_audit",
+      "column_name": "occurred_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_login_audit",
+      "column_name": "org_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_login_audit",
+      "column_name": "outcome",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_login_audit",
+      "column_name": "reason",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_login_audit",
+      "column_name": "user_agent",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_login_otp_challenges",
+      "column_name": "attempt_count",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "qms_login_otp_challenges",
+      "column_name": "consumed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_login_otp_challenges",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_login_otp_challenges",
+      "column_name": "expires_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_login_otp_challenges",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_login_otp_challenges",
+      "column_name": "max_attempts",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "qms_login_otp_challenges",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_login_otp_challenges",
+      "column_name": "otp_code_hash",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_login_otp_challenges",
+      "column_name": "recipient_email",
+      "is_nullable": "NO",
+      "data_type": "USER-DEFINED"
+    },
+    {
+      "table_name": "qms_login_otp_challenges",
+      "column_name": "user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_notifications",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_notifications",
+      "column_name": "event_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_notifications",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_notifications",
+      "column_name": "is_read",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "qms_notifications",
+      "column_name": "message",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_notifications",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_notifications",
+      "column_name": "payload_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "qms_notifications",
+      "column_name": "recipient_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_notifications",
+      "column_name": "title",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_orgs",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_orgs",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_orgs",
+      "column_name": "is_active",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "qms_orgs",
+      "column_name": "org_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_orgs",
+      "column_name": "org_name",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_orgs",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_permissions",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_permissions",
+      "column_name": "description",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_permissions",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_permissions",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_permissions",
+      "column_name": "permission_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_role_permissions",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_role_permissions",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_role_permissions",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_role_permissions",
+      "column_name": "permission_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_role_permissions",
+      "column_name": "role_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_roles",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_roles",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_roles",
+      "column_name": "is_system",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "qms_roles",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_roles",
+      "column_name": "role_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_roles",
+      "column_name": "role_name",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_schema_migrations",
+      "column_name": "applied_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_schema_migrations",
+      "column_name": "filename",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_schema_migrations",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "link_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "source_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "source_module",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "source_table",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "target_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "target_module",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_trace_links",
+      "column_name": "target_table",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_training_assignments",
+      "column_name": "assigned_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_training_assignments",
+      "column_name": "assigned_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_assignments",
+      "column_name": "assigned_role_key",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_training_assignments",
+      "column_name": "assigned_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_assignments",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "qms_training_assignments",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_assignments",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_assignments",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_training_assignments",
+      "column_name": "training_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "description",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "is_active",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "source_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "source_module",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "source_table",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "title",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_training_catalog",
+      "column_name": "training_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_training_completions",
+      "column_name": "assignment_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_completions",
+      "column_name": "completed_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_training_completions",
+      "column_name": "completion_notes",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_training_completions",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_completions",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_training_completions",
+      "column_name": "user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_user_2fa_settings",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_user_2fa_settings",
+      "column_name": "email_otp_enabled",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "qms_user_2fa_settings",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_user_2fa_settings",
+      "column_name": "last_verified_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_user_2fa_settings",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_user_2fa_settings",
+      "column_name": "reset_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_user_2fa_settings",
+      "column_name": "reset_required",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "qms_user_2fa_settings",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_user_2fa_settings",
+      "column_name": "user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_user_roles",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_user_roles",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_user_roles",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_user_roles",
+      "column_name": "role_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_user_roles",
+      "column_name": "user_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_users",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qms_users",
+      "column_name": "email",
+      "is_nullable": "NO",
+      "data_type": "USER-DEFINED"
+    },
+    {
+      "table_name": "qms_users",
+      "column_name": "full_name",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_users",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_users",
+      "column_name": "is_active",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "qms_users",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qms_users",
+      "column_name": "password_hash",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_users",
+      "column_name": "role_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qms_users",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qn_nonconformance_capa_links",
+      "column_name": "capa_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qn_nonconformance_capa_links",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qn_nonconformance_capa_links",
+      "column_name": "linked_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qn_nonconformance_capa_links",
+      "column_name": "linked_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qn_nonconformance_capa_links",
+      "column_name": "nonconformance_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qn_nonconformance_capa_links",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "assigned_to",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "closed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "closed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "details",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "disposition",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "item_reference",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "nc_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "severity",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "source_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "summary",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "qn_nonconformance_records",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "detectability",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "mitigation_plan",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "occurrence",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "owner_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "review_due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "risk_band",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "risk_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "risk_domain",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "risk_score",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "risk_title",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "severity",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "rm_risk_register",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "rm_risk_reviews",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "rm_risk_reviews",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "rm_risk_reviews",
+      "column_name": "residual_score",
+      "is_nullable": "YES",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "rm_risk_reviews",
+      "column_name": "review_notes",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "rm_risk_reviews",
+      "column_name": "reviewed_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "rm_risk_reviews",
+      "column_name": "reviewed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "rm_risk_reviews",
+      "column_name": "risk_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_billing_controls",
+      "column_name": "billing_status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_org_billing_controls",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_billing_controls",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_billing_controls",
+      "column_name": "license_limit",
+      "is_nullable": "YES",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "sa_org_billing_controls",
+      "column_name": "notes",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_org_billing_controls",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_billing_controls",
+      "column_name": "plan_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_org_billing_controls",
+      "column_name": "reporting_email",
+      "is_nullable": "YES",
+      "data_type": "USER-DEFINED"
+    },
+    {
+      "table_name": "sa_org_billing_controls",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_billing_reports",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_billing_reports",
+      "column_name": "currency_code",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_org_billing_reports",
+      "column_name": "generated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_billing_reports",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_billing_reports",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_billing_reports",
+      "column_name": "report_period_end",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "sa_org_billing_reports",
+      "column_name": "report_period_start",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "sa_org_billing_reports",
+      "column_name": "report_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_org_billing_reports",
+      "column_name": "total_amount",
+      "is_nullable": "YES",
+      "data_type": "numeric"
+    },
+    {
+      "table_name": "sa_org_feature_flags",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_feature_flags",
+      "column_name": "feature_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_org_feature_flags",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_feature_flags",
+      "column_name": "is_enabled",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "sa_org_feature_flags",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_feature_flags",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_profiles",
+      "column_name": "billing_contact_email",
+      "is_nullable": "YES",
+      "data_type": "USER-DEFINED"
+    },
+    {
+      "table_name": "sa_org_profiles",
+      "column_name": "billing_contact_name",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_org_profiles",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_profiles",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_profiles",
+      "column_name": "legal_name",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_org_profiles",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_profiles",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_org_profiles",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_security_policies",
+      "column_name": "allow_org_admin_2fa_reset",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "sa_org_security_policies",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_security_policies",
+      "column_name": "email_otp_required",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "sa_org_security_policies",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_security_policies",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_security_policies",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_security_policies",
+      "column_name": "updated_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_upload_policies",
+      "column_name": "allowed_extensions",
+      "is_nullable": "NO",
+      "data_type": "ARRAY"
+    },
+    {
+      "table_name": "sa_org_upload_policies",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_upload_policies",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_upload_policies",
+      "column_name": "max_upload_mb",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "sa_org_upload_policies",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_upload_policies",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_org_upload_policies",
+      "column_name": "updated_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_org_upload_policies",
+      "column_name": "viewer_default_can_download",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "sa_org_upload_policies",
+      "column_name": "viewer_download_requires_watermark",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "config_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "is_active",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "smtp_from_email",
+      "is_nullable": "YES",
+      "data_type": "USER-DEFINED"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "smtp_from_name",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "smtp_host",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "smtp_password_encrypted",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "smtp_port",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "smtp_username",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "updated_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_platform_email_config",
+      "column_name": "use_tls",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "sa_user_admin_actions",
+      "column_name": "action_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sa_user_admin_actions",
+      "column_name": "actor_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_user_admin_actions",
+      "column_name": "details_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "sa_user_admin_actions",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "sa_user_admin_actions",
+      "column_name": "occurred_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sa_user_admin_actions",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_user_admin_actions",
+      "column_name": "target_entity_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sa_user_admin_actions",
+      "column_name": "target_entity_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "closed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "closed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "effectiveness_result",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "issue_summary",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "scar_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "supplier_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_scar_records",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "audit_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "audit_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "findings_count",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "outcome",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "planned_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "summary",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "supplier_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_supplier_audits",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "approved_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "contact_email",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "qualification_status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "risk_level",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "scorecard_rating",
+      "is_nullable": "YES",
+      "data_type": "numeric"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "supplier_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "supplier_name",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "supplier_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "sq_suppliers",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_history_events",
+      "column_name": "action_key",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_history_events",
+      "column_name": "actor_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_history_events",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "bigint"
+    },
+    {
+      "table_name": "vs_history_events",
+      "column_name": "occurred_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_history_events",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_history_events",
+      "column_name": "payload_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "vs_history_events",
+      "column_name": "system_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_periodic_reviews",
+      "column_name": "alert_schedule_days",
+      "is_nullable": "NO",
+      "data_type": "ARRAY"
+    },
+    {
+      "table_name": "vs_periodic_reviews",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_periodic_reviews",
+      "column_name": "due_date",
+      "is_nullable": "NO",
+      "data_type": "date"
+    },
+    {
+      "table_name": "vs_periodic_reviews",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_periodic_reviews",
+      "column_name": "last_alert_sent_days",
+      "is_nullable": "YES",
+      "data_type": "ARRAY"
+    },
+    {
+      "table_name": "vs_periodic_reviews",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_periodic_reviews",
+      "column_name": "system_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_periodic_reviews",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_protocol_instances",
+      "column_name": "approved_signature_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_protocol_instances",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_protocol_instances",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_protocol_instances",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_protocol_instances",
+      "column_name": "plan_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_protocol_instances",
+      "column_name": "protocol_name",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_protocol_instances",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_protocol_instances",
+      "column_name": "template_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_protocol_instances",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_protocol_templates",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_protocol_templates",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_protocol_templates",
+      "column_name": "is_system",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "vs_protocol_templates",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_protocol_templates",
+      "column_name": "template_body_json",
+      "is_nullable": "NO",
+      "data_type": "jsonb"
+    },
+    {
+      "table_name": "vs_protocol_templates",
+      "column_name": "template_name",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_protocol_templates",
+      "column_name": "template_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_requirement_specs",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_requirement_specs",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_requirement_specs",
+      "column_name": "description",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_requirement_specs",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_requirement_specs",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_requirement_specs",
+      "column_name": "requirement_code",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_requirement_specs",
+      "column_name": "requirement_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_requirement_specs",
+      "column_name": "risk_level",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_requirement_specs",
+      "column_name": "system_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_revalidation_flags",
+      "column_name": "change_type",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_revalidation_flags",
+      "column_name": "flagged_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_revalidation_flags",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_revalidation_flags",
+      "column_name": "is_revalidation_required",
+      "is_nullable": "NO",
+      "data_type": "boolean"
+    },
+    {
+      "table_name": "vs_revalidation_flags",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_revalidation_flags",
+      "column_name": "reason",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_revalidation_flags",
+      "column_name": "system_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "compliance_impact",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "gamp_category",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "next_review_due_date",
+      "is_nullable": "YES",
+      "data_type": "date"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "retired_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "risk_level",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "system_name",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "system_owner_user_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "validated_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "validated_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "validation_scope",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "validation_status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "vendor",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_system_inventory",
+      "column_name": "version",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "actual_result",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "evidence_ref",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "executed_at",
+      "is_nullable": "YES",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "executed_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "expected_result",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "outcome",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "script_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "signature_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_test_script_steps",
+      "column_name": "step_no",
+      "is_nullable": "NO",
+      "data_type": "integer"
+    },
+    {
+      "table_name": "vs_test_scripts",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_test_scripts",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_test_scripts",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_test_scripts",
+      "column_name": "protocol_instance_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_test_scripts",
+      "column_name": "script_name",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "notes",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "plan_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "protocol_instance_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "requirement_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "script_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "step_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "system_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "trace_status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_trace_matrix_entries",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_validation_deviations",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_validation_deviations",
+      "column_name": "deviation_text",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_validation_deviations",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_deviations",
+      "column_name": "linked_deviation_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_deviations",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_deviations",
+      "column_name": "protocol_step_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_deviations",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_validation_deviations",
+      "column_name": "system_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_deviations",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "approach",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "approved_signature_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "created_by",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "protocol_types",
+      "is_nullable": "NO",
+      "data_type": "ARRAY"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "responsibilities",
+      "is_nullable": "YES",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "scope",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "system_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_plans",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_validation_summary_reports",
+      "column_name": "approved_signature_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_summary_reports",
+      "column_name": "file_object_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_summary_reports",
+      "column_name": "generated_at",
+      "is_nullable": "NO",
+      "data_type": "timestamp with time zone"
+    },
+    {
+      "table_name": "vs_validation_summary_reports",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_summary_reports",
+      "column_name": "org_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_summary_reports",
+      "column_name": "plan_id",
+      "is_nullable": "YES",
+      "data_type": "uuid"
+    },
+    {
+      "table_name": "vs_validation_summary_reports",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "data_type": "text"
+    },
+    {
+      "table_name": "vs_validation_summary_reports",
+      "column_name": "system_id",
+      "is_nullable": "NO",
+      "data_type": "uuid"
+    }
+  ],
+  "foreignKeysByTable": {
+    "ai_quality_insights_cache": 2,
+    "au_audit_assignments": 3,
+    "au_audit_reports": 3,
+    "au_auditee_responses": 3,
+    "au_audits": 4,
+    "au_binder_items": 2,
+    "au_binder_jobs": 2,
+    "au_finding_capa_links": 3,
+    "au_findings": 3,
+    "au_history_events": 4,
+    "au_pre_audit_checklists": 3,
+    "ca_action_items": 3,
+    "ca_approvals": 4,
+    "ca_capa_records": 4,
+    "ca_effectiveness_checks": 4,
+    "ca_escalations": 4,
+    "ca_history_events": 3,
+    "ca_root_cause_5why": 3,
+    "ca_root_cause_fishbone": 3,
+    "cc_approval_records": 3,
+    "cc_change_records": 6,
+    "cc_history_events": 3,
+    "cc_impact_assessments": 3,
+    "cc_implementation_steps": 3,
+    "dc_document_access_policies": 2,
+    "dc_document_acknowledgements": 4,
+    "dc_document_distribution_targets": 3,
+    "dc_document_exports": 4,
+    "dc_document_periodic_reviews": 3,
+    "dc_document_review_history": 4,
+    "dc_document_versions": 7,
+    "dc_document_workflow_events": 5,
+    "dc_documents": 4,
+    "dv_containment_actions": 3,
+    "dv_deviation_capa_links": 4,
+    "dv_deviation_records": 5,
+    "dv_history_events": 3,
+    "dv_investigations": 3,
+    "mr_management_reviews": 3,
+    "mr_review_actions": 3,
+    "qc_complaint_capa_links": 4,
+    "qc_complaints": 4,
+    "qms_audit_events": 2,
+    "qms_auth_accounts": 2,
+    "qms_e_signatures": 2,
+    "qms_email_notifications": 1,
+    "qms_event_outbox": 1,
+    "qms_file_objects": 2,
+    "qms_integration_adapters": 2,
+    "qms_integration_sync_jobs": 3,
+    "qms_login_audit": 1,
+    "qms_login_otp_challenges": 2,
+    "qms_notifications": 2,
+    "qms_permissions": 1,
+    "qms_role_permissions": 3,
+    "qms_roles": 1,
+    "qms_trace_links": 2,
+    "qms_training_assignments": 4,
+    "qms_training_catalog": 2,
+    "qms_training_completions": 3,
+    "qms_user_2fa_settings": 3,
+    "qms_user_roles": 3,
+    "qms_users": 1,
+    "qn_nonconformance_capa_links": 4,
+    "qn_nonconformance_records": 4,
+    "rm_risk_register": 3,
+    "rm_risk_reviews": 3,
+    "sa_org_billing_controls": 1,
+    "sa_org_billing_reports": 1,
+    "sa_org_feature_flags": 1,
+    "sa_org_profiles": 1,
+    "sa_org_security_policies": 2,
+    "sa_org_upload_policies": 2,
+    "sa_platform_email_config": 1,
+    "sa_user_admin_actions": 2,
+    "sq_scar_records": 4,
+    "sq_supplier_audits": 3,
+    "sq_suppliers": 2,
+    "vs_history_events": 3,
+    "vs_periodic_reviews": 2,
+    "vs_protocol_instances": 4,
+    "vs_protocol_templates": 1,
+    "vs_requirement_specs": 3,
+    "vs_revalidation_flags": 2,
+    "vs_system_inventory": 4,
+    "vs_test_script_steps": 4,
+    "vs_test_scripts": 2,
+    "vs_trace_matrix_entries": 8,
+    "vs_validation_deviations": 4,
+    "vs_validation_plans": 4,
+    "vs_validation_summary_reports": 4
+  },
+  "tenantTables": [
+    "ai_quality_insights_cache",
+    "au_audit_assignments",
+    "au_audit_reports",
+    "au_auditee_responses",
+    "au_audits",
+    "au_binder_items",
+    "au_binder_jobs",
+    "au_finding_capa_links",
+    "au_findings",
+    "au_history_events",
+    "au_pre_audit_checklists",
+    "ca_action_items",
+    "ca_approvals",
+    "ca_capa_records",
+    "ca_effectiveness_checks",
+    "ca_escalations",
+    "ca_history_events",
+    "ca_root_cause_5why",
+    "ca_root_cause_fishbone",
+    "cc_approval_records",
+    "cc_change_records",
+    "cc_history_events",
+    "cc_impact_assessments",
+    "cc_implementation_steps",
+    "dc_document_access_policies",
+    "dc_document_acknowledgements",
+    "dc_document_distribution_targets",
+    "dc_document_exports",
+    "dc_document_periodic_reviews",
+    "dc_document_review_history",
+    "dc_document_versions",
+    "dc_document_workflow_events",
+    "dc_documents",
+    "dv_containment_actions",
+    "dv_deviation_capa_links",
+    "dv_deviation_records",
+    "dv_history_events",
+    "dv_investigations",
+    "mr_management_reviews",
+    "mr_review_actions",
+    "qc_complaint_capa_links",
+    "qc_complaints",
+    "qms_audit_events",
+    "qms_auth_accounts",
+    "qms_e_signatures",
+    "qms_email_notifications",
+    "qms_event_outbox",
+    "qms_file_objects",
+    "qms_integration_adapters",
+    "qms_integration_sync_jobs",
+    "qms_login_audit",
+    "qms_login_otp_challenges",
+    "qms_notifications",
+    "qms_permissions",
+    "qms_role_permissions",
+    "qms_roles",
+    "qms_trace_links",
+    "qms_training_assignments",
+    "qms_training_catalog",
+    "qms_training_completions",
+    "qms_user_2fa_settings",
+    "qms_user_roles",
+    "qms_users",
+    "qn_nonconformance_capa_links",
+    "qn_nonconformance_records",
+    "rm_risk_register",
+    "rm_risk_reviews",
+    "sa_org_billing_controls",
+    "sa_org_billing_reports",
+    "sa_org_feature_flags",
+    "sa_org_profiles",
+    "sa_org_security_policies",
+    "sa_org_upload_policies",
+    "sa_user_admin_actions",
+    "sq_scar_records",
+    "sq_supplier_audits",
+    "sq_suppliers",
+    "vs_history_events",
+    "vs_periodic_reviews",
+    "vs_protocol_instances",
+    "vs_protocol_templates",
+    "vs_requirement_specs",
+    "vs_revalidation_flags",
+    "vs_system_inventory",
+    "vs_test_script_steps",
+    "vs_test_scripts",
+    "vs_trace_matrix_entries",
+    "vs_validation_deviations",
+    "vs_validation_plans",
+    "vs_validation_summary_reports"
+  ]
+}

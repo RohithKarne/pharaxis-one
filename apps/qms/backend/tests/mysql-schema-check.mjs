@@ -9,18 +9,32 @@
  *   1. Drops and recreates a scratch database, so every run is from zero.
  *   2. Applies every file in src/db/mysql/migrations in filename order, and
  *      reports the exact file that fails.
- *   3. Compares the result against the LIVE Postgres schema:
+ *   3. Compares the result against the PostgreSQL schema of record:
  *        - missing tables / extra tables      -> FAIL
  *        - missing columns / extra columns    -> FAIL
  *        - nullability mismatch               -> FAIL
+ *        - foreign-key shortfall per table    -> FAIL
  *        - type differences                   -> reported, not failed
  *          (uuid -> char(36), timestamptz -> datetime(3) etc. are intentional)
+ *
+ * THE POSTGRES SIDE IS A FROZEN SNAPSHOT, NOT A LIVE CONNECTION.
+ * tests/fixtures/postgres-schema-snapshot.json was captured from the live
+ * qms_dev database on 2026-08-04, immediately before it was decommissioned. It
+ * carries exactly the three things this check ever asked Postgres for —
+ * information_schema.columns, the per-table FOREIGN KEY counts, and the
+ * org_id-bearing table list — so every assertion below is unchanged; only the
+ * source of the expected values moved. This is what makes the legacy database
+ * disposable.
+ *
+ * The snapshot is the schema AS AT THE CUTOVER. It is deliberately not
+ * self-updating: any future divergence is a real change to the converted
+ * schema and must be reviewed, then the snapshot regenerated from a PostgreSQL
+ * instance of record — not silently absorbed.
  *
  * Run: node tests/mysql-schema-check.mjs
  */
 
 import dotenv from 'dotenv';
-import pg from 'pg';
 import mysql from 'mysql2/promise';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,6 +42,7 @@ import { join } from 'node:path';
 dotenv.config();
 
 const MIGRATIONS_DIR = 'src/db/mysql/migrations';
+const SNAPSHOT_FILE = 'tests/fixtures/postgres-schema-snapshot.json';
 const SCRATCH_DB = process.env.QMS_MYSQL_SCRATCH_DB || 'pharaxis_qms_schemacheck';
 
 const MYSQL = {
@@ -90,15 +105,34 @@ for (const file of files) {
 
 console.log(`\napplied ${applied}/${files.length} migration(s)\n`);
 
-// ---- 2. compare against the live Postgres schema ---------------------------
+// ---- 2. compare against the PostgreSQL schema snapshot ---------------------
 
-const pgPool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+/**
+ * Load the frozen Postgres schema. An unreadable or truncated snapshot must
+ * ABORT, never degrade to "nothing to compare, therefore PASSED" — a parity
+ * gate that silently compares against an empty expectation is worse than no
+ * gate, because it still prints PASSED.
+ */
+let snapshot;
+try {
+  snapshot = JSON.parse(readFileSync(SNAPSHOT_FILE, 'utf8'));
+} catch (error) {
+  console.error(`FAIL cannot read ${SNAPSHOT_FILE} — ${error.message}`);
+  console.error('       this file is the PostgreSQL schema of record; the check cannot run without it.');
+  await my.end();
+  process.exit(1);
+}
 
-const { rows: pgCols } = await pgPool.query(
-  `SELECT table_name, column_name, is_nullable, data_type
-     FROM information_schema.columns
-    WHERE table_schema = 'public'
-    ORDER BY table_name, column_name`
+const pgCols = snapshot.columns;
+const pgFkByTable = snapshot.foreignKeysByTable;
+if (!Array.isArray(pgCols) || pgCols.length === 0 || !pgFkByTable || typeof pgFkByTable !== 'object') {
+  console.error(`FAIL ${SNAPSHOT_FILE} is missing 'columns' or 'foreignKeysByTable'`);
+  await my.end();
+  process.exit(1);
+}
+
+console.log(
+  `postgres side: snapshot ${SNAPSHOT_FILE} captured ${snapshot.capturedAt} from ${snapshot.source}\n`
 );
 
 /**
@@ -177,12 +211,9 @@ if (nullabilityMismatch.length) {
 // table-level `FOREIGN KEY (col) REFERENCES ...` clause produces a real key.
 // Without this check a conversion can drop every FK in the schema and still
 // pass on tables, columns, and nullability.
-const { rows: pgFk } = await pgPool.query(
-  `SELECT tc.table_name, count(*)::int AS n
-     FROM information_schema.table_constraints tc
-    WHERE tc.table_schema = 'public' AND tc.constraint_type = 'FOREIGN KEY'
-    GROUP BY tc.table_name`
-);
+// The snapshot stores this as { table_name: count } — the same GROUP BY result
+// the live query returned, one row per table that has at least one FOREIGN KEY.
+const pgFk = Object.entries(pgFkByTable).map(([table_name, n]) => ({ table_name, n }));
 
 const [myFkRaw] = await my.query(
   `SELECT tc.table_name, count(*) AS n
@@ -232,7 +263,6 @@ if (typeMap.size) {
 }
 
 await my.end();
-await pgPool.end();
 
 if (failures > 0) {
   console.error(`MySQL schema check: FAILED (${failures} problem group(s))`);

@@ -14,13 +14,24 @@
  *      unverifiable-digest rather than as corruption (the migration boundary)
  *
  * Every write happens inside a transaction that is always ROLLED BACK, so the
- * append-only ledger is never actually mutated by this test.
+ * append-only ledger is never actually mutated by this test. Because MySQL's
+ * rollback semantics are not Postgres's (see below), the test now also COUNTS
+ * the ledger before and after and asserts the two are equal — the rollback is
+ * proven, not assumed.
+ *
+ * DIALECT: this runs against MySQL, the application database after the cutover.
+ * It uses src/db/mysql/pool.js so the connection settings — timezone 'Z' and a
+ * session time_zone of '+00:00' — are exactly the app's. That matters here more
+ * than anywhere: the hash preimage contains occurred_at rendered as ISO-8601,
+ * so a connection that read DATETIME(3) in local time would recompute a
+ * different digest and this test would fail for a reason that has nothing to do
+ * with the chain.
  *
  * Run: node tests/audit-chain-digest.mjs
  */
 
 import dotenv from 'dotenv';
-import pg from 'pg';
+import { getMysqlPool, getMysqlClient } from '../src/db/mysql/pool.js';
 import { appendAuditEvent, verifyAuditChain, auditPreimage } from '../src/services/auditTrailService.js';
 import { verifyAuditHashChain } from '../src/utils/auditVerify.js';
 import { createSha256Hex } from '../src/utils/hash.js';
@@ -36,19 +47,32 @@ function check(name, condition, details) {
   }
 }
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const client = await pool.connect();
+/** Count the whole ledger. Read on its own connection so it is never inside the test transaction. */
+async function ledgerCount() {
+  const counter = await getMysqlClient();
+  try {
+    const { rows } = await counter.query('SELECT COUNT(*) AS n FROM qms_audit_events');
+    return Number(rows[0].n);
+  } finally {
+    counter.release();
+  }
+}
+
+// Taken BEFORE the transaction opens, and compared after it rolls back.
+const eventsBefore = await ledgerCount();
+
+const client = await getMysqlClient();
 
 try {
-  await client.query('BEGIN');
-  await client.query("SELECT set_config('app.is_superadmin', 'true', true)");
-  await client.query(
-    "SELECT set_config('app.current_org_id', '00000000-0000-0000-0000-000000000000', true)"
-  );
+  // No set_config here. Those calls existed to populate the Postgres RLS
+  // session variables (app.current_org_id, app.is_superadmin) that the USING
+  // clauses read. MySQL has no Row Level Security and no session GUCs, so there
+  // is nothing to set — tenant scoping is carried by the queries themselves.
+  await client.query('START TRANSACTION');
 
   const { rows: orgs } = await client.query('SELECT id FROM qms_orgs ORDER BY created_at LIMIT 1');
+  if (!orgs.length) throw new Error('no rows in qms_orgs — cannot exercise the audit chain');
   const orgId = orgs[0].id;
-  await client.query("SELECT set_config('app.current_org_id', $1, true)", [orgId]);
 
   // ---- 1. a freshly appended event must recompute ---------------------------
   const writtenHash = await appendAuditEvent(client, {
@@ -125,12 +149,15 @@ try {
     'qms_audit_events accepted an UPDATE — the immutability trigger is not firing'
   );
 
-  // The failed UPDATE aborts the transaction in Postgres, so re-open one to
-  // continue reading.
-  await client.query('ROLLBACK');
-  await client.query('BEGIN');
-  await client.query("SELECT set_config('app.is_superadmin', 'true', true)");
-  await client.query("SELECT set_config('app.current_org_id', $1, true)", [orgId]);
+  // NOTE — DIALECT DIFFERENCE, and the reason this block no longer re-opens a
+  // transaction. In Postgres the rejected UPDATE puts the transaction into the
+  // aborted state, so every later statement fails with "current transaction is
+  // aborted" until it is rolled back; the old code had to ROLLBACK and BEGIN
+  // again to keep reading. MySQL raises the SIGNAL as a STATEMENT-level error
+  // and leaves the transaction open and usable, so the probe event written
+  // above is still in scope and still uncommitted. Rolling back and re-opening
+  // here would COMMIT nothing but would discard that row mid-test, which is
+  // exactly what we must not do to an append-only ledger.
 
   // ---- 3. digest verification would catch a payload that did not match ------
   // Tampering cannot be staged in-table, so verify the property directly: the
@@ -167,8 +194,21 @@ try {
   // Always roll back — the ledger is append-only and must not be mutated here.
   await client.query('ROLLBACK');
   client.release();
-  await pool.end();
 }
+
+// ---- 5. the rollback actually left the ledger untouched ----------------------
+// InnoDB rolls DML back, but that is a property to prove rather than trust: the
+// probe event above is a real INSERT into the compliance ledger, and if this
+// test ever committed one it would be writing fabricated Part 11 records.
+const eventsAfter = await ledgerCount();
+check(
+  'rollback-leaves-ledger-untouched',
+  eventsAfter === eventsBefore,
+  `qms_audit_events had ${eventsBefore} events before and ${eventsAfter} after — the probe event was committed`
+);
+console.log(`     ledger count before ${eventsBefore} / after ${eventsAfter}`);
+
+await getMysqlPool().end();
 
 if (failures) {
   console.error('\nAudit chain digest: FAILED');

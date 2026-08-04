@@ -2,12 +2,19 @@
  * tenant-isolation.mjs — can one tenant reach another tenant's data?
  *
  * WHY THIS EXISTS
- * QMS is migrating PostgreSQL -> MySQL. MySQL has no Row Level Security. Today
- * 90 tables carry RLS policies shaped
+ * QMS has migrated PostgreSQL -> MySQL. MySQL has no Row Level Security. Under
+ * Postgres, 90 tables carried RLS policies shaped
  *   USING (qms_is_superadmin() OR org_id = current_setting('app.current_org_id')::uuid)
- * so the DATABASE silently appends the org predicate to every tenant query.
- * Phase 0 moved that filter into the application so the cutover cannot open a
- * cross-tenant hole.
+ * so the DATABASE silently appended the org predicate to every tenant query.
+ * Phase 0 moved that filter into the application so the cutover could not open
+ * a cross-tenant hole. That application-side filter is now the ONLY thing
+ * standing between two tenants, which is what this test exercises.
+ *
+ * The fixtures are created directly in MySQL — the same database the running
+ * API reads. That is a strengthening, not just a port: while the fixtures lived
+ * in the decommissioned Postgres, the API could not have seen the foreign row
+ * even if it were leaking, so tests 1 and 2 could pass without proving
+ * anything.
  *
  * HISTORY — read this before trusting an earlier version of this file.
  * The first version of Test 2 hardcoded a COPY of the route's SQL as a string
@@ -21,7 +28,8 @@
  */
 
 import dotenv from 'dotenv';
-import pg from 'pg';
+import { randomUUID } from 'node:crypto';
+import { getMysqlPool, getMysqlClient } from '../src/db/mysql/pool.js';
 
 dotenv.config();
 
@@ -30,11 +38,6 @@ const SUPERADMIN_ID = process.env.QMS_SUPERADMIN_USER_ID || 'Superadmin';
 const SUPERADMIN_PASSWORD = process.env.QMS_SUPERADMIN_PASSWORD || '';
 
 const TEST_TAG = 'ZZ_TENANT_ISO_TEST';
-
-// Superadmin sessions still need a syntactically valid uuid: the policies cast
-// current_setting('app.current_org_id')::uuid, and Postgres does not guarantee
-// the qms_is_superadmin() branch of the OR short-circuits before that cast.
-const NO_ORG = '00000000-0000-0000-0000-000000000000';
 
 function pass(name) {
   console.log(`PASS ${name}`);
@@ -50,15 +53,20 @@ function check(name, condition, details) {
   else fail(name, details);
 }
 
-/** Mirrors src/middleware/rlsContext.js so fixtures use the same session setup. */
-async function withSession(pool, { orgId, superadmin = false }, handler) {
-  const client = await pool.connect();
+/**
+ * Run fixture work in one transaction.
+ *
+ * The Postgres version also called set_config('app.current_org_id', ...) and
+ * set_config('app.is_superadmin', ...), mirroring src/middleware/rlsContext.js,
+ * because without those session variables the RLS policies hid the rows this
+ * test needs to create and read back. MySQL has no RLS and no session GUCs, so
+ * there is nothing to set and nothing to bypass — the fixture connection sees
+ * every row, and the isolation being tested is entirely the application's.
+ */
+async function withTransaction(handler) {
+  const client = await getMysqlClient();
   try {
-    await client.query('BEGIN');
-    await client.query("SELECT set_config('app.current_org_id', $1, true)", [orgId]);
-    await client.query("SELECT set_config('app.is_superadmin', $1, true)", [
-      superadmin ? 'true' : 'false'
-    ]);
+    await client.query('START TRANSACTION');
     const result = await handler(client);
     await client.query('COMMIT');
     return result;
@@ -69,8 +77,6 @@ async function withSession(pool, { orgId, superadmin = false }, handler) {
     client.release();
   }
 }
-
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 try {
   if (!SUPERADMIN_PASSWORD) {
@@ -97,32 +103,34 @@ try {
   console.log(`logged in; acting org = ${actingOrgId}\n`);
 
   // ---- Fixture: a FOREIGN org with a deviation the caller must never see -----
-  const { foreignOrgId, foreignDeviationId } = await withSession(
-    pool,
-    { orgId: NO_ORG, superadmin: true },
-    async (client) => {
-      const org = await client.query(
-        'INSERT INTO qms_orgs (org_code, org_name) VALUES ($1, $2) RETURNING id',
-        [`${TEST_TAG}_FOREIGN`, `${TEST_TAG} Foreign Org`]
-      );
-      const orgId = org.rows[0].id;
+  // MySQL has no RETURNING, so the ids are generated here and bound explicitly
+  // rather than read back off the INSERT. Both columns are CHAR(36) with a
+  // DEFAULT (UUID()); supplying our own value of the same shape is what the
+  // application does on every insert since the cutover.
+  const { foreignOrgId, foreignDeviationId } = await withTransaction(async (client) => {
+    const orgId = randomUUID();
+    await client.query('INSERT INTO qms_orgs (id, org_code, org_name) VALUES ($1, $2, $3)', [
+      orgId,
+      `${TEST_TAG}_FOREIGN`,
+      `${TEST_TAG} Foreign Org`
+    ]);
 
-      const dev = await client.query(
-        `INSERT INTO dv_deviation_records
-           (org_id, deviation_code, title, description, deviation_type,
-            classification, status, date_of_occurrence, department)
-         VALUES ($1, $2, $3, $4, 'Process', 'Major', 'Open', CURRENT_DATE, 'Quality')
-         RETURNING id`,
-        [
-          orgId,
-          `${TEST_TAG}-001`,
-          'FOREIGN ORG confidential deviation',
-          'Must never be visible to another tenant'
-        ]
-      );
-      return { foreignOrgId: orgId, foreignDeviationId: dev.rows[0].id };
-    }
-  );
+    const deviationId = randomUUID();
+    await client.query(
+      `INSERT INTO dv_deviation_records
+         (id, org_id, deviation_code, title, description, deviation_type,
+          classification, status, date_of_occurrence, department)
+       VALUES ($1, $2, $3, $4, $5, 'Process', 'Major', 'Open', CURRENT_DATE, 'Quality')`,
+      [
+        deviationId,
+        orgId,
+        `${TEST_TAG}-001`,
+        'FOREIGN ORG confidential deviation',
+        'Must never be visible to another tenant'
+      ]
+    );
+    return { foreignOrgId: orgId, foreignDeviationId: deviationId };
+  });
 
   console.log(`fixture: foreign org=${foreignOrgId} deviation=${foreignDeviationId}\n`);
 
@@ -155,7 +163,7 @@ try {
   );
 
   // ---- Test 3: the row on disk is genuinely untouched ------------------------
-  const after = await withSession(pool, { orgId: NO_ORG, superadmin: true }, async (client) => {
+  const after = await withTransaction(async (client) => {
     const { rows: r } = await client.query(
       'SELECT title FROM dv_deviation_records WHERE id = $1',
       [foreignDeviationId]
@@ -172,7 +180,9 @@ try {
   fail('tenant-isolation-harness', error.message);
 } finally {
   try {
-    await withSession(pool, { orgId: NO_ORG, superadmin: true }, async (client) => {
+    // Deviations first: dv_deviation_records.org_id is ON DELETE RESTRICT, so
+    // removing the org while its rows exist would be refused.
+    await withTransaction(async (client) => {
       await client.query('DELETE FROM dv_deviation_records WHERE deviation_code LIKE $1', [
         `${TEST_TAG}%`
       ]);
@@ -182,7 +192,7 @@ try {
     console.error(`cleanup failed (test rows may remain): ${cleanupError.message}`);
     process.exitCode = 1;
   }
-  await pool.end();
+  await getMysqlPool().end();
 }
 
 if (process.exitCode) {

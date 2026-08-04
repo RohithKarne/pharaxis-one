@@ -7,6 +7,11 @@
  *
  * Tenant tables are derived from the live schema (any table with an org_id
  * column), not a hardcoded list, so the audit cannot drift as tables are added.
+ * That list now comes from the LIVE MySQL database — the application database
+ * after the cutover. It is deliberately not read from
+ * tests/fixtures/postgres-schema-snapshot.json: a frozen list would stop
+ * growing the moment a new tenant table is added, and this audit would then
+ * report a brand-new unscoped table as clean.
  *
  * This is a STATIC heuristic: it reads SQL out of template literals and looks
  * for an org_id predicate. It is deliberately biased toward false positives —
@@ -20,7 +25,7 @@
  */
 
 import dotenv from 'dotenv';
-import pg from 'pg';
+import mysql from 'mysql2/promise';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -35,17 +40,30 @@ const SRC_ROOT = 'src';
 /** Statements that read or mutate existing rows. INSERT is excluded: it sets org_id explicitly. */
 const SCOPED_VERBS = /^\s*(SELECT|UPDATE|DELETE)\b/i;
 
+/** Connection settings mirror src/db/mysql/pool.js so the audit reads the app's own schema. */
+const MYSQL_DATABASE = process.env.MYSQL_DATABASE || 'pharaxis_qms_dev';
+
 async function tenantTables() {
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  const connection = await mysql.createConnection({
+    host: process.env.MYSQL_HOST || '127.0.0.1',
+    port: Number(process.env.MYSQL_PORT || 3306),
+    user: process.env.MYSQL_USER || 'devuser',
+    password: process.env.MYSQL_PASSWORD || 'devpass',
+    database: MYSQL_DATABASE
+  });
   try {
-    const { rows } = await pool.query(
-      `SELECT table_name FROM information_schema.columns
-        WHERE table_schema = 'public' AND column_name = 'org_id'
-        ORDER BY table_name`
+    // MySQL 8 returns information_schema labels UPPERCASED (TABLE_NAME), so read
+    // the aliased lowercase name rather than r.table_name, which would be
+    // undefined and collapse every table to the string "undefined".
+    const [rows] = await connection.query(
+      `SELECT table_name AS table_name FROM information_schema.columns
+        WHERE table_schema = ? AND column_name = 'org_id'
+        ORDER BY table_name`,
+      [MYSQL_DATABASE]
     );
-    return new Set(rows.map((r) => r.table_name));
+    return new Set(rows.map((r) => String(r.table_name ?? r.TABLE_NAME).toLowerCase()));
   } finally {
-    await pool.end();
+    await connection.end();
   }
 }
 
