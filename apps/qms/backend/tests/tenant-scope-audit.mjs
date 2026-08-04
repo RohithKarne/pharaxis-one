@@ -81,8 +81,29 @@ function lineOf(source, index) {
  * tenant table is itself unscoped.
  */
 function whereClauseOf(sql) {
-  const start = sql.search(/\bWHERE\b/i);
+  // Find a WHERE at PAREN DEPTH ZERO.
+  //
+  // Taking the first WHERE anywhere is a false NEGATIVE, which is the dangerous
+  // direction for a security gate. A query with `FILTER (WHERE r.role_key IS NOT
+  // NULL)` in its select list has its first WHERE inside those parentheses, so
+  // the "WHERE clause" extracted was really the select list plus the JOINs — and
+  // a JOIN condition like `ur.org_id = u.org_id` then matched the org_id test
+  // and passed an unscoped query. Same trap for a subquery's WHERE, or a CTE's.
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < sql.length; i += 1) {
+    const ch = sql[i];
+    if (ch === '(') depth += 1;
+    else if (ch === ')') depth -= 1;
+    else if (depth === 0 && (ch === 'w' || ch === 'W')) {
+      if (/^where\b/i.test(sql.slice(i)) && (i === 0 || /\s/.test(sql[i - 1]))) {
+        start = i;
+        break;
+      }
+    }
+  }
   if (start === -1) return null;
+
   const rest = sql.slice(start);
   const end = rest.search(/\b(GROUP\s+BY|ORDER\s+BY|LIMIT|RETURNING|FOR\s+UPDATE)\b/i);
   return end === -1 ? rest : rest.slice(0, end);
