@@ -2,14 +2,14 @@
   "_comment": [
     "The cumulative regression corpus. Every suite the team has written stays here",
     "permanently, tagged with the release that contributed it. Nothing is removed",
-    "when a release ships \u2014 that is what makes a full regression run meaningful at",
+    "when a release ships — that is what makes a full regression run meaningful at",
     "any point in the testing phase.",
     "",
     "Suites enter this file by promotion: a release run finishes clean, and its new",
     "suites are appended with the release tag. Adding a suite by hand is allowed but",
-    "should be rare \u2014 the promotion flow is the intended path.",
+    "should be rare — the promotion flow is the intended path.",
     "",
-    "Each app carries an e2e block: the env var its playwright config reads for a base URL, and a health URL. Setting that env var also disables the config\u2019s webServer, so the console never starts or stops an application server \u2014 it verifies one is already running and fails fast if not."
+    "Each app carries an e2e block: the env var its playwright config reads for a base URL, and a health URL. Setting that env var also disables the config’s webServer, so the console never starts or stops an application server — it verifies one is already running and fails fast if not."
   ],
   "releases": [
     "Sprint 14",
@@ -22,7 +22,8 @@
     "2026.07-R1",
     "2026.07-R2",
     "2026.07-R3",
-    "2026.07-R4"
+    "2026.07-R4",
+    "2026.08-R1"
   ],
   "apps": [
     {
@@ -190,7 +191,12 @@
       "name": "QMS",
       "cwd": "apps/qms",
       "env": {
-        "DATABASE_URL": "postgresql://qms_app:qms_dev_pass@localhost:5432/qms_test"
+        "MYSQL_HOST": "127.0.0.1",
+        "MYSQL_PORT": "3306",
+        "MYSQL_USER": "devuser",
+        "MYSQL_PASSWORD": "devpass",
+        "MYSQL_DATABASE": "pharaxis_qms_test",
+        "DATABASE_URL": "postgresql://qms_app:qms_dev_pass@localhost:5432/qms_dev"
       },
       "suites": [
         {
@@ -208,6 +214,62 @@
           "addedIn": "2026.07-R4",
           "cmd": "npx playwright test --config=playwright.config.cjs --reporter=list",
           "parser": "playwright"
+        },
+        {
+          "id": "qms-tenant-scope",
+          "name": "tenant scope audit — every tenant query carries org_id",
+          "tier": 1,
+          "addedIn": "2026.08-R1",
+          "cmd": "cd backend && node tests/tenant-scope-audit.mjs",
+          "parser": "exitcode"
+        },
+        {
+          "id": "qms-dialect",
+          "name": "MySQL dialect audit — no PostgreSQL-only SQL remains",
+          "tier": 1,
+          "addedIn": "2026.08-R1",
+          "cmd": "cd backend && node tests/mysql-dialect-audit.mjs",
+          "parser": "exitcode"
+        },
+        {
+          "id": "qms-schema-parity",
+          "name": "MySQL schema parity vs PostgreSQL (tables/cols/FKs)",
+          "tier": 1,
+          "addedIn": "2026.08-R1",
+          "cmd": "cd backend && node tests/mysql-schema-check.mjs",
+          "parser": "exitcode"
+        },
+        {
+          "id": "qms-pgcompat",
+          "name": "pgCompat $n placeholder rewrite",
+          "tier": 1,
+          "addedIn": "2026.08-R1",
+          "cmd": "cd backend && node tests/pgcompat-placeholders.mjs",
+          "parser": "exitcode"
+        },
+        {
+          "id": "qms-audit-digest",
+          "name": "Part 11 audit chain — digest recompute + immutability",
+          "tier": 1,
+          "addedIn": "2026.08-R1",
+          "cmd": "cd backend && node tests/audit-chain-digest.mjs",
+          "parser": "exitcode"
+        },
+        {
+          "id": "qms-rbac",
+          "name": "RBAC role matrix smoke",
+          "tier": 1,
+          "addedIn": "2026.08-R1",
+          "cmd": "cd backend && node tests/rbac-smoke.mjs",
+          "parser": "exitcode"
+        },
+        {
+          "id": "qms-tenant-isolation",
+          "name": "cross-tenant read/write blocked end-to-end (HTTP)",
+          "tier": 3,
+          "addedIn": "2026.08-R1",
+          "cmd": "cd backend && node tests/tenant-isolation.mjs",
+          "parser": "exitcode"
         }
       ],
       "e2e": {
