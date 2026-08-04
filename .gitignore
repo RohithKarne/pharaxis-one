@@ -58,6 +58,11 @@ ecosystem.config.js
 
 # WP9: never commit DB dumps (e.g. mims_dev_backup_*.sql)
 *.sql
+# ...but schema migrations ARE source and must be committed. The blanket rule
+# above had silently swallowed CP Portal migrations 0002-0010 — a fresh clone
+# could not build the schema past 0001. Found 2026-08-04 while adding 0011.
+!**/migrations/*.sql
+!**/migrations/**/*.sql
 
 # Test console run artifacts (registry.json IS committed — it is the corpus)
 apps/test-console/data/runs/
