@@ -37,6 +37,31 @@
  * shape (the qms_trace_links lookups), so getting this wrong would bind the
  * wrong value rather than fail loudly.
  */
+/**
+ * Serialise a bound value the way node-postgres did.
+ *
+ * pg automatically JSON-encodes a plain object or array bound to a json/jsonb
+ * column. mysql2 does NOT: an object arrives as the string "[object Object]",
+ * which MySQL rejects with
+ *   Invalid JSON text: "Invalid value." at position 1
+ * and an array is expanded into a comma-separated value list, which silently
+ * corrupts the column or throws "Column count doesn't match value count".
+ *
+ * Both failures are driver mechanics, not query semantics, so they belong here
+ * rather than in the ~50 call sites that pass a payload object. Handling it in
+ * one place also means a new call site cannot reintroduce the bug.
+ *
+ * Date and Buffer are deliberately passed through — mysql2 serialises those
+ * itself, and JSON-encoding a Date would write a quoted string into a DATETIME.
+ */
+function toBindValue(value) {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value;
+  if (Buffer.isBuffer(value)) return value;
+  if (typeof value === 'object') return JSON.stringify(value);
+  return value;
+}
+
 export function toMysqlSql(sql, params = []) {
   const outParams = [];
   const text = sql.replace(/\$(\d+)/g, (_match, digits) => {
@@ -46,7 +71,7 @@ export function toMysqlSql(sql, params = []) {
         `pgCompat: query references $${digits} but only ${params.length} parameter(s) were supplied`
       );
     }
-    outParams.push(params[index]);
+    outParams.push(toBindValue(params[index]));
     return '?';
   });
   return { text, values: outParams };

@@ -85,8 +85,8 @@ async function getCapaRecord(client, orgId, capaId, { forUpdate = false } = {}) 
       FROM ca_capa_records
       WHERE id = $1
         AND org_id = $2
-      ${forUpdate ? 'FOR UPDATE' : ''}
       LIMIT 1
+      ${forUpdate ? 'FOR UPDATE' : ''}
     `,
     [capaId, orgId]
   );

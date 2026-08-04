@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { appendAuditEvent } from '../services/auditTrailService.js';
+import { appendAuditEvent, verifyAuditChain } from '../services/auditTrailService.js';
 
 export const securityRouter = Router();
 
@@ -156,9 +156,39 @@ securityRouter.get('/audit-chain/verify', async (req, res, next) => {
       return res.status(403).json({ error: 'Admin, QA Reviewer, or Superadmin role required' });
     }
 
+    // Both verifiers run, because they answer different questions.
+    //
+    // verifyAuditHashChain (utils/auditVerify.js) checks CHAIN LINKAGE: each
+    // row's prev_hash equals the previous row's curr_hash. It detects a deleted
+    // or reordered event. It does NOT recompute the digest, so on its own it
+    // would pass a row whose payload had been edited in place.
+    //
+    // verifyAuditChain (services/auditTrailService.js) recomputes the SHA-256
+    // over the row's actual contents, so it detects tampering with the payload,
+    // actor, action or timestamp. This is the 21 CFR Part 11 property; until now
+    // it was dead code and the endpoint reported linkage only.
     const verificationResult = await req.withRlsTransaction(async (client) => {
       const { verifyAuditHashChain } = await import('../utils/auditVerify.js');
-      return verifyAuditHashChain(client, req.authContext.orgId);
+      const [linkage, digest] = await Promise.all([
+        verifyAuditHashChain(client, req.authContext.orgId),
+        verifyAuditChain(client, req.authContext.orgId)
+      ]);
+
+      return {
+        ...linkage,
+        // Events written before the PostgreSQL -> MySQL cutover hashed the
+        // Postgres text rendering of their timestamp, which cannot be
+        // reproduced. They stay link-verified but their digests cannot be
+        // recomputed. Reported explicitly rather than counted as corruption,
+        // so the boundary is visible to an auditor instead of looking either
+        // like a clean bill of health or like tampering.
+        digestVerifiedCount: digest.digestVerified ?? 0,
+        digestUnverifiableCount: digest.unverifiableDigestCount ?? 0,
+        digestUnverifiableReason:
+          (digest.unverifiableDigestCount ?? 0) > 0
+            ? 'Written before the MySQL cutover; hashed with the PostgreSQL timestamp rendering. Chain linkage is verified; the digest cannot be recomputed.'
+            : null
+      };
     });
 
     return res.json(verificationResult);

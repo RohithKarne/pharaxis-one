@@ -138,6 +138,17 @@ const CONSTRUCTS = [
     fix: 'JSON_OBJECT() / JSON_ARRAY()'
   },
   {
+    // Position, not syntax. Postgres tolerates `FOR UPDATE` before `LIMIT`;
+    // MySQL requires LIMIT first and otherwise raises a syntax error at
+    // runtime. The clause itself is fine in both, which is exactly why the
+    // non-blocking `forupdate` entry below did NOT catch this — it cost a 500
+    // on CAPA submit after the cutover.
+    key: 'forupdatelimit',
+    pattern: /\bFOR\s+UPDATE\b[\s\S]{0,60}?\bLIMIT\b/gi,
+    what: 'FOR UPDATE placed before LIMIT',
+    fix: 'MySQL requires LIMIT first: ... LIMIT 1 FOR UPDATE'
+  },
+  {
     key: 'forupdate',
     pattern: /\bFOR\s+UPDATE\b/gi,
     what: 'SELECT ... FOR UPDATE',

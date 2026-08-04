@@ -120,7 +120,17 @@ export async function appendAuditEvent(dbClient, event) {
   );
 
   const prevHash = tail[0]?.curr_hash ?? null;
-  const occurredAtIso = new Date().toISOString();
+
+  // Two representations of one instant, deliberately:
+  //   occurredAt    — a Date, for the bind. MySQL rejects an ISO-8601 string
+  //                   with a trailing Z ("Incorrect datetime value"), so the
+  //                   driver must serialise it. The pool pins timezone 'Z' and
+  //                   SET time_zone = '+00:00', so it lands as UTC.
+  //   occurredAtIso — the canonical string, for the hash preimage. It must be
+  //                   reproducible by the verifier from the stored DATETIME(3),
+  //                   which is why the column keeps millisecond precision.
+  const occurredAt = new Date();
+  const occurredAtIso = occurredAt.toISOString();
 
   const currHash = createSha256Hex(
     auditPreimage({
@@ -160,7 +170,7 @@ export async function appendAuditEvent(dbClient, event) {
       event.actionKey,
       event.actorUserId || null,
       JSON.stringify(payloadJson),
-      occurredAtIso,
+      occurredAt,
       prevHash,
       currHash
     ]
