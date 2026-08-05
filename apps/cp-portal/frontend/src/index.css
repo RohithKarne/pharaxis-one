@@ -2910,3 +2910,25 @@ textarea:focus-visible {
 }
 @keyframes pp-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .pp-spinner { animation-duration: 2s; } }
+
+/* ── Bulk Add Portal Users (PAUD-4 item 2) ─────────────────────────────────── */
+.cp-modal-wide { max-width: 860px; width: 96vw; }
+
+.cp-bulk-filerow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cp-bulk-filename { font-size: 12px; color: var(--cp-text-muted); }
+.cp-bulk-link { background: none; border: none; padding: 0; font-size: 12px; color: var(--cp-primary); cursor: pointer; text-decoration: underline; margin-left: auto; }
+
+.cp-bulk-textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--cp-border); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; color: var(--cp-text); background: var(--cp-surface); resize: vertical; }
+.cp-bulk-textarea:focus { outline: none; border-color: var(--cp-primary); }
+
+.cp-bulk-previewhead { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--cp-text-muted); padding-bottom: 6px; border-bottom: 1px solid var(--cp-border); }
+.cp-bulk-badge-err { margin-left: 10px; padding: 2px 8px; border-radius: 10px; background: var(--cp-danger-lt); color: var(--cp-danger); font-size: 10px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+
+.cp-bulk-preview { max-height: 250px; overflow: auto; border: 1px solid var(--cp-border); border-radius: 8px; }
+.cp-bulk-preview .cp-table th { position: sticky; top: 0; z-index: 1; background: var(--cp-bg); }
+.cp-bulk-rowerr td { background: var(--cp-danger-lt); }
+.cp-bulk-problem { font-size: 11px; color: var(--cp-danger); }
+
+.cp-bulk-result { text-align: center; padding: 24px 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.cp-bulk-result-count { font-size: 40px; font-weight: 700; color: var(--cp-primary); line-height: 1; }
+.cp-bulk-result p { font-size: 13px; color: var(--cp-text-muted); margin: 0; }

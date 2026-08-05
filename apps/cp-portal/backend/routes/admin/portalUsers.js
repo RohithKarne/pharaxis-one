@@ -138,6 +138,132 @@ router.post('/:clientId', authenticateAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/users/:clientId/bulk-create — create many portal users at once.
+// PAUD-4 item 2. Declared before '/:clientId/:userId/...' so 'bulk-create' is not
+// matched as a userId.
+//
+// Users are inserted in one transaction and committed before any invite is sent.
+// Invites are emails: they cannot be rolled back, so sending them inside the
+// transaction would mean a failed batch had already mailed real people. Accounts
+// first, then invites, with any invite failure reported rather than swallowed.
+router.post('/:clientId/bulk-create', authenticateAdmin, async (req, res) => {
+  const rows = Array.isArray(req.body?.users) ? req.body.users : [];
+  if (!rows.length) return res.status(400).json({ error: 'No users supplied.' });
+  if (rows.length > 500) return res.status(400).json({ error: 'A batch may contain at most 500 users.' });
+
+  const errors = [];
+  const seen = new Set();
+  const normalised = [];
+
+  rows.forEach((raw, index) => {
+    const rowNumber = index + 1;
+    const { first_name, last_name, email, user_type, specialty, country } = raw || {};
+    if (!first_name || !last_name || !email) {
+      errors.push({ row: rowNumber, reason: 'first_name, last_name and email are required.' });
+      return;
+    }
+    if (String(email).length > 254 || String(first_name).length > 255 || String(last_name).length > 255) {
+      errors.push({ row: rowNumber, reason: 'Input exceeds maximum length.' });
+      return;
+    }
+    if (!String(email).includes('@')) {
+      errors.push({ row: rowNumber, reason: 'Enter a valid email address.' });
+      return;
+    }
+    const type = user_type || 'other';
+    if (!VALID_USER_TYPES.includes(type)) {
+      errors.push({ row: rowNumber, reason: `Invalid user_type: ${type}.` });
+      return;
+    }
+    const normalisedEmail = String(email).trim().toLowerCase();
+    if (seen.has(normalisedEmail)) {
+      errors.push({ row: rowNumber, reason: `Duplicate email within the batch: ${normalisedEmail}.` });
+      return;
+    }
+    seen.add(normalisedEmail);
+    normalised.push({ row: rowNumber, first_name, last_name, email: normalisedEmail, type, specialty: specialty || null, country: country || null });
+  });
+
+  if (errors.length) {
+    return res.status(400).json({ error: 'Batch rejected. No users were created.', errors });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    const [[client]] = await conn.execute(
+      'SELECT id, code FROM cp_clients WHERE id = ? AND is_active = 1',
+      [req.params.clientId]
+    );
+    if (!client) {
+      conn.release();
+      return res.status(404).json({ error: 'Client not found.' });
+    }
+
+    await conn.beginTransaction();
+    const created = [];
+    for (const row of normalised) {
+      const unusablePassword = `!invite:${crypto.randomBytes(24).toString('hex')}`;
+      try {
+        const [info] = await conn.execute(
+          `INSERT INTO cp_portal_users
+             (client_id, first_name, last_name, email, password, user_type, specialty, country,
+              is_active, is_verified, user_type_confirmed, email_verified, token_version)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 1, 0)`,
+          [client.id, row.first_name, row.last_name, row.email, unusablePassword,
+           row.type, row.specialty, row.country]
+        );
+        created.push({ id: info.insertId, email: row.email, first_name: row.first_name, row: row.row });
+      } catch (err) {
+        await conn.rollback();
+        conn.release();
+        if (err && err.code === 'ER_DUP_ENTRY') {
+          return res.status(409).json({
+            error: 'Batch rejected. No users were created.',
+            errors: [{ row: row.row, reason: `A user with that email already exists for this portal: ${row.email}.` }],
+          });
+        }
+        throw err;
+      }
+    }
+    await conn.commit();
+    conn.release();
+
+    for (const user of created) {
+      await audit(req.admin, client.id, 'CREATE', 'portal_user', user.id, { email: user.email, user_type: 'bulk' });
+    }
+
+    // Invites go out after the accounts are durable. A failure here leaves a real
+    // account that simply has no invite yet — recoverable with resend-invite —
+    // rather than an email sent for an account that was rolled back.
+    const inviteFailures = [];
+    for (const user of created) {
+      try {
+        await issueInvite({
+          userId: user.id, clientId: client.id, clientCode: client.code,
+          email: user.email, firstName: user.first_name,
+          origin: req.headers.origin, isResend: false,
+        });
+      } catch (err) {
+        inviteFailures.push({ row: user.row, email: user.email, reason: 'Invitation email failed to send. Use resend-invite.' });
+      }
+    }
+
+    res.status(201).json({
+      message: inviteFailures.length
+        ? `${created.length} user(s) created. ${inviteFailures.length} invitation(s) failed to send.`
+        : `${created.length} user(s) created. Invitations to set a password have been emailed.`,
+      created: created.length,
+      users: created.map(({ id, email }) => ({ id, email })),
+      invite_failures: inviteFailures,
+    });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) { /* connection may already be released */ }
+    try { conn.release(); } catch (_) { /* already released */ }
+    console.error('POST /:clientId/bulk-create error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // POST /api/admin/users/:clientId/:userId/resend-invite — reissue the set-password
 // link. Invalidates any previous one, since a fresh token overwrites the old hash.
 router.post('/:clientId/:userId/resend-invite', authenticateAdmin, async (req, res) => {

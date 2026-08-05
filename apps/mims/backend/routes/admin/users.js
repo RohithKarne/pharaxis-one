@@ -16,6 +16,7 @@ const { authenticate, requireRole } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
+const { validateBulkUserRows } = require('../../services/bulkUserProvisioningService');
 
 const SALT_ROUNDS = 12;
 const PLATFORM_ADMIN_EXCLUSION_SQL =
@@ -339,6 +340,121 @@ router.post('/users', authenticate, requireRole('admin', 'platform_admin'), asyn
   } catch (err) {
     await conn.rollback();
     console.error('POST /users error:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// ── POST /api/admin/users/bulk — create many users in one batch ──────────────
+// PAUD-4 item 2. Applied all-or-nothing inside a single transaction: user
+// provisioning is access control, and a half-applied batch leaves an admin
+// unsure who exists. Every row is validated first and the whole batch is
+// rejected with per-row reasons if any row fails.
+router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
+  const { valid, errors, normalized } = validateBulkUserRows(req.body?.users);
+  if (!valid) {
+    return res.status(400).json({ error: 'Batch rejected. No users were created.', errors });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Uniqueness against users that already exist (the batch's own duplicates
+    // were caught by validateBulkUserRows).
+    const dupErrors = [];
+    for (const row of normalized) {
+      const [[dupUserId]] = await conn.execute('SELECT id FROM users WHERE user_id = ? LIMIT 1', [row.user_id]);
+      if (dupUserId) dupErrors.push({ row: row.row, reason: `User ID already exists: ${row.user_id}.` });
+      const [[dupEmail]] = await conn.execute('SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1', [row.email]);
+      if (dupEmail) dupErrors.push({ row: row.row, reason: `Email address already in use: ${row.email}.` });
+    }
+    if (dupErrors.length) {
+      await conn.rollback();
+      return res.status(409).json({ error: 'Batch rejected. No users were created.', errors: dupErrors });
+    }
+
+    // Resolve the effective role per row from its security group, and apply the
+    // same elevation and org-scope rules the single-user route enforces.
+    const allowedOrgs = hasGlobalAdminScope(req.user) ? null : await callerAssignableOrgIds(req);
+    const permissionErrors = [];
+    for (const row of normalized) {
+      let roleAtOrg = 'agent';
+      const [[sg]] = await conn.execute('SELECT privileges FROM security_groups WHERE id = ? LIMIT 1', [row.security_group_id]);
+      if (!sg) {
+        permissionErrors.push({ row: row.row, reason: `Security group ${row.security_group_id} not found.` });
+        continue;
+      }
+      if (sg.privileges) {
+        try {
+          const priv = typeof sg.privileges === 'string' ? JSON.parse(sg.privileges) : sg.privileges;
+          if (priv?.role) roleAtOrg = priv.role;
+        } catch (parseErr) {
+          console.warn(`POST /users/bulk: security group ${row.security_group_id} has unparseable privileges JSON, defaulting role_at_org to 'agent':`, parseErr.message);
+        }
+      }
+      if (allowedOrgs) {
+        if (ELEVATED_ROLES.has(roleAtOrg)) {
+          permissionErrors.push({ row: row.row, reason: 'You are not permitted to assign a platform-admin security group.' });
+          continue;
+        }
+        const bad = row.tenant_ids.filter((id) => !allowedOrgs.has(id));
+        if (bad.length) {
+          permissionErrors.push({ row: row.row, reason: 'You can only assign users to organisations you belong to.' });
+          continue;
+        }
+      }
+      row.roleAtOrg = roleAtOrg;
+    }
+    if (permissionErrors.length) {
+      await conn.rollback();
+      return res.status(403).json({ error: 'Batch rejected. No users were created.', errors: permissionErrors });
+    }
+
+    const tempPassword = await bcrypt.hash('Temp@12345!', SALT_ROUNDS);
+    const { expiry_days } = await passwordPolicy.getPolicy();
+    const expiresAt = addDays(new Date(), expiry_days);
+
+    const created = [];
+    for (const row of normalized) {
+      const [insert] = await conn.execute(
+        `INSERT INTO users
+           (user_id, name, email, password, role, initials, security_group_id,
+            network_user_id, department, is_primary_ref, access_admin_site,
+            case_admin, is_active, is_disabled, password_reset_required,
+            password_expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 1, ?)`,
+        [
+          row.user_id, row.name, row.email, tempPassword,
+          row.roleAtOrg, row.initials, row.security_group_id,
+          row.network_user_id, row.department,
+          row.is_primary_ref, row.access_admin_site, row.case_admin, expiresAt,
+        ]
+      );
+      for (const orgId of row.tenant_ids) {
+        await conn.execute(
+          `INSERT INTO user_org_access (user_id, org_id, role_at_org, is_active)
+           VALUES (?, ?, ?, 1)
+           ON DUPLICATE KEY UPDATE role_at_org = VALUES(role_at_org), is_active = 1`,
+          [insert.insertId, orgId, row.roleAtOrg]
+        );
+      }
+      created.push({ id: insert.insertId, user_id: row.user_id, email: row.email });
+    }
+
+    await conn.commit();
+
+    // One audit row per user — a batch is a convenience for the operator, not a
+    // reason for forty provisioning events to collapse into a single record.
+    for (const user of created) {
+      await audit(req.user.userId, 'CREATE_USER', user.id, { ...user, via: 'bulk' });
+    }
+
+    res.status(201).json({ ok: true, created: created.length, users: created });
+  } catch (err) {
+    await conn.rollback();
+    console.error('POST /users/bulk error:', err);
     res.status(500).json({ error: err.message });
   } finally {
     conn.release();

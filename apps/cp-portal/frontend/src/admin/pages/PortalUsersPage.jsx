@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
+import BulkPortalUserImport from '../components/BulkPortalUserImport'
 
 export default function PortalUsersPage() {
   const { clientId }    = useParams()
@@ -16,6 +17,7 @@ export default function PortalUsersPage() {
   const [saving, setSaving]             = useState(false)
   const [msg, setMsg]                   = useState(null)  // { type: 'success' | 'error', text }
   const [selectedIds, setSelectedIds]   = useState([])
+  const [showBulkAdd, setShowBulkAdd]   = useState(false)
 
   useEffect(() => { load() }, [clientId, userType])
 
@@ -121,7 +123,21 @@ export default function PortalUsersPage() {
           <option value="other">Other</option>
         </select>
         <button className="cp-btn cp-btn-outline" onClick={load}>Search</button>
+        <button className="cp-btn cp-btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setShowBulkAdd(true)}>
+          ⇪ Bulk Add Users
+        </button>
       </div>
+
+      {showBulkAdd && (
+        <BulkPortalUserImport
+          clientId={clientId}
+          onClose={() => setShowBulkAdd(false)}
+          onCreated={(count) => {
+            setMsg({ type: 'success', text: `${count} portal user${count === 1 ? '' : 's'} created.` })
+            load()
+          }}
+        />
+      )}
 
       {selectedIds.length > 0 && (
         <div className="cp-bulk-bar">

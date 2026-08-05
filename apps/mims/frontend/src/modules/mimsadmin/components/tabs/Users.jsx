@@ -8,6 +8,7 @@ import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
 import AuditChip from '../../../../shared/components/AuditChip'
 import SavedViews from '../../../../shared/components/SavedViews'
+import BulkUserImport from './BulkUserImport'
 import './Users.css'
 
 const API = '/api/admin'
@@ -41,6 +42,7 @@ export default function Users() {
   const [groups,     setGroups]     = useState([])
   const [orgs,       setOrgs]       = useState([])
   const [modalOpen,  setModalOpen]  = useState(false)
+  const [bulkOpen,   setBulkOpen]   = useState(false)
   const [editUser,   setEditUser]   = useState(null)   // null = create, object = edit
   const [flash,      setFlash]      = useState(null)
 
@@ -206,6 +208,7 @@ export default function Users() {
               } catch { showFlash('Network error.', 'error') }
             }}
           >⬇ Export CSV</button>
+          <button className="ma-usr-btn-bulk" onClick={() => setBulkOpen(true)}>⇪ Bulk Add</button>
           <button className="ma-usr-btn-add" onClick={openCreate}>+ Add User</button>
         </div>
       </div>
@@ -284,6 +287,19 @@ export default function Users() {
           onSaved={onSaved}
           onClose={closeModal}
           showFlash={showFlash}
+        />
+      )}
+
+      {bulkOpen && (
+        <BulkUserImport
+          groups={groups}
+          orgs={orgs}
+          token={token}
+          onClose={() => setBulkOpen(false)}
+          onCreated={(count) => {
+            showFlash(`${count} user${count === 1 ? '' : 's'} created.`)
+            loadUsers()
+          }}
         />
       )}
     </div>
