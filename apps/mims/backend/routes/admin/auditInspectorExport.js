@@ -11,6 +11,7 @@ const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { sha256, createESignManifest } = require('../../services/eSignManifestService');
 const { makeTextPdf } = require('../../services/pdfExportService');
+const { CASE_SCOPED_AUDIT_ENTITIES, buildChronologyLines } = require('../../services/inspectorExportService');
 
 const router = express.Router();
 
@@ -28,8 +29,30 @@ router.post('/audit/inspector-export', authenticate, requireRole('admin', 'platf
       const valid = userWithHash?.password ? await bcrypt.compare(password, userWithHash.password) : false;
       if (!valid) return res.status(401).json({ error: 'Incorrect password. Electronic signature rejected.' });
     }
-    const [audit] = await pool.execute('SELECT * FROM case_audit_trail WHERE case_id=? ORDER BY changed_at ASC', [caseId]).catch(async () => [ [] ]);
-    const [generic] = await pool.execute('SELECT * FROM audit_logs WHERE entity_id=? ORDER BY created_at ASC', [caseId]).catch(async () => [ [] ]);
+    // PAUD-4 item 3: this ordered by `changed_at`, which does not exist on
+    // case_audit_trail (the column is `timestamp`). The query threw, the catch
+    // below swallowed it, and every inspector pack was silently produced with an
+    // EMPTY chronology — signed, and containing nothing. Found 2026-08-05 while
+    // browser-verifying the truncation fix.
+    //
+    // The catch is kept for deployments where the table is absent, but it now
+    // says so instead of failing silently. An audit artifact that quietly
+    // contains nothing is worse than one that errors.
+    const [audit] = await pool.execute(
+      'SELECT * FROM case_audit_trail WHERE case_id=? ORDER BY timestamp ASC',
+      [caseId]
+    ).catch(async (err) => {
+      console.error(`inspector-export: case_audit_trail query failed for case ${caseId} — chronology will be empty:`, err.message);
+      return [ [] ];
+    });
+    const entityPlaceholders = CASE_SCOPED_AUDIT_ENTITIES.map(() => '?').join(',');
+    const [generic] = await pool.execute(
+      `SELECT * FROM audit_logs WHERE entity_id=? AND entity IN (${entityPlaceholders}) ORDER BY created_at ASC`,
+      [caseId, ...CASE_SCOPED_AUDIT_ENTITIES]
+    ).catch(async (err) => {
+      console.error(`inspector-export: audit_logs query failed for case ${caseId}:`, err.message);
+      return [ [] ];
+    });
     const payload = { case_id: caseId, generated_at: new Date().toISOString(), audit, generic, signature_manifest: { hash: sha256(JSON.stringify({ audit, generic })) } };
     if (process.env.ESIGN_PRIVATE_KEY_PATH) {
       payload.signature_manifest = await createESignManifest({
@@ -50,7 +73,7 @@ router.post('/audit/inspector-export', authenticate, requireRole('admin', 'platf
         `Manifest ID: ${payload.signature_manifest.manifest_id || 'not configured'}`,
         '',
         'Chronology',
-        ...audit.slice(0, 34).map((row) => `${row.changed_at || row.created_at || ''} ${row.action || row.change_type || ''} ${row.field_name || row.field || ''}`),
+        ...buildChronologyLines(audit),
       ];
       const pdf = makeTextPdf('MIMS Inspector Audit Export', lines);
       res.setHeader('Content-Type', 'application/pdf');
