@@ -9,7 +9,10 @@ jest.mock('nodemailer', () => ({ createTransport: jest.fn() }), { virtual: true 
 const mockExecute = jest.fn();
 jest.mock('../database/db', () => ({ execute: (...args) => mockExecute(...args) }));
 
-const { emitPlatformAdminAlert } = require('../services/alertService');
+const mockWarn = jest.fn();
+jest.mock('../services/logger', () => ({ logger: { warn: (...args) => mockWarn(...args) } }));
+
+const { emitPlatformAdminAlert, warnOnUnreachableAlertRules } = require('../services/alertService');
 
 const RULE = {
   id: 4,
@@ -44,7 +47,19 @@ const statusUpdate = calls => calls.find(c => c.sql.includes('SET email_status =
 const notificationInserts = calls => calls.filter(c => c.sql.includes('INSERT INTO notifications'));
 const metadataUpdate = calls => calls.find(c => c.sql.includes('SET metadata = ?'));
 
-beforeEach(() => mockExecute.mockReset());
+// Stub for the boot-time reachability check: active rules, then the admin count.
+function stubActiveRules(rules, activePlatformAdmins = []) {
+  mockExecute.mockImplementation(async (sql) => {
+    if (sql.includes('FROM platform_admin_alert_rules')) return [rules];
+    if (sql.includes('FROM users u')) return [activePlatformAdmins];
+    throw new Error(`unexpected SQL in test stub: ${sql}`);
+  });
+}
+
+beforeEach(() => {
+  mockExecute.mockReset();
+  mockWarn.mockReset();
+});
 
 describe('emitPlatformAdminAlert in-app delivery status', () => {
   test('records skipped, not sent, when there is no active platform admin to notify', async () => {
@@ -75,5 +90,49 @@ describe('emitPlatformAdminAlert in-app delivery status', () => {
     expect(statusUpdate(calls).params[1]).toBe('sent');
     expect(event.inAppStatus).toBe('sent');
     expect(metadataUpdate(calls)).toBeUndefined();
+  });
+});
+
+describe('warnOnUnreachableAlertRules', () => {
+  test('flags an active rule with no recipient emails and no active platform admin', async () => {
+    stubActiveRules([{ ...RULE, channels: 'email,in_app', recipient_emails: '' }], []);
+
+    const unreachable = await warnOnUnreachableAlertRules();
+
+    expect(unreachable).toHaveLength(1);
+    expect(unreachable[0].reasons).toEqual([
+      'no recipient emails configured',
+      'no active platform admin users',
+    ]);
+    expect(mockWarn).toHaveBeenCalledTimes(1);
+    expect(mockWarn.mock.calls[0][1]).toContain('can reach nobody');
+  });
+
+  test('gives the reason for the channels the rule actually uses', async () => {
+    stubActiveRules([{ ...RULE, channels: 'in_app', recipient_emails: '' }], []);
+
+    const [unreachable] = await warnOnUnreachableAlertRules();
+
+    expect(unreachable.reasons).toEqual(['no active platform admin users']);
+  });
+
+  test('stays quiet when one channel can reach someone', async () => {
+    stubActiveRules(
+      [
+        { ...RULE, id: 1, channels: 'email,in_app', recipient_emails: 'ops@example.com' },
+        { ...RULE, id: 2, channels: 'in_app', recipient_emails: '' },
+      ],
+      [{ id: 9, email: 'ops@example.com', name: 'Ops' }]
+    );
+
+    expect(await warnOnUnreachableAlertRules()).toEqual([]);
+    expect(mockWarn).not.toHaveBeenCalled();
+  });
+
+  test('does not query users when no rule is active', async () => {
+    stubActiveRules([]);
+
+    expect(await warnOnUnreachableAlertRules()).toEqual([]);
+    expect(mockExecute).toHaveBeenCalledTimes(1);
   });
 });

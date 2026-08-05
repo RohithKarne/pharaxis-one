@@ -2,6 +2,7 @@
 
 const nodemailer = require('nodemailer');
 const pool = require('../database/db');
+const { logger } = require('./logger');
 const { PLATFORM_ADMIN_MODULE_KEYS } = require('../utils/adminScope');
 
 function parseJson(value, fallback = null) {
@@ -257,8 +258,45 @@ async function emitPlatformAdminAlert(eventType, payload = {}) {
   return createdEvents;
 }
 
+// An active rule whose only channels have no destination fires into the void —
+// the event row is written and nothing reaches a human. Surface that at boot
+// rather than leaving it to be discovered from an alert that never arrived.
+async function warnOnUnreachableAlertRules() {
+  const [rules] = await pool.execute(
+    `SELECT id, name, event_type, channels, recipient_emails
+     FROM platform_admin_alert_rules
+     WHERE is_active = 1
+     ORDER BY id`
+  );
+  if (!rules.length) return [];
+
+  const activePlatformAdmins = (await getActivePlatformAdminUsers()).length;
+  const unreachable = [];
+
+  for (const rule of rules) {
+    const channels = parseChannels(rule.channels);
+    const emailReachable = channels.includes('email') && parseRecipients(rule.recipient_emails).length > 0;
+    const inAppReachable = channels.includes('in_app') && activePlatformAdmins > 0;
+    if (emailReachable || inAppReachable) continue;
+
+    const reasons = [];
+    if (channels.includes('email')) reasons.push('no recipient emails configured');
+    if (channels.includes('in_app')) reasons.push('no active platform admin users');
+    if (!reasons.length) reasons.push('no deliverable channel enabled');
+
+    unreachable.push({ id: rule.id, name: rule.name, eventType: rule.event_type, reasons });
+    logger.warn(
+      { ruleId: rule.id, eventType: rule.event_type, channels: rule.channels, activePlatformAdmins },
+      `Alert rule "${rule.name}" is active but can reach nobody — ${reasons.join(' and ')}.`
+    );
+  }
+
+  return unreachable;
+}
+
 module.exports = {
   emitPlatformAdminAlert,
+  warnOnUnreachableAlertRules,
   getSystemConfig,
   getActivePlatformAdminUsers,
   parseJson,
