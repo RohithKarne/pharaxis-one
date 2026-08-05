@@ -5,6 +5,7 @@ const { authenticate } = require('../../middleware/auth');
 const { requireActivityPrivilege } = require('../../middleware/accessPolicy');
 const accessService = require('../../services/accessConfigurationService');
 const { hasGlobalAdminScope, isAdminUser } = require('../../utils/adminScope');
+const { findSodConflicts, hasBlockingSodConflict, describeSodConflict } = require('../../services/sodEvaluator');
 
 const router = express.Router();
 
@@ -161,6 +162,28 @@ router.put('/access-config/groups/:id/privileges', authenticate, requireAccessAd
         error: `Segregation of Duties conflict: a group cannot hold both "${blocked.first_privilege}" and "${blocked.conflicting_privilege}".`,
         code: 'SOD_CONFLICT',
       });
+    }
+
+    // PAUD-4 item 1: the check above only looks at THIS group. Adding a
+    // privilege here can still create a conflict for an existing member who
+    // holds the other side through a different group, so each member's combined
+    // privileges are re-evaluated against the proposed set before it is saved.
+    const members = await accessService.getGroupMembers(req.params.id);
+    for (const member of members) {
+      const existing = await accessService.getUserCombinedPrivileges(member.id, orgId);
+      const proposed = existing
+        .filter(() => true)
+        .concat(keys);
+      const memberConflicts = findSodConflicts(proposed, sodRules);
+      if (hasBlockingSodConflict(memberConflicts)) {
+        const blocking = memberConflicts.find((c) => String(c.severity || '').toLowerCase() === 'block');
+        return res.status(422).json({
+          error: `${describeSodConflict(blocking)} ${member.email} would hold both once this group is saved.`,
+          code: 'SOD_CONFLICT_MEMBER',
+          user_id: member.id,
+          conflicts: memberConflicts,
+        });
+      }
     }
     const result = await accessService.setGroupPrivileges({
       groupId: Number(req.params.id),

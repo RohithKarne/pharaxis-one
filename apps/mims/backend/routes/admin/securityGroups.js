@@ -11,6 +11,8 @@ const pool = require('../../database/db');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const accessService = require('../../services/accessConfigurationService');
+const { findSodConflicts, hasBlockingSodConflict, describeSodConflict } = require('../../services/sodEvaluator');
 
 async function audit(userId, userName, action, entity, entityId, details) {
   try {
@@ -462,6 +464,23 @@ router.post('/security-groups/:id/users', authenticate, requireRole('admin', 'pl
 
     const [[user]] = await pool.execute('SELECT id, name, email FROM users WHERE id = ?', [user_id]);
     if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    // PAUD-4 item 1: block the assignment if joining this group would give the
+    // user both sides of a block-severity SoD rule. Previously nothing was
+    // checked here at all, so a conflict could be assembled from two groups that
+    // were each individually clean.
+    const orgId = group.org_id ?? req.user.orgId;
+    const wouldHold = await accessService.getUserCombinedPrivileges(user_id, orgId, { includeGroupId: group.id });
+    const sodRules = await accessService.getSodRules(orgId);
+    const conflicts = findSodConflicts(wouldHold, sodRules);
+    if (hasBlockingSodConflict(conflicts)) {
+      const blocking = conflicts.find((c) => String(c.severity || '').toLowerCase() === 'block');
+      return res.status(422).json({
+        error: `${describeSodConflict(blocking)} ${user.email} would hold both through their combined group membership.`,
+        code: 'SOD_CONFLICT',
+        conflicts,
+      });
+    }
 
     await pool.execute(
       'INSERT IGNORE INTO security_group_users (group_id, user_id) VALUES (?, ?)',

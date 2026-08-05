@@ -2,6 +2,7 @@
 
 const pool = require('../database/db');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
+const { findSodConflicts } = require('./sodEvaluator');
 const {
   getOrgSsoPolicy,
   normalizeLoginMode,
@@ -530,6 +531,67 @@ async function getSodRules(orgId) {
   return rows.map((row) => ({ ...row, is_active: !!row.is_active }));
 }
 
+/**
+ * PAUD-4 item 1: a user's privileges across EVERY group they belong to.
+ * `excludeGroupId` / `includeGroupId` let a caller ask "what would this person
+ * hold if I made this change?" before committing it.
+ */
+async function getUserCombinedPrivileges(userId, orgId, { includeGroupId = null } = {}) {
+  const [rows] = await pool.execute(
+    `SELECT DISTINCT agp.privilege_key
+       FROM security_group_users sgu
+       JOIN security_groups sg ON sg.id = sgu.group_id AND sg.is_active = 1
+       JOIN access_group_privileges agp ON agp.group_id = sg.id AND agp.is_allowed = 1
+      WHERE sgu.user_id = ? AND (sg.org_id = ? OR sg.org_id IS NULL)`,
+    [userId, orgId]
+  );
+  const keys = rows.map((row) => row.privilege_key);
+
+  if (includeGroupId) {
+    const [pending] = await pool.execute(
+      `SELECT DISTINCT privilege_key FROM access_group_privileges
+        WHERE group_id = ? AND is_allowed = 1`,
+      [includeGroupId]
+    );
+    keys.push(...pending.map((row) => row.privilege_key));
+  }
+  return keys;
+}
+
+/**
+ * PAUD-4 item 1: every user in the org whose COMBINED privileges breach an SoD
+ * rule. The previous check only ever looked at one group at a time, so a person
+ * holding both sides through two groups was invisible.
+ */
+async function findUserSodConflicts(orgId) {
+  const sodRules = await getSodRules(orgId);
+  if (!sodRules.length) return [];
+
+  const [rows] = await pool.execute(
+    `SELECT sgu.user_id, u.name, u.email, agp.privilege_key
+       FROM security_group_users sgu
+       JOIN security_groups sg ON sg.id = sgu.group_id AND sg.is_active = 1
+       JOIN access_group_privileges agp ON agp.group_id = sg.id AND agp.is_allowed = 1
+       JOIN users u ON u.id = sgu.user_id
+      WHERE (sg.org_id = ? OR sg.org_id IS NULL)`,
+    [orgId]
+  );
+
+  const byUser = new Map();
+  rows.forEach((row) => {
+    if (!byUser.has(row.user_id)) byUser.set(row.user_id, { name: row.name, email: row.email, keys: [] });
+    byUser.get(row.user_id).keys.push(row.privilege_key);
+  });
+
+  const found = [];
+  byUser.forEach((user, userId) => {
+    findSodConflicts(user.keys, sodRules).forEach((conflict) => {
+      found.push({ user_id: userId, user_name: user.name, user_email: user.email, ...conflict });
+    });
+  });
+  return found;
+}
+
 async function validateAccessConfiguration(orgId) {
   const issues = [];
   const authPolicy = await getAuthPolicy(orgId);
@@ -564,6 +626,17 @@ async function validateAccessConfiguration(orgId) {
       }
     }
   }
+  // PAUD-4 item 1: the same check across a user's combined group memberships.
+  // The per-group loop above cannot see a conflict split across two groups.
+  const userConflicts = await findUserSodConflicts(orgId);
+  userConflicts.forEach((conflict) => {
+    issues.push({
+      severity: conflict.severity || 'warning',
+      type: 'sod_conflict_user',
+      message: `${conflict.user_name || conflict.user_email} holds conflicting privileges across their groups: ${conflict.first_privilege} and ${conflict.conflicting_privilege}.`,
+      entity_id: conflict.user_id,
+    });
+  });
   return { issues, checked_at: new Date().toISOString() };
 }
 
@@ -729,6 +802,8 @@ module.exports = {
   createAccessRequest,
   reviewAccessRequest,
   getSodRules,
+  getUserCombinedPrivileges,
+  findUserSodConflicts,
   validateAccessConfiguration,
   createAccessReviewSnapshot,
   listAccessReviewSnapshots,
