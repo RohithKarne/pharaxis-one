@@ -20,6 +20,9 @@ export default function AdminCaseImportPanel({ H }) {
   const [scheduledExportForm, setScheduledExportForm] = useState({ name: '', cron_expression: '', format: 'csv', case_type: '', email_to: '', is_active: true })
   const [scheduledExportSaving, setScheduledExportSaving] = useState(false)
   const [scheduledExportMsg, setScheduledExportMsg] = useState('')
+  // PAUD-4 item 4 — count-back per import job, keyed by job id.
+  const [reconciliation, setReconciliation] = useState({})
+  const [reconcilingId, setReconcilingId] = useState(null)
 
   useEffect(() => {
     loadImportJobs()
@@ -34,6 +37,19 @@ export default function AdminCaseImportPanel({ H }) {
       setImportJobHistory(d.jobs || [])
     } catch { setImportJobHistory([]) }
     finally { setImportJobLoading(false) }
+  }
+
+  // PAUD-4 item 4: re-counts `cases` for this job and compares it with what the
+  // job recorded. A migration that cannot be reconciled is not evidenced.
+  async function reconcileJob(jobId) {
+    setReconcilingId(jobId)
+    try {
+      const r = await httpFetch(`/api/admin/cases/import/jobs/${jobId}/reconciliation`, { headers: H })
+      const d = await r.json()
+      setReconciliation(prev => ({ ...prev, [jobId]: r.ok ? d : { error: d.error || 'Reconciliation failed.' } }))
+    } catch {
+      setReconciliation(prev => ({ ...prev, [jobId]: { error: 'Network error.' } }))
+    } finally { setReconcilingId(null) }
   }
 
   async function loadScheduledExports() {
@@ -230,16 +246,38 @@ export default function AdminCaseImportPanel({ H }) {
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead><tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Job ID','File','Status','Rows','Created','Completed'].map(h => <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>)}
+                {['Job ID','File','Status','Rows','Created','Reconciliation'].map(h => <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>)}
               </tr></thead>
               <tbody>{importJobHistory.map((job, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>{job.id}</td>
                   <td style={{ padding: '6px 8px' }}>{job.filename || '—'}</td>
                   <td style={{ padding: '6px 8px' }}><span style={{ color: job.status === 'completed' ? 'var(--success)' : job.status === 'failed' ? 'var(--warning)' : 'var(--text-muted)' }}>{job.status}</span></td>
-                  <td style={{ padding: '6px 8px' }}>{job.rows_imported != null ? `${job.rows_imported}/${job.total_rows || '?'}` : '—'}</td>
+                  <td style={{ padding: '6px 8px' }}>{job.imported_rows != null ? `${job.imported_rows}/${job.total_rows ?? '?'}` : '—'}</td>
                   <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{job.created_at ? new Date(job.created_at).toLocaleString() : '—'}</td>
-                  <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{job.completed_at ? new Date(job.completed_at).toLocaleString() : '—'}</td>
+                  <td style={{ padding: '6px 8px' }}>
+                    {(() => {
+                      const rec = reconciliation[job.id]
+                      if (!rec) return (
+                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}
+                          disabled={reconcilingId === job.id} onClick={() => reconcileJob(job.id)}>
+                          {reconcilingId === job.id ? 'Checking…' : 'Reconcile'}
+                        </button>
+                      )
+                      if (rec.error) return <span style={{ color: 'var(--warning)' }}>{rec.error}</span>
+                      const r = rec.reconciliation
+                      return (
+                        <span style={{ color: r.balanced ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
+                          {r.balanced ? '✓ Balanced' : `✗ ${r.status.replace(/_/g, ' ')}`}
+                          <span style={{ display: 'block', fontWeight: 400, fontSize: 11, color: 'var(--text-muted)' }}>
+                            {r.rows_received} received · {r.rows_claimed_imported} claimed · {r.rows_present_in_database} in database
+                            {r.discrepancy !== 0 ? ` · discrepancy ${r.discrepancy > 0 ? '+' : ''}${r.discrepancy}` : ''}
+                            {r.unaccounted !== 0 ? ` · ${r.unaccounted} unaccounted` : ''}
+                          </span>
+                        </span>
+                      )
+                    })()}
+                  </td>
                 </tr>
               ))}</tbody>
             </table>
