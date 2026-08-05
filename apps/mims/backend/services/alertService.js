@@ -204,15 +204,21 @@ async function emitPlatformAdminAlert(eventType, payload = {}) {
 
     let emailStatus = channels.includes('email') ? 'pending' : 'skipped';
     let inAppStatus = channels.includes('in_app') ? 'pending' : 'skipped';
+    const deliveryErrors = {};
 
     if (channels.includes('in_app')) {
-      await createNotificationsForPlatformAdmins({
+      const notificationCount = await createNotificationsForPlatformAdmins({
         title: payload.title || rule.name,
         message: payload.message || '',
         linkUrl: payload.linkUrl || '/mims-admin?standalone=1',
         metadata: payload.metadata || null,
       });
-      inAppStatus = 'sent';
+      if (notificationCount > 0) {
+        inAppStatus = 'sent';
+      } else {
+        inAppStatus = 'skipped';
+        deliveryErrors.inAppError = 'No active platform admin users to notify.';
+      }
     }
 
     if (channels.includes('email')) {
@@ -223,14 +229,16 @@ async function emitPlatformAdminAlert(eventType, payload = {}) {
         metadata: payload.metadata || null,
       });
       emailStatus = delivery.status;
-      if (delivery.error) {
-        const details = parseJson(metadataJson, {}) || {};
-        details.emailError = delivery.error;
-        await pool.execute(
-          'UPDATE platform_admin_alert_events SET metadata = ? WHERE id = ?',
-          [JSON.stringify(details), result.insertId]
-        );
-      }
+      if (delivery.error) deliveryErrors.emailError = delivery.error;
+    }
+
+    if (Object.keys(deliveryErrors).length) {
+      const details = parseJson(metadataJson, {}) || {};
+      Object.assign(details, deliveryErrors);
+      await pool.execute(
+        'UPDATE platform_admin_alert_events SET metadata = ? WHERE id = ?',
+        [JSON.stringify(details), result.insertId]
+      );
     }
 
     await pool.execute(
