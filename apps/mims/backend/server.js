@@ -35,6 +35,7 @@ const {
   emitTelemetryEvent,
 } = require('./services/telemetryService');
 const { logger } = require('./services/logger');
+const { getBuildInfo } = require('./services/buildInfo');
 const { requestContext, attachRequestIdHeader } = require('./middleware/requestContext');
 const { captureApiExceptions } = require('./middleware/exceptionCapture');
 const { securityHeaders } = require('./middleware/securityHeaders');
@@ -230,7 +231,10 @@ if (process.env.NODE_ENV === 'production') {
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.execute('SELECT 1');
-    res.json({ status: 'ok', db: 'ok', time: new Date().toISOString() });
+    // PAUD-3 item 1 — build reported here as well as on /api/v1/build-version,
+    // which sits behind the API-client bearer guard. Deploy verification should
+    // not require an API token, and it matches CP Portal's /api/health.
+    res.json({ status: 'ok', db: 'ok', build: getBuildInfo(), time: new Date().toISOString() });
   } catch (err) {
     logger.error({ err: err.message }, 'Health check: DB unreachable');
     res.status(503).json({ status: 'error', db: 'unreachable', time: new Date().toISOString() });
@@ -448,6 +452,12 @@ apiV1Router.get('/health', async (_req, res) => {
 
 apiV1Router.get('/version', (_req, res) => {
   res.json(getApiVersionContract('v1'));
+});
+
+// PAUD-3 item 1 — the deployed build, not the API contract. /version above is
+// the contract and existing clients may depend on its shape, so this is additive.
+apiV1Router.get('/build-version', (_req, res) => {
+  res.json(getBuildInfo());
 });
 
 // Mount same routes on /api/v1 (routers are shared — require() is cached by Node)

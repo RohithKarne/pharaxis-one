@@ -19,6 +19,7 @@ const { inputSecurity } = require('./middleware/inputSecurity');
 const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandler');
 const log = require('./utils/logger');
 const { makeStore } = require('./utils/rateLimitStore');
+const { getBuildInfo } = require('./utils/buildInfo');
 
 const app  = express();
 const PORT = process.env.CP_PORT || 4000;
@@ -323,7 +324,9 @@ app.get('/api/health', async (_req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     db: { status: dbStatus, engine: 'MySQL', version: dbVersion },
-    version: process.env.npm_package_version || '1.0.0',
+    // `version` kept for existing consumers; `build` carries commit and build time.
+    version: getBuildInfo().version,
+    build: getBuildInfo(),
   });
 });
 

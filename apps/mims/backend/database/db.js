@@ -11,6 +11,7 @@ const mysql  = require('mysql2/promise');
 const path   = require('path');
 const fs     = require('fs');
 const { runMigrations } = require('./migrationRunner');
+const { buildSslOption } = require('./sslConfig');
 
 function loadLocalEnvFile() {
   const envPath = path.join(__dirname, '../../.env');
@@ -44,6 +45,9 @@ if (isProd) {
   if (!MYSQL_DATABASE) throw new Error('MYSQL_DATABASE is required in production.');
 }
 
+// PAUD-3 item 4a — TLS on the database connection, off unless MYSQL_SSL=true.
+const sslOption = buildSslOption();
+
 const pool = mysql.createPool({
   host:               MYSQL_HOST,
   port:               MYSQL_PORT,
@@ -56,6 +60,7 @@ const pool = mysql.createPool({
   connectTimeout:     parseInt(process.env.MYSQL_CONNECT_TIMEOUT_MS || '10000', 10),
   charset:            'utf8mb4',
   timezone:           '+00:00',
+  ...(sslOption ? { ssl: sslOption } : {}),
 });
 
 // Enforce STRICT mode (+ UTC) on every pooled connection so over-length pharma

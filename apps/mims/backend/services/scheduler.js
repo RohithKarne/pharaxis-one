@@ -69,6 +69,10 @@ function buildTask(job) {
 }
 
 const HANDLERS = {
+  'runtime-health-watch': async () => {
+    const { runRuntimeHealthWatch } = require('./runtimeHealthWatchService')
+    await runRuntimeHealthWatch()
+  },
   'expiry-alerts': async () => {
     const { runExpiryAlerts } = require('./expiryAlertService')
     await runExpiryAlerts()
@@ -198,4 +202,6 @@ module.exports = {
   startScheduler,
   stopScheduler,
   getJobStatus,
+  HANDLERS, // exported for the registry/handler parity test — a registry entry
+  // with no handler is a job that silently never runs
 }

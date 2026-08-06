@@ -1,4 +1,6 @@
 {
+  "name": "cp-portal",
+  "version": "1.0.0",
   "scripts": {
     "start": "cd backend && npm run start",
     "dev": "cd backend && npm run dev",

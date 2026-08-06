@@ -372,7 +372,23 @@ router.get('/api/v1/products', scopeGuard('products:read'), async (req, res) => 
   res.json({ rows });
 });
 
-router.get('/api/v1/contacts', scopeGuard('contacts:read'), async (_req, res) => res.json({ rows: [] }));
+// PAUD-3 item 9 — was a hardcoded empty array behind a scope guard, so a client
+// got 200 + zero rows and read it as "we have no contacts".
+// Columns are listed explicitly rather than SELECT *: `notes` is unbounded free
+// text and `do_not_update_master` is an internal flag, neither belongs on an
+// external API surface.
+router.get('/api/v1/contacts', scopeGuard('contacts:read'), async (req, res) => {
+  const [rows] = await pool.execute(
+    `SELECT id, type, specialty, first_name, last_name, email, phone,
+            institution, address, org_id, site_id, is_active, created_at, updated_at
+       FROM contacts
+      WHERE org_id = ? AND is_active = 1
+      ORDER BY last_name ASC, first_name ASC
+      LIMIT 100`,
+    [req.apiClient.org_id]
+  );
+  res.json({ rows });
+});
 router.get('/api/v1/users', scopeGuard('admin:read'), async (req, res) => {
   // WP1: scope to the API client's org — was leaking every tenant's user roster.
   const [rows] = await pool.execute(
@@ -394,7 +410,16 @@ router.get('/api/v1/transmissions', scopeGuard('transmissions:read'), async (req
   const [rows] = await pool.execute('SELECT t.* FROM transmission_audit_trail t JOIN cases c ON c.id=t.case_id WHERE c.org_id=? ORDER BY t.timestamp DESC LIMIT 100', [req.apiClient.org_id]);
   res.json({ rows });
 });
-router.get('/api/v1/content/documents', scopeGuard('content:read'), async (_req, res) => res.json({ rows: [] }));
+// PAUD-3 item 9 — deliberately 501, not an empty 200. Which table backs a
+// client-facing document list is an open question (backend/routes/admin/documents.js
+// is case attachments, not content-management documents), and returning a
+// confident empty array while we do not know is how the original defect read.
+router.get('/api/v1/content/documents', scopeGuard('content:read'), async (_req, res) =>
+  res.status(501).json({
+    error: 'Not implemented.',
+    detail: 'Document listing is not yet available on the public API. Contact your Pharaxis representative.',
+  })
+);
 
 router.get('/api/v1/webhook-subscriptions', scopeGuard('webhooks:write'), async (req, res) => {
   const [rows] = await pool.execute('SELECT * FROM webhook_subscriptions WHERE client_id=? ORDER BY created_at DESC', [req.apiClient.id]);

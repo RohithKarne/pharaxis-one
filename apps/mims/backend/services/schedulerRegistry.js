@@ -17,6 +17,14 @@
 module.exports = [
   // ── Cron jobs (managed by scheduler.js) ──────────────────────────────────
   {
+    name:           'runtime-health-watch',
+    source:         'Platform Operations',
+    cronExpression: '*/5 * * * *',
+    description:    'Runs the runtime health check and alerts platform admins when it degrades',
+    type:           'cron',
+    configRoute:    null,
+  },
+  {
     name:           'expiry-alerts',
     source:         'Case Management',
     cronExpression: '0 8 * * *',
