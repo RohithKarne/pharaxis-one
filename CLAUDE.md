@@ -8,7 +8,7 @@ Read this before writing code in this repository.
 
 ## Hard constraints — these are not style preferences
 
-1. **Never run `git push`.** Disabled since Sprint 3. Commit locally; Rohith pushes.
+1. **Pushing is enabled, and it is not blanket authorisation.** Rohith re-enabled `git push` on 2026-07-27, ending the Sprint 3 restriction, so CI runs the tests instead of someone remembering to. **Confirm with Rohith before pushing anything of substance**, and never push to `main` without saying what is going and what has not been checked. → SOP §31
 2. **Nothing is "Done" until browser-verified.** Data in the database and a 200 from the API are **not** evidence. Open the real screen. → SOP §26 *Functional Verification Standard*
 3. **Pharaxis One has no customers.** Never describe any company as a customer, user, or reference.
 4. **Evidence or nothing.** Cite a real file path and line range, or a public URL. Do not invent a client request, a user complaint, or a defect you have not located.

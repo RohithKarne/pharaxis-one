@@ -1529,7 +1529,11 @@ Full text in `CLAUDE.md`. Four carry direct SOP weight:
 
 ### The hard constraints restated in `CLAUDE.md`
 
-Never `git push` · nothing is Done until browser-verified · Pharaxis One has no customers · evidence or nothing.
+Push only with Rohith's confirmation · nothing is Done until browser-verified · Pharaxis One has no customers · evidence or nothing.
+
+> **Corrected 2026-08-06.** This line read *"Never `git push`"* until today. Rohith had re-enabled pushing on **2026-07-27** so CI would run the tests; `CLAUDE.md` was adopted on 2026-07-31 — four days later — and carried the dead rule in, and this SOP repeated it. The rule was then enforced against Rohith on 2026-08-05, nine days after he retired it.
+>
+> This is the failure §31 exists to prevent, described in §31's own words about `MEMORY.md`, and it happened in the opposite direction: memory held the current rule while the checked-in documents held the stale one. **When a rule changes, both files change in the same edit.** Bala owns that check.
 
 ### Ownership
 
