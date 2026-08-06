@@ -2,6 +2,7 @@
 
 const nodemailer = require('nodemailer');
 const pool = require('../database/db');
+const { logger } = require('./logger');
 const { PLATFORM_ADMIN_MODULE_KEYS } = require('../utils/adminScope');
 
 function parseJson(value, fallback = null) {
@@ -204,15 +205,21 @@ async function emitPlatformAdminAlert(eventType, payload = {}) {
 
     let emailStatus = channels.includes('email') ? 'pending' : 'skipped';
     let inAppStatus = channels.includes('in_app') ? 'pending' : 'skipped';
+    const deliveryErrors = {};
 
     if (channels.includes('in_app')) {
-      await createNotificationsForPlatformAdmins({
+      const notificationCount = await createNotificationsForPlatformAdmins({
         title: payload.title || rule.name,
         message: payload.message || '',
         linkUrl: payload.linkUrl || '/mims-admin?standalone=1',
         metadata: payload.metadata || null,
       });
-      inAppStatus = 'sent';
+      if (notificationCount > 0) {
+        inAppStatus = 'sent';
+      } else {
+        inAppStatus = 'skipped';
+        deliveryErrors.inAppError = 'No active platform admin users to notify.';
+      }
     }
 
     if (channels.includes('email')) {
@@ -223,14 +230,16 @@ async function emitPlatformAdminAlert(eventType, payload = {}) {
         metadata: payload.metadata || null,
       });
       emailStatus = delivery.status;
-      if (delivery.error) {
-        const details = parseJson(metadataJson, {}) || {};
-        details.emailError = delivery.error;
-        await pool.execute(
-          'UPDATE platform_admin_alert_events SET metadata = ? WHERE id = ?',
-          [JSON.stringify(details), result.insertId]
-        );
-      }
+      if (delivery.error) deliveryErrors.emailError = delivery.error;
+    }
+
+    if (Object.keys(deliveryErrors).length) {
+      const details = parseJson(metadataJson, {}) || {};
+      Object.assign(details, deliveryErrors);
+      await pool.execute(
+        'UPDATE platform_admin_alert_events SET metadata = ? WHERE id = ?',
+        [JSON.stringify(details), result.insertId]
+      );
     }
 
     await pool.execute(
@@ -249,8 +258,45 @@ async function emitPlatformAdminAlert(eventType, payload = {}) {
   return createdEvents;
 }
 
+// An active rule whose only channels have no destination fires into the void —
+// the event row is written and nothing reaches a human. Surface that at boot
+// rather than leaving it to be discovered from an alert that never arrived.
+async function warnOnUnreachableAlertRules() {
+  const [rules] = await pool.execute(
+    `SELECT id, name, event_type, channels, recipient_emails
+     FROM platform_admin_alert_rules
+     WHERE is_active = 1
+     ORDER BY id`
+  );
+  if (!rules.length) return [];
+
+  const activePlatformAdmins = (await getActivePlatformAdminUsers()).length;
+  const unreachable = [];
+
+  for (const rule of rules) {
+    const channels = parseChannels(rule.channels);
+    const emailReachable = channels.includes('email') && parseRecipients(rule.recipient_emails).length > 0;
+    const inAppReachable = channels.includes('in_app') && activePlatformAdmins > 0;
+    if (emailReachable || inAppReachable) continue;
+
+    const reasons = [];
+    if (channels.includes('email')) reasons.push('no recipient emails configured');
+    if (channels.includes('in_app')) reasons.push('no active platform admin users');
+    if (!reasons.length) reasons.push('no deliverable channel enabled');
+
+    unreachable.push({ id: rule.id, name: rule.name, eventType: rule.event_type, reasons });
+    logger.warn(
+      { ruleId: rule.id, eventType: rule.event_type, channels: rule.channels, activePlatformAdmins },
+      `Alert rule "${rule.name}" is active but can reach nobody — ${reasons.join(' and ')}.`
+    );
+  }
+
+  return unreachable;
+}
+
 module.exports = {
   emitPlatformAdminAlert,
+  warnOnUnreachableAlertRules,
   getSystemConfig,
   getActivePlatformAdminUsers,
   parseJson,

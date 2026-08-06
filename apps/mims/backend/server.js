@@ -51,6 +51,7 @@ const { attachCasePresence } = require('./services/casePresenceService');
 const ocrWorker = require('./services/ocrWorker');
 const { attachAppRealtime } = require('./services/appRealtimeService');
 const { ensureMobilePushSchema } = require('./services/mobilePushService');
+const { warnOnUnreachableAlertRules } = require('./services/alertService');
 const changeApprovals = require('./routes/admin/changeApprovals');
 const dependencyCheck = require('./routes/admin/dependencyCheck');
 
@@ -488,6 +489,7 @@ const isTestEnv = process.env.NODE_ENV === 'test' || !!process.env.JEST_WORKER_I
 if (!isTestEnv) {
   initPromise.then(() => {
     ensureMobilePushSchema().catch(() => {});
+    warnOnUnreachableAlertRules().catch(err => logger.warn({ err }, 'Alert rule reachability check failed'));
     startWorkers();        // forks pollerProcess + schedulerProcess as child processes
     startDpprScheduler();
     startSchemaTracker();
