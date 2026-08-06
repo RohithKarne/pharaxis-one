@@ -80,5 +80,67 @@ async function provisionBaselineTenant(pool) {
       .catch(() => {}); // column set varies by migration age; access rows are optional here
   }
 
+  await provisionTenantFieldOverrides(pool, orgId);
+
   console.log(`[jest globalSetup] Baseline tenant provisioned (org ${orgId})`);
+}
+
+/**
+ * Migration 106 ships the platform field defaults (org_id NULL). Three suites need
+ * the *tenant* side of that picture as well:
+ *
+ *   - caseFormRegression proves the field_setup dedup bug is real, which requires a
+ *     platform row and an org row for the same field to both exist. Its own comment
+ *     says "Both rows must exist for this test to mean anything."
+ *   - coreFieldConfig checks that an org's own custom field is left untagged, which
+ *     needs an org field carrying no core_key.
+ *
+ * Org-scoped rows are tenant data, not product configuration, so they belong here
+ * with the tenant rather than in a migration. Derived from the platform rows at
+ * runtime — nothing is hardcoded, so this follows the field set rather than pinning
+ * a copy of it that can silently drift.
+ */
+async function provisionTenantFieldOverrides(pool, orgId) {
+  const [[existing]] = await pool.execute(
+    'SELECT id FROM field_setup WHERE org_id = ? LIMIT 1',
+    [orgId]
+  );
+  if (existing) return;
+
+  // 1. Override Case Information / priority for this org. Named explicitly rather
+  //    than "some platform field" because that is the exact row the suites look for:
+  //    caseFormRegression queries LOWER(field_name)='priority' in that section, and
+  //    caseFieldsAdmin looks up org_id=? AND core_key='priority'.
+  const [[priority]] = await pool.execute(
+    `SELECT section_name, field_name, field_type, sort_order
+       FROM field_setup
+      WHERE org_id IS NULL AND core_key = 'priority'
+      LIMIT 1`
+  );
+  if (priority) {
+    await pool.execute(
+      `INSERT INTO field_setup
+         (section_name, field_name, field_type, sort_order, core_key, custom_label,
+          is_hidden, is_disabled, org_id)
+       VALUES (?, ?, ?, ?, 'priority', ?, 0, 0, ?)`,
+      [
+        priority.section_name,
+        priority.field_name,
+        priority.field_type,
+        priority.sort_order,
+        'Tenant override (CI fixture)',
+        orgId,
+      ]
+    );
+  }
+
+  // 2. A field this org invented. Not a platform field, so core_key stays NULL.
+  //    Must sit in Case Information — coreFieldConfig scopes its check to that
+  //    section when asserting that an org's own field is left untagged.
+  await pool.execute(
+    `INSERT INTO field_setup
+       (section_name, field_name, field_type, sort_order, core_key, is_hidden, is_disabled, org_id)
+     VALUES ('Case Information', 'CI Fixture Custom Field', 'text', 900, NULL, 0, 0, ?)`,
+    [orgId]
+  );
 }
