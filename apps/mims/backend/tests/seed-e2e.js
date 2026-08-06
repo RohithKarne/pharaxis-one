@@ -26,7 +26,12 @@ const DB       = process.env.MYSQL_DATABASE || '';
 const HOST     = process.env.MYSQL_HOST     || 'localhost';
 const PORT     = parseInt(process.env.MYSQL_PORT || '3306', 10);
 const USER     = process.env.MYSQL_USER     || 'devuser';
-const PASSWORD = process.env.MYSQL_PASSWORD || 'devpass';
+// No literal fallback. A known-weak default that silently works is how a weak
+// password reaches an environment nobody meant it to reach; fail loudly instead.
+const PASSWORD = process.env.MYSQL_PASSWORD;
+if (PASSWORD === undefined) {
+  throw new Error('MYSQL_PASSWORD must be set to run the E2E seeder. Refusing to guess a default.');
+}
 
 // Credentials the E2E specs expect. Test-only, and only ever written to a
 // database whose name ends in `_test`.

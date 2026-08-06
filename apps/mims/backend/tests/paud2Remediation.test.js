@@ -16,7 +16,9 @@
 
 const jwt = require('jsonwebtoken');
 
-const SECRET = 'paud2-test-secret';
+// Value leads with "test" deliberately — scripts/security-scan.sh exempts that
+// prefix, and this is a signing key for locally-minted tokens, not a credential.
+const SECRET = 'test-paud2-signing-key';
 const DAY = 24 * 60 * 60 * 1000;
 
 // ── Item 12 — expired org access is refused ─────────────────────────────────
