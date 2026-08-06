@@ -28,3 +28,10 @@ jobs:
       backend_entrypoint: server.js
       quality_command: npm run test:static
       security_command: npm run security:scan
+      # QMS was the only app whose green tick meant "it compiled" — it had no
+      # unit-tests job at all. `npm test` builds the MySQL schema from the 22
+      # migrations and then runs the schema, dialect and tenant-scope audits
+      # against it. QMS keeps its dependencies in backend/, not the app root, so
+      # the test script installs them itself.
+      test_database: pharaxis_qms_test
+      test_command: npm test
