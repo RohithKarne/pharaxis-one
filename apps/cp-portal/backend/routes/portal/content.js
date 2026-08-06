@@ -161,13 +161,17 @@ router.get('/:clientCode/trials', async (req, res) => {
   try {
     const client = await getClient(req.params.clientCode);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
-    // Default mock/seeded clinical trial list for HCP referral
-    const trials = [
-      { id: 'nct-048291', nct_id: 'NCT048291', title: 'Phase III Evaluation of PX-104 in Relapsing Multiple Sclerosis', phase: 'Phase III', indication: 'Multiple Sclerosis', status: 'Recruiting', site_location: 'Basel, Switzerland & New York, USA', pi: 'Dr. E. Vance, MD' },
-      { id: 'nct-059281', nct_id: 'NCT059281', title: 'Phase II Efficacy Study of Novel Biologic Target in Advanced Oncology', phase: 'Phase II', indication: 'Solid Tumors', status: 'Recruiting', site_location: 'London, UK & Zurich, Switzerland', pi: 'Dr. M. Rossi, MD' },
-      { id: 'nct-062849', nct_id: 'NCT062849', title: 'Phase I Safety and Pharmacokinetics of Subcutaneous Monoclonal Antibody', phase: 'Phase I', indication: 'Immunology', status: 'Active, Not Recruiting', site_location: 'Boston, MA, USA', pi: 'Dr. S. Thorne, PhD' },
-    ];
-    res.json({ items: trials });
+    // Only what the client's admin has entered. There is deliberately no
+    // fallback list: an unconfigured portal shows nothing rather than showing
+    // a trial that does not exist. Doctors act on what is on this screen.
+    const [rows] = await pool.execute(
+      `SELECT id, nct_id, title, phase, indication, status, site_location, pi
+         FROM cp_clinical_trials
+        WHERE client_id = ? AND is_active = 1
+        ORDER BY id DESC`,
+      [client.id]
+    );
+    res.json({ items: rows });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }
@@ -178,12 +182,15 @@ router.get('/:clientCode/training', async (req, res) => {
   try {
     const client = await getClient(req.params.clientCode);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
-    const modules = [
-      { id: 'cme-101', title: 'Safe Prescribing & Risk Mitigation for PX-104', type: 'REMS Certification', duration: '20 mins', credits: '1.5 CME', pass_score: 80, status: 'Available' },
-      { id: 'cme-202', title: 'Advances in Targeted Biologic Therapies in 2026', type: 'CME Accredited', duration: '45 mins', credits: '2.5 CME', pass_score: 80, status: 'Available' },
-      { id: 'cme-303', title: 'Adverse Event Detection & Pharmacovigilance SOP', type: 'Mandatory Compliance', duration: '15 mins', credits: '1.0 CME', pass_score: 100, status: 'Available' },
-    ];
-    res.json({ items: modules });
+    // Same rule as trials: only the client's own approved modules, no fallback.
+    const [rows] = await pool.execute(
+      `SELECT id, title, type, duration, credits, pass_score, status
+         FROM cp_training_modules
+        WHERE client_id = ? AND is_active = 1
+        ORDER BY id DESC`,
+      [client.id]
+    );
+    res.json({ items: rows });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
   }

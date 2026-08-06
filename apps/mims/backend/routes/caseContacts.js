@@ -251,6 +251,34 @@ router.get('/cases/contacts/search', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/cases/contacts/:contactId/history — every case this contact appears on
+//
+// The link from a case contact back to the master record already existed; there
+// was no way to travel it in the other direction, so a first-line agent taking a
+// third call from the same doctor could not see the first two (PAUD-2 item 1).
+router.get('/cases/contacts/:contactId/history', authenticate, async (req, res) => {
+  try {
+    if (!await verifyMasterContactOrg(req.params.contactId, req)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const [rows] = await pool.execute(
+      `SELECT c.id, c.case_number, c.case_type, c.date_received, c.priority,
+              ws.name AS status, cc.role_in_case, cc.is_primary
+         FROM case_contacts cc
+         JOIN cases c ON c.id = cc.case_id
+         LEFT JOIN workflow_states ws ON ws.id = c.status_id
+        WHERE cc.contact_id = ? AND c.is_deleted = 0
+        ORDER BY c.date_received DESC, c.id DESC
+        LIMIT 50`,
+      [req.params.contactId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('contact history error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── INTERNAL HELPER ─────────────────────────────────────────────────────────
 
 async function syncBackToMaster(contactId, fields, req) {

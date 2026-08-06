@@ -40,7 +40,7 @@ router.post('/:clientCode/:mslId', authenticatePortal, async (req, res) => {
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
 
-    const [[msl]] = await pool.execute('SELECT id, name FROM cp_msls WHERE id = ? AND client_id = ? AND is_active = 1', [mslId, client.id]);
+    const [[msl]] = await pool.execute('SELECT id, name, email FROM cp_msls WHERE id = ? AND client_id = ? AND is_active = 1', [mslId, client.id]);
     if (!msl) return res.status(404).json({ error: 'MSL not found.' });
 
     // If a specific slot was chosen, validate it is still available and use its time.
@@ -99,6 +99,19 @@ router.post('/:clientCode/:mslId', authenticatePortal, async (req, res) => {
       html: `<p>Hi ${requester_name.trim()},</p><p>Your meeting request with <strong>${msl.name}</strong> has been received for <strong>${whenText}</strong>.</p>${topic ? `<p>Topic: ${String(topic).replace(/</g, '&lt;')}</p>` : ''}<p>We'll be in touch to confirm.${attachments ? ' A calendar invite is attached.' : ''}</p>`,
       attachments,
     }));
+
+    // The MSL is the other party to this meeting and was not told about it.
+    // Queued separately so a failure to reach the MSL cannot take the doctor's
+    // confirmation down with it. email is nullable on cp_msls — where it is
+    // unset there is nowhere to send, and the booking still stands.
+    if (msl.email) {
+      enqueue('booking.notify-msl', () => sendEmail(client.id, {
+        to: msl.email,
+        subject: `Meeting request — ${requester_name.trim()}`,
+        html: `<p>Hi ${msl.name},</p><p><strong>${requester_name.trim()}</strong> (${requester_email.toLowerCase().trim()}) has requested a meeting for <strong>${whenText}</strong>.</p>${topic ? `<p>Topic: ${String(topic).replace(/</g, '&lt;')}</p>` : ''}${message ? `<p>Message: ${String(message).replace(/</g, '&lt;')}</p>` : ''}<p>Booking reference ${result.insertId}.</p>`,
+        attachments,
+      }));
+    }
 
     res.status(201).json({ ok: true, bookingId: result.insertId, slotBooked: !!chosenSlot });
   } catch (err) {

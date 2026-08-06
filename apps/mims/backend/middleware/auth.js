@@ -111,7 +111,6 @@ async function authenticate(req, res, next) {
 
   try {
     req.user = await validateAccessToken(token);
-    next();
   } catch (err) {
     const status = Number(err?.status || 401);
     const message = String(err?.message || 'Invalid or expired token. Please log in again.');
@@ -121,6 +120,12 @@ async function authenticate(req, res, next) {
       should_logout: Boolean(err?.shouldLogout),
     });
   }
+
+  // Time-boxed org access is checked here rather than per route. It was written
+  // as standalone middleware and mounted on nothing, so an expired grant let
+  // every request through (PAUD-2 item 12). Chaining it to the one place every
+  // authenticated route already passes through is what closes that.
+  return requireAccessNotExpired(req, res, next);
 }
 
 /**
