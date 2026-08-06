@@ -35,6 +35,10 @@ async function makeCase(caseType, description) {
 }
 
 beforeAll(async () => {
+  // db.js kicks off an async initialization on require. Without waiting for it,
+  // afterAll can close the pool mid-init and the suite dies with
+  // "Can't add new command when connection is in closed state".
+  await pool.initPromise;
   const [users] = await pool.query('SELECT id FROM users WHERE org_id = ? LIMIT 1', [ORG_ID]);
   if (!users.length) throw new Error(`No user in org ${ORG_ID} — cannot seed the handoff fixture.`);
   userId = users[0].id;

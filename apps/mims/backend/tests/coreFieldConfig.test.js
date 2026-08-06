@@ -25,6 +25,10 @@ const EXPECTED_CORE_KEYS = [
 // reverse the decision, but hidden by default.
 const RETIRED_CORE_KEYS = ['date_of_intake', 'intake_channel'];
 
+// db.js kicks off an async initialization on require. Without waiting for it,
+// afterAll can close the pool mid-init and the suite dies with
+// "Can't add new command when connection is in closed state".
+beforeAll(async () => { await pool.initPromise; });
 afterAll(async () => { await pool.end(); });
 
 describe('field_setup.core_key', () => {
