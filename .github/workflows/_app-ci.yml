@@ -220,10 +220,23 @@ jobs:
       # Database) unless log_bin_trust_function_creators is set at the server
       # level. If it is not, migration 0001 fails — and forcing past it would
       # leave the audit ledger mutable. Raised with Vasu 2026-08-06.
-      - name: Allow trigger creation without SUPER
+      #
+      # The second grant is for QMS's schema check, which builds a throwaway
+      # database (pharaxis_qms_schemacheck) to validate the migrated schema
+      # against. The service container gives devuser rights to the test database
+      # only, so creating that scratch schema is refused:
+      #
+      #   ER_DBACCESS_DENIED_ERROR  Access denied for user 'devuser'@'%'
+      #
+      # Widening devuser inside a throwaway CI container is safe — the container
+      # is destroyed with the job and holds nothing but fixtures.
+      - name: Prepare MySQL for migrations and schema checks
         run: |
-          mysql -h 127.0.0.1 -P 3306 -uroot -pdevpass \
-            -e "SET GLOBAL log_bin_trust_function_creators = 1;"
+          mysql -h 127.0.0.1 -P 3306 -uroot -pdevpass -e "
+            SET GLOBAL log_bin_trust_function_creators = 1;
+            GRANT ALL PRIVILEGES ON *.* TO 'devuser'@'%';
+            FLUSH PRIVILEGES;
+          "
 
       - name: Run unit tests
         run: ${{ inputs.test_command }}
