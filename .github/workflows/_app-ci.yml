@@ -205,5 +205,25 @@ jobs:
           done
           echo "MySQL never became ready"; exit 1
 
+      # QMS migration 0001 installs two triggers that make qms_audit_events
+      # append-only — the audit-trail immutability control. MySQL refuses to
+      # create a trigger when binary logging is on and the connecting user lacks
+      # SUPER, which devuser does:
+      #
+      #   ER_BINLOG_CREATE_ROUTINE_NEED_SUPER
+      #
+      # Set here as root so the control is actually installed and exercised,
+      # rather than skipping the migration and testing a schema without it.
+      #
+      # NOTE FOR DEPLOYMENT, not CI: this means QMS cannot install its audit
+      # triggers on a managed MySQL that withholds SUPER (RDS, Cloud SQL, Azure
+      # Database) unless log_bin_trust_function_creators is set at the server
+      # level. If it is not, migration 0001 fails — and forcing past it would
+      # leave the audit ledger mutable. Raised with Vasu 2026-08-06.
+      - name: Allow trigger creation without SUPER
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -uroot -pdevpass \
+            -e "SET GLOBAL log_bin_trust_function_creators = 1;"
+
       - name: Run unit tests
         run: ${{ inputs.test_command }}
