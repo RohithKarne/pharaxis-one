@@ -50,7 +50,7 @@ Queries `DCI`, `MIMS` and `CP`, requesting only the `summary` field, **paginatin
 
 ## 3. The voice — Katrina Mehra
 
-Senior Director, Client Excellence. Defined in `live-communication-use-and-format.md` §3. **Simulated in this routine, always.**
+Senior Director, Client Excellence. Defined in `docs/TEAM_OPERATING_SOP.md` §39.3. **Simulated in this routine, always.**
 
 She writes like an **operator**, not a product manager. She describes what her team could not do. She does not propose implementations, name files, or estimate effort. Two to five short paragraphs.
 

@@ -39,7 +39,7 @@ Pharaxis-One groups medical-affairs and platform products into a single engineer
 ## Team and Process Artifacts
 
 - `docs/TEAM_OPERATING_SOP.md` defines cross-functional operating rules, gates, and responsibilities.
-- `docs/live-communication-use-and-format.md` defines live collaboration communication behavior.
+- `docs/TEAM_OPERATING_SOP.md` §39 defines live collaboration communication behavior (consolidated 2026-08-07 from the former `live-communication-use-and-format.md`).
 - Domain memory SOP docs capture app-specific context and continuity.
 
 ## How to Navigate This Repo

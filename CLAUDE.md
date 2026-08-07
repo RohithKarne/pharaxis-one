@@ -2,7 +2,9 @@
 
 Read this before writing code in this repository.
 
-**Precedence.** `docs/TEAM_OPERATING_SOP.md` is the source of truth for process and governance. Where a rule appears in both files, **the SOP wins**. This file exists so the coding agent reads the same rules the team works to; it does not restate the SOP, it points at it.
+**Precedence.** `docs/TEAM_OPERATING_SOP.md` is **the** SOP — the single source of truth for process, governance, communication and execution. Where a rule appears in both files, **the SOP wins**. This file exists only because Claude Code loads it at the start of every session; it is the doorway to the SOP, not a second rulebook.
+
+> **Consolidated 2026-08-07.** `docs/live-communication-use-and-format.md` and `docs/workflow_orchestration.md` were merged into the SOP as §39 and §40 and deleted. There is now one SOP.
 
 ---
 
@@ -12,6 +14,7 @@ Read this before writing code in this repository.
 2. **Nothing is "Done" until browser-verified.** Data in the database and a 200 from the API are **not** evidence. Open the real screen. → SOP §26 *Functional Verification Standard*
 3. **Pharaxis One has no customers.** Never describe any company as a customer, user, or reference.
 4. **Evidence or nothing.** Cite a real file path and line range, or a public URL. Do not invent a client request, a user complaint, or a defect you have not located.
+5. **`main` is protected — work on a branch and open a pull request.** Direct pushes to `main` are blocked by ruleset `main protection`. Even a one-line change goes through a PR carrying its ticket key, its §26 lock, what you verified, and **what you did not check**. → SOP §38
 
 ---
 
@@ -29,6 +32,10 @@ Read this before writing code in this repository.
 
 > An unrun test in the repository is worse than no test. It reads as evidence to an auditor and is not.
 
+**Before it runs the first time, someone else reads it** — anything that writes to a database, calls an external service, or files a ticket. Twenty minutes, and it is the rule we skip most. The reviewer's third question is the one that matters: **could this fail silently?** A thing that reports success without doing the work is worse than a thing that crashes. → SOP §37.2
+
+**When we state something as fact and it turns out false, that earns a written postmortem** — not when code is wrong, but when we told someone something untrue. Half a page, blameless, and it ends in a filed ticket. → SOP §37.1
+
 **VI. Goal-driven execution.** Every task needs a success criterion **before** code is written. "Add validation" becomes "reject a missing or malformed email, return 400 with a clear message, and test both cases." For anything multi-step, state the plan first so Rohith can catch a wrong approach before you spend an hour building it. → SOP §26 *Pre-Development Feature Lock*
 
 **VII. Debugging.** When something breaks, investigate — do not guess. Read the whole error and the stack trace. **Reproduce the problem before you change anything.** Change one thing at a time. Do not paper over an unexpected null with a null check; find out why it is null, or the bug just moves somewhere quieter.
@@ -37,7 +44,7 @@ Read this before writing code in this repository.
 
 > **Pharaxis addition (Vasu, compliance):** in a regulated app — MIMS, CP Portal, Vault, QMS — a new dependency needs a named reason in the commit message. This is a supply-chain control, not a style note.
 
-**IX. Communication.** Say what you did and why, not just a block of code. Flag concerns even when you did exactly what was asked. Be precise about uncertainty: **"I am not sure this library supports streaming"** tells the reader what to verify; **"I think this should work"** does not. → SOP §28 *Communication Brevity Standard*
+**IX. Communication.** Say what you did and why, not just a block of code. Flag concerns even when you did exactly what was asked. Be precise about uncertainty: **"I am not sure this library supports streaming"** tells the reader what to verify; **"I think this should work"** does not. On any **recommendation**, add one line naming what would change it — **"Changes if: …"**. That turns an opinion into something someone can test instead of merely agree with. → SOP §28 *Communication Brevity Standard*, §39.5 *What Would Change My Mind*
 
 **X. Common failure modes.** Four patterns recur often enough to name:
 
@@ -54,15 +61,20 @@ Catch yourself in any of these and the right move is to **stop, not push through
 
 ## Development tooling
 
-Claude Code is the only development tool. Write and edit code directly with Edit/Write. → `memory/feedback.md`
+Claude Code is the only development tool. Write and edit code directly with Edit/Write. **Subagents and multi-agent workflows run only when Rohith asks for them** — not as a default. → SOP §40.2, `memory/feedback.md`
 
-## Where the rest lives
+## Where the rest lives — one SOP
 
-| Need | File |
+| Need | Where |
 |---|---|
-| Gates, approvals, roles, escalation | `docs/TEAM_OPERATING_SOP.md` |
-| How the team talks in-channel | `docs/live-communication-use-and-format.md` |
-| Per-app detail | `apps/<app>/*_MEMORY_SOP.md` |
+| Gates, approvals, roles, escalation | SOP §7–§23 |
+| Pre-development lock, functional verification | SOP §26 |
+| **Branches, pull requests, who owns each step** | **SOP §38** |
+| How the team talks in-channel, who says what | SOP §39 |
+| How the coding agent executes | SOP §40 |
+| CP Portal · MIMS · Vault · QMS · AI Agent | SOP §41 · §42 · §43 · §44 · §45 |
+
+**Everything is in `docs/TEAM_OPERATING_SOP.md`.** There is exactly one SOP. The five per-app SOP files were absorbed and deleted on 2026-08-07 — do not recreate them.
 
 ---
 
