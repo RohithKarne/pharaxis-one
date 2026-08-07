@@ -137,7 +137,7 @@ Remote deploy workflows are intentionally disabled for automatic pushes and fail
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Database details: [docs/DB_DETAILS.md](docs/DB_DETAILS.md)
 - GitHub product ops: [docs/GITHUB_PRODUCT_OPERATIONS_SETUP.md](docs/GITHUB_PRODUCT_OPERATIONS_SETUP.md)
-- Branch protection: [docs/BRANCH_PROTECTION_POLICY.md](docs/BRANCH_PROTECTION_POLICY.md)
+- Branch protection, pull requests, releases: [docs/TEAM_OPERATING_SOP.md](docs/TEAM_OPERATING_SOP.md) §38
 - Monitoring and backup baseline: [docs/MONITORING_AND_BACKUP_BASELINE.md](docs/MONITORING_AND_BACKUP_BASELINE.md)
 - Product runbooks: [docs/runbooks/](docs/runbooks)
 

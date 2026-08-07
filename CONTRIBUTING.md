@@ -2,8 +2,13 @@
 
 ## Branching
 
-- Base branch: `main`
-- Branch naming recommendation: `feature/<short-topic>`, `fix/<short-topic>`, `chore/<short-topic>`
+- Base branch: `main`. **`main` is protected — you cannot push to it directly.**
+- Branch naming: `<type>/<TICKET>-<short-topic>` — e.g. `feat/CPAP-4-trial-listing`.
+  Types: `feat`, `fix`, `chore`, `docs`, `test`.
+- The ticket key is what links Jira to the diff. Without it nothing connects a
+  merged change back to the discussion that authorised it.
+
+Full process, including who owns each step: `docs/TEAM_OPERATING_SOP.md` §38.
 
 ## Development Setup
 
