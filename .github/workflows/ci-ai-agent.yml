@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'apps/ai-agent/**'
+      - '!apps/ai-agent/**/*.md'
       - '.github/workflows/_app-ci.yml'
       - '.github/workflows/ci-ai-agent.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/ai-agent/**'
+      - '!apps/ai-agent/**/*.md'
       - '.github/workflows/_app-ci.yml'
       - '.github/workflows/ci-ai-agent.yml'
   workflow_dispatch:

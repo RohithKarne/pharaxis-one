@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'apps/cp-portal/**'
+      - '!apps/cp-portal/**/*.md'
       - '.github/workflows/_app-ci.yml'
       - '.github/workflows/ci-cp-portal.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/cp-portal/**'
+      - '!apps/cp-portal/**/*.md'
       - '.github/workflows/_app-ci.yml'
       - '.github/workflows/ci-cp-portal.yml'
   workflow_dispatch:

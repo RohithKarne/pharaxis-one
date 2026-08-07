@@ -35,4 +35,13 @@ if (failures > 0) {
   process.exit(1)
 }
 
+// Fail loudly rather than pass on an empty walk. Rename or move a directory and
+// this would otherwise print "passed for 0 file(s)" and exit 0 - a gate that
+// reports success without doing the work, which is the bug it exists to catch.
+// SOP 37.2. Added to the MIMS copy first in #533.
+if (files.length === 0) {
+  process.stderr.write('CP Portal backend syntax check found no files to check. Refusing to pass.\n')
+  process.exit(1)
+}
+
 console.log(`CP Portal backend syntax check passed for ${files.length} file(s).`)

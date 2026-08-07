@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'apps/qms/**'
+      - '!apps/qms/**/*.md'
       - '.github/workflows/_app-ci.yml'
       - '.github/workflows/ci-qms.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/qms/**'
+      - '!apps/qms/**/*.md'
       - '.github/workflows/_app-ci.yml'
       - '.github/workflows/ci-qms.yml'
   workflow_dispatch:

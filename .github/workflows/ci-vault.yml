@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'apps/vault/**'
+      - '!apps/vault/**/*.md'
       - '.github/workflows/_app-ci.yml'
       - '.github/workflows/ci-vault.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/vault/**'
+      - '!apps/vault/**/*.md'
       - '.github/workflows/_app-ci.yml'
       - '.github/workflows/ci-vault.yml'
   workflow_dispatch:
