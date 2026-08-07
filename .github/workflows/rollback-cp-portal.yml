@@ -1,0 +1,107 @@
+name: CP Portal Rollback (Google Cloud)
+
+# Deploys became automatic on merge in #542. Until this existed, recovery from a
+# bad deploy meant somebody remembering the right `gcloud run services
+# update-traffic` incantation under pressure, from a laptop, with credentials
+# only one person had. Automatic deploys without a rollback path is a worse
+# position than manual deploys were. See docs/TEAM_OPERATING_SOP.md §38.7.
+#
+# Defaults to the previous READY revision of each service. Pass explicit
+# revision names to go further back.
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_revision:
+        description: 'cp-portal-api revision to roll back to (blank = previous READY)'
+        required: false
+        default: ''
+      web_revision:
+        description: 'cp-portal-web revision to roll back to (blank = previous READY)'
+        required: false
+        default: ''
+      reason:
+        description: 'Why are we rolling back? Recorded in the run log.'
+        required: true
+
+concurrency:
+  group: deploy-cp-portal      # shares the deploy group: never roll back mid-deploy
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: cp-portal-demo
+  REGION: us-west1
+  WEB_URL: https://cp-portal-web-965313610931.us-west1.run.app
+
+jobs:
+  rollback:
+    name: Roll back
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Record the reason
+        run: echo "Rollback requested by ${GITHUB_ACTOR}: ${{ inputs.reason }}"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: cp-portal-demo
+          workload_identity_provider: projects/965313610931/locations/global/workloadIdentityPools/github/providers/github-provider
+          service_account: github-deployer@cp-portal-demo.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Resolve target revisions
+        id: pick
+        run: |
+          set -euo pipefail
+          pick() {
+            local svc="$1" explicit="$2"
+            if [ -n "$explicit" ]; then echo "$explicit"; return; fi
+            # Second newest READY revision. The newest is what we are rolling off.
+            gcloud run revisions list --service="$svc" --region="$REGION" \
+              --project="$PROJECT_ID" --filter='status.conditions.type=Ready AND status.conditions.status=True' \
+              --sort-by=~metadata.creationTimestamp --format='value(metadata.name)' | sed -n '2p'
+          }
+          api=$(pick cp-portal-api '${{ inputs.api_revision }}')
+          web=$(pick cp-portal-web '${{ inputs.web_revision }}')
+          # Refuse to "succeed" having found nothing to roll back to.
+          [ -n "$api" ] || { echo "no previous READY revision for cp-portal-api"; exit 1; }
+          [ -n "$web" ] || { echo "no previous READY revision for cp-portal-web"; exit 1; }
+          echo "api=$api" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+          echo "rolling back to api=$api web=$web"
+
+      - name: Route all traffic to the target revisions
+        run: |
+          set -euo pipefail
+          gcloud run services update-traffic cp-portal-api \
+            --to-revisions='${{ steps.pick.outputs.api }}=100' \
+            --region="$REGION" --project="$PROJECT_ID" --quiet
+          gcloud run services update-traffic cp-portal-web \
+            --to-revisions='${{ steps.pick.outputs.web }}=100' \
+            --region="$REGION" --project="$PROJECT_ID" --quiet
+
+      # Assert traffic actually moved. `update-traffic` returning 0 means the API
+      # accepted the request, not that the live service is serving that revision.
+      - name: Verify the live service is serving the rolled-back revision
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 10); do
+            live=$(gcloud run services describe cp-portal-api --region="$REGION" \
+              --project="$PROJECT_ID" --format='value(status.traffic[0].revisionName)')
+            if [ "$live" = "${{ steps.pick.outputs.api }}" ]; then
+              echo "cp-portal-api is serving $live"
+              curl -fsS --max-time 30 "${WEB_URL}/api/health" | tee /dev/stderr | grep -q '"status":"ok"'
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${WEB_URL}/cp-portal/admin/login")
+              [ "$code" = "200" ] || { echo "admin login page returned $code"; exit 1; }
+              echo "rollback verified: health ok, login page 200"
+              exit 0
+            fi
+            echo "attempt $i: serving '$live', want '${{ steps.pick.outputs.api }}'"
+            sleep 10
+          done
+          echo "FAILED: traffic did not move. The service may still be serving the bad revision."
+          exit 1
