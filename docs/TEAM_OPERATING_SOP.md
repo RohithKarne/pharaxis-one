@@ -2438,6 +2438,21 @@ That is the gap in 38.7, not a deliberate exemption.
 product's CI. A pull request touching several must pass all of them. A pull request
 touching `.github/**` should be reviewed expecting CI, deploy and release impact.
 
+> **The trap that makes this harder than it looks, recorded 2026-08-07.** Our CI
+> workflows are path-filtered, and as of this date they also *exclude* markdown —
+> so a documentation-only change under `apps/mims/**` runs **no workflow at all**.
+>
+> **A required check that never runs never reports, and a pull request waiting on
+> it is blocked permanently.** This is not hypothetical: it is exactly how the
+> `MIMS-CP Portal rule` ruleset broke, and narrowing the filters has made the
+> failure mode *easier* to hit, not harder.
+>
+> So before any check in the table above is marked required, one of these must be
+> true: the workflow runs on every pull request regardless of paths, or a
+> permanently-running job reports the same check name when the paths do not match.
+> **Marking a path-filtered check required without one of those will lock `main`.**
+> Anirudh owns this decision.
+
 **Target state for the ruleset**, beyond what 38.4 enforces today: dismiss stale
 approvals on new commits, require the branch to be up to date before merge, and one
 approving review — the last of these **only once a second reviewer exists**

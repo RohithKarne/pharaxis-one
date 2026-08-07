@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'apps/mims/**'
+      - '!apps/mims/**/*.md'
       - '.github/workflows/_app-ci.yml'
       - '.github/workflows/ci-mims.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/mims/**'
+      - '!apps/mims/**/*.md'
       - '.github/workflows/_app-ci.yml'
       - '.github/workflows/ci-mims.yml'
   workflow_dispatch:
