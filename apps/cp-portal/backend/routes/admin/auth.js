@@ -6,6 +6,7 @@
 const express = require('express');
 const bcrypt  = require('bcrypt');
 const jwt     = require('jsonwebtoken');
+const log     = require('../../utils/logger');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, ADMIN_SECRET } = require('../../middleware/auth');
@@ -47,6 +48,10 @@ router.post('/login', async (req, res) => {
     res.cookie('cp_admin_token', token, { ...COOKIE_OPTS, maxAge: 12 * 60 * 60 * 1000 })
        .json({ admin: { id: user.id, name: user.name, email: user.email, role: user.role, clientId: user.client_id ?? null } });
   } catch (err) {
+    // SEC: log the error only — `password` is in scope here and must never reach
+    // the logs. logger.js serializes an Error to name/message/stack, so mysql2's
+    // `err.sql` (which can carry interpolated values) is dropped too.
+    log.error('admin.auth.error', { err, route: 'POST /login', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -58,6 +63,7 @@ router.get('/me', authenticateAdmin, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Admin user not found.' });
     res.json({ admin: { ...user, clientId: user.client_id ?? null } });
   } catch (err) {
+    log.error('admin.auth.error', { err, route: 'GET /me', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -76,16 +82,20 @@ router.patch('/password', authenticateAdmin, async (req, res) => {
     await pool.execute(`UPDATE cp_admin_users SET password = ?, token_version = token_version + 1, updated_at = NOW() WHERE id = ?`, [hash, user.id]);
     res.json({ message: 'Password updated.' });
   } catch (err) {
+    // SEC: as in /login — `current_password` and `new_password` are in scope and
+    // are never passed to the logger.
+    log.error('admin.auth.error', { err, route: 'PATCH /password', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
 
 // POST /api/admin/auth/logout — clear auth cookie
-router.post('/logout', async (_req, res) => {
+router.post('/logout', async (req, res) => {
   try {
     res.clearCookie('cp_admin_token', { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' })
        .json({ message: 'Logged out.' });
   } catch (err) {
+    log.error('admin.auth.error', { err, route: 'POST /logout', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

@@ -16,6 +16,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess, requireRole } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const log = require('../../utils/logger');
 
 const ASSIGNABLE_ROLES = ['admin', 'content_manager', 'reviewer', 'viewer'];
 
@@ -32,6 +33,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, requireRole('su
     );
     res.json({ users });
   } catch (err) {
+    log.error('admin.adminUsers.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -73,6 +75,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, requireRole('s
       user: { id: result.insertId, name, email: email.toLowerCase().trim(), role, client_id: clientId, is_active: 1 }
     });
   } catch (err) {
+    log.error('admin.adminUsers.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -105,6 +108,7 @@ router.patch('/:clientId/:userId', authenticateAdmin, requireClientAccess, requi
 
     res.json({ message: 'Admin user updated.' });
   } catch (err) {
+    log.error('admin.adminUsers.error', { err, route: 'PATCH /:clientId/:userId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -125,6 +129,7 @@ router.delete('/:clientId/:userId', authenticateAdmin, requireClientAccess, requ
 
     res.json({ message: 'Admin user deactivated.' });
   } catch (err) {
+    log.error('admin.adminUsers.error', { err, route: 'DELETE /:clientId/:userId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

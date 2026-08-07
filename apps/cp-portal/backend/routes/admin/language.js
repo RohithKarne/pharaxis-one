@@ -9,6 +9,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const { autoTranslate } = require('../../utils/translator');
+const log = require('../../utils/logger');
 
 const SUPPORTED = ['en', 'fr', 'de', 'es', 'ja', 'zh'];
 
@@ -21,6 +22,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     try { config = JSON.parse(client.language_config_json || '{}'); } catch {}
     res.json({ language: config });
   } catch (err) {
+    log.error('admin.language.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -38,6 +40,7 @@ router.put('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     await audit(req.admin, req.params.clientId, 'UPDATE', 'language_config', req.params.clientId, { default: defaultLang, enabled });
     res.json({ ok: true, language: { default: defaultLang, enabled } });
   } catch (err) {
+    log.error('admin.language.error', { err, route: 'PUT /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -72,6 +75,7 @@ router.post('/:clientId/retranslate', authenticateAdmin, requireClientAccess, as
       }
     })();
   } catch (err) {
+    log.error('admin.language.error', { err, route: 'POST /:clientId/retranslate', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

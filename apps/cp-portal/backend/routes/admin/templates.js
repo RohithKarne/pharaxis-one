@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
 
@@ -15,6 +16,7 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM cp_templates WHERE client_id=? AND is_active=1 ORDER BY name ASC', [req.params.clientId]);
     res.json({ templates: rows });
   } catch (err) {
+    log.error('admin.templates.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -29,6 +31,7 @@ router.post('/:clientId', authenticateAdmin, async (req, res) => {
     );
     res.status(201).json({ id: result.insertId, message: 'Template created.' });
   } catch (err) {
+    log.error('admin.templates.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -46,6 +49,7 @@ router.patch('/:clientId/:id', authenticateAdmin, async (req, res) => {
     await pool.execute(`UPDATE cp_templates SET ${updates.join(',')} WHERE id=? AND client_id=?`, params);
     res.json({ message: 'Template updated.' });
   } catch (err) {
+    log.error('admin.templates.error', { err, route: 'PATCH /:clientId/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -55,6 +59,7 @@ router.delete('/:clientId/:id', authenticateAdmin, async (req, res) => {
     await pool.execute(`UPDATE cp_templates SET is_active=0 WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
     res.json({ message: 'Template deleted.' });
   } catch (err) {
+    log.error('admin.templates.error', { err, route: 'DELETE /:clientId/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

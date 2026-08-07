@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const { applyTranslation } = require('../../utils/translator');
+const log = require('../../utils/logger');
 
 const NEWS_TRANS_FIELDS = ['title', 'body_html'];
 
@@ -79,6 +80,7 @@ router.get('/', authenticatePortal, async (req, res) => {
 
     res.json({ posts: paged, total, page, limit, allCategories });
   } catch (err) {
+    log.error('portal.news.error', { err, route: 'GET /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -97,6 +99,7 @@ router.get('/preview/:postId', authenticatePortal, requirePortalAuth, async (req
     if (!post) return res.status(404).json({ error: 'Post not found.' });
     res.json({ post });
   } catch (err) {
+    log.error('portal.news.error', { err, route: 'GET /preview/:postId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -132,6 +135,7 @@ router.get('/:postId', authenticatePortal, async (req, res) => {
     const translated = applyTranslation(post, lang2, NEWS_TRANS_FIELDS);
     res.json({ post: { ...translated, thumbnail_url: toUrl(post.thumbnail_path) } });
   } catch (err) {
+    log.error('portal.news.error', { err, route: 'GET /:postId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -144,6 +148,7 @@ router.post('/:clientCode/posts/:id/view', authenticatePortal, async (req, res) 
     await pool.execute('UPDATE cp_news_posts SET view_count = view_count + 1 WHERE id = ? AND client_id = ?', [req.params.id, client.id]);
     res.json({ ok: true });
   } catch (err) {
+    log.error('portal.news.error', { err, route: 'POST /:clientCode/posts/:id/view', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

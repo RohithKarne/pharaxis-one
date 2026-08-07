@@ -46,6 +46,7 @@ const upload = multer({
 
 // CP-28: shared allow-list sanitizer (replaces the bypassable blocklist).
 const { sanitizeHtml: sanitiseHtml } = require('../../utils/sanitizeHtml');
+const log = require('../../utils/logger');
 
 const VALID_TYPES     = ['dhcp_letter','product_recall','urgent_safety_restriction','field_safety_notice','other'];
 const VALID_SEVERITIES = ['critical','high','medium','informational'];
@@ -61,6 +62,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     const [alerts] = await pool.execute(query, params);
     res.json({ alerts });
   } catch (err) {
+    log.error('admin.safety.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -120,6 +122,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       const [[alert]] = await pool.execute('SELECT * FROM cp_safety_alerts WHERE id = ?', [result.insertId]);
       res.json({ alert });
     } catch (e) {
+      log.error('admin.safety.error', { err: e, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
       res.status(500).json({ error: 'Server error.' });
     }
   });
@@ -161,6 +164,7 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, async 
     if (Object.keys(transFields).length) autoTranslate(req.params.clientId, 'cp_safety_alerts', req.params.alertId, transFields).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.safety.error', { err, route: 'PUT /:clientId/:alertId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -173,6 +177,7 @@ router.patch('/:clientId/:alertId/resolve', authenticateAdmin, requireClientAcce
     await audit(req.admin, req.params.clientId, 'UPDATE', 'safety_alert', req.params.alertId, { status: 'resolved' });
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.safety.error', { err, route: 'PATCH /:clientId/:alertId/resolve', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

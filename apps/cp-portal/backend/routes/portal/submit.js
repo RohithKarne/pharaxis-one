@@ -17,6 +17,7 @@ const { validateUploads } = require('../../utils/fileValidation');
 const { enqueue } = require('../../utils/jobQueue');
 const { validateAnswer, isFlagged, AE_SCREEN_KEY, AE_SCREEN_DETAIL_KEY } = require('../../services/aeScreening');
 const { systemAudit } = require('../../utils/audit');
+const log = require('../../utils/logger');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
 const ATT_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB per file
@@ -188,6 +189,7 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
       reference: `CP-${String(submissionId).padStart(6, '0')}`,
     });
   } catch (err) {
+    log.error('portal.submit.error', { err, route: 'POST /:clientCode/:formType', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -206,6 +208,7 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
     const submissions = rows.map(r => ({ ...r, reference: `CP-${String(r.id).padStart(6, '0')}` }));
     res.json({ submissions });
   } catch (err) {
+    log.error('portal.submit.error', { err, route: 'GET /:clientCode/submissions', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -420,6 +423,7 @@ router.get('/:clientCode/attachments/:attachmentId', authenticatePortal, require
     if (!att) return res.status(404).json({ error: 'Attachment not found.' });
     streamAttachment(res, att, req.query.disposition === 'inline');
   } catch (err) {
+    log.error('portal.submit.error', { err, route: 'GET /:clientCode/attachments/:attachmentId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

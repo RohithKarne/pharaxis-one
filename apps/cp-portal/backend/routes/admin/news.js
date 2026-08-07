@@ -36,6 +36,7 @@ const { notifyPortalUsers } = require('../../utils/notify');
 
 // CP-28: shared allow-list sanitizer (replaces the bypassable blocklist).
 const { sanitizeHtml: sanitiseHtml } = require('../../utils/sanitizeHtml');
+const log = require('../../utils/logger');
 
 // GET /api/admin/news/:clientId
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -48,6 +49,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     const [posts] = await pool.execute(query, params);
     res.json({ posts });
   } catch (err) {
+    log.error('admin.news.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -109,6 +111,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
     const [[post]] = await pool.execute('SELECT * FROM cp_news_posts WHERE id = ?', [result.insertId]);
     res.json({ post });
   } catch (err) {
+    log.error('admin.news.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -130,6 +133,7 @@ router.post('/:clientId/bulk', authenticateAdmin, requireClientAccess, async (re
     await audit(req.admin, req.params.clientId, `BULK_${action.toUpperCase()}`, 'news', null, { ids })
     res.json({ ok: true, affected: ids.length })
   } catch (err) {
+    log.error('admin.news.error', { err, route: 'POST /:clientId/bulk', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' })
   }
 })
@@ -202,6 +206,7 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, async (
     if (Object.keys(transFields).length) autoTranslate(req.params.clientId, 'cp_news_posts', req.params.postId, transFields).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.news.error', { err, route: 'PUT /:clientId/:postId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -217,6 +222,7 @@ router.delete('/:clientId/:postId', authenticateAdmin, requireClientAccess, asyn
     await audit(req.admin, req.params.clientId, 'DELETE', 'news', req.params.postId, {});
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.news.error', { err, route: 'DELETE /:clientId/:postId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

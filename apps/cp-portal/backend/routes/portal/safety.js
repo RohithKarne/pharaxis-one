@@ -12,6 +12,7 @@ const { applyTranslation } = require('../../utils/translator');
 const SAFETY_TRANS_FIELDS = ['title', 'body_html'];
 const path = require('path');
 const fs   = require('fs');
+const log = require('../../utils/logger');
 
 // GET /api/portal/safety?clientCode=xxx
 router.get('/', authenticatePortal, async (req, res) => {
@@ -47,6 +48,7 @@ router.get('/', authenticatePortal, async (req, res) => {
 
     res.json({ alerts: filtered });
   } catch (err) {
+    log.error('portal.safety.error', { err, route: 'GET /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -75,6 +77,7 @@ router.get('/:alertId', authenticatePortal, async (req, res) => {
 
     res.json({ alert });
   } catch (err) {
+    log.error('portal.safety.error', { err, route: 'GET /:alertId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -87,6 +90,7 @@ router.post('/:clientCode/alerts/:id/view', authenticatePortal, async (req, res)
     await pool.execute('UPDATE cp_safety_alerts SET view_count = view_count + 1 WHERE id = ? AND client_id = ?', [req.params.id, client.id]);
     res.json({ ok: true });
   } catch (err) {
+    log.error('portal.safety.error', { err, route: 'POST /:clientCode/alerts/:id/view', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -121,6 +125,7 @@ router.get('/:alertId/attachment', authenticatePortal, async (req, res) => {
     res.setHeader('Content-Type', CONTENT_TYPES[ext] || 'application/octet-stream');
     fs.createReadStream(filePath).pipe(res);
   } catch (err) {
+    log.error('portal.safety.error', { err, route: 'GET /:alertId/attachment', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

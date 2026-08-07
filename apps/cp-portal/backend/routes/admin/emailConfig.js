@@ -13,6 +13,7 @@ const { authenticateAdmin, requireClientAccess, requireRole } = require('../../m
 const { audit } = require('../../utils/audit')
 const { sendEmail } = require('../../utils/mailer')
 const { encryptSecret } = require('../../utils/secretCrypto')
+const log = require('../../utils/logger')
 
 // GET /api/admin/email-config/:clientId — returns config, never the real password
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -33,6 +34,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       },
     })
   } catch (err) {
+    log.error('admin.emailConfig.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null })
     res.status(500).json({ error: 'Server error.' })
   }
 })
@@ -78,6 +80,7 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, requireRole('
     await audit(req.admin, clientId, 'UPDATE', 'email_config', Number(clientId), { smtp_host, smtp_username, is_active })
     res.json({ message: 'Email settings saved.' })
   } catch (err) {
+    log.error('admin.emailConfig.error', { err, route: 'PATCH /:clientId', path: req.path, request_id: req.requestId || null })
     res.status(500).json({ error: 'Server error.' })
   }
 })
@@ -98,6 +101,7 @@ router.post('/:clientId/test', authenticateAdmin, requireClientAccess, requireRo
     await audit(req.admin, clientId, 'TEST_EMAIL', 'email_config', Number(clientId), { to })
     res.json({ message: `Test email sent to ${to}.` })
   } catch (err) {
+    log.error('admin.emailConfig.error', { err, route: 'POST /:clientId/test', path: req.path, request_id: req.requestId || null })
     res.status(502).json({ error: `Failed to send: ${err.message}` })
   }
 })

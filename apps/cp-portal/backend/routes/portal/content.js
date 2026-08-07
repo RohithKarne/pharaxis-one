@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal } = require('../../middleware/auth');
 const { withAeScreening } = require('../../services/aeScreening');
+const log = require('../../utils/logger');
 
 async function getClient(code) {
   const [[row]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [code]);
@@ -25,6 +26,7 @@ router.get('/:clientCode/therapeutic-areas', async (req, res) => {
     );
     res.json({ items: rows });
   } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/therapeutic-areas', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -40,6 +42,7 @@ router.get('/:clientCode/therapeutic-areas/:slug', async (req, res) => {
     if (!row) return res.status(404).json({ error: 'Not found.' });
     res.json({ item: row });
   } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/therapeutic-areas/:slug', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -61,6 +64,7 @@ router.get('/:clientCode/drugs', async (req, res) => {
     const [items] = await pool.execute(query, params);
     res.json({ items });
   } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/drugs', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -79,6 +83,7 @@ router.get('/:clientCode/events', async (req, res) => {
     );
     res.json({ items: rows });
   } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/events', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -97,6 +102,7 @@ router.get('/:clientCode/msls', authenticatePortal, async (req, res) => {
     const items = req.portalUser ? rows : rows.map(({ email, phone, ...rest }) => rest);
     res.json({ items });
   } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/msls', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -112,6 +118,7 @@ router.get('/:clientCode/resources', async (req, res) => {
     );
     res.json({ items: rows });
   } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/resources', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -152,6 +159,7 @@ router.get('/:clientCode/forms/:formType', async (req, res) => {
     if (rows.length === 0) return res.json({ fields: rows });
     res.json({ fields: withAeScreening(rows, req.params.formType) });
   } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/forms/:formType', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -173,6 +181,7 @@ router.get('/:clientCode/trials', async (req, res) => {
     );
     res.json({ items: rows });
   } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/trials', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -192,6 +201,7 @@ router.get('/:clientCode/training', async (req, res) => {
     );
     res.json({ items: rows });
   } catch (err) {
+    log.error('portal.content.error', { err, route: 'GET /:clientCode/training', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

@@ -10,6 +10,7 @@ const { authenticateAdmin, requireClientAccess } = require('../../middleware/aut
 const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
 const { encryptSecret } = require('../../utils/secretCrypto');
 const { getAuthHeaders, invalidateAuth } = require('../../services/mimsAuth');
+const log = require('../../utils/logger');
 
 // Mask a secret field — show only last 4 chars with **** prefix
 function maskSecret(value) {
@@ -29,6 +30,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     const [mapping] = await pool.execute('SELECT * FROM cp_field_mapping WHERE client_id = ? ORDER BY form_type, cp_field ASC', [req.params.clientId]);
     res.json({ integrations: masked, mappings: mapping });
   } catch (err) {
+    log.error('admin.integration.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -45,6 +47,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
     );
     res.status(201).json({ id: result.insertId, message: 'Integration configured.' });
   } catch (err) {
+    log.error('admin.integration.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -69,6 +72,7 @@ router.patch('/:clientId/:integrationId', authenticateAdmin, requireClientAccess
     await pool.execute(`UPDATE cp_integration_config SET ${updates.join(', ')} WHERE id=? AND client_id=?`, params);
     res.json({ message: 'Integration updated.' });
   } catch (err) {
+    log.error('admin.integration.error', { err, route: 'PATCH /:clientId/:integrationId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -79,6 +83,7 @@ router.delete('/:clientId/:integrationId', authenticateAdmin, requireClientAcces
     await pool.execute('UPDATE cp_integration_config SET is_active=0 WHERE id=? AND client_id=?', [req.params.integrationId, req.params.clientId]);
     res.json({ message: 'Integration deactivated.' });
   } catch (err) {
+    log.error('admin.integration.error', { err, route: 'DELETE /:clientId/:integrationId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -120,6 +125,7 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, requireClientAc
       res.json({ success: false, error: fetchErr.message });
     }
   } catch (err) {
+    log.error('admin.integration.error', { err, route: 'POST /:clientId/:integrationId/test', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -132,6 +138,7 @@ router.get('/:clientId/mapping/:integrationId', authenticateAdmin, requireClient
     const [rows] = await pool.execute('SELECT * FROM cp_field_mapping WHERE client_id=? AND integration_id=? ORDER BY form_type, cp_field', [req.params.clientId, req.params.integrationId]);
     res.json({ mappings: rows });
   } catch (err) {
+    log.error('admin.integration.error', { err, route: 'GET /:clientId/mapping/:integrationId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -148,6 +155,7 @@ router.post('/:clientId/mapping', authenticateAdmin, requireClientAccess, async 
     );
     res.status(201).json({ id: result.insertId, message: 'Mapping saved.' });
   } catch (err) {
+    log.error('admin.integration.error', { err, route: 'POST /:clientId/mapping', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -158,6 +166,7 @@ router.delete('/:clientId/mapping/:mappingId', authenticateAdmin, requireClientA
     await pool.execute('DELETE FROM cp_field_mapping WHERE id=? AND client_id=?', [req.params.mappingId, req.params.clientId]);
     res.json({ message: 'Mapping removed.' });
   } catch (err) {
+    log.error('admin.integration.error', { err, route: 'DELETE /:clientId/mapping/:mappingId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

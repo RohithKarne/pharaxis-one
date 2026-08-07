@@ -9,6 +9,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 // GET /api/admin/trials/:clientId — list trials for client
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -19,6 +20,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     );
     res.json({ trials: rows });
   } catch (err) {
+    log.error('admin.trials.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -37,6 +39,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
     );
     res.json({ id: result.insertId, message: 'Clinical trial created.' });
   } catch (err) {
+    log.error('admin.trials.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -50,6 +53,7 @@ router.delete('/:clientId/:trialId', authenticateAdmin, requireClientAccess, asy
     );
     res.json({ message: 'Trial deleted.' });
   } catch (err) {
+    log.error('admin.trials.error', { err, route: 'DELETE /:clientId/:trialId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

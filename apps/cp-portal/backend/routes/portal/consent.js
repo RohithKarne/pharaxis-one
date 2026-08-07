@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { requirePortalAuth, authenticatePortal } = require('../../middleware/auth');
 const crypto  = require('crypto');
+const log = require('../../utils/logger');
 
 // Jurisdiction strictness ranking — highest index = strictest
 const JURISDICTION_RANK = ['apac', 'pdpb', 'ccpa', 'gdpr'];
@@ -49,6 +50,7 @@ router.get('/current', async (req, res) => {
       require_reconsent: !!config.require_reconsent,
     });
   } catch (err) {
+    log.error('portal.consent.error', { err, route: 'GET /current', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -76,6 +78,7 @@ router.get('/check', authenticatePortal, async (req, res) => {
     const [[record]] = await pool.execute('SELECT id FROM cp_consent_records WHERE client_id = ? AND user_id = ? AND version = ?', [client.id, userId, version]);
     res.json({ consented: !!record });
   } catch (err) {
+    log.error('portal.consent.error', { err, route: 'GET /check', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -105,6 +108,7 @@ router.post('/', authenticatePortal, async (req, res) => {
 
     res.json({ saved: true });
   } catch (err) {
+    log.error('portal.consent.error', { err, route: 'POST /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

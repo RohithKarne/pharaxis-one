@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
 
@@ -30,6 +31,7 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
 
     res.json({ config: config || {}, userTypes, features, accessMap });
   } catch (err) {
+    log.error('admin.gate.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -61,6 +63,7 @@ router.patch('/:clientId', authenticateAdmin, async (req, res) => {
     await audit(req.admin, clientId, 'UPDATE', 'gate', clientId, { fields: Object.keys(req.body) });
     res.json({ message: 'Gate config updated.' });
   } catch (err) {
+    log.error('admin.gate.error', { err, route: 'PATCH /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -71,6 +74,7 @@ router.get('/:clientId/user-types', authenticateAdmin, async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM cp_gate_user_types WHERE client_id = ? ORDER BY display_order ASC', [req.params.clientId]);
     res.json({ userTypes: rows });
   } catch (err) {
+    log.error('admin.gate.error', { err, route: 'GET /:clientId/user-types', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -90,6 +94,7 @@ router.patch('/:clientId/user-types/:typeId', authenticateAdmin, async (req, res
     await audit(req.admin, clientId, 'UPDATE', 'gate', typeId, { entity: 'user_type', fields: Object.keys(req.body) });
     res.json({ message: 'User type updated.' });
   } catch (err) {
+    log.error('admin.gate.error', { err, route: 'PATCH /:clientId/user-types/:typeId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -123,6 +128,7 @@ router.patch('/:clientId/access', authenticateAdmin, async (req, res) => {
     await audit(req.admin, clientId, 'UPDATE', 'gate', null, { entity: 'access_matrix', count: updates.length });
     res.json({ message: `${updates.length} access rules updated.` });
   } catch (err) {
+    log.error('admin.gate.error', { err, route: 'PATCH /:clientId/access', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

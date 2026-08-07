@@ -10,6 +10,7 @@ const { authenticatePortal } = require('../../middleware/auth');
 const { sendEmail } = require('../../utils/mailer');
 const { buildEvent } = require('../../utils/ics');
 const { enqueue } = require('../../utils/jobQueue');
+const log = require('../../utils/logger');
 
 // GET /api/portal/bookings/:clientCode/:mslId/slots — available (future, unbooked) slots
 router.get('/:clientCode/:mslId/slots', async (req, res) => {
@@ -23,6 +24,7 @@ router.get('/:clientCode/:mslId/slots', async (req, res) => {
       [client.id, req.params.mslId]);
     res.json({ slots });
   } catch (err) {
+    log.error('portal.bookings.error', { err, route: 'GET /:clientCode/:mslId/slots', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -115,6 +117,7 @@ router.post('/:clientCode/:mslId', authenticatePortal, async (req, res) => {
 
     res.status(201).json({ ok: true, bookingId: result.insertId, slotBooked: !!chosenSlot });
   } catch (err) {
+    log.error('portal.bookings.error', { err, route: 'POST /:clientCode/:mslId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -137,6 +140,7 @@ router.get('/:clientCode', authenticatePortal, async (req, res) => {
 
     res.json({ bookings });
   } catch (err) {
+    log.error('portal.bookings.error', { err, route: 'GET /:clientCode', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

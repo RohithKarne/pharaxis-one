@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
 
@@ -17,6 +18,7 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM cp_features WHERE client_id = ? ORDER BY display_order ASC', [req.params.clientId]);
     res.json({ features: rows });
   } catch (err) {
+    log.error('admin.features.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -37,6 +39,7 @@ router.patch('/:clientId/:featureKey', authenticateAdmin, async (req, res) => {
     await audit(req.admin, clientId, is_enabled !== undefined ? (is_enabled ? 'ENABLE' : 'DISABLE') : 'UPDATE', 'feature', featureKey, { feature_key: featureKey, ...req.body });
     res.json({ message: 'Feature updated.' });
   } catch (err) {
+    log.error('admin.features.error', { err, route: 'PATCH /:clientId/:featureKey', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -65,6 +68,7 @@ router.post('/:clientId/reorder', authenticateAdmin, async (req, res) => {
     await audit(req.admin, req.params.clientId, 'UPDATE', 'feature', null, { action: 'reorder' });
     res.json({ message: 'Order updated.' });
   } catch (err) {
+    log.error('admin.features.error', { err, route: 'POST /:clientId/reorder', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

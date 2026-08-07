@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
 
@@ -17,6 +18,7 @@ router.get('/:clientId/therapeutic-areas', authenticateAdmin, async (req, res) =
     const [rows] = await pool.execute('SELECT * FROM cp_therapeutic_areas WHERE client_id = ? ORDER BY display_order ASC', [req.params.clientId]);
     res.json({ therapeutic_areas: rows });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'GET /:clientId/therapeutic-areas', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -32,6 +34,7 @@ router.post('/:clientId/therapeutic-areas', authenticateAdmin, async (req, res) 
     );
     res.status(201).json({ id: result.insertId, message: 'Therapeutic area created.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'POST /:clientId/therapeutic-areas', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -45,6 +48,7 @@ router.patch('/:clientId/therapeutic-areas/:id', authenticateAdmin, async (req, 
     await pool.execute(`UPDATE cp_therapeutic_areas SET ${updates.join(', ')}, updated_at=NOW() WHERE id = ? AND client_id = ?`, params);
     res.json({ message: 'Updated.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'PATCH /:clientId/therapeutic-areas/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -54,6 +58,7 @@ router.delete('/:clientId/therapeutic-areas/:id', authenticateAdmin, async (req,
     await pool.execute(`UPDATE cp_therapeutic_areas SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
     res.json({ message: 'Deactivated.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'DELETE /:clientId/therapeutic-areas/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -65,6 +70,7 @@ router.get('/:clientId/drugs', authenticateAdmin, async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM cp_drugs WHERE client_id = ? ORDER BY display_order ASC', [req.params.clientId]);
     res.json({ drugs: rows });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'GET /:clientId/drugs', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -80,6 +86,7 @@ router.post('/:clientId/drugs', authenticateAdmin, async (req, res) => {
     );
     res.status(201).json({ id: result.insertId, message: 'Drug created.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'POST /:clientId/drugs', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -93,6 +100,7 @@ router.patch('/:clientId/drugs/:id', authenticateAdmin, async (req, res) => {
     await pool.execute(`UPDATE cp_drugs SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
     res.json({ message: 'Updated.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'PATCH /:clientId/drugs/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -102,6 +110,7 @@ router.delete('/:clientId/drugs/:id', authenticateAdmin, async (req, res) => {
     await pool.execute(`UPDATE cp_drugs SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
     res.json({ message: 'Deactivated.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'DELETE /:clientId/drugs/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -113,6 +122,7 @@ router.get('/:clientId/events', authenticateAdmin, async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM cp_events WHERE client_id = ? ORDER BY start_date ASC', [req.params.clientId]);
     res.json({ events: rows });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'GET /:clientId/events', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -128,6 +138,7 @@ router.post('/:clientId/events', authenticateAdmin, async (req, res) => {
     );
     res.status(201).json({ id: result.insertId, message: 'Event created.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'POST /:clientId/events', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -141,6 +152,7 @@ router.patch('/:clientId/events/:id', authenticateAdmin, async (req, res) => {
     await pool.execute(`UPDATE cp_events SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
     res.json({ message: 'Updated.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'PATCH /:clientId/events/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -150,6 +162,7 @@ router.delete('/:clientId/events/:id', authenticateAdmin, async (req, res) => {
     await pool.execute(`UPDATE cp_events SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
     res.json({ message: 'Deactivated.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'DELETE /:clientId/events/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -161,6 +174,7 @@ router.get('/:clientId/resources', authenticateAdmin, async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM cp_resources WHERE client_id = ? ORDER BY display_order ASC', [req.params.clientId]);
     res.json({ resources: rows });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'GET /:clientId/resources', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -176,6 +190,7 @@ router.post('/:clientId/resources', authenticateAdmin, async (req, res) => {
     );
     res.status(201).json({ id: result.insertId, message: 'Resource created.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'POST /:clientId/resources', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -189,6 +204,7 @@ router.patch('/:clientId/resources/:id', authenticateAdmin, async (req, res) => 
     await pool.execute(`UPDATE cp_resources SET ${updates.join(', ')}, updated_at=NOW() WHERE id=? AND client_id=?`, params);
     res.json({ message: 'Updated.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'PATCH /:clientId/resources/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -198,6 +214,7 @@ router.delete('/:clientId/resources/:id', authenticateAdmin, async (req, res) =>
     await pool.execute(`UPDATE cp_resources SET is_active=0, updated_at=NOW() WHERE id=? AND client_id=?`, [req.params.id, req.params.clientId]);
     res.json({ message: 'Deactivated.' });
   } catch (err) {
+    log.error('admin.content.error', { err, route: 'DELETE /:clientId/resources/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

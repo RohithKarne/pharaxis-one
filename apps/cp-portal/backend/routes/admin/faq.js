@@ -9,6 +9,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const { autoTranslate } = require('../../utils/translator');
+const log = require('../../utils/logger');
 
 // GET /api/admin/faq/:clientId
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -16,6 +17,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     const [rows] = await pool.execute('SELECT * FROM cp_faq_items WHERE client_id = ? ORDER BY category ASC, sort_order ASC, id ASC', [req.params.clientId]);
     res.json({ faqs: rows });
   } catch (err) {
+    log.error('admin.faq.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -34,6 +36,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
     const [[faq]] = await pool.execute('SELECT * FROM cp_faq_items WHERE id = ?', [result.insertId]);
     res.json({ faq });
   } catch (err) {
+    log.error('admin.faq.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -59,6 +62,7 @@ router.put('/:clientId/:faqId', authenticateAdmin, requireClientAccess, async (r
     if (Object.keys(transFields).length) autoTranslate(req.params.clientId, 'cp_faq_items', req.params.faqId, transFields).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.faq.error', { err, route: 'PUT /:clientId/:faqId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -70,6 +74,7 @@ router.delete('/:clientId/:faqId', authenticateAdmin, requireClientAccess, async
     await audit(req.admin, req.params.clientId, 'DELETE', 'faq', req.params.faqId, {});
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.faq.error', { err, route: 'DELETE /:clientId/:faqId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

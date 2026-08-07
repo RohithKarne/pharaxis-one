@@ -9,6 +9,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 // GET /api/admin/training/:clientId — list modules for client
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -19,6 +20,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     );
     res.json({ modules: rows });
   } catch (err) {
+    log.error('admin.training.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -35,6 +37,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
     );
     res.json({ id: result.insertId, message: 'Training module created.' });
   } catch (err) {
+    log.error('admin.training.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -48,6 +51,7 @@ router.delete('/:clientId/:moduleId', authenticateAdmin, requireClientAccess, as
     );
     res.json({ message: 'Training module deleted.' });
   } catch (err) {
+    log.error('admin.training.error', { err, route: 'DELETE /:clientId/:moduleId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

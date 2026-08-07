@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
 
@@ -21,6 +22,7 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
     }, {});
     res.json({ forms: grouped });
   } catch (err) {
+    log.error('admin.forms.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -31,6 +33,7 @@ router.get('/:clientId/:formType', authenticateAdmin, async (req, res) => {
     const [rows] = await pool.execute('SELECT * FROM cp_form_config WHERE client_id = ? AND form_type = ? ORDER BY display_order ASC', [req.params.clientId, req.params.formType]);
     res.json({ fields: rows.map(r => ({ ...r, field_options: r.field_options ? JSON.parse(r.field_options) : null })) });
   } catch (err) {
+    log.error('admin.forms.error', { err, route: 'GET /:clientId/:formType', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -47,6 +50,7 @@ router.post('/:clientId', authenticateAdmin, async (req, res) => {
     );
     res.status(201).json({ id: result.insertId, message: 'Field added.' });
   } catch (err) {
+    log.error('admin.forms.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -70,6 +74,7 @@ router.patch('/:clientId/:fieldId', authenticateAdmin, async (req, res) => {
     await pool.execute(`UPDATE cp_form_config SET ${updates.join(', ')} WHERE id = ? AND client_id = ?`, params);
     res.json({ message: 'Field updated.' });
   } catch (err) {
+    log.error('admin.forms.error', { err, route: 'PATCH /:clientId/:fieldId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -80,6 +85,7 @@ router.delete('/:clientId/:fieldId', authenticateAdmin, async (req, res) => {
     await pool.execute('UPDATE cp_form_config SET is_active = 0 WHERE id = ? AND client_id = ?', [req.params.fieldId, req.params.clientId]);
     res.json({ message: 'Field deactivated.' });
   } catch (err) {
+    log.error('admin.forms.error', { err, route: 'DELETE /:clientId/:fieldId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -107,6 +113,7 @@ router.post('/:clientId/reorder', authenticateAdmin, async (req, res) => {
     }
     res.json({ message: 'Order updated.' });
   } catch (err) {
+    log.error('admin.forms.error', { err, route: 'POST /:clientId/reorder', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

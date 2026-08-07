@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { decryptSecret } = require('../../utils/secretCrypto');
 const { retrieveContext, formatContext } = require('../../utils/retrieve');
+const log = require('../../utils/logger');
 
 async function isFeatureEnabled(clientId, featureKey) {
   const [[row]] = await pool.execute('SELECT is_enabled FROM cp_features WHERE client_id = ? AND feature_key = ?', [clientId, featureKey]);
@@ -102,7 +103,7 @@ router.post('/:clientCode', async (req, res) => {
 
     res.status(400).json({ error: 'Unsupported AI provider.' });
   } catch (err) {
-    console.error('Chatbox AI error:', err);
+    log.error('portal.chatbox.error', { err, route: 'POST /:clientCode', path: req.path, request_id: req.requestId || null });
     res.status(502).json({ error: 'AI service error. Please try again.' });
   }
 });

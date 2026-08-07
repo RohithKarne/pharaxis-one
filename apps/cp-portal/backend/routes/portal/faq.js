@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { applyTranslation } = require('../../utils/translator');
+const log = require('../../utils/logger');
 
 // GET /api/portal/faq/:clientCode?lang=fr
 router.get('/:clientCode', async (req, res) => {
@@ -21,6 +22,7 @@ router.get('/:clientCode', async (req, res) => {
     const faqs = rows.map(r => applyTranslation(r, lang, ['question', 'answer']));
     res.json({ faqs });
   } catch (err) {
+    log.error('portal.faq.error', { err, route: 'GET /:clientCode', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

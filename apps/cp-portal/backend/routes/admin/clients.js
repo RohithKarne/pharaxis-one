@@ -9,6 +9,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const { getClientBundle, listClients } = require('../../services/clientService');
+const log = require('../../utils/logger');
 
 const DEFAULT_FEATURES = [
   { key: 'therapeutic_areas',   label: 'Therapeutic Areas & Research', order: 1 },
@@ -88,10 +89,11 @@ function requireClientScopeByIdParam(req, res, next) {
 // No password_hash stripping is required here.
 
 // GET /api/admin/clients
-router.get('/', authenticateAdmin, requireSuperadmin, async (_req, res) => {
+router.get('/', authenticateAdmin, requireSuperadmin, async (req, res) => {
   try {
     res.json({ clients: await listClients(pool) });
   } catch (err) {
+    log.error('admin.clients.error', { err, route: 'GET /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -103,6 +105,7 @@ router.get('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req, r
     if (!bundle) return res.status(404).json({ error: 'Client not found.' });
     res.json(bundle);
   } catch (err) {
+    log.error('admin.clients.error', { err, route: 'GET /:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -139,6 +142,7 @@ router.get('/:id/readiness', authenticateAdmin, requireClientScopeByIdParam, asy
 
     res.json({ checks, score, label, done: doneCount, total: checks.length });
   } catch (err) {
+    log.error('admin.clients.error', { err, route: 'GET /:id/readiness', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -210,6 +214,7 @@ router.post('/', authenticateAdmin, requireSuperadmin, async (req, res) => {
     await audit(req.admin, clientId, 'CREATE', 'client', clientId, { name, code });
     res.status(201).json({ id: clientId, message: 'Client created with default configuration.' });
   } catch (err) {
+    log.error('admin.clients.error', { err, route: 'POST /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -232,6 +237,7 @@ router.patch('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req,
     await audit(req.admin, Number(id), 'UPDATE', 'client', Number(id), req.body);
     res.json({ message: 'Client updated.' });
   } catch (err) {
+    log.error('admin.clients.error', { err, route: 'PATCH /:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -259,6 +265,7 @@ router.delete('/:id', authenticateAdmin, requireClientScopeByIdParam, async (req
     await audit(req.admin, clientId, 'DELETE', 'client', clientId, {});
     res.json({ message: 'Client deactivated.' });
   } catch (err) {
+    log.error('admin.clients.error', { err, route: 'DELETE /:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

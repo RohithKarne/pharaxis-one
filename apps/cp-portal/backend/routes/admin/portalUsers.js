@@ -12,6 +12,7 @@ const { sendEmail } = require('../../utils/mailer');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
 const { audit } = require('../../utils/audit');
+const log = require('../../utils/logger');
 
 const VALID_USER_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other'];
 
@@ -134,6 +135,7 @@ router.post('/:clientId', authenticateAdmin, async (req, res) => {
       user: created,
     });
   } catch (err) {
+    log.error('admin.portalUsers.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -244,6 +246,8 @@ router.post('/:clientId/bulk-create', authenticateAdmin, async (req, res) => {
           origin: req.headers.origin, isResend: false,
         });
       } catch (err) {
+        // The caller is told the invite failed but not why — record the cause.
+        log.warn('admin.portalUsers.invite_failed', { err, route: 'POST /:clientId/bulk-create', userId: user.id, request_id: req.requestId || null });
         inviteFailures.push({ row: user.row, email: user.email, reason: 'Invitation email failed to send. Use resend-invite.' });
       }
     }
@@ -259,7 +263,7 @@ router.post('/:clientId/bulk-create', authenticateAdmin, async (req, res) => {
   } catch (err) {
     try { await conn.rollback(); } catch (_) { /* connection may already be released */ }
     try { conn.release(); } catch (_) { /* already released */ }
-    console.error('POST /:clientId/bulk-create error:', err);
+    log.error('admin.portalUsers.error', { err, route: 'POST /:clientId/bulk-create', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -288,6 +292,7 @@ router.post('/:clientId/:userId/resend-invite', authenticateAdmin, async (req, r
     await audit(req.admin, client.id, 'UPDATE', 'portal_user', user.id, { action: 'resend_invite' });
     res.json({ message: 'Invitation resent.' });
   } catch (err) {
+    log.error('admin.portalUsers.error', { err, route: 'POST /:clientId/:userId/resend-invite', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -303,6 +308,7 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
     const [rows] = await pool.execute(query, params);
     res.json({ users: rows });
   } catch (err) {
+    log.error('admin.portalUsers.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -322,6 +328,7 @@ router.patch('/:clientId/bulk', authenticateAdmin, async (req, res) => {
     await audit(req.admin, req.params.clientId, is_active ? 'ENABLE' : 'DISABLE', 'portal_user', null, { count: cleanIds.length });
     res.json({ message: `${cleanIds.length} user(s) ${is_active ? 'activated' : 'deactivated'}.`, count: cleanIds.length });
   } catch (err) {
+    log.error('admin.portalUsers.error', { err, route: 'PATCH /:clientId/bulk', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -351,6 +358,7 @@ router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
     await audit(req.admin, req.params.clientId, 'UPDATE', 'portal_user', req.params.userId, { fields: Object.keys(req.body) });
     res.json({ message: 'User updated.' });
   } catch (err) {
+    log.error('admin.portalUsers.error', { err, route: 'PATCH /:clientId/:userId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -361,6 +369,7 @@ router.delete('/:clientId/:userId', authenticateAdmin, async (req, res) => {
     await audit(req.admin, req.params.clientId, 'DELETE', 'portal_user', req.params.userId, {});
     res.json({ message: 'User deactivated.' });
   } catch (err) {
+    log.error('admin.portalUsers.error', { err, route: 'DELETE /:clientId/:userId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

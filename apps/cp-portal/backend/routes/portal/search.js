@@ -8,6 +8,7 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
+const log = require('../../utils/logger');
 
 function snippet(text) {
   const s = String(text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -83,6 +84,7 @@ router.get('/', async (req, res) => {
 
     res.json({ query: q, results });
   } catch (err) {
+    log.error('portal.search.error', { err, route: 'GET /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -115,6 +117,7 @@ router.get('/suggest', async (req, res) => {
 
     res.json({ suggestions: out.slice(0, 8) });
   } catch (err) {
+    log.error('portal.search.error', { err, route: 'GET /suggest', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

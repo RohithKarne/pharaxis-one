@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 const DEFAULT_PREFS = { news: true, documents: true, safety: true, digest: true };
 
@@ -20,6 +21,7 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
     try { prefs = { ...DEFAULT_PREFS, ...JSON.parse(user.notif_prefs_json || '{}') }; } catch {}
     res.json({ prefs });
   } catch (err) {
+    log.error('portal.preferences.error', { err, route: 'GET /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -44,6 +46,7 @@ router.patch('/', authenticatePortal, requirePortalAuth, async (req, res) => {
 
     res.json({ prefs });
   } catch (err) {
+    log.error('portal.preferences.error', { err, route: 'PATCH /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
