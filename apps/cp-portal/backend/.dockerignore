@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log*
+.env
+.env.*
+uploads
+storage
+logs
+*.log
+tests
+test-results
+.git
+Dockerfile
+.dockerignore
