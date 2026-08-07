@@ -10,6 +10,7 @@
     "dev:clean": "bash ./dev-clean.sh",
     "stop:ports": "bash ./stop-ports.sh",
     "security:scan": "bash ./scripts/security-scan.sh",
+    "test:static": "node backend/tests/syntax-check.js",
     "test": "jest --testPathPatterns=backend/tests --forceExit",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
