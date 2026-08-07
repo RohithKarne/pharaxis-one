@@ -42,8 +42,16 @@ jobs:
       id-token: write
 
     steps:
+      # Block scalar, and the reason goes through env rather than being
+      # interpolated into the command. Two reasons: an unquoted ": " inside a
+      # flow scalar makes YAML read it as a mapping key (this file did not parse
+      # at all until it was fixed), and inputs.reason is operator-supplied text
+      # that must never be spliced into a shell line.
       - name: Record the reason
-        run: echo "Rollback requested by ${GITHUB_ACTOR}: ${{ inputs.reason }}"
+        env:
+          REASON: ${{ inputs.reason }}
+        run: |
+          printf 'Rollback requested by %s: %s\n' "$GITHUB_ACTOR" "$REASON"
 
       - uses: google-github-actions/auth@v2
         with:
