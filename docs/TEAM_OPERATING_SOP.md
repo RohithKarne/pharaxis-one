@@ -2400,7 +2400,7 @@ Recorded openly rather than left to be discovered:
 | Gap | Consequence | Owner |
 |---|---|---|
 | **CI is not a required check** | A red pipeline does not block a merge. A human must read it. | Anirudh |
-| **`CODEOWNERS` contradicts Gate 2** | Section 9 requires *"Varun review complete"*; `.github/CODEOWNERS` routes every path to `@RohithKarne`. One of the two is wrong. | Varun |
+| **`CODEOWNERS` cannot express Gate 2** | Section 9 requires *"Varun review complete"*, and `.github/CODEOWNERS` routes every path to `@RohithKarne`. **This was first recorded as a contradiction to fix; that was wrong.** `RohithKarne` is the only account with repository access — every other team member is a simulated persona with no GitHub identity, so no other name can appear in `CODEOWNERS` without being silently ignored. **Varun's review is an in-process step recorded in chat (step 9), not a GitHub mechanism.** `CODEOWNERS` is correct as written; the gap is that GitHub cannot enforce the review the SOP requires, and nothing but discipline closes it. | Varun |
 | **E2E tests never run in CI** | Playwright is installed in MIMS and CP Portal and is invoked by no workflow. Browser verification stays manual. | Kiranmai |
 | **No coverage floor** | Test counts: MIMS 30, CP Portal 5, Vault 3, QMS 1, AI Agent 1. Nothing stops that falling. | Kiranmai |
 | **MIMS has no quality gate** | `ci-mims.yml` passes no `quality_command`; it is the only app without one, and the largest. | Anirudh |
