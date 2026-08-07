@@ -1,18 +1,138 @@
-name: CP Portal Remote Deploy Disabled
+name: CP Portal Deploy (Google Cloud)
+
+# Replaces the "Remote Deploy Disabled" stub that has been here since the AWS
+# host was deleted (2026-05-27).
+#
+# Before this workflow existed, the demo was deployed by running
+# `gcloud builds submit` from a laptop against an unmerged branch. Nothing
+# recorded what was deployed - /api/health reported commit "unknown" - and the
+# running service could drift from main indefinitely with no signal. See
+# docs/TEAM_OPERATING_SOP.md §38: Deploy is step 20, after Merge at step 11.
+#
+# Auth is Workload Identity Federation, NOT a service-account key. This
+# repository is public; a JSON key in repository secrets would be a permanent
+# credential with no expiry. The pool provider is restricted to this repository
+# by attribute condition.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/cp-portal/**'
+      - '!apps/cp-portal/**/*.md'
+      - '.github/workflows/deploy-cp-portal.yml'
   workflow_dispatch:
 
+concurrency:
+  group: deploy-cp-portal
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: cp-portal-demo
+  REGION: us-west1
+  REGISTRY: us-west1-docker.pkg.dev/cp-portal-demo/cp-portal
+  API_SERVICE: cp-portal-api
+  WEB_SERVICE: cp-portal-web
+  API_URL: https://cp-portal-api-965313610931.us-west1.run.app
+  WEB_URL: https://cp-portal-web-965313610931.us-west1.run.app
+
 jobs:
-  local-only-status:
-    uses: ./.github/workflows/_app-deploy.yml
-    secrets: inherit
-    with:
-      app_name: CP Portal
-      app_slug: cp-portal
-      app_root: apps/cp-portal
-      frontend_dir: apps/cp-portal/frontend
-      frontend_lockfile: apps/cp-portal/frontend/package-lock.json
-      publish_dir: local-only-disabled
-      pm2_name: local-only-disabled
-      environment_name: local-only-disabled
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write        # required to mint the OIDC token for federation
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: cp-portal-demo
+          workload_identity_provider: projects/965313610931/locations/global/workloadIdentityPools/github/providers/github-provider
+          service_account: github-deployer@cp-portal-demo.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Stamp the build
+        id: stamp
+        run: |
+          echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Build backend image
+        working-directory: apps/cp-portal/backend
+        run: |
+          gcloud builds submit \
+            --tag="${REGISTRY}/backend:${{ steps.stamp.outputs.sha }}" \
+            --project="${PROJECT_ID}" --region="${REGION}" .
+
+      - name: Build frontend image
+        working-directory: apps/cp-portal/frontend
+        run: |
+          cat > /tmp/cb-web.yaml <<EOF
+          steps:
+            - name: gcr.io/cloud-builders/docker
+              args:
+                - build
+                - --build-arg=BACKEND_URL=${API_URL}
+                - --build-arg=BACKEND_HOST=${API_URL#https://}
+                - -t
+                - ${REGISTRY}/web:${{ steps.stamp.outputs.sha }}
+                - .
+          images:
+            - ${REGISTRY}/web:${{ steps.stamp.outputs.sha }}
+          options:
+            logging: CLOUD_LOGGING_ONLY
+          EOF
+          gcloud builds submit --config=/tmp/cb-web.yaml \
+            --project="${PROJECT_ID}" --region="${REGION}" .
+
+      # BUILD_SHA and BUILD_TIME are already read by the backend and surfaced on
+      # /api/health (PAUD-3 item 1). They were never set, which is why the
+      # running service reported commit "unknown".
+      - name: Deploy backend
+        run: |
+          gcloud run deploy "${API_SERVICE}" \
+            --image="${REGISTRY}/backend:${{ steps.stamp.outputs.sha }}" \
+            --project="${PROJECT_ID}" --region="${REGION}" \
+            --update-env-vars="BUILD_SHA=${{ steps.stamp.outputs.short }},BUILD_TIME=${{ steps.stamp.outputs.built_at }}" \
+            --quiet
+
+      - name: Deploy frontend
+        run: |
+          gcloud run deploy "${WEB_SERVICE}" \
+            --image="${REGISTRY}/web:${{ steps.stamp.outputs.sha }}" \
+            --project="${PROJECT_ID}" --region="${REGION}" \
+            --quiet
+
+      # A deploy that "succeeded" and serves a broken app is the failure mode
+      # this whole standard exists to catch. Assert on the response, and assert
+      # the commit actually changed - not just that the request returned 200.
+      - name: Verify the deployment reports THIS commit
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 10); do
+            body=$(curl -fsS --max-time 30 "${WEB_URL}/api/health" || true)
+            got=$(printf '%s' "$body" | python3 -c 'import json,sys; print(json.load(sys.stdin)["build"]["commit"])' 2>/dev/null || echo "")
+            if [ "$got" = "${{ steps.stamp.outputs.short }}" ]; then
+              echo "health reports commit ${got} — matches this build"
+              printf '%s\n' "$body"
+              exit 0
+            fi
+            echo "attempt $i: health reports '${got}', want '${{ steps.stamp.outputs.short }}'"
+            sleep 10
+          done
+          echo "FAILED: /api/health never reported this commit. The deploy may have"
+          echo "succeeded while traffic still points at an older revision."
+          exit 1
+
+      - name: Verify the admin login page is reachable
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${WEB_URL}/cp-portal/admin/login")
+          [ "$code" = "200" ] || { echo "admin login page returned ${code}"; exit 1; }
+          echo "admin login page 200"
