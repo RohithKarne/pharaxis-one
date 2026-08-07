@@ -63,33 +63,28 @@ jobs:
           echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
-      - name: Build backend image
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-west1-docker.pkg.dev --quiet
+
+      # Built on the runner, not Cloud Build. `gcloud builds submit` needs a GCS
+      # staging bucket and serviceusage.services.use, which failed repeatedly
+      # under Workload Identity Federation even with the roles granted. The
+      # runner already has Docker, so Cloud Build adds a permission surface and
+      # a staging round-trip for nothing.
+      - name: Build and push backend image
         working-directory: apps/cp-portal/backend
         run: |
-          gcloud builds submit \
-            --tag="${REGISTRY}/backend:${{ steps.stamp.outputs.sha }}" \
-            --project="${PROJECT_ID}" --region="${REGION}" .
+          docker build -t "${REGISTRY}/backend:${{ steps.stamp.outputs.sha }}" .
+          docker push "${REGISTRY}/backend:${{ steps.stamp.outputs.sha }}"
 
-      - name: Build frontend image
+      - name: Build and push frontend image
         working-directory: apps/cp-portal/frontend
         run: |
-          cat > /tmp/cb-web.yaml <<EOF
-          steps:
-            - name: gcr.io/cloud-builders/docker
-              args:
-                - build
-                - --build-arg=BACKEND_URL=${API_URL}
-                - --build-arg=BACKEND_HOST=${API_URL#https://}
-                - -t
-                - ${REGISTRY}/web:${{ steps.stamp.outputs.sha }}
-                - .
-          images:
-            - ${REGISTRY}/web:${{ steps.stamp.outputs.sha }}
-          options:
-            logging: CLOUD_LOGGING_ONLY
-          EOF
-          gcloud builds submit --config=/tmp/cb-web.yaml \
-            --project="${PROJECT_ID}" --region="${REGION}" .
+          docker build \
+            --build-arg="BACKEND_URL=${API_URL}" \
+            --build-arg="BACKEND_HOST=${API_URL#https://}" \
+            -t "${REGISTRY}/web:${{ steps.stamp.outputs.sha }}" .
+          docker push "${REGISTRY}/web:${{ steps.stamp.outputs.sha }}"
 
       # BUILD_SHA and BUILD_TIME are already read by the backend and surfaced on
       # /api/health (PAUD-3 item 1). They were never set, which is why the
