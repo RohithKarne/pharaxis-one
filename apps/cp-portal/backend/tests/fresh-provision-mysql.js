@@ -25,6 +25,16 @@ const fs     = require('fs');
 const path   = require('path');
 
 if (!process.env.MYSQL_HOST) {
+  // Skipping is fine on a laptop with no MySQL. Skipping in CI is not: this is
+  // the only check that proves the schema can actually be built, so a silent
+  // pass would put the green tick back to meaning "it compiled". Fail instead
+  // and make whoever removed the service container deal with it.
+  if (process.env.CI) {
+    console.error('FAILED — MYSQL_HOST is not set, but CI is.');
+    console.error('         The workflow is supposed to provide a MySQL service container.');
+    console.error('         Refusing to skip: that would report success without provisioning anything.');
+    process.exit(1);
+  }
   console.log('SKIPPED — MYSQL_HOST is not set, so there is no server to provision against.');
   console.log('          This check runs in CI, where a MySQL service is provided.');
   process.exit(0);

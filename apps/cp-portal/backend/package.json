@@ -12,6 +12,7 @@
     "test:api": "node tests/api-integration.js",
     "test:provision": "node tests/fresh-provision.js",
     "test:provision:mysql": "node tests/fresh-provision-mysql.js",
+    "test:unit": "node tests/paud2-remediation.js && node tests/pd2-ae-screening.js && node tests/sso-config-check.js && node tests/cp65-translation-gate.js",
     "migrate:utc": "node scripts/migrate-timestamps-to-utc.js"
   },
   "dependencies": {
