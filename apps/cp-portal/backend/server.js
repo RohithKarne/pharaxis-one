@@ -110,7 +110,14 @@ app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin '${origin}' not allowed`));
+    // CP-88: a refused origin is the caller's error, not ours. Without an explicit
+    // status the handler falls back to 500, answers "Server error." and raises a
+    // Sentry exception — letting anyone drive our error volume with a header.
+    // SEC: the message echoes only the origin the caller already sent, bounded in
+    // length. It must never name what IS allowed.
+    const denied = new Error(`Origin '${String(origin).slice(0, 100)}' is not allowed.`);
+    denied.statusCode = 403;
+    callback(denied);
   },
   credentials: true,
 }));
