@@ -39,7 +39,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "jsdom": "^28.1.0",
-    "postcss": "^8.5.12",
+    "postcss": "^8.5.26",
     "vite": "^8.0.16",
     "vitest": "^4.0.18"
   }
