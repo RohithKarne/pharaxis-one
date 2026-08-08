@@ -114,6 +114,29 @@ Source: <publisher> — <title>, <full URL>, read <run date>
 
 ---
 
+## 3A. The story is split — a description plus four comments
+
+> **Learned the hard way on the first run, 8 Aug 2026.** The routine created the epic (`CPPM-1`) and then **produced no story at all**, leaving `STORY-KEY-PENDING` stranded in the epic. **A Jira description is capped at 32,000 characters** and the full exercise — five blocks, a fifteen-row panel, a fourteen-row rubric, six phases, sealed blocks, worked examples — does not fit in one.
+
+| Where | What it holds | Cap |
+|---|---|---|
+| **Story description** | Header · the six-phase map · Blocks 1–3 · Block 4 as a *list* · Block 5 rubric · the panel · two-hat rule · questions rule · promotion bridge · footer | target **under 25,000** |
+| **Comment 1** | *Worked examples — reference. Read before Phase 2.* | 32,000 |
+| **Comment 2** | *SEALED — Phase 3 (Sizing).* | 32,000 |
+| **Comment 3** | *SEALED — Phase 4 (Change request).* | 32,000 |
+| **Comment 4** | *Engineering evidence — for the panel.* **The only place code-level detail is permitted.** | 32,000 |
+
+**Never truncate a section to make it fit — move it to a comment and say so.** If a comment would itself exceed the cap, split it and number the parts in the heading.
+
+**Sealing is now physically separate as well as honour-based** — Phases 3 and 4 are not in the text the analyst is working from.
+
+**Two other defects from the same run, both fixed:**
+
+1. **The routine had no `editJiraIssue`** in its tool list, so it could not write the story key back into the epic. Added.
+2. **The duplicate guard could not tell an abandoned round from a finished one.** It now distinguishes three cases — no epic today → proceed; epic **with** a story → stop; epic **without** a story → **resume**, reusing that epic and keeping the scenario it already committed to.
+
+---
+
 ## 4. The story — six phases
 
 The story is **phased, with sealed blocks.** The analyst reads a short opening; the rest unfolds as he works. Sealed content is written into the ticket at creation inside a collapsed panel headed exactly:

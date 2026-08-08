@@ -19,7 +19,7 @@
 > Revision update: 2026-08-07 (**Every SOP is now this file.** Sections 41–45 added — the five per-app SOPs (`apps/cp-portal/CP_MEMORY_SOP.md`, `apps/mims/MIMS_MEMORY_SOP.md`, `apps/vault/VAULT_MEMORY_SOP.md`, `apps/qms/QMS_MEMORY_SOP.md`, `apps/ai-agent/AI_AGENT_MEMORY_SOP.md`) absorbed verbatim and deleted, on Rohith's instruction. Content is unchanged; only heading levels were demoted to nest under their sections, and two now-dead cross-references between the CP Portal and MIMS SOPs were repointed to §41 and §42. Each app section keeps its own update protocol. **This supersedes the standing rule that each app holds its own SOP file** (set 2026-04-06). **Anirudh takes Cloud Engineer alongside Solution Architect** — he now owns monitoring and incident response, Section 38 steps 21 and 22, which had no owner before today. Section 5 and §39.3 updated.)
 > Revision update: 2026-08-07 (**Section 38 corrected the same day it was written.** The first version showed 15 steps and QA exactly once — the failing test. Rohith caught it: the failing test is a developer discipline, not the QA function's work, and Sections 15, 17, 18, 22 and 29 already specified a validation lifecycle the flow represented none of. Now 23 steps across six phases, with QA at six of them. **Rohith decided QA executes after the merge and before the deploy** — `main` is integrated, the release is what QA gates. Section 38.2 added: three change classes, because a process demanding 23 steps for a typo is a process people route around.)
 > Revision update: 2026-08-07 (**Consolidated into a single SOP on Rohith's instruction.** Section 38 added — Source Control & Change Delivery Standard, written after branch protection was enabled on `main` and we found that every pull request in the repository's history had been raised by dependabot. Section 39 added — absorbs `docs/live-communication-use-and-format.md`, now deleted; citations of "the comms doc §3" mean §39.3 and "§2D" means §39.5. Section 40 added — absorbs `docs/workflow_orchestration.md`, now deleted, which had no inbound references and two rules that had drifted from practice; both corrections are stated in the section. **Sections 1–37 are unchanged and deliberately not renumbered** — §26 alone is cited 49 times across the repository and inside live cloud routine prompts. `CLAUDE.md` remains at the repository root because Claude Code loads it at session start; it is now a pointer to this SOP, not a second rulebook.)
-> Revision update: 2026-08-08 (Section 46 added — CP-PM Product Management Training Routine. Mandated by Rohith Karne. A seventh cloud agent sets **one product management exercise per run** on real CP Portal code and withholds the answer; the analyst is Rohith, training toward Product Owner and Product Manager. **CP Portal only**, files to Jira project `CPPM`. Manual, like the other six. **Scenario sources are our own code *and* public web research** — regulation, standards, industry practice, adjacent product documentation — added the same day on Rohith's instruction, because code alone yields too narrow a feature pool; the two-source rule keeps our own code as the anchor for the as-is. Governance lives here; the operational prompt lives in `docs/CP_PM.md`. **Two decisions inside the same day reversed each other and both are recorded:** training tickets were first ruled never to become real work, then Rohith decided that **what the analyst specifies gets built and shipped** — against Vasu's and Sarvanan's advice. The promotion bridge in §46 is what makes that safe: the `CPPM` story is a draft, a re-issued `CP` ticket is the controlled specification, and no `TRN-` identifier ever crosses. **Consequence stated: CP Portal reopens to feature development**, which §41 currently records as hotfix-only.)
+> Revision update: 2026-08-08 (Section 46 added — CP-PM Product Management Training Routine. Mandated by Rohith Karne. A seventh cloud agent sets **one product management exercise per run** on real CP Portal code and withholds the answer; the analyst is Rohith, training toward Product Owner and Product Manager. **CP Portal only**, files to Jira project `CPPM`. Manual, like the other six. **Scenario sources are our own code *and* public web research** — regulation, standards, industry practice, adjacent product documentation — added the same day on Rohith's instruction, because code alone yields too narrow a feature pool; the two-source rule keeps our own code as the anchor for the as-is. Governance lives here; the operational prompt lives in `docs/CP_PM.md`. **Two decisions inside the same day reversed each other and both are recorded:** training tickets were first ruled never to become real work, then Rohith decided that **what the analyst specifies gets built and shipped** — against Vasu's and Sarvanan's advice. The promotion bridge in §46 is what makes that safe: the `CPPM` story is a draft, a re-issued `CP` ticket is the controlled specification, and no `TRN-` identifier ever crosses. **Consequence stated: CP Portal reopens to feature development** — §41 updated the same day, on Rohith's confirmation, from *STABLE, hotfix support only* to **ACTIVE FEATURE DEVELOPMENT**, so §41 and §46 agree.)
 > Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
 
 ---
@@ -2914,7 +2914,7 @@ retires it.
 
 > **Purpose:** Single source of truth for the CP Portal project. Intended for any developer, QA engineer, or team member who needs to onboard or resume work without requiring verbal explanation.
 > **Scope:** CP Portal only. MIMS is documented separately in §42.
-> **Current Status:** STABLE — hotfix support only. No active feature development unless explicitly directed by Rohith.
+> **Current Status:** ACTIVE FEATURE DEVELOPMENT (set 2026-08-08 by Rohith). Reopened from hotfix-only when §46 introduced the CP-PM training routine, whose analyst-specified work gets built and shipped.
 > **Update Protocol:** This file is only updated when Rohith explicitly confirms. Rohith says "Bala, update the CP Memory SOP — [what changed]" and Bala updates it. No one else modifies this file. Each update adds a version note below.
 
 ---
@@ -2941,7 +2941,9 @@ CP Portal has two apps in one codebase:
 CP Portal sends MI/AE/PC submissions to MIMS as cases — LIVE since 2026-07 (see Version History 2026-07-15). Outbound: `syncToIntegration` in `backend/routes/portal/submit.js` posts to MIMS `POST /api/v1/cases` with OAuth client-credentials auth (`services/mimsAuth.js`), forwards attachments, and is idempotent on the CP reference. Inbound: `services/mimsCloseSync.js` polls MIMS case status and auto-closes CP inquiries. Admin config lives on the Integration page (credentials, field mapping, test connection) plus the Sync Health page (status tiles, failed syncs, manual retry). `other_inquiry` stays CP-only by design.
 
 **Active status:**
-CP Portal is in maintenance mode. MIMS is the active development priority. CP Portal receives hotfix support only when explicitly required by Rohith.
+CP Portal is in **active feature development** (set 2026-08-08 by Rohith). It was maintenance-only until §46
+reopened it: the CP-PM routine's analyst-specified work is built and shipped, so CP Portal needs a development
+path rather than a hotfix path. MIMS remains a development priority alongside it, not ahead of it.
 
 ---
 
@@ -4972,6 +4974,20 @@ The routine draws on **two source families**, and this matches the standard the 
 
 **Never invent a URL, a clause number, a standard reference or a quotation.** Not read this run means not cited. A competitor's public documentation is evidence of what such products do — **never** of anyone using ours. And an externally-sourced idea raises the odds of proposing something CP Portal already has, so the code is searched first and the search is stated.
 
+### One story, four comments — and what the first run taught us
+
+> **Recorded openly, 2026-08-08, the day the routine was built.** Rohith fired the first round within two minutes of it being created. It produced the epic (`CPPM-1`) and **no story at all**, stranding a `STORY-KEY-PENDING` placeholder. Three defects, all ours, all in the routine's design rather than the agent's execution:
+
+| Defect | Fix |
+|---|---|
+| **A Jira description is capped at 32,000 characters** and the full exercise does not fit in one | The story is **split** — description (target under 25,000) plus **four comments**: worked examples · sealed Phase 3 · sealed Phase 4 · engineering evidence. **Never truncate to fit; move it to a comment and say so** |
+| **The routine could not write the story key back into the epic** — `editJiraIssue` was not in its tool list | Added |
+| **The duplicate guard could not tell an abandoned round from a finished one**, so a re-fire would have been blocked by the very epic the failed run left behind | Three cases now: no epic today → proceed; epic **with** a story → stop; epic **without** a story → **resume**, reusing that epic and keeping the scenario it already committed to |
+
+The run also **broke Rule Zero once** — the epic named a repository folder when describing which surface the exercise covered. Rule Zero did not exist when it ran; a resume run repairs it.
+
+**And it confirmed the web limit by experiment rather than inheritance:** three fetches, three domains (EMA, eCFR, W3C), all refused. That is now written into the prompt as a confirmed finding with the date.
+
 ### The ladder
 
 | Level | Role | Produces |
@@ -5031,7 +5047,7 @@ Every grade closes with **one** thing to do differently next time.
 >
 > **Vasu Ranabothu and Sarvanan both advised against it.** Sarvanan's finding: a document labelled *training* becoming the requirements baseline for a released change is a lifecycle problem, not a labelling one — *requirements documentation of unverified provenance entering the validated lifecycle*. Vasu's position was the same. Rohith decided otherwise, in the open, and the disagreement is recorded rather than smoothed (§39.6, §33 rule 5).
 
-The consequence is accepted and stated: **CP Portal reopens to feature development.** §41 records it as STABLE, hotfix-only, *"no active feature development unless explicitly directed by Rohith"* — this is that direction, and §41's status line will need Rohith's confirmation to update.
+The consequence is accepted and stated: **CP Portal reopens to feature development.** §41 had recorded it as STABLE, hotfix-only, *"no active feature development unless explicitly directed by Rohith"* — this was that direction. **Rohith confirmed it on 2026-08-08 and §41 now reads ACTIVE FEATURE DEVELOPMENT**, so the two sections agree.
 
 The bridge that makes (b) safe is not optional:
 
