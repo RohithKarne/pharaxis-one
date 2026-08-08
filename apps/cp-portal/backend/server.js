@@ -99,6 +99,13 @@ const ALLOWED_ORIGINS = process.env.CP_CORS_ORIGINS
      // an unencrypted origin. Serve deployed environments over HTTPS only.
      'https://13.205.213.128'];
 
+// First middleware, deliberately. A request rejected by the CORS origin callback
+// below reaches nothing else, so registering this after `cors` meant those 500s
+// were logged — and answered — with `request_id: null`. That is the one case
+// where a correlation id matters most, because no route ever ran to leave a
+// trace. It reads one header and sets one field, so nothing here depends on it.
+app.use(attachRequestContext);
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
@@ -111,7 +118,6 @@ app.use(applySecurityHeaders);
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: true, limit: '200kb', parameterLimit: 1000 }));
 app.use(cookieParser());
-app.use(attachRequestContext);
 app.use('/api', apiLimiter);
 app.use('/api', inputSecurity);
 
