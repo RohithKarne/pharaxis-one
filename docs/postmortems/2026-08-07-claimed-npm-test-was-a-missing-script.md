@@ -126,16 +126,23 @@ What this leaves, stated plainly rather than presented as a fix:
   `routes/admin/auth.js`, `✗ T1`, `✗ T2`, exit 1 — but **nothing runs it automatically.**
 - CLAUDE.md rates an unrun test in the repository as worse than no test, because it reads as
   evidence to an auditor and is not. That judgement stands and is not being argued with here.
-  It is recorded as a known, accepted debt with a ticket owed, rather than resolved by a
+  It is recorded as a known, accepted debt under **CP-87**, rather than resolved by a
   fourth attempt at the thing that failed three times.
 
-Owed, and now the substance of the follow-up rather than a footnote:
+**Filed: [CP-87](https://rohithkarne.atlassian.net/browse/CP-87)** — *CP Portal's Unit Tests
+job runs the syntax check, not tests — all five backend test files gate nothing.* §37.1
+requires this postmortem to end in a ticket; that is the ticket. Suggested owner Anirudh
+(§5, CI pipeline and its gates). Raised as a §26 candidate, not authorised work.
+
+What CP-87 carries, and why it is one ticket rather than three:
 
 - **The other four apps have the same shape.** MIMS, Vault, QMS and AI Agent each declare
   `test_command: npm test` against an `app_root` package, and each runs in a job that
   installs `app_lockfile` only. Whether any resolves to something that runs real tests is
   unverified — and is not being asserted here, since asserting exactly this without reading
-  the job logs is what caused this postmortem. Ticket owed.
+  the job logs is what caused this postmortem. **Deliberately outside CP-87**, which is
+  scoped to CP Portal and says so; a claim about four unread pipelines is what this document
+  exists to warn against. Separate ticket owed, after someone reads those four job logs.
 - **`unit-tests` runs no migrations.** It stands up MySQL, creates the database, grants
   privileges "for migrations and schema checks" — and never migrates. `cp63-data-subject`
   and `cp65-translation-gate` therefore cannot pass there. Two real tests in the repository
