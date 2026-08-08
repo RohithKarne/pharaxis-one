@@ -33,13 +33,19 @@ async function ensureMigrationTable() {
 
 async function runMigrations({ logger = console } = {}) {
   await ensureMigrationTable()
-  const [appliedRows] = await pool.query('SELECT filename FROM cp_schema_migrations')
-  const applied = new Set(appliedRows.map(row => row.filename))
   const files = fs.readdirSync(migrationsDir).filter(file => file.endsWith('.sql')).sort()
 
   let appliedCount = 0
   for (const file of files) {
-    if (applied.has(file)) {
+    // Checked per file rather than from one snapshot taken before the loop: the
+    // 0000 baseline records 0002-0012 as applied while it runs, and a snapshot
+    // taken beforehand would not contain those rows, so those migrations would
+    // run anyway on a fresh database and fail on duplicate columns.
+    const [[alreadyApplied]] = await pool.query(
+      'SELECT 1 AS applied FROM cp_schema_migrations WHERE filename = ? LIMIT 1',
+      [file]
+    )
+    if (alreadyApplied) {
       if (logger?.log) logger.log(`skip ${file}`)
       continue
     }

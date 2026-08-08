@@ -10,6 +10,8 @@
     "test:static": "node tests/syntax-check.js",
     "test:smoke": "node tests/smoke-health.js",
     "test:api": "node tests/api-integration.js",
+    "test:provision": "node tests/fresh-provision.js",
+    "test:provision:mysql": "node tests/fresh-provision-mysql.js",
     "migrate:utc": "node scripts/migrate-timestamps-to-utc.js"
   },
   "dependencies": {
