@@ -12,6 +12,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { encryptSecret, decryptSecret } = require('../../utils/secretCrypto');
 const sso = require('../../services/ssoService');
+const log = require('../../utils/logger');
 
 // Providers we support. The UI always shows both slots (configured or empty).
 const SUPPORTED = [
@@ -59,6 +60,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       providers,
     });
   } catch (err) {
+    log.error('admin.sso.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -120,6 +122,7 @@ router.put('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 
     res.json({ message: 'SSO configuration saved.' });
   } catch (err) {
+    log.error('admin.sso.error', { err, route: 'PUT /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

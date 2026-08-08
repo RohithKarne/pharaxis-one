@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
 
@@ -23,6 +24,7 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
       return { ...r, therapeutic_areas: tas };
     }) });
   } catch (err) {
+    log.error('admin.msls.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -38,6 +40,7 @@ router.post('/:clientId', authenticateAdmin, async (req, res) => {
     await audit(req.admin, req.params.clientId, 'CREATE', 'msl', info.insertId, { name });
     res.status(201).json({ id: info.insertId, message: 'MSL created.' });
   } catch (err) {
+    log.error('admin.msls.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -59,6 +62,7 @@ router.patch('/:clientId/:id', authenticateAdmin, async (req, res) => {
     await audit(req.admin, req.params.clientId, 'UPDATE', 'msl', req.params.id, {});
     res.json({ message: 'MSL updated.' });
   } catch (err) {
+    log.error('admin.msls.error', { err, route: 'PATCH /:clientId/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -69,6 +73,7 @@ router.delete('/:clientId/:id', authenticateAdmin, async (req, res) => {
     await audit(req.admin, req.params.clientId, 'DELETE', 'msl', req.params.id, {});
     res.json({ message: 'MSL deactivated.' });
   } catch (err) {
+    log.error('admin.msls.error', { err, route: 'DELETE /:clientId/:id', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -89,6 +94,7 @@ router.get('/:clientId/bookings', authenticateAdmin, async (req, res) => {
     `, [req.params.clientId]);
     res.json({ bookings });
   } catch (err) {
+    log.error('admin.msls.error', { err, route: 'GET /:clientId/bookings', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -109,6 +115,7 @@ router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res)
     await audit(req.admin, req.params.clientId, 'UPDATE', 'msl_booking', req.params.bookingId, { status });
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.msls.error', { err, route: 'PUT /:clientId/bookings/:bookingId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -120,6 +127,7 @@ router.delete('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, r
     await audit(req.admin, req.params.clientId, 'DELETE', 'msl_booking', req.params.bookingId, {});
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.msls.error', { err, route: 'DELETE /:clientId/bookings/:bookingId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -134,7 +142,10 @@ router.get('/:clientId/:mslId/slots', authenticateAdmin, async (req, res) => {
        FROM cp_msl_slots WHERE client_id = ? AND msl_id = ? ORDER BY starts_at ASC`,
       [req.params.clientId, req.params.mslId]);
     res.json({ slots });
-  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+  } catch (err) {
+    log.error('admin.msls.error', { err, route: 'GET /:clientId/:mslId/slots', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // POST /api/admin/msls/:clientId/:mslId/slots — add a bookable slot
@@ -150,7 +161,10 @@ router.post('/:clientId/:mslId/slots', authenticateAdmin, async (req, res) => {
       [req.params.clientId, req.params.mslId, starts_at, ends_at]);
     await audit(req.admin, req.params.clientId, 'CREATE', 'msl_slot', info.insertId, { msl_id: req.params.mslId });
     res.status(201).json({ id: info.insertId, message: 'Slot added.' });
-  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+  } catch (err) {
+    log.error('admin.msls.error', { err, route: 'POST /:clientId/:mslId/slots', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // DELETE /api/admin/msls/:clientId/slots/:slotId — remove an unbooked slot
@@ -161,7 +175,10 @@ router.delete('/:clientId/slots/:slotId', authenticateAdmin, async (req, res) =>
     if (slot.is_booked) return res.status(409).json({ error: 'Cannot delete a booked slot.' });
     await pool.execute('DELETE FROM cp_msl_slots WHERE id = ? AND client_id = ?', [req.params.slotId, req.params.clientId]);
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
+  } catch (err) {
+    log.error('admin.msls.error', { err, route: 'DELETE /:clientId/slots/:slotId', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 module.exports = router;

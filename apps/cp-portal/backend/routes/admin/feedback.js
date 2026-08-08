@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 // GET /api/admin/feedback/:clientId — paginated feedback list with avg rating
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -32,6 +33,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 
     res.json({ feedback: rows, avg_rating: avg || null, total, page, limit });
   } catch (err) {
+    log.error('admin.feedback.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -42,6 +44,7 @@ router.delete('/:clientId/:feedbackId', authenticateAdmin, requireClientAccess, 
     await pool.execute('DELETE FROM cp_feedback WHERE id = ? AND client_id = ?', [req.params.feedbackId, req.params.clientId]);
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.feedback.error', { err, route: 'DELETE /:clientId/:feedbackId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

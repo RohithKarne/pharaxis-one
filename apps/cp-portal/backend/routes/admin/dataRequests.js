@@ -9,6 +9,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const { eraseUser } = require('../../services/dataSubject');
+const log = require('../../utils/logger');
 
 // GET /api/admin/data-requests/:clientId — the queue (pending first, newest first)
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -24,6 +25,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     );
     res.json({ requests: rows });
   } catch (err) {
+    log.error('admin.dataRequests.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -50,6 +52,7 @@ router.post('/:clientId/:requestId/fulfill', authenticateAdmin, requireClientAcc
 
     res.json({ status: 'fulfilled', summary });
   } catch (err) {
+    log.error('admin.dataRequests.error', { err, route: 'POST /:clientId/:requestId/fulfill', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -70,6 +73,7 @@ router.post('/:clientId/:requestId/reject', authenticateAdmin, requireClientAcce
 
     res.json({ status: 'rejected' });
   } catch (err) {
+    log.error('admin.dataRequests.error', { err, route: 'POST /:clientId/:requestId/reject', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

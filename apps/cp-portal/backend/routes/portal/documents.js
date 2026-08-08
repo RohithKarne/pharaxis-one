@@ -11,6 +11,7 @@ const { applyTranslation } = require('../../utils/translator');
 const path = require('path');
 const fs   = require('fs');
 const http = require("http");
+const log = require('../../utils/logger');
 
 function httpPost(url, headers, body) {
   return new Promise((resolve, reject) => {
@@ -85,6 +86,7 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
 
     res.json({ documents: filtered, categories });
   } catch (err) {
+    log.error('portal.documents.error', { err, route: 'GET /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -125,18 +127,24 @@ router.post('/ai-search', authenticatePortal, requirePortalAuth, async (req, res
     let aiResponse;
     try {
       aiResponse = await httpPost("http://localhost:6000/api/v1/agent/query", { "Content-Type": "application/json", "Authorization": "Bearer " + process.env.AI_AGENT_INTERNAL_TOKEN }, JSON.stringify({ org_id: client.id, app_source: "cp_portal", query_type: "document_search", payload: { query, context: { documents: context } } }));
-    } catch (_) {
+    } catch (err) {
+      // Degradation, not a server error — the caller still gets 200. Logged at
+      // warn so the operator can tell the AI agent is unreachable; without this
+      // the whole feature can be down with nothing recorded anywhere.
+      log.warn('portal.documents.ai_unavailable', { err, reason: 'agent_unreachable', route: 'POST /ai-search', request_id: req.requestId || null });
       return res.json({ ai_unavailable: true, results: [] });
     }
 
     if (!aiResponse.ok) {
+      log.warn('portal.documents.ai_unavailable', { reason: 'agent_status', status: aiResponse.status, route: 'POST /ai-search', request_id: req.requestId || null });
       return res.json({ ai_unavailable: true, results: [] });
     }
 
     let aiJson;
     try {
       aiJson = await aiResponse.json();
-    } catch (_) {
+    } catch (err) {
+      log.warn('portal.documents.ai_unavailable', { err, reason: 'agent_bad_json', route: 'POST /ai-search', request_id: req.requestId || null });
       return res.json({ ai_unavailable: true, results: [] });
     }
 
@@ -184,7 +192,8 @@ router.post('/ai-search', authenticatePortal, requirePortalAuth, async (req, res
       .filter(Boolean);
 
     return res.json({ results });
-  } catch (_) {
+  } catch (err) {
+    log.error('portal.documents.error', { err, route: 'POST /ai-search', path: req.path, request_id: req.requestId || null });
     return res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -218,6 +227,7 @@ router.get('/:docId/download', authenticatePortal, requirePortalAuth, async (req
     res.setHeader('Content-Type', doc.mime_type);
     fs.createReadStream(filePath).pipe(res);
   } catch (err) {
+    log.error('portal.documents.error', { err, route: 'GET /:docId/download', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 // GET /api/admin/analytics/:clientId
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -56,6 +57,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
       recent_activity:   recentActivity,
     });
   } catch (err) {
+    log.error('admin.analytics.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -107,6 +109,7 @@ router.get('/:clientId/export', authenticateAdmin, requireClientAccess, async (r
     res.setHeader('Content-Disposition', `attachment; filename="analytics-${client.code}-${new Date().toISOString().slice(0,10)}.csv"`);
     res.send(csv);
   } catch (err) {
+    log.error('admin.analytics.error', { err, route: 'GET /:clientId/export', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

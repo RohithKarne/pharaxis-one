@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 // POST /api/portal/feedback/:clientCode
 router.post('/:clientCode', authenticatePortal, async (req, res) => {
@@ -31,6 +32,7 @@ router.post('/:clientCode', authenticatePortal, async (req, res) => {
 
     res.status(201).json({ ok: true, message: 'Thank you for your feedback!' });
   } catch (err) {
+    log.error('portal.feedback.error', { err, route: 'POST /:clientCode', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

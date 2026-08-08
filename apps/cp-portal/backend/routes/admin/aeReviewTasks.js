@@ -20,6 +20,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const log = require('../../utils/logger');
 
 const OUTCOMES = ['reviewed_not_ae', 'cleared_administrative'];
 const CLINICAL_ROLES = ['safety_reviewer', 'superadmin'];
@@ -43,6 +44,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     );
     res.json({ items: rows });
   } catch (err) {
+    log.error('admin.aeReviewTasks.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -56,6 +58,7 @@ router.get('/:clientId/count', authenticateAdmin, requireClientAccess, async (re
     );
     res.json({ count: row.cnt });
   } catch (err) {
+    log.error('admin.aeReviewTasks.error', { err, route: 'GET /:clientId/count', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -106,6 +109,7 @@ router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, 
 
     res.json({ message: 'Task closed.' });
   } catch (err) {
+    log.error('admin.aeReviewTasks.error', { err, route: 'POST /:clientId/:taskId/close', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

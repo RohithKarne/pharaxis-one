@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
 
@@ -23,6 +24,7 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
     }
     res.json({ compliance: row });
   } catch (err) {
+    log.error('admin.compliance.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -69,6 +71,7 @@ router.patch('/:clientId', authenticateAdmin, async (req, res) => {
     await audit(req.admin, clientId, 'UPDATE', 'compliance', clientId, { jurisdictions, version });
     res.json({ compliance: updated });
   } catch (err) {
+    log.error('admin.compliance.error', { err, route: 'PATCH /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -96,6 +99,7 @@ router.post('/:clientId/trigger-reconsent', authenticateAdmin, async (req, res) 
     await audit(req.admin, clientId, 'TRIGGER_RECONSENT', 'compliance', clientId, { old_version: current, new_version: newVersion })
     res.json({ ok: true, new_version: newVersion, message: `Re-acceptance triggered. All portal users will be prompted to re-consent (version ${newVersion}).` })
   } catch (err) {
+    log.error('admin.compliance.error', { err, route: 'POST /:clientId/trigger-reconsent', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' })
   }
 })
@@ -120,6 +124,7 @@ router.get('/:clientId/consent-records', authenticateAdmin, async (req, res) => 
 
     res.json({ records, total, page, limit });
   } catch (err) {
+    log.error('admin.compliance.error', { err, route: 'GET /:clientId/consent-records', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

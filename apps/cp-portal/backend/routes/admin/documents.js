@@ -36,6 +36,7 @@ const { validateContent } = require('../../utils/fileValidation');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
+const log = require('../../utils/logger');
 
 // SEC-03: only allow safe document MIME types
 const ALLOWED_MIMES = [
@@ -76,6 +77,7 @@ router.get('/:clientId/categories', authenticateAdmin, requireClientAccess, asyn
     const [rows] = await pool.execute('SELECT * FROM cp_document_categories WHERE client_id = ? ORDER BY sort_order ASC', [req.params.clientId]);
     res.json({ categories: rows });
   } catch (err) {
+    log.error('admin.documents.error', { err, route: 'GET /:clientId/categories', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -93,6 +95,7 @@ router.post('/:clientId/categories', authenticateAdmin, requireClientAccess, asy
       res.status(409).json({ error: 'Category already exists.' });
     }
   } catch (err) {
+    log.error('admin.documents.error', { err, route: 'POST /:clientId/categories', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -109,6 +112,7 @@ router.put('/:clientId/categories/:catId', authenticateAdmin, requireClientAcces
     await pool.execute(`UPDATE cp_document_categories SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.documents.error', { err, route: 'PUT /:clientId/categories/:catId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -119,6 +123,7 @@ router.delete('/:clientId/categories/:catId', authenticateAdmin, requireClientAc
     await pool.execute('DELETE FROM cp_document_categories WHERE id = ? AND client_id = ?', [req.params.catId, req.params.clientId]);
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.documents.error', { err, route: 'DELETE /:clientId/categories/:catId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -138,6 +143,7 @@ router.get('/:clientId/expiring', authenticateAdmin, requireClientAccess, async 
     `, [req.params.clientId]);
     res.json({ expiring: rows });
   } catch (err) {
+    log.error('admin.documents.error', { err, route: 'GET /:clientId/expiring', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -203,6 +209,7 @@ router.post('/:clientId/expiry-alerts/send', authenticateAdmin, requireClientAcc
     if (sent === 0) return res.status(502).json({ error: 'Email config not active or send failed. Check Email Settings.' });
     res.json({ message: `Alert sent to ${sent} admin(s) for ${expiring.length} document(s).` });
   } catch (err) {
+    log.error('admin.documents.error', { err, route: 'POST /:clientId/expiry-alerts/send', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -226,6 +233,7 @@ router.post('/:clientId/bulk', authenticateAdmin, requireClientAccess, async (re
     await audit(req.admin, req.params.clientId, `BULK_${action.toUpperCase()}`, 'document', null, { ids });
     res.json({ ok: true, affected: ids.length });
   } catch (err) {
+    log.error('admin.documents.error', { err, route: 'POST /:clientId/bulk', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -238,6 +246,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     const [rows] = await pool.execute('SELECT * FROM cp_documents WHERE client_id = ? ORDER BY created_at DESC', [req.params.clientId]);
     res.json({ documents: rows });
   } catch (err) {
+    log.error('admin.documents.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -286,6 +295,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       autoTranslate(req.params.clientId, 'cp_documents', doc.id, { title }).catch(() => {});
       res.json({ document: doc });
     } catch (e) {
+      log.error('admin.documents.error', { err: e, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
       res.status(500).json({ error: 'Server error.' });
     }
   });
@@ -331,6 +341,7 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     if (req.body.title) autoTranslate(req.params.clientId, 'cp_documents', req.params.docId, { title: req.body.title }).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.documents.error', { err, route: 'PUT /:clientId/:docId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -342,6 +353,7 @@ router.delete('/:clientId/:docId', authenticateAdmin, requireClientAccess, async
     await audit(req.admin, req.params.clientId, 'DELETE', 'document', req.params.docId, {});
     res.json({ ok: true });
   } catch (err) {
+    log.error('admin.documents.error', { err, route: 'DELETE /:clientId/:docId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

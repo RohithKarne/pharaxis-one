@@ -6,6 +6,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 // GET /api/admin/audit/:clientId?page=1&limit=50&entity=branding&action=UPDATE&from=2026-01-01&to=2026-12-31
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -38,6 +39,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 
     res.json({ records, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (err) {
+    log.error('admin.audit.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

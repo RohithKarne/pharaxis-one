@@ -10,6 +10,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 // GET /api/admin/review-queue/:clientId/count — fast badge count
 router.get('/:clientId/count', authenticateAdmin, requireClientAccess, async (req, res) => {
@@ -25,6 +26,7 @@ router.get('/:clientId/count', authenticateAdmin, requireClientAccess, async (re
     );
     res.json({ count: newsRow.cnt + docRow.cnt });
   } catch (err) {
+    log.error('admin.reviewQueue.error', { err, route: 'GET /:clientId/count', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -54,6 +56,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     const items = [...newsItems, ...docItems].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
     res.json({ items });
   } catch (err) {
+    log.error('admin.reviewQueue.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

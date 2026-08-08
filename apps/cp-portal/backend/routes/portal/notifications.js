@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 // GET /api/portal/notifications?clientCode=xxx
 router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
@@ -25,6 +26,7 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
     const unread_count = notifications.filter(n => !n.is_read).length;
     res.json({ notifications, unread_count });
   } catch (err) {
+    log.error('portal.notifications.error', { err, route: 'GET /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -41,6 +43,7 @@ router.patch('/read-all', authenticatePortal, requirePortalAuth, async (req, res
       [req.portalUser.id, client.id]);
     res.json({ ok: true });
   } catch (err) {
+    log.error('portal.notifications.error', { err, route: 'PATCH /read-all', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -52,6 +55,7 @@ router.patch('/:id/read', authenticatePortal, requirePortalAuth, async (req, res
       [req.params.id, req.portalUser.id]);
     res.json({ ok: true });
   } catch (err) {
+    log.error('portal.notifications.error', { err, route: 'PATCH /:id/read', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

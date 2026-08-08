@@ -12,6 +12,7 @@ const { pool } = require('../../database/db');
 const { requirePortalAuth, authenticatePortal, PORTAL_SECRET } = require('../../middleware/auth');
 const { sendEmail } = require('../../utils/mailer');
 const sso = require('../../services/ssoService');
+const log = require('../../utils/logger');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' };
 
@@ -43,6 +44,7 @@ router.post('/register', async (req, res) => {
       error: 'Self-registration is disabled. Contact your administrator for account access.',
     });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /register', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -71,6 +73,7 @@ router.post('/login', async (req, res) => {
     res.cookie('cp_portal_token', token, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ user: safe });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /login', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -82,6 +85,7 @@ router.get('/me', authenticatePortal, requirePortalAuth, async (req, res) => {
     const [submissions] = await pool.execute('SELECT id, submission_type, status, external_ref, submitted_at FROM cp_submissions WHERE user_id = ? ORDER BY submitted_at DESC', [req.portalUser.userId]);
     res.json({ user, submissions });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'GET /me', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -100,6 +104,7 @@ router.patch('/confirm-type', authenticatePortal, requirePortalAuth, async (req,
     res.cookie('cp_portal_token', newToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Type confirmed.', user: updated });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'PATCH /confirm-type', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -125,6 +130,7 @@ router.patch('/profile', authenticatePortal, requirePortalAuth, async (req, res)
     // SEC: do not echo the JWT in the response body — it lives only in the httpOnly cookie.
     res.json({ message: 'Profile updated.', user: updated });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'PATCH /profile', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -149,6 +155,7 @@ router.patch('/password', authenticatePortal, requirePortalAuth, async (req, res
     await pool.execute('UPDATE cp_portal_users SET password = ?, token_version = token_version + 1 WHERE id = ?', [hash, req.portalUser.userId]);
     res.json({ message: 'Password updated successfully.' });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'PATCH /password', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -175,6 +182,7 @@ router.post('/verify-email', async (req, res) => {
     res.cookie('cp_portal_token', authToken, { ...COOKIE_OPTS, maxAge: 24 * 60 * 60 * 1000 })
        .json({ message: 'Email verified successfully.', user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, user_type: user.user_type, user_type_confirmed: user.user_type_confirmed } });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /verify-email', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -207,6 +215,7 @@ router.post('/resend-verification', async (req, res) => {
 
     res.json({ message: 'If that email is registered and unverified, a new link has been sent.' });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /resend-verification', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -244,6 +253,7 @@ router.post('/forgot-password', async (req, res) => {
     // Generic response regardless of whether the account exists — prevents enumeration.
     res.json({ message: 'If that email is registered, a password reset link has been sent.' });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /forgot-password', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -270,6 +280,7 @@ router.post('/reset-password', async (req, res) => {
     );
     res.json({ message: 'Your password has been reset. You can now sign in.' });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'POST /reset-password', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -287,6 +298,7 @@ router.get('/sso/providers', async (req, res) => {
     const options = await sso.getPublicLoginOptions(client.id, client.code);
     res.json(options || { providers: [], local_login_allowed: true, sso_login_allowed: false });
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'GET /sso/providers', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -318,6 +330,7 @@ router.get('/sso/:provider/start', async (req, res) => {
     const url = await sso.buildAuthorizationUrl(client.id, providerKey, state, nonce);
     res.redirect(url);
   } catch (err) {
+    log.error('portal.auth.error', { err, route: 'GET /sso/:provider/start', path: req.path, request_id: req.requestId || null });
     res.status(500).send('Unable to start SSO sign-in.');
   }
 });

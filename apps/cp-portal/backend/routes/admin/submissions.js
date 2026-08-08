@@ -10,6 +10,7 @@ const path    = require('path');
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const log = require('../../utils/logger');
 
 // GET /api/admin/submissions/:clientId
 // Returns submissions with optional filter by submission_type and status
@@ -78,6 +79,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 
     res.json({ submissions: rows, counts, total: total?.n || 0 });
   } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -145,6 +147,7 @@ router.get('/:clientId/export', authenticateAdmin, requireClientAccess, async (r
     res.setHeader('Content-Disposition', `attachment; filename="submissions-${req.params.clientId}-${stamp}.csv"`);
     res.send(csv);
   } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'GET /:clientId/export', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -162,6 +165,7 @@ router.get('/:clientId/attachments/:attachmentId', authenticateAdmin, requireCli
     res.setHeader('Content-Disposition', `${req.query.disposition === 'inline' ? 'inline' : 'attachment'}; filename="${att.file_name}"`);
     fs.createReadStream(abs).pipe(res);
   } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'GET /:clientId/attachments/:attachmentId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -183,6 +187,7 @@ router.patch('/:clientId/:submissionId', authenticateAdmin, requireClientAccess,
     await audit(req.admin, req.params.clientId, 'STATUS_CHANGED', 'submission', req.params.submissionId, { status });
     res.json({ message: 'Status updated.' });
   } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'PATCH /:clientId/:submissionId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -203,6 +208,7 @@ router.get('/:clientId/sync-health', authenticateAdmin, requireClientAccess, asy
     failures.forEach(f => { f.reference = `CP-${String(f.id).padStart(6, '0')}`; });
     res.json({ counts: byStatus, failures });
   } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'GET /:clientId/sync-health', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -221,6 +227,7 @@ router.post('/:clientId/:submissionId/retry', authenticateAdmin, requireClientAc
     const [[after]] = await pool.execute('SELECT status, external_ref, sync_error FROM cp_submissions WHERE id = ?', [sub.id]);
     res.json({ status: after.status, external_ref: after.external_ref, error: after.sync_error });
   } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'POST /:clientId/:submissionId/retry', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

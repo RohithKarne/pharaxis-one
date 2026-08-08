@@ -8,6 +8,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const cache = require('../../utils/cache');
+const log = require('../../utils/logger');
 
 // GET /api/portal/config/:clientCode
 router.get('/:clientCode', async (req, res) => {
@@ -98,6 +99,7 @@ router.get('/:clientCode', async (req, res) => {
     if (payload.__notFound) return res.status(404).json({ error: 'Portal not found.' });
     res.json(payload);
   } catch (err) {
+    log.error('portal.config.error', { err, route: 'GET /:clientCode', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

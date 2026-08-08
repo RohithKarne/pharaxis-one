@@ -9,6 +9,7 @@ const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const { buildExport } = require('../../services/dataSubject');
 const { systemAudit } = require('../../utils/audit');
+const log = require('../../utils/logger');
 
 const FOLLOW_TYPES = ['therapeutic_area', 'drug'];
 
@@ -118,6 +119,7 @@ router.get('/export', authenticatePortal, requirePortalAuth, async (req, res) =>
     res.setHeader('Content-Disposition', `attachment; filename="my-data-export-${uid}.json"`);
     res.send(JSON.stringify(data, null, 2));
   } catch (err) {
+    log.error('portal.personal.error', { err, route: 'GET /export', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -146,6 +148,7 @@ router.post('/erasure-request', authenticatePortal, requirePortalAuth, async (re
 
     res.status(201).json({ id: r.insertId, message: 'Your deletion request has been submitted. Our team will process it in line with legal retention requirements.' });
   } catch (err) {
+    log.error('portal.personal.error', { err, route: 'POST /erasure-request', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

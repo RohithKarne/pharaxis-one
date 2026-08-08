@@ -14,6 +14,7 @@ const { audit } = require('../../utils/audit');
 const { validateContent } = require('../../utils/fileValidation');
 const { ratio, AA_NORMAL } = require('../../utils/contrast');
 const cache = require('../../utils/cache');
+const log = require('../../utils/logger');
 
 // Multer — logo uploads only (5 MB, images only)
 const logoStorage = multer.diskStorage({
@@ -43,6 +44,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     if (!row) return res.status(404).json({ error: 'Branding config not found.' });
     res.json({ branding: row });
   } catch (err) {
+    log.error('admin.branding.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -73,6 +75,7 @@ router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, up
     cache.invalidate('config:'); // CP-22: refresh portal config cache after logo change
     res.json({ logo_url: logoUrl });
   } catch (err) {
+    log.error('admin.branding.error', { err, route: 'POST /:clientId/upload-logo', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -125,6 +128,7 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
     cache.invalidate('config:'); // CP-22: refresh portal config cache after edits
     res.json({ message: 'Branding updated.' });
   } catch (err) {
+    log.error('admin.branding.error', { err, route: 'PATCH /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -149,6 +153,7 @@ router.post('/:clientId/reset', authenticateAdmin, requireClientAccess, async (r
     `, [req.params.clientId]);
     res.json({ message: 'Branding reset to defaults.' });
   } catch (err) {
+    log.error('admin.branding.error', { err, route: 'POST /:clientId/reset', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

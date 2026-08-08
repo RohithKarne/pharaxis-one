@@ -9,6 +9,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const { encryptSecret } = require('../../utils/secretCrypto');
+const log = require('../../utils/logger');
 
 const VALID_PROVIDERS = ['anthropic', 'openai'];
 
@@ -21,6 +22,7 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     delete row.api_key;
     res.json({ chatbox: row });
   } catch (err) {
+    log.error('admin.chatbox.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -54,6 +56,7 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
     await audit(req.admin, req.params.clientId, 'UPDATE', 'chatbox', req.params.clientId, { fields: Object.keys(req.body).filter(k => k !== 'api_key') });
     res.json({ message: 'Chatbox config updated.' });
   } catch (err) {
+    log.error('admin.chatbox.error', { err, route: 'PATCH /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

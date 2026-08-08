@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
+const log = require('../../utils/logger');
 
 // GET /api/portal/saved?clientCode=xxx
 router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
@@ -38,6 +39,7 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
     // Filter out items whose referenced content no longer exists
     res.json({ saved: enriched.filter(item => item.detail !== null) });
   } catch (err) {
+    log.error('portal.saved.error', { err, route: 'GET /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -60,6 +62,7 @@ router.post('/', authenticatePortal, requirePortalAuth, async (req, res) => {
       res.status(409).json({ error: 'Already saved.' });
     }
   } catch (err) {
+    log.error('portal.saved.error', { err, route: 'POST /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -77,6 +80,7 @@ router.delete('/', authenticatePortal, requirePortalAuth, async (req, res) => {
       [req.portalUser.id, client.id, item_type, item_id]);
     res.json({ saved: false });
   } catch (err) {
+    log.error('portal.saved.error', { err, route: 'DELETE /', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
