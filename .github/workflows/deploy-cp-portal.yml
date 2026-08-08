@@ -104,6 +104,18 @@ jobs:
             --project="${PROJECT_ID}" --region="${REGION}" \
             --quiet
 
+      # A rollback pins traffic with --to-revisions=<name>=100. While pinned,
+      # `gcloud run deploy` creates a new revision and Cloud Run keeps serving
+      # the pinned one - the deploy reports success and changes nothing. Found
+      # by the verify step below during the 2026-08-08 rollback drill. Routing
+      # to latest here clears any pin left by a previous rollback.
+      - name: Route traffic to the newly deployed revisions
+        run: |
+          gcloud run services update-traffic "${API_SERVICE}" --to-latest \
+            --project="${PROJECT_ID}" --region="${REGION}" --quiet
+          gcloud run services update-traffic "${WEB_SERVICE}" --to-latest \
+            --project="${PROJECT_ID}" --region="${REGION}" --quiet
+
       # A deploy that "succeeded" and serves a broken app is the failure mode
       # this whole standard exists to catch. Assert on the response, and assert
       # the commit actually changed - not just that the request returned 200.
