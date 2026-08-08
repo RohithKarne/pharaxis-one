@@ -74,7 +74,7 @@ jobs:
           sha256sum "${{ inputs.app_slug }}-dist.tar.gz" "sbom-${{ inputs.app_slug }}.json" > "${{ inputs.app_slug }}-release-manifest.sha256"
 
       - name: Publish GitHub release artifacts
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             ${{ inputs.app_root }}/${{ inputs.app_slug }}-dist.tar.gz
