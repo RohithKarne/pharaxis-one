@@ -6,6 +6,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # One PR per directory instead of one per package. Without this, every PR
+      # touches the same package-lock.json as its siblings, so merging any one
+      # conflicts the rest - 61 of 67 open PRs were CONFLICTING on 2026-08-08.
+      production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
     labels: ["dependencies", "app:mims"]
 
   - package-ecosystem: "npm"
@@ -14,6 +24,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # One PR per directory instead of one per package. Without this, every PR
+      # touches the same package-lock.json as its siblings, so merging any one
+      # conflicts the rest - 61 of 67 open PRs were CONFLICTING on 2026-08-08.
+      production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
     labels: ["dependencies", "app:mims", "frontend"]
 
   - package-ecosystem: "npm"
@@ -22,6 +42,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # One PR per directory instead of one per package. Without this, every PR
+      # touches the same package-lock.json as its siblings, so merging any one
+      # conflicts the rest - 61 of 67 open PRs were CONFLICTING on 2026-08-08.
+      production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
     labels: ["dependencies", "app:cp-portal", "backend"]
 
   - package-ecosystem: "npm"
@@ -30,6 +60,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # One PR per directory instead of one per package. Without this, every PR
+      # touches the same package-lock.json as its siblings, so merging any one
+      # conflicts the rest - 61 of 67 open PRs were CONFLICTING on 2026-08-08.
+      production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
     labels: ["dependencies", "app:cp-portal", "frontend"]
 
   - package-ecosystem: "npm"
@@ -38,6 +78,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # One PR per directory instead of one per package. Without this, every PR
+      # touches the same package-lock.json as its siblings, so merging any one
+      # conflicts the rest - 61 of 67 open PRs were CONFLICTING on 2026-08-08.
+      production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
     labels: ["dependencies", "app:ai-agent"]
 
   - package-ecosystem: "npm"
@@ -46,6 +96,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # One PR per directory instead of one per package. Without this, every PR
+      # touches the same package-lock.json as its siblings, so merging any one
+      # conflicts the rest - 61 of 67 open PRs were CONFLICTING on 2026-08-08.
+      production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
     labels: ["dependencies", "app:ai-agent", "frontend"]
 
   - package-ecosystem: "npm"
@@ -54,6 +114,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # One PR per directory instead of one per package. Without this, every PR
+      # touches the same package-lock.json as its siblings, so merging any one
+      # conflicts the rest - 61 of 67 open PRs were CONFLICTING on 2026-08-08.
+      production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
     labels: ["dependencies", "app:vault"]
 
   - package-ecosystem: "npm"
@@ -62,6 +132,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # One PR per directory instead of one per package. Without this, every PR
+      # touches the same package-lock.json as its siblings, so merging any one
+      # conflicts the rest - 61 of 67 open PRs were CONFLICTING on 2026-08-08.
+      production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
     labels: ["dependencies", "app:vault", "frontend"]
 
   - package-ecosystem: "npm"
@@ -70,6 +150,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # One PR per directory instead of one per package. Without this, every PR
+      # touches the same package-lock.json as its siblings, so merging any one
+      # conflicts the rest - 61 of 67 open PRs were CONFLICTING on 2026-08-08.
+      production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
     labels: ["dependencies", "app:qms", "backend"]
 
   - package-ecosystem: "npm"
@@ -78,6 +168,16 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    groups:
+      # One PR per directory instead of one per package. Without this, every PR
+      # touches the same package-lock.json as its siblings, so merging any one
+      # conflicts the rest - 61 of 67 open PRs were CONFLICTING on 2026-08-08.
+      production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
     labels: ["dependencies", "app:qms", "frontend"]
 
   - package-ecosystem: "github-actions"
@@ -85,3 +185,7 @@ updates:
     schedule:
       interval: "monthly"
     labels: ["dependencies", "area:ci"]
+    groups:
+      # All action bumps in one PR rather than one per action.
+      github-actions:
+        patterns: ["*"]
