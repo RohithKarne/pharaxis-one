@@ -138,11 +138,18 @@ What CP-87 carries, and why it is one ticket rather than three:
 
 - **The other four apps have the same shape.** MIMS, Vault, QMS and AI Agent each declare
   `test_command: npm test` against an `app_root` package, and each runs in a job that
-  installs `app_lockfile` only. Whether any resolves to something that runs real tests is
-  unverified — and is not being asserted here, since asserting exactly this without reading
-  the job logs is what caused this postmortem. **Deliberately outside CP-87**, which is
-  scoped to CP Portal and says so; a claim about four unread pipelines is what this document
-  exists to warn against. Separate ticket owed, after someone reads those four job logs.
+  installs `app_lockfile` only. **Surveyed on 8th Aug from the job logs, and the result is
+  the point of this entry: the shape observation was right, and the conclusion it invited
+  was wrong for half of them.** MIMS runs 197 real tests across 20 suites. QMS installs
+  backend dependencies and migrates inside its own test script — it is the pattern CP-87
+  recommends, already built. Only Vault and AI Agent are affected, and differently: they
+  have no unit tests at all, so nothing is being bypassed; the defect is a check *named*
+  `Unit Tests` reporting green with a database attached. Filed as
+  [PD-12](https://rohithkarne.atlassian.net/browse/PD-12).
+
+  Had that ticket been written from the shared job shape rather than from four job logs, it
+  would have asserted a defect against two apps that do not have one — this document's own
+  error, committed a fourth time, against the very apps it warned about. The caveat held.
 - **`unit-tests` runs no migrations.** It stands up MySQL, creates the database, grants
   privileges "for migrations and schema checks" — and never migrates. `cp63-data-subject`
   and `cp65-translation-gate` therefore cannot pass there. Two real tests in the repository
