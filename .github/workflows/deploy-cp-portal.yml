@@ -45,16 +45,16 @@ jobs:
       id-token: write        # required to mint the OIDC token for federation
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           project_id: cp-portal-demo
           workload_identity_provider: projects/965313610931/locations/global/workloadIdentityPools/github/providers/github-provider
           service_account: github-deployer@cp-portal-demo.iam.gserviceaccount.com
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Stamp the build
         id: stamp
