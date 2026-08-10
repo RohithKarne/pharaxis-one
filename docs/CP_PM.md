@@ -114,26 +114,35 @@ Source: <publisher> — <title>, <full URL>, read <run date>
 
 ---
 
-## 3A. The story is split — a description plus four comments
+## 3A. The 15,000-character budget
 
-> **Learned the hard way on the first run, 8 Aug 2026.** The routine created the epic (`CPPM-1`) and then **produced no story at all**, leaving `STORY-KEY-PENDING` stranded in the epic. **A Jira description is capped at 32,000 characters** and the full exercise — five blocks, a fifteen-row panel, a fourteen-row rubric, six phases, sealed blocks, worked examples — does not fit in one.
+> **Set by Rohith 2026-08-08**, after `CPPM-2` came out at **50,113 characters** — *"so much garbage in it"*, and the routine spent most of its runtime fighting the Jira limit. Two earlier failures preceded it: the first run produced an epic and **no story at all**, and a Jira description caps at 32,000 characters.
 
-| Where | What it holds | Cap |
-|---|---|---|
-| **Story description** | Header · the six-phase map · Blocks 1–3 · Block 4 as a *list* · Block 5 rubric · the panel · two-hat rule · questions rule · promotion bridge · footer | target **under 25,000** |
-| **Comment 1** | *Worked examples — reference. Read before Phase 2.* | 32,000 |
-| **Comment 2** | *SEALED — Phase 3 (Sizing).* | 32,000 |
-| **Comment 3** | *SEALED — Phase 4 (Change request).* | 32,000 |
-| **Comment 4** | *Engineering evidence — for the panel.* **The only place code-level detail is permitted.** | 32,000 |
+**The analyst-facing ticket is at most 15,000 characters.** These are ceilings, not targets, and they **override this document wherever it says otherwise**.
 
-**Never truncate a section to make it fit — move it to a comment and say so.** If a comment would itself exceed the cap, split it and number the parts in the heading.
+| | Chars | |
+|---|---:|---|
+| **Story description** | **9,500** | header + phase map 300 · Block 1 1,200 · Block 2 2,000 · Block 3 1,300 · Block 4 900 · Block 5 900 · panel 1,400 · promotion + not-verified 400 · headroom 1,100 |
+| **Comment 1** — worked examples | **5,500** | **The teaching. Cut here last, and never to make room for something else** |
+| **Comment 2** — engineering evidence | 800 | A **bare citation list**, no narrative. Outside the 15,000 — the analyst never reads it |
+| **Epic** | 2,000 | Bullets, not prose |
 
-**Sealing is now physically separate as well as honour-based** — Phases 3 and 4 are not in the text the analyst is working from.
+**Two comments, not four.** **Phases 3 and 4 are no longer created with the ticket** — they are *deferred, not deleted*. Unlock each by firing the routine with the ticket key and the phase (*"unlock Phase 3 for CPPM-2"*); it appends one comment, 4,000 characters, and stops. That removes 11,371 characters from the analyst's screen at **zero learning cost**, and makes the sealing real rather than honour-based.
 
-**Two other defects from the same run, both fixed:**
+**What was cut, and what it cost:**
 
-1. **The routine had no `editJiraIssue`** in its tool list, so it could not write the story key back into the epic. Added.
-2. **The duplicate guard could not tell an abandoned round from a finished one.** It now distinguishes three cases — no epic today → proceed; epic **with** a story → stop; epic **without** a story → **resume**, reusing that epic and keeping the scenario it already committed to.
+| Cut | Chars | Learning lost |
+|---|---:|---|
+| Evidence comment → bare citations | −10,700 | None — never his to read |
+| Phase 3 + Phase 4 → deferred | −11,371 | **None — deferred** |
+| Panel → 15 rows, one line each | −2,500 | None |
+| Rubric → only rows scored at this level | −1,700 | None; the rest arrive with the level |
+| Blocks 2 and 3 → prose tightened | −3,300 | Minimal |
+| Revision note, self-explanation, restated rules | −2,900 | None |
+
+**Writing short without writing vague** is the rule that makes the budget survivable: delete every sentence explaining *why* a rule exists, every restatement, every "this matters because". Keep nouns, states, numbers, constraints. *"Reconciled by hand each morning, about an hour a day"* is short and specific; *"visibility is a key concern"* is short and useless.
+
+**Three defects fixed along the way:** `editJiraIssue` added, so the story key gets written back into the epic; the duplicate guard now distinguishes **resume** (epic with no story) from **stop** (epic with a story); and the routine counts characters *before* creating anything, cutting prose rather than sections and reporting what it cut.
 
 ---
 

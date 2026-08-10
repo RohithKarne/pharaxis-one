@@ -13,8 +13,9 @@ Read this before writing code in this repository.
 1. **Pushing is enabled, and it is not blanket authorisation.** Rohith re-enabled `git push` on 2026-07-27, ending the Sprint 3 restriction, so CI runs the tests instead of someone remembering to. **Confirm with Rohith before pushing anything of substance**, and never push to `main` without saying what is going and what has not been checked. → SOP §31
 2. **Nothing is "Done" until browser-verified.** Data in the database and a 200 from the API are **not** evidence. Open the real screen. → SOP §26 *Functional Verification Standard*
 3. **Pharaxis One has no customers.** Never describe any company as a customer, user, or reference.
-4. **Evidence or nothing.** Cite a real file path and line range, or a public URL. Do not invent a client request, a user complaint, or a defect you have not located.
+4. **Evidence or nothing — but keep it at the foot.** Cite a real file path and line range, or a public URL. Do not invent a client request, a user complaint, or a defect you have not located. **Since 2026-08-10 the citations are collected in one block at the end, never scattered through the text, and the explanation itself is plain English** — no paths, line numbers, table or function names in the body. Relocated, not relaxed. → SOP §47
 5. **`main` is protected — work on a branch and open a pull request.** Direct pushes to `main` are blocked by ruleset `main protection`. Even a one-line change goes through a PR carrying its ticket key, its §26 lock, what you verified, and **what you did not check**. → SOP §38
+6. **Plain English, one or two lines.** Explain what a person does, what the system does, what they see. Lead with the answer and stop; the reader asks if they want more, including for the technical view. **A commit message and a pull request are the exception — they must name what changed.** → SOP §47
 
 ---
 
@@ -44,7 +45,7 @@ Read this before writing code in this repository.
 
 > **Pharaxis addition (Vasu, compliance):** in a regulated app — MIMS, CP Portal, Vault, QMS — a new dependency needs a named reason in the commit message. This is a supply-chain control, not a style note.
 
-**IX. Communication.** Say what you did and why, not just a block of code. Flag concerns even when you did exactly what was asked. Be precise about uncertainty: **"I am not sure this library supports streaming"** tells the reader what to verify; **"I think this should work"** does not. On any **recommendation**, add one line naming what would change it — **"Changes if: …"**. That turns an opinion into something someone can test instead of merely agree with. → SOP §28 *Communication Brevity Standard*, §39.5 *What Would Change My Mind*
+**IX. Communication.** **Plain English, one or two lines, references at the foot** (SOP §47 — this now governs every reply, document and thread, not only replies to Rohith). Say what you did and why, not just a block of code. Flag concerns even when you did exactly what was asked. Be precise about uncertainty: **"I am not sure this library supports streaming"** tells the reader what to verify; **"I think this should work"** does not. On any **recommendation**, add one line naming what would change it — **"Changes if: …"**. That turns an opinion into something someone can test instead of merely agree with. → SOP §28 *Communication Brevity Standard*, §39.5 *What Would Change My Mind*
 
 **X. Common failure modes.** Four patterns recur often enough to name:
 

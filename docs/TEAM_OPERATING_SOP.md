@@ -19,6 +19,8 @@
 > Revision update: 2026-08-07 (**Every SOP is now this file.** Sections 41–45 added — the five per-app SOPs (`apps/cp-portal/CP_MEMORY_SOP.md`, `apps/mims/MIMS_MEMORY_SOP.md`, `apps/vault/VAULT_MEMORY_SOP.md`, `apps/qms/QMS_MEMORY_SOP.md`, `apps/ai-agent/AI_AGENT_MEMORY_SOP.md`) absorbed verbatim and deleted, on Rohith's instruction. Content is unchanged; only heading levels were demoted to nest under their sections, and two now-dead cross-references between the CP Portal and MIMS SOPs were repointed to §41 and §42. Each app section keeps its own update protocol. **This supersedes the standing rule that each app holds its own SOP file** (set 2026-04-06). **Anirudh takes Cloud Engineer alongside Solution Architect** — he now owns monitoring and incident response, Section 38 steps 21 and 22, which had no owner before today. Section 5 and §39.3 updated.)
 > Revision update: 2026-08-07 (**Section 38 corrected the same day it was written.** The first version showed 15 steps and QA exactly once — the failing test. Rohith caught it: the failing test is a developer discipline, not the QA function's work, and Sections 15, 17, 18, 22 and 29 already specified a validation lifecycle the flow represented none of. Now 23 steps across six phases, with QA at six of them. **Rohith decided QA executes after the merge and before the deploy** — `main` is integrated, the release is what QA gates. Section 38.2 added: three change classes, because a process demanding 23 steps for a typo is a process people route around.)
 > Revision update: 2026-08-07 (**Consolidated into a single SOP on Rohith's instruction.** Section 38 added — Source Control & Change Delivery Standard, written after branch protection was enabled on `main` and we found that every pull request in the repository's history had been raised by dependabot. Section 39 added — absorbs `docs/live-communication-use-and-format.md`, now deleted; citations of "the comms doc §3" mean §39.3 and "§2D" means §39.5. Section 40 added — absorbs `docs/workflow_orchestration.md`, now deleted, which had no inbound references and two rules that had drifted from practice; both corrections are stated in the section. **Sections 1–37 are unchanged and deliberately not renumbered** — §26 alone is cited 49 times across the repository and inside live cloud routine prompts. `CLAUDE.md` remains at the repository root because Claude Code loads it at session start; it is now a pointer to this SOP, not a second rulebook.)
+> Revision update: 2026-08-10 (**Seven routines cut to four, and five Jira spaces closed.** Mandated by Rohith Karne. **Product Audit merged into §30** as its second story — five client-side teams a run, rotating, instead of twenty-seven. **Client Support Simulation merged into §32** as its second story — one end user, rotating through the six personas. **CEO Meeting and Product Development retired outright.** **MIMS-PM added** as the twin of CP-PM (§46). What remains: **Product Intelligence · Client Intelligence · CP-PM · MIMS-PM**, writing to **`CPPM` · `MIPM` · `DCI`**. The `CP`, `MIMS`, `PD`, `ASUP`, `PAUD` and `CEO` spaces are deleted; every open feature, enhancement, audit finding and support item was imported first — 27 backlog items, 27 audit questions and 4 support accounts. **`CPPM` and `MIPM` are the live product spaces, not a sandbox** — Rohith: *"dont think my learning as training. It will real production feature only."* That retires the `TRN-` prefix, the re-issued controlled ticket and the never-built-from rule in §46. §30, §32, §33, §34, §35, §36 and §46 all carry a dated block at the top stating the current position; the original text is kept below each.)
+> Revision update: 2026-08-10 (Section 47 added — Plain Language & Brevity Standard. Mandated by Rohith Karne, and **it applies to everything**: this chat, every routine, every document, internal product development, and every reply between team members. Two rules. **Plain English in the body** — no file paths, line numbers, table or function names, endpoints or code fragments where a person reads; explain what a person does and what the system does. **References are kept but collected in one block at the foot**, never scattered — `evidence or nothing` is relocated, not relaxed. And **one or two lines**, with depth given on request rather than by default. §28 is narrowed to replies to Rohith and §47 wins where they differ; §39.6 and `CLAUDE.md` hard constraint 4 amended as to placement. Commit messages and pull requests are the exception and must still name what changed.)
 > Revision update: 2026-08-08 (Section 46 added — CP-PM Product Management Training Routine. Mandated by Rohith Karne. A seventh cloud agent sets **one product management exercise per run** on real CP Portal code and withholds the answer; the analyst is Rohith, training toward Product Owner and Product Manager. **CP Portal only**, files to Jira project `CPPM`. Manual, like the other six. **Scenario sources are our own code *and* public web research** — regulation, standards, industry practice, adjacent product documentation — added the same day on Rohith's instruction, because code alone yields too narrow a feature pool; the two-source rule keeps our own code as the anchor for the as-is. Governance lives here; the operational prompt lives in `docs/CP_PM.md`. **Two decisions inside the same day reversed each other and both are recorded:** training tickets were first ruled never to become real work, then Rohith decided that **what the analyst specifies gets built and shipped** — against Vasu's and Sarvanan's advice. The promotion bridge in §46 is what makes that safe: the `CPPM` story is a draft, a re-issued `CP` ticket is the controlled specification, and no `TRN-` identifier ever crosses. **Consequence stated: CP Portal reopens to feature development** — §41 updated the same day, on Rohith's confirmation, from *STABLE, hotfix support only* to **ACTIVE FEATURE DEVELOPMENT**, so §41 and §46 agree.)
 > Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
 
@@ -1334,6 +1336,8 @@ and tracks it to closure — but **the owner gives the answer, never Aditi.**
 
 > Established: 2026-07-28. Mandated by Rohith Karne.
 > Applies to: every reply to Rohith, from every team member.
+>
+> **Superseded in scope and strengthened 2026-08-10 by §47.** This section governs replies *to Rohith*. §47 extends the same discipline to **everything** — every routine, document, internal thread and this chat — sets the target at **one or two lines**, and adds the plain-language rule: no code-level detail in the body of anything a person reads. **Where the two differ, §47 wins.**
 
 ### Principle
 
@@ -1461,7 +1465,21 @@ A change that "works" in the database or the API but shows nothing (or the wrong
 
 ---
 
-## 30. Daily Product Intelligence Routine (Mandatory)
+## 30. Product Intelligence (Mandatory)
+
+> **Rewritten 2026-08-10 on Rohith's instruction. Read this block before anything below it.**
+>
+> **Renamed.** *Daily* Product Intelligence → **Product Intelligence**. It never ran daily.
+>
+> **It files to `CPPM` and `MIPM` now.** The `CP` and `MIMS` spaces were deleted on 2026-08-10; their open feature and enhancement items were imported into the two product-management spaces first. CP Portal findings land in `CPPM`, MIMS findings in `MIPM`.
+>
+> **Product Audit (§35) is merged into it** as a **second story**: five client-side teams, one question each, answered YES / PARTLY / NO — rotating, instead of the same twenty-seven every run. Filed only when there is something worth asking.
+>
+> **It deduplicates against `CPPM`, `MIPM` and `DCI`, and never queries a deleted space.** Where it drops a candidate because the subject already exists, it **names the ticket** — *"already raised as CPPM-11"*. Rohith, 2026-08-10: silence looks like it missed it.
+>
+> **§47 applies in full.** Plain English in every ticket body; the file references sit in one **References** block at the foot.
+>
+> Everything below this block is the original 2026-07-29 text. Where the two differ, this block wins.
 
 > Established: 2026-07-29. Mandated by Rohith Karne.
 > Applies to: MIMS and CP Portal. Vault and QMS to be added on Rohith's instruction.
@@ -1568,7 +1586,21 @@ Rules I–X are adapted from field notes on LLM-assisted programming circulated 
 
 ---
 
-## 32. Daily Client Intelligence Routine (Mandatory)
+## 32. Client Intelligence (Mandatory)
+
+> **Rewritten 2026-08-10 on Rohith's instruction. Read this block before anything below it.**
+>
+> **Renamed.** *Daily* Client Intelligence → **Client Intelligence**. It never ran daily.
+>
+> **Client Support Simulation (§34) is merged into it** as a **second story** under each epic: one end user who hit something while doing their job, rotating through the six personas. The `ASUP` space was deleted; its four open items were imported into `DCI` first, under an epic named *Imported — Client Support Simulation*.
+>
+> **Two stories per application, and the boundary between them is the point.** Story 1 is the client **organisation** speaking to its vendor — Katrina, requests and questionnaires. Story 2 is **one end user** about their day. *"Can you produce an audit trail across cases?"* is story 1. *"I clicked export and got fifty rows"* is story 2.
+>
+> **It still writes only to `DCI`.** It deduplicates against `DCI`, `CPPM` and `MIPM` — the live product spaces — and never queries a deleted one. Dropped duplicates are named, not skipped silently.
+>
+> **§47 applies in full.** Plain English throughout; references in one block at the foot.
+>
+> Everything below this block is the original 2026-08-03 text. Where the two differ, this block wins.
 
 > Established: 2026-08-03. Mandated by Rohith Karne.
 > Applies to: MIMS and CP Portal. Vault and QMS to be added on Rohith's instruction.
@@ -1655,7 +1687,13 @@ If that count is ever lower than the number of issues in `DCI`, an item has esca
 
 ---
 
-## 33. CEO Meeting Routine (Mandatory)
+## 33. CEO Meeting Routine — RETIRED 2026-08-10
+
+> **Deleted on Rohith's instruction, 2026-08-10.** The routine and the `CEO` space are both gone.
+> No replacement. The one-to-one rounds it produced are not being carried by another routine.
+> Nothing was imported — the decisions it raised had already been taken or overtaken.
+>
+> The section is kept for the record. Do not recreate it without Rohith asking.
 
 > Established: 2026-08-03. Mandated by Rohith Karne.
 > Applies to: the CEO and his seven direct leaders.
@@ -1798,7 +1836,22 @@ Renaming them is available and cheap; it was not done on 2026-08-03 because the 
 
 ---
 
-## 34. Client Support Simulation (Mandatory)
+## 34. Client Support Simulation — MERGED INTO §32 ON 2026-08-10
+
+> **The separate routine and the `ASUP` space are deleted.** Its work is now the **second story** of
+> each Client Intelligence round (§32): one end user, one application, rotating through the six
+> personas, filed only when there is genuine friction to report.
+>
+> **Nothing was lost.** The four open items were imported into `DCI` before deletion, under
+> *Imported — Client Support Simulation*. What did not survive is the file references behind each
+> answer; that is recorded in the imported epic.
+>
+> **What §32 carries forward from here:** the six personas and their remits, the HCP relay rule
+> (an HCP never files — Lauren relays), the seven classes, and the *"Can we answer this today?
+> YES or NO"* line. All of it is in the §32 prompt.
+>
+> The detail below is kept for the record. Read it as the source of §32's second story, not as a
+> live routine.
 
 > Established: 2026-08-03. Mandated by Rohith Karne.
 > Applies to: MIMS and CP Portal. Vault and QMS excluded, as in §30 and §32.
@@ -1909,7 +1962,26 @@ If that count is ever lower than the number of issues in `ASUP`, an item has esc
 
 ---
 
-## 35. Product Audit (Mandatory)
+## 35. Product Audit — MERGED INTO §30 ON 2026-08-10
+
+> **The separate routine and the `PAUD` space are deleted.** The audit is now the **second story**
+> of each Product Intelligence round (§30).
+>
+> **Five teams a run, not twenty-seven, and they rotate.** Rohith, 2026-08-10: *"different team each
+> run. instead of 27 teams, lets put 5 teams once and it should rotate."* The routine reads the last
+> five rounds and picks teams not asked recently, covering more than one tier. Filed only when five
+> sharp questions genuinely exist; fewer, or none, is an acceptable round.
+>
+> **Nothing was lost.** All twenty-seven questions and verdicts were imported into `CPPM` before
+> deletion, under *Imported — Product Audit* — score **1 yes · 12 partly · 14 no**. The file
+> references behind each answer did not survive; the imported epic says so.
+>
+> **What §30 carries forward from here:** the twenty-seven teams across three tiers (the list lives
+> in `docs/PRODUCT_AUDIT.md`), the YES / PARTLY / NO verdict, the seven-line-per-team format, naming
+> the team twice, and the rule that **a NO is never softened**.
+>
+> The detail below is kept for the record. Read it as the source of §30's second story, not as a
+> live routine.
 
 > Established: 2026-08-03. Mandated by Rohith Karne.
 > Applies to: MIMS and CP Portal. Vault and QMS excluded, as in §30, §32 and §34.
@@ -2026,7 +2098,21 @@ If that count is ever lower than the number of issues in `PAUD`, an item has esc
 
 ---
 
-## 36. Product Development (Mandatory)
+## 36. Product Development — RETIRED 2026-08-10
+
+> **Deleted on Rohith's instruction, 2026-08-10.** The routine and the `PD` space are both gone.
+>
+> **Nothing was lost.** Its six open items were imported into `CPPM` and `MIPM` before deletion,
+> split by application and labelled `queued`.
+>
+> **Why it went.** Its job — proposing what to build — is now done by Rohith himself through CP-PM
+> and MIMS-PM (§46), where he writes the specification rather than reading a proposal.
+>
+> **The convergence rule below survives it** and still governs how the team argues in this channel:
+> every speaker answers the one before them by name, positions move, and the thread ends in one
+> concrete answer. That is not tied to the routine.
+>
+> The detail below is kept for the record. Do not recreate the routine without Rohith asking.
 
 > Established: 2026-08-04. Mandated by Rohith Karne.
 > Applies to: MIMS and CP Portal. Vault, QMS and AI Agent excluded.
@@ -2656,8 +2742,9 @@ have not read line by line** (Section 37.2).
 
 **Bhavya Bobba** — do not jump to a fix without stating root cause. Do not give
 findings without stating risk or impact. Do not implement beyond the scope
-confirmed with Varun. Do not say "done" without listing files and lines. Do not
-speak for QA.
+confirmed with Varun. Do not say "done" without saying what changed — **in plain
+English, with the file references collected at the foot, never through the text**
+(§47). Do not speak for QA.
 
 **Anirudh** — do not approve a design without stating its impact on adjacent apps.
 Do not let a local fix create a shared-platform divergence. Do not stay silent when
@@ -4893,7 +4980,42 @@ AI is an opt-in feature enabled at contract level.
 
 ---
 
-## 46. CP-PM — Product Management Training Routine (Mandatory)
+## 46. CP-PM and MIMS-PM — Product Management Routines (Mandatory)
+
+> **Amended 2026-08-10 on Rohith's instruction. Read this block before anything below it.**
+>
+> **There are two now, and they are twins.** **CP-PM** works CP Portal and writes to `CPPM`.
+> **MIMS-PM** works MIMS and writes to `MIPM` (`trig_01CcWCpt8DKoU6EPkdrBV8Uy`). Identical rules,
+> panel, budgets and phases.
+>
+> **This is not a sandbox.** Rohith, 2026-08-10: *"dont think my learning as training. It will real
+> production feature only."* `CPPM` and `MIPM` are the **live product spaces**. What he specifies is
+> the specification, and it is built through the ordinary gate. Three things follow, and they
+> **retire** what the 2026-08-08 text below says:
+>
+> | Retired | Replaced by |
+> |---|---|
+> | The `TRN-` identifier prefix | Ordinary requirement identifiers |
+> | Re-issuing a locked item as a separate controlled ticket | The ticket he wrote **is** the specification |
+> | *"Never built from directly"* | It is built from, through §26 lock and §38 delivery |
+>
+> **Vasu and Sarvanan both signed off on losing those two controls** — they answered a provenance
+> question that no longer exists once the analyst is the product owner writing in the product space.
+> What Vasu keeps is the ordinary requirement: locked before build, revalidation flag before release.
+>
+> **The coaching panel stays simulated.** The fifteen voices are personas; the requirement is real.
+>
+> **Three ways to fire either one:**
+>
+> | Mode | Say |
+> |---|---|
+> | **New exercise** | *run CP-PM* — it researches and picks a scenario |
+> | **Convert** | *run CP-PM from CPPM-14 at L2* — turns a queued backlog item into a full exercise, rewritten in place, label `queued` → `exercise` |
+> | **Unlock** | *unlock Phase 3 for CPPM-14* — appends one 4,000-character comment and stops |
+>
+> **Both deduplicate against `CPPM`, `MIPM` and `DCI`** and never query a deleted space.
+>
+> Everything below is the 2026-08-08 text. Where the two differ, this block wins.
 
 > Established: 2026-08-08. Mandated by Rohith Karne.
 > Applies to: **CP Portal only.** MIMS, Vault, QMS and AI Agent are out of scope.
@@ -4974,13 +5096,34 @@ The routine draws on **two source families**, and this matches the standard the 
 
 **Never invent a URL, a clause number, a standard reference or a quotation.** Not read this run means not cited. A competitor's public documentation is evidence of what such products do — **never** of anyone using ours. And an externally-sourced idea raises the odds of proposing something CP Portal already has, so the code is searched first and the search is stated.
 
-### One story, four comments — and what the first run taught us
+### The 15,000-character budget (Mandatory)
+
+> **Set by Rohith 2026-08-08**, after `CPPM-2` was issued at **50,113 characters**. His words: *"its very vast and jira character limit is not sufficient. routine has taken so much time to complete it due to character limit issue."* And the constraint on the fix: *"I dont want to compromise on my learning. we should not delete product management related info."*
+
+**The analyst-facing ticket is at most 15,000 characters** — description **9,500**, worked-examples comment **5,500**. The evidence comment (**800**, a bare citation list) sits outside it because the analyst never reads it. The epic is capped at **2,000**. **These ceilings override every other document, including `docs/CP_PM.md`.**
+
+**The cut honoured his constraint: no product management content was deleted.** Of the 50,113 characters, roughly 19,400 was scaffolding and engineering narrative that taught nothing, and 11,371 was PM content he did not need *yet*. So:
+
+| Cut | Chars | Learning lost |
+|---|---:|---|
+| Evidence comment → bare citations | −10,700 | None |
+| **Phases 3 and 4 → deferred, not deleted** | −11,371 | **None** |
+| Panel → 15 rows, one line each | −2,500 | None |
+| Rubric → only the rows scored at this level | −1,700 | None; the rest arrive with the level |
+| Blocks 2–3 prose tightened | −3,300 | Minimal |
+| Revision notes, self-explanation, restated rules | −2,900 | None |
+
+**Deferral is the mechanism that made the target reachable without deleting an exercise.** Phases 3 (sizing) and 4 (change control) are no longer created with the ticket; the analyst unlocks each by firing the routine with the ticket key and the phase, and it appends one 4,000-character comment and stops. It also makes the sealing real rather than honour-based.
+
+**The worked-examples comment is protected.** It is the teaching content, it is cut last, and it is never trimmed to make room for anything else. Where the total runs over, the cut order is: promotion block, panel wording, Block 3, Block 2, header.
+
+### One story, two comments — and what the first runs taught us
 
 > **Recorded openly, 2026-08-08, the day the routine was built.** Rohith fired the first round within two minutes of it being created. It produced the epic (`CPPM-1`) and **no story at all**, stranding a `STORY-KEY-PENDING` placeholder. Three defects, all ours, all in the routine's design rather than the agent's execution:
 
 | Defect | Fix |
 |---|---|
-| **A Jira description is capped at 32,000 characters** and the full exercise does not fit in one | The story is **split** — description (target under 25,000) plus **four comments**: worked examples · sealed Phase 3 · sealed Phase 4 · engineering evidence. **Never truncate to fit; move it to a comment and say so** |
+| **A Jira description is capped at 32,000 characters** and the full exercise does not fit in one | The story was first split across four comments. **Superseded the same day by the budget above** — description plus **two** comments, with Phases 3 and 4 deferred. Splitting solved the cap; it did not solve the volume, which was the real problem |
 | **The routine could not write the story key back into the epic** — `editJiraIssue` was not in its tool list | Added |
 | **The duplicate guard could not tell an abandoned round from a finished one**, so a re-fire would have been blocked by the very epic the failed run left behind | Three cases now: no epic today → proceed; epic **with** a story → stop; epic **without** a story → **resume**, reusing that epic and keeping the scenario it already committed to |
 
@@ -5106,3 +5249,52 @@ Lower than the issue count means an item escaped the labelling control — the s
 - It cannot reach local dev servers, databases, or any running instance. **It cannot open the portal** — so it cannot verify the as-is on screen, only in code.
 - Each run is an isolated session with no memory of the previous one. Continuity comes entirely from Jira.
 - `CPPM` is a **team-managed** Jira project, so its workflow states are project-scoped. That the story lands in **To Do** is unverified and must be confirmed on the first run.
+
+---
+
+## 47. Plain Language & Brevity Standard (Mandatory)
+
+> Established 2026-08-10 on Rohith Karne's instruction. **Applies to everything** — this chat, every routine, internal product development, every document, every reply between team members. Not only to routine tickets.
+>
+> His words: *"I should not see code related information, code line related information in visible. I should see plain english terms... So that any members or me will understand the issue rather than ignoring technical terms."* And: *"I should not see heavy explaination for anything. It should be short, easy, crisp to understand in 1 or 2 lines."*
+
+### 47.1 Plain language
+
+**Explain in plain English. Always.** No file paths, line numbers, function or table or column names, endpoints, fields or code fragments in the body of anything a person reads.
+
+Say what a person does, what the system does, what they see, what is kept, what is lost. A technical constraint is explained in ordinary words — *"the system does not keep a record of when this changed, so showing it means starting to keep one"* — never as schema.
+
+**Why it is a rule and not a preference:** a reader who has to skip the technical parts stops reading. That is how a real problem goes unnoticed by the person who could have caught it.
+
+### 47.2 Where the references go
+
+**References are kept — collected in one place, at the end.** Rohith, 2026-08-10: *"code reference can be at anywhere but should not see everywhere which might confuse me."*
+
+- In a Jira ticket: one comment at the end.
+- In a reply, a document or a report: one short block at the foot, under a plain heading.
+- Never scattered through the text.
+
+**`Evidence or nothing` is unchanged.** Every claim still rests on something real. It is *relocated*, not relaxed — without it we cannot tell a found defect from an invented one. This amends `CLAUDE.md` hard constraint 4 and §39.6 as to *placement*, not as to *requirement*.
+
+### 47.3 Brevity
+
+**One or two lines.** Lead with the answer. Stop.
+
+- Tables and short lists are allowed — they are the compact form, not the long one.
+- Numbers, not narration.
+- Say it once. Never twice.
+- Delete every sentence that explains why a rule exists, every restatement, every *"this matters because"*.
+
+**The other person asks if they want more.** That is the mechanism — depth on request, not depth by default. When Rohith asks for detail, or for the technical view, give it fully. Brevity is the default, not a ceiling.
+
+### 47.4 What it does not permit
+
+Dropping accuracy, uncertainty or bad news. Say it briefly; do not omit it. Skipping evidence — it moves to the foot, it does not disappear. Vagueness: *"reconciled by hand each morning, about an hour a day"* is short and specific; *"visibility is a key concern"* is short and useless.
+
+### 47.5 Where it applies
+
+Every routine · every ticket · every document · this chat · internal product development · every reply between team members. **The two exceptions are the reference block at the foot, and a commit message or pull request, which must name what changed.**
+
+### Ownership
+
+Rohith Karne owns it. Bala Kaviti keeps the documents current. Aditi Raghavan enforces it in routing. Anyone may say *"plain English, please"* and be answered without argument.
