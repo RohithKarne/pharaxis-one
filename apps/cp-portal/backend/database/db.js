@@ -110,6 +110,12 @@ async function initializeDatabase() {
       language_config_json VARCHAR(500) NOT NULL DEFAULT '{"default":"en","enabled":["en"]}',
       created_at           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      -- Which login methods the portal exposes: local_only | sso_only | local_and_sso.
+      -- Matches the column migrations/0008_add_sso.sql appends to this table, and is
+      -- last in the list because that is where the ALTER puts it. Read by
+      -- services/ssoService.js getClientById — a database without it cannot serve SSO
+      -- at all. See the SSO table definitions below for the rest of that pairing.
+      login_mode           VARCHAR(30)  NOT NULL DEFAULT 'local_only',
       PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
@@ -690,23 +696,31 @@ async function initializeDatabase() {
   await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_notif_user ON cp_notifications(portal_user_id, is_read)`);
 
   // ── SSO PROVIDER CONFIGS & IDENTITIES ─────────────────────────
+  // Definitions match migrations/0008_add_sso.sql exactly so the two paths
+  // cannot drift. 0008 is authoritative — it is what every database that has
+  // these tables was actually built from. They had drifted: this bootstrap
+  // had is_active DEFAULT 1 against 0008's DEFAULT 0 (a provider config saved
+  // without an explicit is_active would have been live on one path and dormant
+  // on the other), allowed_domains TEXT against JSON, wider provider_key /
+  // provider_type, a nullable-vs-NOT NULL email, different key and constraint
+  // names, and no idx_sso_ident_user. Change them here and in 0008 together.
   await run(`
     CREATE TABLE IF NOT EXISTS cp_sso_provider_configs (
       id                      INT          NOT NULL AUTO_INCREMENT,
       client_id               INT          NOT NULL,
-      provider_key            VARCHAR(50)  NOT NULL,
-      provider_type           VARCHAR(50)  NOT NULL DEFAULT 'oidc',
-      oidc_client_id          VARCHAR(255) NULL,
+      provider_key            VARCHAR(30)  NOT NULL,
+      provider_type           VARCHAR(30)  NOT NULL DEFAULT 'oidc',
+      oidc_client_id          VARCHAR(500) NULL,
       client_secret_encrypted TEXT         NULL,
       tenant_id               VARCHAR(255) NULL,
-      allowed_domains         TEXT         NULL,
-      is_active               TINYINT(1)   NOT NULL DEFAULT 1,
+      allowed_domains         JSON         NULL,
+      is_active               TINYINT(1)   NOT NULL DEFAULT 0,
       updated_by              INT          NULL,
-      created_at              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      created_at              TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at              TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       UNIQUE KEY uq_client_provider (client_id, provider_key),
-      CONSTRAINT fk_sso_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+      CONSTRAINT fk_sso_cfg_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
@@ -715,13 +729,14 @@ async function initializeDatabase() {
       id             INT          NOT NULL AUTO_INCREMENT,
       client_id      INT          NOT NULL,
       portal_user_id INT          NOT NULL,
-      provider_key   VARCHAR(50)  NOT NULL,
+      provider_key   VARCHAR(30)  NOT NULL,
       subject        VARCHAR(255) NOT NULL,
-      email          VARCHAR(255) NOT NULL,
-      last_login_at  DATETIME     NULL,
-      created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      email          VARCHAR(255) NULL,
+      created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_login_at  TIMESTAMP    NULL,
       PRIMARY KEY (id),
-      UNIQUE KEY uq_sso_identity (client_id, provider_key, subject),
+      UNIQUE KEY uq_client_provider_subject (client_id, provider_key, subject),
+      KEY idx_sso_ident_user (portal_user_id),
       CONSTRAINT fk_sso_ident_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE,
       CONSTRAINT fk_sso_ident_user   FOREIGN KEY (portal_user_id) REFERENCES cp_portal_users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
