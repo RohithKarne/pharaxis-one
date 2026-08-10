@@ -30,5 +30,13 @@ jobs:
       backend_entrypoint: server.js
       quality_command: npm run test:static
       security_command: npm run security:scan
+      # This job used to start a MySQL service container and then never touch
+      # it: `npm test` was an alias for the syntax check, so the service, the
+      # wait step and the GRANT step all ran for nothing and a green tick still
+      # only meant "it compiled". `npm test` now provisions a database from
+      # database/migrations and runs the backend tests against it.
+      #
+      # CP Portal keeps its dependencies in backend/, not the app root, so the
+      # test script installs them itself — same as QMS.
       test_database: pharaxis_cp_portal_test
       test_command: npm test

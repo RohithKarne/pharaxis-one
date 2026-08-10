@@ -1,6 +1,14 @@
 'use strict';
 
 require('dotenv').config();
+
+// ssoService pulls in the auth middleware, which exits the process if these are
+// unset outside development — and CI runs with NODE_ENV=test. Set before the
+// service is required. The values are never used: nothing here signs or verifies
+// a token. Same pattern as tests/paud2-remediation.js.
+process.env.CP_ADMIN_JWT_SECRET  = process.env.CP_ADMIN_JWT_SECRET  || 'test-only-admin-secret';
+process.env.CP_PORTAL_JWT_SECRET = process.env.CP_PORTAL_JWT_SECRET || 'test-only-portal-secret';
+
 const assert = require('assert');
 const sso = require('../services/ssoService');
 
