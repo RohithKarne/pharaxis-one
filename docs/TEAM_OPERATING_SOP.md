@@ -23,6 +23,7 @@
 > Revision update: 2026-08-10 (Section 47 added — Plain Language & Brevity Standard. Mandated by Rohith Karne, and **it applies to everything**: this chat, every routine, every document, internal product development, and every reply between team members. Two rules. **Plain English in the body** — no file paths, line numbers, table or function names, endpoints or code fragments where a person reads; explain what a person does and what the system does. **References are kept but collected in one block at the foot**, never scattered — `evidence or nothing` is relocated, not relaxed. And **one or two lines**, with depth given on request rather than by default. §28 is narrowed to replies to Rohith and §47 wins where they differ; §39.6 and `CLAUDE.md` hard constraint 4 amended as to placement. Commit messages and pull requests are the exception and must still name what changed.)
 > Revision update: 2026-08-08 (Section 46 added — CP-PM Product Management Training Routine. Mandated by Rohith Karne. A seventh cloud agent sets **one product management exercise per run** on real CP Portal code and withholds the answer; the analyst is Rohith, training toward Product Owner and Product Manager. **CP Portal only**, files to Jira project `CPPM`. Manual, like the other six. **Scenario sources are our own code *and* public web research** — regulation, standards, industry practice, adjacent product documentation — added the same day on Rohith's instruction, because code alone yields too narrow a feature pool; the two-source rule keeps our own code as the anchor for the as-is. Governance lives here; the operational prompt lives in `docs/CP_PM.md`. **Two decisions inside the same day reversed each other and both are recorded:** training tickets were first ruled never to become real work, then Rohith decided that **what the analyst specifies gets built and shipped** — against Vasu's and Sarvanan's advice. The promotion bridge in §46 is what makes that safe: the `CPPM` story is a draft, a re-issued `CP` ticket is the controlled specification, and no `TRN-` identifier ever crosses. **Consequence stated: CP Portal reopens to feature development** — §41 updated the same day, on Rohith's confirmation, from *STABLE, hotfix support only* to **ACTIVE FEATURE DEVELOPMENT**, so §41 and §46 agree.)
 > Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
+> Revision update: 2026-08-13 (Section 48 added — CSV/CSA Interviews. Mandated by Rohith Karne. **The first routine whose subject is not a Pharaxis product.** It rehearses him for interviews as a validation professional moving companies: one epic and five stories per run, each story a real interview conversation between two named interviewers and him, followed by coaching. Manual, like the others. Files to Jira project `CSV`. Governance lives here; the operational prompt lives in `docs/CSV_CSA_INTERVIEWS.md`. It reads no Pharaxis code, names no Pharaxis product, and nothing it produces enters the delivery flow in §38.)
 
 ---
 
@@ -5298,3 +5299,85 @@ Every routine · every ticket · every document · this chat · internal product
 ### Ownership
 
 Rohith Karne owns it. Bala Kaviti keeps the documents current. Aditi Raghavan enforces it in routing. Anyone may say *"plain English, please"* and be answered without argument.
+
+---
+
+## 48. CSV/CSA Interviews (Mandatory)
+
+> Established 2026-08-13 on Rohith Karne's instruction.
+> Governance lives here. The operational prompt lives in `docs/CSV_CSA_INTERVIEWS.md`.
+
+### Principle
+
+**This is the only routine whose subject is not a Pharaxis product, and not Pharaxis at all.**
+
+It prepares Rohith for interviews as a validation professional moving from one company to
+another. Every other routine looks inward at what we build. This one looks outward at a job
+market, and it is deliberately walled off from everything else we do.
+
+### What it is
+
+| Item | Value |
+|---|---|
+| Routine | **CSV/CSA Interviews** |
+| Runs | **Manual only.** Fired by Rohith from the routines screen, as often in a day as he wants |
+| Files to | Jira project **`CSV`** — the only project it writes to |
+| Produces | **One epic and five stories.** Never more, never fewer |
+| Epic name | `CSV/CSA Epic — <today's date>`, and `Round 2`, `Round 3` for later runs the same day |
+| Assigned to | Rohith |
+| Prompt | `docs/CSV_CSA_INTERVIEWS.md` |
+
+### What a story is
+
+One interview question, played out as a conversation. Two interviewers speak by name and
+designation — **Sarvanan as Validation Lead, Vasu as Director of Validation** — and they behave
+like people: they greet him, they react to his last answer, they push when an answer is thin.
+His answers are written out as he would say them.
+
+The interviewer's follow-up probes happen **inside the conversation**, three to five exchanges
+per question. That is the point of the format. A question with a single answer teaches very
+little; the second and third question is where interviews are won and lost.
+
+Each story then steps out of the interview and coaches: what a weak answer sounds like and what
+it signals, a prompt for Rohith to write his own real example, three questions the interviewer
+would go to next, and the regulations behind the answer.
+
+### The rules that matter
+
+- **Main questions never repeat.** Every main question is checked against every story already in
+  the project — by meaning, not by wording. Follow-up questions are exempt, because repetition
+  teaches.
+- **A follow-up may be promoted** into its own main question on a later day, carrying a reference
+  back to where it came from.
+- **All five stories are written at full depth.** A shortened story is a broken story — the
+  weak-answer section only works against a complete answer.
+- **Every answer names its regulation or guidance**, and **no date or clause number is quoted
+  unless it has been verified**. Where a source was read only in summary, the story says so.
+- **The mix is automatic** — two straightforward questions and three that vary between mid and
+  hard. Rohith does not set it.
+- **At least one question per run is situational**, not knowledge-based.
+- **Topic weighting comes from current job adverts**, so the routine tracks what employers are
+  asking for rather than what was being asked three years ago.
+- **When a topic area is used up, the routine says so** rather than padding a run with
+  near-duplicates.
+
+### Where it does not reach
+
+- It never reads Pharaxis code, names a Pharaxis product, or mentions the company.
+- It writes to no Jira project other than `CSV`.
+- **Nothing it produces enters the delivery flow.** It is not a source of work, it does not pass
+  through §26, and it never reaches §38. It produces study material and nothing else.
+- The two interviewers are the same simulated people who speak elsewhere in this SOP, playing
+  interview roles. Their designations here are for the rehearsal only and change nothing about
+  §5 or §39.3.
+
+### Listing the questions
+
+There is no standing local file. When Rohith asks for the list, it is generated from Jira on the
+spot — question, type, ticket reference, no answers. A second copy would drift the moment a
+ticket was edited.
+
+### Ownership
+
+Rohith Karne owns it. Vasu Ranabothu owns the content standard and the source discipline.
+Sarvanan challenges the realism of the questions. Bala Kaviti keeps this section current.
