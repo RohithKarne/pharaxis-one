@@ -90,7 +90,26 @@ Decide the mix automatically. Do not ask Rohith to set it.
 
 **Type** — every story carries one, shown in the title:
 `AI-Enabled` · `CSA Thinking` · `Risk` · `Data Integrity` · `Situational` · `Change Control` ·
-`Supplier and Hosting` · `Qualification` · `Regulatory`
+`Supplier and Hosting` · `Qualification` · `Regulatory` · `IT Compliance` · `Testing`
+
+**What the two newer types cover**, so they are not treated as spare labels:
+
+- **IT Compliance** — access management and periodic access review, segregation of duties, backup
+  and restore, disaster recovery and business continuity, infrastructure qualification, patch and
+  vulnerability handling, procedures and training records, security incident handling. These are
+  the controls that sit inside a regulated system rather than the wider corporate frameworks.
+- **Testing** — test strategy and levels, traceability from requirement through to test, test case
+  design, negative testing, defect classification and management, regression scope, who owns user
+  acceptance testing, evidence standards, and whether an automated test tool itself needs
+  validating.
+
+**Rotation — no type sits unused.** Before choosing, read the last three epics in the project and
+see which types have appeared. **Any type absent from all three is picked first.** With eleven
+types and five slots a run, nothing is allowed to quietly drop off the list.
+
+**AI-Enabled appears at least every other run.** Half of what Rohith is positioning is the
+AI-enabled angle, and it will not come up on its own. If the previous epic had no AI-Enabled
+story, this run must have one.
 
 **Round** — every story carries one:
 `Screening` · `Technical` · `Panel`
@@ -166,17 +185,33 @@ A real conversation. Not a question followed by an answer — a conversation.
   it belongs in the story, not in a list afterwards.
 - Interviewers react honestly. They say when an answer was good and why. They say when a
   candidate has drifted. They are warm but not soft.
+- **At least one probe per story must be genuine pushback.** The interviewer is not convinced,
+  says so, and makes him answer again — *"that's the textbook answer, but it doesn't survive
+  contact"*, *"you've described what, not how"*, *"I don't buy that, try again"*. In at least
+  one story per epic his first attempt is **deliberately incomplete or slightly wrong**, and he
+  has to recover in the next exchange. **A panel that agrees with everything teaches nothing** —
+  it is the recovery he needs to rehearse, not the applause. Do not close every exchange with a
+  compliment.
 - **Every answer is labelled** `**Rohith's answer —**` followed by the answer as a blockquote,
   written in first person, as spoken.
-- The first answer is the short one — roughly twenty seconds of speech, the thing you lead
-  with. Depth comes out through the probes that follow, exactly as it does in a real interview.
+- **The first answer is genuinely short — roughly twenty seconds of speech, about sixty to
+  eighty words.** Not a paragraph, not a mini-essay. In a real screening call a long opener gets
+  interrupted, and rehearsing the wrong rhythm is worse than not rehearsing. **All the depth
+  comes out through the probes that follow.** Later answers may run longer, but none should read
+  as written prose — this is speech.
 
 ### c. Coaching — <name>, stepping out of the interview
 Clearly marked as leaving the interview. Contains:
 
 - **The version that quietly loses you the job.** One or two weak answers written out in full,
-  and an explanation of what each one signals to the interviewer. Say why the confident-sounding
-  wrong answer is often more damaging than the hesitant right one.
+  and an explanation of what each one signals to the interviewer.
+  **The point about a confident wrong answer being more damaging than a hesitant right one is
+  made in full in exactly ONE story per epic — the one where it bites hardest.** Everywhere else
+  it may be referred to in a clause, or not at all. Repeating the same lesson at length in all
+  five stories turns an insight into padding, and the reader starts skipping the section that
+  matters most.
+  The same applies to the **source caveat**: written out in full in the first story that needs
+  it, then reduced to a single line elsewhere.
 - **Your turn — write your own example here.** A prompt asking Rohith for a real example from
   his own work that fits this question. Be specific about what would make a good one, and say
   plainly when he may not have a relevant example and should use the nearest true thing rather
@@ -289,6 +324,12 @@ Agreed with Rohith in session on 2026-08-13.
 | What a weak answer sounds like | §8c |
 | Prompt for Rohith's own example | §8c |
 | Situational questions mandatory | §6 |
+| IT Compliance and Testing added as types, with what each covers | §6 |
+| Rotation — any type absent from the last three epics is picked first | §6 |
+| AI-Enabled appears at least every other run | §6 |
+| At least one genuine pushback per story; one weak first attempt per epic | §8b |
+| Opening answer held to about twenty seconds | §8b |
+| The confident-wrong-answer lesson stated in full once per epic, not five times | §8c |
 | Job advert scan drives topic weighting | §4 |
 | Product-company and service-provider framing, mixed | §6 |
 | Say when a source was summarised, not read | §10 |
