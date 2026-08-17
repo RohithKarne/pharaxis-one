@@ -13,9 +13,9 @@
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-grid-layout": "^2.2.2",
+    "react-grid-layout": "^2.2.4",
     "react-router-dom": "^6.30.4",
-    "recharts": "^3.8.0"
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
