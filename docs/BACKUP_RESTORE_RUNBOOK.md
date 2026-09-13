@@ -88,9 +88,11 @@ Record each drill:
 ## Product Runbook References
 
 - `docs/runbooks/MIMS_PRODUCTION_RUNBOOK.md`
-- `docs/runbooks/QMS_PRODUCTION_RUNBOOK.md`
 - `docs/runbooks/CP_PORTAL_PRODUCTION_RUNBOOK.md`
-- `docs/runbooks/AI_AGENT_PRODUCTION_RUNBOOK.md`
+
+The QMS and AI Agent runbooks were deleted with those products on 2026-09-09
+(SOP §43–§45). The 2026-04-30 restore drill recorded further down ran against
+QMS and is kept as the historical record of that drill.
 
 ## This Repo Next Step
 

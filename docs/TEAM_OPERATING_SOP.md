@@ -2965,9 +2965,9 @@ Section 26 is the standard. Two execution rules sit on top of it:
 ### 40.6 Learning from corrections
 
 - After any correction from Rohith or from a team member, record the **pattern** in
-  `tasks/lessons.md` — the rule that would have prevented it, not a narration of
+  `docs/lessons.md` — the rule that would have prevented it, not a narration of
   what happened.
-- Review `tasks/lessons.md` at the start of work on a project.
+- Review `docs/lessons.md` at the start of work on a project.
 - Where the correction was a **false statement of fact**, this is not sufficient —
   it earns a written postmortem under Section 37.1.
 
@@ -3004,7 +3004,7 @@ retires it.
 | Date | Updated By | What Changed |
 |------|-----------|--------------|
 | 2026-03-27 | Bala | Initial creation — full snapshot as of 2026-03-22 stable release |
-| 2026-07-15 | Bala | CP↔MIMS integration SHIPPED and browser-verified (approved by Rohith). Outbound sync to MIMS `POST /api/v1/cases` (OAuth client-credentials with auto-refresh — `services/mimsAuth.js`), idempotent on CP reference, attachments forwarded, close-sync poller auto-closes CP inquiries, retry poller (incl. stale `pending_sync`), audit trail. Admin: Integration page gained an OAuth auth type + per-form-type Field Mapping builder (`cp_field_mapping`, dot-path targets); new Sync Health dashboard page (`/admin/clients/:id/sync-health`). Secrets encrypted at rest; provisioning scripts must load `.env` (see `tasks/lessons.md` L-011). |
+| 2026-07-15 | Bala | CP↔MIMS integration SHIPPED and browser-verified (approved by Rohith). Outbound sync to MIMS `POST /api/v1/cases` (OAuth client-credentials with auto-refresh — `services/mimsAuth.js`), idempotent on CP reference, attachments forwarded, close-sync poller auto-closes CP inquiries, retry poller (incl. stale `pending_sync`), audit trail. Admin: Integration page gained an OAuth auth type + per-form-type Field Mapping builder (`cp_field_mapping`, dot-path targets); new Sync Health dashboard page (`/admin/clients/:id/sync-health`). Secrets encrypted at rest; provisioning scripts must load `.env` (see `docs/lessons.md` L-011). |
 
 ---
 
@@ -3288,9 +3288,9 @@ All under `/portal/:clientCode/`. Features gated via `isFeatureEnabled()`.
 
 #### 9. Current Status
 
-**Status: STABLE — No active sprint**
+**Status: ACTIVE FEATURE DEVELOPMENT** — set 2026-08-08 by Rohith
 
-CP Portal is in maintenance/hotfix mode. The last active sprint (Sprint 6) closed on 2026-03-24. No new features are being added unless Rohith explicitly directs.
+CP Portal reopened to feature development on 2026-08-08, when §46 introduced the CP-PM routine whose analyst-specified work is built and shipped. The last closed sprint (Sprint 6) ended 2026-03-24; everything since runs through the §26 lock and the §38 delivery path. This section previously still read *STABLE — no active sprint*, contradicting the header of §41; corrected 2026-09-13 on Rohith's instruction.
 
 **What is working:**
 - Full admin panel (28 pages) — all features operational
@@ -3312,18 +3312,20 @@ CP Portal is in maintenance/hotfix mode. The last active sprint (Sprint 6) close
 | 3 | Translation coverage — existing content before 2026-03-21 has empty `translations_json`. Admin must click "Retranslate All Content" once per client to backfill. | Data gap | Low |
 | 4 | Bundle size — 1.1MB JS bundle (single chunk). Should split with `React.lazy()` per route when performance matters. | Performance debt | Low |
 | 5 | Uploads not backed up — `cp-portal/backend/uploads/` is gitignored. Ensure this folder is persisted in any deployment (not ephemeral). | Deployment risk | Medium |
-| 6 | MIMS → CP Portal integration not built | Future sprint | Deferred |
+| 6 | ~~MIMS → CP Portal integration not built~~ — **closed 2026-07-15.** Shipped both directions and browser-verified; see Version History | Closed | — |
 
 ---
 
-#### 11. Future Integration with MIMS
+#### 11. Integration with MIMS — LIVE since 2026-07-15
 
-When MIMS is ready, the integration plan:
-- **CP Portal → MIMS:** CP Portal sends new medical inquiry submissions to MIMS via webhook or polling
-- **MIMS → CP Portal:** MIMS pushes submission outcomes and status updates back to CP Portal via `POST /api/admin/submissions`
-- **Auth:** Shared API key or service token between systems
+This section described the integration as a future plan long after it shipped. Corrected 2026-09-13.
 
-CP Portal REST API is already structured to support this. No changes needed on the CP Portal side to receive updates from MIMS.
+- **CP Portal → MIMS:** MI/AE/PC submissions post to MIMS `POST /api/v1/cases`, idempotent on the CP reference, attachments forwarded
+- **MIMS → CP Portal:** a poller reads MIMS case status and auto-closes the matching CP inquiry
+- **Auth:** OAuth client-credentials with auto-refresh, secrets encrypted at rest
+- **Admin surface:** Integration page (credentials, field mapping, test connection) and the Sync Health page
+
+`other_inquiry` stays CP-only by design. See Version History 2026-07-15.
 
 ---
 
@@ -3393,9 +3395,9 @@ MIMS handles:
 - Multi-org support — single MIMS instance serves multiple pharma client orgs with full data isolation
 
 **Relationship to CP Portal:**
-CP Portal: separate white-label HCP/patient portal. Future: CP Portal → MIMS via API, MIMS pushes outcomes back. Not built yet.
+CP Portal: separate white-label HCP/patient portal. Integration **LIVE since 2026-07-15** — CP Portal posts submissions to MIMS, and MIMS case status flows back to auto-close the CP inquiry (§41.11).
 
-**Current Focus:** MIMS sole active dev priority. CP Portal: hotfix only if Rohith requires.
+**Current Focus:** MIMS and CP Portal are both in active development, neither ahead of the other (§41, set 2026-08-08 by Rohith). Both run locally; no cloud deployment is in scope.
 
 ---
 

@@ -24,7 +24,9 @@ apps/
   mims/
   cp-portal/
 .github/
-docs/
+docs/        all project documentation lives here
+ops/
+scripts/
 ```
 
 ## Prerequisites
@@ -32,7 +34,6 @@ docs/
 - Node.js 20+
 - npm 10+
 - MySQL 8+
-- PostgreSQL 14+
 - macOS/Linux shell (examples use `zsh`/`bash`)
 
 ## Quick Start
@@ -63,6 +64,14 @@ MySQL:
 - `pharaxis_cp_portal_dev`
 
 ### 4) Run Services
+
+Both products, one command (MySQL must already be running):
+
+```bash
+./scripts/dev-all.sh
+```
+
+Ctrl-C stops everything it started. To run just one product:
 
 ```bash
 # MIMS
