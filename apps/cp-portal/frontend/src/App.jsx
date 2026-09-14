@@ -49,6 +49,7 @@ import FindMSLPage              from './portal/pages/FindMSLPage'
 import MySubmissionsPage        from './portal/pages/MySubmissionsPage'
 import ContactPage              from './portal/pages/ContactPage'
 import PortalNotFoundPage       from './portal/pages/PortalNotFoundPage'
+import PortalUnavailablePage   from './portal/pages/PortalUnavailablePage'
 import SafetyPortalPage         from './portal/pages/SafetyPage'
 import NewsPortalPage           from './portal/pages/NewsPage'
 import NewsDetailPage           from './portal/pages/NewsDetailPage'
@@ -106,10 +107,20 @@ function PortalIdleTimeout() {
   return <IdleTimeout timeoutMinutes={user ? PORTAL_IDLE_MINUTES : 0} onTimeout={logout} />
 }
 
+// PortalContext records a failed config load in `error` and, until 2026-09-14,
+// nothing read it — so an unknown client code rendered the default portal shell
+// instead of saying the portal does not exist. This gate is that reader.
+function PortalConfigGate({ children }) {
+  const { error } = usePortal()
+  if (error) return <PortalUnavailablePage />
+  return children
+}
+
 function PortalRoutes() {
   return (
     <PortalProvider>
       <ToastProvider>
+      <PortalConfigGate>
       <PortalIdleTimeout />
       <PortalLayout>
         <Routes>
@@ -142,6 +153,7 @@ function PortalRoutes() {
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
       </PortalLayout>
+      </PortalConfigGate>
       </ToastProvider>
     </PortalProvider>
   )
