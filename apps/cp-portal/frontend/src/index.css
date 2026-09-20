@@ -1950,9 +1950,9 @@ body { background: var(--cp-bg); }
 .pp-header-search { display: flex; align-items: center; gap: 8px; min-width: 300px; max-width: 420px; height: 38px; padding: 0 12px; border: 1px solid var(--pp-border); border-radius: 8px; background: #fff; color: var(--pp-text-muted); }
 .pp-header-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--pp-text); font: inherit; font-size: 13px; }
 .pp-header-search input::placeholder { color: #8A94A3; }
-.pp-hero-search { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #DDE5EE; border-radius: 8px; padding: 12px 14px; width: min(100%, 720px); margin: 0 0 14px; box-shadow: 0 16px 40px -28px rgba(15,23,42,0.5); color: var(--pp-primary); }
-.pp-hero-search input { flex: 1; min-width: 0; border: 0; outline: 0; font: inherit; font-size: 15px; color: var(--pp-text); background: transparent; }
-.pp-hero-search-btn { flex: none; background: var(--pp-btn); color: var(--pp-btn-text); border: 0; font-weight: 700; font-size: 14px; padding: 10px 20px; border-radius: 7px; cursor: pointer; }
+.pp-hero-search { display: flex; align-items: center; gap: 14px; background: #fff; border: 1px solid #DDE5EE; border-radius: 10px; padding: 16px 18px; width: min(100%, 1000px); margin: 0 0 14px; box-shadow: 0 16px 40px -28px rgba(15,23,42,0.5); color: var(--pp-primary); }
+.pp-hero-search input { flex: 1; min-width: 0; border: 0; outline: 0; font: inherit; font-size: 18px; color: var(--pp-text); background: transparent; }
+.pp-hero-search-btn { flex: none; background: var(--pp-btn); color: var(--pp-btn-text); border: 0; font-weight: 700; font-size: 16px; padding: 12px 26px; border-radius: 8px; cursor: pointer; }
 .pp-hero-search-btn:hover { filter: brightness(0.95); }
 .pp-search-suggestions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--pp-text-muted); }
 .pp-search-suggestions button { border: 1px solid var(--pp-border); background: #fff; color: var(--pp-text); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12px; cursor: pointer; }
@@ -2085,10 +2085,10 @@ body { background: var(--cp-bg); }
 /* ── Hero section ────────────────────────────────────────── */
 .pp-hero { background: linear-gradient(180deg, #F8FBFF 0%, #FFFFFF 100%); color: var(--pp-text); padding: 56px 0 34px; border-bottom: 1px solid #EAF0F6; }
 .pp-hero-inner { max-width: 1600px; margin: 0 auto; padding: 0 32px; display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 56px; align-items: start; text-align: left; }
-.pp-hero-copy { max-width: 760px; }
-.pp-hero-kicker { display: inline-flex; margin-bottom: 14px; color: var(--pp-primary); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.pp-hero-title { font-size: clamp(28px, 3vw, 40px); font-weight: 800; line-height: 1.08; margin-bottom: 14px; letter-spacing: -0.02em; color: #0F172A; max-width: 640px; }
-.pp-hero-subtitle { font-size: 17px; color: var(--pp-text-muted); margin-bottom: 28px; line-height: 1.65; max-width: 680px; }
+.pp-hero-copy { max-width: 1020px; }
+.pp-hero-kicker { display: inline-flex; margin-bottom: 14px; color: var(--pp-primary); font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.pp-hero-title { font-size: clamp(32px, 4vw, 56px); font-weight: 800; line-height: 1.06; margin-bottom: 16px; letter-spacing: -0.02em; color: #0F172A; max-width: 900px; }
+.pp-hero-subtitle { font-size: 21px; color: var(--pp-text-muted); margin-bottom: 30px; line-height: 1.6; max-width: 860px; }
 .pp-hero-panel { display: flex; flex-direction: column; gap: 14px; }
 .pp-safety-card { display: flex; gap: 14px; padding: 18px; background: #FFF7F6; border: 1px solid #F8D3CE; border-radius: 8px; color: #7F1D1D; }
 .pp-safety-card-icon { flex: none; color: var(--pp-accent); }
@@ -2881,7 +2881,7 @@ textarea:focus-visible {
 @keyframes pp-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ── Search typeahead dropdown (CP-12) ────────────────────────────────────── */
-.pp-hero-search-wrap { position: relative; width: min(100%, 720px); }
+.pp-hero-search-wrap { position: relative; width: min(100%, 1000px); }
 .pp-hero-search-wrap .pp-hero-search { width: 100%; }
 .pp-suggest-dropdown {
   position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 50;
