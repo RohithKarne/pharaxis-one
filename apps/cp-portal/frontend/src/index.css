@@ -2020,17 +2020,17 @@ body { background: var(--cp-bg); }
 .pp-header { background: #fff; color: var(--pp-text); border-bottom: 1px solid var(--pp-border); box-shadow: 0 1px 2px rgba(15,23,42,0.04); position: sticky; top: 0; z-index: 100; }
 .pp-header-inner { max-width: 1600px; margin: 0 auto; padding: 0 32px; height: 100px; display: flex; align-items: center; gap: 18px; }
 .pp-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--pp-header-text); flex-shrink: 0; }
-.pp-logo-img { height: 58px; object-fit: contain; }
-.pp-logo-text { font-size: 27px; font-weight: 800; letter-spacing: -0.4px; color: var(--pp-text); }
-.pp-nav { display: flex; align-items: center; gap: 2px; flex: 1; }
-.pp-nav-link { color: var(--pp-text-muted); text-decoration: none; padding: 8px 11px; border-radius: 7px; font-size: 17px; font-weight: 600; transition: background 0.15s, color 0.15s; white-space: nowrap; }
+.pp-logo-img { height: 62px; object-fit: contain; }
+.pp-logo-text { font-size: 30px; font-weight: 800; letter-spacing: -0.4px; color: var(--pp-text); }
+.pp-nav { display: flex; align-items: center; gap: 6px; flex: 1; }
+.pp-nav-link { color: var(--pp-text-muted); text-decoration: none; padding: 9px 13px; border-radius: 7px; font-size: 19px; font-weight: 600; transition: background 0.15s, color 0.15s; white-space: nowrap; }
 .pp-nav-link:hover, .pp-nav-link-active { background: #EEF5FF; color: var(--pp-primary); }
 .pp-nav-dropdown-btn { background: none; border: none; cursor: pointer; }
 .pp-nav-dropdown-menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 180px; background: #fff; border: 1px solid #E2E8F0; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 200; overflow: hidden; }
-.pp-nav-dropdown-item { display: block; padding: 10px 16px; font-size: 15px; color: #1E293B; text-decoration: none; transition: background 0.12s; }
+.pp-nav-dropdown-item { display: block; padding: 11px 16px; font-size: 16px; color: #1E293B; text-decoration: none; transition: background 0.12s; }
 .pp-nav-dropdown-item:hover { background: #F1F5F9; }
 .pp-header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-.pp-header-actions .pp-btn { font-size: 15px; padding: 10px 20px; }
+.pp-header-actions .pp-btn { font-size: 16px; padding: 11px 22px; }
 .pp-mobile-menu-btn { display: none; background: none; border: 1px solid var(--pp-border); color: var(--pp-text); border-radius: 8px; font-size: 20px; cursor: pointer; padding: 4px 8px; }
 .pp-mobile-menu-btn:focus-visible { outline: 2px solid var(--pp-header-text, #fff); outline-offset: 2px; -webkit-focus-ring-color: var(--pp-header-text, #fff); }
 
@@ -2763,7 +2763,7 @@ textarea:focus-visible {
 }
 
 /* Persistent local date/time clock in the header (all portal pages). */
-.pp-clock       { display: inline-flex; align-items: baseline; gap: 6px; font-size: 14px; color: var(--pp-text-muted); white-space: nowrap; }
+.pp-clock       { display: inline-flex; align-items: baseline; gap: 6px; font-size: 15px; color: var(--pp-text-muted); white-space: nowrap; }
 .pp-clock-date  { font-weight: 600; color: var(--pp-text); }
 .pp-clock-time  { font-variant-numeric: tabular-nums; }
 /* Step the clock down as header space tightens so it never overflows the row:
@@ -2778,6 +2778,12 @@ textarea:focus-visible {
 
 /* Between the phone menu (769px) and a roomy desktop the full nav has to fit on
    one line, so the enlarged header type steps back down as the window narrows. */
+@media (max-width: 1520px) and (min-width: 769px) {
+  .pp-logo-img { height: 56px; }
+  .pp-logo-text { font-size: 25px; }
+  .pp-nav-link { font-size: 16px; padding: 8px 10px; }
+  .pp-header-actions .pp-btn { font-size: 14.5px; padding: 10px 18px; }
+}
 @media (max-width: 1250px) and (min-width: 769px) {
   .pp-logo-img { height: 48px; }
   .pp-logo-text { font-size: 21px; }
