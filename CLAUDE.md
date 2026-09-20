@@ -8,6 +8,14 @@ Read this before writing code in this repository.
 
 ---
 
+## The team, as of 2026-09-20
+
+Six people: **Rohith Karne** (Founder & CEO), **Aditi Raghavan** (Chief of Staff — Claude Code's default voice), **Varun Karne** (Co-Founder & CTO — all engineering), **Saad Rahman** (CPO), **Kiranmai Avuluri** (Director of Test Engineering — the testing view, **writes no test code**), **Vasu Ranabothu** (CCO). **Katrina** is an external client.
+
+Removed 2026-09-20: Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. **AI-governance and clinical judgement are now unstaffed — those calls go to Rohith.** → SOP §4, §39.3
+
+---
+
 ## Hard constraints — these are not style preferences
 
 1. **Pushing is enabled, and it is not blanket authorisation.** Rohith re-enabled `git push` on 2026-07-27, ending the Sprint 3 restriction, so CI runs the tests instead of someone remembering to. **Confirm with Rohith before pushing anything of substance**, and never push to `main` without saying what is going and what has not been checked. → SOP §31
@@ -29,11 +37,13 @@ Read this before writing code in this repository.
 
 **IV. Surgical changes.** Your diff should be as small as the task allows. Do not touch what you were not asked to touch. Match the existing style. Do not reformat — a formatter pass buries the three lines that matter inside three hundred that do not. **The test:** can you justify every changed line by the task? If a line is there because "while I was in there," revert it.
 
-**V. Verification.** When fixing a bug, **write the failing test first, watch it fail, then fix it.** That is the only proof you fixed the cause and not the symptom. Test behaviour that can actually break, not that a constructor sets a field. If something is hard to test, that is information about the design, not permission to skip it. → SOP §26, §29
+**V. Verification.** **Changed 2026-09-20: we no longer write automated tests.** Kiranmai stopped writing test code and nobody took it on, so SOP §29 is retired and the failing-test-first rule with it. What replaces it is not "less proof" but a different proof: **open the real screen, do the thing a user would do, including one path that should fail, and say what you saw.** → SOP §26
 
-> An unrun test in the repository is worse than no test. It reads as evidence to an auditor and is not.
+> Two consequences, said out loud because they are easy to forget. A regression is now caught only by a person noticing it. And the person who writes a change is usually the person who verifies it — so **what you did not check matters more than ever, and goes in every report and every pull request.**
 
-**Before it runs the first time, someone else reads it** — anything that writes to a database, calls an external service, or files a ticket. Twenty minutes, and it is the rule we skip most. The reviewer's third question is the one that matters: **could this fail silently?** A thing that reports success without doing the work is worse than a thing that crashes. → SOP §37.2
+> The tests already in the repositories still run in CI. Do not delete them, and do not let a red one stay red.
+
+**Before it runs the first time, someone else reads it** — anything that writes to a database, calls an external service, or files a ticket. Twenty minutes, and it is the rule we skip most. The reviewer's third question is the one that matters: **could this fail silently?** A thing that reports success without doing the work is worse than a thing that crashes. **Since 2026-09-20 that second reader is Rohith** — the team is six people and Varun is usually the author. → SOP §37.2
 
 **When we state something as fact and it turns out false, that earns a written postmortem** — not when code is wrong, but when we told someone something untrue. Half a page, blameless, and it ends in a filed ticket. → SOP §37.1
 

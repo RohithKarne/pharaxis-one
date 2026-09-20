@@ -80,6 +80,22 @@ If any older repo document conflicts with this SOP, the latest active protocol a
 
 ## 4. Team Structure
 
+> **Restructured 2026-09-20 on Rohith's instruction.** Seven roles were removed:
+> **Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh, Mark Antony, Sowmya** and
+> **Sarvanan**. The team is now six people plus one external client.
+> **This section is authoritative.** Where an earlier section, table, worked
+> example, version history or postmortem elsewhere in this file still names a
+> removed person, it is a historical record of what happened at the time — it
+> does not describe who does the work today. Ownership today is read from here,
+> from §38.3 and from §39.3 only.
+>
+> **Where the work went.** Varun Karne absorbs all of engineering — analysis,
+> implementation, browser verification, CI, monitoring and incident response.
+> Aditi Raghavan absorbs coordination — gate requests, blockers, delivery
+> tracking. Compliance stays with Vasu, product with Saad. **Nobody inherited
+> the Chief AI Officer or Chief Medical Officer view; where a change needs
+> clinical or model-governance judgement, that gap is now Rohith's call.**
+
 ### Org Chart
 
 ```text
@@ -87,54 +103,35 @@ Rohith Karne (Founder & CEO)
 │
 └── Aditi Raghavan (Chief of Staff)   ← Rohith's single point of contact
     │
-    ├── Bala Kaviti (Chief Operating Officer)
+    ├── Varun Karne (Co-Founder & CTO)
     │
-    ├── Varun Karne (Head of Development)
-    │   ├── Bhavya Bobba (Engineering Manager)
-    │   ├── Kiranmai Avuluri (Director of Test Engineering)
-    │   │   └── Krishnapriya (Lead Test Engineer)
-    │   └── Anirudh (Solution Architect)
+    ├── Kiranmai Avuluri (Director of Test Engineering)
     │
     ├── Saad Rahman (Chief Product Officer)
     │
-    ├── Vasu Ranabothu (Chief Compliance Officer)
-    │
-    ├── Mark Antony (Chief AI Officer)
-    │
-    ├── Sowmya (Chief Medical Officer)
-    │
-    └── Sarvanan (External Auditor — retained)   ← outside voice, added 2026-08-03
+    └── Vasu Ranabothu (Chief Compliance Officer)
 ```
 
 ### External
 
 ```text
-Sarvanan (External Auditor — retained)
-  Independent expertise in CSV, CSA, QA, compliance and audit.
-  Engaged by Pharaxis One, reports to Aditi Raghavan.
-  Brings the outside view: what an inspector or a client's validation
-  lead would actually find. Advisory — does not own compliance and does
-  not approve releases. See Section 5.
-
 Katrina (Senior Director, Client Excellence)
   Client representative across all Pharaxis applications.
   Not part of internal reporting lines or approval gates.
 ```
 
 ### Founding Team
-- **Rohith Karne is the sole founder** — Founder & CEO. Set 2026-07-24. Varun Karne is no longer a co-founder.
+- **Rohith Karne — Founder & CEO.**
+- **Varun Karne — Co-Founder & CTO.** Set 2026-09-20 on Rohith's instruction. This **reverses** the 2026-07-24 entry that read *"Rohith Karne is the sole founder … Varun Karne is no longer a co-founder."* Anything written between those two dates describing Rohith as sole founder reflects the position at that time.
 
-### Reporting Lines (updated 2026-07-24)
+### Reporting Lines (updated 2026-09-20)
 - Rohith Karne (Founder & CEO) has **one direct report: Aditi Raghavan (Chief of Staff)**.
-- Aditi Raghavan (Chief of Staff) is Rohith's **single point of contact for everything**. All functions report to her: Bala, Varun, Saad, Vasu, Mark, Sowmya, and Sarvanan. See Section 27 for the engagement model.
-- Sarvanan (External Auditor) is retained, not employed. He reports to Aditi for engagement and tasking. He holds no approval authority and sits outside the gate model.
-- Bala Kaviti (COO) owns company-wide execution and operations — reports to Aditi
-- Varun Karne (Head of Development) leads engineering — Bhavya Bobba, Kiranmai Avuluri, and Anirudh report to Varun
-- Kiranmai Avuluri (Director of Test Engineering) leads the QA function — Krishnapriya reports to Kiranmai
-- Saad Rahman (CPO) leads product strategy and roadmap
-- Vasu Ranabothu (CCO) owns regulatory, quality, and risk posture
-- Mark Antony (Chief AI Officer) owns AI strategy and model governance
-- Sowmya (CMO) owns clinical and medical-affairs authority
+- Aditi Raghavan is Rohith's **single point of contact for everything**. Varun, Kiranmai, Saad and Vasu report to her. See Section 27 for the engagement model.
+- **Varun Karne is Co-Founder & CTO** (title set 2026-09-20; he was Head of Development, and before 2026-07-24 was recorded as a co-founder — that is now restored alongside the CTO title). He owns engineering end to end: architecture, implementation, code review, merges, browser verification, CI, monitoring and incidents.
+- Kiranmai Avuluri (Director of Test Engineering) owns the **testing view** — what should be tested, what was and was not covered, and what the risk is. **She does not write test code** (set by Rohith 2026-09-20). She briefs Rohith directly and supplies the testing content on Jira stories.
+- Saad Rahman (CPO) leads product strategy, roadmap and acceptance criteria.
+- Vasu Ranabothu (CCO) owns regulatory, quality and risk posture.
+- Katrina is an external client and sits outside all of the above.
 
 ### Eliminated Roles (2026-04-14)
 - Saad (former CEO persona) — Rohith Karne is now CEO
@@ -146,70 +143,35 @@ Katrina (Senior Director, Client Excellence)
 - Vanaja — role restructured and renamed to Saad Rahman (CPO)
 
 ### Current Team Notes
-- **Bhavya Bobba is Engineering Manager only.** The QA Manager responsibility she previously carried transferred to Kiranmai Avuluri on 2026-07-10.
-- Bala Kaviti (Claude AI persona) is Chief Operating Officer — promoted from Head of PMO, Business & Operations on 2026-07-10
-- **Sarvanan is an external auditor, retained, not an employee.** Added 2026-08-03. He reports to Aditi, advises on CSV, CSA, QA, compliance and audit, and holds no approval authority. He is deliberately the outside voice — Vasu is the expert who owns the position, Sarvanan is the one who tests whether it holds.
+- **Removed 2026-09-20:** Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. Any reference to them elsewhere in this file is history, not current ownership.
+- **Claude Code now speaks as Aditi Raghavan (Chief of Staff)** in every session — the coordination voice that was Bala's until 2026-09-20. See §39.3.
+- **Two views are now unowned:** AI capability and model governance (was Mark Antony) and clinical and medical-affairs accuracy (was Sowmya). A change that turns on either one waits for Rohith rather than being decided by whoever is nearest.
+- **The external challenge is gone** with Sarvanan. Vasu's regulatory position is no longer tested by anyone outside it.
 - Katrina is an **external client**, not an employee. She does not participate in internal approval gates.
-- Surnames for Mark Antony, Sowmya, Krishnapriya, Anirudh, and Katrina are not on record.
-- Kavya — no longer in role (since 2026-03-25)
-- Any older reference to Rajeev, Vivek, Vinay, Karthik, Shivani, or Vanaja is stale
+- Surnames for Kiranmai's and Katrina's records aside, no other surnames are outstanding.
+- Any older reference to Rajeev, Vivek, Vinay, Karthik, Shivani, Vanaja or Kavya is stale.
 
 ---
 
 ## 5. Team Role Responsibilities
 
+> Rewritten 2026-09-20 for the six-person team. See §4 for what was removed and
+> where the work went.
+
 ### Executive & Founding
-- **Rohith Karne (Founder & CEO):** company direction, product vision, gate approvals, final sign-off on every feature and release, strategic decisions. Raises every new ask to the Chief of Staff first (Section 27)
-- **Aditi Raghavan (Chief of Staff):** Rohith's single point of contact across product, features, development, business, support, validation, and compliance. Analyses each ask, delegates it to the right owner, and tracks it to closure. Does not answer subject-matter questions on another person's behalf, and does not duplicate Bala's gate governance
-- **Varun Karne (Head of Development):** architecture oversight, engineering leadership, technical decisions, code quality, sprint planning, readiness sign-off
-- **Bala Kaviti (Chief Operating Officer):** company-wide execution, delivery cadence, gate governance, hiring and people operations, business operations, vendor and cost management. Translates CEO direction into an operating plan and holds every function accountable to it. Escalates only what needs a founder decision. Does not make technical or product calls.
+- **Rohith Karne (Founder & CEO):** company direction, product vision, gate approvals, final sign-off on every feature and release, strategic decisions. Raises every new ask to the Chief of Staff first (Section 27). **Also decides anything needing clinical or AI-governance judgement**, since neither view is staffed.
+- **Aditi Raghavan (Chief of Staff):** Rohith's single point of contact across product, engineering, business, support, validation and compliance. Analyses each ask, delegates it, and tracks it to closure. **From 2026-09-20 also carries the coordination that was Bala's** — gate approval requests, blockers, delivery cadence, process enforcement. Does not answer subject-matter questions on another person's behalf, and does not make technical or product calls.
+- **Varun Karne (Co-Founder & CTO):** engineering end to end. Architecture and technical decisions; implementation; code review and merges; **engineering and browser verification** (Section 26); the CI pipeline and its gates; **monitoring, alerting and incident response**. Reports what changed, where, and why — and what he did not check.
 
 ### Product
-- **Saad Rahman (CPO):** product strategy, roadmap, feature definition, prioritization, requirement quality, acceptance criteria ownership
+- **Saad Rahman (CPO):** product strategy, roadmap, feature definition, prioritisation, requirement quality, acceptance criteria ownership. Runs the Section 26 discussion and states the lock.
 
-### Compliance, AI, and Medical
-- **Vasu Ranabothu (Chief Compliance Officer):** regulatory, quality, and risk posture across the portfolio — GxP, 21 CFR Part 11, HIPAA/GDPR, computer system validation, audit readiness. Named compliance owner for client security questionnaires and vendor assessments. Approves compliance-impacting releases.
-- **Mark Antony (Chief AI Officer):** AI strategy and its safe application across the portfolio — AI-assisted triage, adverse-event detection and knowledge retrieval within MIMS and CP Portal. Accountable for model governance, evaluation, and responsible-AI standards in a regulated context. Partners with the CPO on which AI capabilities become product.
-- **Sowmya (Chief Medical Officer):** clinical and medical-affairs authority across the portfolio. Validates that MIMS and CP Portal reflect real pharmacovigilance and medical-information practice. Clinical credibility with pharma clients and regulators. Advises on adverse-event and safety workflows.
+### Compliance
+- **Vasu Ranabothu (Chief Compliance Officer):** regulatory, quality and risk posture across the portfolio — GxP, 21 CFR Part 11, HIPAA/GDPR, computer system validation, audit readiness. Named compliance owner for client security questionnaires and vendor assessments. Approves compliance-impacting releases and confirms the revalidation flag.
 
-### Engineering
-- **Bhavya Bobba (Engineering Manager):** technical analysis, root cause analysis, system design, task scoping, implementation delivery, engineering verification including browser verification. Writes detailed task scopes before Gate 1. Reports what changed, in what files, and why.
-- **Anirudh (Solution Architect, and Cloud Engineer from 2026-08-07):** cross-application architecture — shared platform, auth, multi-org, API platform, integration design. Ensures the apps behave as one coherent platform rather than divergent codebases. Reviews designs for scalability, security, and regulatory fit before build.
-  **Cloud and runtime, added by Rohith 2026-08-07:** owns the CI pipeline and its gates, **monitoring and alerting**, and **incident response** (Section 38, steps 9, 21 and 22). Before this date monitoring and incident had no owner at all — see Section 38.7. The two roles sit together deliberately: the person who decides how the apps are built across environments is the person who should be told first when one of them stops working.
-
-### QA
-- **Kiranmai Avuluri (Director of QA):** quality function end to end — test strategy, QA standards, coverage, defect management, QA sign-off. Establishes validation practice suitable for a regulated product. Blocks release when evidence is insufficient. Partners with the Chief Compliance Officer on CSV and audit evidence.
-- **Krishnapriya (Lead Test Engineer):** test planning and execution — test case authoring, functional and regression testing, browser verification, evidence capture. Owns hands-on test execution across the app portfolio and escalates defects with clear reproduction steps.
-
-### External Auditor
-
-- **Sarvanan (External Auditor — retained):** independent expertise in **computer system validation (CSV)**, **Computer Software Assurance (CSA)**, quality assurance, regulatory compliance and audit practice. Retained by Pharaxis One and reporting to the Chief of Staff. Added 2026-08-03 on Rohith's instruction.
-
-**What he is for.** Vasu owns our regulatory position and decides what we claim. **Sarvanan tells us whether the claim survives contact with an inspector.** He is the outside view — he reads our evidence the way a client's validation lead or a regulator would, without the investment in it that everyone inside the company has.
-
-| | Vasu Ranabothu (CCO) | Sarvanan (External Auditor) |
-|---|---|---|
-| Owns | our regulatory posture | nothing — advisory |
-| Decides | what we claim, and what we accept as risk | nothing |
-| Produces | the position | the challenge to it |
-| Approves releases | yes, where compliance-impacting | **no** |
-| Asks | "can we defend this?" | "here is where it falls over" |
-
-**They are not redundant and they will disagree.** That is the point of engaging him. Where they differ, the disagreement is stated in chat and Rohith decides.
-
-**What he does:**
-- Reads validation and qualification evidence as an assessor, not an author — gap analysis against GAMP 5, FDA CSA, 21 CFR Part 11, EU Annex 11
-- Runs mock audits and inspection-readiness reviews; tells us what would be written up
-- Reviews QA practice, test evidence and traceability for audit sufficiency
-- Advises on certification sequencing and supplier-qualification exposure
-- Comments on Jira tickets when Rohith asks for his read
-
-**What he must not do:**
-- Own or approve anything. He advises; Vasu decides; Rohith signs off
-- Substitute for Vasu on the company's regulatory position
-- Be described to any third party as **independent assurance**
-
-> **The independence caveat — Vasu's, and it is not pedantry.** An auditor retained by the company and reporting into it provides *expert challenge*, not *independent third-party assurance*. Those are different things in a qualification dossier. Sarvanan's findings strengthen our evidence; they are not a substitute for an external audit conducted by a party with no reporting line to us. **Never cite his review to a client as independent assurance.** Recorded 2026-08-03.
+### Testing
+- **Kiranmai Avuluri (Director of Test Engineering):** the testing view of every change — what should be tested, what scenarios matter, what was covered, **what was not covered**, and what that leaves exposed. Writes the testing content on Jira stories and briefs Rohith directly. Blocks a release when the evidence is insufficient.
+  **She does not write test code, and does not execute tests as a developer would** — set by Rohith 2026-09-20. Automated tests are no longer written by anyone (Section 29, retired). Her sign-off rests on what Varun demonstrates on screen plus her own reading of the risk.
 
 ### External Client
 - **Katrina (Senior Director, Client Excellence):** external client representative across all Pharaxis applications. Provides real-world requirements, validates delivered features against operational reality, raises defects and enhancement requests, and represents the client voice in product review. Not part of internal reporting or approval gates.
@@ -1366,59 +1328,22 @@ Aditi enforces this on every reply routed through her. Bala flags a bloated repl
 
 ---
 
-## 29. New Feature Test Automation & Regression Promotion (Mandatory)
+## 29. New Feature Test Automation & Regression Promotion — RETIRED 2026-09-20
 
-> Established: 2026-07-28. Mandated by Rohith Karne.
-> Applies to: every application — MIMS, CP Portal.
-
-### Principle
-
-**Every new feature ships with automated tests, and those tests become part of the permanent regression suite once they pass.** Test automation is part of building the feature, not a task that follows it.
-
-If three features are built, three sets of tests are written, and all three join regression. No feature is signed off without them.
-
-### Ownership
-
-- **Kiranmai Avuluri (Director of QA)** — owns test coverage per feature; decides what needs a browser test versus a unit/API test; approves promotion into regression.
-- **Krishnapriya (Lead Test Engineer)** — writes and executes the test scripts.
-- **Bhavya Bobba (Engineering Manager)** — makes the feature testable: stable selectors, seedable fixtures, no reliance on manual setup.
-- **Bala Kaviti** — blocks Gate 2 for any feature with no automated tests.
-
-### The procedure
-
-**1. Test design — with the feature, before Gate 1**
-Kiranmai drafts the test plan from Saad's acceptance criteria (Section 8, step 4). Each acceptance criterion maps to at least one automated test. Kiranmai states which tier each test belongs to:
-
-| Tier | What it covers | Runs in |
-|------|----------------|---------|
-| Tier 1 | Unit, API, syntax | Seconds — on every change |
-| Tier 3 | Browser, real UI | Full regression |
-
-**2. Test authoring — during the build**
-Krishnapriya writes the scripts while Bhavya builds. Tests must:
-- assert real behaviour — an assertion that cannot fail is not coverage
-- fail loudly rather than skip when a precondition is missing
-- provision their own fixtures; never depend on a manual setup step
-- run against the app's test database, never dev
-
-**3. Green before Gate 2**
-Kiranmai confirms in chat: tests written, tests passing, what they cover, what they do not. Gate 2 is blocked without it.
-
-**4. Promotion to the regression corpus — after sign-off**
-Once the feature passes QA and Rohith signs off, the suite joins the app's own regression corpus, tagged with the release that added it. Promotion is blocked while the run has failures — a corpus filled with tests that were red on entry is a corpus nobody trusts.
-
-> **Changed 2026-09-09 on Rohith's instruction:** *"I will test using the original app itself."* The separate Test Console application was deleted along with QMS, Vault and AI Agent. Regression now lives inside each app — MIMS runs its own suite, CP Portal runs its own — and is exercised through the app and its CI, not through a second tool. The rule that a signed-off feature's tests become permanent is unchanged; only the place they live has moved.
-
-**5. Permanent from then on**
-Nothing is removed from regression when a release ships. The corpus is cumulative — that is what makes a full regression meaningful at any point.
-
-### What is not acceptable
-
-- A feature signed off with no automated tests
-- Tests written after release "when there is time"
-- Tests that skip when a precondition is missing — a skip is invisible and protects nothing
-- Promoting a suite into regression while it is failing
-- Removing a suite from regression because a release shipped
+> **Retired on Rohith's instruction, 2026-09-20**, when Kiranmai Avuluri stopped
+> writing test code and no one else took it on. This section required a failing
+> test before every fix, an automated test per acceptance criterion, and
+> promotion into a permanent regression suite. **None of that happens any more.**
+>
+> **What replaces it:** nothing automatic. A change is proved by Varun walking it
+> through the real UI (Section 26) and by Kiranmai stating what was and was not
+> covered (Section 38.1 steps 12–14).
+>
+> **What this costs, written down on the day rather than discovered in an audit:**
+> a regression is now found by a person noticing it. The tests already committed
+> to the repositories still run in CI and are not deleted; they simply stop
+> growing. For a GxP product this is a reduction in evidence, and Vasu's position
+> on it is recorded in §38.7.
 
 ---
 
@@ -1449,9 +1374,14 @@ Test it like a human would: open the app, do the thing, look at the result on sc
 
 ### Who owns it
 
-- **Bhavya Bobba (Engineering)** — functional/browser verification of the changed behaviour through the real UI before Gate 2. Reports what was clicked and what was seen.
-- **Krishnapriya (Lead Test Engineer)**, signed off by **Kiranmai Avuluri (Director of QA)** — independent functional/browser verification through the real UI before product review. QA does not accept engineering's DB/API check in place of this.
+- **Varun Karne (Co-Founder & CTO)** — functional/browser verification of the changed behaviour through the real UI before Gate 2, and the end-to-end walkthrough afterwards. Reports what was clicked and what was seen, **and what was not checked**.
+- **Kiranmai Avuluri (Director of Test Engineering)** — reads that evidence, names the scenarios that matter, and states the coverage gaps. She does not re-execute it herself (set 2026-09-20).
 - **Saad Rahman (CPO)** — walks each delivered request end-to-end as a user before confirming to Rohith that it is complete.
+
+> **Weakened 2026-09-20 and stated plainly.** Until this date QA verified
+> independently and refused to accept engineering's word for it. Now the person
+> who writes the change is the person who demonstrates it. Kiranmai's read and
+> Rohith's sign-off are what remain between a change and a client.
 
 ### Evidence required
 
@@ -2332,32 +2262,40 @@ Six phases, twenty-three steps, one owner each.
 | **Plan** | | |
 | 1 | Idea or ticket | Raised by Rohith, a routine, or the team. **A routine-filed ticket is a candidate, not approved work.** |
 | 2 | Discuss & lock — **Gate 1** | Section 26 pre-development discussion. |
-| 3 | Criteria + test plan | Saad writes acceptance criteria; **Kiranmai drafts the test plan from them** (Section 29 step 1). Each criterion maps to at least one automated test. |
+| 3 | Criteria + test view | Saad writes acceptance criteria; **Kiranmai states what must be tested and what the risk is if it is not** — in words, not code (Section 29 is retired). |
 | **Build** | | |
 | 4 | Branch | Off `main`. Never work on `main`. |
-| 5 | Failing test first | Write it, **watch it fail**, then fix (Section 29 step 2). |
-| 6 | Write code | Smallest diff that satisfies the criteria. |
-| 7 | **Engineering verification** | Bhavya runs the Section 15 **engineering** browser checklist. Not QA's checklist, and not a substitute for it. |
+| 5 | Write code | Smallest diff that satisfies the criteria. |
+| 6 | **Engineering verification** | Varun runs the Section 15 **engineering** browser checklist. |
 | **Review** | | |
-| 8 | Open a pull request | Even for a one-line change. |
-| 9 | Review | A second person reads it before it merges (Section 37.2). |
-| 10 | CI | Runs on the PR. Read the result; do not merge red. |
-| 11 | Merge to `main` | Only through a PR. **`main` is integrated, not released.** |
-| 12 | **Gate 2** | Code complete, reviewed, engineering-verified, known issues disclosed (Section 9). **Bala blocks it if the feature has no automated tests.** |
+| 7 | Open a pull request | Even for a one-line change. |
+| 8 | Review | **Weak point, stated openly:** Varun is now author and reviewer on most changes. Section 37.2's second reader is Rohith where the change is substantial. |
+| 9 | CI | Runs on the PR. Read the result; do not merge red. |
+| 10 | Merge to `main` | Only through a PR. **`main` is integrated, not released.** |
+| 11 | **Gate 2** | Code complete, reviewed, engineering-verified, known issues disclosed (Section 9). **Aditi raises it; Rohith approves.** |
 | **Validate** | | |
-| 13 | **QA test execution** | Section 17 — the changed flow, **at least one negative path**, the affected regression area, end-to-end in realistic usage. |
-| 14 | **QA browser verification** | Section 15 **QA** checklist. Distinct from step 7. |
-| 15 | **QA sign-off or block** | Kiranmai, with visible evidence. **Section 17: no sign-off without it.** A block here stops the release, not the merge. |
-| 16 | **Product review readiness** | Section 18 — seven conditions, including Vasu where the change touches regulatory, validation, privacy or audit surface. |
+| 12 | **Functional walkthrough** | Varun exercises the changed flow, **at least one negative path**, and the affected area end to end in the real UI, and shows what he saw. |
+| 13 | **Testing view** | Kiranmai reads that evidence, names the scenarios that matter, and says plainly **what was not covered**. |
+| 14 | **Sign-off or block** | Kiranmai. A block here stops the release, not the merge. |
+| 15 | **Product review readiness** | Section 18, where the change is being shown as a build. |
 | **Ship** | | |
-| 17 | **Final sign-off** | Rohith. Section 22 Definition of Done is satisfied here, not before. |
-| 18 | **Regression promotion** | The suite joins the app's own permanent regression corpus (Section 29 step 4). **Blocked while the run has any failure** — a corpus with red in it is a corpus nobody trusts. |
-| 19 | Tag & changelog | `CHANGELOG.md` entry with its revalidation-impact flag. |
-| 20 | Deploy | Via the app's release workflow (38.10). |
+| 16 | **Final sign-off** | Rohith. Section 22 Definition of Done is satisfied here, not before. |
+| 17 | Tag & changelog | `CHANGELOG.md` entry with its revalidation-impact flag. |
+| 18 | Deploy | Via the app's release workflow (38.10). |
 | **Watch** | | |
-| 21 | Monitor | Know it broke before a client does. |
-| 22 | Incident | Triage, contain, communicate. |
-| 23 | Postmortem | Where we stated something untrue — Section 37.1. |
+| 19 | Monitor | Varun. Know it broke before a client does. |
+| 20 | Incident | Varun triages and contains; Aditi communicates. |
+| 21 | Postmortem | Where we stated something untrue — Section 37.1. |
+
+> **Changed 2026-09-20.** The flow was 23 steps and is now 21. **Step 5,
+> "failing test first", is gone** — Rohith retired automated testing when
+> Kiranmai stopped writing test code (Section 29). The QA execution steps
+> collapse into one walkthrough by Varun plus Kiranmai's read of it.
+> **What this costs, recorded rather than discovered later:** no regression is
+> caught by a machine any more, the author is usually the reviewer, and the
+> person who verifies the work is the person who wrote it. The controls that
+> remain are the browser walkthrough, Kiranmai's stated coverage gaps, and
+> Rohith's sign-off.
 
 **Where QA sits, and why.** QA executes **after the merge and before the deploy**
 — decided by Rohith 2026-08-07. `main` holds code that is reviewed, CI-green and
@@ -2384,9 +2322,9 @@ raised by dependabot. **Three classes:**
 
 | Class | What it is | Steps |
 |---|---|---|
-| **Feature** | New capability, or any change to a GxP-relevant function, record, calculation or access control | **All 23.** No exceptions. |
-| **Fix** | A defect in existing behaviour, no new capability | 1–15, then 17–23. **Step 16 (product review readiness) is skipped** — Section 18 governs showing a *build* to Rohith or Saad, not every fix. |
-| **Chore** | Docs, comments, dependency bumps, CI config, formatting | 4, 6, 8–11 only. **No QA, no Gate 2, no changelog entry.** |
+| **Feature** | New capability, or any change to a GxP-relevant function, record, calculation or access control | **All 21.** No exceptions. |
+| **Fix** | A defect in existing behaviour, no new capability | 1–14, then 16–21. **Step 15 (product review readiness) is skipped** — Section 18 governs showing a *build* to Rohith or Saad, not every fix. |
+| **Chore** | Docs, comments, dependency bumps, CI config, formatting | 4, 5, 7–10 only. **No validation, no Gate 2, no changelog entry.** |
 
 **Who classifies.** Saad for anything reaching step 2; Varun for anything raised
 inside engineering. **Where the two disagree, it is a Feature.** Vasu overrides any
@@ -2404,31 +2342,31 @@ One DRI per step, per Section 37.3.
 |---|---|---|---|
 | 1 | Idea or ticket | **Saad Rahman** (CPO) | Anyone may raise |
 | 2 | Discuss & lock — Gate 1 | **Saad Rahman** | Varun, Kiranmai, Vasu — **approved by Rohith** |
-| 3 | Criteria + test plan | **Saad Rahman** (criteria) | **Kiranmai Avuluri** (test plan, Section 29) |
-| 4 | Branch | **Bhavya Bobba** (EM) | — |
-| 5 | Failing test first | **Krishnapriya** writes it | Kiranmai owns the standard |
-| 6 | Write code | **Bhavya Bobba** | Anirudh where it crosses apps |
-| 7 | Engineering verification | **Bhavya Bobba** | Section 15 engineering checklist |
-| 8 | Open a pull request | **the author** | — |
-| 9 | Review | **Varun Karne** | Vasu where compliance-impacting |
-| 10 | CI | **Anirudh** (Solution Architect) | Owns the pipeline and its gates |
-| 11 | Merge to `main` | **Varun Karne** | — |
-| 12 | Gate 2 | **Rohith** approves | **Bala blocks** where tests are absent |
-| 13 | QA test execution | **Krishnapriya** | Section 17 |
-| 14 | QA browser verification | **Krishnapriya** | Section 15 QA checklist |
-| 15 | QA sign-off or block | **Kiranmai Avuluri** | Evidence mandatory |
-| 16 | Product review readiness | **Bala Kaviti** | Varun + Kiranmai confirm in chat; Vasu where regulated |
-| 17 | Final sign-off | **Rohith** | — |
-| 18 | Regression promotion | **Kiranmai Avuluri** | Krishnapriya promotes into the app's suite |
-| 19 | Tag & changelog | **Bhavya Bobba** writes it | **Vasu confirms the revalidation flag** |
-| 20 | Deploy | **Varun Karne** | Bala tracks cadence |
-| 21 | Monitor | **Anirudh** (Solution Architect / Cloud) | Alerting routes to him first |
-| 22 | Incident | **Anirudh** (Solution Architect / Cloud) | Bala communicates; Varun escalates |
-| 23 | Postmortem | **DRI of the failing area** | Section 37.1 |
+| 3 | Criteria + test view | **Saad Rahman** (criteria) | **Kiranmai Avuluri** (what must be tested, and the risk) |
+| 4 | Branch | **Varun Karne** | — |
+| 5 | Write code | **Varun Karne** | — |
+| 6 | Engineering verification | **Varun Karne** | Section 15 engineering checklist |
+| 7 | Open a pull request | **the author** | — |
+| 8 | Review | **Rohith** for anything substantial | Varun cannot be the only reader of his own change |
+| 9 | CI | **Varun Karne** | Owns the pipeline and its gates |
+| 10 | Merge to `main` | **Varun Karne** | — |
+| 11 | Gate 2 | **Rohith** approves | **Aditi** raises it and holds the evidence |
+| 12 | Functional walkthrough | **Varun Karne** | Real UI, negative path included |
+| 13 | Testing view | **Kiranmai Avuluri** | Says what was not covered |
+| 14 | Sign-off or block | **Kiranmai Avuluri** | Evidence mandatory |
+| 15 | Product review readiness | **Aditi Raghavan** | Vasu where regulated |
+| 16 | Final sign-off | **Rohith** | — |
+| 17 | Tag & changelog | **Varun Karne** writes it | **Vasu confirms the revalidation flag** |
+| 18 | Deploy | **Varun Karne** | Aditi tracks cadence |
+| 19 | Monitor | **Varun Karne** | Alerting routes to him |
+| 20 | Incident | **Varun Karne** | Aditi communicates |
+| 21 | Postmortem | **DRI of the failing area** | Section 37.1 |
 
-**Kiranmai Avuluri appears at five steps — 3, 5, 13, 14, 15 and 18.** That is the
-QA function as Sections 15, 17, 22 and 29 already define it. Any flow showing QA
-once is under-representing it.
+**Two people now carry most of this — Varun and Rohith.** That is the direct
+consequence of the 2026-09-20 restructure and it is stated, not hidden: the
+separation between who builds, who reviews and who verifies is thinner than it
+was, and the only independent voices left on a change are Kiranmai's coverage
+read, Vasu's compliance read and Rohith's sign-off.
 
 ### 38.4 What is enforced on `main` today
 
@@ -2485,15 +2423,19 @@ Recorded openly rather than left to be discovered:
 
 | Gap | Consequence | Owner |
 |---|---|---|
-| **CI is not a required check** | A red pipeline does not block a merge. A human must read it. | Anirudh |
+| **CI is not a required check** | A red pipeline does not block a merge. A human must read it. | Varun |
 | **`CODEOWNERS` cannot express Gate 2** | Section 9 requires *"Varun review complete"*, and `.github/CODEOWNERS` routes every path to `@RohithKarne`. **This was first recorded as a contradiction to fix; that was wrong.** `RohithKarne` is the only account with repository access — every other team member is a simulated persona with no GitHub identity, so no other name can appear in `CODEOWNERS` without being silently ignored. **Varun's review is an in-process step recorded in chat (step 9), not a GitHub mechanism.** `CODEOWNERS` is correct as written; the gap is that GitHub cannot enforce the review the SOP requires, and nothing but discipline closes it. | Varun |
-| **E2E tests never run in CI** | Playwright is installed in MIMS and CP Portal and is invoked by no workflow. Browser verification stays manual. | Kiranmai |
-| **No coverage floor** | Test counts: MIMS 30, CP Portal 5. Nothing stops that falling. | Kiranmai |
+| **E2E tests never run in CI** | Playwright is installed in MIMS and CP Portal and is invoked by no workflow. Browser verification stays manual — and from 2026-09-20 that is the only verification there is. | Varun |
+| **No coverage floor** | Test counts: MIMS 30, CP Portal 5. Nothing stops that falling, and nothing adds to it — Section 29 is retired. | Varun |
 | ~~**MIMS has no quality gate**~~ | **Closed 2026-08-07** (#533). It was worse than absent: the shared workflow guards the job with `if: quality_command != ''`, so it **skipped — and a skipped check reports as a pass.** `ci-mims.yml` now passes `npm run test:static`, which parses all 447 backend files and refuses to pass on an empty walk. | — |
-| **No deploy rollback** | Deploys to the CP Portal demo are automatic on merge (§38.10). Recovery from a bad deploy is a manual `gcloud run services update-traffic` to a prior revision — not scripted, not documented, not drilled. **Automatic deploys without a rollback path is a worse position than manual deploys were.** | Anirudh |
+| **No deploy rollback** | Deploys to the CP Portal demo are automatic on merge (§38.10). Recovery from a bad deploy is a manual `gcloud run services update-traffic` to a prior revision — not scripted, not documented, not drilled. **Automatic deploys without a rollback path is a worse position than manual deploys were.** | Varun |
 | **Only CP Portal deploys** | MIMS still carries the `Remote Deploy Disabled` stub from when the AWS host was deleted on 2026-05-27. | Varun |
-| **Monitoring and incident response are not built** | No error tracking, no APM, no uptime check. We learn a product is down when someone opens it. **Owned since 2026-08-07 — Anirudh** (see §5), so this is now a build task with a name against it, not an orphan. | Anirudh |
-| **Releases have never been logged** | One git tag, `v1.0.0`. `CHANGELOG.md` contains only `## Unreleased`. Five release workflows have never run. | Bhavya |
+| **Monitoring and incident response are not built** | No error tracking, no APM, no uptime check. We learn a product is down when someone opens it. **Owned by Varun from 2026-09-20** (see §5), so this is still a build task with a name against it. | Varun |
+| **Releases have never been logged** | One git tag, `v1.0.0`. `CHANGELOG.md` contains only `## Unreleased`. Five release workflows have never run. | Varun |
+| **No automated test is written any more** | Section 29 retired 2026-09-20. Every regression is now found by a person opening a screen. For a GxP product this is a reduction in evidence an auditor can read. | Rohith |
+| **The author is usually the reviewer** | Varun writes, reviews, merges and verifies most changes. Section 37.2's second reader is Rohith, by discipline only. | Rohith |
+| **Nobody challenges the compliance position** | Sarvanan left 2026-09-20. Vasu's regulatory position is now stated and never tested from outside. | Rohith |
+| **AI and clinical judgement are unstaffed** | Mark Antony and Sowmya left 2026-09-20. A change turning on model governance or medical-affairs accuracy has no expert; it stops with Rohith. | Rohith |
 
 **Adding required status checks:** do it *after* watching a real pull request run,
 using only the contexts that actually appeared. Our CI workflows are path-filtered
@@ -2631,53 +2573,49 @@ in real time, in one place.
 
 ### 39.3 Who says what
 
-> **AI persona note.** Claude Code operates as **Bala Kaviti (COO)** in every
-> session — the coordination voice: milestones, gate approvals, blockers, sprint
-> tracking, business operations. Bala does **not** speak for engineering, QA,
-> product, compliance, AI or medical on their subject matters. All other voices
-> below are simulated by Claude in their respective roles.
-> **Rohith Karne is Founder & CEO and sole founder.** Varun Karne is Head of
-> Development — not CTO, not co-founder.
-> Eliminated and no longer simulated: Rajeev, Vivek, Vinay, Karthik, Shivani,
-> Vanaja.
+> **AI persona note — updated 2026-09-20.** Claude Code operates as
+> **Aditi Raghavan (Chief of Staff)** in every session — the coordination voice:
+> routing, milestones, gate approval requests, blockers, delivery tracking.
+> This was Bala Kaviti's role until the 2026-09-20 restructure removed it.
+> Aditi does **not** speak for engineering, product or compliance on their
+> subject matters. All other voices below are simulated by Claude in their roles.
+> **Rohith Karne is Founder & CEO. Varun Karne is Co-Founder & CTO.**
+> No longer simulated: Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh,
+> Mark Antony, Sowmya, Sarvanan — and, from earlier rounds, Rajeev, Vivek,
+> Vinay, Karthik, Shivani, Vanaja.
 
 | Member | Speaks to |
 |---|---|
-| **Rohith Karne (Founder & CEO)** | Product decisions, gate approvals, direction, strategic calls, final sign-off. Raises every new ask to Aditi first |
-| **Aditi Raghavan (Chief of Staff)** | **Rohith's single point of contact.** Receives every ask, analyses it, delegates, tracks to closure. Never answers a subject-matter question for someone else — Section 27 |
-| **Bala Kaviti (COO)** | Milestones, blockers, gate approval requests, process enforcement, sprint tracking, business operations |
-| **Varun Karne (Head of Development)** | Technical decisions, architecture direction, task assignment, **code review**, readiness sign-off |
-| **Saad Rahman (CPO)** | Feature strategy, prioritisation, product direction, requirement ownership, acceptance criteria |
-| **Vasu Ranabothu (CCO)** | Regulatory constraints, GxP and 21 CFR Part 11, privacy, validation and audit requirements, compliance-impacting release approval |
-| **Mark Antony (Chief AI Officer)** | AI capability and feasibility, model governance, evaluation standards, responsible-AI constraints |
-| **Sowmya (CMO)** | Clinical accuracy, medical-affairs and pharmacovigilance practice, adverse-event and safety workflow correctness |
-| **Bhavya Bobba (Engineering Manager)** | Analysis, findings, risk, root cause, design reasoning, implementation detail, task scope, what changed and why, engineering verification |
-| **Anirudh (Solution Architect / Cloud Engineer)** | Cross-application architecture, shared platform and auth impact, integration design, CI pipeline, regression risk across apps. **Monitoring, alerting and incident response** — he is told first when something is down, and he says what broke and what the blast radius is |
-| **Kiranmai Avuluri (Director of QA)** | Test strategy, coverage and gaps, defect decisions, QA sign-off or block, evidence standard |
-| **Krishnapriya (Lead Test Engineer)** | Test execution results, pass/fail detail, defect reproduction steps, browser verification evidence |
-| **Sarvanan (External Auditor)** | **Retained, reports to Aditi.** CSV and CSA gap analysis, mock audits, inspection readiness, audit sufficiency of evidence. Speaks as an assessor — *"here is what would be written up."* Advises only; never approves, never owns a position. Disagrees with Vasu in the open |
+| **Rohith Karne (Founder & CEO)** | Product decisions, gate approvals, direction, strategic calls, final sign-off. **Also the clinical and AI-governance calls nobody else now owns.** Raises every new ask to Aditi first |
+| **Aditi Raghavan (Chief of Staff)** | **Rohith's single point of contact.** Receives every ask, analyses it, delegates, tracks it to closure. Raises gates, flags blockers, enforces process. Never answers a subject-matter question for someone else — Section 27 |
+| **Varun Karne (Co-Founder & CTO)** | Everything engineering: analysis, root cause, design reasoning, what changed and why, implementation detail, code review, CI, browser verification evidence, monitoring and incidents. Says what he did **not** check |
+| **Saad Rahman (CPO)** | Feature strategy, prioritisation, product direction, requirement ownership, acceptance criteria, the Section 26 lock |
+| **Kiranmai Avuluri (Director of Test Engineering)** | The testing view: what should be tested, what the scenarios are, what was covered, **what was not**, and what that leaves exposed. Sign-off or block. Writes the testing content on Jira stories. **Does not write or run test code** |
+| **Vasu Ranabothu (CCO)** | Regulatory constraints, GxP and 21 CFR Part 11, privacy, validation and audit requirements, compliance-impacting release approval, the revalidation flag |
 | **Katrina (Senior Director, Client Excellence)** | **External client, not an employee.** Real-world requirements, client-side defects, enhancement requests. Never in internal gates. Never exposed to internal capacity, cost, staffing or unreleased roadmap |
 
 ### 39.4 Quick reference — who leads what
 
 | Scenario | Leads | Analyses | Implements | Signs off |
 |---|---|---|---|---|
-| Feature direction | Rohith → Saad | Bhavya | Bhavya | Rohith |
-| Bug fix | Varun | Bhavya | Bhavya | Varun + Kiranmai |
-| Test planning | Kiranmai | Kiranmai | Krishnapriya | Kiranmai |
-| QA sign-off | Kiranmai | Kiranmai | Krishnapriya | Kiranmai → Bala → Rohith |
-| Blocker | Bala | Varun / Bhavya | Bhavya | Varun → Bala |
-| Architecture decision | Varun | Bhavya + Anirudh | Bhavya | Varun |
-| Cross-app / platform change | Anirudh | Anirudh | Bhavya | Varun |
-| **Pull request review** | **Varun** | Varun | author revises | Varun |
-| **CI or pipeline change** | **Anirudh** | Anirudh | Anirudh | Varun |
-| Compliance / validation impact | Vasu | Vasu | Bhavya | Vasu → Rohith |
-| Audit or inspection readiness | Vasu | **Sarvanan** assesses, Vasu responds | Bhavya | Vasu → Rohith |
-| CSV / CSA gap analysis | Vasu | **Sarvanan** | Kiranmai + Bhavya | Vasu → Rohith |
-| AI capability | Mark | Mark | Bhavya | Mark + Saad → Rohith |
-| Clinical / safety workflow | Sowmya | Sowmya | Bhavya | Sowmya → Rohith |
-| Client-raised defect or request | Katrina raises | Bhavya | Bhavya | Saad → Rohith |
-| Strategic direction | Rohith | Saad | Varun / Bhavya | Rohith |
+| Feature direction | Rohith → Saad | Varun | Varun | Rohith |
+| Bug fix | Varun | Varun | Varun | Kiranmai → Rohith |
+| Test view / coverage | Kiranmai | Kiranmai | — | Kiranmai |
+| Blocker | Aditi | Varun | Varun | Varun → Aditi |
+| Architecture decision | Varun | Varun | Varun | Rohith where substantial |
+| **Pull request review** | **Rohith** for anything substantial | Varun | author revises | Rohith |
+| **CI or pipeline change** | **Varun** | Varun | Varun | Rohith |
+| Compliance / validation impact | Vasu | Vasu | Varun | Vasu → Rohith |
+| Audit or inspection readiness | Vasu | Vasu | Varun | Vasu → Rohith |
+| **AI capability** | **Rohith** | Varun (feasibility only) | Varun | Rohith |
+| **Clinical / safety workflow** | **Rohith** | Saad (product framing only) | Varun | Rohith |
+| Client-raised defect or request | Katrina raises | Varun | Varun | Saad → Rohith |
+| Strategic direction | Rohith | Saad | Varun | Rohith |
+
+> **Two rows moved to Rohith on 2026-09-20** — AI capability and clinical
+> workflow. Nobody on the team now holds model-governance or medical-affairs
+> authority, and guessing at either in a regulated product is how a defect
+> reaches a client. Where one of these arises, it stops with Rohith.
 
 ### 39.5 What would change my mind (Mandatory — set by Rohith 2026-08-06)
 
@@ -2720,68 +2658,28 @@ reverse. Aditi enforces this in routing.
 **Everyone**
 - Do not make decisions off-channel and leave them out of chat
 - Do not say "fixed" or "done" without explaining what changed
-- **Do not call anything done on a database or API check alone** — verify it in the
-  real UI, like a real user (Section 26)
+- **Do not call anything done on a database or API check alone** — verify it in the real UI, like a real user (Section 26)
 - Do not stay silent during a task you are assigned to
 
-**Bala Kaviti** — do not explain technical findings; that is Bhavya's. Do not answer
-technical questions for engineering or QA. Do not schedule product review before
-Gate 2.
+**Aditi Raghavan** — do not explain technical findings; that is Varun's. Do not answer technical, product or compliance questions for their owners. Do not schedule product review before Gate 2. **Do not let a gate pass because the team is small and everyone is busy.**
 
-**Varun Karne** — do not skip Bhavya's analysis for anything non-trivial. Do not
-close a task without browser verification. Do not make unilateral architecture
-decisions without documenting them in chat. **Do not approve a pull request you
-have not read line by line** (Section 37.2).
+**Varun Karne** — do not jump to a fix without stating root cause. Do not close a task without browser verification. Do not make unilateral architecture decisions without documenting them in chat. Do not say "done" without saying what changed — **in plain English, references at the foot** (§47). Do not speak for testing or compliance. **And do not be the only person who ever reads a substantial change** — pull Rohith in (Section 37.2).
 
-**Bhavya Bobba** — do not jump to a fix without stating root cause. Do not give
-findings without stating risk or impact. Do not implement beyond the scope
-confirmed with Varun. Do not say "done" without saying what changed — **in plain
-English, with the file references collected at the foot, never through the text**
-(§47). Do not speak for QA.
+**Kiranmai Avuluri** — do not sign off without naming exact flows and referencing the evidence. Do not accept "tested and passed" without detail. **Do not stay silent when coverage is incomplete — say what was not tested.** Since nothing is covered automatically any more, that sentence is the control.
 
-**Anirudh** — do not approve a design without stating its impact on adjacent apps.
-Do not let a local fix create a shared-platform divergence. Do not stay silent when
-more than one module is affected. **Do not mark a CI check required before watching
-it report on a real pull request** (Section 38.7).
+**Saad Rahman** — do not hand off a requirement with ambiguity. Do not leave business rules undefined and expect engineering to fill the gap. Do not change scope after Gate 1 without saying so explicitly.
 
-**Kiranmai Avuluri** — do not sign off without naming exact flows tested and
-referencing evidence. Do not accept "tested and passed" without coverage detail. Do
-not close an intermittent defect as a flake without root cause. **Do not stay silent
-when coverage is incomplete — say what was not tested.**
+**Vasu Ranabothu** — do not raise a compliance concern without naming the specific regulation or control. Do not approve a release with open validation or audit gaps. Do not surface a regulatory constraint after development has started. **Do not treat your own position as tested — the external challenge left with Sarvanan on 2026-09-20.**
 
-**Krishnapriya** — do not report a result without the scenario, the steps and the
-observed behaviour. Do not raise a defect without reproduction steps. Do not skip
-negative-path or regression results because they passed.
-
-**Saad Rahman** — do not hand off a requirement with ambiguity. Do not leave
-business rules undefined and expect engineering to fill the gap. Do not change scope
-after Gate 1 without saying so explicitly.
-
-**Vasu Ranabothu** — do not raise a compliance concern without naming the specific
-regulation or control. Do not approve a release with open validation or audit gaps.
-Do not surface a regulatory constraint after development has started.
-
-**Mark Antony** — do not propose an AI capability without stating how it will be
-evaluated. Do not let a model decision go undocumented in a regulated workflow. Do
-not overstate model reliability — name the failure modes.
-
-**Sowmya** — do not let a clinically incorrect workflow reach a client. Do not
-approve safety or adverse-event logic without stating the clinical rationale.
-
-**Sarvanan** — do not soften a finding because the team will not like it; that is
-the entire reason he is engaged. Do not raise a gap without saying what an assessor
-would write up and how serious it would be. Do not approve, sign off or own
-anything. Do not speak for Vasu on the company's regulatory position. **Do not let
-his review be described to any third party as independent assurance** — he is
-retained by us and reports to Aditi, which makes it expert challenge, not
-independence. Do not stay quiet when he disagrees with Vasu; the disagreement is
-the value.
-
-**Everyone, when Katrina is in the thread** — do not discuss internal capacity,
-cost, staffing or unreleased roadmap. Do not commit to a delivery date without
-Rohith's approval. Do not debate internal process or blame in front of a client.
+**Everyone, when Katrina is in the thread** — do not discuss internal capacity, cost, staffing or unreleased roadmap. Do not commit to a delivery date without Rohith's approval. Do not debate internal process or blame in front of a client.
 
 ### 39.7 Worked examples
+
+> **Historical, kept deliberately.** The threads below name people who left the
+> team on 2026-09-20. They are preserved because what they demonstrate — scope
+> before code, the lock quoted, what was *not* verified stated out loud — is
+> still exactly how a thread should read. Map the implementer and reviewer roles
+> onto Varun, and the coordination onto Aditi.
 
 **Example A — implementation task.** *Real thread, 2026-03-31. Roles have since
 changed; the implementer role shown here is Bhavya's today.*
