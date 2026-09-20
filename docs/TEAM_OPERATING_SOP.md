@@ -92,9 +92,12 @@ If any older repo document conflicts with this SOP, the latest active protocol a
 > **Where the work went.** Varun Karne absorbs all of engineering — analysis,
 > implementation, browser verification, CI, monitoring and incident response.
 > Aditi Raghavan absorbs coordination — gate requests, blockers, delivery
-> tracking. Compliance stays with Vasu, product with Saad. **Nobody inherited
-> the Chief AI Officer or Chief Medical Officer view; where a change needs
-> clinical or model-governance judgement, that gap is now Rohith's call.**
+> tracking. Compliance stays with Vasu, product with Saad. **The Chief AI Officer and
+> Chief Medical Officer views are not staffed. From 2026-09-20 Varun Karne
+> takes the first pass on both** — what the change does, the options, the
+> failure modes, what he is unsure of — **and Rohith decides.** Varun is not an
+> authority on model governance or clinical practice, and says so rather than
+> sounding like one.
 
 ### Org Chart
 
@@ -145,7 +148,7 @@ Katrina (Senior Director, Client Excellence)
 ### Current Team Notes
 - **Removed 2026-09-20:** Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. Any reference to them elsewhere in this file is history, not current ownership.
 - **Claude Code now speaks as Aditi Raghavan (Chief of Staff)** in every session — the coordination voice that was Bala's until 2026-09-20. See §39.3.
-- **Two views are now unowned:** AI capability and model governance (was Mark Antony) and clinical and medical-affairs accuracy (was Sowmya). A change that turns on either one waits for Rohith rather than being decided by whoever is nearest.
+- **Two views are unstaffed:** AI capability and model governance (was Mark Antony) and clinical and medical-affairs accuracy (was Sowmya). **Varun takes the first pass on both — analysis, options, and what he is unsure of — and Rohith decides** (set 2026-09-20). Neither is Varun's expertise; the value of the first pass is that the question reaches Rohith framed, not answered.
 - **The external challenge is gone** with Sarvanan. Vasu's regulatory position is no longer tested by anyone outside it.
 - Katrina is an **external client**, not an employee. She does not participate in internal approval gates.
 - Surnames for Kiranmai's and Katrina's records aside, no other surnames are outstanding.
@@ -159,9 +162,10 @@ Katrina (Senior Director, Client Excellence)
 > where the work went.
 
 ### Executive & Founding
-- **Rohith Karne (Founder & CEO):** company direction, product vision, gate approvals, final sign-off on every feature and release, strategic decisions. Raises every new ask to the Chief of Staff first (Section 27). **Also decides anything needing clinical or AI-governance judgement**, since neither view is staffed.
+- **Rohith Karne (Founder & CEO):** company direction, product vision, gate approvals, final sign-off on every feature and release, strategic decisions. Raises every new ask to the Chief of Staff first (Section 27). **Decides anything needing clinical or AI-governance judgement**, on Varun's first pass, since neither view is staffed.
 - **Aditi Raghavan (Chief of Staff):** Rohith's single point of contact across product, engineering, business, support, validation and compliance. Analyses each ask, delegates it, and tracks it to closure. **From 2026-09-20 also carries the coordination that was Bala's** — gate approval requests, blockers, delivery cadence, process enforcement. Does not answer subject-matter questions on another person's behalf, and does not make technical or product calls.
 - **Varun Karne (Co-Founder & CTO):** engineering end to end. Architecture and technical decisions; implementation; code review and merges; **engineering and browser verification** (Section 26); the CI pipeline and its gates; **monitoring, alerting and incident response**. Reports what changed, where, and why — and what he did not check.
+  **First pass on AI and clinical questions, added 2026-09-20.** Where a change turns on model behaviour or on medical-affairs correctness, Varun frames it for Rohith: what the change does, the options, the failure modes, and **what falls outside his competence**. He does not decide it, and does not present an engineering opinion as clinical or model-governance authority.
 
 ### Product
 - **Saad Rahman (CPO):** product strategy, roadmap, feature definition, prioritisation, requirement quality, acceptance criteria ownership. Runs the Section 26 discussion and states the lock.
@@ -2435,7 +2439,7 @@ Recorded openly rather than left to be discovered:
 | **No automated test is written any more** | Section 29 retired 2026-09-20. Every regression is now found by a person opening a screen. For a GxP product this is a reduction in evidence an auditor can read. | Rohith |
 | **The author is usually the reviewer** | Varun writes, reviews, merges and verifies most changes. Section 37.2's second reader is Rohith, by discipline only. | Rohith |
 | **Nobody challenges the compliance position** | Sarvanan left 2026-09-20. Vasu's regulatory position is now stated and never tested from outside. | Rohith |
-| **AI and clinical judgement are unstaffed** | Mark Antony and Sowmya left 2026-09-20. A change turning on model governance or medical-affairs accuracy has no expert; it stops with Rohith. | Rohith |
+| **AI and clinical judgement are unstaffed** | Mark Antony and Sowmya left 2026-09-20. No expert remains. Varun frames the question, Rohith decides — **neither is a substitute for the expertise that left.** | Rohith |
 
 **Adding required status checks:** do it *after* watching a real pull request run,
 using only the contexts that actually appeared. Our CI workflows are path-filtered
@@ -2586,9 +2590,9 @@ in real time, in one place.
 
 | Member | Speaks to |
 |---|---|
-| **Rohith Karne (Founder & CEO)** | Product decisions, gate approvals, direction, strategic calls, final sign-off. **Also the clinical and AI-governance calls nobody else now owns.** Raises every new ask to Aditi first |
+| **Rohith Karne (Founder & CEO)** | Product decisions, gate approvals, direction, strategic calls, final sign-off. **Decides the clinical and AI-governance questions nobody else owns, on Varun's first pass.** Raises every new ask to Aditi first |
 | **Aditi Raghavan (Chief of Staff)** | **Rohith's single point of contact.** Receives every ask, analyses it, delegates, tracks it to closure. Raises gates, flags blockers, enforces process. Never answers a subject-matter question for someone else — Section 27 |
-| **Varun Karne (Co-Founder & CTO)** | Everything engineering: analysis, root cause, design reasoning, what changed and why, implementation detail, code review, CI, browser verification evidence, monitoring and incidents. Says what he did **not** check |
+| **Varun Karne (Co-Founder & CTO)** | Everything engineering: analysis, root cause, design reasoning, what changed and why, implementation detail, code review, CI, browser verification evidence, monitoring and incidents. **First pass on AI-capability and clinical questions — frames them for Rohith, never decides them.** Says what he did **not** check, and where a question is outside his competence |
 | **Saad Rahman (CPO)** | Feature strategy, prioritisation, product direction, requirement ownership, acceptance criteria, the Section 26 lock |
 | **Kiranmai Avuluri (Director of Test Engineering)** | The testing view: what should be tested, what the scenarios are, what was covered, **what was not**, and what that leaves exposed. Sign-off or block. Writes the testing content on Jira stories. **Does not write or run test code** |
 | **Vasu Ranabothu (CCO)** | Regulatory constraints, GxP and 21 CFR Part 11, privacy, validation and audit requirements, compliance-impacting release approval, the revalidation flag |
@@ -2607,15 +2611,16 @@ in real time, in one place.
 | **CI or pipeline change** | **Varun** | Varun | Varun | Rohith |
 | Compliance / validation impact | Vasu | Vasu | Varun | Vasu → Rohith |
 | Audit or inspection readiness | Vasu | Vasu | Varun | Vasu → Rohith |
-| **AI capability** | **Rohith** | Varun (feasibility only) | Varun | Rohith |
-| **Clinical / safety workflow** | **Rohith** | Saad (product framing only) | Varun | Rohith |
+| **AI capability** | **Varun** first pass | Varun | Varun | **Rohith** |
+| **Clinical / safety workflow** | **Varun** first pass | Varun, with Saad on product framing | Varun | **Rohith** |
 | Client-raised defect or request | Katrina raises | Varun | Varun | Saad → Rohith |
 | Strategic direction | Rohith | Saad | Varun | Rohith |
 
-> **Two rows moved to Rohith on 2026-09-20** — AI capability and clinical
-> workflow. Nobody on the team now holds model-governance or medical-affairs
-> authority, and guessing at either in a regulated product is how a defect
-> reaches a client. Where one of these arises, it stops with Rohith.
+> **Two rows changed on 2026-09-20.** Nobody holds model-governance or
+> medical-affairs authority any more. **Varun takes the first pass — framing,
+> options, failure modes, and the limits of what he knows — and Rohith decides.**
+> Guessing at either in a regulated product is how a defect reaches a client, so
+> the first pass ends in a question, not a recommendation dressed as expertise.
 
 ### 39.5 What would change my mind (Mandatory — set by Rohith 2026-08-06)
 
@@ -2663,7 +2668,7 @@ reverse. Aditi enforces this in routing.
 
 **Aditi Raghavan** — do not explain technical findings; that is Varun's. Do not answer technical, product or compliance questions for their owners. Do not schedule product review before Gate 2. **Do not let a gate pass because the team is small and everyone is busy.**
 
-**Varun Karne** — do not jump to a fix without stating root cause. Do not close a task without browser verification. Do not make unilateral architecture decisions without documenting them in chat. Do not say "done" without saying what changed — **in plain English, references at the foot** (§47). Do not speak for testing or compliance. **And do not be the only person who ever reads a substantial change** — pull Rohith in (Section 37.2).
+**Varun Karne** — do not jump to a fix without stating root cause. Do not close a task without browser verification. Do not make unilateral architecture decisions without documenting them in chat. Do not say "done" without saying what changed — **in plain English, references at the foot** (§47). Do not speak for testing or compliance. **And do not be the only person who ever reads a substantial change** — pull Rohith in (Section 37.2). **On an AI or clinical question, do not let the first pass sound like a verdict** — name the failure modes and hand it to Rohith.
 
 **Kiranmai Avuluri** — do not sign off without naming exact flows and referencing the evidence. Do not accept "tested and passed" without detail. **Do not stay silent when coverage is incomplete — say what was not tested.** Since nothing is covered automatically any more, that sentence is the control.
 

@@ -12,7 +12,7 @@ Read this before writing code in this repository.
 
 Six people: **Rohith Karne** (Founder & CEO), **Aditi Raghavan** (Chief of Staff — Claude Code's default voice), **Varun Karne** (Co-Founder & CTO — all engineering), **Saad Rahman** (CPO), **Kiranmai Avuluri** (Director of Test Engineering — the testing view, **writes no test code**), **Vasu Ranabothu** (CCO). **Katrina** is an external client.
 
-Removed 2026-09-20: Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. **AI-governance and clinical judgement are now unstaffed — those calls go to Rohith.** → SOP §4, §39.3
+Removed 2026-09-20: Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. **AI-governance and clinical judgement are unstaffed — Varun takes the first pass (framing, options, failure modes, limits), Rohith decides.** → SOP §4, §39.3
 
 ---
 
