@@ -6,6 +6,7 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
+const { VISIBLE_DOCUMENT_SQL, documentUnavailableReason, unavailableResponse } = require('../../utils/documentVisibility');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const { applyTranslation } = require('../../utils/translator');
 const path = require('path');
@@ -66,9 +67,7 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
              version, download_count, created_at, translations_json
       FROM cp_documents
       WHERE client_id = ? AND is_active = 1
-        AND (status = 'published' OR (status = 'scheduled' AND publish_at <= NOW()))
-        AND (expires_at IS NULL OR expires_at > NOW())
-        AND (publish_at IS NULL OR publish_at <= NOW())
+        AND ${VISIBLE_DOCUMENT_SQL}
       ORDER BY created_at DESC
     `, [client.id]);
 
@@ -111,9 +110,7 @@ router.post('/ai-search', authenticatePortal, requirePortalAuth, async (req, res
       SELECT id, title, category, doc_type, file_size, expires_at
       FROM cp_documents
       WHERE client_id = ? AND is_active = 1
-        AND (status = 'published' OR (status = 'scheduled' AND publish_at <= NOW()))
-        AND (expires_at IS NULL OR expires_at > NOW())
-        AND (publish_at IS NULL OR publish_at <= NOW())
+        AND ${VISIBLE_DOCUMENT_SQL}
       ORDER BY created_at DESC
     `, [client.id]);
 
@@ -207,6 +204,14 @@ router.get('/:docId/download', authenticatePortal, requirePortalAuth, async (req
 
     // Verify user is from same client
     if (doc.client_id !== req.portalUser.clientId) return res.status(403).json({ error: 'Access denied.' });
+
+    // CPPM-34: an expired, draft or not-yet-due document is never served, however
+    // the reader arrived at the link. Checked before the file is touched.
+    const unavailable = documentUnavailableReason(doc);
+    if (unavailable) {
+      const { status, body } = unavailableResponse(unavailable);
+      return res.status(status).json(body);
+    }
 
     // Verify user_type access
     const userType  = req.portalUser.user_type || 'other';

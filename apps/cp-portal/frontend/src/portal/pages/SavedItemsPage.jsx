@@ -123,10 +123,23 @@ export default function SavedItemsPage() {
                   }}>
                     {item.item_type === 'news' ? '📰 News' : '📁 Document'}
                   </span>
+                  {item.withdrawn && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px',
+                      background: '#FEE2E2', color: '#B91C1C', padding: '2px 8px', borderRadius: 99,
+                    }}>
+                      Withdrawn
+                    </span>
+                  )}
                 </div>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#1E293B', marginBottom: 2 }}>
-                  {item.title || 'Untitled'}
+                <div style={{ fontWeight: 600, fontSize: 14, color: item.withdrawn ? '#94A3B8' : '#1E293B', marginBottom: 2 }}>
+                  {item.title || item.detail?.title || 'Untitled'}
                 </div>
+                {item.withdrawn && (
+                  <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 2 }}>
+                    This document is no longer available.
+                  </div>
+                )}
                 <div style={{ fontSize: 12, color: '#94A3B8' }}>
                   Saved {item.created_at ? formatDateTime(item.created_at) : ''}
                 </div>
@@ -139,7 +152,7 @@ export default function SavedItemsPage() {
                   >
                     Go to item →
                   </Link>
-                ) : (
+                ) : item.withdrawn ? null : (
                   <Link
                     to={`${base}/documents`}
                     className="pp-btn pp-btn-outline pp-btn-sm"
@@ -152,7 +165,7 @@ export default function SavedItemsPage() {
                   style={{ color: '#DC2626', borderColor: '#FCA5A5' }}
                   onClick={() => handleUnsave(item)}
                   disabled={unsaving === item.id}
-                  aria-label={`Remove ${item.title} from saved items`}
+                  aria-label={`Remove ${item.title || item.detail?.title || 'item'} from saved items`}
                 >
                   {unsaving === item.id ? '…' : '🔖 Unsave'}
                 </button>

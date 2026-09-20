@@ -8,6 +8,7 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
+const { VISIBLE_DOCUMENT_SQL } = require('../../utils/documentVisibility');
 const log = require('../../utils/logger');
 
 function snippet(text) {
@@ -77,7 +78,7 @@ router.get('/', async (req, res) => {
 
     if (enabled.has('document_library')) {
       const [rows] = await pool.execute(
-        `SELECT id, title FROM cp_documents WHERE client_id=? AND is_active=1 AND status='published' AND title LIKE ? LIMIT 8`,
+        `SELECT id, title FROM cp_documents WHERE client_id=? AND is_active=1 AND ${VISIBLE_DOCUMENT_SQL} AND title LIKE ? LIMIT 8`,
         [cid, like]);
       rows.forEach(r => results.push({ type: 'document', label: 'Document', id: r.id, title: r.title, snippet: '', path: `documents` }));
     }
@@ -112,7 +113,7 @@ router.get('/suggest', async (req, res) => {
     faq.forEach(r => out.push({ title: r.question, type: 'faq', path: 'faq' }));
 
     const [docs] = await pool.execute(
-      `SELECT title FROM cp_documents WHERE client_id=? AND is_active=1 AND status='published' AND title LIKE ? LIMIT 5`, [cid, like]);
+      `SELECT title FROM cp_documents WHERE client_id=? AND is_active=1 AND ${VISIBLE_DOCUMENT_SQL} AND title LIKE ? LIMIT 5`, [cid, like]);
     docs.forEach(r => out.push({ title: r.title, type: 'document', path: 'documents' }));
 
     res.json({ suggestions: out.slice(0, 8) });

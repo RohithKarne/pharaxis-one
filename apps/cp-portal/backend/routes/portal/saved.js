@@ -6,6 +6,7 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
+const { documentUnavailableReason } = require('../../utils/documentVisibility');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const log = require('../../utils/logger');
 
@@ -30,8 +31,13 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
         return { ...item, detail: post || null };
       }
       if (item.item_type === 'document') {
-        const [[doc]] = await pool.execute('SELECT id, title, category, doc_type FROM cp_documents WHERE id = ?', [item.item_id]);
-        return { ...item, detail: doc || null };
+        const [[doc]] = await pool.execute(
+          'SELECT id, title, category, doc_type, status, publish_at, expires_at FROM cp_documents WHERE id = ?', [item.item_id]);
+        // CPPM-34: a bookmark of an expired document stays visible but is marked
+        // withdrawn; one that was never published disappears like any missing item.
+        const unavailable = documentUnavailableReason(doc);
+        if (unavailable === 'unpublished') return { ...item, detail: null };
+        return { ...item, detail: doc || null, withdrawn: unavailable === 'expired' };
       }
       return { ...item, detail: null };
     }));
