@@ -110,6 +110,7 @@ async function releaseSlot(clientId, bookingId) {
 // PUT /api/admin/msls/:clientId/bookings/:bookingId — update status + notes
 router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res) => {
   try {
+    if (!/^\d+$/.test(req.params.bookingId)) return res.status(404).json({ error: 'Booking not found.' });
     const { status, admin_notes } = req.body;
     const allowed = ['pending', 'confirmed', 'cancelled', 'completed'];
     if (status && !allowed.includes(status)) return res.status(400).json({ error: 'Invalid status.' });
@@ -133,6 +134,7 @@ router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res)
 // DELETE /api/admin/msls/:clientId/bookings/:bookingId
 router.delete('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res) => {
   try {
+    if (!/^\d+$/.test(req.params.bookingId)) return res.status(404).json({ error: 'Booking not found.' });
     await releaseSlot(req.params.clientId, req.params.bookingId);
     await pool.execute('DELETE FROM cp_msl_bookings WHERE id = ? AND client_id = ?', [req.params.bookingId, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'DELETE', 'msl_booking', req.params.bookingId, {});

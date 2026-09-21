@@ -10,7 +10,7 @@ const crypto  = require('crypto');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { requirePortalAuth, authenticatePortal, PORTAL_SECRET } = require('../../middleware/auth');
-const { sendEmail } = require('../../utils/mailer');
+const { queueEmail } = require('../../utils/emailOutbox');
 const sso = require('../../services/ssoService');
 const log = require('../../utils/logger');
 
@@ -206,12 +206,12 @@ router.post('/resend-verification', async (req, res) => {
 
     const origin = req.headers.origin || `http://localhost:5174`;
     const verifyUrl = buildVerifyUrl(origin, client_code, token);
-    sendEmail(client.id, {
+    queueEmail(client.id, {
       to: email,
       subject: 'Verify your email address',
       html: `<p>Hi ${user.first_name},</p><p>Here is your new verification link:</p><p><a href="${verifyUrl}" style="background:#6B3FA0;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Verify Email</a></p><p>This link expires in 24 hours.</p>`,
       text: `Hi ${user.first_name}, verify your email: ${verifyUrl}`,
-    }).catch(() => {});
+    }, { kind: 'email_verification', relatedType: 'portal_user', relatedId: user.id, sensitive: true });
 
     res.json({ message: 'If that email is registered and unverified, a new link has been sent.' });
   } catch (err) {
@@ -242,12 +242,12 @@ router.post('/forgot-password', async (req, res) => {
 
         const origin   = req.headers.origin || 'http://localhost:5174';
         const resetUrl = `${origin}/portal/${client_code}/reset-password#token=${encodeURIComponent(rawToken)}`;
-        sendEmail(client.id, {
+        queueEmail(client.id, {
           to: email,
           subject: 'Reset your password',
           html: `<p>Hi ${user.first_name},</p><p>We received a request to reset your password.</p><p><a href="${resetUrl}" style="background:#6B3FA0;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Reset Password</a></p><p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>`,
           text: `Hi ${user.first_name}, reset your password: ${resetUrl} (expires in 1 hour)`,
-        }).catch(() => {});
+        }, { kind: 'password_reset', relatedType: 'portal_user', relatedId: user.id, sensitive: true });
       }
     }
     // Generic response regardless of whether the account exists — prevents enumeration.

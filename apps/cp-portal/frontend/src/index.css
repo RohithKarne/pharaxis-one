@@ -2079,6 +2079,8 @@ body { background: var(--cp-bg); }
 .pp-footer-links { display: flex; flex-direction: column; gap: 10px; }
 .pp-footer-links a { color: var(--pp-footer-text); text-decoration: none; font-size: 14px; }
 .pp-footer-links a:hover { color: #fff; }
+.pp-footer-link-btn { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: var(--pp-footer-text); font-size: 14px; }
+.pp-footer-link-btn:hover { color: #fff; }
 .pp-footer-legal { font-size: 12px; color: rgba(255,255,255,0.4); line-height: 1.7; }
 
 /* ── Hero section ────────────────────────────────────────── */

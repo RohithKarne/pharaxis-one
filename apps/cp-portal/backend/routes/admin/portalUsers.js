@@ -8,7 +8,7 @@ const crypto  = require('crypto');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { sendEmail } = require('../../utils/mailer');
+const { queueEmail } = require('../../utils/emailOutbox');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
 const { audit } = require('../../utils/audit');
@@ -45,16 +45,16 @@ async function issueInvite({ userId, clientId, clientCode, email, firstName, ori
   const inviteUrl = `${base}/portal/${clientCode}/reset-password#token=${encodeURIComponent(rawToken)}`;
   const heading   = isResend ? 'Here is your new sign-in link' : 'Your portal account is ready';
 
-  // Fire-and-forget, exactly as the rest of the portal treats mail: a mail outage
-  // must not fail account creation, and the admin can always resend.
-  sendEmail(clientId, {
+  // A mail outage must not fail account creation. Recorded in the outbox so a
+  // failure is visible; the admin can always issue a fresh invite (CPPM-36).
+  queueEmail(clientId, {
     to: email,
     subject: isResend ? 'Your portal invitation' : 'Set your password',
     html: `<p>Hi ${firstName},</p><p>${heading}. Choose a password to activate your account.</p>`
         + `<p><a href="${inviteUrl}" style="background:#6B3FA0;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Set Password</a></p>`
         + `<p>This link expires in 7 days.</p>`,
     text: `Hi ${firstName}, set your password: ${inviteUrl} (expires in 7 days)`,
-  }).catch(() => {});
+  }, { kind: 'portal_invite', relatedType: 'portal_user', relatedId: userId, sensitive: true });
 
   return inviteUrl;
 }

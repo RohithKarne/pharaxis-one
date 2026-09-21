@@ -10,11 +10,10 @@ const path    = require('path');
 const multer  = require('multer');
 const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
-const { sendEmail } = require('../../utils/mailer');
 const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
 const { getAuthHeaders, invalidateAuth } = require('../../services/mimsAuth');
 const { validateUploads } = require('../../utils/fileValidation');
-const { enqueue } = require('../../utils/jobQueue');
+const { queueEmail } = require('../../utils/emailOutbox');
 const { validateAnswer, isFlagged, AE_SCREEN_KEY, AE_SCREEN_DETAIL_KEY } = require('../../services/aeScreening');
 const { systemAudit } = require('../../utils/audit');
 const log = require('../../utils/logger');
@@ -173,14 +172,14 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     if (recipientEmail) {
       const ref = `CP-${String(submissionId).padStart(6, '0')}`;
       const typeLabel = { medical_inquiry: 'Medical Inquiry', adverse_event: 'Adverse Event', product_complaint: 'Product Complaint', other_inquiry: 'Other Inquiry' }[formType] || formType;
-      // CP-21: send via the job queue so a slow SMTP never blocks the response and
-      // transient failures are retried instead of silently dropped.
-      enqueue('submission.ack-email', () => sendEmail(client.id, {
+      // CPPM-36: recorded in the durable outbox — retried, and visible to an
+      // administrator if it finally fails, rather than lost on restart.
+      queueEmail(client.id, {
         to: recipientEmail,
         subject: `Submission Received — ${typeLabel} (${ref})`,
         html: `<p>Thank you for your submission.</p><p>Your reference number is <strong>${ref}</strong>.</p><p>We will review your ${typeLabel} and respond as soon as possible.</p>`,
         text: `Thank you for your submission. Your reference number is ${ref}. We will review your ${typeLabel} and respond as soon as possible.`,
-      }));
+      }, { kind: 'submission_ack', relatedType: 'submission', relatedId: submissionId });
     }
 
     res.status(201).json({

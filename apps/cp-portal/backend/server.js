@@ -236,6 +236,10 @@ function createContentScheduler() {
         const { sendAllDigests } = require('./utils/digest');
         await sendAllDigests().catch(() => {});
       }
+
+      // CPPM-36: retry outbox emails that are due.
+      const { retryDueEmails } = require('./utils/emailOutbox');
+      await retryDueEmails().catch(err => log.error('email.outbox.retry_tick_failed', { err }));
     } catch { /* silently ignore scheduler errors */ }
     finally {
       if (lockAcquired) {

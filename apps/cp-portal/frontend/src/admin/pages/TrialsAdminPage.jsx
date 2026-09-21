@@ -9,6 +9,8 @@ export default function TrialsAdminPage() {
   const [loading, setLoading] = useState(true)
   const [form, setForm]       = useState({ nct_id: '', title: '', phase: 'Phase III', indication: '', status: 'Recruiting', site_location: '', pi: '' })
   const [msg, setMsg]         = useState('')
+  const [editingId, setEditingId] = useState(null)   // CPPM-33: correcting an existing entry
+  const EMPTY = { nct_id: '', title: '', phase: 'Phase III', indication: '', status: 'Recruiting', site_location: '', pi: '' }
 
   useEffect(() => {
     fetch(`/api/admin/trials/${clientId}`, { headers: adminHeaders() })
@@ -21,15 +23,16 @@ export default function TrialsAdminPage() {
     e.preventDefault()
     setMsg('')
     try {
-      const res = await fetch(`/api/admin/trials/${clientId}`, {
-        method: 'POST',
+      const res = await fetch(editingId ? `/api/admin/trials/${clientId}/${editingId}` : `/api/admin/trials/${clientId}`, {
+        method: editingId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', ...adminHeaders() },
         body: JSON.stringify(form),
       })
       const d = await res.json()
       if (res.ok) {
-        setMsg('✅ Clinical Trial published.')
-        setForm({ nct_id: '', title: '', phase: 'Phase III', indication: '', status: 'Recruiting', site_location: '', pi: '' })
+        setMsg(editingId ? '✅ Changes saved.' : '✅ Clinical Trial published.')
+        setEditingId(null)
+        setForm(EMPTY)
         const updated = await fetch(`/api/admin/trials/${clientId}`, { headers: adminHeaders() }).then(r => r.json())
         setTrials(updated.trials || [])
       } else {
@@ -38,6 +41,18 @@ export default function TrialsAdminPage() {
     } catch {
       setMsg('❌ Error saving trial.')
     }
+  }
+
+  function startEdit(t) {
+    setEditingId(t.id)
+    setForm(Object.fromEntries(Object.keys(EMPTY).map(k => [k, t[k] ?? EMPTY[k]])))
+    setMsg('')
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setForm(EMPTY)
+    setMsg('')
   }
 
   async function handleDelete(id) {
@@ -78,10 +93,33 @@ export default function TrialsAdminPage() {
               <option value="Phase IV">Phase IV</option>
             </select>
           </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Site location</label>
+            <input value={form.site_location} onChange={e => setForm({ ...form, site_location: e.target.value })} placeholder="Hospital, city" style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1' }} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Principal investigator</label>
+            <input value={form.pi} onChange={e => setForm({ ...form, pi: e.target.value })} placeholder="Dr. ..." style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1' }} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Status</label>
+            <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1' }}>
+              <option value="Recruiting">Recruiting</option>
+              <option value="Active, not recruiting">Active, not recruiting</option>
+              <option value="Completed">Completed</option>
+              <option value="Suspended">Suspended</option>
+              <option value="Terminated">Terminated</option>
+            </select>
+          </div>
           {msg && <div style={{ fontSize: 13, marginBottom: 12, fontWeight: 600 }}>{msg}</div>}
           <button type="submit" className="cp-btn cp-btn-primary" style={{ width: '100%', padding: '9px 14px', background: '#6B3FA0', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
-            Publish Clinical Trial
+            {editingId ? 'Save changes' : 'Publish Clinical Trial'}
           </button>
+          {editingId && (
+            <button type="button" onClick={cancelEdit} style={{ width: '100%', marginTop: 8, padding: '8px 14px', background: '#fff', color: '#374151', border: '1px solid #CBD5E1', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
+              Cancel editing
+            </button>
+          )}
         </form>
 
         <div className="cp-card" style={{ padding: 20, background: '#fff', borderRadius: 8, border: '1px solid #E2E8F0' }}>
@@ -105,6 +143,7 @@ export default function TrialsAdminPage() {
                     <td style={{ padding: 8 }}>{t.phase}</td>
                     <td style={{ padding: 8 }}>{t.status}</td>
                     <td style={{ padding: 8 }}>
+                      <button onClick={() => startEdit(t)} style={{ color: '#6B3FA0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, marginRight: 8 }}>Edit</button>
                       <button onClick={() => handleDelete(t.id)} style={{ color: '#DC2626', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600 }}>Delete</button>
                     </td>
                   </tr>

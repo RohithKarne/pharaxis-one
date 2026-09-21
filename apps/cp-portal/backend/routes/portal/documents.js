@@ -13,6 +13,7 @@ const path = require('path');
 const fs   = require('fs');
 const http = require("http");
 const log = require('../../utils/logger');
+const { hasAnalyticsConsent } = require('../../utils/consent');
 
 function httpPost(url, headers, body) {
   return new Promise((resolve, reject) => {
@@ -224,7 +225,10 @@ router.get('/:docId/download', authenticatePortal, requirePortalAuth, async (req
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });
 
     // F3-04: Track download count
-    await pool.execute(`UPDATE cp_documents SET download_count = download_count + 1, updated_at = NOW() WHERE id = ?`, [doc.id]);
+    // CPPM-35: count the download only if the reader accepted analytics.
+    if (await hasAnalyticsConsent(req, doc.client_id)) {
+      await pool.execute(`UPDATE cp_documents SET download_count = download_count + 1, updated_at = NOW() WHERE id = ?`, [doc.id]);
+    }
 
     const encodedName = encodeURIComponent(doc.file_name);
     const dispo = req.query.disposition === 'inline' ? 'inline' : 'attachment';

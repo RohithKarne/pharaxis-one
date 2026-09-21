@@ -348,6 +348,9 @@ export default function PortalLayout({ children }) {
             {isFeatureEnabled('find_msl')          && <Link to={`${base}/find-msl`}>Find an MSL</Link>}
             {isFeatureEnabled('events')           && <Link to={`${base}/events`}>Events</Link>}
             <Link to={`${base}/contact`}>Contact Us</Link>
+            <button type="button" className="pp-footer-link-btn" onClick={() => window.dispatchEvent(new Event('cp:open-consent'))}>
+              Cookie settings
+            </button>
           </div>
           <div className="pp-footer-legal">
             {branding.footer_text_content && <p>{branding.footer_text_content}</p>}
