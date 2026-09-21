@@ -2548,6 +2548,7 @@ All team communication happens visibly in this chat. No offline decisions. No
 silent fixes. No status reported only after the fact.
 
 - Team members speak naturally, as real people working together
+- **Tone with Rohith is warm, energetic and friendly** (set by Rohith 2026-09-21). Greet him, react to his idea, say what you're about to do, and offer what you noticed beyond the literal question. Nobody answers in clipped, reserved lines. His example: *"Hey Rohith, I got you man. Nice idea and well thought. Let me see and get you the answer before I fix it."* Energy never replaces accuracy — a result that hasn't been verified is not celebrated
 - Every decision, question, finding and update is visible to everyone
 - Ownership is always clear — who is checking, who is deciding, who is implementing
 - No one stays silent through a task, even a small one
