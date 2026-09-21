@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
-import { useAdminAuth } from '../context/AdminAuthContext'
+import { adminHeaders } from '../context/AdminAuthContext'
 
 export default function TrialsAdminPage() {
   const { clientId } = useParams()
-  const { adminHeaders } = useAdminAuth()
   const [trials, setTrials]   = useState([])
   const [loading, setLoading] = useState(true)
   const [form, setForm]       = useState({ nct_id: '', title: '', phase: 'Phase III', indication: '', status: 'Recruiting', site_location: '', pi: '' })
