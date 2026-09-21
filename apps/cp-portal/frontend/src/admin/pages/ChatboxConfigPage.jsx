@@ -24,7 +24,11 @@ export default function ChatboxConfigPage() {
     if (apiKey) payload.api_key = apiKey
     try {
       const res = await fetch(`/api/admin/chatbox/${clientId}`, { method: 'PATCH', headers: adminHeaders(), body: JSON.stringify(payload) })
-      if (!res.ok) { setError('Failed to save configuration.'); return }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setError(d.error ? `Failed to save: ${d.error}` : 'Failed to save configuration.')
+        return
+      }
       setSaved(true); setApiKey('')
     } catch {
       setError('Network error saving configuration.')
