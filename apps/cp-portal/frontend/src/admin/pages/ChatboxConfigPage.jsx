@@ -62,10 +62,11 @@ export default function ChatboxConfigPage() {
                   <option value="gpt-6-astra">GPT-6 Astra (Flagship, highest cost)</option>
                 </select>
               ) : (
-                <select value={config.model || 'claude-haiku-4-5-20251001'} onChange={e => set('model', e.target.value)}>
-                  <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Fast)</option>
-                  <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Balanced)</option>
-                  <option value="claude-opus-4-6">Claude Opus 4.6 (Most Capable)</option>
+                <select value={config.model || 'claude-opus-5'} onChange={e => set('model', e.target.value)}>
+                  <option value="claude-haiku-4-5">Claude Haiku 4.5 (Fast, lowest cost)</option>
+                  <option value="claude-sonnet-5">Claude Sonnet 5 (Balanced)</option>
+                  <option value="claude-opus-5">Claude Opus 5 (Most capable Opus)</option>
+                  <option value="claude-fable-5-1">Claude Fable 5.1 (Flagship, highest cost)</option>
                 </select>
               )}
             </div>

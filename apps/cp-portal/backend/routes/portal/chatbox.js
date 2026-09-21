@@ -97,13 +97,35 @@ router.post('/:clientCode', authenticatePortal, requirePortalAuth, async (req, r
     if (config.ai_provider === 'anthropic') {
       const Anthropic = require('@anthropic-ai/sdk');
       const anthropic = new Anthropic({ apiKey: config.api_key });
-      const response = await anthropic.messages.create({
-        model: config.model || 'claude-haiku-4-5-20251001',
-        max_tokens: config.max_tokens || 1024,
+      const model = config.model || 'claude-opus-5';
+      // Sonnet 5 / Opus 5 / Fable 5.1 (and 4.6+) think adaptively and accept an
+      // effort level. Thinking is paid from max_tokens, so give room, and keep
+      // effort low: short answers grounded in supplied content do not need depth.
+      // Haiku 4.5 takes neither.
+      const isCurrentGen = /^claude-(fable-5|opus-5|sonnet-5|opus-4-[678]|sonnet-4-6)/.test(model);
+      const params = {
+        model,
+        max_tokens: isCurrentGen ? 16000 : (config.max_tokens || 1024),
         system: systemPrompt,
         messages: messages.map(m => ({ role: m.role, content: m.content })),
-      });
-      return res.json({ reply: response.content[0]?.text || '', sources });
+        ...(isCurrentGen ? { output_config: { effort: 'low' } } : {}),
+      };
+      // Opus 5 and Fable 5.1 can decline on safety grounds; server-side fallbacks
+      // re-run a declined request on a suitable model inside the same call.
+      const useFallbacks = model === 'claude-opus-5' || model === 'claude-fable-5-1';
+      const response = useFallbacks
+        ? await anthropic.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
+        : await anthropic.messages.create(params);
+
+      if (response.stop_reason === 'refusal') {
+        log.warn('portal.chatbox.refusal', { model, category: response.stop_details?.category || null });
+        return res.json({ reply: "I can't help with that here. Please submit a medical inquiry and our medical team will respond.", sources: [] });
+      }
+      // With thinking on, the first content block is a thinking block, not the
+      // answer — read the text blocks, never content[0].
+      const reply = response.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+      if (!reply) log.warn('portal.chatbox.empty_reply', { provider: 'anthropic', model, stop_reason: response.stop_reason });
+      return res.json({ reply: reply || 'Sorry, I could not produce an answer. Please try rephrasing your question.', sources });
     }
 
     if (config.ai_provider === 'openai') {
