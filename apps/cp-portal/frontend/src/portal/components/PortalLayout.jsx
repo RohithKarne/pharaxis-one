@@ -412,7 +412,7 @@ function ChatboxWidget({ clientCode }) {
   const [input, setInput]   = useState('')
   const [loading, setLoading] = useState(false)
   const [sendCooldown, setSendCooldown] = useState(false)
-  const { portalConfig }    = usePortal()
+  const { portalConfig, user } = usePortal()
   const welcomeMsg = portalConfig?.chatbox?.welcome_message || 'Hello! How can I help you today?'
 
   function openChat() {
@@ -439,7 +439,9 @@ function ChatboxWidget({ clientCode }) {
         body: JSON.stringify(payload)
       })
       const data = await res.json()
-      setMessages(m => [...m, { role: 'assistant', content: data.reply || 'Sorry, I could not process that.', sources: Array.isArray(data.sources) ? data.sources : [] }])
+      // Show the server's reason (e.g. not available for this account type) rather than a generic line.
+      const content = res.ok ? (data.reply || 'Sorry, I could not process that.') : (data.error || 'Sorry, I could not process that.')
+      setMessages(m => [...m, { role: 'assistant', content, sources: res.ok && Array.isArray(data.sources) ? data.sources : [] }])
     } catch {
       setMessages(m => [...m, { role: 'assistant', content: 'Connection error. Please try again.' }])
     }
@@ -454,6 +456,14 @@ function ChatboxWidget({ clientCode }) {
             <span>AI Medical Assistant</span>
             <button onClick={() => setOpen(false)} aria-label="Close chat">✕</button>
           </div>
+          {/* CPPM-16: the assistant is for signed-in users, so the client knows who it is talking to. */}
+          {!user ? (
+            <div className="pp-chat-body pp-chat-signin">
+              <p className="pp-chat-signin-title">Sign in to chat</p>
+              <p>Our medical assistant answers from approved information. Please sign in so we can tailor answers to you and follow up if needed.</p>
+              <Link to={`/portal/${clientCode}/login`} className="pp-btn pp-btn-primary" onClick={() => setOpen(false)}>Sign In</Link>
+            </div>
+          ) : (<>
           <div className="pp-chat-body">
             {messages.map((m, i) => (
               <div key={i} className={`pp-chat-msg pp-chat-msg-${m.role}`}>
@@ -475,6 +485,7 @@ function ChatboxWidget({ clientCode }) {
             <span className="pp-chat-counter">{input.length}/500</span>
             <button type="submit" disabled={sendCooldown || loading || !input.trim()}>Send</button>
           </form>
+          </>)}
         </div>
       ) : (
         <button className="pp-chat-fab" onClick={openChat} title="AI Medical Assistant" aria-label="Open AI Medical Assistant">

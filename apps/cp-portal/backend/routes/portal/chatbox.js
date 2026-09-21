@@ -8,6 +8,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { decryptSecret } = require('../../utils/secretCrypto');
 const { retrieveContext, formatContext } = require('../../utils/retrieve');
+const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const log = require('../../utils/logger');
 
 async function isFeatureEnabled(clientId, featureKey) {
@@ -15,14 +16,31 @@ async function isFeatureEnabled(clientId, featureKey) {
   return row ? row.is_enabled === 1 : false;
 }
 
+// CPPM-16: the client's gate can switch a feature off for a user type. The
+// browser applied this only for signed-in users; now the server applies it too.
+async function isAllowedForUserType(clientId, featureKey, userType) {
+  const [[gate]] = await pool.execute('SELECT is_enabled FROM cp_gate_config WHERE client_id = ?', [clientId]);
+  if (!gate?.is_enabled) return true;
+  const [[row]] = await pool.execute(
+    'SELECT is_allowed FROM cp_feature_access WHERE client_id = ? AND feature_key = ? AND type_key = ?',
+    [clientId, featureKey, userType]);
+  return row ? !!row.is_allowed : true;
+}
+
 // POST /api/portal/chatbox/:clientCode
-router.post('/:clientCode', async (req, res) => {
+// CPPM-16: sign-in required, so the client knows who it is talking to and can
+// follow up — and so its "who may use chat" rule actually applies.
+router.post('/:clientCode', authenticatePortal, requirePortalAuth, async (req, res) => {
   try {
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
 
     if (!await isFeatureEnabled(client.id, 'chatbox')) {
       return res.status(403).json({ error: 'Chatbox is not enabled for this portal.' });
+    }
+    const userType = req.portalUser.user_type || 'other';
+    if (!await isAllowedForUserType(client.id, 'chatbox', userType)) {
+      return res.status(403).json({ error: 'The chat assistant is not available for your account type.' });
     }
 
     const [[config]] = await pool.execute('SELECT * FROM cp_chatbox_config WHERE client_id = ? AND is_active = 1', [client.id]);
@@ -59,7 +77,8 @@ router.post('/:clientCode', async (req, res) => {
     // ground the model in it. Retrieval is keyword-based (v1); the interface lets
     // us swap in semantic search later without changing this handler.
     const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content || '';
-    const retrieved = await retrieveContext(client.id, lastUserMessage, 6);
+    // CPPM-16: only ground answers in content this person is allowed to see.
+    const retrieved = await retrieveContext(client.id, lastUserMessage, 6, userType);
     const contextBlock = formatContext(retrieved);
 
     const safeSystemPrompt = (config.system_prompt || 'You are a helpful medical information assistant for a pharmaceutical company.').slice(0, 2000);

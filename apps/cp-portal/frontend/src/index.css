@@ -2388,6 +2388,9 @@ body { background: var(--cp-bg); }
 .pp-contact-card p { font-size: 13px; color: var(--pp-text-muted); line-height: 1.6; }
 .pp-contact-link { display: block; margin-top: 12px; color: var(--pp-link); font-weight: 600; text-decoration: none; font-size: 14px; }
 /* Contact page — actions and message form (rebuilt: the form used classes with no styles) */
+.pp-chat-signin { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; font-size: 14px; color: var(--pp-text-muted); line-height: 1.55; }
+.pp-chat-signin-title { font-size: 16px; font-weight: 700; color: var(--pp-text); margin: 0; }
+.pp-chat-signin p { margin: 0; }
 .pp-contact-action { margin-top: auto; padding-top: 14px; font-size: 14px; font-weight: 700; color: var(--pp-primary); text-decoration: none; }
 .pp-contact-action:hover { text-decoration: underline; }
 .pp-contact-card-alert { border-color: #FECACA; background: #FFFBFB; }
