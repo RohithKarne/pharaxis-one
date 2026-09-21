@@ -21,7 +21,8 @@ export default function PortalHomePage() {
   // CP-12: debounced typeahead suggestions for the hero search.
   useEffect(() => {
     const q = homeSearch.trim()
-    if (q.length < 2) { setSuggestions([]); setActiveIdx(-1); return }
+    // CPPM-25: suggestions need a signed-in user; signed-out visitors get none.
+    if (!user || q.length < 2) { setSuggestions([]); setActiveIdx(-1); return }
     const t = setTimeout(() => {
       fetch(`/api/portal/search/suggest?clientCode=${clientCode}&q=${encodeURIComponent(q)}`)
         .then(r => r.ok ? r.json() : null)
@@ -29,7 +30,7 @@ export default function PortalHomePage() {
         .catch(() => {})
     }, 250)
     return () => clearTimeout(t)
-  }, [homeSearch, clientCode])
+  }, [homeSearch, clientCode, user])
 
   // CP-16: keyboard navigation for the typeahead (↑/↓/Enter/Esc).
   function onSearchKeyDown(e) {
