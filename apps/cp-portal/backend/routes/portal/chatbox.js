@@ -107,17 +107,30 @@ router.post('/:clientCode', authenticatePortal, requirePortalAuth, async (req, r
     }
 
     if (config.ai_provider === 'openai') {
+      const model = config.model || 'gpt-5.6-luna';
+      // GPT-5.x / GPT-6 are reasoning models: they take max_completion_tokens (not
+      // max_tokens), and their thinking is paid from that same budget. Low effort keeps
+      // short, grounded answers fast and stops the thinking from consuming the reply.
+      const isReasoningModel = /^(gpt-5|gpt-6|o\d)/.test(model);
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.api_key}` },
         body: JSON.stringify({
-          model: config.model || 'gpt-4o-mini',
-          max_tokens: config.max_tokens || 1024,
+          model,
+          max_completion_tokens: config.max_tokens || 2048,
+          ...(isReasoningModel ? { reasoning_effort: 'low' } : {}),
           messages: [{ role: 'system', content: systemPrompt }, ...messages],
         }),
       });
       const data = await response.json();
-      return res.json({ reply: data.choices?.[0]?.message?.content || '', sources });
+      // Surface provider errors (bad key, no credit, unknown model) instead of an empty reply.
+      if (!response.ok) {
+        log.error('portal.chatbox.provider_error', { provider: 'openai', model, status: response.status, message: data?.error?.message });
+        return res.status(502).json({ error: 'The assistant is temporarily unavailable. Please try again later.' });
+      }
+      const reply = data.choices?.[0]?.message?.content || '';
+      if (!reply) log.warn('portal.chatbox.empty_reply', { provider: 'openai', model, finish_reason: data.choices?.[0]?.finish_reason });
+      return res.json({ reply: reply || 'Sorry, I could not produce an answer. Please try rephrasing your question.', sources });
     }
 
     res.status(400).json({ error: 'Unsupported AI provider.' });

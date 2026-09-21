@@ -51,9 +51,11 @@ export default function ChatboxConfigPage() {
             <div className="cp-field">
               <label>Model</label>
               {config.ai_provider === 'openai' ? (
-                <select value={config.model || 'gpt-4o-mini'} onChange={e => set('model', e.target.value)}>
-                  <option value="gpt-4o-mini">GPT-4o Mini</option>
-                  <option value="gpt-4o">GPT-4o</option>
+                <select value={config.model || 'gpt-5.6-luna'} onChange={e => set('model', e.target.value)}>
+                  <option value="gpt-5.6-luna">GPT-5.6 Luna (Fast, lowest cost)</option>
+                  <option value="gpt-5.6-terra">GPT-5.6 Terra (Balanced)</option>
+                  <option value="gpt-5.6-sol">GPT-5.6 Sol (Most capable GPT-5.6)</option>
+                  <option value="gpt-6-astra">GPT-6 Astra (Flagship, highest cost)</option>
                 </select>
               ) : (
                 <select value={config.model || 'claude-haiku-4-5-20251001'} onChange={e => set('model', e.target.value)}>
@@ -70,9 +72,10 @@ export default function ChatboxConfigPage() {
             </div>
           </div>
           <div className="cp-field">
-            <label>API Key {config.is_active ? '(set — leave blank to keep current)' : ''}</label>
+            {/* Was keyed on is_active, so an enabled chatbox with no key claimed one was set. */}
+            <label>API Key {config.has_api_key ? '(set — leave blank to keep current)' : <span style={{ color: '#DC2626' }}>(not set — the assistant cannot answer until you add one)</span>}</label>
             <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-              placeholder={config.is_active ? '••••••••' : 'Paste API key…'} />
+              placeholder={config.has_api_key ? '••••••••' : 'Paste API key…'} />
           </div>
         </div>
 
