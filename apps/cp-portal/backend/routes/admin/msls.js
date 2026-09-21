@@ -99,6 +99,14 @@ router.get('/:clientId/bookings', authenticateAdmin, async (req, res) => {
   }
 });
 
+// CPPM-26: free the slot held by a booking so the time can be booked again.
+async function releaseSlot(clientId, bookingId) {
+  await pool.execute(
+    'UPDATE cp_msl_slots SET is_booked = 0, booking_id = NULL WHERE booking_id = ? AND client_id = ?',
+    [bookingId, clientId]
+  );
+}
+
 // PUT /api/admin/msls/:clientId/bookings/:bookingId — update status + notes
 router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res) => {
   try {
@@ -112,6 +120,8 @@ router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res)
     fields.push('updated_at = NOW()');
     values.push(req.params.bookingId, req.params.clientId);
     await pool.execute(`UPDATE cp_msl_bookings SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
+    // CPPM-26: a cancelled meeting gives its time back.
+    if (status === 'cancelled') await releaseSlot(req.params.clientId, req.params.bookingId);
     await audit(req.admin, req.params.clientId, 'UPDATE', 'msl_booking', req.params.bookingId, { status });
     res.json({ ok: true });
   } catch (err) {
@@ -123,6 +133,7 @@ router.put('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res)
 // DELETE /api/admin/msls/:clientId/bookings/:bookingId
 router.delete('/:clientId/bookings/:bookingId', authenticateAdmin, async (req, res) => {
   try {
+    await releaseSlot(req.params.clientId, req.params.bookingId);
     await pool.execute('DELETE FROM cp_msl_bookings WHERE id = ? AND client_id = ?', [req.params.bookingId, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'DELETE', 'msl_booking', req.params.bookingId, {});
     res.json({ ok: true });

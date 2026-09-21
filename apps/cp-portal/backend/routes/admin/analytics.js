@@ -62,10 +62,11 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
   }
 });
 
-// Sanitize CSV field — prevent XLS formula injection (=, +, -, @ prefixes)
+// Sanitize CSV field — prevent XLS formula injection (=, +, -, @ prefixes),
+// and double any quote mark so a value can't close its column early (CPPM-28).
 function csvSafe(val) {
   const s = String(val ?? '')
-  return /^[=+\-@]/.test(s) ? `'${s}` : s
+  return (/^[=+\-@]/.test(s) ? `'${s}` : s).replace(/"/g, '""')
 }
 
 // GET /api/admin/analytics/:clientId/export — S4-7: CSV export
@@ -77,9 +78,9 @@ router.get('/:clientId/export', authenticateAdmin, requireClientAccess, async (r
 
     const [subs] = await pool.execute(
       `SELECT submission_type as form_type, status, submitted_at,
-              JSON_EXTRACT(form_data, '$.email') as email,
-              JSON_EXTRACT(form_data, '$.first_name') as first_name,
-              JSON_EXTRACT(form_data, '$.last_name') as last_name
+              JSON_UNQUOTE(JSON_EXTRACT(form_data, '$.email')) as email,
+              JSON_UNQUOTE(JSON_EXTRACT(form_data, '$.first_name')) as first_name,
+              JSON_UNQUOTE(JSON_EXTRACT(form_data, '$.last_name')) as last_name
        FROM cp_submissions WHERE client_id = ? ORDER BY submitted_at DESC`,
       [id]
     );

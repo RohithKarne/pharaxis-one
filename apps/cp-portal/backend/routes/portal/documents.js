@@ -64,7 +64,7 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
 
     const [docs] = await pool.execute(`
       SELECT id, title, category, doc_type, file_name, file_size, mime_type, visible_to_json, source,
-             version, download_count, created_at, translations_json
+             version, download_count, created_at, expires_at, translations_json
       FROM cp_documents
       WHERE client_id = ? AND is_active = 1
         AND ${VISIBLE_DOCUMENT_SQL}

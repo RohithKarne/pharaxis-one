@@ -63,6 +63,15 @@ export default function PortalHomePage() {
 
   // LOW-16: fetch upcoming events from API
   const [upcomingEvents, setUpcomingEvents] = useState([])
+  const [productTerm, setProductTerm] = useState(null)
+  // Popular-search chip for this client's own lead product (was a hard-coded "PX-104").
+  useEffect(() => {
+    if (!clientCode) return
+    fetch(`/api/portal/content/${clientCode}/drugs`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setProductTerm(d?.items?.[0]?.brand_name?.split(/\s+/)[0] || null))
+      .catch(() => {})
+  }, [clientCode])
   const [latestNews, setLatestNews] = useState([])
   const [latestDocs, setLatestDocs] = useState([])
   useEffect(() => {
@@ -160,7 +169,7 @@ export default function PortalHomePage() {
     },
   ].filter(c => isFeatureEnabled(c.key))
 
-  const quickSearches = ['PX-104', 'Dosing', 'Clinical trials', 'Prescribing information', 'Safety']
+  const quickSearches = [productTerm, 'Dosing', 'Clinical trials', 'Prescribing information', 'Safety'].filter(Boolean)
   const quickDocs = latestDocs.length > 0
     ? latestDocs.slice(0, 2)
     : [
