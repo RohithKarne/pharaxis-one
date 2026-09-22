@@ -25,6 +25,7 @@
 > Revision update: 2026-09-09 (**Two products, not five.** Mandated by Rohith Karne: *"lets delete qms, vault and test console, ai-agent. I want to concentrate only on mims, cp-portal."* The **Pharaxis Vault, QMS and AI Agent** applications and the **Test Console** were deleted from the repository, together with their CI, deploy and release workflows, runbooks, website pages, nginx routes, PM2 entries, Dependabot configs, labels and local databases. **§43, §44 and §45 are retired in place and their numbers are not reused** — the same pattern as §33–§36 — because §41–§47 are cited across this file, in `CLAUDE.md` and inside cloud routine prompts that cannot be edited from the repository. **Document management moves outside:** MIMS integrates with **Veeva Vault and other external content management systems** through its per-organisation integration config, which was always written against Veeva's API and never called the in-house Vault app — that integration is unaffected. **Regression moves into the apps:** §29 step 4 and §38 step 18 no longer promote into a separate Test Console; each app carries its own suite, run through the app and its CI, on Rohith's instruction *"I will test using the original app itself."* The full text of the deleted sections remains in git history.)
 > Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
 > Revision update: 2026-08-13 (Section 48 added — CSV/CSA Interviews. Mandated by Rohith Karne. **The first routine whose subject is not a Pharaxis product.** It rehearses him for interviews as a validation professional moving companies: one epic and five stories per run, each story a real interview conversation between two named interviewers and him, followed by coaching. Manual, like the others. Files to Jira project `CSV`. Governance lives here; the operational prompt lives in `docs/CSV_CSA_INTERVIEWS.md`. It reads no Pharaxis code, names no Pharaxis product, and nothing it produces enters the delivery flow in §38.)
+> Revision update: 2026-09-22 (**Section 48 widened and renamed — CSV/CSA Interviews becomes The Job.** Mandated by Rohith Karne. The routine rehearsed validation alone; the roles he is going for reach past it into **project management, IT compliance, application support, system administration and AI**, so it now covers all six topics and produces **one epic and seven stories** per run — six topic stories and a seventh situational one, drawn from a topic on rotation and always a panel. **Six named interviewers, one per topic**, replace the two; only Vasu also speaks elsewhere in this SOP, and Sarvanan is no longer an interviewer. **`docs/CSV_CSA_INTERVIEWS.md` is absorbed into §48 and deleted** — the same pattern as the five app SOPs on 2026-08-07, so there is again exactly one SOP and no separate prompt file. Same Jira project `CSV`, same manual run, and the earlier `CSV/CSA Epic` runs still count for duplication. Nothing it produces enters the delivery flow in §38.)
 
 ---
 
@@ -4591,64 +4592,221 @@ Rohith Karne owns it. Bala Kaviti keeps the documents current. Aditi Raghavan en
 
 ---
 
-## 48. CSV/CSA Interviews (Mandatory)
+## 48. The Job — Interview Rehearsal (Mandatory)
 
-> Established 2026-08-13 on Rohith Karne's instruction.
-> Governance lives here. The operational prompt lives in `docs/CSV_CSA_INTERVIEWS.md`.
+> Established 2026-08-13 on Rohith Karne's instruction, as **CSV/CSA Interviews**.
+> **Renamed and widened to The Job on 2026-09-22.** Citations of "§48 CSV/CSA Interviews"
+> mean this section.
+> **There is no separate prompt file.** `docs/CSV_CSA_INTERVIEWS.md` was absorbed here and
+> deleted, the same pattern as the five app SOPs on 2026-08-07. Everything the routine needs
+> is below.
 
 ### Principle
 
 **This is the only routine whose subject is not a Pharaxis product, and not Pharaxis at all.**
 
-It prepares Rohith for interviews as a validation professional moving from one company to
-another. Every other routine looks inward at what we build. This one looks outward at a job
-market, and it is deliberately walled off from everything else we do.
+It prepares Rohith for interviews as he changes companies. Every other routine looks inward at
+what we build. This one looks outward at a job market, and it is deliberately walled off from
+everything else we do.
+
+**What widened on 2026-09-22.** The routine used to rehearse validation alone. The roles Rohith
+is going for reach past validation into project management, IT compliance, application support,
+system administration and AI, so the routine now covers all six and produces seven stories
+rather than five. The old shape is superseded, not retired — same project, same Jira space, and
+the earlier `CSV/CSA Epic` runs still count for duplication.
 
 ### What it is
 
 | Item | Value |
 |---|---|
-| Routine | **CSV/CSA Interviews** |
+| Routine | **The Job** |
 | Runs | **Manual only.** Fired by Rohith from the routines screen, as often in a day as he wants |
 | Files to | Jira project **`CSV`** — the only project it writes to |
-| Produces | **One epic and five stories.** Never more, never fewer |
-| Epic name | `CSV/CSA Epic — <today's date>`, and `Round 2`, `Round 3` for later runs the same day |
-| Assigned to | Rohith |
-| Prompt | `docs/CSV_CSA_INTERVIEWS.md` |
+| Produces | **One epic and seven stories.** Never more, never fewer |
+| Epic name | `The Job — <today's date>`, e.g. `The Job — 22nd Sep 2026`; then ` Round 2`, ` Round 3` for later runs the same day |
+| Assigned to | Rohith Karne |
+| Spec | This section. There is no prompt file |
 
-### What a story is
+### Who it is for
 
-One interview question, played out as a conversation. Two interviewers speak by name and
-designation — **Sarvanan as Validation Lead, Vasu as Director of Validation** — and they behave
-like people: they greet him, they react to his last answer, they push when an answer is thin.
-His answers are written out as he would say them.
+Rohith Karne, a Computer System Validation and Computer System Assurance professional with
+around five years across cloud-hosted GxP applications. His background is vendor and service
+side — SaaS release validation, upgrades across customer environments, UAT, qualification,
+change and incident management, and integrations across safety, regulatory information, medical
+information and content management systems.
 
-The interviewer's follow-up probes happen **inside the conversation**, three to five exchanges
-per question. That is the point of the format. A question with a single answer teaches very
-little; the second and third question is where interviews are won and lost.
+Read his CV for context if it is available, but **do not narrow the questions to it**. He is
+moving beyond what he has done, and a rehearsal that only asks about his current job prepares
+him for the job he is leaving.
 
-Each story then steps out of the interview and coaches: what a weak answer sounds like and what
-it signals, a prompt for Rohith to write his own real example, three questions the interviewer
-would go to next, and the regulations behind the answer.
+### Research before writing
 
-### The rules that matter
+Three steps, every run, before a word of the epic is written.
 
-- **Main questions never repeat.** Every main question is checked against every story already in
-  the project — by meaning, not by wording. Follow-up questions are exempt, because repetition
-  teaches.
-- **A follow-up may be promoted** into its own main question on a later day, carrying a reference
-  back to where it came from.
-- **All five stories are written at full depth.** A shortened story is a broken story — the
-  weak-answer section only works against a complete answer.
-- **Every answer names its regulation or guidance**, and **no date or clause number is quoted
-  unless it has been verified**. Where a source was read only in summary, the story says so.
-- **The mix is automatic** — two straightforward questions and three that vary between mid and
-  hard. Rohith does not set it.
-- **At least one question per run is situational**, not knowledge-based.
-- **Topic weighting comes from current job adverts**, so the routine tracks what employers are
-  asking for rather than what was being asked three years ago.
-- **When a topic area is used up, the routine says so** rather than padding a run with
-  near-duplicates.
+1. **Search what is actually being asked** for each of the six topics in regulated life
+   sciences — what candidates report being asked, not what training material says.
+2. **Search current job adverts** for the roles behind each topic, and use them to weight what
+   each question covers. This is what keeps the routine tracking the market rather than what
+   was being asked three years ago.
+3. **Read every existing story in `CSV`**, including the earlier `CSV/CSA Epic` runs, so the
+   duplication check is real, and read the last three epics to see which topics the situational
+   story has used.
+
+**Jira rejects unbounded JQL.** Always include a restriction such as `project = CSV`, and
+request only the fields you need.
+
+**Every topic is set in regulated life sciences.** A project management question is about
+running a validated system rollout, not a generic IT project.
+
+### The six topics
+
+| Topic | What it covers | The angle |
+|---|---|---|
+| **PM** | Planning and running a GxP implementation, upgrade or release; scope, schedule, budget; stakeholders and steering; vendor and client management; risks, issues, dependencies; change requests; building validation into the plan; go-live readiness and hypercare; releases across many customer environments | Can you make the call, or only track it? |
+| **IT Compliance** | Access management and periodic review, segregation of duties, backup and restore, disaster recovery and business continuity, infrastructure qualification, patch and vulnerability handling, procedures and training records, security incidents, audit readiness | Is it controlled, and can you prove it? |
+| **Validation** | CSV and CSA thinking, risk-based approach, qualification, testing strategy and traceability, data integrity and ALCOA+, change control, supplier assessment and hosting, periodic review, regulatory expectations | Does the effort follow the risk? |
+| **Support** | Incident, problem and change management on a GxP system; triage and severity; service levels; root cause; when an incident becomes a deviation or CAPA; communicating with a regulated customer in an outage; hypercare; known errors and workarounds | Do you know this is not an ordinary service desk? |
+| **System Admin** | User provisioning and role design, configuration management, environments, release deployment, audit trail and e-signature configuration, monitoring, patching, SaaS tenant administration | How is it actually done, hands-on? |
+| **AI** | Validating AI and machine learning features, locked versus continuously learning models, training and test data integrity, human oversight, performance monitoring and drift, risk classification, large language models used in GxP work, emerging AI guidance | Can you govern something that is not deterministic? |
+
+### The seventh story — situational
+
+One extra story every run: a real scenario, not a knowledge question, drawn from one topic and
+tagged `Situational · <topic>`.
+
+- **Rotation.** Pick a topic whose situational story has not appeared in the last three epics.
+  If all have, take the one used longest ago.
+- It must not overlap the same topic's own story in this run.
+- It is **always a panel**, and always mid or hard.
+
+### The mix — decided automatically, never asked of Rohith
+
+- **Difficulty.** Two straightforward among the six topic stories. The other four vary mid and
+  hard — 2+2, 3+1 or 1+3, alternating between runs. The situational is always mid or hard.
+  Rotate which topics get the straightforward ones.
+- **Round.** Screening, Technical, Panel — mixed across the seven.
+- **Company framing.** Mix product-company and service-provider framings.
+
+### Duplication
+
+**Main questions never repeat.** Every main question is checked against every story already in
+the project — **by meaning, not by wording**. Follow-up probes and "where they'll go next" are
+exempt, because repetition teaches.
+
+**A follow-up may be promoted** into its own main question on a later day, carrying a reference
+back to where it came from.
+
+### The epic description contains
+
+What it is; the seven stories by topic and which topic the situational drew on; the difficulty
+mix; the rounds covered; a note that weighting came from current job adverts; the company types
+represented; the interviewers with designations; the source rule; and at the foot **three
+questions for Rohith to ask the interviewer**, varied every run.
+
+### The story — required format
+
+**All seven are written at full depth. A shortened story is a broken story** — the weak-answer
+section only works against a complete answer.
+
+**Summary line:** `[<Difficulty> · <Round> · <Topic>] <question shortened to a readable title>`.
+The description repeats the tags at the top.
+
+**a. How it'll come at you** — one short paragraph: which round, who is asking, their mood, any
+trap in the wording.
+
+**b. The interview** — a real conversation.
+
+- Open with a greeting and human conversation. Interviewers are people.
+- **Follow-up probes live inside the conversation** — three to five exchanges per story. That is
+  the point of the format. A question with a single answer teaches very little; the second and
+  third question is where interviews are won and lost.
+- **At least one genuine pushback per story.** In at least one story per epic his first attempt
+  is deliberately incomplete or slightly wrong and he recovers. Do not close every exchange with
+  a compliment.
+- Every answer is labelled `**Rohith's answer —**` then a blockquote, first person, as spoken.
+- **The first answer runs about twenty seconds — sixty to eighty words.** Depth comes through the
+  probes. Speech, not prose.
+
+**c. Coaching — <name>, stepping out of the interview** — the interviewer who led the story
+coaches:
+
+- **The version that quietly loses you the job** — one or two weak answers in full, and what each
+  signals. The confident-wrong-answer lesson is made in full in **exactly one story per epic**;
+  the source caveat in full once, then one line elsewhere.
+- **Your turn — write your own example here** — ask for a real example. Where he may not have one,
+  likely on some PM, system admin or AI questions, tell him to use the nearest true thing rather
+  than invent.
+- **Where they'll go next** — three follow-up questions, no answers.
+- **Sources** — named regulations, guidance or recognised practice.
+
+### The interviewers
+
+One per topic, named with designation on first speaking, **the same every run**:
+
+| Topic | Interviewer |
+|---|---|
+| PM | **Priya**, Head of Delivery |
+| IT Compliance | **Daniel**, IT Quality and Compliance Lead |
+| Validation | **Vasu**, Director, Validation |
+| Support | **Meera**, Application Support Manager |
+| System Admin | **Tom**, Platform Operations Lead |
+| AI | **Arjun**, Head of AI Governance |
+
+- **Screening and technical:** the topic's interviewer, with a second from the list joining
+  briefly near the end.
+- **Panel:** two throughout.
+- **Situational:** the topic's interviewer plus the one whose area the scenario spills into.
+
+**These are simulated people belonging to this routine.** Only Vasu also speaks elsewhere in this
+SOP, and his designation here is for the rehearsal only — it changes nothing about §5 or §39.3.
+Sarvanan was an interviewer under the old five-story shape and is not one now.
+
+### Voice
+
+**Coaching voice** — warm, direct, occasionally funny, honest, encouraging without being soft.
+
+**Answer voice** — calm, plain, confident, never jokey.
+
+**Plain English throughout**, per §47.
+
+### Accuracy and sources
+
+Every answer names what it rests on.
+
+- **Validation, IT Compliance, System Admin** — 21 CFR Part 11, EU GMP Annex 11, GAMP 5 Second
+  Edition, FDA Computer Software Assurance guidance, data integrity and ALCOA+.
+- **Support** — recognised IT service management practice, named as practice, plus GxP
+  expectations on incidents, deviations and CAPA.
+- **PM** — **no regulation governs project management.** Name the practice as practice, and name
+  the GxP guidance only where the project touches validation or data.
+- **AI** — draft EU GMP Annex 22, the EU AI Act and FDA AI-related guidance alongside GAMP 5.
+
+**Never quote a clause number, section number or publication date that has not been verified
+against the primary document.** Where a source came from search summaries, say so and tell Rohith
+to check before quoting. Describe draft regulation as draft. Never invent a statistic or a
+"most companies" claim.
+
+### Jira
+
+Project **`CSV`** only — never write to any other project. Cloud id
+`0a7f7971-6443-474b-9c5e-9aee486f5fa2`. Epic issue type `Epic`, stories `Story`, all seven linked
+to the epic. Default starting status. Assigned to Rohith Karne.
+
+### When the well runs dry
+
+Questions run down per topic. **When a topic is exhausted, say so** and name what is left. A run
+with a missing topic, stated plainly, is acceptable. **Never pad with near-duplicates.**
+
+### Reporting at the end of a run
+
+State the epic name, the seven story references by topic, which topic the situational story drew
+on, the difficulty mix, and anything that could not be verified.
+
+### Listing the questions
+
+There is no standing local file. When Rohith asks for the list, it is generated from Jira on the
+spot — question, topic, ticket reference, no answers. A second copy would drift the moment a
+ticket was edited.
 
 ### Where it does not reach
 
@@ -4656,17 +4814,50 @@ would go to next, and the regulations behind the answer.
 - It writes to no Jira project other than `CSV`.
 - **Nothing it produces enters the delivery flow.** It is not a source of work, it does not pass
   through §26, and it never reaches §38. It produces study material and nothing else.
-- The two interviewers are the same simulated people who speak elsewhere in this SOP, playing
-  interview roles. Their designations here are for the rehearsal only and change nothing about
-  §5 or §39.3.
-
-### Listing the questions
-
-There is no standing local file. When Rohith asks for the list, it is generated from Jira on the
-spot — question, type, ticket reference, no answers. A second copy would drift the moment a
-ticket was edited.
+- It never asks Rohith to choose the difficulty — the mix is automatic.
+- It never shortens a story. All seven are full depth.
+- It never presents an unverified date or clause number as fact.
+- It never claims any company is a customer of anything.
 
 ### Ownership
 
 Rohith Karne owns it. Vasu Ranabothu owns the content standard and the source discipline.
 Sarvanan challenges the realism of the questions. Bala Kaviti keeps this section current.
+
+### Decisions this section encodes
+
+Agreed with Rohith on 2026-08-13, widened 2026-09-22.
+
+| Decision | Set |
+|---|---|
+| One epic, seven stories, manual run | 2026-09-22 |
+| Six topics — PM, IT Compliance, Validation, Support, System Admin, AI | 2026-09-22 |
+| Seventh story is situational, drawn from one topic, always a panel | 2026-09-22 |
+| Situational rotation across the last three epics | 2026-09-22 |
+| Six named interviewers, one per topic, same every run | 2026-09-22 |
+| Epic naming, including same-day rounds | 2026-08-13 |
+| Two straightforward; the rest vary mid and hard, alternating between runs | 2026-09-22 |
+| Difficulty, round and topic tags in title and body | 2026-08-13 |
+| Duplication on main questions only, by meaning | 2026-08-13 |
+| Follow-ups live inside the interview, three to five exchanges | 2026-08-13 |
+| Follow-ups promoted later with a reference back | 2026-08-13 |
+| Named interviewers with designations, greetings, human reaction | 2026-08-13 |
+| Answers written as "Rohith's answer —" | 2026-08-13 |
+| Source named in every answer; PM has no governing regulation | 2026-09-22 |
+| What a weak answer sounds like | 2026-08-13 |
+| Prompt for Rohith's own example, nearest true thing where he has none | 2026-08-13 |
+| At least one genuine pushback per story; one weak first attempt per epic | 2026-08-13 |
+| Opening answer held to about twenty seconds | 2026-08-13 |
+| The confident-wrong-answer lesson stated in full once per epic | 2026-08-13 |
+| Job advert scan drives topic weighting | 2026-08-13 |
+| Product-company and service-provider framing, mixed | 2026-08-13 |
+| Say when a source was summarised, not read | 2026-08-13 |
+| Three questions for Rohith to ask them, at epic level, varied every run | 2026-08-13 |
+| CV read for reference only, questions not narrowed to it | 2026-08-13 |
+| Question list generated from Jira on demand, no standing file | 2026-08-13 |
+| Honest when a topic area is exhausted | 2026-08-13 |
+| Report the run at the end | 2026-09-22 |
+
+**Dropped by Rohith, recorded so it is not re-proposed:** a field for Rohith to record his own
+answer and rate himself weak or solid, and the spaced-repetition follow-on that depended on it.
+He will raise weak areas in conversation instead.
