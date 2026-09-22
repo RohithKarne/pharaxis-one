@@ -51,7 +51,16 @@ async function buildExport(userId, clientId) {
   }
 
   const [consent, savedItems, follows, notifications, feedback, mslBookings, ssoIdentities] = await Promise.all([
-    q(`SELECT id, version, choices_json, consented_at FROM cp_consent_records WHERE user_id = ? AND client_id = ?`, [userId, clientId]),
+    // CPPM-13: the wording accepted, not just the version number behind it.
+    // consent_text is null for records taken before the wording was stored —
+    // we have the version they agreed to but not the text, and we do not guess.
+    // consent_text_effective_from says when that wording was last saved: after
+    // consented_at means the wording may have moved under the record.
+    q(`SELECT cr.id, cr.version, cr.choices_json, cr.consented_at,
+              v.title AS consent_title, v.body AS consent_text, v.effective_from AS consent_text_effective_from
+         FROM cp_consent_records cr
+         LEFT JOIN cp_consent_text_versions v ON v.id = cr.consent_text_version_id
+        WHERE cr.user_id = ? AND cr.client_id = ?`, [userId, clientId]),
     q(`SELECT id, item_type, item_id, created_at FROM cp_saved_items WHERE portal_user_id = ? AND client_id = ?`, [userId, clientId]),
     q(`SELECT id, item_type, item_id, created_at FROM cp_user_follows WHERE portal_user_id = ? AND client_id = ?`, [userId, clientId]),
     q(`SELECT id, type, title, item_id, is_read, created_at FROM cp_notifications WHERE portal_user_id = ? AND client_id = ?`, [userId, clientId]),

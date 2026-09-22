@@ -31,17 +31,26 @@ function hashVisitorIp(req) {
   return crypto.createHmac('sha256', key()).update(visitorIp(req)).digest('hex');
 }
 
-// CPPM-35: the visitor's latest recorded choice for this client. No record means
-// no consent — nothing optional is assumed.
-async function latestChoices(req, clientId) {
+// CPPM-35: the visitor's latest consent record for this client, with the wording
+// it was given against (CPPM-13). No record means no consent — nothing optional
+// is assumed.
+const LATEST_CONSENT_SQL = `
+  SELECT cr.choices_json, cr.version, cr.consented_at, v.title, v.body
+    FROM cp_consent_records cr
+    LEFT JOIN cp_consent_text_versions v ON v.id = cr.consent_text_version_id
+   WHERE cr.client_id = ? AND `;
+
+async function latestConsent(req, clientId) {
   const userId = req.portalUser?.userId || null;
   const [[row]] = userId
-    ? await pool.execute(
-        'SELECT choices_json FROM cp_consent_records WHERE client_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1',
-        [clientId, userId])
-    : await pool.execute(
-        'SELECT choices_json FROM cp_consent_records WHERE client_id = ? AND user_id IS NULL AND ip_hash = ? ORDER BY id DESC LIMIT 1',
+    ? await pool.execute(`${LATEST_CONSENT_SQL} cr.user_id = ? ORDER BY cr.id DESC LIMIT 1`, [clientId, userId])
+    : await pool.execute(`${LATEST_CONSENT_SQL} cr.user_id IS NULL AND cr.ip_hash = ? ORDER BY cr.id DESC LIMIT 1`,
         [clientId, hashVisitorIp(req)]);
+  return row || null;
+}
+
+async function latestChoices(req, clientId) {
+  const row = await latestConsent(req, clientId);
   if (!row) return {};
   try { return JSON.parse(row.choices_json || '{}') || {}; } catch { return {}; }
 }
@@ -50,4 +59,4 @@ async function hasAnalyticsConsent(req, clientId) {
   return (await latestChoices(req, clientId)).analytics === true;
 }
 
-module.exports = { hashVisitorIp, latestChoices, hasAnalyticsConsent };
+module.exports = { hashVisitorIp, latestConsent, latestChoices, hasAnalyticsConsent };

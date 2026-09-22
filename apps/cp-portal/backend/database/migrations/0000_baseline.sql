@@ -436,6 +436,24 @@ CREATE TABLE IF NOT EXISTS cp_compliance_config (
   CONSTRAINT fk_compliance_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── CONSENT TEXT VERSIONS ──────────────────────────────────────
+-- CPPM-13: the exact wording of each consent version, written once and never
+-- updated. A reworded notice becomes a new version.
+CREATE TABLE IF NOT EXISTS cp_consent_text_versions (
+  id             INT          NOT NULL AUTO_INCREMENT,
+  client_id      INT          NOT NULL,
+  version        VARCHAR(20)  NOT NULL,
+  title          VARCHAR(500) NULL,
+  body           TEXT         NOT NULL,
+  effective_from DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by     INT          NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_consent_text_version (client_id, version),
+  CONSTRAINT fk_consent_text_client  FOREIGN KEY (client_id)  REFERENCES cp_clients(id) ON DELETE CASCADE,
+  CONSTRAINT fk_consent_text_creator FOREIGN KEY (created_by) REFERENCES cp_admin_users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── CONSENT RECORDS ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS cp_consent_records (
   id           INT          NOT NULL AUTO_INCREMENT,
@@ -443,13 +461,16 @@ CREATE TABLE IF NOT EXISTS cp_consent_records (
   user_id      INT          NULL,
   ip_hash      VARCHAR(255) NULL,
   version      VARCHAR(20)  NOT NULL,
+  consent_text_version_id INT NULL,
   choices_json TEXT         NULL,
   consented_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_cp_consent_client (client_id),
   KEY idx_cp_consent_user (user_id),
+  KEY idx_cp_consent_text_version (consent_text_version_id),
   CONSTRAINT fk_consent_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE,
-  CONSTRAINT fk_consent_user   FOREIGN KEY (user_id)   REFERENCES cp_portal_users(id) ON DELETE SET NULL
+  CONSTRAINT fk_consent_user   FOREIGN KEY (user_id)   REFERENCES cp_portal_users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_consent_text_version FOREIGN KEY (consent_text_version_id) REFERENCES cp_consent_text_versions(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── DOCUMENT CATEGORIES ────────────────────────────────────────
@@ -915,4 +936,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0012_add_trials_and_training.sql',       NULL),
   ('0013_add_email_outbox.sql',              NULL),
   ('0014_add_chat_records.sql',              NULL),
-  ('0015_chat_safety_and_confirmed_ae.sql',  NULL);
+  ('0015_chat_safety_and_confirmed_ae.sql',  NULL),
+  ('0018_add_consent_text_versions.sql',     NULL);

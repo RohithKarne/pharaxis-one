@@ -8,7 +8,8 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { requirePortalAuth, authenticatePortal } = require('../../middleware/auth');
 const log = require('../../utils/logger');
-const { hashVisitorIp, latestChoices } = require('../../utils/consent');
+const { hashVisitorIp, latestConsent } = require('../../utils/consent');
+const { wordingFrom, findVersion, ensureVersion } = require('../../utils/consentText');
 
 // Jurisdiction strictness ranking — highest index = strictest
 const JURISDICTION_RANK = ['apac', 'pdpb', 'ccpa', 'gdpr'];
@@ -84,12 +85,21 @@ router.get('/check', authenticatePortal, async (req, res) => {
 });
 
 // GET /api/portal/consent/my-choice?clientCode=xxx — the visitor's latest choice (CPPM-35),
-// so "Cookie settings" reopens with what they actually chose.
+// so "Cookie settings" reopens with what they actually chose. CPPM-13 adds the
+// wording they agreed to, so they can read it back rather than take our word.
 router.get('/my-choice', authenticatePortal, async (req, res) => {
   try {
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.query.clientCode || '']);
     if (!client) return res.status(404).json({ error: 'Client not found.' });
-    res.json({ choices: await latestChoices(req, client.id) });
+    const record = await latestConsent(req, client.id);
+    let choices = {};
+    try { choices = JSON.parse(record?.choices_json || '{}') || {}; } catch { /* no choices */ }
+    res.json({
+      choices,
+      agreed: record && record.body
+        ? { version: record.version, consented_at: record.consented_at, title: record.title, body: record.body }
+        : null,
+    });
   } catch (err) {
     log.error('portal.consent.error', { err, route: 'GET /my-choice', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -115,10 +125,19 @@ router.post('/', authenticatePortal, async (req, res) => {
     // SHA-256 used before, it cannot be reversed without the server secret.
     const ipHash = userId ? null : hashVisitorIp(req);
 
+    // CPPM-13: point the record at the wording behind this version. The wording
+    // is only captured for the version the portal is currently serving — an older
+    // version arriving from a stale browser links to its stored text if we have
+    // it, and to nothing if we do not, rather than being stamped with today's.
+    const [[config]] = await pool.execute('SELECT version, banner_config_json FROM cp_compliance_config WHERE client_id = ?', [client.id]);
+    const textVersion = config && config.version === version
+      ? await ensureVersion(client.id, version, wordingFrom(config.banner_config_json))
+      : await findVersion(client.id, version);
+
     await pool.execute(`
-      INSERT INTO cp_consent_records (client_id, user_id, ip_hash, version, choices_json)
-      VALUES (?, ?, ?, ?, ?)
-    `, [client.id, userId, ipHash, version, JSON.stringify(choices || {})]);
+      INSERT INTO cp_consent_records (client_id, user_id, ip_hash, version, consent_text_version_id, choices_json)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [client.id, userId, ipHash, version, textVersion?.id || null, JSON.stringify(choices || {})]);
 
     res.json({ saved: true });
   } catch (err) {

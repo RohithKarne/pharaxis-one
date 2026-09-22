@@ -28,6 +28,8 @@ export default function ConsentBanner() {
   const [step, setStep]       = useState('banner') // 'banner' | 'preferences'
   const [choices, setChoices] = useState(DEFAULT_CHOICES)
   const [saving, setSaving]   = useState(false)
+  // CPPM-13: the wording this visitor actually accepted, read back from the record.
+  const [agreed, setAgreed]   = useState(null)
 
   useEffect(() => {
     if (!compliance) return
@@ -53,8 +55,10 @@ export default function ConsentBanner() {
         const res = await fetch(`/api/portal/consent/my-choice?clientCode=${clientCode}`)
         const d = res.ok ? await res.json() : {}
         setChoices({ ...DEFAULT_CHOICES, ...(d.choices || {}), necessary: true })
+        setAgreed(d.agreed || null)
       } catch {
         setChoices(DEFAULT_CHOICES)
+        setAgreed(null)
       }
       setStep('preferences')
       setShow(true)
@@ -174,6 +178,18 @@ export default function ConsentBanner() {
                 </label>
               </div>
             ))}
+
+            {/* CPPM-13: what this visitor agreed to, in the words they were shown. */}
+            {agreed && (
+              <div style={{ marginTop: 18, padding: 14, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+                  What you agreed to (version {agreed.version}
+                  {agreed.consented_at ? ` on ${new Date(agreed.consented_at).toLocaleDateString()}` : ''})
+                </div>
+                {agreed.title && <div style={{ fontSize: 13, fontWeight: 600 }}>{agreed.title}</div>}
+                <div style={{ fontSize: 13, color: '#475569', whiteSpace: 'pre-wrap' }}>{agreed.body}</div>
+              </div>
+            )}
 
             <div className="pp-consent-actions" style={{ marginTop: 20 }}>
               <button className="pp-consent-btn-primary" onClick={handleSavePreferences} disabled={saving}>
