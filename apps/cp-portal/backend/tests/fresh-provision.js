@@ -138,7 +138,10 @@ fs.readFileSync = function (file, ...rest) {
 };
 
 const ALL_FILES = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
-const SQUASHED  = ALL_FILES.filter(f => /^00(0[2-9]|1[0-2])_/.test(f));
+// Every migration after 0001 is folded into the baseline (F2 already demands a
+// fresh database runs nothing else), so derive the list rather than pin a range:
+// a new migration that is not folded in fails F5/F5b here instead of in production.
+const SQUASHED  = ALL_FILES.filter(f => /^\d{4}_/.test(f) && !/^000[01]_/.test(f));
 
 // ── F1: the baseline is first ───────────────────────────────────────────────
 
@@ -230,7 +233,7 @@ check('F5b the baseline records exactly the migrations it squashes', () => {
   const baseline = realReadFileSync(path.join(migrationsDir, '0000_baseline.sql'), 'utf8');
   const recorded = [...baseline.matchAll(/'(\d{4}_[^']+\.sql)'/g)].map(m => m[1]).sort();
   assert.deepStrictEqual(recorded, SQUASHED,
-    'the baseline must record 0002-0012 and nothing else');
+    'the baseline must record every migration after 0001 and nothing else');
 });
 
 // ── F6: the baseline stays idempotent ───────────────────────────────────────
