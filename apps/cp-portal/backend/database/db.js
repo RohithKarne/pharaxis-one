@@ -903,6 +903,29 @@ async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  // ── SUBMISSION ANSWERS (CPPM-14) ───────────────────────────────
+  // The approved medical answer that goes back to the person who asked.
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_submission_answers (
+      id             INT          NOT NULL AUTO_INCREMENT,
+      submission_id  INT          NOT NULL,
+      client_id      INT          NOT NULL,
+      body           MEDIUMTEXT   NOT NULL,
+      status         VARCHAR(20)  NOT NULL DEFAULT 'draft',
+      drafted_by     INT          NULL,
+      approved_by    INT          NULL,
+      approved_at    DATETIME     NULL,
+      sent_at        DATETIME     NULL,
+      send_error     TEXT         NULL,
+      created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_answer_submission (submission_id),
+      KEY idx_answer_client_status (client_id, status),
+      CONSTRAINT fk_answer_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   // ── CHAT RECORDS (CPPM-17) ─────────────────────────────────────
   // Every chat box conversation and turn, per client, for staff to read.
   await run(`
