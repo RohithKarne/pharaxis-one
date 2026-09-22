@@ -44,7 +44,19 @@ async function findVersion(clientId, version) {
  */
 async function ensureVersion(clientId, version, wording, createdBy = null) {
   const existing = await findVersion(clientId, version);
-  if (existing) return existing;
+  if (existing) {
+    // A row with no words is not a wording — it comes from a client who never
+    // configured the banner, where the visitor saw the built-in default text.
+    // Filling it in once records what was actually on screen; it is not a rewrite,
+    // and a row that already holds words is still never touched.
+    if (!String(existing.body || '').trim() && String(wording.body || '').trim()) {
+      await pool.execute(
+        'UPDATE cp_consent_text_versions SET title = ?, body = ? WHERE id = ? AND (body IS NULL OR body = \'\')',
+        [wording.title, wording.body, existing.id]);
+      return findVersion(clientId, version);
+    }
+    return existing;
+  }
   // INSERT IGNORE + re-read: two visitors consenting at once race here, and the
   // unique key on (client_id, version) decides which insert wins.
   await pool.execute(

@@ -458,6 +458,37 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
       fields.push('status = ?'); values.push(status);
     }
 
+    // CPPM-31 (Rohith and Vasu, 23 Sep 2026): an approved document that is edited
+    // must become a new version and be approved again. Otherwise the approval
+    // stamp — a named person, dated — would silently certify wording they never
+    // saw. Housekeeping fields (active flag, publish date, review date) are not
+    // certified content and do not unpick an approval.
+    const CERTIFIED_FIELDS = { title, category, doc_type, version, expires_at,
+      visible_to: visible_to === undefined ? undefined : JSON.stringify(visible_to) };
+    if (current === null && Object.values(CERTIFIED_FIELDS).some(v => v !== undefined)) {
+      [[current]] = await pool.execute('SELECT * FROM cp_documents WHERE id = ? AND client_id = ?', [req.params.docId, req.params.clientId]);
+      if (!current) return res.status(404).json({ error: 'Document not found.' });
+    }
+    let requiresReapproval = false;
+    if (current?.approved_at && status !== 'approved') {
+      const changed = Object.entries(CERTIFIED_FIELDS).filter(([key, value]) => {
+        if (value === undefined) return false;
+        const before = key === 'visible_to' ? (current.visible_to_json || null)
+          : key === 'expires_at' ? (current.expires_at ? new Date(current.expires_at).toISOString().slice(0, 10) : null)
+          : (current[key] ?? null);
+        const after = key === 'expires_at' ? (value ? String(value).slice(0, 10) : null) : (value ?? null);
+        return String(before ?? '') !== String(after ?? '');
+      }).map(([key]) => key);
+      if (changed.length) {
+        requiresReapproval = true;
+        // Keep what was certified before, then take the approval off this row.
+        await recordSupersededVersion(current, req.admin, 'edited');
+        fields.push('approved_by = NULL', 'approved_by_name = NULL', 'approved_at = NULL', 'review_due_at = NULL');
+        if (status === undefined) { fields.push('status = ?'); values.push('draft'); }
+        await audit(req.admin, req.params.clientId, 'DOCUMENT_REOPENED', 'document', req.params.docId, { changed });
+      }
+    }
+
     if (title !== undefined)      { fields.push('title = ?');           values.push(title); }
     if (category !== undefined)   { fields.push('category = ?');        values.push(category); }
     if (doc_type !== undefined)   { fields.push('doc_type = ?');        values.push(doc_type); }
@@ -483,7 +514,11 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
       });
     }
     if (req.body.title) autoTranslate(req.params.clientId, 'cp_documents', req.params.docId, { title: req.body.title }).catch(() => {});
-    res.json({ ok: true });
+    res.json({
+      ok: true,
+      requires_reapproval: requiresReapproval,
+      ...(requiresReapproval ? { message: 'Saved. This document was approved, so the change created a new version — it must be approved again before it can be published.' } : {}),
+    });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'PUT /:clientId/:docId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
