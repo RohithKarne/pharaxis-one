@@ -151,6 +151,7 @@ app.use('/api/admin/sso',          require('./routes/admin/sso'));
 app.use('/api/admin/users',        require('./routes/admin/portalUsers'));
 app.use('/api/admin/templates',    require('./routes/admin/templates'));
 app.use('/api/admin/chatbox',      require('./routes/admin/chatbox'));
+app.use('/api/admin/chat-records', require('./routes/admin/chatRecords'));
 app.use('/api/admin/gate',         require('./routes/admin/gate'));
 app.use('/api/admin/compliance',   require('./routes/admin/compliance'));
 app.use('/api/admin/documents',    require('./routes/admin/documents'));
@@ -240,6 +241,9 @@ function createContentScheduler() {
       // CPPM-36: retry outbox emails that are due.
       const { retryDueEmails } = require('./utils/emailOutbox');
       await retryDueEmails().catch(err => log.error('email.outbox.retry_tick_failed', { err }));
+      // CPPM-17: remove chat records past retention.
+      const { purgeExpiredChats } = require('./utils/chatRecords');
+      await purgeExpiredChats().catch(err => log.error('chat.records.purge_failed', { err }));
     } catch { /* silently ignore scheduler errors */ }
     finally {
       if (lockAcquired) {

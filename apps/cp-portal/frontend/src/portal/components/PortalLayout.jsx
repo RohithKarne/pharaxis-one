@@ -412,6 +412,9 @@ function ChatboxWidget({ clientCode }) {
   const [input, setInput]   = useState('')
   const [loading, setLoading] = useState(false)
   const [sendCooldown, setSendCooldown] = useState(false)
+  // CPPM-17: the server names the conversation on the first reply; send it back so
+  // later turns are recorded in the same conversation. A page refresh starts a new one.
+  const [conversationId, setConversationId] = useState(null)
   const { portalConfig, user } = usePortal()
   const welcomeMsg = portalConfig?.chatbox?.welcome_message || 'Hello! How can I help you today?'
 
@@ -432,13 +435,14 @@ function ChatboxWidget({ clientCode }) {
     try {
       // Build messages array in {role, content} format expected by backend
       const history = messages.slice(-8).map(m => ({ role: m.role, content: m.content || m.text || '' }))
-      const payload = { messages: [...history, { role: 'user', content: userMsg }] }
+      const payload = { messages: [...history, { role: 'user', content: userMsg }], conversation_id: conversationId }
       const res  = await fetch(`/api/portal/chatbox/${clientCode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
       const data = await res.json()
+      if (data.conversation_id) setConversationId(data.conversation_id)
       // Show the server's reason (e.g. not available for this account type) rather than a generic line.
       const content = res.ok ? (data.reply || 'Sorry, I could not process that.') : (data.error || 'Sorry, I could not process that.')
       setMessages(m => [...m, { role: 'assistant', content, sources: res.ok && Array.isArray(data.sources) ? data.sources : [] }])

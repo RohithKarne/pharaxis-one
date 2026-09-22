@@ -903,6 +903,43 @@ async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  // ── CHAT RECORDS (CPPM-17) ─────────────────────────────────────
+  // Every chat box conversation and turn, per client, for staff to read.
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_chat_conversations (
+      id               INT          NOT NULL AUTO_INCREMENT,
+      client_id        INT          NOT NULL,
+      portal_user_id   INT          NULL,
+      user_type        VARCHAR(50)  NULL,
+      provider         VARCHAR(30)  NULL,
+      model            VARCHAR(100) NULL,
+      message_count    INT          NOT NULL DEFAULT 0,
+      started_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_message_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_chatconv_client (client_id, last_message_at),
+      KEY idx_chatconv_user (portal_user_id),
+      CONSTRAINT fk_chatconv_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_chat_messages (
+      id               INT          NOT NULL AUTO_INCREMENT,
+      conversation_id  INT          NOT NULL,
+      client_id        INT          NOT NULL,
+      role             VARCHAR(20)  NOT NULL,
+      content          MEDIUMTEXT   NOT NULL,
+      sources_json     TEXT         NULL,
+      outcome          VARCHAR(20)  NULL,
+      latency_ms       INT          NULL,
+      created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_chatmsg_conv (conversation_id, id),
+      KEY idx_chatmsg_client (client_id, created_at),
+      CONSTRAINT fk_chatmsg_conv FOREIGN KEY (conversation_id) REFERENCES cp_chat_conversations(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   // ── SUBMISSION ATTACHMENTS ─────────────────────────────────────
   await run(`
     CREATE TABLE IF NOT EXISTS cp_submission_attachments (

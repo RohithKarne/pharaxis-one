@@ -10,6 +10,8 @@ const { decryptSecret } = require('../../utils/secretCrypto');
 const { retrieveContext, formatContext } = require('../../utils/retrieve');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const log = require('../../utils/logger');
+const { resolveConversation, recordMessage, bestEffort } = require('../../utils/chatRecords');
+const { chatStubEnabled, stubReply } = require('../../utils/chatStub');
 
 async function isFeatureEnabled(clientId, featureKey) {
   const [[row]] = await pool.execute('SELECT is_enabled FROM cp_features WHERE client_id = ? AND feature_key = ?', [clientId, featureKey]);
@@ -31,6 +33,8 @@ async function isAllowedForUserType(clientId, featureKey, userType) {
 // CPPM-16: sign-in required, so the client knows who it is talking to and can
 // follow up — and so its "who may use chat" rule actually applies.
 router.post('/:clientCode', authenticatePortal, requirePortalAuth, async (req, res) => {
+  // CPPM-17: set once the conversation is recorded, so every exit can record the reply.
+  let answer = (status, body) => res.status(status).json(body);
   try {
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
@@ -44,8 +48,9 @@ router.post('/:clientCode', authenticatePortal, requirePortalAuth, async (req, r
     }
 
     const [[config]] = await pool.execute('SELECT * FROM cp_chatbox_config WHERE client_id = ? AND is_active = 1', [client.id]);
-    if (!config || !config.api_key) return res.status(503).json({ error: 'Chatbox is not configured for this portal.' });
-    config.api_key = decryptSecret(config.api_key);
+    const stub = chatStubEnabled();
+    if (!config || (!config.api_key && !stub)) return res.status(503).json({ error: 'Chatbox is not configured for this portal.' });
+    if (config.api_key) config.api_key = decryptSecret(config.api_key);
 
     // Accept either {messages} array OR {message + history} format from frontend
     let messages;
@@ -94,6 +99,29 @@ router.post('/:clientCode', authenticatePortal, requirePortalAuth, async (req, r
     // Sources surfaced to the client for citation display.
     const sources = retrieved.map((s, i) => ({ n: i + 1, source: s.source, title: s.title }));
 
+    // CPPM-17: record the question before asking the AI, so it is kept even if the
+    // AI fails. Best-effort: a recording failure is logged, never shown to the person.
+    const recCtx = { client_id: client.id, route: 'POST /:clientCode' };
+    const conversationId = await bestEffort('conversation', () => resolveConversation({
+      conversationId: req.body.conversation_id, clientId: client.id, userId: req.portalUser.userId, userType,
+      provider: stub ? 'stub' : config.ai_provider, model: stub ? null : config.model,
+    }), recCtx);
+    if (conversationId) {
+      await bestEffort('user_message', () => recordMessage({ conversationId, clientId: client.id, role: 'user', content: lastUserMessage }), recCtx);
+    }
+    const startedAt = Date.now();
+    answer = async (status, body, outcome = 'error') => {
+      if (conversationId) {
+        await bestEffort('assistant_message', () => recordMessage({
+          conversationId, clientId: client.id, role: 'assistant', content: body.reply ?? body.error,
+          sources: body.sources?.length ? body.sources : null, outcome, latencyMs: Date.now() - startedAt,
+        }), recCtx);
+      }
+      return res.status(status).json({ ...body, conversation_id: conversationId });
+    };
+
+    if (stub) return answer(200, { reply: stubReply(lastUserMessage, sources), sources }, 'answered');
+
     if (config.ai_provider === 'anthropic') {
       const Anthropic = require('@anthropic-ai/sdk');
       const anthropic = new Anthropic({ apiKey: config.api_key });
@@ -113,19 +141,27 @@ router.post('/:clientCode', authenticatePortal, requirePortalAuth, async (req, r
       // Opus 5 and Fable 5.1 can decline on safety grounds; server-side fallbacks
       // re-run a declined request on a suitable model inside the same call.
       const useFallbacks = model === 'claude-opus-5' || model === 'claude-fable-5-1';
-      const response = useFallbacks
-        ? await anthropic.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
-        : await anthropic.messages.create(params);
+      let response;
+      try {
+        response = useFallbacks
+          ? await anthropic.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
+          : await anthropic.messages.create(params);
+      } catch (err) {
+        // The SDK throws on a provider error (bad key, no credit, outage); answer as the OpenAI path does.
+        if (!(err instanceof Anthropic.APIError)) throw err;
+        log.error('portal.chatbox.provider_error', { provider: 'anthropic', model, status: err.status, message: err.message });
+        return answer(502, { error: 'The assistant is temporarily unavailable. Please try again later.' }, 'provider_error');
+      }
 
       if (response.stop_reason === 'refusal') {
         log.warn('portal.chatbox.refusal', { model, category: response.stop_details?.category || null });
-        return res.json({ reply: "I can't help with that here. Please submit a medical inquiry and our medical team will respond.", sources: [] });
+        return answer(200, { reply: "I can't help with that here. Please submit a medical inquiry and our medical team will respond.", sources: [] }, 'refused');
       }
       // With thinking on, the first content block is a thinking block, not the
       // answer — read the text blocks, never content[0].
       const reply = response.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
       if (!reply) log.warn('portal.chatbox.empty_reply', { provider: 'anthropic', model, stop_reason: response.stop_reason });
-      return res.json({ reply: reply || 'Sorry, I could not produce an answer. Please try rephrasing your question.', sources });
+      return answer(200, { reply: reply || 'Sorry, I could not produce an answer. Please try rephrasing your question.', sources }, reply ? 'answered' : 'empty');
     }
 
     if (config.ai_provider === 'openai') {
@@ -148,17 +184,17 @@ router.post('/:clientCode', authenticatePortal, requirePortalAuth, async (req, r
       // Surface provider errors (bad key, no credit, unknown model) instead of an empty reply.
       if (!response.ok) {
         log.error('portal.chatbox.provider_error', { provider: 'openai', model, status: response.status, message: data?.error?.message });
-        return res.status(502).json({ error: 'The assistant is temporarily unavailable. Please try again later.' });
+        return answer(502, { error: 'The assistant is temporarily unavailable. Please try again later.' }, 'provider_error');
       }
       const reply = data.choices?.[0]?.message?.content || '';
       if (!reply) log.warn('portal.chatbox.empty_reply', { provider: 'openai', model, finish_reason: data.choices?.[0]?.finish_reason });
-      return res.json({ reply: reply || 'Sorry, I could not produce an answer. Please try rephrasing your question.', sources });
+      return answer(200, { reply: reply || 'Sorry, I could not produce an answer. Please try rephrasing your question.', sources }, reply ? 'answered' : 'empty');
     }
 
-    res.status(400).json({ error: 'Unsupported AI provider.' });
+    return answer(400, { error: 'Unsupported AI provider.' }, 'error');
   } catch (err) {
     log.error('portal.chatbox.error', { err, route: 'POST /:clientCode', path: req.path, request_id: req.requestId || null });
-    res.status(502).json({ error: 'AI service error. Please try again.' });
+    return answer(502, { error: 'AI service error. Please try again.' }, 'error');
   }
 });
 
