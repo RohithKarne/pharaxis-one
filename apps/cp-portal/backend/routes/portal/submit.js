@@ -161,7 +161,11 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     }
 
     // Auto-sync to integrated system if configured
-    syncToIntegration(client.id, submissionId, formType).catch(() => {});
+    // CPPM-8: syncToIntegration records its own failures; anything that still
+    // escapes is logged, never swallowed. The retry job also sweeps stale
+    // 'submitted' rows, so a crash here cannot strand the submission.
+    syncToIntegration(client.id, submissionId, formType)
+      .catch(err => log.error('portal.submit.sync_crashed', { err, submission_id: submissionId }));
 
     // Send submission confirmation email — fire-and-forget, non-fatal
     let recipientEmail = submitter_email || null;
@@ -345,36 +349,51 @@ async function syncToIntegration(clientId, submissionId, formType) {
   // other_inquiry has no MIMS case type — it is never pushed (CP-only). Gate 1 decision.
   if (!Object.prototype.hasOwnProperty.call(FORM_TYPE_TO_CASE_TYPE, formType)) return;
 
-  // AC3: no active integration configured for this client → stay CP-only, no MIMS call.
-  const [[integration]] = await pool.execute('SELECT * FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [clientId]);
-  if (!integration) return;
+  // CPPM-8: preparing the case (lookups, parsing, the client's field mappings) can
+  // fail before anything is sent — a DB blip, damaged form data, a mapping with a
+  // bad date. It used to throw out of here with the row still 'submitted', which
+  // the retry job never looks at, so the report was never sent and never seen.
+  // Any failure while preparing is now recorded as failed_sync and counted as an
+  // attempt, so it joins the retry queue and stays visible.
+  let integration, payload;
+  try {
+    // AC3: no active integration configured for this client → stay CP-only, no MIMS call.
+    [[integration]] = await pool.execute('SELECT * FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [clientId]);
+    if (!integration) return;
 
-  const [[submission]] = await pool.execute('SELECT * FROM cp_submissions WHERE id = ?', [submissionId]);
-  if (!submission) return;
+    const [[submission]] = await pool.execute('SELECT * FROM cp_submissions WHERE id = ?', [submissionId]);
+    if (!submission) return;
 
-  const [mappings] = await pool.execute('SELECT * FROM cp_field_mapping WHERE client_id = ? AND integration_id = ? AND form_type = ?',
-    [clientId, integration.id, formType]);
+    const [mappings] = await pool.execute('SELECT * FROM cp_field_mapping WHERE client_id = ? AND integration_id = ? AND form_type = ?',
+      [clientId, integration.id, formType]);
 
-  const formData = typeof submission.form_data === 'string' ? JSON.parse(submission.form_data) : submission.form_data;
+    const formData = typeof submission.form_data === 'string' ? JSON.parse(submission.form_data) : submission.form_data;
 
-  // Default structured payload — works out-of-the-box for the seeded portal forms.
-  const payload = buildMimsPayload(formType, formData, submissionId, submission.submitted_at);
+    // Default structured payload — works out-of-the-box for the seeded portal forms.
+    payload = buildMimsPayload(formType, formData, submissionId, submission.submitted_at);
 
-  // Admin-configured field mappings override/extend the defaults. NEW-C: dot-path
-  // targets (e.g. `reporter.first_name`, `ae_intake.outcome`) write into the nested
-  // payload the MIMS API actually reads — a flat assignment would silently no-op.
-  for (const m of mappings) {
-    let value = formData[m.cp_field] ?? m.default_value ?? null;
-    if (value && m.transform === 'uppercase') value = String(value).toUpperCase();
-    if (value && m.transform === 'date_iso') value = new Date(value).toISOString();
-    const segs = String(m.target_field).split('.');
-    let obj = payload;
-    while (segs.length > 1) {
-      const k = segs.shift();
-      if (!obj[k] || typeof obj[k] !== 'object') obj[k] = {};
-      obj = obj[k];
+    // Admin-configured field mappings override/extend the defaults. NEW-C: dot-path
+    // targets (e.g. `reporter.first_name`, `ae_intake.outcome`) write into the nested
+    // payload the MIMS API actually reads — a flat assignment would silently no-op.
+    for (const m of mappings) {
+      let value = formData[m.cp_field] ?? m.default_value ?? null;
+      if (value && m.transform === 'uppercase') value = String(value).toUpperCase();
+      if (value && m.transform === 'date_iso') value = new Date(value).toISOString();
+      const segs = String(m.target_field).split('.');
+      let obj = payload;
+      while (segs.length > 1) {
+        const k = segs.shift();
+        if (!obj[k] || typeof obj[k] !== 'object') obj[k] = {};
+        obj = obj[k];
+      }
+      obj[segs[0]] = value;
     }
-    obj[segs[0]] = value;
+  } catch (err) {
+    const reason = `Could not prepare the MIMS case: ${err.message}`.slice(0, 1000);
+    log.error('portal.sync.prepare_failed', { err, client_id: clientId, submission_id: submissionId });
+    await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_attempts=sync_attempts+1, sync_error=? WHERE id=?`, [reason, submissionId]);
+    systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: reason, stage: 'prepare' });
+    return;
   }
 
   try {
