@@ -47,7 +47,7 @@ const submissionUpload = multer({
   limits: { fileSize: ATT_MAX_SIZE, files: ATT_MAX_FILES },
   fileFilter: (req, file, cb) => {
     if (ATT_ALLOWED.includes(file.mimetype)) cb(null, true);
-    else cb(new Error('File type not allowed. Use PDF, JPG, PNG, DOC, or DOCX.'));
+    else cb(new Error('File type not allowed. Use PDF, JPG, PNG or DOCX.'));
   },
 }).array('attachments', ATT_MAX_FILES);
 

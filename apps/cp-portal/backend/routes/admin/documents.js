@@ -32,7 +32,7 @@ const { audit } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
 const { sendEmail } = require('../../utils/mailer');
 const { autoTranslate } = require('../../utils/translator');
-const { validateContent } = require('../../utils/fileValidation');
+const { validateContent, inspectDangerousContent } = require('../../utils/fileValidation');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -258,9 +258,18 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
     if (!req.file) return res.status(400).json({ error: 'File is required.' });
 
     // SEC: validate real file content (magic bytes), not the spoofable MIME header.
-    if (validateContent(req.file.path, req.file.mimetype, ALLOWED_MIMES).ok !== true) {
+    const checked = validateContent(req.file.path, req.file.mimetype, ALLOWED_MIMES);
+    if (checked.ok !== true) {
       try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
       return res.status(400).json({ error: 'File content is not a valid PDF or Office document.' });
+    }
+    // CPPM-12: this document is published to every doctor on the portal, so refuse
+    // macros, PDF scripts and embedded programs even from an administrator.
+    const danger = inspectDangerousContent(req.file.path, checked.signature);
+    if (!danger.ok) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      log.warn('admin.documents.upload_blocked', { client_id: req.params.clientId, reason: danger.reason, file: req.file.originalname });
+      return res.status(400).json({ error: `This file was not accepted because ${danger.reason}.` });
     }
 
     const { title, category, doc_type, visible_to, source, status, version, expires_at } = req.body;
