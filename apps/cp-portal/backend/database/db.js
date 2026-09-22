@@ -566,6 +566,11 @@ async function initializeDatabase() {
       mims_ref_id      VARCHAR(255) NULL,
       is_active        TINYINT(1)   NOT NULL DEFAULT 1,
       status           VARCHAR(50)  NOT NULL DEFAULT 'draft',
+      approved_by      INT          NULL,
+      approved_by_name VARCHAR(255) NULL,
+      approved_at      DATETIME     NULL,
+      review_due_at    DATETIME     NULL,
+      retired_at       DATETIME     NULL,
       expires_at       DATETIME     NULL,
       version          VARCHAR(50)  NULL,
       download_count   INT          NOT NULL DEFAULT 0,
@@ -578,6 +583,34 @@ async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
   await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_docs_client ON cp_documents(client_id)`);
+  await runIndex(`CREATE INDEX IF NOT EXISTS idx_cp_docs_review_due ON cp_documents(client_id, review_due_at)`);
+
+  // ── DOCUMENT VERSION HISTORY (CPPM-31) ─────────────────────────
+  // A superseded version stays readable after the live document moves on.
+  await run(`
+    CREATE TABLE IF NOT EXISTS cp_document_versions (
+      id                 INT          NOT NULL AUTO_INCREMENT,
+      document_id        INT          NOT NULL,
+      client_id          INT          NOT NULL,
+      version            VARCHAR(50)  NULL,
+      title              VARCHAR(500) NOT NULL,
+      file_path          TEXT         NULL,
+      file_name          VARCHAR(500) NULL,
+      status             VARCHAR(50)  NOT NULL,
+      approved_by        INT          NULL,
+      approved_by_name   VARCHAR(255) NULL,
+      approved_at        DATETIME     NULL,
+      review_due_at      DATETIME     NULL,
+      expires_at         DATETIME     NULL,
+      superseded_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      superseded_by_name VARCHAR(255) NULL,
+      reason             VARCHAR(50)  NOT NULL,
+      PRIMARY KEY (id),
+      KEY idx_docver_document (document_id, id),
+      KEY idx_docver_client (client_id, superseded_at),
+      CONSTRAINT fk_docver_document FOREIGN KEY (document_id) REFERENCES cp_documents(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
 
   // ── NEWS POSTS ─────────────────────────────────────────────────
   await run(`

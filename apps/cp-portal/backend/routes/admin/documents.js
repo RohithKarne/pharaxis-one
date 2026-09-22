@@ -28,6 +28,13 @@ const DOC_STATUS_ROLES = {
   archived:  PUBLISH_ROLES,
   draft:     APPROVE_ROLES,
 };
+
+// CPPM-31: how long an approval stands before the document must be looked at
+// again, and how far ahead the screen warns. Both are placeholders — the review
+// period is Vasu's (CCO) call, not engineering's.
+const DEFAULT_REVIEW_MONTHS = 12;
+const REVIEW_WARNING_DAYS   = 30;
+
 const { audit } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
 const { sendEmail } = require('../../utils/mailer');
@@ -68,6 +75,26 @@ const upload = multer({
     cb(new Error('Only PDF and DOCX files are allowed.'));
   },
 });
+
+// CPPM-31: freeze the certified facts of the version being retired or replaced,
+// so a superseded version stays readable after the live document has moved on.
+// A document that was never approved has nothing certified to keep, so nothing
+// is written. This deliberately does not swallow its errors: a version history
+// that silently loses a row is worse than a request that fails loudly.
+async function recordSupersededVersion(doc, admin, reason) {
+  if (!doc || !doc.approved_at) return false;
+  await pool.execute(`
+    INSERT INTO cp_document_versions
+      (document_id, client_id, version, title, file_path, file_name, status,
+       approved_by, approved_by_name, approved_at, review_due_at, expires_at,
+       superseded_by_name, reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [doc.id, doc.client_id, doc.version || null, doc.title, doc.file_path || null,
+      doc.file_name || null, doc.status, doc.approved_by || null, doc.approved_by_name || null,
+      doc.approved_at, doc.review_due_at || null, doc.expires_at || null,
+      admin?.name || 'unknown', reason]);
+  return true;
+}
 
 // ── CATEGORIES ────────────────────────────────────────────────
 
@@ -148,6 +175,27 @@ router.get('/:clientId/expiring', authenticateAdmin, requireClientAccess, async 
   }
 });
 
+// GET /api/admin/documents/:clientId/review-due — CPPM-31: approved documents
+// whose next review falls within 30 days, or is already past. Same shape as
+// /expiring above so the screen can show both warnings the same way.
+router.get('/:clientId/review-due', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(`
+      SELECT id, title, status, category, approved_by_name, approved_at, review_due_at
+      FROM cp_documents
+      WHERE client_id = ? AND is_active = 1
+        AND retired_at IS NULL
+        AND review_due_at IS NOT NULL
+        AND DATE(review_due_at) <= DATE(DATE_ADD(NOW(), INTERVAL ${REVIEW_WARNING_DAYS} DAY))
+      ORDER BY review_due_at ASC
+    `, [req.params.clientId]);
+    res.json({ reviewDue: rows });
+  } catch (err) {
+    log.error('admin.documents.error', { err, route: 'GET /:clientId/review-due', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // POST /api/admin/documents/:clientId/expiry-alerts/send — email alert to client admins
 router.post('/:clientId/expiry-alerts/send', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
@@ -223,12 +271,32 @@ router.post('/:clientId/bulk', authenticateAdmin, requireClientAccess, async (re
     if (!PUBLISH_ROLES.includes(req.admin.role)) return res.status(403).json({ error: 'Only admins can perform bulk actions.' });
 
     const placeholders = ids.map(() => '?').join(',');
+    const [selected] = await pool.execute(
+      `SELECT * FROM cp_documents WHERE id IN (${placeholders}) AND client_id=?`,
+      [...ids, req.params.clientId]
+    );
+
     if (action === 'publish') {
-      await pool.execute(`UPDATE cp_documents SET status='published', updated_at=NOW() WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
+      // CPPM-31: the single-document route refuses an unapproved publish, and so
+      // must this one — otherwise ticking the boxes is the way around the control.
+      // The whole batch is refused rather than part of it, so nobody is left
+      // believing all the selected documents went live.
+      const unapproved = selected.filter(d => !d.approved_at);
+      if (unapproved.length > 0) {
+        return res.status(400).json({
+          error: `Nothing was published. ${unapproved.length} of ${selected.length} selected document(s) have not been approved: ${unapproved.map(d => d.title).join(', ')}.`,
+        });
+      }
+      await pool.execute(`UPDATE cp_documents SET status='published', retired_at=NULL, updated_at=NOW() WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
     } else if (action === 'archive') {
-      await pool.execute(`UPDATE cp_documents SET status='archived', updated_at=NOW() WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
+      // Retiring a certified document keeps a copy of what was certified.
+      for (const doc of selected) await recordSupersededVersion(doc, req.admin, 'retired');
+      await pool.execute(`UPDATE cp_documents SET status='archived', retired_at=NOW(), updated_at=NOW() WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
     } else {
-      await pool.execute(`UPDATE cp_documents SET is_active=0, updated_at=NOW() WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
+      // Same as the single delete: leaving the library retires the document, and
+      // what was certified is kept first.
+      for (const doc of selected) await recordSupersededVersion(doc, req.admin, 'retired');
+      await pool.execute(`UPDATE cp_documents SET is_active=0, retired_at=NOW(), updated_at=NOW() WHERE id IN (${placeholders}) AND client_id=?`, [...ids, req.params.clientId]);
     }
     await audit(req.admin, req.params.clientId, `BULK_${action.toUpperCase()}`, 'document', null, { ids });
     res.json({ ok: true, affected: ids.length });
@@ -247,6 +315,21 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     res.json({ documents: rows });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// GET /api/admin/documents/:clientId/:docId/versions — CPPM-31: the superseded
+// versions of one document, newest first, exactly as they were certified.
+router.get('/:clientId/:docId/versions', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT * FROM cp_document_versions WHERE document_id = ? AND client_id = ? ORDER BY id DESC',
+      [req.params.docId, req.params.clientId]
+    );
+    res.json({ versions: rows });
+  } catch (err) {
+    log.error('admin.documents.error', { err, route: 'GET /:clientId/:docId/versions', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -288,18 +371,31 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
       fs.unlinkSync(req.file.path);
       return res.status(403).json({ error: `Your role cannot upload documents with status '${docStatus}'.` });
     }
+    // CPPM-31: a brand new file has been approved by nobody, so it cannot start
+    // life on the portal. It has to be approved first, by a named person.
+    if (['published', 'scheduled'].includes(docStatus)) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'A document must be approved before it can be published.' });
+    }
 
     try {
       const visible_to_json = visible_to ? JSON.stringify(typeof visible_to === 'string' ? JSON.parse(visible_to) : visible_to) : '[]';
       const filePath = `/uploads/private/docs/${req.params.clientId}/${req.file.filename}`;
 
+      // CPPM-31: an upload that arrives already approved records who approved it
+      // and when it is next due for review, exactly as the approve action does.
+      const approving = docStatus === 'approved';
+
       const [result] = await pool.execute(`
-        INSERT INTO cp_documents (client_id, title, category, doc_type, file_path, file_name, file_size, mime_type, visible_to_json, source, status, version, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [req.params.clientId, title, category || null, doc_type || 'other', filePath, req.file.originalname, req.file.size, req.file.mimetype, visible_to_json, source || 'manual', docStatus, version || null, expires_at || null]);
+        INSERT INTO cp_documents (client_id, title, category, doc_type, file_path, file_name, file_size, mime_type, visible_to_json, source, status, version, expires_at, approved_by, approved_by_name, approved_at, review_due_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ${approving ? 'NOW()' : 'NULL'},
+                ${approving ? `DATE_ADD(NOW(), INTERVAL ${DEFAULT_REVIEW_MONTHS} MONTH)` : 'NULL'})
+      `, [req.params.clientId, title, category || null, doc_type || 'other', filePath, req.file.originalname, req.file.size, req.file.mimetype, visible_to_json, source || 'manual', docStatus, version || null, expires_at || null, approving ? (req.admin.adminId || null) : null, approving ? (req.admin.name || null) : null]);
 
       const [[doc]] = await pool.execute('SELECT * FROM cp_documents WHERE id = ?', [result.insertId]);
       await audit(req.admin, req.params.clientId, 'UPLOAD', 'document', doc.id, { title: doc.title });
+      if (approving) await audit(req.admin, req.params.clientId, 'APPROVE', 'document', doc.id, { title: doc.title, version: doc.version, review_due_at: doc.review_due_at });
       if (docStatus === 'published') notifyPortalUsers(req.params.clientId, 'document', title, doc.id);
       autoTranslate(req.params.clientId, 'cp_documents', doc.id, { title }).catch(() => {});
       res.json({ document: doc });
@@ -313,12 +409,14 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
 // PUT /api/admin/documents/:clientId/:docId — update metadata (no file re-upload)
 router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    const { title, category, doc_type, visible_to, source, is_active, status, expires_at, version, publish_at } = req.body;
+    const { title, category, doc_type, visible_to, source, is_active, status, expires_at, version, publish_at, review_due_at } = req.body;
     const fields = [], values = [];
+    let current = null;        // the row as it stands before this update
+    let lifecycleAction = null; // APPROVE | PUBLISH | RETIRE, audited below
 
     // S4-8: validate status transition + role permission
     if (status !== undefined) {
-      const [[current]] = await pool.execute('SELECT status FROM cp_documents WHERE id = ? AND client_id = ?', [req.params.docId, req.params.clientId]);
+      [[current]] = await pool.execute('SELECT * FROM cp_documents WHERE id = ? AND client_id = ?', [req.params.docId, req.params.clientId]);
       if (!current) return res.status(404).json({ error: 'Document not found.' });
       if (current.status !== status) {
         const allowed = DOC_TRANSITIONS[current.status] || [];
@@ -328,6 +426,30 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
         const requiredRoles = DOC_STATUS_ROLES[status] || PUBLISH_ROLES;
         if (!requiredRoles.includes(req.admin.role)) {
           return res.status(403).json({ error: `Your role cannot set status to '${status}'.` });
+        }
+
+        // CPPM-31: the certified lifecycle.
+        if (status === 'published' || status === 'scheduled') {
+          if (!current.approved_at) {
+            return res.status(400).json({ error: 'A document must be approved before it can be published.' });
+          }
+          lifecycleAction = 'PUBLISH';
+          fields.push('retired_at = NULL');
+        } else if (status === 'approved') {
+          // A fresh approval replaces any earlier one, so the version it
+          // supersedes is written to the history before it is overwritten.
+          await recordSupersededVersion(current, req.admin, 'replaced');
+          lifecycleAction = 'APPROVE';
+          fields.push('approved_by = ?');      values.push(req.admin.adminId || null);
+          fields.push('approved_by_name = ?'); values.push(req.admin.name || null);
+          fields.push('approved_at = NOW()');
+          fields.push(`review_due_at = COALESCE(?, DATE_ADD(NOW(), INTERVAL ${DEFAULT_REVIEW_MONTHS} MONTH))`);
+          values.push(review_due_at || null);
+          fields.push('retired_at = NULL');
+        } else if (status === 'archived') {
+          await recordSupersededVersion(current, req.admin, 'retired');
+          lifecycleAction = 'RETIRE';
+          fields.push('retired_at = NOW()');
         }
       }
       fields.push('status = ?'); values.push(status);
@@ -342,11 +464,21 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     if (expires_at !== undefined)  { fields.push('expires_at = ?');      values.push(expires_at || null); }
     if (version !== undefined)     { fields.push('version = ?');         values.push(version || null); }
     if (publish_at !== undefined)  { fields.push('publish_at = ?');      values.push(publish_at || null); }
+    // CPPM-31: an approval sets the review date itself, so only take it from the
+    // body when this request is not an approval.
+    if (review_due_at !== undefined && lifecycleAction !== 'APPROVE') { fields.push('review_due_at = ?'); values.push(review_due_at || null); }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     fields.push('updated_at = NOW()');
     values.push(req.params.docId, req.params.clientId);
     await pool.execute(`UPDATE cp_documents SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
     await audit(req.admin, req.params.clientId, 'UPDATE', 'document', req.params.docId, { fields: Object.keys(req.body) });
+    // CPPM-31: the lifecycle step gets its own audit entry, so approve, publish
+    // and retire are findable in the trail without reading every UPDATE.
+    if (lifecycleAction) {
+      await audit(req.admin, req.params.clientId, lifecycleAction, 'document', req.params.docId, {
+        title: current.title, version: current.version, from: current.status, to: status,
+      });
+    }
     if (req.body.title) autoTranslate(req.params.clientId, 'cp_documents', req.params.docId, { title: req.body.title }).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
@@ -358,8 +490,13 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
 // DELETE /api/admin/documents/:clientId/:docId — soft delete (sets is_active = 0)
 router.delete('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
-    await pool.execute("UPDATE cp_documents SET is_active = 0, updated_at = NOW() WHERE id = ? AND client_id = ?", [req.params.docId, req.params.clientId]);
+    // CPPM-31: taking a certified document out of the library retires it, and
+    // what was certified is kept in the version history first.
+    const [[current]] = await pool.execute('SELECT * FROM cp_documents WHERE id = ? AND client_id = ?', [req.params.docId, req.params.clientId]);
+    await recordSupersededVersion(current, req.admin, 'retired');
+    await pool.execute("UPDATE cp_documents SET is_active = 0, retired_at = NOW(), updated_at = NOW() WHERE id = ? AND client_id = ?", [req.params.docId, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'DELETE', 'document', req.params.docId, {});
+    if (current?.approved_at) await audit(req.admin, req.params.clientId, 'RETIRE', 'document', req.params.docId, { title: current.title, version: current.version });
     res.json({ ok: true });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'DELETE /:clientId/:docId', path: req.path, request_id: req.requestId || null });
