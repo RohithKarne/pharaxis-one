@@ -8,6 +8,7 @@
  */
 
 const { pool } = require('../database/db')
+const { canSee } = require('./audience')
 
 function clean(text) {
   return String(text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
@@ -17,7 +18,7 @@ function clean(text) {
  * Retrieve up to `limit` relevant content snippets for a free-text query.
  * @returns {Promise<Array<{source:string,title:string,text:string}>>}
  */
-async function retrieveContext(clientId, query, limit = 6) {
+async function retrieveContext(clientId, query, limit = 6, userType = null) {
   const q = String(query || '').trim()
   if (q.length < 2) return []
   const like = `%${q}%`
@@ -28,9 +29,10 @@ async function retrieveContext(clientId, query, limit = 6) {
   }
 
   const [news] = await pool.execute(
-    `SELECT title, body_html FROM cp_news_posts WHERE client_id=? AND status='published' AND (title LIKE ? OR body_html LIKE ?) ORDER BY publish_at DESC LIMIT 3`,
+    `SELECT title, body_html, target_types_json FROM cp_news_posts WHERE client_id=? AND status='published' AND (title LIKE ? OR body_html LIKE ?) ORDER BY publish_at DESC LIMIT 15`,
     [clientId, like, like])
-  news.forEach(r => push('News', r.title, r.body_html))
+  // CPPM-16: never ground an answer in content outside the asker's audience.
+  news.filter(r => canSee(r.target_types_json, userType)).slice(0, 3).forEach(r => push('News', r.title, r.body_html))
 
   const [faq] = await pool.execute(
     `SELECT question, answer FROM cp_faq_items WHERE client_id=? AND is_published=1 AND (question LIKE ? OR answer LIKE ?) LIMIT 3`,
@@ -38,9 +40,9 @@ async function retrieveContext(clientId, query, limit = 6) {
   faq.forEach(r => push('FAQ', r.question, r.answer))
 
   const [safety] = await pool.execute(
-    `SELECT title, body_html FROM cp_safety_alerts WHERE client_id=? AND status='active' AND (title LIKE ? OR body_html LIKE ?) LIMIT 2`,
+    `SELECT title, body_html, target_types_json FROM cp_safety_alerts WHERE client_id=? AND status='active' AND (title LIKE ? OR body_html LIKE ?) LIMIT 10`,
     [clientId, like, like])
-  safety.forEach(r => push('Safety Alert', r.title, r.body_html))
+  safety.filter(r => canSee(r.target_types_json, userType)).slice(0, 2).forEach(r => push('Safety Alert', r.title, r.body_html))
 
   const [drugs] = await pool.execute(
     `SELECT brand_name, generic_name, indication, dosage_info, contraindications, side_effects

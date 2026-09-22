@@ -9,6 +9,7 @@ const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const { applyTranslation } = require('../../utils/translator');
 const log = require('../../utils/logger');
+const { hasAnalyticsConsent } = require('../../utils/consent');
 
 const NEWS_TRANS_FIELDS = ['title', 'body_html'];
 
@@ -145,8 +146,12 @@ router.post('/:clientCode/posts/:id/view', authenticatePortal, async (req, res) 
   try {
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
-    await pool.execute('UPDATE cp_news_posts SET view_count = view_count + 1 WHERE id = ? AND client_id = ?', [req.params.id, client.id]);
-    res.json({ ok: true });
+    // CPPM-35: count the view only if the visitor accepted analytics.
+    const counted = await hasAnalyticsConsent(req, client.id);
+    if (counted) {
+      await pool.execute('UPDATE cp_news_posts SET view_count = view_count + 1 WHERE id = ? AND client_id = ?', [req.params.id, client.id]);
+    }
+    res.json({ ok: true, counted });
   } catch (err) {
     log.error('portal.news.error', { err, route: 'POST /:clientCode/posts/:id/view', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });

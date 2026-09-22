@@ -8,6 +8,9 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
+const { VISIBLE_DOCUMENT_SQL } = require('../../utils/documentVisibility');
+const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
+const { canSee } = require('../../utils/audience');
 const log = require('../../utils/logger');
 
 function snippet(text) {
@@ -16,7 +19,8 @@ function snippet(text) {
 }
 
 // GET /api/portal/search?clientCode=xxx&q=term
-router.get('/', async (req, res) => {
+// CPPM-25: search needs to know who is asking, so it can respect audience.
+router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
   try {
     const { clientCode } = req.query;
     const q = String(req.query.q || '').trim();
@@ -27,6 +31,7 @@ router.get('/', async (req, res) => {
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
     const cid = client.id;
     const like = `%${q}%`;
+    const userType = req.portalUser.user_type || 'other';
 
     const [featRows] = await pool.execute('SELECT feature_key FROM cp_features WHERE client_id = ? AND is_enabled = 1', [cid]);
     const enabled = new Set(featRows.map(r => r.feature_key));
@@ -35,17 +40,19 @@ router.get('/', async (req, res) => {
 
     if (enabled.has('news_announcements')) {
       const [rows] = await pool.execute(
-        `SELECT id, title, body_html FROM cp_news_posts WHERE client_id=? AND status='published' AND (title LIKE ? OR body_html LIKE ?) ORDER BY publish_at DESC LIMIT 8`,
+        `SELECT id, title, body_html, target_types_json FROM cp_news_posts WHERE client_id=? AND status='published' AND (title LIKE ? OR body_html LIKE ?) ORDER BY publish_at DESC LIMIT 40`,
         [cid, like, like]);
-      rows.forEach(r => results.push({ type: 'news', label: 'News', id: r.id, title: r.title, snippet: snippet(r.body_html), path: `news/${r.id}` }));
+      rows.filter(r => canSee(r.target_types_json, userType)).slice(0, 8)
+        .forEach(r => results.push({ type: 'news', label: 'News', id: r.id, title: r.title, snippet: snippet(r.body_html), path: `news/${r.id}` }));
     }
 
     // Safety & FAQ are always-on portal pages
     {
       const [rows] = await pool.execute(
-        `SELECT id, title, body_html FROM cp_safety_alerts WHERE client_id=? AND status='active' AND (title LIKE ? OR body_html LIKE ?) ORDER BY publish_at DESC LIMIT 8`,
+        `SELECT id, title, body_html, target_types_json FROM cp_safety_alerts WHERE client_id=? AND status='active' AND (title LIKE ? OR body_html LIKE ?) ORDER BY publish_at DESC LIMIT 40`,
         [cid, like, like]);
-      rows.forEach(r => results.push({ type: 'safety', label: 'Safety Alert', id: r.id, title: r.title, snippet: snippet(r.body_html), path: `safety` }));
+      rows.filter(r => canSee(r.target_types_json, userType)).slice(0, 8)
+        .forEach(r => results.push({ type: 'safety', label: 'Safety Alert', id: r.id, title: r.title, snippet: snippet(r.body_html), path: `safety` }));
     }
     {
       const [rows] = await pool.execute(
@@ -77,9 +84,10 @@ router.get('/', async (req, res) => {
 
     if (enabled.has('document_library')) {
       const [rows] = await pool.execute(
-        `SELECT id, title FROM cp_documents WHERE client_id=? AND is_active=1 AND status='published' AND title LIKE ? LIMIT 8`,
+        `SELECT id, title, visible_to_json FROM cp_documents WHERE client_id=? AND is_active=1 AND ${VISIBLE_DOCUMENT_SQL} AND title LIKE ? LIMIT 40`,
         [cid, like]);
-      rows.forEach(r => results.push({ type: 'document', label: 'Document', id: r.id, title: r.title, snippet: '', path: `documents` }));
+      rows.filter(r => canSee(r.visible_to_json, userType)).slice(0, 8)
+        .forEach(r => results.push({ type: 'document', label: 'Document', id: r.id, title: r.title, snippet: '', path: `documents` }));
     }
 
     res.json({ query: q, results });
@@ -91,7 +99,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/portal/search/suggest?clientCode=xxx&q=term — lightweight typeahead (CP-12)
 // Returns just titles across the main content types for an autocomplete dropdown.
-router.get('/suggest', async (req, res) => {
+router.get('/suggest', authenticatePortal, requirePortalAuth, async (req, res) => {
   try {
     const { clientCode } = req.query;
     const q = String(req.query.q || '').trim();
@@ -101,19 +109,20 @@ router.get('/suggest', async (req, res) => {
     if (!client) return res.json({ suggestions: [] });
     const cid = client.id;
     const like = `%${q}%`;
+    const userType = req.portalUser.user_type || 'other';
     const out = [];
 
     const [news] = await pool.execute(
-      `SELECT title FROM cp_news_posts WHERE client_id=? AND status='published' AND title LIKE ? ORDER BY publish_at DESC LIMIT 5`, [cid, like]);
-    news.forEach(r => out.push({ title: r.title, type: 'news', path: 'news' }));
+      `SELECT title, target_types_json FROM cp_news_posts WHERE client_id=? AND status='published' AND title LIKE ? ORDER BY publish_at DESC LIMIT 25`, [cid, like]);
+    news.filter(r => canSee(r.target_types_json, userType)).slice(0, 5).forEach(r => out.push({ title: r.title, type: 'news', path: 'news' }));
 
     const [faq] = await pool.execute(
       `SELECT question FROM cp_faq_items WHERE client_id=? AND is_published=1 AND question LIKE ? LIMIT 5`, [cid, like]);
     faq.forEach(r => out.push({ title: r.question, type: 'faq', path: 'faq' }));
 
     const [docs] = await pool.execute(
-      `SELECT title FROM cp_documents WHERE client_id=? AND is_active=1 AND status='published' AND title LIKE ? LIMIT 5`, [cid, like]);
-    docs.forEach(r => out.push({ title: r.title, type: 'document', path: 'documents' }));
+      `SELECT title, visible_to_json FROM cp_documents WHERE client_id=? AND is_active=1 AND ${VISIBLE_DOCUMENT_SQL} AND title LIKE ? LIMIT 25`, [cid, like]);
+    docs.filter(r => canSee(r.visible_to_json, userType)).slice(0, 5).forEach(r => out.push({ title: r.title, type: 'document', path: 'documents' }));
 
     res.json({ suggestions: out.slice(0, 8) });
   } catch (err) {

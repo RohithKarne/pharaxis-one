@@ -30,8 +30,16 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     // MED-31: validate model field against known Anthropic / OpenAI models
-    const VALID_ANTHROPIC_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-6'];
-    const VALID_OPENAI_MODELS    = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+    // Keep in step with the Model dropdown in admin/pages/ChatboxConfigPage.jsx (lessons L-013).
+    // Older IDs stay accepted so existing configs can still be saved.
+    const VALID_ANTHROPIC_MODELS = ['claude-haiku-4-5', 'claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1',
+                                    'claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-6'];
+    // Keep in step with the Model dropdown in admin/pages/ChatboxConfigPage.jsx —
+    // the dropdown was updated to GPT-5.6/6 and this list was not, so every save
+    // of a new model was rejected. Older IDs stay accepted so existing configs
+    // can still be saved; they are no longer offered on screen.
+    const VALID_OPENAI_MODELS    = ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-6-astra',
+                                    'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'];
     const VALID_MODELS           = [...VALID_ANTHROPIC_MODELS, ...VALID_OPENAI_MODELS];
 
     if (req.body.ai_provider && !VALID_PROVIDERS.includes(req.body.ai_provider)) {

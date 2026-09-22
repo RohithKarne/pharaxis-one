@@ -7,8 +7,8 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { requirePortalAuth, authenticatePortal } = require('../../middleware/auth');
-const crypto  = require('crypto');
 const log = require('../../utils/logger');
+const { hashVisitorIp, latestChoices } = require('../../utils/consent');
 
 // Jurisdiction strictness ranking — highest index = strictest
 const JURISDICTION_RANK = ['apac', 'pdpb', 'ccpa', 'gdpr'];
@@ -83,6 +83,19 @@ router.get('/check', authenticatePortal, async (req, res) => {
   }
 });
 
+// GET /api/portal/consent/my-choice?clientCode=xxx — the visitor's latest choice (CPPM-35),
+// so "Cookie settings" reopens with what they actually chose.
+router.get('/my-choice', authenticatePortal, async (req, res) => {
+  try {
+    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.query.clientCode || '']);
+    if (!client) return res.status(404).json({ error: 'Client not found.' });
+    res.json({ choices: await latestChoices(req, client.id) });
+  } catch (err) {
+    log.error('portal.consent.error', { err, route: 'GET /my-choice', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // POST /api/portal/consent — save consent record (auth optional)
 router.post('/', authenticatePortal, async (req, res) => {
   try {
@@ -97,9 +110,10 @@ router.post('/', authenticatePortal, async (req, res) => {
     // to record a consent choice (attributed by hashed IP below).
     const userId = req.portalUser?.userId || null;
 
-    // Hash IP for anonymous records (no PII stored)
-    const rawIp  = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-    const ipHash = userId ? null : crypto.createHash('sha256').update(rawIp).digest('hex');
+    // CPPM-27: anonymous records carry a keyed hash of the IP. This is
+    // pseudonymous personal data under GDPR — not "no PII" — but, unlike the plain
+    // SHA-256 used before, it cannot be reversed without the server secret.
+    const ipHash = userId ? null : hashVisitorIp(req);
 
     await pool.execute(`
       INSERT INTO cp_consent_records (client_id, user_id, ip_hash, version, choices_json)

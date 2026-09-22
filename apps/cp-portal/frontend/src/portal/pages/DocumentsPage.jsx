@@ -179,9 +179,12 @@ export default function DocumentsPage() {
 
   function docBadges(doc) {
     const badges = []
+    // Show the document's real version. "v2.1" was hard-coded here, so every
+    // document claimed the same version regardless of what was published.
+    const version = doc.version ? (/^\d/.test(doc.version) ? `v${doc.version}` : doc.version) : null
     badges.push(
       <span key="appr" style={{ background: '#DEF7EC', color: '#03543F', fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 4, marginLeft: 6 }}>
-        v2.1 Approved
+        {version ? `${version} Approved` : 'Approved'}
       </span>
     )
     if (doc.created_at && (Date.now() - new Date(doc.created_at).getTime()) < 14 * 86400000) {

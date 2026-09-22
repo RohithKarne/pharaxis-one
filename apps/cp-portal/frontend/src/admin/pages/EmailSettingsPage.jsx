@@ -22,6 +22,27 @@ export default function EmailSettingsPage() {
   const [testTo, setTestTo] = useState('')
   const [testMsg, setTestMsg] = useState(null)   // { type: 'success'|'error', text }
   const [testing, setTesting] = useState(false)
+  const [outbox, setOutbox] = useState({ emails: [], counts: { sent: 0, pending: 0, failed: 0 } })
+  const [resendMsg, setResendMsg] = useState(null)
+
+  // CPPM-36: failed and retrying emails, so nobody is left unnotified unseen.
+  async function loadOutbox() {
+    try {
+      const res = await fetch(`/api/admin/email-config/${clientId}/outbox`, { headers: adminHeaders() })
+      if (res.ok) setOutbox(await res.json())
+    } catch { /* leave the last known list on screen */ }
+  }
+  useEffect(() => { loadOutbox() }, [clientId])
+
+  async function handleResend(id) {
+    setResendMsg(null)
+    const res = await fetch(`/api/admin/email-config/${clientId}/outbox/${id}/resend`, { method: 'POST', headers: adminHeaders() })
+    const d = await res.json().catch(() => ({}))
+    setResendMsg(res.ok
+      ? { type: d.status === 'sent' ? 'success' : 'error', text: d.status === 'sent' ? 'Email sent.' : `Still failing: ${d.error || 'unknown error'}` }
+      : { type: 'error', text: d.error || 'Resend failed.' })
+    loadOutbox()
+  }
 
   useEffect(() => { loadConfig() }, [clientId])
 
@@ -237,6 +258,51 @@ export default function EmailSettingsPage() {
           }}>
             {testMsg.type === 'success' ? '✓ ' : '✗ '}{testMsg.text}
           </div>
+        )}
+      </div>
+
+      <div className="cp-card">
+        <h3 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 600, color: '#1A1A2E' }}>
+          Email Delivery
+        </h3>
+        <p style={{ margin: '0 0 14px', fontSize: 13, color: '#6B7280' }}>
+          {outbox.counts.sent} sent · {outbox.counts.pending} retrying · <strong style={{ color: outbox.counts.failed ? '#DC2626' : undefined }}>{outbox.counts.failed} failed</strong>
+        </p>
+        {resendMsg && (
+          <div style={{ marginBottom: 12, fontSize: 13, color: resendMsg.type === 'success' ? '#16A34A' : '#DC2626' }}>
+            {resendMsg.type === 'success' ? '✓ ' : '✗ '}{resendMsg.text}
+          </div>
+        )}
+        {outbox.emails.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#16A34A' }}>✓ No failed or pending emails.</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '2px solid #E2E8F0' }}>
+                <th style={{ padding: 8 }}>To</th><th style={{ padding: 8 }}>Email</th><th style={{ padding: 8 }}>Status</th><th style={{ padding: 8 }}>Last error</th><th style={{ padding: 8 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {outbox.emails.map(e => (
+                <tr key={e.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                  <td style={{ padding: 8 }}>{e.to_email}</td>
+                  <td style={{ padding: 8 }}>{e.subject}</td>
+                  <td style={{ padding: 8, fontWeight: 600, color: e.status === 'failed' ? '#DC2626' : '#B45309' }}>
+                    {e.status === 'failed' ? `Failed (${e.attempts} tries)` : `Retrying (${e.attempts} so far)`}
+                  </td>
+                  <td style={{ padding: 8, color: '#6B7280', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.last_error || ''}>{e.last_error || '—'}</td>
+                  <td style={{ padding: 8 }}>
+                    {e.status === 'failed' && !e.is_sensitive && (
+                      <button className="cp-btn cp-btn-outline" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => handleResend(e.id)}>Resend</button>
+                    )}
+                    {e.status === 'failed' && !!e.is_sensitive && (
+                      <span style={{ fontSize: 12, color: '#6B7280' }}>Person must request a new link</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </AdminLayout>

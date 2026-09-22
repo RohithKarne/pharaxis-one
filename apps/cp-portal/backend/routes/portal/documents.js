@@ -6,12 +6,14 @@
 const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
+const { VISIBLE_DOCUMENT_SQL, documentUnavailableReason, unavailableResponse } = require('../../utils/documentVisibility');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
 const { applyTranslation } = require('../../utils/translator');
 const path = require('path');
 const fs   = require('fs');
 const http = require("http");
 const log = require('../../utils/logger');
+const { hasAnalyticsConsent } = require('../../utils/consent');
 
 function httpPost(url, headers, body) {
   return new Promise((resolve, reject) => {
@@ -63,12 +65,10 @@ router.get('/', authenticatePortal, requirePortalAuth, async (req, res) => {
 
     const [docs] = await pool.execute(`
       SELECT id, title, category, doc_type, file_name, file_size, mime_type, visible_to_json, source,
-             version, download_count, created_at, translations_json
+             version, download_count, created_at, expires_at, translations_json
       FROM cp_documents
       WHERE client_id = ? AND is_active = 1
-        AND (status = 'published' OR (status = 'scheduled' AND publish_at <= NOW()))
-        AND (expires_at IS NULL OR expires_at > NOW())
-        AND (publish_at IS NULL OR publish_at <= NOW())
+        AND ${VISIBLE_DOCUMENT_SQL}
       ORDER BY created_at DESC
     `, [client.id]);
 
@@ -111,9 +111,7 @@ router.post('/ai-search', authenticatePortal, requirePortalAuth, async (req, res
       SELECT id, title, category, doc_type, file_size, expires_at
       FROM cp_documents
       WHERE client_id = ? AND is_active = 1
-        AND (status = 'published' OR (status = 'scheduled' AND publish_at <= NOW()))
-        AND (expires_at IS NULL OR expires_at > NOW())
-        AND (publish_at IS NULL OR publish_at <= NOW())
+        AND ${VISIBLE_DOCUMENT_SQL}
       ORDER BY created_at DESC
     `, [client.id]);
 
@@ -208,6 +206,14 @@ router.get('/:docId/download', authenticatePortal, requirePortalAuth, async (req
     // Verify user is from same client
     if (doc.client_id !== req.portalUser.clientId) return res.status(403).json({ error: 'Access denied.' });
 
+    // CPPM-34: an expired, draft or not-yet-due document is never served, however
+    // the reader arrived at the link. Checked before the file is touched.
+    const unavailable = documentUnavailableReason(doc);
+    if (unavailable) {
+      const { status, body } = unavailableResponse(unavailable);
+      return res.status(status).json(body);
+    }
+
     // Verify user_type access
     const userType  = req.portalUser.user_type || 'other';
     const visibleTo = JSON.parse(doc.visible_to_json || '[]');
@@ -219,7 +225,10 @@ router.get('/:docId/download', authenticatePortal, requirePortalAuth, async (req
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on server.' });
 
     // F3-04: Track download count
-    await pool.execute(`UPDATE cp_documents SET download_count = download_count + 1, updated_at = NOW() WHERE id = ?`, [doc.id]);
+    // CPPM-35: count the download only if the reader accepted analytics.
+    if (await hasAnalyticsConsent(req, doc.client_id)) {
+      await pool.execute(`UPDATE cp_documents SET download_count = download_count + 1, updated_at = NOW() WHERE id = ?`, [doc.id]);
+    }
 
     const encodedName = encodeURIComponent(doc.file_name);
     const dispo = req.query.disposition === 'inline' ? 'inline' : 'attachment';

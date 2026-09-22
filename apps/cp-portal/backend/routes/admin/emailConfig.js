@@ -106,4 +106,39 @@ router.post('/:clientId/test', authenticateAdmin, requireClientAccess, requireRo
   }
 })
 
+// ── CPPM-36: delivery log ─────────────────────────────────────────
+// GET /api/admin/email-config/:clientId/outbox — failed and still-retrying emails
+router.get('/:clientId/outbox', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, kind, to_email, subject, status, attempts, last_error, is_sensitive, related_type, related_id, created_at, next_attempt_at
+         FROM cp_email_outbox
+        WHERE client_id = ? AND status IN ('failed','pending')
+        ORDER BY status = 'failed' DESC, id DESC LIMIT 100`,
+      [req.params.clientId])
+    const [[counts]] = await pool.execute(
+      `SELECT SUM(status='sent') AS sent, SUM(status='pending') AS pending, SUM(status='failed') AS failed
+         FROM cp_email_outbox WHERE client_id = ?`, [req.params.clientId])
+    res.json({ emails: rows, counts: { sent: Number(counts.sent || 0), pending: Number(counts.pending || 0), failed: Number(counts.failed || 0) } })
+  } catch (err) {
+    log.error('admin.emailConfig.error', { err, route: 'GET /:clientId/outbox', path: req.path, request_id: req.requestId || null })
+    res.status(500).json({ error: 'Server error.' })
+  }
+})
+
+// POST /api/admin/email-config/:clientId/outbox/:id/resend
+router.post('/:clientId/outbox/:id/resend', authenticateAdmin, requireClientAccess, requireRole('superadmin', 'admin'), async (req, res) => {
+  try {
+    const { resendEmail } = require('../../utils/emailOutbox')
+    const ok = await resendEmail(Number(req.params.clientId), Number(req.params.id))
+    if (!ok) return res.status(409).json({ error: 'This email cannot be resent. Sign-in and reset links are not kept — ask the person to request a new one.' })
+    const [[row]] = await pool.execute('SELECT status, last_error FROM cp_email_outbox WHERE id = ?', [req.params.id])
+    await audit(req.admin, req.params.clientId, 'RESEND_EMAIL', 'email_outbox', Number(req.params.id), { status: row?.status })
+    res.json({ status: row?.status, error: row?.last_error || null })
+  } catch (err) {
+    log.error('admin.emailConfig.error', { err, route: 'POST /:clientId/outbox/:id/resend', path: req.path, request_id: req.requestId || null })
+    res.status(500).json({ error: 'Server error.' })
+  }
+})
+
 module.exports = router

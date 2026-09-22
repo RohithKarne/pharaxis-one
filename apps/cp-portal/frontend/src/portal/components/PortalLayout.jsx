@@ -348,6 +348,9 @@ export default function PortalLayout({ children }) {
             {isFeatureEnabled('find_msl')          && <Link to={`${base}/find-msl`}>Find an MSL</Link>}
             {isFeatureEnabled('events')           && <Link to={`${base}/events`}>Events</Link>}
             <Link to={`${base}/contact`}>Contact Us</Link>
+            <button type="button" className="pp-footer-link-btn" onClick={() => window.dispatchEvent(new Event('cp:open-consent'))}>
+              Cookie settings
+            </button>
           </div>
           <div className="pp-footer-legal">
             {branding.footer_text_content && <p>{branding.footer_text_content}</p>}
@@ -409,7 +412,33 @@ function ChatboxWidget({ clientCode }) {
   const [input, setInput]   = useState('')
   const [loading, setLoading] = useState(false)
   const [sendCooldown, setSendCooldown] = useState(false)
-  const { portalConfig }    = usePortal()
+  // CPPM-17: the server names the conversation on the first reply; send it back so
+  // later turns are recorded in the same conversation. A page refresh starts a new one.
+  const [conversationId, setConversationId] = useState(null)
+  // CPPM-18: the same screening question every portal form asks. null = asking,
+  // 'no' = answered No (collapsed, still reachable), 'yes' = telling us, 'sent' = done.
+  const [unwell, setUnwell] = useState(null)
+  const [unwellDetail, setUnwellDetail] = useState('')
+  const [unwellBusy, setUnwellBusy] = useState(false)
+  const [unwellError, setUnwellError] = useState('')
+
+  async function sendUnwellReport() {
+    setUnwellBusy(true); setUnwellError('')
+    try {
+      const res = await fetch(`/api/portal/chatbox/${clientCode}/report-unwell`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_id: conversationId, detail: unwellDetail }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setUnwellError(data.error || 'We could not send your report. Please use the side effect form.'); return }
+      if (data.conversation_id) setConversationId(data.conversation_id)
+      setUnwell('sent'); setUnwellDetail('')
+    } catch {
+      setUnwellError('We could not send your report. Please use the side effect form.')
+    } finally { setUnwellBusy(false) }
+  }
+  const { portalConfig, user } = usePortal()
   const welcomeMsg = portalConfig?.chatbox?.welcome_message || 'Hello! How can I help you today?'
 
   function openChat() {
@@ -429,14 +458,17 @@ function ChatboxWidget({ clientCode }) {
     try {
       // Build messages array in {role, content} format expected by backend
       const history = messages.slice(-8).map(m => ({ role: m.role, content: m.content || m.text || '' }))
-      const payload = { messages: [...history, { role: 'user', content: userMsg }] }
+      const payload = { messages: [...history, { role: 'user', content: userMsg }], conversation_id: conversationId }
       const res  = await fetch(`/api/portal/chatbox/${clientCode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
       const data = await res.json()
-      setMessages(m => [...m, { role: 'assistant', content: data.reply || 'Sorry, I could not process that.', sources: Array.isArray(data.sources) ? data.sources : [] }])
+      if (data.conversation_id) setConversationId(data.conversation_id)
+      // Show the server's reason (e.g. not available for this account type) rather than a generic line.
+      const content = res.ok ? (data.reply || 'Sorry, I could not process that.') : (data.error || 'Sorry, I could not process that.')
+      setMessages(m => [...m, { role: 'assistant', content, sources: res.ok && Array.isArray(data.sources) ? data.sources : [] }])
     } catch {
       setMessages(m => [...m, { role: 'assistant', content: 'Connection error. Please try again.' }])
     }
@@ -451,6 +483,14 @@ function ChatboxWidget({ clientCode }) {
             <span>AI Medical Assistant</span>
             <button onClick={() => setOpen(false)} aria-label="Close chat">✕</button>
           </div>
+          {/* CPPM-16: the assistant is for signed-in users, so the client knows who it is talking to. */}
+          {!user ? (
+            <div className="pp-chat-body pp-chat-signin">
+              <p className="pp-chat-signin-title">Sign in to chat</p>
+              <p>Our medical assistant answers from approved information. Please sign in so we can tailor answers to you and follow up if needed.</p>
+              <Link to={`/portal/${clientCode}/login`} className="pp-btn pp-btn-primary" onClick={() => setOpen(false)}>Sign In</Link>
+            </div>
+          ) : (<>
           <div className="pp-chat-body">
             {messages.map((m, i) => (
               <div key={i} className={`pp-chat-msg pp-chat-msg-${m.role}`}>
@@ -467,11 +507,43 @@ function ChatboxWidget({ clientCode }) {
             ))}
             {loading && <div className="pp-chat-msg pp-chat-msg-assistant" role="status" aria-live="polite" aria-busy="true"><div className="pp-chat-bubble pp-chat-typing">…</div></div>}
           </div>
+          <div className="pp-chat-safety">
+            {unwell === 'sent' ? (
+              <p className="pp-chat-safety-done" role="status">
+                ✓ Thank you. Our safety team will review this. You can also give full details on the{' '}
+                <Link to={`/portal/${clientCode}/submit?type=adverse_event`} onClick={() => setOpen(false)}>side effect form</Link>.
+                {' '}<button type="button" className="pp-chat-safety-link" onClick={() => setUnwell('yes')}>Report something else</button>
+              </p>
+            ) : unwell === 'no' ? (
+              <button type="button" className="pp-chat-safety-link" onClick={() => setUnwell('yes')}>Report that someone became unwell</button>
+            ) : unwell === 'yes' ? (
+              <>
+                <label htmlFor="pp-chat-unwell-detail" className="pp-chat-safety-q">Please tell us what happened</label>
+                <textarea id="pp-chat-unwell-detail" rows={2} maxLength={2000} value={unwellDetail} disabled={unwellBusy}
+                  onChange={e => setUnwellDetail(e.target.value)} placeholder="In your own words. Anything you can tell us helps." />
+                {unwellError && <p className="pp-chat-safety-error" role="alert">{unwellError}</p>}
+                <div className="pp-chat-safety-actions">
+                  <button type="button" onClick={sendUnwellReport} disabled={unwellBusy}>{unwellBusy ? 'Sending…' : 'Send to safety team'}</button>
+                  <button type="button" className="pp-chat-safety-link" onClick={() => setUnwell(null)} disabled={unwellBusy}>Cancel</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="pp-chat-safety-q">Did anyone become unwell, or have an unexpected medical problem, after using the product?</p>
+                <p className="pp-chat-safety-help">This includes anything you did not expect — however minor, and whether or not you think the product caused it.</p>
+                <div className="pp-chat-safety-actions">
+                  <button type="button" onClick={() => setUnwell('yes')}>Yes</button>
+                  <button type="button" className="pp-chat-safety-no" onClick={() => setUnwell('no')}>No</button>
+                </div>
+              </>
+            )}
+          </div>
           <form className="pp-chat-input-row" onSubmit={sendMessage}>
             <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask a medical question…" disabled={loading} maxLength={500} />
             <span className="pp-chat-counter">{input.length}/500</span>
             <button type="submit" disabled={sendCooldown || loading || !input.trim()}>Send</button>
           </form>
+          </>)}
         </div>
       ) : (
         <button className="pp-chat-fab" onClick={openChat} title="AI Medical Assistant" aria-label="Open AI Medical Assistant">

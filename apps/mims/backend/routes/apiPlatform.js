@@ -123,6 +123,16 @@ router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
   res.json(row);
 });
 
+// 'YYYY-MM-DD', a real calendar date, not in the future (one day of slack for
+// time zones). Anything else → null.
+function parseAwarenessDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const d = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== value) return null;
+  if (d.getTime() > Date.now() + 86400000) return null;
+  return value;
+}
+
 router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
   // org is always resolved from the API key — never from the request body — so a
   // client can only ever create a case in its own organisation (cross-tenant safe).
@@ -147,6 +157,16 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     const caseNumber = req.body.reference ? String(req.body.reference).slice(0, 100) : null;
     const desc = req.body.description || req.body.subject || null;
     const priority = req.body.priority || 'normal';
+    // CPPM-18: when the report first reached the company, per the source portal
+    // (e.g. the day a person reported it in chat, not the day a reviewer
+    // confirmed it). It starts the regulatory clock on the awareness basis
+    // (haClockService). date_received stays the day MIMS received the case.
+    // Missing, malformed or future dates are ignored, so the clock falls back to
+    // date_received exactly as before — an intake is never rejected for this.
+    const awarenessDate = parseAwarenessDate(req.body.awareness_date);
+    if (req.body.awareness_date && !awarenessDate) {
+      console.warn(`[api/v1/cases] ignored invalid awareness_date for ${caseNumber || 'unreferenced case'}`);
+    }
 
     // R2: idempotency — a repeated push of the same submission (same reference)
     // must NOT create a duplicate case. If one already exists for this org with
@@ -165,9 +185,9 @@ router.post('/api/v1/cases', scopeGuard('cases:write'), async (req, res) => {
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, case_number, description, status_id, priority, created_by)
-         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, NULL)`,
-        [orgId, site.id, caseType, intakeChannel, caseNumber, desc, state?.id || null, priority]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, case_number, description, status_id, priority, created_by)
+         VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, NULL)`,
+        [orgId, site.id, caseType, intakeChannel, awarenessDate, caseNumber, desc, state?.id || null, priority]
       );
     } catch (err) {
       // Race: another request created the same reference between our check and insert.

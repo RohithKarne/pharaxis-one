@@ -45,6 +45,24 @@ export default function ConsentBanner() {
     setShow(true)
   }, [compliance, user, clientCode, version])
 
+  // CPPM-35: "Cookie settings" in the footer reopens the preferences with the
+  // visitor's current choice, so consent can be changed or withdrawn at any time.
+  useEffect(() => {
+    async function reopen() {
+      try {
+        const res = await fetch(`/api/portal/consent/my-choice?clientCode=${clientCode}`)
+        const d = res.ok ? await res.json() : {}
+        setChoices({ ...DEFAULT_CHOICES, ...(d.choices || {}), necessary: true })
+      } catch {
+        setChoices(DEFAULT_CHOICES)
+      }
+      setStep('preferences')
+      setShow(true)
+    }
+    window.addEventListener('cp:open-consent', reopen)
+    return () => window.removeEventListener('cp:open-consent', reopen)
+  }, [clientCode])
+
   // A-02: hide background content from screen readers when overlay is open
   useEffect(() => {
     const appRoot = document.getElementById('root')

@@ -2079,6 +2079,8 @@ body { background: var(--cp-bg); }
 .pp-footer-links { display: flex; flex-direction: column; gap: 10px; }
 .pp-footer-links a { color: var(--pp-footer-text); text-decoration: none; font-size: 14px; }
 .pp-footer-links a:hover { color: #fff; }
+.pp-footer-link-btn { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: var(--pp-footer-text); font-size: 14px; }
+.pp-footer-link-btn:hover { color: #fff; }
 .pp-footer-legal { font-size: 12px; color: rgba(255,255,255,0.4); line-height: 1.7; }
 
 /* ── Hero section ────────────────────────────────────────── */
@@ -2379,12 +2381,49 @@ body { background: var(--cp-bg); }
 .pp-sync-failed_sync { color: #DC2626; }
 
 /* ── Contact page ────────────────────────────────────────── */
-.pp-contact-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; margin-bottom: 40px; }
-.pp-contact-card { background: var(--pp-surface); border: 1px solid var(--pp-border); border-radius: calc(var(--pp-radius) * 1.5); padding: 28px; text-align: center; }
+.pp-contact-layout { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-bottom: 40px; }
+.pp-contact-card { background: var(--pp-surface); border: 1px solid var(--pp-border); border-radius: calc(var(--pp-radius) * 1.5); padding: 28px; text-align: center; display: flex; flex-direction: column; align-items: center; }
 .pp-contact-icon { font-size: 36px; margin-bottom: 12px; }
 .pp-contact-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
 .pp-contact-card p { font-size: 13px; color: var(--pp-text-muted); line-height: 1.6; }
 .pp-contact-link { display: block; margin-top: 12px; color: var(--pp-link); font-weight: 600; text-decoration: none; font-size: 14px; }
+/* Contact page — actions and message form (rebuilt: the form used classes with no styles) */
+.pp-chat-signin { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; font-size: 14px; color: var(--pp-text-muted); line-height: 1.55; }
+.pp-chat-signin-title { font-size: 16px; font-weight: 700; color: var(--pp-text); margin: 0; }
+.pp-chat-signin p { margin: 0; }
+.pp-contact-action { margin-top: auto; padding-top: 14px; font-size: 14px; font-weight: 700; color: var(--pp-primary); text-decoration: none; }
+.pp-contact-action:hover { text-decoration: underline; }
+.pp-contact-card-alert { border-color: #FECACA; background: #FFFBFB; }
+.pp-contact-action-alert { color: #B91C1C; }
+.pp-contact-muted { margin-top: 12px; font-size: 13px; color: var(--pp-text-muted); }
+.pp-contact-form-card { background: var(--pp-surface); border: 1px solid var(--pp-border); border-radius: calc(var(--pp-radius) * 1.5); padding: 32px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(15,23,42,0.05); }
+.pp-contact-form-head { margin-bottom: 22px; }
+.pp-contact-form-head h2 { font-size: 22px; font-weight: 700; margin: 0 0 6px; }
+.pp-contact-form-head p { font-size: 14px; color: var(--pp-text-muted); margin: 0; }
+.pp-contact-form-card form { display: flex; flex-direction: column; gap: 18px; }
+.pp-contact-form-card .pp-field input, .pp-contact-form-card .pp-field textarea { padding: 11px 14px; font-size: 15px; }
+.pp-contact-form-card .pp-field textarea { resize: vertical; min-height: 140px; line-height: 1.5; }
+.pp-contact-count { align-self: flex-end; font-size: 12px; color: var(--pp-text-muted); }
+.pp-contact-form-foot { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.pp-contact-form-foot p { margin: 0; font-size: 13px; color: var(--pp-text-muted); flex: 1; min-width: 240px; }
+.pp-contact-form-foot a { color: #B91C1C; font-weight: 600; }
+.pp-contact-ae { border: 1px solid var(--pp-border); border-radius: var(--pp-radius); padding: 16px 18px; margin: 0; background: #FAFBFD; }
+.pp-contact-ae legend { font-size: 14px; font-weight: 600; color: var(--pp-text); padding: 0 6px; }
+.pp-contact-ae-help { font-size: 13px; color: var(--pp-text-muted); margin: 4px 0 12px; }
+.pp-contact-ae-options { display: flex; gap: 10px; }
+.pp-contact-ae-option { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border: 1px solid var(--pp-border); border-radius: 999px; font-size: 14px; font-weight: 600; cursor: pointer; background: #fff; }
+.pp-contact-ae-option.on { border-color: var(--pp-primary); background: #F5F0FB; color: var(--pp-primary); }
+.pp-contact-ae-option input { accent-color: var(--pp-primary); }
+.pp-contact-error { padding: 12px 14px; border-radius: var(--pp-radius); background: #FEF2F2; border: 1px solid #FECACA; color: #B91C1C; font-size: 14px; }
+.pp-contact-note { padding: 14px 16px; border-radius: var(--pp-radius); background: #F8FAFC; border: 1px solid var(--pp-border); color: var(--pp-text-muted); font-size: 14px; }
+.pp-contact-success { text-align: center; padding: 24px 12px; }
+.pp-contact-success-icon { width: 52px; height: 52px; border-radius: 50%; background: #DCFCE7; color: #15803D; font-size: 26px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+.pp-contact-success h3 { font-size: 20px; margin: 0 0 8px; }
+.pp-contact-success p { color: var(--pp-text-muted); font-size: 14px; margin: 0 auto 18px; max-width: 520px; line-height: 1.6; }
+@media (max-width: 900px) {
+  .pp-contact-layout { grid-template-columns: 1fr; }
+  .pp-contact-form-card { padding: 22px; }
+}
 .pp-legal-note { background: var(--pp-surface); border: 1px solid var(--pp-border); border-radius: var(--pp-radius); padding: 16px 20px; font-size: 12px; color: var(--pp-text-muted); line-height: 1.7; }
 
 /* ── 404 page ────────────────────────────────────────────── */
@@ -2413,6 +2452,20 @@ body { background: var(--cp-bg); }
 .pp-chat-input-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--pp-border); border-radius: 20px; font-size: 13px; }
 .pp-chat-input-row button { background: var(--pp-primary); color: #fff; border: none; border-radius: 20px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .pp-chat-input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* CPPM-18: the screening question inside the chat window */
+.pp-chat-safety { padding: 10px 12px; border-top: 1px solid var(--pp-border); background: #FFF7ED; font-size: 12px; color: var(--pp-text); display: flex; flex-direction: column; gap: 6px; }
+.pp-chat-safety p { margin: 0; line-height: 1.45; }
+.pp-chat-safety-q { font-weight: 600; font-size: 12.5px; }
+.pp-chat-safety-help { color: var(--pp-text-muted); }
+.pp-chat-safety textarea { width: 100%; padding: 6px 10px; border: 1px solid var(--pp-border); border-radius: 8px; font-size: 13px; font-family: inherit; resize: vertical; }
+.pp-chat-safety-actions { display: flex; gap: 8px; align-items: center; }
+.pp-chat-safety-actions button { background: #C2410C; color: #fff; border: none; border-radius: 16px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.pp-chat-safety-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.pp-chat-safety-actions .pp-chat-safety-no { background: #fff; color: var(--pp-text); border: 1px solid var(--pp-border); }
+.pp-chat-safety .pp-chat-safety-link, .pp-chat-safety-actions .pp-chat-safety-link { background: none; border: none; padding: 0; color: #C2410C; font-size: 12px; font-weight: 600; text-decoration: underline; cursor: pointer; align-self: flex-start; }
+.pp-chat-safety-done { color: #166534; }
+.pp-chat-safety-error { color: #B91C1C; }
 
 /* ── Inline edit inputs (admin tables) ───────────────────── */
 .cp-inline-edit { border: none; border-bottom: 1px dashed transparent; background: transparent; font-size: 13px; color: var(--cp-text); padding: 2px 4px; outline: none; width: 100%; min-width: 120px; transition: border-color 0.15s; }

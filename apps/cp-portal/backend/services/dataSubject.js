@@ -60,6 +60,16 @@ async function buildExport(userId, clientId) {
     q(`SELECT id, provider_key, email, created_at, last_login_at FROM cp_sso_identities WHERE portal_user_id = ? AND client_id = ?`, [userId, clientId]),
   ]);
 
+  // CPPM-17: chat conversations with their messages, oldest first.
+  const chats = await q(
+    `SELECT id, started_at, last_message_at, message_count FROM cp_chat_conversations
+      WHERE portal_user_id = ? AND client_id = ? ORDER BY id`, [userId, clientId]);
+  for (const c of chats) {
+    c.messages = await q(
+      `SELECT role, content, created_at FROM cp_chat_messages WHERE conversation_id = ? AND client_id = ? ORDER BY id`,
+      [c.id, clientId]);
+  }
+
   return {
     export_metadata: { generated_at: new Date().toISOString(), scope: 'CP Portal', user_id: userId, client_id: clientId, note: 'MIMS-synced case data is held in a separate system and is not included in this export.' },
     profile: profile || null,
@@ -72,6 +82,7 @@ async function buildExport(userId, clientId) {
     feedback,
     msl_bookings: mslBookings,
     sso_identities: ssoIdentities,
+    chat_conversations: chats,
   };
 }
 
@@ -113,11 +124,22 @@ async function eraseUser(userId, clientId) {
       summary.retained.push(`submissions(${retainIds.length}) [AE/PC — identity severed, safety record retained]`);
     }
 
+    // CPPM-18: a chat that raised a safety review is a safety record — keep it,
+    // sever the identity (as for AE/PC submissions above). The rest are deleted below.
+    const [flaggedChats] = await conn.execute(
+      `UPDATE cp_chat_conversations c SET c.portal_user_id = NULL
+        WHERE c.portal_user_id = ? AND c.client_id = ?
+          AND EXISTS (SELECT 1 FROM cp_ae_review_tasks t WHERE t.chat_conversation_id = c.id)`, [userId, clientId]);
+    if (flaggedChats.affectedRows) {
+      summary.retained.push(`chat_conversations(${flaggedChats.affectedRows}) [safety review raised — identity severed, record retained]`);
+    }
+
     // Delete engagement/identity-link data.
     for (const [table, col] of [
       ['cp_saved_items', 'portal_user_id'], ['cp_user_follows', 'portal_user_id'],
       ['cp_notifications', 'portal_user_id'], ['cp_feedback', 'user_id'],
       ['cp_msl_bookings', 'portal_user_id'], ['cp_sso_identities', 'portal_user_id'],
+      ['cp_chat_conversations', 'portal_user_id'], // CPPM-17; messages go with them
     ]) {
       const [r] = await conn.execute(`DELETE FROM \`${table}\` WHERE ${col} = ? AND client_id = ?`, [userId, clientId]);
       if (r.affectedRows) summary.deleted.push(`${table}(${r.affectedRows})`);

@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
-import { useAdminAuth } from '../context/AdminAuthContext'
+import { adminHeaders } from '../context/AdminAuthContext'
 
 export default function TrainingAdminPage() {
   const { clientId } = useParams()
-  const { adminHeaders } = useAdminAuth()
   const [modules, setModules] = useState([])
   const [loading, setLoading] = useState(true)
   const [form, setForm]       = useState({ title: '', type: 'CME Accredited', duration: '30 mins', credits: '1.5 CME', pass_score: 80 })
   const [msg, setMsg]         = useState('')
+  const [editingId, setEditingId] = useState(null)   // CPPM-33: correcting an existing entry
+  const EMPTY = { title: '', type: 'CME Accredited', duration: '30 mins', credits: '1.5 CME', pass_score: 80, status: 'Available' }
 
   useEffect(() => {
     fetch(`/api/admin/training/${clientId}`, { headers: adminHeaders() })
@@ -22,15 +23,16 @@ export default function TrainingAdminPage() {
     e.preventDefault()
     setMsg('')
     try {
-      const res = await fetch(`/api/admin/training/${clientId}`, {
-        method: 'POST',
+      const res = await fetch(editingId ? `/api/admin/training/${clientId}/${editingId}` : `/api/admin/training/${clientId}`, {
+        method: editingId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', ...adminHeaders() },
         body: JSON.stringify(form),
       })
       const d = await res.json()
       if (res.ok) {
-        setMsg('✅ Training module published.')
-        setForm({ title: '', type: 'CME Accredited', duration: '30 mins', credits: '1.5 CME', pass_score: 80 })
+        setMsg(editingId ? '✅ Changes saved.' : '✅ Training module published.')
+        setEditingId(null)
+        setForm(EMPTY)
         const updated = await fetch(`/api/admin/training/${clientId}`, { headers: adminHeaders() }).then(r => r.json())
         setModules(updated.modules || [])
       } else {
@@ -39,6 +41,18 @@ export default function TrainingAdminPage() {
     } catch {
       setMsg('❌ Error saving training module.')
     }
+  }
+
+  function startEdit(m) {
+    setEditingId(m.id)
+    setForm(Object.fromEntries(Object.keys(EMPTY).map(k => [k, m[k] ?? EMPTY[k]])))
+    setMsg('')
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setForm(EMPTY)
+    setMsg('')
   }
 
   async function handleDelete(id) {
@@ -78,10 +92,23 @@ export default function TrainingAdminPage() {
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Pass Score Threshold (%)</label>
             <input type="number" value={form.pass_score} onChange={e => setForm({ ...form, pass_score: e.target.value })} min={50} max={100} style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1' }} />
           </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Status</label>
+            <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1' }}>
+              <option value="Available">Available</option>
+              <option value="Coming soon">Coming soon</option>
+              <option value="Retired">Retired</option>
+            </select>
+          </div>
           {msg && <div style={{ fontSize: 13, marginBottom: 12, fontWeight: 600 }}>{msg}</div>}
           <button type="submit" className="cp-btn cp-btn-primary" style={{ width: '100%', padding: '9px 14px', background: '#6B3FA0', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
-            Publish Training Module
+            {editingId ? 'Save changes' : 'Publish Training Module'}
           </button>
+          {editingId && (
+            <button type="button" onClick={cancelEdit} style={{ width: '100%', marginTop: 8, padding: '8px 14px', background: '#fff', color: '#374151', border: '1px solid #CBD5E1', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}>
+              Cancel editing
+            </button>
+          )}
         </form>
 
         <div className="cp-card" style={{ padding: 20, background: '#fff', borderRadius: 8, border: '1px solid #E2E8F0' }}>
@@ -105,6 +132,7 @@ export default function TrainingAdminPage() {
                     <td style={{ padding: 8 }}>{m.credits}</td>
                     <td style={{ padding: 8 }}>{m.pass_score}%</td>
                     <td style={{ padding: 8 }}>
+                      <button onClick={() => startEdit(m)} style={{ color: '#6B3FA0', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600, marginRight: 8 }}>Edit</button>
                       <button onClick={() => handleDelete(m.id)} style={{ color: '#DC2626', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 600 }}>Delete</button>
                     </td>
                   </tr>

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import usePageTitle from '../hooks/usePageTitle'
 
 const TYPE_ICON = { news: '📰', safety: '⚠️', faq: '❓', ta: '🧬', drug: '💊', resource: '📚', document: '📁' }
 
 export default function SearchResultsPage() {
-  const { clientCode } = usePortal()
+  const { clientCode, user } = usePortal()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const q = params.get('q') || ''
@@ -17,14 +17,15 @@ export default function SearchResultsPage() {
   usePageTitle('Search')
 
   useEffect(() => {
-    if (!clientCode || q.trim().length < 2) { setResults([]); return }
+    // CPPM-25: search is for signed-in users only, so results can respect audience.
+    if (!user || !clientCode || q.trim().length < 2) { setResults([]); return }
     setLoading(true)
     fetch(`/api/portal/search?clientCode=${clientCode}&q=${encodeURIComponent(q)}`)
       .then(r => r.ok ? r.json() : { results: [] })
       .then(d => setResults(d.results || []))
       .catch(() => setResults([]))
       .finally(() => setLoading(false))
-  }, [clientCode, q])
+  }, [clientCode, q, user])
 
   const base = `/portal/${clientCode}`
 
@@ -44,7 +45,12 @@ export default function SearchResultsPage() {
         {q ? <>Results for “<strong>{q}</strong>”</> : 'Enter a search term.'}
       </p>
 
-      {loading ? <div className="pp-loading">Searching…</div> : (
+      {!user ? (
+        <div className="pp-empty-state" style={{ textAlign: 'left' }}>
+          <p style={{ marginBottom: 12 }}>Sign in to search medical information, documents and news.</p>
+          <Link to={`${base}/login`} className="pp-btn pp-btn-primary">Sign In</Link>
+        </div>
+      ) : loading ? <div className="pp-loading">Searching…</div> : (
         results.length === 0 ? (
           <div style={{ color: '#6B7280', fontSize: 14 }}>{q.trim().length >= 2 ? 'No results found.' : 'Type at least 2 characters.'}</div>
         ) : (

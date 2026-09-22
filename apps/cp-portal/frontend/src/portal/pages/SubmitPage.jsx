@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import Icon from '../../shared/components/Icon'
 
@@ -13,7 +13,10 @@ const FORM_TYPES = [
 export default function SubmitPage() {
   const { clientCode, portalHeaders, isFeatureEnabled, portalConfig } = usePortal()
   const slaText = portalConfig?.branding?.sla_response_text || 'Our medical affairs team will review your submission and respond within 5–7 business days.'
-  const [selectedType, setSelectedType] = useState(null)
+  const [params] = useSearchParams()
+  // ?type=adverse_event (e.g. from the Contact page) opens that form directly.
+  const requestedType = ['medical_inquiry', 'adverse_event', 'product_complaint', 'other_inquiry'].includes(params.get('type')) ? params.get('type') : null
+  const [selectedType, setSelectedType] = useState(requestedType)
   const [formFields, setFormFields]     = useState([])
   const [formValues, setFormValues]     = useState({})
   const [submitting, setSubmitting]     = useState(false)
@@ -120,7 +123,17 @@ export default function SubmitPage() {
       })
       // A 413 / proxy error may return non-JSON (HTML) — parse defensively.
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(data.error || 'Submission failed. Please try again.'); return }
+      if (!res.ok) {
+        setError(data.error || 'Submission failed. Please try again.')
+        // CPPM-7: the server names the required fields it found empty.
+        if (Array.isArray(data.fields)) {
+          setFieldErrors(Object.fromEntries(data.fields.map(k => {
+            const f = formFields.find(x => x.field_key === k)
+            return [k, `${f?.field_label || f?.label || k} is required.`]
+          })))
+        }
+        return
+      }
       clearDraft()
       setSubmitted(data)
     } catch {

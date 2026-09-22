@@ -93,3 +93,10 @@
 **What:** Rohith asked for the Vault roadmap plan, then directed the team to read the current live-communication, operating, and workflow documents before preparing it.
 **Why:** A product plan can become stale or breach the current operating model when it is drafted from prior context rather than the active project SOPs.
 **Rule:** Before drafting a non-trivial Pharaxis product plan or implementation scope, refresh the current governing SOPs and reflect their latest roles, approval gates, task-scope requirements, and functional verification standard in the output.
+
+---
+
+## L-013 — A dropdown and its server allow-list are one change, not two (2026-09-21)
+**What:** The CP Portal chat admin's Model dropdown was updated to the current OpenAI models, but the server's own list of allowed models in the save route was not. Every save of a new model returned 400, and the screen showed only "Failed to save configuration." Rohith hit it trying to add a key.
+**Why:** The change was verified by *looking at* the dropdown and by writing the config straight to the database — never by pressing Save through the screen, the one path that exercises the server check.
+**Rule:** When a list of allowed values appears on screen, find every other place that enforces it (grep the values) and change them together. Verify by performing the save through the UI, not by writing the row directly. And never swallow a server's error message on screen: show it, so the next failure explains itself.

@@ -26,6 +26,7 @@ const CLIENT_NAV_GROUPS = (id) => [
       { to: `/admin/clients/${id}/features`,  label: 'Features',   icon: 'sliders' },
       { to: `/admin/clients/${id}/gate`,      label: 'User Gate',  icon: 'gate' },
       { to: `/admin/clients/${id}/chatbox`,   label: 'Chatbox AI', icon: 'message' },
+      { to: `/admin/clients/${id}/chat-records`, label: 'Chat Conversations', icon: 'message' },
     ],
   },
   {
@@ -83,6 +84,7 @@ const SEGMENT_TITLES = {
   'sync-health':  'Sync Health',
   'data-requests': 'Data Requests',
   chatbox:        'Chatbox',
+  'chat-records': 'Chat Conversations',
   compliance:     'Compliance',
   users:          'Portal Users',
   submissions:    'Submissions',

@@ -23,6 +23,7 @@ import DataRequestsPage     from './admin/pages/DataRequestsPage'
 import SsoConfigPage        from './admin/pages/SsoConfigPage'
 import PortalUsersPage      from './admin/pages/PortalUsersPage'
 import ChatboxConfigPage    from './admin/pages/ChatboxConfigPage'
+import ChatRecordsPage      from './admin/pages/ChatRecordsPage'
 import GatePage             from './admin/pages/GatePage'
 import SafetyAdminPage      from './admin/pages/SafetyPage'
 import NewsAdminPage        from './admin/pages/NewsPage'
@@ -179,6 +180,7 @@ export default function App() {
         <Route path="/admin/clients/:clientId/sso" element={<AdminGuard><SsoConfigPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/users" element={<AdminGuard><PortalUsersPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/chatbox" element={<AdminGuard><ChatboxConfigPage /></AdminGuard>} />
+        <Route path="/admin/clients/:clientId/chat-records" element={<AdminGuard><ChatRecordsPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/gate"       element={<AdminGuard><GatePage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/safety"     element={<AdminGuard><SafetyAdminPage /></AdminGuard>} />
         <Route path="/admin/clients/:clientId/news"       element={<AdminGuard><NewsAdminPage /></AdminGuard>} />

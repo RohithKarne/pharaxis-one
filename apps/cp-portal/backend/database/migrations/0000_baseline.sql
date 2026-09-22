@@ -10,9 +10,10 @@
 -- uq_notif_dedup) and 0009 (mims_case_url_base) as duplicate-column errors.
 --
 -- This file is the complete current schema — the union of db.js and migrations
--- 0002-0012 — so an empty database is provisioned by the migration runner alone.
--- It then records 0002-0012 as applied, because their contents are already
+-- 0002-0015 — so an empty database is provisioned by the migration runner alone.
+-- It then records 0002-0015 as applied, because their contents are already
 -- included here and re-running them would duplicate columns.
+-- Every new migration must be folded in here as well (tests/fresh-provision.js).
 --
 -- Existing databases are unaffected: every statement is CREATE TABLE IF NOT
 -- EXISTS, so each one is a no-op where the table already exists, and the
@@ -812,25 +813,88 @@ CREATE TABLE IF NOT EXISTS cp_data_requests (
   KEY idx_dr_user (portal_user_id)
 );
 
--- ── AE REVIEW TASKS (from 0011) ────────────────────────────────
--- Defined only in 0011, never in db.js. Reproduced verbatim, including the
--- absence of foreign keys.
+-- ── AE REVIEW TASKS (from 0011, as changed by 0015) ────────────
+-- Defined only in migrations, never in db.js. No foreign keys, as in 0011.
+-- CPPM-18 (0015): a task comes from a form submission OR a chat conversation,
+-- exactly one of them; a confirmed side effect links its new AE submission.
 CREATE TABLE IF NOT EXISTS cp_ae_review_tasks (
-  id              INT AUTO_INCREMENT PRIMARY KEY,
-  client_id       INT NOT NULL,
-  submission_id   INT NOT NULL,
-  status          VARCHAR(20) NOT NULL DEFAULT 'open',
-  outcome         VARCHAR(30) NULL,
-  outcome_reason  TEXT NULL,
-  reported_detail TEXT NULL,
-  closed_by       INT NULL,
-  closed_at       DATETIME NULL,
-  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id                   INT AUTO_INCREMENT PRIMARY KEY,
+  client_id            INT NOT NULL,
+  submission_id        INT NULL,
+  chat_conversation_id INT NULL,
+  status               VARCHAR(20) NOT NULL DEFAULT 'open',
+  outcome              VARCHAR(30) NULL,
+  outcome_reason       TEXT NULL,
+  ae_submission_id     INT NULL,
+  reported_detail      TEXT NULL,
+  closed_by            INT NULL,
+  closed_at            DATETIME NULL,
+  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_ae_task_submission (submission_id),
-  KEY idx_ae_task_client_status (client_id, status)
+  UNIQUE KEY uq_ae_task_chat (chat_conversation_id),
+  KEY idx_ae_task_client_status (client_id, status),
+  CONSTRAINT chk_ae_task_one_source CHECK ((submission_id IS NULL) <> (chat_conversation_id IS NULL))
 );
 
--- ── RECORD 0002-0012 AS APPLIED ────────────────────────────────
+-- ── EMAIL OUTBOX (from 0013, CPPM-36) ─────────────────────────
+CREATE TABLE IF NOT EXISTS cp_email_outbox (
+  id               INT          NOT NULL AUTO_INCREMENT,
+  client_id        INT          NOT NULL,
+  kind             VARCHAR(50)  NOT NULL,
+  to_email         VARCHAR(255) NOT NULL,
+  subject          VARCHAR(500) NOT NULL,
+  html             MEDIUMTEXT   NULL,
+  text_body        MEDIUMTEXT   NULL,
+  attachments_json MEDIUMTEXT   NULL,
+  related_type     VARCHAR(50)  NULL,
+  related_id       INT          NULL,
+  is_sensitive     TINYINT(1)   NOT NULL DEFAULT 0,
+  status           VARCHAR(20)  NOT NULL DEFAULT 'pending',
+  attempts         INT          NOT NULL DEFAULT 0,
+  last_error       TEXT         NULL,
+  next_attempt_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  sent_at          DATETIME     NULL,
+  created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_outbox_due (status, next_attempt_at),
+  KEY idx_outbox_client (client_id, status),
+  CONSTRAINT fk_outbox_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── CHAT RECORDS (from 0014, CPPM-17) ─────────────────────────
+CREATE TABLE IF NOT EXISTS cp_chat_conversations (
+  id               INT          NOT NULL AUTO_INCREMENT,
+  client_id        INT          NOT NULL,
+  portal_user_id   INT          NULL,
+  user_type        VARCHAR(50)  NULL,
+  provider         VARCHAR(30)  NULL,
+  model            VARCHAR(100) NULL,
+  message_count    INT          NOT NULL DEFAULT 0,
+  started_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_message_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_chatconv_client (client_id, last_message_at),
+  KEY idx_chatconv_user (portal_user_id),
+  CONSTRAINT fk_chatconv_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cp_chat_messages (
+  id               INT          NOT NULL AUTO_INCREMENT,
+  conversation_id  INT          NOT NULL,
+  client_id        INT          NOT NULL,
+  role             VARCHAR(20)  NOT NULL,
+  content          MEDIUMTEXT   NOT NULL,
+  sources_json     TEXT         NULL,
+  outcome          VARCHAR(20)  NULL,
+  latency_ms       INT          NULL,
+  created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_chatmsg_conv (conversation_id, id),
+  KEY idx_chatmsg_client (client_id, created_at),
+  CONSTRAINT fk_chatmsg_conv FOREIGN KEY (conversation_id) REFERENCES cp_chat_conversations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── RECORD 0002-0015 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
 -- database these rows are already present, so INSERT IGNORE leaves them untouched
@@ -848,4 +912,7 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0009_add_mims_case_url_base.sql',        NULL),
   ('0010_add_data_requests.sql',             NULL),
   ('0011_add_ae_review_tasks.sql',           NULL),
-  ('0012_add_trials_and_training.sql',       NULL);
+  ('0012_add_trials_and_training.sql',       NULL),
+  ('0013_add_email_outbox.sql',              NULL),
+  ('0014_add_chat_records.sql',              NULL),
+  ('0015_chat_safety_and_confirmed_ae.sql',  NULL);

@@ -10,14 +10,14 @@ const path    = require('path');
 const multer  = require('multer');
 const { pool } = require('../../database/db');
 const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth');
-const { sendEmail } = require('../../utils/mailer');
 const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
 const { getAuthHeaders, invalidateAuth } = require('../../services/mimsAuth');
 const { validateUploads } = require('../../utils/fileValidation');
-const { enqueue } = require('../../utils/jobQueue');
+const { queueEmail } = require('../../utils/emailOutbox');
 const { validateAnswer, isFlagged, AE_SCREEN_KEY, AE_SCREEN_DETAIL_KEY } = require('../../services/aeScreening');
 const { systemAudit } = require('../../utils/audit');
 const log = require('../../utils/logger');
+const { loadFormFields, missingRequired } = require('../../services/formFields');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
 const ATT_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB per file
@@ -110,6 +110,18 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     const screenError = validateAnswer(formType, parsedForm);
     if (screenError) return res.status(400).json({ error: screenError, field: AE_SCREEN_KEY });
 
+    // CPPM-7: required fields were only enforced by the page, so anything posted
+    // another way was accepted with them empty. Checked here against the same
+    // field list the page renders.
+    const { fields: formFields } = await loadFormFields(client.id, formType);
+    const missing = missingRequired(formFields, parsedForm);
+    if (missing.length) {
+      return res.status(400).json({
+        error: `Please fill in: ${missing.map(f => f.label || f.field_key).join(', ')}.`,
+        fields: missing.map(f => f.field_key),
+      });
+    }
+
     const rawIp = req.ip || '';
     const ip_address = rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
 
@@ -162,7 +174,11 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     }
 
     // Auto-sync to integrated system if configured
-    syncToIntegration(client.id, submissionId, formType).catch(() => {});
+    // CPPM-8: syncToIntegration records its own failures; anything that still
+    // escapes is logged, never swallowed. The retry job also sweeps stale
+    // 'submitted' rows, so a crash here cannot strand the submission.
+    syncToIntegration(client.id, submissionId, formType)
+      .catch(err => log.error('portal.submit.sync_crashed', { err, submission_id: submissionId }));
 
     // Send submission confirmation email — fire-and-forget, non-fatal
     let recipientEmail = submitter_email || null;
@@ -173,14 +189,14 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     if (recipientEmail) {
       const ref = `CP-${String(submissionId).padStart(6, '0')}`;
       const typeLabel = { medical_inquiry: 'Medical Inquiry', adverse_event: 'Adverse Event', product_complaint: 'Product Complaint', other_inquiry: 'Other Inquiry' }[formType] || formType;
-      // CP-21: send via the job queue so a slow SMTP never blocks the response and
-      // transient failures are retried instead of silently dropped.
-      enqueue('submission.ack-email', () => sendEmail(client.id, {
+      // CPPM-36: recorded in the durable outbox — retried, and visible to an
+      // administrator if it finally fails, rather than lost on restart.
+      queueEmail(client.id, {
         to: recipientEmail,
         subject: `Submission Received — ${typeLabel} (${ref})`,
         html: `<p>Thank you for your submission.</p><p>Your reference number is <strong>${ref}</strong>.</p><p>We will review your ${typeLabel} and respond as soon as possible.</p>`,
         text: `Thank you for your submission. Your reference number is ${ref}. We will review your ${typeLabel} and respond as soon as possible.`,
-      }));
+      }, { kind: 'submission_ack', relatedType: 'submission', relatedId: submissionId });
     }
 
     res.status(201).json({
@@ -228,7 +244,14 @@ const FORM_TYPE_TO_CASE_TYPE = {
 // The portal captures the MINIMUM field set; MIMS triage completes the regulated
 // fields (seriousness, causality, MedDRA, etc.). Reads the seeded CP field keys
 // and tolerates the richer AE template's alternate keys as fallbacks.
-function buildMimsPayload(formType, formData, submissionId) {
+// Local calendar date as 'YYYY-MM-DD'.
+function toDateOnly(d) {
+  const x = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(x.getTime())) return null;
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+
+function buildMimsPayload(formType, formData, submissionId, submittedAt) {
   const caseType = FORM_TYPE_TO_CASE_TYPE[formType];
   const pick = (...keys) => {
     for (const k of keys) {
@@ -252,6 +275,11 @@ function buildMimsPayload(formType, formData, submissionId) {
     case_type: caseType,
     intake_channel: 'Portal',
     reference: `CP-${String(submissionId).padStart(6, '0')}`,
+    // CPPM-18: when the report first reached the company — it starts the
+    // regulatory clock in MIMS. A side effect confirmed in the Safety Queue
+    // carries the date it was originally reported; anything else, the day it was
+    // submitted. Either way a sync that is retried days later keeps the true date.
+    awareness_date: formData.awareness_date || (submittedAt ? toDateOnly(submittedAt) : null),
     reporter: {
       first_name:    firstName,
       last_name:     lastName,
@@ -334,36 +362,51 @@ async function syncToIntegration(clientId, submissionId, formType) {
   // other_inquiry has no MIMS case type — it is never pushed (CP-only). Gate 1 decision.
   if (!Object.prototype.hasOwnProperty.call(FORM_TYPE_TO_CASE_TYPE, formType)) return;
 
-  // AC3: no active integration configured for this client → stay CP-only, no MIMS call.
-  const [[integration]] = await pool.execute('SELECT * FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [clientId]);
-  if (!integration) return;
+  // CPPM-8: preparing the case (lookups, parsing, the client's field mappings) can
+  // fail before anything is sent — a DB blip, damaged form data, a mapping with a
+  // bad date. It used to throw out of here with the row still 'submitted', which
+  // the retry job never looks at, so the report was never sent and never seen.
+  // Any failure while preparing is now recorded as failed_sync and counted as an
+  // attempt, so it joins the retry queue and stays visible.
+  let integration, payload;
+  try {
+    // AC3: no active integration configured for this client → stay CP-only, no MIMS call.
+    [[integration]] = await pool.execute('SELECT * FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [clientId]);
+    if (!integration) return;
 
-  const [[submission]] = await pool.execute('SELECT * FROM cp_submissions WHERE id = ?', [submissionId]);
-  if (!submission) return;
+    const [[submission]] = await pool.execute('SELECT * FROM cp_submissions WHERE id = ?', [submissionId]);
+    if (!submission) return;
 
-  const [mappings] = await pool.execute('SELECT * FROM cp_field_mapping WHERE client_id = ? AND integration_id = ? AND form_type = ?',
-    [clientId, integration.id, formType]);
+    const [mappings] = await pool.execute('SELECT * FROM cp_field_mapping WHERE client_id = ? AND integration_id = ? AND form_type = ?',
+      [clientId, integration.id, formType]);
 
-  const formData = typeof submission.form_data === 'string' ? JSON.parse(submission.form_data) : submission.form_data;
+    const formData = typeof submission.form_data === 'string' ? JSON.parse(submission.form_data) : submission.form_data;
 
-  // Default structured payload — works out-of-the-box for the seeded portal forms.
-  const payload = buildMimsPayload(formType, formData, submissionId);
+    // Default structured payload — works out-of-the-box for the seeded portal forms.
+    payload = buildMimsPayload(formType, formData, submissionId, submission.submitted_at);
 
-  // Admin-configured field mappings override/extend the defaults. NEW-C: dot-path
-  // targets (e.g. `reporter.first_name`, `ae_intake.outcome`) write into the nested
-  // payload the MIMS API actually reads — a flat assignment would silently no-op.
-  for (const m of mappings) {
-    let value = formData[m.cp_field] ?? m.default_value ?? null;
-    if (value && m.transform === 'uppercase') value = String(value).toUpperCase();
-    if (value && m.transform === 'date_iso') value = new Date(value).toISOString();
-    const segs = String(m.target_field).split('.');
-    let obj = payload;
-    while (segs.length > 1) {
-      const k = segs.shift();
-      if (!obj[k] || typeof obj[k] !== 'object') obj[k] = {};
-      obj = obj[k];
+    // Admin-configured field mappings override/extend the defaults. NEW-C: dot-path
+    // targets (e.g. `reporter.first_name`, `ae_intake.outcome`) write into the nested
+    // payload the MIMS API actually reads — a flat assignment would silently no-op.
+    for (const m of mappings) {
+      let value = formData[m.cp_field] ?? m.default_value ?? null;
+      if (value && m.transform === 'uppercase') value = String(value).toUpperCase();
+      if (value && m.transform === 'date_iso') value = new Date(value).toISOString();
+      const segs = String(m.target_field).split('.');
+      let obj = payload;
+      while (segs.length > 1) {
+        const k = segs.shift();
+        if (!obj[k] || typeof obj[k] !== 'object') obj[k] = {};
+        obj = obj[k];
+      }
+      obj[segs[0]] = value;
     }
-    obj[segs[0]] = value;
+  } catch (err) {
+    const reason = `Could not prepare the MIMS case: ${err.message}`.slice(0, 1000);
+    log.error('portal.sync.prepare_failed', { err, client_id: clientId, submission_id: submissionId });
+    await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_attempts=sync_attempts+1, sync_error=? WHERE id=?`, [reason, submissionId]);
+    systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: reason, stage: 'prepare' });
+    return;
   }
 
   try {
@@ -431,3 +474,4 @@ router.get('/:clientCode/attachments/:attachmentId', authenticatePortal, require
 module.exports = router;
 // R1: exposed so the retry poller can re-drive a failed sync without duplicating logic.
 module.exports.syncToIntegration = syncToIntegration;
+module.exports.toDateOnly = toDateOnly;

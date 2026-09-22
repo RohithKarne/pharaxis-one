@@ -13,6 +13,7 @@ const SAFETY_TRANS_FIELDS = ['title', 'body_html'];
 const path = require('path');
 const fs   = require('fs');
 const log = require('../../utils/logger');
+const { hasAnalyticsConsent } = require('../../utils/consent');
 
 // GET /api/portal/safety?clientCode=xxx
 router.get('/', authenticatePortal, async (req, res) => {
@@ -87,8 +88,12 @@ router.post('/:clientCode/alerts/:id/view', authenticatePortal, async (req, res)
   try {
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
-    await pool.execute('UPDATE cp_safety_alerts SET view_count = view_count + 1 WHERE id = ? AND client_id = ?', [req.params.id, client.id]);
-    res.json({ ok: true });
+    // CPPM-35: count the view only if the visitor accepted analytics.
+    const counted = await hasAnalyticsConsent(req, client.id);
+    if (counted) {
+      await pool.execute('UPDATE cp_safety_alerts SET view_count = view_count + 1 WHERE id = ? AND client_id = ?', [req.params.id, client.id]);
+    }
+    res.json({ ok: true, counted });
   } catch (err) {
     log.error('portal.safety.error', { err, route: 'POST /:clientCode/alerts/:id/view', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
