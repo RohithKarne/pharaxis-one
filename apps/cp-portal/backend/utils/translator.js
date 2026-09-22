@@ -73,15 +73,31 @@ async function translateText(text, targetLang, sourceLang = 'en') {
   return results.join('');
 }
 
-// Get languages to translate into (all enabled minus the source/default)
-async function getTargetLangs(clientId) {
+// CPPM-9 outside-translation switch (2026-09-23, Rohith's decision — Option A).
+// CP-65 above stops REGULATED content reaching the free MyMemory endpoint. CPPM-9
+// closes the rest: that endpoint still has no data agreement, so by default NO portal
+// content of any type is sent to it. The portal serves only translations held in our
+// own database and otherwise falls back to the content as written.
+// A client may opt in by setting "machine_translation": true in
+// cp_clients.language_config_json. That flag is deliberately NOT settable through the
+// admin API — turning outside translation on is a considered act with a compliance
+// owner, not a checkbox. The CP-65 gate still applies on top of it: an opted-in client
+// still never sends safety alerts or documents out.
+function isMachineTranslationEnabled(cfg) { return cfg?.machine_translation === true; }
+
+// Read a client's language config ({ default, enabled, machine_translation }).
+async function getLanguageConfig(clientId) {
   try {
     const [[row]] = await pool.execute('SELECT language_config_json FROM cp_clients WHERE id = ?', [clientId]);
-    if (!row?.language_config_json) return [];
-    const cfg    = JSON.parse(row.language_config_json);
-    const source = cfg.default || 'en';
-    return (cfg.enabled || ['en']).filter(l => l !== source);
-  } catch { return []; }
+    if (!row?.language_config_json) return { default: 'en', enabled: ['en'] };
+    return JSON.parse(row.language_config_json);
+  } catch { return { default: 'en', enabled: ['en'] }; }
+}
+
+// Languages to translate into (all enabled minus the source/default)
+function targetLangsFrom(cfg) {
+  const source = cfg.default || 'en';
+  return (cfg.enabled || ['en']).filter(l => l !== source);
 }
 
 /**
@@ -101,7 +117,14 @@ async function autoTranslate(clientId, table, rowId, fields, sourceLang = 'en') 
     console.info(`[translator] skipped free-API translation for regulated content type "${table}" (CP-65 gate).`);
     return;
   }
-  const targetLangs = await getTargetLangs(clientId);
+  // CPPM-9: nothing leaves the building unless this client has explicitly opted in.
+  // Logged (not silent) so a skipped translation is visible in the same way as CP-65.
+  const cfg = await getLanguageConfig(clientId);
+  if (!isMachineTranslationEnabled(cfg)) {
+    console.info(`[translator] skipped outside translation of "${table}"#${rowId} — outside machine translation is off for client ${clientId} (CPPM-9). Stored translations are served as-is.`);
+    return;
+  }
+  const targetLangs = targetLangsFrom(cfg);
   if (!targetLangs.length) return;
   try {
     const translations = {};
@@ -124,21 +147,49 @@ async function autoTranslate(clientId, table, rowId, fields, sourceLang = 'en') 
   }
 }
 
+// Fields of this row that actually carry content, and so need a translation before
+// the row counts as translated. An empty field needs nothing translated.
+function contentFields(row, fields) {
+  return fields.filter(f => row[f] !== null && row[f] !== undefined && String(row[f]).trim() !== '');
+}
+
 /**
  * Apply stored translations to a row object.
- * Returns a new object with translated field values (falls back to original if not available).
+ *
+ * CPPM-9: all-or-nothing. A row is only shown in the requested language when EVERY
+ * field that carries content has a stored translation. Otherwise the row is returned
+ * exactly as written, so a reader sees one coherent language instead of a half
+ * translated item or English text presented as French.
  *
  * @param {object} row
  * @param {string} lang   - target language code
- * @param {string[]} fields - field names to replace if a translation exists
+ * @param {string[]} fields - field names to replace if a complete translation exists
  */
 function applyTranslation(row, lang, fields) {
-  if (!row || !lang || lang === 'en' || !row.translations_json) return row;
+  if (!row || !lang || !row.translations_json) return row;
   let t = {};
   try { t = JSON.parse(row.translations_json)[lang] || {}; } catch {}
+  const needed = contentFields(row, fields);
+  if (!needed.length || !needed.every(f => t[f])) return row;
   const result = { ...row };
-  for (const f of fields) { if (t[f]) result[f] = t[f]; }
+  for (const f of needed) { result[f] = t[f]; }
   return result;
 }
 
-module.exports = { autoTranslate, translateText, applyTranslation, isTranslatableEntity };
+/**
+ * CPPM-9: which of `langs` this row has no complete stored translation for — the
+ * languages in which it will fall back to the language it was written in. Uses the
+ * same all-or-nothing rule as applyTranslation, so the admin view matches the portal.
+ */
+function missingTranslations(row, fields, langs) {
+  let all = {};
+  try { all = JSON.parse(row.translations_json || '{}'); } catch {}
+  const needed = contentFields(row, fields);
+  if (!needed.length) return [];
+  return langs.filter(l => !needed.every(f => all[l]?.[f]));
+}
+
+module.exports = {
+  autoTranslate, translateText, applyTranslation, isTranslatableEntity,
+  getLanguageConfig, isMachineTranslationEnabled, missingTranslations,
+};
