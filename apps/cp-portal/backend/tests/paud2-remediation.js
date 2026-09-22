@@ -202,39 +202,50 @@ function bookingDb({ mslEmail }) {
 
 const BOOKING = { requester_name: 'Dr Ellis', requester_email: 'ellis@hospital.example', topic: 'Dosing' };
 
+// Since CPPM-36 booking emails go through the durable outbox: each one is written
+// to cp_email_outbox, then sent from there. Recording the row IS the promise to
+// deliver it (the scheduler retries it), so these checks read the outbox writes.
+function queuedEmails() {
+  return db.queries
+    .filter((q) => /^INSERT INTO cp_email_outbox/i.test(q.sql))
+    .map((q) => ({ kind: q.params[1], to: q.params[2], html: q.params[4] }));
+}
+
 check('T5.1 the requesting doctor still gets their confirmation', async () => {
-  mail.sent = [];
+  db.queries = [];
   db.responder = bookingDb({ mslEmail: 'nadia@pharma.example' });
 
   const { status } = await post('/bookings/acme/3', BOOKING);
   assert.strictEqual(status, 201);
 
-  const toDoctor = mail.sent.find((m) => m.to === 'ellis@hospital.example');
+  const toDoctor = queuedEmails().find((m) => m.to === 'ellis@hospital.example');
   assert.ok(toDoctor, 'the doctor lost their confirmation email');
+  assert.strictEqual(toDoctor.kind, 'booking_confirmation');
 });
 
 check('T5.2 the MSL is emailed about their own meeting', async () => {
-  mail.sent = [];
+  db.queries = [];
   db.responder = bookingDb({ mslEmail: 'nadia@pharma.example' });
 
   await post('/bookings/acme/3', BOOKING);
 
-  const toMsl = mail.sent.find((m) => m.to === 'nadia@pharma.example');
+  const toMsl = queuedEmails().find((m) => m.to === 'nadia@pharma.example');
   assert.ok(toMsl, 'the MSL was never told a doctor booked time with them');
+  assert.strictEqual(toMsl.kind, 'booking_msl_notice');
   assert.ok(/Dr Ellis/.test(toMsl.html), 'the MSL email does not say who requested the meeting');
 });
 
 check('T5.3 an MSL with no email on file does not break the booking', async () => {
   // cp_msls.email is nullable. Sending to null would throw inside the queued
   // job and lose the doctor's confirmation with it.
-  mail.sent = [];
+  db.queries = [];
   db.responder = bookingDb({ mslEmail: null });
 
   const { status } = await post('/bookings/acme/3', BOOKING);
   assert.strictEqual(status, 201, 'a missing MSL address broke the booking');
-  assert.ok(mail.sent.some((m) => m.to === 'ellis@hospital.example'),
+  assert.ok(queuedEmails().some((m) => m.to === 'ellis@hospital.example'),
     'the doctor lost their confirmation because the MSL had no address');
-  assert.ok(!mail.sent.some((m) => !m.to), 'attempted to send mail to an empty address');
+  assert.ok(!queuedEmails().some((m) => !m.to), 'attempted to send mail to an empty address');
 });
 
 // ── Runner ──────────────────────────────────────────────────────────────────
