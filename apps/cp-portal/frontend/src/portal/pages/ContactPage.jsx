@@ -35,8 +35,9 @@ export default function ContactPage() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!name.trim() || !email.trim() || !message.trim() || !aeAnswer) {
-      setErrorMsg(!aeAnswer ? 'Please answer the question about whether anyone became unwell.' : 'Please fill in your name, email and message.')
+    // Subject is required: the contact form's server-side field list requires it (CPPM-7).
+    if (!name.trim() || !email.trim() || !subject.trim() || !message.trim() || !aeAnswer) {
+      setErrorMsg(!aeAnswer ? 'Please answer the question about whether anyone became unwell.' : 'Please fill in your name, email, subject and message.')
       setStatus('error')
       return
     }
@@ -159,9 +160,9 @@ export default function ContactPage() {
               </div>
             </div>
             <div className="pp-field">
-              <label htmlFor="contact-subject">Subject</label>
+              <label htmlFor="contact-subject">Subject <span className="pp-required" aria-hidden="true">*</span></label>
               <input id="contact-subject" type="text" placeholder="What is this about?"
-                value={subject} onChange={e => setSubject(e.target.value)} disabled={busy} />
+                value={subject} onChange={e => setSubject(e.target.value)} required disabled={busy} />
             </div>
             <div className="pp-field">
               <label htmlFor="contact-message">Message <span className="pp-required" aria-hidden="true">*</span></label>

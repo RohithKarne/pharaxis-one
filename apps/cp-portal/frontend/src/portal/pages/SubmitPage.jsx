@@ -123,7 +123,17 @@ export default function SubmitPage() {
       })
       // A 413 / proxy error may return non-JSON (HTML) — parse defensively.
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(data.error || 'Submission failed. Please try again.'); return }
+      if (!res.ok) {
+        setError(data.error || 'Submission failed. Please try again.')
+        // CPPM-7: the server names the required fields it found empty.
+        if (Array.isArray(data.fields)) {
+          setFieldErrors(Object.fromEntries(data.fields.map(k => {
+            const f = formFields.find(x => x.field_key === k)
+            return [k, `${f?.field_label || f?.label || k} is required.`]
+          })))
+        }
+        return
+      }
       clearDraft()
       setSubmitted(data)
     } catch {

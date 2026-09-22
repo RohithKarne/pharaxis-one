@@ -17,6 +17,7 @@ const { queueEmail } = require('../../utils/emailOutbox');
 const { validateAnswer, isFlagged, AE_SCREEN_KEY, AE_SCREEN_DETAIL_KEY } = require('../../services/aeScreening');
 const { systemAudit } = require('../../utils/audit');
 const log = require('../../utils/logger');
+const { loadFormFields, missingRequired } = require('../../services/formFields');
 
 // ── Attachment upload config (private storage, streamed via auth endpoints) ──
 const ATT_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB per file
@@ -108,6 +109,18 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     try { parsedForm = JSON.parse(formDataStr); } catch { parsedForm = {}; }
     const screenError = validateAnswer(formType, parsedForm);
     if (screenError) return res.status(400).json({ error: screenError, field: AE_SCREEN_KEY });
+
+    // CPPM-7: required fields were only enforced by the page, so anything posted
+    // another way was accepted with them empty. Checked here against the same
+    // field list the page renders.
+    const { fields: formFields } = await loadFormFields(client.id, formType);
+    const missing = missingRequired(formFields, parsedForm);
+    if (missing.length) {
+      return res.status(400).json({
+        error: `Please fill in: ${missing.map(f => f.label || f.field_key).join(', ')}.`,
+        fields: missing.map(f => f.field_key),
+      });
+    }
 
     const rawIp = req.ip || '';
     const ip_address = rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
