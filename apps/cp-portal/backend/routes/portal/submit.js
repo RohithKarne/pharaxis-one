@@ -216,9 +216,14 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
     if (!req.portalUser) return res.status(401).json({ error: 'Login required to view submissions.' });
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    // CPPM-14: a sent answer travels with the request. Only 'sent' — a draft or an
+    // unapproved answer must never reach the person who asked.
     const [rows] = await pool.execute(`
-      SELECT id, submission_type, status, external_ref, submitted_at, updated_at
-      FROM cp_submissions WHERE client_id = ? AND user_id = ? ORDER BY submitted_at DESC
+      SELECT s.id, s.submission_type, s.status, s.external_ref, s.submitted_at, s.updated_at,
+             a.body AS answer, a.sent_at AS answered_at
+      FROM cp_submissions s
+      LEFT JOIN cp_submission_answers a ON a.submission_id = s.id AND a.status = 'sent'
+      WHERE s.client_id = ? AND s.user_id = ? ORDER BY s.submitted_at DESC
     `, [client.id, req.portalUser.userId]);
     // Surface the user-facing case reference (matches the confirmation email/response).
     const submissions = rows.map(r => ({ ...r, reference: `CP-${String(r.id).padStart(6, '0')}` }));

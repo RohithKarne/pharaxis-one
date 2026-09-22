@@ -11,6 +11,8 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const log = require('../../utils/logger');
+const { queueEmail } = require('../../utils/emailOutbox');
+const { requireRole } = require('../../middleware/auth');
 
 // GET /api/admin/submissions/:clientId
 // Returns submissions with optional filter by submission_type and status
@@ -228,6 +230,111 @@ router.post('/:clientId/:submissionId/retry', authenticateAdmin, requireClientAc
     res.json({ status: after.status, external_ref: after.external_ref, error: after.sync_error });
   } catch (err) {
     log.error('admin.submissions.error', { err, route: 'POST /:clientId/:submissionId/retry', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+
+// ── CPPM-14: the approved medical answer, delivered back ──────
+// Staff draft an answer; only a named reviewer approves it, and only then is it
+// emailed and shown to the person who asked. A draft never leaves the admin area.
+const ANSWER_APPROVERS = requireRole('superadmin', 'admin', 'reviewer');
+
+// GET /api/admin/submissions/:clientId/:submissionId/answer
+router.get('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const [[answer]] = await pool.execute(
+      `SELECT a.id, a.body, a.status, a.approved_at, a.sent_at, a.send_error,
+              d.name AS drafted_by_name, p.name AS approved_by_name
+         FROM cp_submission_answers a
+    LEFT JOIN cp_admin_users d ON d.id = a.drafted_by
+    LEFT JOIN cp_admin_users p ON p.id = a.approved_by
+        WHERE a.submission_id = ? AND a.client_id = ?`,
+      [req.params.submissionId, req.params.clientId]);
+    res.json({ answer: answer || null });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'GET /:clientId/:submissionId/answer', request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// PUT /api/admin/submissions/:clientId/:submissionId/answer — save or update the draft
+router.put('/:clientId/:submissionId/answer', authenticateAdmin, requireClientAccess, async (req, res) => {
+  try {
+    const body = String(req.body.body || '').trim();
+    if (body.length < 10) return res.status(400).json({ error: 'Write the answer before saving it.' });
+
+    const [[submission]] = await pool.execute(
+      'SELECT id FROM cp_submissions WHERE id = ? AND client_id = ?', [req.params.submissionId, req.params.clientId]);
+    if (!submission) return res.status(404).json({ error: 'Submission not found.' });
+
+    const [[existing]] = await pool.execute(
+      'SELECT id, status FROM cp_submission_answers WHERE submission_id = ? AND client_id = ?',
+      [req.params.submissionId, req.params.clientId]);
+    // An answer already with the person cannot be edited underneath them.
+    if (existing?.status === 'sent') {
+      return res.status(409).json({ error: 'This answer has already been sent. Send a follow-up instead of changing it.' });
+    }
+    if (existing) {
+      await pool.execute('UPDATE cp_submission_answers SET body = ?, drafted_by = ? WHERE id = ?', [body, req.admin.adminId, existing.id]);
+    } else {
+      await pool.execute(
+        'INSERT INTO cp_submission_answers (submission_id, client_id, body, drafted_by) VALUES (?, ?, ?, ?)',
+        [req.params.submissionId, req.params.clientId, body, req.admin.adminId]);
+    }
+    await audit(req.admin, req.params.clientId, 'ANSWER_DRAFTED', 'submission', req.params.submissionId, { length: body.length });
+    res.json({ message: 'Draft saved.' });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'PUT /:clientId/:submissionId/answer', request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/admin/submissions/:clientId/:submissionId/answer/send — approve and send
+router.post('/:clientId/:submissionId/answer/send', authenticateAdmin, requireClientAccess, ANSWER_APPROVERS, async (req, res) => {
+  try {
+    const [[answer]] = await pool.execute(
+      'SELECT id, body, status FROM cp_submission_answers WHERE submission_id = ? AND client_id = ?',
+      [req.params.submissionId, req.params.clientId]);
+    if (!answer) return res.status(404).json({ error: 'Write the answer first.' });
+    if (answer.status === 'sent') return res.status(409).json({ error: 'This answer has already been sent.' });
+
+    const [[submission]] = await pool.execute(
+      `SELECT s.id, s.submission_type, s.submitter_email, u.email AS user_email
+         FROM cp_submissions s LEFT JOIN cp_portal_users u ON u.id = s.user_id
+        WHERE s.id = ? AND s.client_id = ?`, [req.params.submissionId, req.params.clientId]);
+    if (!submission) return res.status(404).json({ error: 'Submission not found.' });
+    const to = (submission.submitter_email || submission.user_email || '').trim();
+    if (!to) return res.status(400).json({ error: 'There is no email address on this request, so the answer cannot be sent.' });
+
+    // Approve first: the record of who approved it must exist before anything leaves.
+    const [claimed] = await pool.execute(
+      `UPDATE cp_submission_answers SET status = 'sent', approved_by = ?, approved_at = NOW(), sent_at = NOW(), send_error = NULL
+        WHERE id = ? AND status <> 'sent'`, [req.admin.adminId, answer.id]);
+    // Lost the race with another reviewer pressing send at the same moment.
+    if (claimed.affectedRows === 0) return res.status(409).json({ error: 'This answer has already been sent.' });
+
+    const reference = `CP-${String(submission.id).padStart(6, '0')}`;
+    const safe = String(answer.body).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    const queued = await queueEmail(req.params.clientId, {
+      to,
+      subject: `Response to your medical information request — ${reference}`,
+      html: `<p>Hello,</p><p>Our medical information team has answered your request <strong>${reference}</strong>:</p>`
+        + `<blockquote style="border-left:3px solid #6B3FA0;padding-left:12px;color:#334155">${safe}</blockquote>`
+        + `<p>You can also see this answer when you sign in to the portal. Please reply through the portal if you need anything further.</p>`,
+    }, { kind: 'inquiry_answer', relatedType: 'submission', relatedId: submission.id });
+    // queueEmail records the email before sending and retries it; a null means the
+    // record itself could not be written, which the reviewer must know about.
+    if (!queued) {
+      await pool.execute("UPDATE cp_submission_answers SET send_error = 'The answer was approved but the email could not be queued.' WHERE id = ?", [answer.id]);
+      log.error('admin.submissions.answer_email_not_queued', { submission_id: submission.id });
+      await audit(req.admin, req.params.clientId, 'ANSWER_SENT', 'submission', req.params.submissionId, { to, email_queued: false });
+      return res.status(502).json({ error: 'The answer is approved and visible in the portal, but the email could not be queued. Please try resending from Email Delivery.' });
+    }
+    await audit(req.admin, req.params.clientId, 'ANSWER_SENT', 'submission', req.params.submissionId, { to, email_queued: true });
+    res.json({ message: `Answer sent to ${to}.` });
+  } catch (err) {
+    log.error('admin.submissions.error', { err, route: 'POST /:clientId/:submissionId/answer/send', request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
 });

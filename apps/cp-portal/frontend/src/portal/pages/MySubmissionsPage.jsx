@@ -125,6 +125,19 @@ export default function MySubmissionsPage() {
                   </div>
                 </div>
 
+                {/* CPPM-14: the approved medical answer, once it has been sent. */}
+                {s.answer && (
+                  <div style={{ marginTop: 16, padding: '14px 16px', borderRadius: 8, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#166534', marginBottom: 6 }}>
+                      Our answer{s.answered_at ? ` · ${formatDate(s.answered_at)}` : ''}
+                    </div>
+                    <div style={{ whiteSpace: 'pre-wrap', color: '#14532d', fontSize: '0.9rem', lineHeight: 1.55 }}>{s.answer}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#166534', marginTop: 8 }}>
+                      A copy was emailed to you. Reply through the portal if you need anything further.
+                    </div>
+                  </div>
+                )}
+
                 {/* Expandable Activity Details */}
                 <details style={{ marginTop: '12px', fontSize: '0.85rem', color: '#475569' }}>
                   <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--pp-primary, #0284c7)' }}>
