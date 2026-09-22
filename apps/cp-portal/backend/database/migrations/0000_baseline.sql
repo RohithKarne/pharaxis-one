@@ -436,6 +436,22 @@ CREATE TABLE IF NOT EXISTS cp_compliance_config (
   CONSTRAINT fk_compliance_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── CONSENT TEXT VERSIONS (from 0018, CPPM-13) ────────────────────
+CREATE TABLE IF NOT EXISTS cp_consent_text_versions (
+  id             INT          NOT NULL AUTO_INCREMENT,
+  client_id      INT          NOT NULL,
+  version        VARCHAR(20)  NOT NULL,
+  title          VARCHAR(500) NULL,
+  body           TEXT         NOT NULL,
+  effective_from DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by     INT          NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_consent_text_version (client_id, version),
+  CONSTRAINT fk_consent_text_client  FOREIGN KEY (client_id)  REFERENCES cp_clients(id) ON DELETE CASCADE,
+  CONSTRAINT fk_consent_text_creator FOREIGN KEY (created_by) REFERENCES cp_admin_users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── CONSENT RECORDS ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS cp_consent_records (
   id           INT          NOT NULL AUTO_INCREMENT,
@@ -961,22 +977,6 @@ CREATE TABLE IF NOT EXISTS cp_submission_status_events (
   KEY idx_cp_sse_client (client_id, created_at),
   CONSTRAINT fk_sse_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE,
   CONSTRAINT fk_sse_client     FOREIGN KEY (client_id)     REFERENCES cp_clients(id)     ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ── CONSENT TEXT VERSIONS (from 0018, CPPM-13) ────────────────────
-CREATE TABLE IF NOT EXISTS cp_consent_text_versions (
-  id             INT          NOT NULL AUTO_INCREMENT,
-  client_id      INT          NOT NULL,
-  version        VARCHAR(20)  NOT NULL,
-  title          VARCHAR(500) NULL,
-  body           TEXT         NOT NULL,
-  effective_from DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  created_by     INT          NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_consent_text_version (client_id, version),
-  CONSTRAINT fk_consent_text_client  FOREIGN KEY (client_id)  REFERENCES cp_clients(id) ON DELETE CASCADE,
-  CONSTRAINT fk_consent_text_creator FOREIGN KEY (created_by) REFERENCES cp_admin_users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── DOCUMENT VERSIONS (from 0019, CPPM-31) ────────────────────
