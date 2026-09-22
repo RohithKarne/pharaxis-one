@@ -40,4 +40,55 @@ async function systemAudit(actorName, clientId, action, entity, entityId, detail
   return audit({ adminId: null, name: actorName || 'system' }, clientId, action, entity, entityId, details);
 }
 
-module.exports = { audit, systemAudit };
+const WRITE_METHODS  = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
+const DEFAULT_ACTION = { POST: 'CREATE', PATCH: 'UPDATE', PUT: 'UPDATE', DELETE: 'DELETE' };
+
+// The record that was touched: a route param other than clientId, or the id a
+// create route hands back in its response body.
+function affectedId(req, body) {
+  for (const [key, value] of Object.entries(req.params || {})) {
+    if (key !== 'clientId' && Number.isInteger(Number(value))) return Number(value);
+  }
+  return Number.isInteger(Number(body?.id)) ? Number(body.id) : null;
+}
+
+/**
+ * auditWrites(entity) — router-level safety net, so a NEW write route on an
+ * already-covered router cannot silently leave no record. Mount it on an admin
+ * router and every write that answers with a success status is logged once.
+ *
+ * A route that wants a more specific record sets res.locals.audit before it
+ * responds — { action, entity, entityId, details } is merged over the defaults;
+ * res.locals.audit = false skips the row.
+ *
+ * Only route params and details a route supplies on purpose are recorded —
+ * never the request body — so a secret cannot reach the audit trail by accident.
+ * CPPM-10.
+ */
+function auditWrites(entity) {
+  return function auditWritesMiddleware(req, res, next) {
+    if (!WRITE_METHODS.has(req.method)) return next();
+    const clientId = req.params.clientId || null;
+    const sendJson = res.json.bind(res);
+    res.json = (body) => {
+      const override = res.locals.audit;
+      if (override !== false && res.statusCode < 400) {
+        res.locals.audit = false; // never log the same request twice
+        // Not awaited: audit() swallows its own errors, so the response is
+        // never delayed or failed by the logging.
+        audit(
+          req.admin,
+          clientId,
+          override?.action   || DEFAULT_ACTION[req.method],
+          override?.entity   || entity,
+          override?.entityId ?? affectedId(req, body),
+          override?.details  || {}
+        );
+      }
+      return sendJson(body);
+    };
+    next();
+  };
+}
+
+module.exports = { audit, systemAudit, auditWrites };

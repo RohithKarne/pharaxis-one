@@ -90,6 +90,7 @@ router.post('/:clientId/categories', authenticateAdmin, requireClientAccess, asy
     try {
       const [result] = await pool.execute('INSERT INTO cp_document_categories (client_id, name, sort_order) VALUES (?, ?, ?)', [req.params.clientId, name.trim(), sort_order || 0]);
       const [[category]] = await pool.execute('SELECT * FROM cp_document_categories WHERE id = ?', [result.insertId]);
+      await audit(req.admin, req.params.clientId, 'CREATE', 'document_category', result.insertId, { name: name.trim() });
       res.json({ category });
     } catch {
       res.status(409).json({ error: 'Category already exists.' });
@@ -110,6 +111,7 @@ router.put('/:clientId/categories/:catId', authenticateAdmin, requireClientAcces
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     values.push(req.params.catId, req.params.clientId);
     await pool.execute(`UPDATE cp_document_categories SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
+    await audit(req.admin, req.params.clientId, 'UPDATE', 'document_category', Number(req.params.catId), { fields: Object.keys(req.body) });
     res.json({ ok: true });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'PUT /:clientId/categories/:catId', path: req.path, request_id: req.requestId || null });
@@ -121,6 +123,7 @@ router.put('/:clientId/categories/:catId', authenticateAdmin, requireClientAcces
 router.delete('/:clientId/categories/:catId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     await pool.execute('DELETE FROM cp_document_categories WHERE id = ? AND client_id = ?', [req.params.catId, req.params.clientId]);
+    await audit(req.admin, req.params.clientId, 'DELETE', 'document_category', Number(req.params.catId), {});
     res.json({ ok: true });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'DELETE /:clientId/categories/:catId', path: req.path, request_id: req.requestId || null });
