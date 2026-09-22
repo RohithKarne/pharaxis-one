@@ -10,8 +10,10 @@
 -- uq_notif_dedup) and 0009 (mims_case_url_base) as duplicate-column errors.
 --
 -- This file is the complete current schema — the union of db.js and migrations
--- 0002-0016 — so an empty database is provisioned by the migration runner alone.
--- It then records 0002-0016 as applied, because their contents are already
+  -- 0002-0015 and 0019 — so an empty database is provisioned by the migration,
+  -- 0002-0016 — so an empty database is provisioned by the migration runner alone.,
+  -- It then records 0002-0016 as applied, because their contents are already,
+  -- runner alone. It then records them as applied, because their contents are already;
 -- included here and re-running them would duplicate columns.
 -- Every new migration must be folded in here as well (tests/fresh-provision.js).
 --
@@ -500,6 +502,11 @@ CREATE TABLE IF NOT EXISTS cp_documents (
   mims_ref_id       VARCHAR(255) NULL,
   is_active         TINYINT(1)   NOT NULL DEFAULT 1,
   status            VARCHAR(50)  NOT NULL DEFAULT 'draft',
+  approved_by       INT          NULL,
+  approved_by_name  VARCHAR(255) NULL,
+  approved_at       DATETIME     NULL,
+  review_due_at     DATETIME     NULL,
+  retired_at        DATETIME     NULL,
   expires_at        DATETIME     NULL,
   version           VARCHAR(50)  NULL,
   download_count    INT          NOT NULL DEFAULT 0,
@@ -509,7 +516,32 @@ CREATE TABLE IF NOT EXISTS cp_documents (
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_cp_docs_client (client_id),
+  KEY idx_cp_docs_review_due (client_id, review_due_at),
   CONSTRAINT fk_docs_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── DOCUMENT VERSION HISTORY (0019) ────────────────────────────
+CREATE TABLE IF NOT EXISTS cp_document_versions (
+  id                 INT          NOT NULL AUTO_INCREMENT,
+  document_id        INT          NOT NULL,
+  client_id          INT          NOT NULL,
+  version            VARCHAR(50)  NULL,
+  title              VARCHAR(500) NOT NULL,
+  file_path          TEXT         NULL,
+  file_name          VARCHAR(500) NULL,
+  status             VARCHAR(50)  NOT NULL,
+  approved_by        INT          NULL,
+  approved_by_name   VARCHAR(255) NULL,
+  approved_at        DATETIME     NULL,
+  review_due_at      DATETIME     NULL,
+  expires_at         DATETIME     NULL,
+  superseded_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  superseded_by_name VARCHAR(255) NULL,
+  reason             VARCHAR(50)  NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_docver_document (document_id, id),
+  KEY idx_docver_client (client_id, superseded_at),
+  CONSTRAINT fk_docver_document FOREIGN KEY (document_id) REFERENCES cp_documents(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── NEWS POSTS ─────────────────────────────────────────────────
@@ -916,6 +948,7 @@ CREATE TABLE IF NOT EXISTS cp_chat_messages (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4,
+  -- ── RECORD 0002-0015 AND 0019 AS APPLIED ───────────────────────,
   -- ── RECORD 0002-0016 AS APPLIED ────────────────────────────────,
   -- ── RECORD 0002-0017 AS APPLIED ────────────────────────────────,
   -- ── SUBMISSION ANSWERS (from 0016, CPPM-14) ───────────────────,
@@ -972,4 +1005,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0015_chat_safety_and_confirmed_ae.sql',  NULL),
   ('0016_add_submission_answers.sql',        NULL),
   ('0017_add_submission_status_history.sql', NULL),
-  ('0018_add_consent_text_versions.sql',     NULL);
+  ('0018_add_consent_text_versions.sql',     NULL),
+  ('0019_add_document_lifecycle.sql',        NULL);
