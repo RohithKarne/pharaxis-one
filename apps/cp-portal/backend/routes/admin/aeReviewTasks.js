@@ -27,7 +27,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const log = require('../../utils/logger');
-const { syncToIntegration } = require('../portal/submit');
+const { syncToIntegration, toDateOnly } = require('../portal/submit');
 
 const OUTCOMES = ['reviewed_not_ae', 'cleared_administrative', 'confirmed_ae'];
 const CLINICAL_ROLES = ['safety_reviewer', 'superadmin'];
@@ -41,20 +41,22 @@ async function createAeSubmission(conn, clientId, task, { productName, eventDesc
   let reporter;
   if (task.submission_id) {
     const [[s]] = await conn.execute(
-      'SELECT user_id, submitter_name, submitter_email, submitter_type FROM cp_submissions WHERE id = ?', [task.submission_id]);
-    reporter = { userId: s.user_id, name: s.submitter_name, email: s.submitter_email, type: s.submitter_type };
+      'SELECT user_id, submitter_name, submitter_email, submitter_type, submitted_at FROM cp_submissions WHERE id = ?', [task.submission_id]);
+    reporter = { userId: s.user_id, name: s.submitter_name, email: s.submitter_email, type: s.submitter_type, reportedAt: s.submitted_at };
   } else {
     const [[u]] = await conn.execute(
       `SELECT u.id, u.first_name, u.last_name, u.email, c.user_type FROM cp_chat_conversations c
          LEFT JOIN cp_portal_users u ON u.id = c.portal_user_id AND u.client_id = c.client_id
         WHERE c.id = ?`, [task.chat_conversation_id]);
-    reporter = { userId: u?.id || null, name: [u?.first_name, u?.last_name].filter(Boolean).join(' ') || null, email: u?.email || null, type: u?.user_type || null };
+    reporter = { userId: u?.id || null, name: [u?.first_name, u?.last_name].filter(Boolean).join(' ') || null, email: u?.email || null, type: u?.user_type || null, reportedAt: task.created_at };
   }
   const formData = {
     name: reporter.name, email: reporter.email, user_type: reporter.type,
     product_name: productName, event_description: eventDescription, event_date: eventDate,
     source: task.submission_id ? 'safety_review_form' : 'safety_review_chat',
     review_task_id: task.id, confirmed_by: reviewer || null,
+    // Day zero is when the person told us, not when a reviewer confirmed it.
+    awareness_date: toDateOnly(reporter.reportedAt),
   };
   const [r] = await conn.execute(
     `INSERT INTO cp_submissions (client_id, submission_type, user_id, submitter_name, submitter_email, submitter_type, form_data)
@@ -139,7 +141,7 @@ router.post('/:clientId/:taskId/close', authenticateAdmin, requireClientAccess, 
     }
 
     const [[task]] = await pool.execute(
-      'SELECT id, status, submission_id, chat_conversation_id FROM cp_ae_review_tasks WHERE id = ? AND client_id = ?',
+      'SELECT id, status, submission_id, chat_conversation_id, created_at FROM cp_ae_review_tasks WHERE id = ? AND client_id = ?',
       [req.params.taskId, req.params.clientId]
     );
     if (!task) return res.status(404).json({ error: 'Task not found.' });

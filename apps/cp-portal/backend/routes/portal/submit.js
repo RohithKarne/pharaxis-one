@@ -227,7 +227,14 @@ const FORM_TYPE_TO_CASE_TYPE = {
 // The portal captures the MINIMUM field set; MIMS triage completes the regulated
 // fields (seriousness, causality, MedDRA, etc.). Reads the seeded CP field keys
 // and tolerates the richer AE template's alternate keys as fallbacks.
-function buildMimsPayload(formType, formData, submissionId) {
+// Local calendar date as 'YYYY-MM-DD'.
+function toDateOnly(d) {
+  const x = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(x.getTime())) return null;
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+
+function buildMimsPayload(formType, formData, submissionId, submittedAt) {
   const caseType = FORM_TYPE_TO_CASE_TYPE[formType];
   const pick = (...keys) => {
     for (const k of keys) {
@@ -251,6 +258,11 @@ function buildMimsPayload(formType, formData, submissionId) {
     case_type: caseType,
     intake_channel: 'Portal',
     reference: `CP-${String(submissionId).padStart(6, '0')}`,
+    // CPPM-18: when the report first reached the company — it starts the
+    // regulatory clock in MIMS. A side effect confirmed in the Safety Queue
+    // carries the date it was originally reported; anything else, the day it was
+    // submitted. Either way a sync that is retried days later keeps the true date.
+    awareness_date: formData.awareness_date || (submittedAt ? toDateOnly(submittedAt) : null),
     reporter: {
       first_name:    firstName,
       last_name:     lastName,
@@ -346,7 +358,7 @@ async function syncToIntegration(clientId, submissionId, formType) {
   const formData = typeof submission.form_data === 'string' ? JSON.parse(submission.form_data) : submission.form_data;
 
   // Default structured payload — works out-of-the-box for the seeded portal forms.
-  const payload = buildMimsPayload(formType, formData, submissionId);
+  const payload = buildMimsPayload(formType, formData, submissionId, submission.submitted_at);
 
   // Admin-configured field mappings override/extend the defaults. NEW-C: dot-path
   // targets (e.g. `reporter.first_name`, `ae_intake.outcome`) write into the nested
@@ -430,3 +442,4 @@ router.get('/:clientCode/attachments/:attachmentId', authenticatePortal, require
 module.exports = router;
 // R1: exposed so the retry poller can re-drive a failed sync without duplicating logic.
 module.exports.syncToIntegration = syncToIntegration;
+module.exports.toDateOnly = toDateOnly;
