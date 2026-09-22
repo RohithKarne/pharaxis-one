@@ -123,6 +123,52 @@ router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
   res.json(row);
 });
 
+// CPPM-11: remove the reporter's identity from a case, keeping the case itself.
+// The source portal calls this when a person exercises their right to erasure:
+// the safety record is retained (pharmacovigilance legal obligation) and only
+// the identifying reporter fields are blanked. reporter_type, country and
+// specialty stay — they are case content, not identity — and nothing else on
+// the case (patient, AE/PC detail, attachments, workflow) is touched.
+// Org-scoped by the API key exactly like the routes above, and idempotent: a
+// repeat call on an already-redacted case succeeds and changes nothing.
+router.post('/api/v1/cases/:id/redact-reporter', scopeGuard('cases:write'), async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const [[c]] = await conn.execute(
+      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND is_deleted = 0 LIMIT 1',
+      [req.params.id, req.apiClient.org_id]
+    );
+    if (!c) return res.status(404).json({ error: 'Case not found.' });
+
+    await conn.beginTransaction();
+    // Intake records the reporter twice: case_reporter (the intake record) and
+    // case_contacts (what the case screen shows). Both carry the identity, so
+    // both are blanked or the identity survives on screen.
+    const [rep] = await conn.execute(
+      `UPDATE case_reporter
+          SET first_name = NULL, last_name = NULL, email = NULL, phone = NULL, organisation = NULL
+        WHERE case_id = ?`,
+      [c.id]
+    );
+    const [con] = await conn.execute(
+      `UPDATE case_contacts
+          SET first_name = NULL, last_name = NULL, email = NULL, phone = NULL, address = NULL, institution = NULL
+        WHERE case_id = ? AND contact_role = 'reporter'`,
+      [c.id]
+    );
+    await conn.commit();
+    // Counts are rows MATCHED (the pool runs with FOUND_ROWS), so they are the
+    // same on a repeat call — the caller reads them as "a reporter row exists",
+    // never as "something changed this time".
+    res.json({ id: c.id, redacted: true, reporter_rows: rep.affectedRows, contact_rows: con.affectedRows });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    res.status(500).json({ error: 'Failed to redact the reporter identity.' });
+  } finally {
+    conn.release();
+  }
+});
+
 // 'YYYY-MM-DD', a real calendar date, not in the future (one day of slack for
 // time zones). Anything else → null.
 function parseAwarenessDate(value) {
