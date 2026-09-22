@@ -894,7 +894,27 @@ CREATE TABLE IF NOT EXISTS cp_chat_messages (
   CONSTRAINT fk_chatmsg_conv FOREIGN KEY (conversation_id) REFERENCES cp_chat_conversations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── RECORD 0002-0015 AS APPLIED ────────────────────────────────
+-- CPPM-11: MIMS reporter redactions still owed for an erasure (see 0020).
+CREATE TABLE IF NOT EXISTS cp_mims_redactions (
+  id              INT          NOT NULL AUTO_INCREMENT,
+  client_id       INT          NOT NULL,
+  submission_id   INT          NOT NULL,
+  external_ref    VARCHAR(100) NOT NULL,
+  portal_user_id  INT          NULL,
+  status          VARCHAR(20)  NOT NULL DEFAULT 'pending',
+  attempts        INT          NOT NULL DEFAULT 0,
+  last_error      TEXT         NULL,
+  next_attempt_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  requested_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at    DATETIME     NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mims_redaction_submission (submission_id),
+  KEY idx_mims_redaction_due (status, next_attempt_at),
+  KEY idx_mims_redaction_client (client_id, status),
+  CONSTRAINT fk_mims_redaction_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── RECORD 0002-0020 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
 -- database these rows are already present, so INSERT IGNORE leaves them untouched
@@ -915,4 +935,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0012_add_trials_and_training.sql',       NULL),
   ('0013_add_email_outbox.sql',              NULL),
   ('0014_add_chat_records.sql',              NULL),
-  ('0015_chat_safety_and_confirmed_ae.sql',  NULL);
+  ('0015_chat_safety_and_confirmed_ae.sql',  NULL),
+  ('0020_add_mims_redactions.sql',           NULL);

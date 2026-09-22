@@ -13,12 +13,15 @@
  *   - All other engagement data (MI/other inquiries, saved items, follows,
  *     notifications, feedback, MSL bookings, SSO identities) is DELETED.
  *
- * MIMS-synced case data is out of scope for this ticket (separate system) —
- * tracked as CP-76 under the Deferred epic.
+ * CPPM-11 (was CP-76): the erasure now reaches MIMS too. A retained submission
+ * that was synced keeps its safety case there, but the reporter identity on that
+ * case is removed — the same ruling, applied on both sides of the integration.
  */
 const { pool } = require('../database/db');
 const fs = require('fs');
 const path = require('path');
+const mimsRedaction = require('./mimsRedaction');
+const log = require('../utils/logger');
 
 const RETAINED_SUBMISSION_TYPES = new Set(['adverse_event', 'product_complaint']);
 const ERASED = '[erased]';
@@ -93,6 +96,7 @@ async function buildExport(userId, clientId) {
 async function eraseUser(userId, clientId) {
   const conn = await pool.getConnection();
   const summary = { anonymized: [], retained: [], deleted: [] };
+  let mimsTargets = [];   // CPPM-11: retained submissions that reached MIMS
   try {
     await conn.beginTransaction();
 
@@ -117,6 +121,15 @@ async function eraseUser(userId, clientId) {
     // Retain regulated submissions but sever the reporter identity.
     if (retainIds.length) {
       const ph = retainIds.map(() => '?').join(',');
+      // CPPM-11: the ones already sent to MIMS hold the identity over there too.
+      // Recorded inside this transaction, so the outstanding work either lands
+      // with the erasure or not at all — it can never be lost between the two.
+      const [synced] = await conn.execute(
+        `SELECT id, external_ref FROM cp_submissions
+          WHERE id IN (${ph}) AND external_ref IS NOT NULL AND external_ref <> ''`, retainIds);
+      mimsTargets = synced;
+      await mimsRedaction.queueRedactions(conn, clientId, userId, synced);
+
       await conn.execute(
         `UPDATE cp_submissions SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL WHERE id IN (${ph})`,
         [ERASED, ERASED, ...retainIds]
@@ -166,6 +179,19 @@ async function eraseUser(userId, clientId) {
     summary.anonymized.push('cp_portal_users(identity)');
 
     await conn.commit();
+
+    // CPPM-11: MIMS is called only after the CP erasure has committed — never
+    // with a transaction held open across a network call. Every case is already
+    // recorded as owed, so a failure here delays the redaction, it never loses it.
+    try {
+      const flushed = await mimsRedaction.flushForSubmissions(clientId, mimsTargets.map(s => s.id));
+      summary.mims = { ...flushed, detail: mimsRedaction.describe(flushed) };
+    } catch (err) {
+      log.error('dataSubject.mims_redaction_flush_failed', { err, user_id: userId, client_id: clientId });
+      const pendingRefs = mimsTargets.map(s => String(s.external_ref));
+      summary.mims = { done: [], pending: pendingRefs, detail: mimsRedaction.describe({ done: [], pending: pendingRefs }) };
+    }
+
     return summary;
   } catch (err) {
     await conn.rollback();

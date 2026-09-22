@@ -41,7 +41,9 @@ export default function DataRequestsPage() {
   }
 
   function summarize(s) {
-    return `Retained: ${(s.retained || []).join(', ') || 'none'} · Deleted: ${(s.deleted || []).join(', ') || 'none'} · Anonymized: ${(s.anonymized || []).join(', ')}`
+    const cp = `Retained: ${(s.retained || []).join(', ') || 'none'} · Deleted: ${(s.deleted || []).join(', ') || 'none'} · Anonymized: ${(s.anonymized || []).join(', ')}`
+    // CPPM-11: what the erasure did in MIMS, and what is still pending there.
+    return s.mims ? `${cp} · ${s.mims.detail}` : cp
   }
 
   const pending = requests.filter(r => r.status === 'pending').length
