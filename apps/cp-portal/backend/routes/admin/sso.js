@@ -11,6 +11,7 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { encryptSecret, decryptSecret } = require('../../utils/secretCrypto');
+const { audit } = require('../../utils/audit');
 const sso = require('../../services/ssoService');
 const log = require('../../utils/logger');
 
@@ -75,6 +76,7 @@ router.put('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
     await pool.execute('UPDATE cp_clients SET login_mode = ?, updated_at = NOW() WHERE id = ?', [loginMode, client.id]);
 
     const incoming = Array.isArray(req.body.providers) ? req.body.providers : [];
+    const saved = []; // CPPM-10: what changed per provider — never the client secret
     for (const item of incoming) {
       const providerKey = sso.normalizeProviderKey(item.provider_key);
       if (!providerKey) continue;
@@ -118,8 +120,10 @@ router.put('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
           req.admin?.adminId || null,
         ]
       );
+      saved.push({ provider_key: providerKey, is_active: !!item.is_active, secret_changed: nextSecret !== (existing?.client_secret_encrypted || null) });
     }
 
+    await audit(req.admin, client.id, 'UPDATE', 'sso_config', client.id, { login_mode: loginMode, providers: saved });
     res.json({ message: 'SSO configuration saved.' });
   } catch (err) {
     log.error('admin.sso.error', { err, route: 'PUT /:clientId', path: req.path, request_id: req.requestId || null });

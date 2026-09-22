@@ -54,6 +54,7 @@ router.post('/:clientId/retranslate', authenticateAdmin, requireClientAccess, as
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE id = ?', [clientId]);
     if (!client) return res.status(404).json({ error: 'Client not found.' });
 
+    await audit(req.admin, clientId, 'RETRANSLATE', 'language_config', Number(clientId), {});
     res.json({ ok: true, message: 'Retranslation started in background.' });
 
     // Run in background — do not await

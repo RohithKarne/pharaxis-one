@@ -9,6 +9,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
 const { encryptSecret } = require('../../utils/secretCrypto');
+const { audit } = require('../../utils/audit');
 const { getAuthHeaders, invalidateAuth } = require('../../services/mimsAuth');
 const log = require('../../utils/logger');
 
@@ -45,6 +46,9 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [req.params.clientId, system_name || 'MIMS', api_base_url, encryptSecret(api_key ?? null), encryptSecret(api_secret ?? null), auth_type || 'bearer', extra_headers ? JSON.stringify(extra_headers) : null, mims_case_url_base || null]
     );
+    // CPPM-10: names and flags only — an API key or secret never reaches the trail.
+    await audit(req.admin, req.params.clientId, 'CREATE', 'integration', result.insertId,
+      { system_name: system_name || 'MIMS', api_base_url, auth_type: auth_type || 'bearer', api_key_set: !!api_key, api_secret_set: !!api_secret });
     res.status(201).json({ id: result.insertId, message: 'Integration configured.' });
   } catch (err) {
     log.error('admin.integration.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
@@ -70,6 +74,9 @@ router.patch('/:clientId/:integrationId', authenticateAdmin, requireClientAccess
     updates.push(`updated_at = NOW()`);
     params.push(req.params.integrationId, req.params.clientId);
     await pool.execute(`UPDATE cp_integration_config SET ${updates.join(', ')} WHERE id=? AND client_id=?`, params);
+    // CPPM-10: which fields changed, never what they changed to.
+    await audit(req.admin, req.params.clientId, 'UPDATE', 'integration', Number(req.params.integrationId),
+      { fields: updates.map(u => u.split(' ')[0]).filter(f => f !== 'updated_at') });
     res.json({ message: 'Integration updated.' });
   } catch (err) {
     log.error('admin.integration.error', { err, route: 'PATCH /:clientId/:integrationId', path: req.path, request_id: req.requestId || null });
@@ -81,6 +88,7 @@ router.patch('/:clientId/:integrationId', authenticateAdmin, requireClientAccess
 router.delete('/:clientId/:integrationId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     await pool.execute('UPDATE cp_integration_config SET is_active=0 WHERE id=? AND client_id=?', [req.params.integrationId, req.params.clientId]);
+    await audit(req.admin, req.params.clientId, 'DISABLE', 'integration', Number(req.params.integrationId), {});
     res.json({ message: 'Integration deactivated.' });
   } catch (err) {
     log.error('admin.integration.error', { err, route: 'DELETE /:clientId/:integrationId', path: req.path, request_id: req.requestId || null });
@@ -116,12 +124,14 @@ router.post('/:clientId/:integrationId/test', authenticateAdmin, requireClientAc
         `UPDATE cp_integration_config SET last_sync_at = NOW(), last_sync_status = ?, last_sync_error = ? WHERE id = ?`,
         [syncStatus, r.ok ? null : message, cfg.id]
       );
+      await audit(req.admin, req.params.clientId, 'TEST_CONNECTION', 'integration', cfg.id, { success: r.ok, status: r.status, message });
       res.json({ success: r.ok, status: r.status, message });
     } catch (fetchErr) {
       await pool.execute(
         `UPDATE cp_integration_config SET last_sync_at = NOW(), last_sync_status = 'failure', last_sync_error = ? WHERE id = ?`,
         [String(fetchErr.message).slice(0, 500), cfg.id]
       );
+      await audit(req.admin, req.params.clientId, 'TEST_CONNECTION', 'integration', cfg.id, { success: false, message: String(fetchErr.message).slice(0, 500) });
       res.json({ success: false, error: fetchErr.message });
     }
   } catch (err) {
@@ -153,6 +163,7 @@ router.post('/:clientId/mapping', authenticateAdmin, requireClientAccess, async 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [req.params.clientId, integration_id, form_type, cp_field, target_field, transform ?? null, default_value ?? null]
     );
+    await audit(req.admin, req.params.clientId, 'CREATE', 'field_mapping', result.insertId, { integration_id, form_type, cp_field, target_field });
     res.status(201).json({ id: result.insertId, message: 'Mapping saved.' });
   } catch (err) {
     log.error('admin.integration.error', { err, route: 'POST /:clientId/mapping', path: req.path, request_id: req.requestId || null });
@@ -164,6 +175,7 @@ router.post('/:clientId/mapping', authenticateAdmin, requireClientAccess, async 
 router.delete('/:clientId/mapping/:mappingId', authenticateAdmin, requireClientAccess, async (req, res) => {
   try {
     await pool.execute('DELETE FROM cp_field_mapping WHERE id=? AND client_id=?', [req.params.mappingId, req.params.clientId]);
+    await audit(req.admin, req.params.clientId, 'DELETE', 'field_mapping', Number(req.params.mappingId), {});
     res.json({ message: 'Mapping removed.' });
   } catch (err) {
     log.error('admin.integration.error', { err, route: 'DELETE /:clientId/mapping/:mappingId', path: req.path, request_id: req.requestId || null });

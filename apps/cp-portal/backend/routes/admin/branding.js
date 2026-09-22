@@ -157,6 +157,7 @@ router.post('/:clientId/reset', authenticateAdmin, requireClientAccess, async (r
         updated_at=NOW()
       WHERE client_id = ?
     `, [req.params.clientId]);
+    await audit(req.admin, req.params.clientId, 'RESET', 'branding', Number(req.params.clientId), {});
     res.json({ message: 'Branding reset to defaults.' });
   } catch (err) {
     log.error('admin.branding.error', { err, route: 'POST /:clientId/reset', path: req.path, request_id: req.requestId || null });

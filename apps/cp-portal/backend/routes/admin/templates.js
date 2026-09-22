@@ -7,9 +7,12 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { auditWrites } = require('../../utils/audit');
 const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
+// CPPM-10: every write below leaves a who-did-what record, including any added later.
+router.use('/:clientId', auditWrites('template'));
 
 router.get('/:clientId', authenticateAdmin, async (req, res) => {
   try {
