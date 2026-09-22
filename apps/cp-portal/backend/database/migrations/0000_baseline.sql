@@ -915,27 +915,40 @@ CREATE TABLE IF NOT EXISTS cp_chat_messages (
   CONSTRAINT fk_chatmsg_conv FOREIGN KEY (conversation_id) REFERENCES cp_chat_conversations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── SUBMISSION ANSWERS (from 0016, CPPM-14) ───────────────────
-CREATE TABLE IF NOT EXISTS cp_submission_answers (
-  id             INT          NOT NULL AUTO_INCREMENT,
-  submission_id  INT          NOT NULL,
-  client_id      INT          NOT NULL,
-  body           MEDIUMTEXT   NOT NULL,
-  status         VARCHAR(20)  NOT NULL DEFAULT 'draft',
-  drafted_by     INT          NULL,
-  approved_by    INT          NULL,
-  approved_at    DATETIME     NULL,
-  sent_at        DATETIME     NULL,
-  send_error     TEXT         NULL,
-  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4,
+  -- ── RECORD 0002-0016 AS APPLIED ────────────────────────────────,
+  -- ── RECORD 0002-0017 AS APPLIED ────────────────────────────────,
+  -- ── SUBMISSION ANSWERS (from 0016, CPPM-14) ───────────────────,
+  -- ── SUBMISSION STATUS HISTORY (0017) ───────────────────────────,
+  CONSTRAINT fk_answer_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sse_client     FOREIGN KEY (client_id)     REFERENCES cp_clients(id)     ON DELETE CASCADE,
+  CONSTRAINT fk_sse_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE,
+  CREATE TABLE IF NOT EXISTS cp_submission_answers (,
+  CREATE TABLE IF NOT EXISTS cp_submission_status_events (,
+  KEY idx_answer_client_status (client_id, status),
+  KEY idx_cp_sse_client (client_id, created_at),
+  KEY idx_cp_sse_submission (submission_id, id),
   PRIMARY KEY (id),
   UNIQUE KEY uq_answer_submission (submission_id),
-  KEY idx_answer_client_status (client_id, status),
-  CONSTRAINT fk_answer_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ── RECORD 0002-0016 AS APPLIED ────────────────────────────────
+  approved_at    DATETIME     NULL,
+  approved_by    INT          NULL,
+  body           MEDIUMTEXT   NOT NULL,
+  client_id      INT          NOT NULL,
+  client_id     INT          NOT NULL,
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  drafted_by     INT          NULL,
+  id             INT          NOT NULL AUTO_INCREMENT,
+  id            INT          NOT NULL AUTO_INCREMENT,
+  note          VARCHAR(500) NULL,
+  send_error     TEXT         NULL,
+  sent_at        DATETIME     NULL,
+  source        VARCHAR(50)  NOT NULL DEFAULT 'system',
+  status         VARCHAR(20)  NOT NULL DEFAULT 'draft',
+  status        VARCHAR(50)  NOT NULL,
+  submission_id  INT          NOT NULL,
+  submission_id INT          NOT NULL,
+  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
 -- database these rows are already present, so INSERT IGNORE leaves them untouched
@@ -958,4 +971,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0014_add_chat_records.sql',              NULL),
   ('0015_chat_safety_and_confirmed_ae.sql',  NULL),
   ('0016_add_submission_answers.sql',        NULL),
+  ('0017_add_submission_status_history.sql', NULL),
   ('0018_add_consent_text_versions.sql',     NULL);

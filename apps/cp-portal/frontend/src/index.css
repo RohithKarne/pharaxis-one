@@ -2375,6 +2375,12 @@ body { background: var(--cp-bg); }
 .pp-status-in-review { background: #DBEAFE; color: #1D4ED8; }
 .pp-status-completed { background: #DCFCE7; color: #16A34A; }
 .pp-status-closed    { background: #F3F4F6; color: #6B7280; }
+/* CPPM-4: the recorded history of one request — "Received 20 Sep → ..." */
+.pp-timeline { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.pp-timeline-step { display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
+.pp-timeline-step + .pp-timeline-step::before { content: '→'; color: var(--pp-text-muted); margin-right: 4px; }
+.pp-timeline-label { font-weight: 600; color: var(--pp-text); }
+.pp-timeline-date { color: var(--pp-text-muted); }
 .pp-sync-tag { font-size: 12px; font-weight: 600; margin-top: 10px; }
 .pp-sync-synced      { color: #16A34A; }
 .pp-sync-pending_sync { color: #D97706; }
