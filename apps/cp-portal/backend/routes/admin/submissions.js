@@ -10,6 +10,7 @@ const path    = require('path');
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
+const { recordStatusEvent } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
 
 // GET /api/admin/submissions/:clientId
@@ -178,11 +179,19 @@ router.patch('/:clientId/:submissionId', authenticateAdmin, requireClientAccess,
     if (!status || !VALID.includes(status)) {
       return res.status(400).json({ error: 'Invalid status.' });
     }
-    await pool.execute(
+    const [upd] = await pool.execute(
       `UPDATE cp_submissions SET status = ?, updated_at = NOW()
        WHERE id = ? AND client_id = ?`,
       [status, req.params.submissionId, req.params.clientId]
     );
+    // CPPM-4: record it only when a row actually moved — a submission belonging
+    // to another client matches nothing here and must not gain a history entry.
+    if (upd.affectedRows > 0) {
+      await recordStatusEvent({
+        submissionId: req.params.submissionId, clientId: req.params.clientId,
+        status, source: 'admin',
+      });
+    }
     // A1: audit the manual status change with the admin actor.
     await audit(req.admin, req.params.clientId, 'STATUS_CHANGED', 'submission', req.params.submissionId, { status });
     res.json({ message: 'Status updated.' });

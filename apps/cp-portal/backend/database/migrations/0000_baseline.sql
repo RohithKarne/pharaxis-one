@@ -894,7 +894,23 @@ CREATE TABLE IF NOT EXISTS cp_chat_messages (
   CONSTRAINT fk_chatmsg_conv FOREIGN KEY (conversation_id) REFERENCES cp_chat_conversations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── RECORD 0002-0015 AS APPLIED ────────────────────────────────
+-- ── SUBMISSION STATUS HISTORY (0017) ───────────────────────────
+CREATE TABLE IF NOT EXISTS cp_submission_status_events (
+  id            INT          NOT NULL AUTO_INCREMENT,
+  submission_id INT          NOT NULL,
+  client_id     INT          NOT NULL,
+  status        VARCHAR(50)  NOT NULL,
+  note          VARCHAR(500) NULL,
+  source        VARCHAR(50)  NOT NULL DEFAULT 'system',
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_cp_sse_submission (submission_id, id),
+  KEY idx_cp_sse_client (client_id, created_at),
+  CONSTRAINT fk_sse_submission FOREIGN KEY (submission_id) REFERENCES cp_submissions(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sse_client     FOREIGN KEY (client_id)     REFERENCES cp_clients(id)     ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── RECORD 0002-0017 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
 -- database these rows are already present, so INSERT IGNORE leaves them untouched
@@ -915,4 +931,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0012_add_trials_and_training.sql',       NULL),
   ('0013_add_email_outbox.sql',              NULL),
   ('0014_add_chat_records.sql',              NULL),
-  ('0015_chat_safety_and_confirmed_ae.sql',  NULL);
+  ('0015_chat_safety_and_confirmed_ae.sql',  NULL),
+  ('0017_add_submission_status_history.sql', NULL);

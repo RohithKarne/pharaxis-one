@@ -16,6 +16,7 @@ const { validateUploads } = require('../../utils/fileValidation');
 const { queueEmail } = require('../../utils/emailOutbox');
 const { validateAnswer, isFlagged, AE_SCREEN_KEY, AE_SCREEN_DETAIL_KEY } = require('../../services/aeScreening');
 const { systemAudit } = require('../../utils/audit');
+const { recordStatusEvent, publicTimeline } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
 const { loadFormFields, missingRequired } = require('../../services/formFields');
 
@@ -143,6 +144,9 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     // A1: audit the inquiry lifecycle. 'submitted' is the first entry.
     systemAudit('portal', client.id, 'SUBMITTED', 'submission', submissionId, { type: formType });
 
+    // CPPM-4: the first entry in the history shown back to the person — "Received".
+    await recordStatusEvent({ submissionId, clientId: client.id, status: 'submitted', source: 'portal' });
+
     // PD-2: the submitter said someone became unwell — raise a review task for
     // the client's safety team. Deliberately non-fatal: a failure here must never
     // cost the visitor their submission or their reference number. It is logged
@@ -220,8 +224,28 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
       SELECT id, submission_type, status, external_ref, submitted_at, updated_at
       FROM cp_submissions WHERE client_id = ? AND user_id = ? ORDER BY submitted_at DESC
     `, [client.id, req.portalUser.userId]);
+    // CPPM-4: the history behind each status. Read back with the same client_id
+    // and user_id the list was built from, so a person can only ever see the
+    // history of their own submissions.
+    const byId = new Map(rows.map(r => [r.id, []]));
+    if (rows.length) {
+      const ph = rows.map(() => '?').join(',');
+      const [events] = await pool.execute(
+        `SELECT e.submission_id, e.status, e.created_at
+           FROM cp_submission_status_events e
+           JOIN cp_submissions s ON s.id = e.submission_id
+          WHERE e.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ?
+          ORDER BY e.id ASC`,
+        [...rows.map(r => r.id), client.id, req.portalUser.userId]
+      );
+      events.forEach(e => byId.get(e.submission_id)?.push(e));
+    }
     // Surface the user-facing case reference (matches the confirmation email/response).
-    const submissions = rows.map(r => ({ ...r, reference: `CP-${String(r.id).padStart(6, '0')}` }));
+    const submissions = rows.map(r => ({
+      ...r,
+      reference: `CP-${String(r.id).padStart(6, '0')}`,
+      timeline: publicTimeline(byId.get(r.id) || []),
+    }));
     res.json({ submissions });
   } catch (err) {
     log.error('portal.submit.error', { err, route: 'GET /:clientCode/submissions', path: req.path, request_id: req.requestId || null });
@@ -405,12 +429,14 @@ async function syncToIntegration(clientId, submissionId, formType) {
     const reason = `Could not prepare the MIMS case: ${err.message}`.slice(0, 1000);
     log.error('portal.sync.prepare_failed', { err, client_id: clientId, submission_id: submissionId });
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_attempts=sync_attempts+1, sync_error=? WHERE id=?`, [reason, submissionId]);
+    await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: reason, source: 'mims-sync' });
     systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: reason, stage: 'prepare' });
     return;
   }
 
   try {
     await pool.execute(`UPDATE cp_submissions SET status='pending_sync', sync_attempts=sync_attempts+1 WHERE id=?`, [submissionId]);
+    await recordStatusEvent({ submissionId, clientId, status: 'pending_sync', source: 'mims-sync' });
     const safeBaseUrl = await assertSafeOutboundUrl(integration.api_base_url);
 
     const buildHeaders = async () => {
@@ -440,15 +466,18 @@ async function syncToIntegration(clientId, submissionId, formType) {
       const mimsCaseId = data.case_id || data.id || null;
       await pool.execute(`UPDATE cp_submissions SET status='synced', external_ref=?, synced_at=NOW(), sync_error=null WHERE id=?`,
         [mimsCaseId, submissionId]);
+      await recordStatusEvent({ submissionId, clientId, status: 'synced', source: 'mims-sync' });
       systemAudit('MIMS integration', clientId, 'SYNCED', 'submission', submissionId, { mims_case_id: mimsCaseId });
       // C1: forward any attachments onto the MIMS case (non-fatal per file).
       if (mimsCaseId) await forwardAttachments(integration, mimsCaseId, submissionId, headers);
     } else {
       await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [`HTTP ${r.status}`, submissionId]);
+      await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: `HTTP ${r.status}`, source: 'mims-sync' });
       systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: `HTTP ${r.status}` });
     }
   } catch (err) {
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [err.message, submissionId]);
+    await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: err.message, source: 'mims-sync' });
     systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: err.message });
   }
 }

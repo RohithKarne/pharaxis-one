@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import { SkeletonCards } from '../../shared/components/Skeleton'
 import Icon from '../../shared/components/Icon'
-import { formatDateTime } from '../../shared/utils/datetime'
+import { formatDate as formatDayOnly, formatDateTime } from '../../shared/utils/datetime'
 
 const STATUS_LABELS = {
   pending:    { label: 'Pending',     cls: 'pp-status-pending'    },
@@ -27,7 +27,8 @@ export default function MySubmissionsPage() {
 
   useEffect(() => {
     if (!user) { navigate(`/portal/${clientCode}/login`); return }
-    fetch(`/api/portal/auth/me`, { headers: portalHeaders() })
+    // CPPM-4: this endpoint returns the same list plus each request's history.
+    fetch(`/api/portal/submit/${clientCode}/submissions`, { headers: portalHeaders() })
       .then(r => r.json()).then(d => { setSubs(d.submissions || []); setLoading(false) }).catch(() => setLoading(false))
   }, [user, clientCode])
 
@@ -100,6 +101,19 @@ export default function MySubmissionsPage() {
                     ⚡ SLA Target: &lt; 24h Response
                   </span>
                 </div>
+
+                {/* CPPM-4: what has actually happened to this request, and when.
+                    Each step is a recorded status change — nothing is inferred. */}
+                {s.timeline?.length > 0 && (
+                  <ol className="pp-timeline">
+                    {s.timeline.map((step, idx) => (
+                      <li key={idx} className="pp-timeline-step">
+                        <span className="pp-timeline-label">{step.label}</span>
+                        <span className="pp-timeline-date">{formatDayOnly(step.at)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
 
                 {/* Milestone Progress Bar */}
                 <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
