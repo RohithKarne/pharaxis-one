@@ -62,10 +62,18 @@ router.get('/:clientCode', async (req, res) => {
       ? `${activeSafetyAlert.cnt}:${activeSafetyAlert.max_id}:${activeSafetyAlert.max_ts || 0}`
       : null;
 
-    // F-02: Compliance config — jurisdictions + version (no banner body exposed here)
-    const [[complianceRow]] = await pool.execute('SELECT jurisdictions_json, version, require_reconsent FROM cp_compliance_config WHERE client_id = ?', [client.id]);
+    // F-02: Compliance config — jurisdictions + version.
+    // The banner wording is carried too: the consent banner reads it from here, and
+    // withholding it made every portal show the built-in default instead of the
+    // client's own words. It is not secret — GET /api/portal/consent/current already
+    // serves the same object publicly — and since CPPM-13 stores the configured
+    // wording as proof of what a person agreed to, the words shown and the words
+    // stored have to be the same ones.
+    const [[complianceRow]] = await pool.execute('SELECT jurisdictions_json, version, require_reconsent, banner_config_json FROM cp_compliance_config WHERE client_id = ?', [client.id]);
+    let bannerConfig = {};
+    try { bannerConfig = JSON.parse(complianceRow?.banner_config_json || '{}'); } catch { bannerConfig = {}; }
     const compliance = complianceRow && JSON.parse(complianceRow.jurisdictions_json || '[]').length > 0
-      ? { jurisdictions: JSON.parse(complianceRow.jurisdictions_json), version: complianceRow.version, require_reconsent: !!complianceRow.require_reconsent }
+      ? { jurisdictions: JSON.parse(complianceRow.jurisdictions_json), version: complianceRow.version, require_reconsent: !!complianceRow.require_reconsent, banner_config: bannerConfig }
       : null;
 
     let language = { default: 'en', enabled: ['en'] };
