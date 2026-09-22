@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 
@@ -10,6 +10,9 @@ import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 // two outcomes stay distinct: a clinical judgement made by a safety reviewer, and
 // an administrative clear that has to say why. Same button for both and within a
 // year everything closes as "reviewed" and the number means nothing.
+//
+// CPPM-18: tasks also come from the chat assistant, and a safety reviewer can
+// confirm a real side effect, which creates an AE case and sends it to MIMS.
 export default function SafetyQueuePage() {
   const { clientId } = useParams()
   const { hasRole }  = useAdminAuth()
@@ -24,6 +27,10 @@ export default function SafetyQueuePage() {
   const [reason, setReason]   = useState('')
   const [busy, setBusy]       = useState(false)
   const [formError, setFormError] = useState('')
+  const [productName, setProductName] = useState('')
+  const [eventDescription, setEventDescription] = useState('')
+  const [eventDate, setEventDate] = useState('')
+  const [notice, setNotice] = useState('')
 
   useEffect(() => { load() }, [clientId, tab])
 
@@ -39,6 +46,7 @@ export default function SafetyQueuePage() {
 
   function startClose(task) {
     setOpen(task); setOutcome(''); setReason(''); setFormError('')
+    setProductName(''); setEventDescription(task.reported_detail || ''); setEventDate('')
   }
 
   async function submitClose() {
@@ -47,14 +55,21 @@ export default function SafetyQueuePage() {
     if (outcome === 'cleared_administrative' && reason.trim().length < 10) {
       setFormError('A reason of at least 10 characters is required to clear this task.'); return
     }
+    if (outcome === 'confirmed_ae' && (!productName.trim() || eventDescription.trim().length < 10)) {
+      setFormError('Name the product and describe what happened (at least 10 characters).'); return
+    }
     setBusy(true)
     try {
       const res = await fetch(`/api/admin/ae-review/${clientId}/${open.id}/close`, {
         method: 'POST', headers: adminHeaders(),
-        body: JSON.stringify({ outcome, reason }),
+        body: JSON.stringify({
+          outcome, reason,
+          ...(outcome === 'confirmed_ae' ? { product_name: productName, event_description: eventDescription, event_date: eventDate || null } : {}),
+        }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setFormError(d.error || 'Could not close this task.'); return }
+      setNotice(d.message || 'Task closed.')
       setOpen(null); load()
     } catch { setFormError('Network error — please try again.') } finally { setBusy(false) }
   }
@@ -69,14 +84,14 @@ export default function SafetyQueuePage() {
   return (
     <AdminLayout title="Safety Queue">
       <p className="cp-page-desc">
-        Portal submissions where the submitter reported that someone became unwell. Each one needs a
-        human decision — a task cannot be closed without recording an outcome.
+        Portal submissions and chat conversations where someone reported that a person became unwell.
+        Each one needs a human decision — a task cannot be closed without recording an outcome.
       </p>
 
       {!canJudge && (
         <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 6, background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1', fontSize: 13 }}>
           You can clear tasks administratively with a reason. Recording a clinical outcome
-          (“reviewed — not an adverse event”) requires the safety reviewer role.
+          (“reviewed — not an adverse event” or “confirmed side effect”) requires the safety reviewer role.
         </div>
       )}
 
@@ -86,6 +101,11 @@ export default function SafetyQueuePage() {
       </div>
 
       {error && <div className="cp-error" style={{ marginBottom: 12 }}>{error}</div>}
+      {notice && (
+        <div role="status" style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 6, background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#166534', fontSize: 13 }}>
+          {notice} <button onClick={() => setNotice('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#166534' }}>×</button>
+        </div>
+      )}
 
       {loading ? <div className="cp-loading">Loading…</div> : (
         <>
@@ -103,7 +123,7 @@ export default function SafetyQueuePage() {
             <table className="cp-table">
               <thead>
                 <tr>
-                  <th>Submission</th><th>Type</th><th>From</th><th>Reported</th>
+                  <th>Source</th><th>Type</th><th>From</th><th>Reported</th>
                   <th>What they told us</th>
                   {tab === 'closed' ? <th>Outcome</th> : null}
                   <th />
@@ -112,7 +132,11 @@ export default function SafetyQueuePage() {
               <tbody>
                 {tasks.map(t => (
                   <tr key={t.id}>
-                    <td>#{t.submission_id}</td>
+                    <td>
+                      {t.source === 'chat'
+                        ? <Link to={`/admin/clients/${clientId}/chat-records?conversation=${t.chat_conversation_id}`}>Chat · view conversation</Link>
+                        : `Submission #${t.submission_id}`}
+                    </td>
                     <td>{String(t.submission_type || '').replace(/_/g, ' ')}</td>
                     <td>{t.submitter_name || t.submitter_email || '—'}</td>
                     <td>{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</td>
@@ -121,7 +145,16 @@ export default function SafetyQueuePage() {
                     </td>
                     {tab === 'closed' ? (
                       <td>
-                        {t.outcome === 'reviewed_not_ae'
+                        {t.outcome === 'confirmed_ae' ? (
+                          <span title="Clinical judgement">
+                            <strong>Confirmed side effect</strong>
+                            <div style={{ fontSize: 12 }}>
+                              {t.ae_sync_status === 'synced' ? `Sent to MIMS · case ${t.ae_mims_case_id}`
+                                : t.ae_sync_status === 'failed_sync' ? 'MIMS not reached yet — retrying'
+                                : 'Held in portal (no MIMS connection)'}
+                            </div>
+                          </span>
+                        ) : t.outcome === 'reviewed_not_ae'
                           ? <span title="Clinical judgement">Reviewed — not an AE</span>
                           : <span title={t.outcome_reason || ''}>Cleared administratively</span>}
                         <div style={{ fontSize: 12, color: '#6B7280' }}>
@@ -146,7 +179,7 @@ export default function SafetyQueuePage() {
         <div className="cp-modal-overlay" onClick={() => !busy && setOpen(null)}>
           <div className="cp-modal" onClick={e => e.stopPropagation()}>
             <div className="cp-modal-header">
-              <span>Close review · submission #{open.submission_id}</span>
+              <span>Close review · {open.source === 'chat' ? 'chat conversation' : `submission #${open.submission_id}`}</span>
               <button className="cp-modal-close" disabled={busy} onClick={() => setOpen(null)}>×</button>
             </div>
             <div className="cp-modal-body">
@@ -164,6 +197,28 @@ export default function SafetyQueuePage() {
                 A clinical judgement. Safety reviewer role only.
               </div>
             </label>
+
+            <label style={{ display: 'block', opacity: canJudge ? 1 : 0.5 }}>
+              <input type="radio" name="outcome" value="confirmed_ae" disabled={!canJudge}
+                     checked={outcome === 'confirmed_ae'}
+                     onChange={e => setOutcome(e.target.value)} />
+              {' '}Confirmed side effect — send to MIMS
+              <div style={{ fontSize: 12, color: '#6B7280', marginLeft: 24 }}>
+                A clinical judgement. Creates an adverse event case in MIMS. Safety reviewer role only.
+              </div>
+            </label>
+
+            {outcome === 'confirmed_ae' && (
+              <div style={{ display: 'grid', gap: 8, marginLeft: 24 }}>
+                <input value={productName} onChange={e => setProductName(e.target.value)} placeholder="Product (required)" />
+                <textarea rows={3} value={eventDescription} onChange={e => setEventDescription(e.target.value)}
+                          placeholder="What happened (required)" style={{ width: '100%' }} />
+                <label style={{ fontSize: 12, color: '#6B7280' }}>
+                  When it started (if known){' '}
+                  <input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+                </label>
+              </div>
+            )}
 
             <label style={{ display: 'block' }}>
               <input type="radio" name="outcome" value="cleared_administrative"

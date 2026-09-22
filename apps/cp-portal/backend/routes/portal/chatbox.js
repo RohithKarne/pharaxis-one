@@ -12,6 +12,7 @@ const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth
 const log = require('../../utils/logger');
 const { resolveConversation, recordMessage, bestEffort } = require('../../utils/chatRecords');
 const { chatStubEnabled, stubReply } = require('../../utils/chatStub');
+const { systemAudit } = require('../../utils/audit');
 
 async function isFeatureEnabled(clientId, featureKey) {
   const [[row]] = await pool.execute('SELECT is_enabled FROM cp_features WHERE client_id = ? AND feature_key = ?', [clientId, featureKey]);
@@ -195,6 +196,65 @@ router.post('/:clientCode', authenticatePortal, requirePortalAuth, async (req, r
   } catch (err) {
     log.error('portal.chatbox.error', { err, route: 'POST /:clientCode', path: req.path, request_id: req.requestId || null });
     return answer(502, { error: 'AI service error. Please try again.' }, 'error');
+  }
+});
+
+// POST /api/portal/chatbox/:clientCode/report-unwell
+// CPPM-18: the chat asks the same screening question as every portal form. A Yes
+// raises a Safety Queue task linked to the conversation. Unlike the chat record,
+// this is NOT best-effort: if the task cannot be raised the person is told, so a
+// report is never silently lost.
+router.post('/:clientCode/report-unwell', authenticatePortal, requirePortalAuth, async (req, res) => {
+  try {
+    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
+    if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    if (!await isFeatureEnabled(client.id, 'chatbox')) {
+      return res.status(403).json({ error: 'Chatbox is not enabled for this portal.' });
+    }
+    const userId = req.portalUser.userId;
+    const userType = req.portalUser.user_type || 'other';
+    const detail = String(req.body.detail || '').trim().slice(0, 5000) || null;
+
+    // The report belongs to a conversation — start one if the person has not asked anything yet.
+    let conversationId = await resolveConversation({
+      conversationId: req.body.conversation_id, clientId: client.id, userId, userType, provider: null, model: null,
+    });
+    const [[existing]] = await pool.execute(
+      'SELECT id, status FROM cp_ae_review_tasks WHERE chat_conversation_id = ? AND client_id = ?', [conversationId, client.id]);
+
+    let taskId;
+    if (existing && existing.status === 'open') {
+      // Same conversation, still under review: add to it rather than raise a second task.
+      if (detail) {
+        await pool.execute(
+          "UPDATE cp_ae_review_tasks SET reported_detail = CONCAT_WS('\\n---\\n', reported_detail, ?) WHERE id = ?", [detail, existing.id]);
+      }
+      taskId = existing.id;
+    } else {
+      // A closed task already decided on this conversation; a new report is new
+      // information and gets its own conversation and task, never a silent append.
+      if (existing) {
+        conversationId = await resolveConversation({ conversationId: null, clientId: client.id, userId, userType, provider: null, model: null });
+      }
+      const [r] = await pool.execute(
+        'INSERT INTO cp_ae_review_tasks (client_id, chat_conversation_id, reported_detail) VALUES (?, ?, ?)',
+        [client.id, conversationId, detail]);
+      taskId = r.insertId;
+      systemAudit('portal', client.id, 'AE_REVIEW_TASK_CREATED', 'chat_conversation', conversationId, { task_id: taskId });
+    }
+
+    await bestEffort('safety_flag_message', () => recordMessage({
+      conversationId, clientId: client.id, role: 'system', outcome: 'safety_flag',
+      content: `Reported that someone became unwell.${detail ? ` What happened: ${detail}` : ''}`,
+    }), { client_id: client.id, route: 'POST /:clientCode/report-unwell' });
+
+    res.status(201).json({
+      message: 'Thank you. Our safety team will review this.',
+      conversation_id: conversationId,
+    });
+  } catch (err) {
+    log.error('portal.chatbox.report_unwell_failed', { err, route: 'POST /:clientCode/report-unwell', request_id: req.requestId || null });
+    res.status(500).json({ error: 'We could not send your report. Please use the side effect form so it reaches our safety team.' });
   }
 });
 

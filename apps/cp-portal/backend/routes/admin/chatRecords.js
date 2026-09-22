@@ -8,8 +8,9 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess, requireRole } = require('../../middleware/auth');
 
-// Personal, sometimes health, messages: admins only, not viewers or reviewers.
-const canRead = requireRole('superadmin', 'admin');
+// Personal, sometimes health, messages: admins, plus safety reviewers who must
+// read a conversation raised in the Safety Queue (CPPM-18). Not viewers.
+const canRead = requireRole('superadmin', 'admin', 'safety_reviewer');
 const { audit } = require('../../utils/audit');
 const log = require('../../utils/logger');
 

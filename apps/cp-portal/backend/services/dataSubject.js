@@ -124,6 +124,16 @@ async function eraseUser(userId, clientId) {
       summary.retained.push(`submissions(${retainIds.length}) [AE/PC — identity severed, safety record retained]`);
     }
 
+    // CPPM-18: a chat that raised a safety review is a safety record — keep it,
+    // sever the identity (as for AE/PC submissions above). The rest are deleted below.
+    const [flaggedChats] = await conn.execute(
+      `UPDATE cp_chat_conversations c SET c.portal_user_id = NULL
+        WHERE c.portal_user_id = ? AND c.client_id = ?
+          AND EXISTS (SELECT 1 FROM cp_ae_review_tasks t WHERE t.chat_conversation_id = c.id)`, [userId, clientId]);
+    if (flaggedChats.affectedRows) {
+      summary.retained.push(`chat_conversations(${flaggedChats.affectedRows}) [safety review raised — identity severed, record retained]`);
+    }
+
     // Delete engagement/identity-link data.
     for (const [table, col] of [
       ['cp_saved_items', 'portal_user_id'], ['cp_user_follows', 'portal_user_id'],

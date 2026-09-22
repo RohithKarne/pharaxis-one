@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminHeaders } from '../context/AdminAuthContext'
 
@@ -11,6 +11,7 @@ const who = c => [c.first_name, c.last_name].filter(Boolean).join(' ') || c.emai
 
 export default function ChatRecordsPage() {
   const { clientId } = useParams()
+  const [searchParams] = useSearchParams()
   const [list, setList]       = useState({ conversations: [], total: 0, page: 1, page_size: 25 })
   const [page, setPage]       = useState(1)
   const [userType, setUserType] = useState('')
@@ -27,6 +28,12 @@ export default function ChatRecordsPage() {
       .catch(d => setError(d?.error || 'Could not load conversations.'))
       .finally(() => setLoading(false))
   }, [clientId, page, userType])
+
+  // CPPM-18: the Safety Queue links straight to a conversation.
+  useEffect(() => {
+    const id = searchParams.get('conversation')
+    if (id) openConversation(id)
+  }, [clientId, searchParams])
 
   async function openConversation(id) {
     setError('')
@@ -56,6 +63,14 @@ export default function ChatRecordsPage() {
             {open.messages.map(m => {
               const sources = m.sources_json ? JSON.parse(m.sources_json) : []
               const isUser = m.role === 'user'
+              if (m.role === 'system') {
+                return (
+                  <div key={m.id} style={{ marginBottom: 12, padding: 12, borderRadius: 8, background: '#FEF2F2', borderLeft: '3px solid #DC2626' }}>
+                    <div style={{ fontSize: 12, color: '#991B1B', marginBottom: 4 }}><strong>Safety report</strong> · {fmt(m.created_at)}</div>
+                    <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                  </div>
+                )
+              }
               return (
                 <div key={m.id} style={{ marginBottom: 12, padding: 12, borderRadius: 8, background: isUser ? '#F1F5F9' : '#F5F0FA', borderLeft: `3px solid ${isUser ? '#94A3B8' : '#6B3FA0'}` }}>
                   <div style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>

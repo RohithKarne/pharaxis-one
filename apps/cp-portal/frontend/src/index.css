@@ -2453,6 +2453,20 @@ body { background: var(--cp-bg); }
 .pp-chat-input-row button { background: var(--pp-primary); color: #fff; border: none; border-radius: 20px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .pp-chat-input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* CPPM-18: the screening question inside the chat window */
+.pp-chat-safety { padding: 10px 12px; border-top: 1px solid var(--pp-border); background: #FFF7ED; font-size: 12px; color: var(--pp-text); display: flex; flex-direction: column; gap: 6px; }
+.pp-chat-safety p { margin: 0; line-height: 1.45; }
+.pp-chat-safety-q { font-weight: 600; font-size: 12.5px; }
+.pp-chat-safety-help { color: var(--pp-text-muted); }
+.pp-chat-safety textarea { width: 100%; padding: 6px 10px; border: 1px solid var(--pp-border); border-radius: 8px; font-size: 13px; font-family: inherit; resize: vertical; }
+.pp-chat-safety-actions { display: flex; gap: 8px; align-items: center; }
+.pp-chat-safety-actions button { background: #C2410C; color: #fff; border: none; border-radius: 16px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.pp-chat-safety-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.pp-chat-safety-actions .pp-chat-safety-no { background: #fff; color: var(--pp-text); border: 1px solid var(--pp-border); }
+.pp-chat-safety .pp-chat-safety-link, .pp-chat-safety-actions .pp-chat-safety-link { background: none; border: none; padding: 0; color: #C2410C; font-size: 12px; font-weight: 600; text-decoration: underline; cursor: pointer; align-self: flex-start; }
+.pp-chat-safety-done { color: #166534; }
+.pp-chat-safety-error { color: #B91C1C; }
+
 /* ── Inline edit inputs (admin tables) ───────────────────── */
 .cp-inline-edit { border: none; border-bottom: 1px dashed transparent; background: transparent; font-size: 13px; color: var(--cp-text); padding: 2px 4px; outline: none; width: 100%; min-width: 120px; transition: border-color 0.15s; }
 .cp-inline-edit:hover, .cp-inline-edit:focus { border-bottom-color: var(--cp-primary); background: var(--cp-bg); border-radius: 3px 3px 0 0; }

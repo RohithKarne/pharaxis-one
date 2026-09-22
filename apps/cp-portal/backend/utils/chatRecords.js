@@ -53,7 +53,10 @@ async function bestEffort(what, fn, context) {
 /** Scheduler: remove conversations past retention (their messages go with them). */
 async function purgeExpiredChats() {
   const [r] = await pool.execute(
-    'DELETE FROM cp_chat_conversations WHERE last_message_at < NOW() - INTERVAL ? DAY', [CHAT_RETENTION_DAYS]);
+    `DELETE FROM cp_chat_conversations c
+      WHERE c.last_message_at < NOW() - INTERVAL ? DAY
+        -- CPPM-18: a chat that raised a safety review is a safety record; never purged here.
+        AND NOT EXISTS (SELECT 1 FROM cp_ae_review_tasks t WHERE t.chat_conversation_id = c.id)`, [CHAT_RETENTION_DAYS]);
   if (r.affectedRows) log.info('chat.records.purged', { conversations: r.affectedRows, retention_days: CHAT_RETENTION_DAYS });
 }
 
