@@ -22,6 +22,8 @@
 > Revision update: 2026-08-10 (**Seven routines cut to four, and five Jira spaces closed.** Mandated by Rohith Karne. **Product Audit merged into §30** as its second story — five client-side teams a run, rotating, instead of twenty-seven. **Client Support Simulation merged into §32** as its second story — one end user, rotating through the six personas. **CEO Meeting and Product Development retired outright.** **MIMS-PM added** as the twin of CP-PM (§46). What remains: **Product Intelligence · Client Intelligence · CP-PM · MIMS-PM**, writing to **`CPPM` · `MIPM` · `DCI`**. The `CP`, `MIMS`, `PD`, `ASUP`, `PAUD` and `CEO` spaces are deleted; every open feature, enhancement, audit finding and support item was imported first — 27 backlog items, 27 audit questions and 4 support accounts. **`CPPM` and `MIPM` are the live product spaces, not a sandbox** — Rohith: *"dont think my learning as training. It will real production feature only."* That retires the `TRN-` prefix, the re-issued controlled ticket and the never-built-from rule in §46. §30, §32, §33, §34, §35, §36 and §46 all carry a dated block at the top stating the current position; the original text is kept below each.)
 > Revision update: 2026-08-10 (Section 47 added — Plain Language & Brevity Standard. Mandated by Rohith Karne, and **it applies to everything**: this chat, every routine, every document, internal product development, and every reply between team members. Two rules. **Plain English in the body** — no file paths, line numbers, table or function names, endpoints or code fragments where a person reads; explain what a person does and what the system does. **References are kept but collected in one block at the foot**, never scattered — `evidence or nothing` is relocated, not relaxed. And **one or two lines**, with depth given on request rather than by default. §28 is narrowed to replies to Rohith and §47 wins where they differ; §39.6 and `CLAUDE.md` hard constraint 4 amended as to placement. Commit messages and pull requests are the exception and must still name what changed.)
 > Revision update: 2026-08-08 (Section 46 added — CP-PM Product Management Training Routine. Mandated by Rohith Karne. A seventh cloud agent sets **one product management exercise per run** on real CP Portal code and withholds the answer; the analyst is Rohith, training toward Product Owner and Product Manager. **CP Portal only**, files to Jira project `CPPM`. Manual, like the other six. **Scenario sources are our own code *and* public web research** — regulation, standards, industry practice, adjacent product documentation — added the same day on Rohith's instruction, because code alone yields too narrow a feature pool; the two-source rule keeps our own code as the anchor for the as-is. Governance lives here; the operational prompt lives in `docs/CP_PM.md`. **Two decisions inside the same day reversed each other and both are recorded:** training tickets were first ruled never to become real work, then Rohith decided that **what the analyst specifies gets built and shipped** — against Vasu's and Sarvanan's advice. The promotion bridge in §46 is what makes that safe: the `CPPM` story is a draft, a re-issued `CP` ticket is the controlled specification, and no `TRN-` identifier ever crosses. **Consequence stated: CP Portal reopens to feature development** — §41 updated the same day, on Rohith's confirmation, from *STABLE, hotfix support only* to **ACTIVE FEATURE DEVELOPMENT**, so §41 and §46 agree.)
+> Revision update: 2026-09-23 (**Sections 39.8 and 39.9 added.** Mandated by Rohith Karne. §39.8 fixes the shape of the overview he approves before any build — product, test and development, in a table with one row per ticket when there is more than one, decisions pulled out and numbered with the team's suggestion against each. §39.9 fixes what a completion report and a Jira closing comment must carry, including **what was not checked**, which is never dropped. §40.2 amended: parallel build sessions are allowed when Rohith asks for them, with the conditions that make them safe.)
+
 > Revision update: 2026-09-09 (**Two products, not five.** Mandated by Rohith Karne: *"lets delete qms, vault and test console, ai-agent. I want to concentrate only on mims, cp-portal."* The **Pharaxis Vault, QMS and AI Agent** applications and the **Test Console** were deleted from the repository, together with their CI, deploy and release workflows, runbooks, website pages, nginx routes, PM2 entries, Dependabot configs, labels and local databases. **§43, §44 and §45 are retired in place and their numbers are not reused** — the same pattern as §33–§36 — because §41–§47 are cited across this file, in `CLAUDE.md` and inside cloud routine prompts that cannot be edited from the repository. **Document management moves outside:** MIMS integrates with **Veeva Vault and other external content management systems** through its per-organisation integration config, which was always written against Veeva's API and never called the in-house Vault app — that integration is unaffected. **Regression moves into the apps:** §29 step 4 and §38 step 18 no longer promote into a separate Test Console; each app carries its own suite, run through the app and its CI, on Rohith's instruction *"I will test using the original app itself."* The full text of the deleted sections remains in git history.)
 > Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
 > Revision update: 2026-09-22 (Section 48 widened and renamed **The Job** on Rohith Karne's instruction. Six topics — Project Management, IT Compliance, Validation, Support, System Administration, AI — all set in regulated life sciences. One epic and seven stories per run: one per topic plus one extra situational story. A matching interviewer per topic. Still files to Jira project `CSV`; epics named `The Job — <date>`. Operational prompt moved to `docs/THE_JOB.md`.)
@@ -2797,6 +2799,47 @@ Varun:   Check production first, then decide. Do not encode a workaround for
 cause. Bhavya gives root cause, options, a recommendation, and the line that says
 what would change it (39.5).
 
+### 39.8 The pre-build overview: product, test, development (Mandatory — set by Rohith 2026-09-22)
+
+Before any ticket is built, Rohith gets one overview covering three views, in this
+order, and he approves before a line is written:
+
+| View | Who | What it answers |
+| --- | --- | --- |
+| **Product** | Saad | What is wrong today, who it hurts, what changes for the person, and the decisions that are Rohith's to make |
+| **Test** | Kiranmai | What will be checked, including the paths that must fail |
+| **Development** | Varun | What is built, in plain words: what exists today, what changes, the trade-off, and the effort |
+
+Rules that make it usable:
+
+- **Table format when more than one ticket is covered**, one row per ticket, those
+  three columns. Rohith asked for exactly this on 2026-09-22: *"I need high level
+  overview in table format for all at once. I need product column, test column,
+  development column. I will check and provide approval to proceed."*
+- **Decisions are pulled out and numbered**, each with the team's suggestion, so
+  Rohith can answer with a single line. He does.
+- **Depth on request.** Varun goes deeper only where Rohith asks — *"for
+  development level - I need in depth explaination not very much. it should be in
+  technical wording"* (2026-09-22) means the technical view stays technical but
+  still short.
+- **One recommendation, with what would change it** (§39.5), never a menu.
+- Effort figures are estimates and are labelled as such.
+
+### 39.9 Closing a ticket: what the report and the Jira comment must carry
+
+The same discipline at the end as at the start. Every completion report and every
+Jira closing comment carries, in plain English:
+
+1. **What changed**, as a person experiences it.
+2. **What was checked**, including what was seen on a real screen (§26) and by whom.
+3. **What was NOT checked** — always present, never omitted because it is awkward.
+4. **What is still open**: decisions waiting on Rohith or Vasu, and anything
+   deliberately left for a follow-up ticket.
+5. **References at the foot** (§47), never in the body.
+
+A defect found while doing the work is reported even when it is out of scope, and
+raised as its own ticket rather than quietly widened into the current one.
+
 ### Ownership of this section
 
 Rohith Karne owns this section. Aditi Raghavan enforces it in routing; Bala Kaviti
@@ -2837,6 +2880,22 @@ no longer how we work and it had drifted from practice.
   postmortem, 2026-08-06.
 - Where one is used, its output is treated as a claim to verify, not a result to
   report onward.
+
+**Amended 2026-09-22.** Rohith asked for seven tickets to be built at once, in
+parallel sessions: *"continue with other 6 too in other chat sessions. Dont wait
+for cppm-14 to get completed."* That is allowed when he asks, under four
+conditions, each of which we needed on the day:
+
+1. **Isolation.** Each session works in its own copy of the repository and its own
+   throwaway database. The shared development database is not theirs to migrate.
+2. **A reserved migration number per session**, agreed up front, or two sessions
+   pick the same one.
+3. **Every new migration is folded into the baseline.** Seven branches each
+   appending to the same file produced a file that could not build a new database;
+   it had to be rebuilt by hand and re-proved against real MySQL.
+4. **Their results are claims until verified together.** The branches are merged
+   into one integration branch and the features are then checked on the real
+   screens, in one running app, before anything is called done.
 
 ### 40.3 Verification before done
 
