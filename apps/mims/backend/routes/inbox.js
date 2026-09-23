@@ -17,8 +17,6 @@ const {
   getInquiryHistory,
   getInquiryRecommendations,
   toMySqlDateTime,
-  FIRST_TOUCH_SLA_HOURS,
-  RESPONSE_SLA_HOURS,
 } = require('../services/inboxGovernanceService');
 
 async function audit(userId, userName, action, entity, entityId, details) {
