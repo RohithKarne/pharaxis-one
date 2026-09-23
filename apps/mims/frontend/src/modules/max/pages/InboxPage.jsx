@@ -34,7 +34,12 @@ export default function InboxPage() {
   const DENSITY_KEY = `mims_inbox_density_${user?.id || 'guest'}`
   const SAVED_VIEWS_SCREEN_KEY = 'inbox'  // server-side saved views via /api/admin/user-preferences
 
+  // Active server-side search term. Search results are a slice of the inbox, never the inbox —
+  // so they are never written to the local cache.
+  const searchRef = useRef('')
+
   const saveInquiries = useCallback((data) => {
+    if (searchRef.current) return
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   }, [STORAGE_KEY])
 
@@ -145,14 +150,18 @@ export default function InboxPage() {
     // C3 FIX: background refreshes don't show a loading spinner
     if (!background) setLoading(true)
     setLoadError(null)
+    const term = searchRef.current
     const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved && !force && !tenantFilterOrgId) {
+    if (saved && !force && !tenantFilterOrgId && !term) {
       setInquiries(JSON.parse(saved))
       setLoading(false)
       return
     }
     try {
-      const query = tenantFilterOrgId ? `?org_id=${encodeURIComponent(tenantFilterOrgId)}` : ''
+      const params = new URLSearchParams()
+      if (tenantFilterOrgId) params.set('org_id', tenantFilterOrgId)
+      if (term) params.set('search', term)
+      const query = params.toString() ? `?${params}` : ''
       const res = await httpFetch(`/api/inbox${query}`, { headers: AUTH_H })
       if (res.ok) {
         const data = await res.json()
@@ -246,6 +255,20 @@ export default function InboxPage() {
     const timer = setTimeout(() => loadInquiries({ force: true, background: true }), 800)
     return () => clearTimeout(timer)
   }, [loadInquiries])
+
+  // F6: search runs on the server so it covers the whole inbox, not only the loaded rows.
+  // Debounced, and skipped on mount / when the term has not changed since the last fetch.
+  const lastSearchRef = useRef('')
+  useEffect(() => {
+    const term = search.trim()
+    searchRef.current = term
+    if (term === lastSearchRef.current) return
+    const timer = setTimeout(() => {
+      lastSearchRef.current = term
+      loadInquiries({ force: true, background: true })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search, loadInquiries])
 
   useEffect(() => {
     const reportFilters = location.state?.reportFilters

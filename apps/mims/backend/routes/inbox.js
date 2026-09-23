@@ -308,8 +308,17 @@ async function applyRoutingRules(req, rows) {
   return nextRows;
 }
 
-async function loadInboxRows(req, limit = 500, requestedOrgIdRaw = null) {
-  const { where, params } = await buildInboxOrgScope(req, 'i', requestedOrgIdRaw);
+async function loadInboxRows(req, limit = 500, requestedOrgIdRaw = null, search = '') {
+  const scope = await buildInboxOrgScope(req, 'i', requestedOrgIdRaw);
+  let { where } = scope;
+  const params = [...scope.params];
+  // Search runs in SQL so it covers every inquiry, not only the rows the LIMIT below returns.
+  const term = String(search || '').trim().slice(0, 200);
+  if (term) {
+    const like = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
+    where = `${where ? `${where} AND` : 'WHERE'} (i.sender LIKE ? OR i.subject LIKE ? OR i.body LIKE ?)`;
+    params.push(like, like, like);
+  }
   const queryParams = [req.user?.userId || 0, ...params];
   const [rows] = await pool.execute(`
     SELECT
@@ -400,7 +409,7 @@ async function loadInboxRows(req, limit = 500, requestedOrgIdRaw = null) {
 // GET /api/inbox — returns persisted inquiries from DB (real emails only)
 router.get('/', authenticate, async (req, res) => {
   try {
-    const inquiries = await loadInboxRows(req, 500, req.query?.org_id ?? null);
+    const inquiries = await loadInboxRows(req, 500, req.query?.org_id ?? null, req.query?.search ?? '');
     res.json({ source: 'db', inquiries, total: inquiries.length });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.status ? err.message : 'Server error.' });
