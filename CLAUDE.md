@@ -85,6 +85,8 @@ Claude Code is the only development tool. Write and edit code directly with Edit
 | How the coding agent executes | SOP §40 |
 | CP Portal · MIMS | SOP §41 · §42 |
 
+**The session-opening prompt Rohith uses is kept in SOP §39.10** — read it if a session starts without one.
+
 **Everything is in `docs/TEAM_OPERATING_SOP.md`.** There is exactly one SOP. The five per-app SOP files were absorbed and deleted on 2026-08-07 — do not recreate them.
 
 ---

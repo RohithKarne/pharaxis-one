@@ -22,7 +22,7 @@
 > Revision update: 2026-08-10 (**Seven routines cut to four, and five Jira spaces closed.** Mandated by Rohith Karne. **Product Audit merged into §30** as its second story — five client-side teams a run, rotating, instead of twenty-seven. **Client Support Simulation merged into §32** as its second story — one end user, rotating through the six personas. **CEO Meeting and Product Development retired outright.** **MIMS-PM added** as the twin of CP-PM (§46). What remains: **Product Intelligence · Client Intelligence · CP-PM · MIMS-PM**, writing to **`CPPM` · `MIPM` · `DCI`**. The `CP`, `MIMS`, `PD`, `ASUP`, `PAUD` and `CEO` spaces are deleted; every open feature, enhancement, audit finding and support item was imported first — 27 backlog items, 27 audit questions and 4 support accounts. **`CPPM` and `MIPM` are the live product spaces, not a sandbox** — Rohith: *"dont think my learning as training. It will real production feature only."* That retires the `TRN-` prefix, the re-issued controlled ticket and the never-built-from rule in §46. §30, §32, §33, §34, §35, §36 and §46 all carry a dated block at the top stating the current position; the original text is kept below each.)
 > Revision update: 2026-08-10 (Section 47 added — Plain Language & Brevity Standard. Mandated by Rohith Karne, and **it applies to everything**: this chat, every routine, every document, internal product development, and every reply between team members. Two rules. **Plain English in the body** — no file paths, line numbers, table or function names, endpoints or code fragments where a person reads; explain what a person does and what the system does. **References are kept but collected in one block at the foot**, never scattered — `evidence or nothing` is relocated, not relaxed. And **one or two lines**, with depth given on request rather than by default. §28 is narrowed to replies to Rohith and §47 wins where they differ; §39.6 and `CLAUDE.md` hard constraint 4 amended as to placement. Commit messages and pull requests are the exception and must still name what changed.)
 > Revision update: 2026-08-08 (Section 46 added — CP-PM Product Management Training Routine. Mandated by Rohith Karne. A seventh cloud agent sets **one product management exercise per run** on real CP Portal code and withholds the answer; the analyst is Rohith, training toward Product Owner and Product Manager. **CP Portal only**, files to Jira project `CPPM`. Manual, like the other six. **Scenario sources are our own code *and* public web research** — regulation, standards, industry practice, adjacent product documentation — added the same day on Rohith's instruction, because code alone yields too narrow a feature pool; the two-source rule keeps our own code as the anchor for the as-is. Governance lives here; the operational prompt lives in `docs/CP_PM.md`. **Two decisions inside the same day reversed each other and both are recorded:** training tickets were first ruled never to become real work, then Rohith decided that **what the analyst specifies gets built and shipped** — against Vasu's and Sarvanan's advice. The promotion bridge in §46 is what makes that safe: the `CPPM` story is a draft, a re-issued `CP` ticket is the controlled specification, and no `TRN-` identifier ever crosses. **Consequence stated: CP Portal reopens to feature development** — §41 updated the same day, on Rohith's confirmation, from *STABLE, hotfix support only* to **ACTIVE FEATURE DEVELOPMENT**, so §41 and §46 agree.)
-> Revision update: 2026-09-23 (**Sections 39.8 and 39.9 added.** Mandated by Rohith Karne. §39.8 fixes the shape of the overview he approves before any build — product, test and development, in a table with one row per ticket when there is more than one, decisions pulled out and numbered with the team's suggestion against each. §39.9 fixes what a completion report and a Jira closing comment must carry, including **what was not checked**, which is never dropped. §40.2 amended: parallel build sessions are allowed when Rohith asks for them, with the conditions that make them safe.)
+> Revision update: 2026-09-23 (**Sections 39.8, 39.9 and 39.10 added.** §39.10 holds the session-opening prompt Rohith uses, updated on his instruction to name §47 and the two new subsections, and recording that the Vault/QMS/AI-Agent deletion retired §43–45 without renumbering anything else. Mandated by Rohith Karne. §39.8 fixes the shape of the overview he approves before any build — product, test and development, in a table with one row per ticket when there is more than one, decisions pulled out and numbered with the team's suggestion against each. §39.9 fixes what a completion report and a Jira closing comment must carry, including **what was not checked**, which is never dropped. §40.2 amended: parallel build sessions are allowed when Rohith asks for them, with the conditions that make them safe.)
 
 > Revision update: 2026-09-09 (**Two products, not five.** Mandated by Rohith Karne: *"lets delete qms, vault and test console, ai-agent. I want to concentrate only on mims, cp-portal."* The **Pharaxis Vault, QMS and AI Agent** applications and the **Test Console** were deleted from the repository, together with their CI, deploy and release workflows, runbooks, website pages, nginx routes, PM2 entries, Dependabot configs, labels and local databases. **§43, §44 and §45 are retired in place and their numbers are not reused** — the same pattern as §33–§36 — because §41–§47 are cited across this file, in `CLAUDE.md` and inside cloud routine prompts that cannot be edited from the repository. **Document management moves outside:** MIMS integrates with **Veeva Vault and other external content management systems** through its per-organisation integration config, which was always written against Veeva's API and never called the in-house Vault app — that integration is unaffected. **Regression moves into the apps:** §29 step 4 and §38 step 18 no longer promote into a separate Test Console; each app carries its own suite, run through the app and its CI, on Rohith's instruction *"I will test using the original app itself."* The full text of the deleted sections remains in git history.)
 > Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
@@ -2839,6 +2839,45 @@ Jira closing comment carries, in plain English:
 
 A defect found while doing the work is reported even when it is out of scope, and
 raised as its own ticket rather than quietly widened into the current one.
+
+### 39.10 The session-opening prompt (set by Rohith 2026-09-23)
+
+Rohith opens every session with the same instruction. The one he had used since
+April named §26, §38, §39 and §41 — still the right numbers, because deleting
+Vault, QMS and the AI Agent retired §43–45 and renumbered nothing. It was missing
+three things added since: §47 (plain English, references at the foot), §39.8 (the
+overview he approves before any build) and §39.9 (what a closing report carries).
+
+**The current wording, kept here so it can be copied:**
+
+> Hi Team. Before we start, read `docs/TEAM_OPERATING_SOP.md` §26, §38, §39, §40,
+> §47 and the section for the app we are working on — §41 CP Portal, §42 MIMS.
+>
+> How I want you to work with me:
+>
+> 1. **Talk to me in chat while you work.** Everyone speaks in their own voice —
+>    Saad, Varun, Kiranmai, Vasu, Aditi — during every feature and every bug fix,
+>    not a report at the end. Communication is the most important thing for me.
+>    Say what you think, what worries you, and what you are about to do. Be human,
+>    be energetic, be friendly. Never drop this.
+> 2. **Before you build anything, give me the overview and wait for my approval** —
+>    product, test and development. A table with one row per ticket when there is
+>    more than one, and pull out the decisions that are mine with your suggestion
+>    against each.
+> 3. **Plain English, short.** No file paths or code in the body; put the
+>    references at the foot. Go deeper only where I ask.
+> 4. **Nothing is done until you have seen it on the real screen**, and every
+>    report tells me **what you did not check**. If you need a login, ask me — do
+>    not type passwords.
+> 5. **Ask me before pushing anything**, and never push to `main` directly.
+
+Why each line is there: 1 is §39, reinforced more than twenty times; 2 is §39.8;
+3 is §47; 4 is §26 and §39.9; 5 is §38 and `CLAUDE.md` hard constraint 1.
+
+**Known quirk, not a typo:** two sections carry the number **26** — the
+Pre-Development Discussion & Feature Lock Process and the Functional Verification
+Standard. Both are cited as "§26" across the repository and inside cloud routine
+prompts, so neither is renumbered. Reading §26 means reading both.
 
 ### Ownership of this section
 
