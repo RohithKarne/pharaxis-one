@@ -11,6 +11,8 @@ const pool = require('../database/db');
 const { emitDataSync } = require('../services/appRealtimeService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 const {
+  FIRST_TOUCH_SLA_HOURS,
+  RESPONSE_SLA_HOURS,
   hydrateInquiryRows,
   getInquiryHistory,
   getInquiryRecommendations,
@@ -434,6 +436,16 @@ router.get('/summary', authenticate, async (req, res) => {
 
     const baseWhere = `${where || 'WHERE 1=1'} AND i.status != 'outbox'`;
 
+    // "Late" is defined once, in inboxGovernanceService.computeSlaStatus; this SQL mirrors it so the
+    // counters and the row badges agree. First touch is due FIRST_TOUCH_SLA_HOURS after receipt; the
+    // response is due RESPONSE_SLA_HOURS after first touch (or after receipt if never touched). A row
+    // is breached when it is past due and still waiting, or when it was completed after the due time.
+    const receivedAtSql = `COALESCE(STR_TO_DATE(i.received_at,'%Y-%m-%d %H:%i:%s'), i.created_at)`;
+    const firstTouchDueSql = `(${receivedAtSql} + INTERVAL ? SECOND)`;
+    const responseDueSql = `(COALESCE(i.first_touched_at, ${receivedAtSql}) + INTERVAL ? SECOND)`;
+    const firstTouchSlaSeconds = Math.round(FIRST_TOUCH_SLA_HOURS * 3600);
+    const responseSlaSeconds = Math.round(RESPONSE_SLA_HOURS * 3600);
+
     // Aggregate counts — no row fetch, no limit
     const [[agg]] = await pool.execute(`
       SELECT
@@ -441,15 +453,15 @@ router.get('/summary', authenticate, async (req, res) => {
         SUM(CASE WHEN i.assigned_to IS NULL THEN 1 ELSE 0 END) AS unassigned,
         SUM(CASE WHEN i.snoozed_until IS NOT NULL AND i.snoozed_until > NOW() THEN 1 ELSE 0 END) AS snoozed,
         SUM(CASE WHEN i.exception_reason IS NOT NULL AND i.exception_reason != '' THEN 1 ELSE 0 END) AS exceptions,
-        SUM(CASE WHEN i.first_touched_at IS NULL AND i.received_at IS NOT NULL
-                      AND TIMESTAMPDIFF(HOUR, COALESCE(STR_TO_DATE(i.received_at,'%Y-%m-%d %H:%i:%s'), i.created_at), NOW()) > 24
+        SUM(CASE WHEN (i.first_touched_at IS NULL AND NOW() >= ${firstTouchDueSql})
+                      OR i.first_touched_at > ${firstTouchDueSql}
                  THEN 1 ELSE 0 END) AS first_touch_breached,
-        SUM(CASE WHEN i.first_touched_at IS NOT NULL AND i.first_response_at IS NULL
-                      AND TIMESTAMPDIFF(HOUR, COALESCE(STR_TO_DATE(i.received_at,'%Y-%m-%d %H:%i:%s'), i.created_at), NOW()) > 48
+        SUM(CASE WHEN (i.first_response_at IS NULL AND NOW() >= ${responseDueSql})
+                      OR i.first_response_at > ${responseDueSql}
                  THEN 1 ELSE 0 END) AS response_breached
       FROM inquiries i
       ${baseWhere}
-    `, params);
+    `, [firstTouchSlaSeconds, firstTouchSlaSeconds, responseSlaSeconds, responseSlaSeconds, ...params]);
 
     // Triage breakdown
     const [triageRows] = await pool.execute(`
