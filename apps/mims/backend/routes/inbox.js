@@ -17,6 +17,8 @@ const {
   getInquiryHistory,
   getInquiryRecommendations,
   toMySqlDateTime,
+  FIRST_TOUCH_SLA_HOURS,
+  RESPONSE_SLA_HOURS,
 } = require('../services/inboxGovernanceService');
 
 async function audit(userId, userName, action, entity, entityId, details) {
@@ -310,85 +312,212 @@ async function applyRoutingRules(req, rows) {
   return nextRows;
 }
 
-async function loadInboxRows(req, limit = 500, requestedOrgIdRaw = null, search = '') {
-  const scope = await buildInboxOrgScope(req, 'i', requestedOrgIdRaw);
-  let { where } = scope;
-  const params = [...scope.params];
-  // Search runs in SQL so it covers every inquiry, not only the rows the LIMIT below returns.
-  const term = String(search || '').trim().slice(0, 200);
-  if (term) {
-    const like = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
-    where = `${where ? `${where} AND` : 'WHERE'} (i.sender LIKE ? OR i.subject LIKE ? OR i.body LIKE ?)`;
+// The five inbox tabs, by status. 'archived' is not a tab and is never listed or counted.
+const INBOX_TAB_STATUSES = ['inbox', 'pending', 'processed', 'non_processed', 'outbox'];
+const INBOX_OPEN_STATUSES = ['inbox', 'pending', 'non_processed'];
+const INBOX_SLA_STATUSES = ['breached', 'at_risk', 'on_track', 'met'];
+// The screen asks for 50 rows a page; the CSV export asks for this many at once.
+const INBOX_PAGE_SIZE_MAX = 1000;
+const INBOX_SLA_ALERT_LEAD_MINUTES = Number(process.env.INBOX_SLA_ALERT_LEAD_MINUTES || 30);
+
+// SQL twin of computeSlaStatus() in inboxGovernanceService: same thresholds, same four
+// outcomes, so the SLA filters and the "SLA risk" count can run in the database instead of
+// over a loaded slice. received_at is the poller's 'YYYY-MM-DD HH:MM:SS' text (written in
+// UTC); every pooled session is pinned to UTC in database/db.js, so NOW() compares fairly.
+function slaStatusSql(alias, kind) {
+  const received = `COALESCE(STR_TO_DATE(${alias}.received_at, '%Y-%m-%d %H:%i:%s'), ${alias}.created_at)`;
+  const hours = Number(kind === 'first_touch' ? FIRST_TOUCH_SLA_HOURS : RESPONSE_SLA_HOURS) || 0;
+  const start = kind === 'first_touch' ? received : `COALESCE(${alias}.first_touched_at, ${received})`;
+  const done = kind === 'first_touch' ? `${alias}.first_touched_at` : `${alias}.first_response_at`;
+  const due = `(${start} + INTERVAL ${hours} HOUR)`;
+  const lead = Number(INBOX_SLA_ALERT_LEAD_MINUTES) || 0;
+  return `CASE
+    WHEN ${done} IS NOT NULL THEN IF(${done} > ${due}, 'breached', 'met')
+    WHEN ${due} <= NOW() THEN 'breached'
+    WHEN ${due} <= NOW() + INTERVAL ${lead} MINUTE THEN 'at_risk'
+    ELSE 'on_track'
+  END`;
+}
+
+function parseInboxListQuery(query = {}) {
+  const pick = (key) => String(query[key] ?? '').trim();
+  const oneOf = (value, allowed) => (allowed.includes(value) ? value : '');
+  const dateOnly = (value) => (/^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '');
+  const status = pick('status') || 'inbox';
+  if (!INBOX_TAB_STATUSES.includes(status)) {
+    const err = new Error('Unknown inbox tab.');
+    err.status = 400;
+    throw err;
+  }
+  return {
+    status,
+    search: pick('search').slice(0, 200),
+    from: dateOnly(pick('from')),
+    to: dateOnly(pick('to')),
+    color: pick('color').slice(0, 50),
+    priority: pick('priority').slice(0, 50),
+    read: oneOf(pick('read'), ['read', 'unread']),
+    locked: oneOf(pick('locked'), ['locked', 'unlocked']),
+    assignee: pick('assignee').slice(0, 255),
+    triageState: pick('triage_state').slice(0, 50),
+    queue: pick('queue').slice(0, 100),
+    firstTouchSla: oneOf(pick('first_touch_sla'), INBOX_SLA_STATUSES),
+    responseSla: oneOf(pick('response_sla'), INBOX_SLA_STATUSES),
+    sort: pick('sort') === 'asc' ? 'ASC' : 'DESC',
+    page: parsePositiveInt(query.page) || 1,
+    pageSize: Math.min(parsePositiveInt(query.page_size) || 50, INBOX_PAGE_SIZE_MAX),
+  };
+}
+
+// Every list filter as SQL, on top of the tenant scope, so search, dates and the advanced
+// filters cover the whole inbox and the count of matches is a real count.
+function buildInboxListWhere(scopeWhere, scopeParams, q) {
+  const clauses = scopeWhere ? [scopeWhere.replace(/^WHERE\s+/i, '')] : [];
+  const params = [...scopeParams];
+  clauses.push('i.status = ?');
+  params.push(q.status);
+  if (q.search) {
+    const like = `%${q.search.replace(/[\\%_]/g, '\\$&')}%`;
+    clauses.push('(i.sender LIKE ? OR i.subject LIKE ? OR i.body LIKE ?)');
     params.push(like, like, like);
   }
-  const queryParams = [req.user?.userId || 0, ...params];
-  const [rows] = await pool.execute(`
-    SELECT
-      i.id,
-      i.org_id,
-      i.sender,
-      i.recipient,
-      i.subject,
-      i.body,
-      i.received_at,
-      i.status,
-      i.is_locked,
-      i.locked_by,
-      i.color,
-      i.attachments_count,
-      i.source_tag,
-      CASE
-        WHEN irr_user.read_at IS NOT NULL OR i.is_read = 1 THEN 1
-        ELSE 0
-      END AS is_read,
-      irr_user.read_at AS read_at,
-      COALESCE(irr_stats.read_receipt_count, 0) AS read_receipt_count,
-      irr_stats.last_read_at,
-      (
-        SELECT u.name
-        FROM inquiry_read_receipts irr_last
-        LEFT JOIN users u ON u.id = irr_last.user_id
-        WHERE irr_last.inquiry_id = i.id
-        ORDER BY irr_last.read_at DESC, irr_last.id DESC
-        LIMIT 1
-      ) AS last_read_by_name,
-      i.assigned_to,
-      i.priority,
-      i.due_date,
-      i.case_id,
-      i.created_at,
-      i.triage_state,
-      i.queue_name,
-      COALESCE(i.mailbox_name, ea.account_name) AS mailbox_name,
-      i.snoozed_until,
-      i.first_touched_at,
-      i.first_response_at,
-      i.first_touch_alerted_at,
-      i.response_alerted_at,
-      i.last_action_at,
-      i.closed_at,
-      i.routing_reason,
-      i.exception_reason,
-      i.ai_suggested_type,
-      i.ai_suggested_payload,
-      i.ai_classified_at
-    FROM inquiries i
-    LEFT JOIN email_accounts ea ON ea.id = i.email_account_id
-    LEFT JOIN inquiry_read_receipts irr_user
-      ON irr_user.inquiry_id = i.id
-     AND irr_user.user_id = ?
-    LEFT JOIN (
-      SELECT inquiry_id, COUNT(*) AS read_receipt_count, MAX(read_at) AS last_read_at
-      FROM inquiry_read_receipts
-      GROUP BY inquiry_id
-    ) irr_stats ON irr_stats.inquiry_id = i.id
-    ${where}
-    ORDER BY COALESCE(STR_TO_DATE(i.received_at, '%Y-%m-%d %H:%i:%s'), i.created_at) DESC, i.created_at DESC
-    LIMIT ${Number(limit) || 500}
-  `, queryParams);
+  // received_at is 'YYYY-MM-DD HH:MM:SS' text, so a string comparison is a date comparison
+  // and the index on it is usable.
+  if (q.from) { clauses.push('i.received_at >= ?'); params.push(`${q.from} 00:00:00`); }
+  if (q.to) { clauses.push('i.received_at <= ?'); params.push(`${q.to} 23:59:59`); }
+  if (q.color) { clauses.push('i.color = ?'); params.push(q.color); }
+  if (q.priority) { clauses.push('i.priority = ?'); params.push(q.priority); }
+  if (q.read) clauses.push(q.read === 'unread' ? 'i.is_read = 0' : 'i.is_read = 1');
+  if (q.locked) clauses.push(q.locked === 'locked' ? 'i.is_locked = 1' : 'i.is_locked = 0');
+  if (q.assignee === '__UNASSIGNED__') clauses.push("(i.assigned_to IS NULL OR i.assigned_to = '')");
+  else if (q.assignee) { clauses.push('i.assigned_to = ?'); params.push(q.assignee); }
+  if (q.triageState) { clauses.push('i.triage_state = ?'); params.push(q.triageState); }
+  if (q.queue) { clauses.push('i.queue_name = ?'); params.push(q.queue); }
+  if (q.firstTouchSla) { clauses.push(`${slaStatusSql('i', 'first_touch')} = ?`); params.push(q.firstTouchSla); }
+  if (q.responseSla) { clauses.push(`${slaStatusSql('i', 'response')} = ?`); params.push(q.responseSla); }
+  return { where: `WHERE ${clauses.join(' AND ')}`, params };
+}
+
+// One request, one page: the rows asked for, the count of everything that matches, the
+// per-tab totals, the queue names in scope and the four hero numbers — all from the database.
+async function loadInboxPage(req, query = {}) {
+  const q = parseInboxListQuery(query);
+  const scope = await buildInboxOrgScope(req, 'i', query.org_id ?? null);
+  const scopeAnd = scope.where ? `${scope.where} AND` : 'WHERE';
+  const { where, params } = buildInboxListWhere(scope.where, scope.params, q);
+  const userId = req.user?.userId || 0;
+  const offset = (q.page - 1) * q.pageSize;
+  const tabPlaceholders = INBOX_TAB_STATUSES.map(() => '?').join(', ');
+  const openPlaceholders = INBOX_OPEN_STATUSES.map(() => '?').join(', ');
+
+  const [[rows], [[countRow]], [tabRows], [queueRows], [[metricRow]]] = await Promise.all([
+    // The page of ids is fixed first, in a derived table, so the joins and the per-row
+    // read-receipt subqueries run for the 50 rows returned — not for every row that
+    // matched before the LIMIT (measured: 0.9s on a 51k-row tab without this).
+    // The index hint keeps the walk inside the tab's rows: left to itself the optimizer
+    // walks the whole received_at index hoping to find 50 matches early, which is 2s+
+    // when a filter matches nothing (measured; 0.22s with the hint).
+    pool.execute(`
+      SELECT
+        i.id,
+        i.org_id,
+        i.sender,
+        i.recipient,
+        i.subject,
+        i.body,
+        i.received_at,
+        i.status,
+        i.is_locked,
+        i.locked_by,
+        i.color,
+        i.attachments_count,
+        i.source_tag,
+        CASE
+          WHEN irr_user.read_at IS NOT NULL OR i.is_read = 1 THEN 1
+          ELSE 0
+        END AS is_read,
+        irr_user.read_at AS read_at,
+        (SELECT COUNT(*) FROM inquiry_read_receipts irr_c WHERE irr_c.inquiry_id = i.id) AS read_receipt_count,
+        (SELECT MAX(irr_m.read_at) FROM inquiry_read_receipts irr_m WHERE irr_m.inquiry_id = i.id) AS last_read_at,
+        (
+          SELECT u.name
+          FROM inquiry_read_receipts irr_last
+          LEFT JOIN users u ON u.id = irr_last.user_id
+          WHERE irr_last.inquiry_id = i.id
+          ORDER BY irr_last.read_at DESC, irr_last.id DESC
+          LIMIT 1
+        ) AS last_read_by_name,
+        i.assigned_to,
+        i.priority,
+        i.due_date,
+        i.case_id,
+        i.created_at,
+        i.triage_state,
+        i.queue_name,
+        COALESCE(i.mailbox_name, ea.account_name) AS mailbox_name,
+        i.snoozed_until,
+        i.first_touched_at,
+        i.first_response_at,
+        i.first_touch_alerted_at,
+        i.response_alerted_at,
+        i.last_action_at,
+        i.closed_at,
+        i.routing_reason,
+        i.exception_reason,
+        i.ai_suggested_type,
+        i.ai_suggested_payload,
+        i.ai_classified_at
+      FROM (
+        SELECT i.id
+        FROM inquiries i USE INDEX (idx_inquiries_status_received, idx_inquiries_org_status_received)
+        ${where}
+        ORDER BY i.received_at ${q.sort}, i.id ${q.sort}
+        LIMIT ${q.pageSize} OFFSET ${offset}
+      ) page
+      JOIN inquiries i ON i.id = page.id
+      LEFT JOIN email_accounts ea ON ea.id = i.email_account_id
+      LEFT JOIN inquiry_read_receipts irr_user
+        ON irr_user.inquiry_id = i.id
+       AND irr_user.user_id = ?
+      ORDER BY i.received_at ${q.sort}, i.id ${q.sort}
+    `, [...params, userId]),
+    pool.execute(`SELECT COUNT(*) AS total FROM inquiries i ${where}`, params),
+    pool.execute(
+      `SELECT i.status, COUNT(*) AS cnt
+       FROM inquiries i
+       ${scopeAnd} i.status IN (${tabPlaceholders})
+       GROUP BY i.status`,
+      [...scope.params, ...INBOX_TAB_STATUSES]
+    ),
+    // Distinct queue names come off the queue_name index in one pass; the EXISTS then keeps
+    // only those present in this tenant scope with one indexed lookup each.
+    pool.execute(
+      `SELECT q.queue_name
+       FROM (SELECT DISTINCT queue_name FROM inquiries WHERE queue_name IS NOT NULL AND queue_name <> '') q
+       WHERE EXISTS (SELECT 1 FROM inquiries i ${scopeAnd} i.queue_name = q.queue_name)
+       ORDER BY q.queue_name`,
+      scope.params
+    ),
+    pool.execute(
+      `SELECT
+         COUNT(*) AS open_work,
+         SUM(CASE WHEN i.assigned_to IS NULL OR i.assigned_to = '' THEN 1 ELSE 0 END) AS unassigned,
+         SUM(CASE WHEN i.assigned_to = (SELECT u.name FROM users u WHERE u.id = ?) THEN 1 ELSE 0 END) AS my_queue,
+         SUM(CASE WHEN ${slaStatusSql('i', 'first_touch')} = 'breached'
+                    OR ${slaStatusSql('i', 'response')} = 'breached' THEN 1 ELSE 0 END) AS sla_risk
+       FROM inquiries i
+       ${scopeAnd} i.status IN (${openPlaceholders})`,
+      [userId, ...scope.params, ...INBOX_OPEN_STATUSES]
+    ),
+  ]);
+
+  const tabCounts = Object.fromEntries(INBOX_TAB_STATUSES.map((status) => [status, 0]));
+  for (const row of tabRows || []) {
+    if (row.status in tabCounts) tabCounts[row.status] = Number(row.cnt || 0);
+  }
 
   const routed = await applyRoutingRules(req, rows || []);
-  return hydrateInquiryRows(routed || []).map((row) => ({
+  const inquiries = hydrateInquiryRows(routed || []).map((row) => ({
     ...row,
     is_locked: !!row.is_locked,
     is_read: !!row.is_read,
@@ -406,13 +535,30 @@ async function loadInboxRows(req, limit = 500, requestedOrgIdRaw = null, search 
     ai_suggested_payload: row.ai_suggested_payload || null,
     ai_classified_at: row.ai_classified_at || null,
   }));
+
+  return {
+    inquiries,
+    total: Number(countRow?.total || 0),
+    page: q.page,
+    page_size: q.pageSize,
+    tab_counts: tabCounts,
+    queues: (queueRows || []).map((row) => row.queue_name),
+    metrics: {
+      open_work: Number(metricRow?.open_work || 0),
+      unassigned: Number(metricRow?.unassigned || 0),
+      my_queue: Number(metricRow?.my_queue || 0),
+      sla_risk: Number(metricRow?.sla_risk || 0),
+    },
+  };
 }
 
-// GET /api/inbox — returns persisted inquiries from DB (real emails only)
+// GET /api/inbox — one page of persisted inquiries (real emails only), filtered, sorted and
+// counted in the database. Query: status (tab), search, from, to, color, priority, read,
+// locked, assignee, triage_state, queue, first_touch_sla, response_sla, sort, page, page_size, org_id.
 router.get('/', authenticate, async (req, res) => {
   try {
-    const inquiries = await loadInboxRows(req, 500, req.query?.org_id ?? null, req.query?.search ?? '');
-    res.json({ source: 'db', inquiries, total: inquiries.length });
+    const data = await loadInboxPage(req, req.query || {});
+    res.json({ source: 'db', ...data });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.status ? err.message : 'Server error.' });
   }
