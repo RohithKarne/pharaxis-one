@@ -19,14 +19,22 @@ It holds two products — MIMS and CP Portal — with shared operating standards
 
 ## Repository Structure
 
+Everything lives inside a folder. Only four files sit at the top level: this
+readme, the licence, the git ignore rules, and `CLAUDE.md`. Each is pinned there
+by a tool that will not look anywhere else.
+
 ```text
-apps/
+apps/          the two products
   mims/
   cp-portal/
-.github/
-docs/        all project documentation lives here
-ops/
-scripts/
+.github/       CI, templates, contributing and security policy
+.claude/       Claude Code settings for this repository
+.githooks/     commit-message check (git config core.hooksPath .githooks)
+docs/          all project documentation, including the change log
+ops/           server-side infrastructure
+  nginx/
+  pm2/         process-manager template
+scripts/       developer and deployment scripts
 ```
 
 ## Prerequisites
@@ -115,4 +123,6 @@ Remote deploy workflows are intentionally disabled for automatic pushes and fail
 
 ## Security and Governance
 
-- Security policy: [SECURITY.md](SECURITY.md)
+- Security policy: [.github/SECURITY.md](.github/SECURITY.md)
+- How to contribute: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md)
+- Change log: [docs/CHANGELOG.md](docs/CHANGELOG.md)

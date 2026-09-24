@@ -2287,7 +2287,7 @@ Six phases, twenty-three steps, one owner each.
 | 15 | **Product review readiness** | Section 18, where the change is being shown as a build. |
 | **Ship** | | |
 | 16 | **Final sign-off** | Rohith. Section 22 Definition of Done is satisfied here, not before. |
-| 17 | Tag & changelog | `CHANGELOG.md` entry with its revalidation-impact flag. |
+| 17 | Tag & changelog | `docs/CHANGELOG.md` entry with its revalidation-impact flag. |
 | 18 | Deploy | Via the app's release workflow (38.10). |
 | **Watch** | | |
 | 19 | Monitor | Varun. Know it broke before a client does. |
@@ -2438,7 +2438,7 @@ Recorded openly rather than left to be discovered:
 | **No deploy rollback** | Deploys to the CP Portal demo are automatic on merge (§38.10). Recovery from a bad deploy is a manual `gcloud run services update-traffic` to a prior revision — not scripted, not documented, not drilled. **Automatic deploys without a rollback path is a worse position than manual deploys were.** | Varun |
 | **Only CP Portal deploys** | MIMS still carries the `Remote Deploy Disabled` stub from when the AWS host was deleted on 2026-05-27. | Varun |
 | **Monitoring and incident response are not built** | No error tracking, no APM, no uptime check. We learn a product is down when someone opens it. **Owned by Varun from 2026-09-20** (see §5), so this is still a build task with a name against it. | Varun |
-| **Releases have never been logged** | One git tag, `v1.0.0`. `CHANGELOG.md` contains only `## Unreleased`. Five release workflows have never run. | Varun |
+| **Releases have never been logged** | One git tag, `v1.0.0`. `docs/CHANGELOG.md` contains only `## Unreleased`. Five release workflows have never run. | Varun |
 | **No automated test is written any more** | Section 29 retired 2026-09-20. Every regression is now found by a person opening a screen. For a GxP product this is a reduction in evidence an auditor can read. | Rohith |
 | **The author is usually the reviewer** | Varun writes, reviews, merges and verifies most changes. Section 37.2's second reader is Rohith, by discipline only. | Rohith |
 | **Nobody challenges the compliance position** | Sarvanan left 2026-09-20. Vasu's regulatory position is now stated and never tested from outside. | Rohith |
@@ -2515,20 +2515,67 @@ Releases use app-specific tags:
 | `mims` | `mims-v…` |
 | `cp-portal` | `cp-portal-v…` |
 
-Every release gets a `CHANGELOG.md` entry carrying its **revalidation impact flag**
+Every release gets a `docs/CHANGELOG.md` entry carrying its **revalidation impact flag**
 — None, Partial or Full. **Engineering proposes the flag; Vasu Ranabothu (CCO)
 confirms it.** It is not final until Compliance has.
 
 > **Status, recorded honestly 2026-08-07:** this rule has never been exercised. The
 > repository holds **one tag, `v1.0.0`**, in none of the forms above, and
-> `CHANGELOG.md` contains only `## Unreleased`. Five release workflows exist and
+> `docs/CHANGELOG.md` contains only `## Unreleased`. Five release workflows exist and
 > have never run. See 38.7.
+
+### 38.11 Repository layout — nothing loose at the top level
+
+> Set by Rohith 2026-09-24: *"I dont want any file outside of folder."*
+
+**No file is created at the top level of the repository.** Every new file goes
+inside an existing folder. Where none of them fits, the folder is agreed with
+Rohith first and created deliberately — a new top-level folder is a decision, not
+a side effect of saving a file somewhere.
+
+**The four files that stay at the top level, and why each one has to.** These are
+exceptions earned by a tool that will not look anywhere else. No file joins this
+list without Rohith's word.
+
+| File | Why it cannot move |
+|---|---|
+| `.gitignore` | Git reads the repository-wide rules only from the top level |
+| `CLAUDE.md` | Claude Code loads it from the repository root at the start of every session |
+| `README.md` | It is the repository's front page; move it and anyone opening the repository lands on nothing |
+| `LICENSE` | GitHub's licence detection reads the top level. **Stated as uncertain** — it may also be found elsewhere; it was left in place rather than tested by losing it |
+
+**Where things belong.**
+
+| Folder | What goes in it |
+|---|---|
+| `apps/` | The two products, and nothing else |
+| `docs/` | Every document, including the change log and the postmortems |
+| `.github/` | CI, issue and pull-request templates, the contributing and security policies |
+| `.claude/` | Claude Code settings for this repository |
+| `.githooks/` | The commit-message check |
+| `ops/` | Server-side infrastructure — web-server config, process-manager template |
+| `scripts/` | Developer and deployment scripts |
+
+**`ops/` and `scripts/` are deliberately separate** and are not to be merged.
+`ops/` is how a server is configured; `scripts/` is what a person runs. Two files
+in one of them is not a reason to fold it into the other.
+
+**What this is guarding against, stated plainly.** Before 2026-09-24 the top level
+held ten loose files. Two of them — a package manifest and its lock file — were
+dead: nothing in the repository imported them, and no CI job or dependency scan
+ever read them. A third, the process-manager template, carried an ignore rule that
+had never been in force, because an ignore rule cannot un-track a file that is
+already tracked. A hidden folder held forty browser snapshots from July that
+nothing referenced. **None of that was visible while the top level was a place
+where anything could be dropped.** All four were removed the same day; the file
+moves and the documents that referenced them were changed in one pull request, not
+two.
 
 ### Ownership of this section
 
-Varun Karne (Head of Development) owns 38.1 through 38.6, 38.9 and 38.10. Anirudh
-(Solution Architect) owns the CI gates in 38.7 and 38.8. Vasu Ranabothu (CCO) owns
-the revalidation flag. Rohith adopts, amends or retires it.
+Varun Karne (Head of Development) owns 38.1 through 38.6, 38.9, 38.10 and 38.11.
+Anirudh (Solution Architect) owns the CI gates in 38.7 and 38.8. Vasu Ranabothu
+(CCO) owns the revalidation flag. Rohith adopts, amends or retires it.
 
 ---
 
