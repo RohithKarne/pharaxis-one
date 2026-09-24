@@ -6,7 +6,7 @@ Purpose: define minimum release bar for active Pharaxis-One apps before calling 
 
 ## Current Hosting Status
 
-Pharaxis apps are local-only as of 2026-05-27. The previous AWS/EC2 host has been deleted, and GitHub remote deployment is disabled. This checklist is retained as a future production-readiness bar, not as evidence that a production environment currently exists.
+**Local only as of 2026-09-24.** Every deployment pipeline, container image and server template was removed, including the Google Cloud pipeline that had been live for CP Portal. A cloud will be chosen later and the path built for it then (`TEAM_OPERATING_SOP.md` §38.12). This checklist is the bar to meet **when** that happens — it is not evidence that any production environment exists.
 
 ## Release Rule
 
@@ -29,7 +29,7 @@ No app is production ready until all gates below are green:
 - [ ] Security scan runs per app
 - [ ] New hosting target is approved before deploy workflows are re-enabled
 - [ ] Each app has its own deploy workflow and production environment after hosting is restored
-- [ ] PM2 or replacement process manager deploy path uses reload/startOrReload, not delete-all restart
+- [ ] The chosen process manager reloads rather than stopping and restarting everything
 - [ ] Postdeploy smoke step exists per app after hosting is restored
 - [ ] App-specific release tag and release workflow are defined
 
@@ -50,7 +50,7 @@ No app is production ready until all gates below are green:
 - [ ] Readiness check covers DB connectivity
 - [ ] Cron/scheduler registration is known and restart-safe
 - [ ] Graceful shutdown handles `SIGTERM`
-- [ ] PM2 ecosystem config is current
+- [ ] A process-manager config exists and is current (none today — removed 2026-09-24)
 - [ ] Nginx/static publish directories are documented
 
 ### Data + Recovery

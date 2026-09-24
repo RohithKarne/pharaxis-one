@@ -37,8 +37,9 @@ Examples:
 
 Repo delivery artifacts:
 
-- [pharaxis-one.conf.template](/Users/rohithkarne/Pharaxis-One/ops/nginx/pharaxis-one.conf.template)
-- [bootstrap-nginx-tls.sh](/Users/rohithkarne/Pharaxis-One/ops/scripts/bootstrap-nginx-tls.sh)
+- The nginx template and the TLS bootstrap script **were removed on 2026-09-24**
+  along with the rest of the server plumbing (`TEAM_OPERATING_SOP.md` §38.12).
+  They are recoverable from git history if a similar host is ever used again.
 
 ## Domain Target
 

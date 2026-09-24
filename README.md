@@ -31,10 +31,7 @@ apps/          the two products
 .claude/       Claude Code settings for this repository
 .githooks/     commit-message check (git config core.hooksPath .githooks)
 docs/          all project documentation, including the change log
-ops/           server-side infrastructure
-  nginx/
-  pm2/         process-manager template
-scripts/       developer and deployment scripts
+scripts/       developer scripts
 ```
 
 ## Prerequisites
@@ -109,7 +106,15 @@ cd apps/cp-portal/frontend && npm run dev
 - Per-app release workflows: `release-mims.yml`, `release-cp-portal.yml`
 - Dependency updates: `.github/dependabot.yml`
 
-Remote deploy workflows are intentionally disabled for automatic pushes and fail intentionally if run manually. The AWS/EC2 instance that previously hosted Pharaxis apps has been deleted, so GitHub Actions is now used for CI, labels, dependency automation, and release artifact validation only. Runtime verification should be done against local app services.
+**Both products are local only.** They run on a developer machine and nowhere else.
+There is no deployment pipeline, no container image, no web-server or
+process-manager template and no cloud project — all of it was removed on
+2026-09-24 so that whichever cloud is chosen later gets a path built for it
+rather than one adapted from somewhere else. See
+[docs/TEAM_OPERATING_SOP.md](docs/TEAM_OPERATING_SOP.md) §38.12.
+
+GitHub Actions is used for CI, labels, dependency automation and release artifact
+packaging only. Runtime verification is done against local app services.
 
 ## Documentation Index
 

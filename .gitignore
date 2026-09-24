@@ -56,12 +56,10 @@ outputs/
 output/
 apps/**/frontend/design-screenshots/
 
-# PM2 ecosystem config — the repo holds the template at ops/pm2/ecosystem.config.js.
-# A deployed box keeps its own edited copy outside the repo; nothing here overwrites it.
-# The earlier rule listed the file as ignored while it was already tracked, which does
-# nothing — an ignore rule cannot un-track a file. Removed 2026-09-24 rather than left
-# to read as a control that was never in force.
-ecosystem.config.local.js
+# Process-manager config. No template is kept in the repo — every deployment
+# pipeline and server template was removed 2026-09-24 (SOP §38.12), so anything
+# of this shape is a local experiment and stays out of the repository.
+ecosystem.config*.js
 
 # WP9: never commit DB dumps (e.g. mims_dev_backup_*.sql)
 *.sql
