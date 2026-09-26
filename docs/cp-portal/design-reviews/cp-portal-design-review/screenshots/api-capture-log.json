@@ -1,0 +1,7 @@
+[
+  "/api/portal/content/pharaxis/events",
+  "/api/portal/config/pharaxis",
+  "/api/portal/auth/me",
+  "/api/admin/auth/me",
+  "/api/admin/clients"
+]
