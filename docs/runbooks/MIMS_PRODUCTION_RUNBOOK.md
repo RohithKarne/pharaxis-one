@@ -1,6 +1,11 @@
 # MIMS Production Runbook
 
-> Status: Remote production hosting is currently inactive. Pharaxis apps are local-only as of 2026-05-27 because the AWS/EC2 host was deleted.
+> **Status, 2026-09-24: local only.** Both products run on a developer machine and
+> nowhere else. Every deployment pipeline, container image and server template was
+> removed — including the Google Cloud pipeline that had been live for CP Portal.
+> A cloud will be chosen later and the path built for it then. See
+> `TEAM_OPERATING_SOP.md` §38.12. **This runbook is the future bar, not a
+> description of anything running today.**
 
 ## Product Summary
 
@@ -8,11 +13,11 @@
 | --- | --- |
 | Product | MIMS |
 | App path | `apps/mims` |
-| Deploy workflow | `.github/workflows/deploy-mims.yml` manual disabled notice |
+| Deploy workflow | **None.** Removed 2026-09-24 (§38.12) |
 | Release workflow | `.github/workflows/release-mims.yml` |
 | GitHub environment | Retired until new hosting is approved |
 | Runtime | Node/Express + MySQL + React/Vite |
-| PM2 app | Retired remote process name: `mims` |
+| Process manager | **None.** The template was removed 2026-09-24 (§38.12) |
 | Frontend path | `/mims/` |
 | Health endpoint | `/mims/api/health` |
 
@@ -25,7 +30,7 @@
 
 ## Deploy
 
-No active remote deploy exists. GitHub deploy workflows are manual-only disabled notices that fail intentionally and must not SSH, SCP, publish to `/var/www`, or restart PM2 until a new hosting target is approved.
+**No deploy workflow exists at all** — the disabled notices were removed along with the live Google Cloud pipeline on 2026-09-24. Nothing in GitHub Actions may deploy, SSH, publish to a server or restart a process manager until a hosting target is chosen and agreed with Rohith.
 
 ## Local Runtime Verification
 

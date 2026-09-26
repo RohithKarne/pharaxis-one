@@ -22,6 +22,8 @@
 > Revision update: 2026-08-10 (**Seven routines cut to four, and five Jira spaces closed.** Mandated by Rohith Karne. **Product Audit merged into §30** as its second story — five client-side teams a run, rotating, instead of twenty-seven. **Client Support Simulation merged into §32** as its second story — one end user, rotating through the six personas. **CEO Meeting and Product Development retired outright.** **MIMS-PM added** as the twin of CP-PM (§46). What remains: **Product Intelligence · Client Intelligence · CP-PM · MIMS-PM**, writing to **`CPPM` · `MIPM` · `DCI`**. The `CP`, `MIMS`, `PD`, `ASUP`, `PAUD` and `CEO` spaces are deleted; every open feature, enhancement, audit finding and support item was imported first — 27 backlog items, 27 audit questions and 4 support accounts. **`CPPM` and `MIPM` are the live product spaces, not a sandbox** — Rohith: *"dont think my learning as training. It will real production feature only."* That retires the `TRN-` prefix, the re-issued controlled ticket and the never-built-from rule in §46. §30, §32, §33, §34, §35, §36 and §46 all carry a dated block at the top stating the current position; the original text is kept below each.)
 > Revision update: 2026-08-10 (Section 47 added — Plain Language & Brevity Standard. Mandated by Rohith Karne, and **it applies to everything**: this chat, every routine, every document, internal product development, and every reply between team members. Two rules. **Plain English in the body** — no file paths, line numbers, table or function names, endpoints or code fragments where a person reads; explain what a person does and what the system does. **References are kept but collected in one block at the foot**, never scattered — `evidence or nothing` is relocated, not relaxed. And **one or two lines**, with depth given on request rather than by default. §28 is narrowed to replies to Rohith and §47 wins where they differ; §39.6 and `CLAUDE.md` hard constraint 4 amended as to placement. Commit messages and pull requests are the exception and must still name what changed.)
 > Revision update: 2026-08-08 (Section 46 added — CP-PM Product Management Training Routine. Mandated by Rohith Karne. A seventh cloud agent sets **one product management exercise per run** on real CP Portal code and withholds the answer; the analyst is Rohith, training toward Product Owner and Product Manager. **CP Portal only**, files to Jira project `CPPM`. Manual, like the other six. **Scenario sources are our own code *and* public web research** — regulation, standards, industry practice, adjacent product documentation — added the same day on Rohith's instruction, because code alone yields too narrow a feature pool; the two-source rule keeps our own code as the anchor for the as-is. Governance lives here; the operational prompt lives in `docs/CP_PM.md`. **Two decisions inside the same day reversed each other and both are recorded:** training tickets were first ruled never to become real work, then Rohith decided that **what the analyst specifies gets built and shipped** — against Vasu's and Sarvanan's advice. The promotion bridge in §46 is what makes that safe: the `CPPM` story is a draft, a re-issued `CP` ticket is the controlled specification, and no `TRN-` identifier ever crosses. **Consequence stated: CP Portal reopens to feature development** — §41 updated the same day, on Rohith's confirmation, from *STABLE, hotfix support only* to **ACTIVE FEATURE DEVELOPMENT**, so §41 and §46 agree.)
+> Revision update: 2026-09-23 (**Sections 39.8, 39.9 and 39.10 added.** §39.10 holds the session-opening prompt Rohith uses, extended 2026-09-23 to eight points — code snippets while explaining, each team giving its own opinion on the requirement, diagrams where they help, and improving on the instruction — with §39.11 added for the culture rules and §47 amended for the snippet exception, and recording that the Vault/QMS/AI-Agent deletion retired §43–45 without renumbering anything else. Mandated by Rohith Karne. §39.8 fixes the shape of the overview he approves before any build — product, test and development, in a table with one row per ticket when there is more than one, decisions pulled out and numbered with the team's suggestion against each. §39.9 fixes what a completion report and a Jira closing comment must carry, including **what was not checked**, which is never dropped. §40.2 amended: parallel build sessions are allowed when Rohith asks for them, with the conditions that make them safe.)
+
 > Revision update: 2026-09-09 (**Two products, not five.** Mandated by Rohith Karne: *"lets delete qms, vault and test console, ai-agent. I want to concentrate only on mims, cp-portal."* The **Pharaxis Vault, QMS and AI Agent** applications and the **Test Console** were deleted from the repository, together with their CI, deploy and release workflows, runbooks, website pages, nginx routes, PM2 entries, Dependabot configs, labels and local databases. **§43, §44 and §45 are retired in place and their numbers are not reused** — the same pattern as §33–§36 — because §41–§47 are cited across this file, in `CLAUDE.md` and inside cloud routine prompts that cannot be edited from the repository. **Document management moves outside:** MIMS integrates with **Veeva Vault and other external content management systems** through its per-organisation integration config, which was always written against Veeva's API and never called the in-house Vault app — that integration is unaffected. **Regression moves into the apps:** §29 step 4 and §38 step 18 no longer promote into a separate Test Console; each app carries its own suite, run through the app and its CI, on Rohith's instruction *"I will test using the original app itself."* The full text of the deleted sections remains in git history.)
 > Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
 > Revision update: 2026-09-22 (Section 48 widened and renamed **The Job** on Rohith Karne's instruction. Six topics — Project Management, IT Compliance, Validation, Support, System Administration, AI — all set in regulated life sciences. One epic and seven stories per run: one per topic plus one extra situational story. A matching interviewer per topic. Still files to Jira project `CSV`; epics named `The Job — <date>`. Operational prompt moved to `docs/THE_JOB.md`.)
@@ -2285,8 +2287,8 @@ Six phases, twenty-three steps, one owner each.
 | 15 | **Product review readiness** | Section 18, where the change is being shown as a build. |
 | **Ship** | | |
 | 16 | **Final sign-off** | Rohith. Section 22 Definition of Done is satisfied here, not before. |
-| 17 | Tag & changelog | `CHANGELOG.md` entry with its revalidation-impact flag. |
-| 18 | Deploy | Via the app's release workflow (38.10). |
+| 17 | Tag & changelog | `docs/CHANGELOG.md` entry with its revalidation-impact flag. |
+| 18 | Deploy | **Nothing is deployed anywhere as of 2026-09-24** — both products are local only (38.12). The release workflow still tags and packages; it publishes to no host. |
 | **Watch** | | |
 | 19 | Monitor | Varun. Know it broke before a client does. |
 | 20 | Incident | Varun triages and contains; Aditi communicates. |
@@ -2433,10 +2435,11 @@ Recorded openly rather than left to be discovered:
 | **E2E tests never run in CI** | Playwright is installed in MIMS and CP Portal and is invoked by no workflow. Browser verification stays manual — and from 2026-09-20 that is the only verification there is. | Varun |
 | **No coverage floor** | Test counts: MIMS 30, CP Portal 5. Nothing stops that falling, and nothing adds to it — Section 29 is retired. | Varun |
 | ~~**MIMS has no quality gate**~~ | **Closed 2026-08-07** (#533). It was worse than absent: the shared workflow guards the job with `if: quality_command != ''`, so it **skipped — and a skipped check reports as a pass.** `ci-mims.yml` now passes `npm run test:static`, which parses all 447 backend files and refuses to pass on an empty walk. | — |
-| **No deploy rollback** | Deploys to the CP Portal demo are automatic on merge (§38.10). Recovery from a bad deploy is a manual `gcloud run services update-traffic` to a prior revision — not scripted, not documented, not drilled. **Automatic deploys without a rollback path is a worse position than manual deploys were.** | Varun |
-| **Only CP Portal deploys** | MIMS still carries the `Remote Deploy Disabled` stub from when the AWS host was deleted on 2026-05-27. | Varun |
+| ~~**No deploy rollback**~~ | **Closed 2026-09-24 by removing the deploy.** Both products are local-only; there is no automatic deploy to roll back from. | — |
+| ~~**Only CP Portal deploys**~~ | **Closed 2026-09-24.** Neither product deploys. The MIMS stub was removed with the rest (38.12). | — |
+| **Nothing is deployed anywhere** | Both products run only on a developer machine. Nobody outside the team can reach either one, and no client demonstration is possible without rebuilding a deployment path. **Accepted deliberately** — see 38.12. | Rohith |
 | **Monitoring and incident response are not built** | No error tracking, no APM, no uptime check. We learn a product is down when someone opens it. **Owned by Varun from 2026-09-20** (see §5), so this is still a build task with a name against it. | Varun |
-| **Releases have never been logged** | One git tag, `v1.0.0`. `CHANGELOG.md` contains only `## Unreleased`. Five release workflows have never run. | Varun |
+| **Releases have never been logged** | One git tag, `v1.0.0`. `docs/CHANGELOG.md` contains only `## Unreleased`. Five release workflows have never run. | Varun |
 | **No automated test is written any more** | Section 29 retired 2026-09-20. Every regression is now found by a person opening a screen. For a GxP product this is a reduction in evidence an auditor can read. | Rohith |
 | **The author is usually the reviewer** | Varun writes, reviews, merges and verifies most changes. Section 37.2's second reader is Rohith, by discipline only. | Rohith |
 | **Nobody challenges the compliance position** | Sarvanan left 2026-09-20. Vasu's regulatory position is now stated and never tested from outside. | Rohith |
@@ -2513,20 +2516,111 @@ Releases use app-specific tags:
 | `mims` | `mims-v…` |
 | `cp-portal` | `cp-portal-v…` |
 
-Every release gets a `CHANGELOG.md` entry carrying its **revalidation impact flag**
+Every release gets a `docs/CHANGELOG.md` entry carrying its **revalidation impact flag**
 — None, Partial or Full. **Engineering proposes the flag; Vasu Ranabothu (CCO)
 confirms it.** It is not final until Compliance has.
 
+> **Local only from 2026-09-24 (38.12).** A release still means a tag, a change-log
+> entry and a revalidation flag. It does not reach a server, because there is no
+> longer a server to reach.
+>
 > **Status, recorded honestly 2026-08-07:** this rule has never been exercised. The
 > repository holds **one tag, `v1.0.0`**, in none of the forms above, and
-> `CHANGELOG.md` contains only `## Unreleased`. Five release workflows exist and
+> `docs/CHANGELOG.md` contains only `## Unreleased`. Five release workflows exist and
 > have never run. See 38.7.
+
+### 38.11 Repository layout — nothing loose at the top level
+
+> Set by Rohith 2026-09-24: *"I dont want any file outside of folder."*
+
+**No file is created at the top level of the repository.** Every new file goes
+inside an existing folder. Where none of them fits, the folder is agreed with
+Rohith first and created deliberately — a new top-level folder is a decision, not
+a side effect of saving a file somewhere.
+
+**The four files that stay at the top level, and why each one has to.** These are
+exceptions earned by a tool that will not look anywhere else. No file joins this
+list without Rohith's word.
+
+| File | Why it cannot move |
+|---|---|
+| `.gitignore` | Git reads the repository-wide rules only from the top level |
+| `CLAUDE.md` | Claude Code loads it from the repository root at the start of every session |
+| `README.md` | It is the repository's front page; move it and anyone opening the repository lands on nothing |
+| `LICENSE` | GitHub's licence detection reads the top level. **Stated as uncertain** — it may also be found elsewhere; it was left in place rather than tested by losing it |
+
+**Where things belong.**
+
+| Folder | What goes in it |
+|---|---|
+| `apps/` | The two products, and nothing else |
+| `docs/` | Every document, including the change log and the postmortems |
+| `.github/` | CI, issue and pull-request templates, the contributing and security policies |
+| `.claude/` | Claude Code settings for this repository |
+| `.githooks/` | The commit-message check |
+| `scripts/` | Developer scripts |
+
+> **`ops/` was deleted on 2026-09-24** along with the rest of the cloud and
+> server plumbing (see 38.12). It held an nginx template and a process-manager
+> template for an Ubuntu host that no longer exists. If a server folder is
+> needed again, it is agreed with Rohith and created deliberately.
+
+**What this is guarding against, stated plainly.** Before 2026-09-24 the top level
+held ten loose files. Two of them — a package manifest and its lock file — were
+dead: nothing in the repository imported them, and no CI job or dependency scan
+ever read them. A third, the process-manager template, carried an ignore rule that
+had never been in force, because an ignore rule cannot un-track a file that is
+already tracked. A hidden folder held forty browser snapshots from July that
+nothing referenced. **None of that was visible while the top level was a place
+where anything could be dropped.** All four were removed the same day; the file
+moves and the documents that referenced them were changed in one pull request, not
+two.
+
+### 38.12 Local only — no cloud, until Rohith picks one
+
+> Set by Rohith 2026-09-24: *"remove the things which are added for aws, google
+> cloud. Lets do it as local for now. In future, I will decide one cloud and lets
+> add at that time."*
+
+**Both products run on a developer machine and nowhere else.** No deployment
+pipeline, no container images, no web-server or process-manager templates, no
+cloud project. When a cloud is chosen, the path is built for that cloud rather
+than adapted from what was here.
+
+**What was removed, and what it had been doing.**
+
+| Removed | What it was |
+|---|---|
+| CP Portal deploy pipeline | Built two container images and released them to Google Cloud Run on every merge to `main`. It was live |
+| CP Portal rollback pipeline | Returned those services to a previous revision. Removed **with** the deploy, never instead of it |
+| Two container images and the web-server proxy config | How CP Portal was packaged for that cloud |
+| MIMS deploy stub and the shared deploy template | Printed a notice saying deployment was disabled. Left over from the AWS host deleted 2026-05-27 |
+| `ops/` | nginx and process-manager templates for an Ubuntu host that no longer exists |
+
+**What was deliberately kept, and why.**
+
+- **The storage and OCR provider switches in MIMS.** Both already default to local,
+  neither cloud library is installed anywhere, and the alternative branches never
+  run. They cost nothing and deleting them means writing them again later.
+- **The Amazon access-key pattern in the security scanner.** It is a **detector**
+  that looks for a leaked key in our own source. It is not a cloud dependency, and
+  removing it would remove a control.
+
+**Two consequences, recorded rather than discovered later.**
+
+1. **The running Google Cloud services were not switched off by this change.**
+   Removing the pipeline stops us updating them; it does not stop them existing or
+   billing. **That is a console action and it is Rohith's**, deliberately not
+   automated from here.
+2. **There is now no way to show either product to anyone outside the team.**
+   Accepted on 2026-09-24 on the basis that nobody outside the team had seen the
+   demo link.
 
 ### Ownership of this section
 
-Varun Karne (Head of Development) owns 38.1 through 38.6, 38.9 and 38.10. Anirudh
-(Solution Architect) owns the CI gates in 38.7 and 38.8. Vasu Ranabothu (CCO) owns
-the revalidation flag. Rohith adopts, amends or retires it.
+Varun Karne (Head of Development) owns 38.1 through 38.6 and 38.9 through 38.12.
+Anirudh (Solution Architect) owns the CI gates in 38.7 and 38.8. Vasu Ranabothu
+(CCO) owns the revalidation flag. Rohith adopts, amends or retires it.
 
 ---
 
@@ -2797,6 +2891,146 @@ Varun:   Check production first, then decide. Do not encode a workaround for
 cause. Bhavya gives root cause, options, a recommendation, and the line that says
 what would change it (39.5).
 
+### 39.8 The pre-build overview: product, test, development (Mandatory — set by Rohith 2026-09-22)
+
+Before any ticket is built, Rohith gets one overview covering three views, in this
+order, and he approves before a line is written:
+
+| View | Who | What it answers |
+| --- | --- | --- |
+| **Product** | Saad | What is wrong today, who it hurts, what changes for the person, and the decisions that are Rohith's to make |
+| **Test** | Kiranmai | What will be checked, including the paths that must fail |
+| **Development** | Varun | What is built, in plain words: what exists today, what changes, the trade-off, and the effort |
+
+Rules that make it usable:
+
+- **Table format when more than one ticket is covered**, one row per ticket, those
+  three columns. Rohith asked for exactly this on 2026-09-22: *"I need high level
+  overview in table format for all at once. I need product column, test column,
+  development column. I will check and provide approval to proceed."*
+- **Decisions are pulled out and numbered**, each with the team's suggestion, so
+  Rohith can answer with a single line. He does.
+- **Depth on request.** Varun goes deeper only where Rohith asks — *"for
+  development level - I need in depth explaination not very much. it should be in
+  technical wording"* (2026-09-22) means the technical view stays technical but
+  still short.
+- **One recommendation, with what would change it** (§39.5), never a menu.
+- Effort figures are estimates and are labelled as such.
+
+### 39.9 Closing a ticket: what the report and the Jira comment must carry
+
+The same discipline at the end as at the start. Every completion report and every
+Jira closing comment carries, in plain English:
+
+1. **What changed**, as a person experiences it.
+2. **What was checked**, including what was seen on a real screen (§26) and by whom.
+3. **What was NOT checked** — always present, never omitted because it is awkward.
+4. **What is still open**: decisions waiting on Rohith or Vasu, and anything
+   deliberately left for a follow-up ticket.
+5. **References at the foot** (§47), never in the body.
+
+A defect found while doing the work is reported even when it is out of scope, and
+raised as its own ticket rather than quietly widened into the current one.
+
+### 39.10 The session-opening prompt (set by Rohith 2026-09-23)
+
+Rohith opens every session with the same instruction. The version he had used
+since April named §26, §38, §39 and §41 — still the right numbers, because
+deleting Vault, QMS and the AI Agent retired §43–45 and renumbered nothing. He
+extended it on 2026-09-23 with four additions: code snippets in explanations,
+each function defending its own view, diagrams where they help, and a standing
+instruction to improve on what he asked for rather than stopping at it.
+
+**The current wording, kept here so it can be copied:**
+
+> Hi Team. Before we start, read `docs/TEAM_OPERATING_SOP.md` §26, §38, §39, §40,
+> §47 and the section for the app we are working on — §41 CP Portal, §42 MIMS.
+>
+> How I want you to work with me:
+>
+> 1. **Talk to me in chat while you work.** Everyone speaks in their own voice —
+>    Saad, Varun, Kiranmai, Vasu, Aditi — during every feature and every bug fix,
+>    not a report at the end. Communication is the most important thing for me.
+>    Say what you think, what worries you, and what you are about to do. Be human,
+>    be energetic, be friendly. Never drop this.
+> 2. **Before you build anything, give me the overview and wait for my approval** —
+>    product, test and development. A table with one row per ticket when there is
+>    more than one, and pull out the decisions that are mine with your suggestion
+>    against each.
+> 3. **Plain English, short — but show me the code.** While building or
+>    explaining, show the actual change as a short snippet with a line or two
+>    underneath saying what it does and why. Keep the long detail out; put file
+>    references at the foot.
+> 4. **Nothing is done until you have seen it on the real screen**, and every
+>    report tells me **what you did not check**. If you need a login, ask me — do
+>    not type passwords.
+> 5. **Ask me before pushing anything**, and never push to `main` directly.
+> 6. **Each team gives its own opinion on the requirement, and stands behind it.**
+>    Development says where it disagrees with product or test, product says where
+>    it disagrees with development or test, test says where it disagrees with
+>    both — with reasons, like people in a real software company. If the views do
+>    not come together, bring them to me. I would rather hear the differing
+>    opinions than a team that agrees with everything.
+> 7. **Explain clearly.** Simple English, technically accurate, and use a diagram
+>    or a flow chart whenever it explains something faster than words — how a
+>    thing flows, where it breaks, what talks to what.
+> 8. **Do not stop at what I asked for.** Improve on it as you go, and bring me
+>    new ideas — about the product, the way we build, or the way we work
+>    together. Ask me before you include one.
+
+Why each line is there: 1 is §39, reinforced more than twenty times; 2 is §39.8;
+3 is §47 **with the snippet exception below**; 4 is §26 and §39.9; 5 is §38 and
+`CLAUDE.md` hard constraint 1; 6, 7 and 8 were added on 2026-09-23 and are
+expanded in §39.11.
+
+**Known quirk, not a typo:** two sections carry the number **26** — the
+Pre-Development Discussion & Feature Lock Process and the Functional Verification
+Standard. Both are cited as "§26" across the repository and inside cloud routine
+prompts, so neither is renumbered. Reading §26 means reading both.
+
+### 39.11 Culture: opinions on the record, drawn out, improved on (set by Rohith 2026-09-23)
+
+**Each function gives its own opinion on the requirement.** Development says where
+scope looks wrong or unsafe; product says where engineering convenience costs the
+user; test says where something cannot be proved. These are professional opinions,
+not arguments — Rohith's framing, 2026-09-23: *"we should not call arguments. team
+is providing their opinions on the requirements."* They are given in chat, in the
+person's own voice, with the reason attached.
+
+How differing opinions run:
+
+1. **Two rounds, then it comes to Rohith.** Each side states its view and responds
+   once. If the views have not come together, they go to him with each side in one
+   or two lines — never a summary that hides who thought what.
+2. **Work continues on what is agreed.** The disputed piece is flagged and not
+   shipped until he rules; everything around it carries on.
+3. **When it reaches him, it is written down.** The ticket carries both views and
+   his decision. Day zero, what counts as identity in MIMS and the document review
+   period all went that way on 23 September, and each was useful when Vasu ruled.
+   Views that settle between the team stay in chat.
+4. **Aditi chairs, and stays neutral.** She routes, holds it to two rounds and puts
+   it to Rohith. She does not take a side; if she is also arguing, nobody is
+   watching whether it is getting anywhere.
+5. **Opinions about Rohith's own instruction are given once.** State the concern
+   and the risk plainly. If he repeats the instruction, it is his decision: we
+   build it and record the concern on the ticket rather than re-opening it.
+
+Two guards, so this stays useful rather than theatre:
+
+- **Substance or silence.** Manufactured disagreement to look human is worse than
+  none. Where a team genuinely agrees, it says so and moves.
+- **Evidence settles it, not seniority.** Whoever can show the code, the screen or
+  the regulation is right for that question, whatever their title.
+
+**Draw it when a picture is faster.** A flow, a hand-off between systems, a failure
+path, a lifecycle — a diagram or flow chart in chat beats three paragraphs. Keep it
+small and label it in plain words.
+
+**Improve on the instruction.** Do the thing asked, then say what you would do
+better — in the product, in how we build, in how we work. Bring the idea to Rohith
+and ask before including it; never widen the current work unasked (§40.1, Rule IV
+in `CLAUDE.md`).
+
 ### Ownership of this section
 
 Rohith Karne owns this section. Aditi Raghavan enforces it in routing; Bala Kaviti
@@ -2837,6 +3071,22 @@ no longer how we work and it had drifted from practice.
   postmortem, 2026-08-06.
 - Where one is used, its output is treated as a claim to verify, not a result to
   report onward.
+
+**Amended 2026-09-22.** Rohith asked for seven tickets to be built at once, in
+parallel sessions: *"continue with other 6 too in other chat sessions. Dont wait
+for cppm-14 to get completed."* That is allowed when he asks, under four
+conditions, each of which we needed on the day:
+
+1. **Isolation.** Each session works in its own copy of the repository and its own
+   throwaway database. The shared development database is not theirs to migrate.
+2. **A reserved migration number per session**, agreed up front, or two sessions
+   pick the same one.
+3. **Every new migration is folded into the baseline.** Seven branches each
+   appending to the same file produced a file that could not build a new database;
+   it had to be rebuilt by hand and re-proved against real MySQL.
+4. **Their results are claims until verified together.** The branches are merged
+   into one integration branch and the features are then checked on the real
+   screens, in one running app, before anything is called done.
 
 ### 40.3 Verification before done
 
@@ -4448,6 +4698,8 @@ Lower than the issue count means an item escaped the labelling control — the s
 ---
 
 ## 47. Plain Language & Brevity Standard (Mandatory)
+
+> **Amended 2026-09-23 by Rohith.** The no-code rule covers documents, tickets, reports and summaries. It does **not** cover explaining a change as it is built: there, show the actual snippet, short, with a line or two underneath saying what it does and why — *"show me the code changes snippets and explaination below in short. So that, I will be understanding the things"* (2026-09-21), restated 2026-09-23. The body still carries no file paths or line numbers; those stay in the references block.
 
 > Established 2026-08-10 on Rohith Karne's instruction. **Applies to everything** — this chat, every routine, internal product development, every document, every reply between team members. Not only to routine tickets.
 >

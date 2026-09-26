@@ -14,7 +14,7 @@ The workflows are already split by app. This document defines the GitHub setting
 
 ## Local-Only Status
 
-The AWS/EC2 Pharaxis host has been deleted. GitHub Actions must not attempt remote deployment, SSH, SCP, server-side `git pull`, `/var/www/pharaxis` publishing, or PM2 restarts.
+**No deployment of any kind exists as of 2026-09-24** (`TEAM_OPERATING_SOP.md` §38.12). The AWS host was deleted in May; the Google Cloud pipeline that replaced it for CP Portal was removed on 2026-09-24. GitHub Actions must not deploy, SSH, publish to a server, or restart a process manager. CI, labels, dependency updates and release packaging only.
 
 Current GitHub usage:
 
@@ -30,8 +30,8 @@ Do not create or maintain production deploy environments unless a new hosting ta
 
 | Environment | Product | Deploy workflow |
 | --- | --- | --- |
-| `mims-prod` | MIMS | `.github/workflows/deploy-mims.yml` |
-| `cp-portal-prod` | CP Portal | `.github/workflows/deploy-cp-portal.yml` |
+| ~~`mims-prod`~~ | MIMS | Workflow removed 2026-09-24 |
+| ~~`cp-portal-prod`~~ | CP Portal | Workflow removed 2026-09-24 |
 
 ## Repo Automation Helpers
 

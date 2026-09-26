@@ -24,6 +24,7 @@ Removed 2026-09-20: Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh, Mark Anton
 4. **Evidence or nothing — but keep it at the foot.** Cite a real file path and line range, or a public URL. Do not invent a client request, a user complaint, or a defect you have not located. **Since 2026-08-10 the citations are collected in one block at the end, never scattered through the text, and the explanation itself is plain English** — no paths, line numbers, table or function names in the body. Relocated, not relaxed. → SOP §47
 5. **`main` is protected — work on a branch and open a pull request.** Direct pushes to `main` are blocked by ruleset `main protection`. Even a one-line change goes through a PR carrying its ticket key, its §26 lock, what you verified, and **what you did not check**. → SOP §38
 6. **Plain English, one or two lines.** Explain what a person does, what the system does, what they see. Lead with the answer and stop; the reader asks if they want more, including for the technical view. **A commit message and a pull request are the exception — they must name what changed.** → SOP §47
+7. **No file is created at the top level of the repository.** Every new file goes inside an existing folder — `apps`, `docs`, `.github`, `.claude`, `.githooks`, `scripts`. Where none fits, agree the new folder with Rohith first. **Only four files live at the root** — `.gitignore`, `CLAUDE.md`, `README.md`, `LICENSE` — each pinned there by a tool that looks nowhere else, and nothing joins that list without Rohith's word. → SOP §38.11
 
 ---
 
@@ -84,6 +85,8 @@ Claude Code is the only development tool. Write and edit code directly with Edit
 | How the team talks in-channel, who says what | SOP §39 |
 | How the coding agent executes | SOP §40 |
 | CP Portal · MIMS | SOP §41 · §42 |
+
+**The session-opening prompt Rohith uses is kept in SOP §39.10** — read it if a session starts without one.
 
 **Everything is in `docs/TEAM_OPERATING_SOP.md`.** There is exactly one SOP. The five per-app SOP files were absorbed and deleted on 2026-08-07 — do not recreate them.
 

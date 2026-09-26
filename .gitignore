@@ -35,6 +35,7 @@ uploads/
 test-results/
 playwright-report/
 .playwright-cli/
+.playwright-mcp/
 .claude/worktrees/
 tasks/todo.md
 
@@ -55,8 +56,10 @@ outputs/
 output/
 apps/**/frontend/design-screenshots/
 
-# PM2 ecosystem config — EC2-specific, never overwrite from repo
-ecosystem.config.js
+# Process-manager config. No template is kept in the repo — every deployment
+# pipeline and server template was removed 2026-09-24 (SOP §38.12), so anything
+# of this shape is a local experiment and stays out of the repository.
+ecosystem.config*.js
 
 # WP9: never commit DB dumps (e.g. mims_dev_backup_*.sql)
 *.sql
