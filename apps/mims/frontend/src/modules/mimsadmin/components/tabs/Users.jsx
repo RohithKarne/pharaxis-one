@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
+import { isPlatformAdmin } from '../../../../shared/utils/adminScope'
 import AuditChip from '../../../../shared/components/AuditChip'
 import SavedViews from '../../../../shared/components/SavedViews'
 import BulkUserImport from './BulkUserImport'
@@ -311,6 +312,9 @@ export default function Users() {
 // ─────────────────────────────────────────────────────────────────────────────
 function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash }) {
   const isEdit = !!editUser
+  // Break-glass (2026-09-23): only a platform admin can make another user a platform admin.
+  const { user: me } = useAuth()
+  const canGrantPlatformAdmin = isEdit && isPlatformAdmin(me)
 
   const [tab,     setTab]     = useState('general')
   const [saving,  setSaving]  = useState(false)
@@ -619,6 +623,16 @@ function UserFormModal({ editUser, groups, orgs, H, onSaved, onClose, showFlash 
                     <input type="checkbox" checked={form.case_admin} onChange={() => toggle('case_admin')} />
                     Case Admin
                   </label>
+                  {canGrantPlatformAdmin && (
+                    <label className="ma-usr-check">
+                      <input
+                        type="checkbox"
+                        checked={form.role === 'platform_admin'}
+                        onChange={e => set('role', e.target.checked ? 'platform_admin' : 'admin')}
+                      />
+                      Platform Administrator
+                    </label>
+                  )}
                 </div>
               </div>
             </>

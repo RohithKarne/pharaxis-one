@@ -4334,7 +4334,7 @@ Non-negotiable. Ignoring causes bugs.
 | Auth header | `Authorization: Bearer <token>`. Token from `mims_token` in localStorage. |
 | Git push | Disabled since Sprint 3. Never run `git push` or `gh` commands. |
 | New case org_id | Always from JWT (`req.user.orgId`) — never from request body. |
-| Platform Admin role | Cannot be assigned to any user via API or UI. Only ID 4 (`platform_admin`) has this role. Never add hardcoded role resets to `db.js` init. |
+| Platform Admin role | Since 2026-09-23 a platform admin may make another user a platform admin from the admin console (see *Platform admin recovery* below); nobody else can. Never add hardcoded role resets to `db.js` init. |
 | Site names | Unique per org. `UNIQUE KEY uq_site_org_name (org_id, name)`. Pre-validate in API with 409 before INSERT. |
 | Login input type | Login field is `type="text"` NOT `type="email"` — allows `platform_admin` username (no @). |
 | Session timeout | Login + switch-org responses must include `sessionTimeout`. AuthContext must store in `mims_session_timeout` localStorage key. |
@@ -4364,6 +4364,8 @@ Non-negotiable. Ignoring causes bugs.
 | Audit Trail UI | `AuditAdminPanel` is a standalone component defined in `AdminMiscSection.jsx` (not a separate file). It uses the existing `fmtDateIST` and `H` (auth headers) props passed from the parent. Case field audit calls `GET /api/admin/case-audit-trail/:caseId` (admin/platform-admin only). |
 | `httpFetch` 401 handler | `shared/api/httpFetch.js` intercepts all 401 responses and calls the registered `_onSessionExpiry` handler. Auth endpoints (`/api/auth/*`) are excluded to prevent login-page 401s triggering logout. `createModuleApp.jsx` registers the handler for all non-platform-admin modules. `Platform AdminPage.jsx` registers via `setSessionExpiryHandler` re-exported from `platform-admin/utils/guardedFetch.js`. Do NOT add manual 401 checks in individual components — the wrapper handles it globally. |
 | `guardedFetch` (platform-admin) | `platform-admin/utils/guardedFetch.js` is now a thin re-export layer over `shared/api/httpFetch.js`. `guardedFetch === httpFetch`. `setSessionExpiryHandler` re-exported from shared. Do not add duplicate 401 logic here. |
+
+**Platform admin recovery (break-glass, locked by Rohith 2026-09-23).** Email password reset is deliberately off for platform admins, so MIMS keeps two of them. Either one can rescue the other from the admin console: open the locked-out account under System > Security > Add / Edit Users, use Quick Actions to set a new password and then expire it, and tell them the password in person — they sign in with it and are taken straight to Set New Password. The console refuses to demote, deactivate or disable the last active platform admin, so the pair cannot be reduced to zero from inside the app. A direct database write is the last resort, only when both accounts are locked out, and whoever does it says so in chat the same day with the exact statement run.
 
 ---
 
