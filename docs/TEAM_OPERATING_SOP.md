@@ -2558,7 +2558,9 @@ list without Rohith's word.
 | `.github/` | CI, issue and pull-request templates, the contributing and security policies |
 | `.claude/` | Claude Code settings for this repository |
 | `.githooks/` | The commit-message check |
-| `scripts/` | Developer scripts |
+| `docs/scripts/` | Developer scripts |
+
+> **Moved 2026-09-26 on Rohith's instruction:** `scripts/` and the local, untracked `tasks/` now live under `docs/`, so the top level shows two folders — `apps` and `docs`. The hidden `.github`, `.claude` and `.githooks` stay where their tools look for them.
 
 > **`ops/` was deleted on 2026-09-24** along with the rest of the cloud and
 > server plumbing (see 38.12). It held an nginx template and a process-manager
@@ -3128,7 +3130,7 @@ Section 26 is the standard. Two execution rules sit on top of it:
 
 ### 40.7 Task tracking
 
-- Multi-step work gets a plan in `tasks/todo.md` with checkable items.
+- Multi-step work gets a plan in `docs/tasks/todo.md` with checkable items.
 - Check in on the plan before implementing.
 - Mark items complete as they finish, not in a batch at the end.
 - Close with what was actually done, including **what was left out and why**.
