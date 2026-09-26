@@ -31,6 +31,9 @@ apps/          the two products
 .claude/       Claude Code settings for this repository
 .githooks/     commit-message check (git config core.hooksPath .githooks)
 docs/          all project documentation, including the change log
+  mims/        documents that belong to one product
+  cp-portal/
+  postmortems/
 scripts/       developer scripts
 ```
 
@@ -124,7 +127,8 @@ packaging only. Runtime verification is done against local app services.
 - GitHub product ops: [docs/GITHUB_PRODUCT_OPERATIONS_SETUP.md](docs/GITHUB_PRODUCT_OPERATIONS_SETUP.md)
 - Branch protection, pull requests, releases: [docs/TEAM_OPERATING_SOP.md](docs/TEAM_OPERATING_SOP.md) §38
 - Monitoring and backup baseline: [docs/MONITORING_AND_BACKUP_BASELINE.md](docs/MONITORING_AND_BACKUP_BASELINE.md)
-- Product runbooks: [docs/runbooks/](docs/runbooks)
+- MIMS documents: [docs/mims/](docs/mims) — including its production runbook
+- CP Portal documents: [docs/cp-portal/](docs/cp-portal) — including its production runbook
 
 ## Security and Governance
 
