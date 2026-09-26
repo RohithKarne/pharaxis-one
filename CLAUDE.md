@@ -88,6 +88,8 @@ Claude Code is the only development tool. Write and edit code directly with Edit
 
 **The session-opening prompt Rohith uses is kept in SOP §39.10** — read it if a session starts without one.
 
+**`@Name` in a message, or a `/varun` `/saad` `/kiranmai` `/vasu` `/aditi` command, means that person answers first and owns the reply** — SOP §39.12. The command files live in `.claude/commands/`.
+
 **Everything is in `docs/TEAM_OPERATING_SOP.md`.** There is exactly one SOP. The five per-app SOP files were absorbed and deleted on 2026-08-07 — do not recreate them.
 
 ---

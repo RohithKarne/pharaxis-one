@@ -2556,11 +2556,14 @@ list without Rohith's word.
 | `apps/` | The two products, and nothing else |
 | `docs/` | Every document, including the change log and the postmortems |
 | `.github/` | CI, issue and pull-request templates, the contributing and security policies |
-| `.claude/` | Claude Code settings for this repository |
+| `.claude/` | Claude Code settings for this repository, the tier-1 hook, and the `/varun` `/saad` `/kiranmai` `/vasu` `/aditi` commands (§39.12) |
 | `.githooks/` | The commit-message check |
-| `docs/scripts/` | Developer scripts |
+| `docs/scripts/` | Developer scripts. **Each one climbs to the repository root from its own folder — move a script and that climb changes.** |
+| `docs/tasks/` | The local, untracked `todo.md` from §40.7 |
 
-> **Moved 2026-09-26 on Rohith's instruction:** `scripts/` and the local, untracked `tasks/` now live under `docs/`, so the top level shows two folders — `apps` and `docs`. The hidden `.github`, `.claude` and `.githooks` stay where their tools look for them.
+> **Moved 2026-09-26 on Rohith's instruction:** `scripts/` and the local, untracked `tasks/` now live under `docs/`, so the top level shows two folders — `apps` and `docs`. The hidden `.github`, `.claude` and `.githooks` stay where their tools look for them. What the move touched, so the next move knows where to look: the six scripts' root-finding line, the tier-1 hook in `.claude/settings.json`, `.gitignore`, the README folder list, and this section.
+
+> **Seeing only `apps` and `docs` in an editor.** Finder hides the dot-folders and VS Code shows them; that is a display choice, not a repository one. Rohith hides them on his own machine with VS Code's *Files: Exclude* setting — one pattern per line: `.claude`, `.githooks`, `.github`, `.gitignore`, `CLAUDE.md`, `LICENSE`, `README.md`. It is a personal setting and is **not** committed: a `.vscode/` folder would be one more hidden top-level folder, and nothing in the repository depends on it. Hidden is not gone — every excluded item is still read by its tool.
 
 > **`ops/` was deleted on 2026-09-24** along with the rest of the cloud and
 > server plumbing (see 38.12). It held an nginx template and a process-manager
@@ -3032,6 +3035,29 @@ small and label it in plain words.
 better — in the product, in how we build, in how we work. Bring the idea to Rohith
 and ask before including it; never widen the current work unasked (§40.1, Rule IV
 in `CLAUDE.md`).
+
+### 39.12 Addressing one team member directly: `@Name` and `/name` (set by Rohith 2026-09-26)
+
+Rohith can speak to one person instead of to the room. Two ways, same result:
+
+| How | What Rohith types | What happens |
+|---|---|---|
+| Mention | `@Varun`, `@Saad`, `@Kiranmai`, `@Vasu` or `@Aditi` anywhere in a message, any case | That person answers first and owns the reply |
+| Command | `/varun`, `/saad`, `/kiranmai`, `/vasu` or `/aditi` at the start of a message, picked from the menu that `/` opens | The same, through a command file in `.claude/commands/` |
+
+The rules of the reply do not change: the named person speaks in their own voice
+(§39.3), every other member speaks only to flag a problem in their own area, and
+§26, §39.1, §39.5 and §47 all still apply. Aditi's routing role (§27) is not
+bypassed — it is what happens when nobody is named, and she still tracks what the
+named person promised. **A mentioned person never hands the question to someone
+else silently**; if it belongs to another owner, they say so and that owner takes
+it in the same thread.
+
+Two limits, stated so nobody expects more: only the first `/name` in a message is a
+command — a second one is plain text; and the `@` key in the tool opens a *file*
+picker, not a people picker, so `@Name` is typed, not chosen from a list. The
+command files must be in the working tree the session opened in; a new session
+sees them, a running one may need a restart.
 
 ### Ownership of this section
 
