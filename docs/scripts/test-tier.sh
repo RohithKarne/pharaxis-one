@@ -12,15 +12,15 @@
 #   tier3  ~10-15min  full browser regression, all apps  — run before Gate 2
 #
 # Usage:
-#   scripts/test-tier.sh tier1 [app]
-#   scripts/test-tier.sh tier2 mims
-#   scripts/test-tier.sh tier3
+#   docs/scripts/test-tier.sh tier1 [app]
+#   docs/scripts/test-tier.sh tier2 mims
+#   docs/scripts/test-tier.sh tier3
 #
 # Tier 2 and 3 require a seeded test database. See apps/mims/backend/tests/seed-e2e.js.
 
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TIER="${1:-tier1}"
 APP="${2:-all}"
 
@@ -79,7 +79,7 @@ tier1() {
 tier2() {
   echo "── Tier 2: browser smoke ──"
   if [ "$APP" = "all" ]; then
-    c_red "Tier 2 needs a specific app: scripts/test-tier.sh tier2 mims"
+    c_red "Tier 2 needs a specific app: docs/scripts/test-tier.sh tier2 mims"
     exit 2
   fi
   local dir="$REPO_ROOT/apps/$APP"

@@ -31,7 +31,7 @@ apps/          the two products
 .claude/       Claude Code settings for this repository
 .githooks/     commit-message check (git config core.hooksPath .githooks)
 docs/          all project documentation, including the change log
-scripts/       developer scripts
+docs/scripts/  developer scripts
 ```
 
 ## Prerequisites

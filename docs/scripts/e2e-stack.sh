@@ -18,7 +18,7 @@
 #
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MIMS_DIR="$REPO_ROOT/apps/mims"
 RUN_DIR="$REPO_ROOT/.e2e-stack"
 

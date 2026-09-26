@@ -37,7 +37,7 @@ playwright-report/
 .playwright-cli/
 .playwright-mcp/
 .claude/worktrees/
-tasks/todo.md
+docs/tasks/todo.md
 
 # Local generated backup/archive artifacts
 apps/**/backend/scripts/cleanup-backups/
