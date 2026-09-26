@@ -16,7 +16,10 @@ function parseInquiryDate(value) {
   const normalized = raw.includes('T')
     ? raw
     : raw.replace(' ', 'T');
-  const parsed = new Date(normalized);
+  // A bare 'YYYY-MM-DD HH:MM:SS' (how received_at is stored — see toMySqlDateTime, which writes UTC)
+  // is read as UTC, the same way the database reads it: the pool runs every connection in +00:00.
+  const withZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(normalized) ? `${normalized}Z` : normalized;
+  const parsed = new Date(withZone);
   if (!Number.isNaN(parsed.getTime())) return parsed;
 
   const fallback = new Date(raw.replace(' ', 'T'));

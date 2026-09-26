@@ -1426,6 +1426,10 @@ const authController = {
           platformAdmin: privileges.platformAdmin,
         });
         attachAuthCookie(res, resetToken, 10 * 60 * 1000);
+        // Every other sign-in path records the session; without this the reset
+        // screen's first request is rejected as SESSION_REVOKED and the user is
+        // bounced back to login before they can set a password.
+        await trackSessionToken(user.id, resetToken);
         return res.status(200).json({
           passwordResetRequired: true,
           token: resetToken,
