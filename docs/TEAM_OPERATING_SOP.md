@@ -2532,11 +2532,17 @@ confirms it.** It is not final until Compliance has.
 ### 38.11 Repository layout — nothing loose at the top level
 
 > Set by Rohith 2026-09-24: *"I dont want any file outside of folder."*
+> Tightened by Rohith 2026-09-26: *"no one should create any new folder outside in
+> root folder. Any new folder should be created within docs folder or apps folder.
+> I should only see folders always."*
 
-**No file is created at the top level of the repository.** Every new file goes
-inside an existing folder. Where none of them fits, the folder is agreed with
-Rohith first and created deliberately — a new top-level folder is a decision, not
-a side effect of saving a file somewhere.
+**No file, and no folder, is created at the top level of the repository.** Every
+new file goes inside an existing folder, and **every new folder goes inside
+`apps/` or `docs/`** — there is no third place. The top level is two visible
+folders, `apps` and `docs`, and stays that way. The earlier wording, *"agree a new
+top-level folder with Rohith first"*, is withdrawn: there is nothing to agree,
+because the answer is always the same. If something genuinely fits neither
+folder, raise it in chat and stop; do not create it and ask afterwards.
 
 **The four files that stay at the top level, and why each one has to.** These are
 exceptions earned by a tool that will not look anywhere else. No file joins this
