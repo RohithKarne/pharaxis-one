@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+#
+# pre-commit — refuse a commit that adds anything new at the top level.
+#
+# Why: SOP §38.11 (Rohith, 2026-09-26) — the repository root is two visible
+# folders, apps/ and docs/, plus the hidden folders and four files each pinned
+# there by a tool. Every new folder goes inside apps/ or docs/. A rule that is
+# only words is caught by someone noticing; this catches it before the commit
+# exists.
+#
+# Enable for this repository (already set on the team's machines):
+#   git config core.hooksPath .githooks
+#
+# Bypass for a genuine emergency (say so in chat the same day):
+#   git commit --no-verify
+
+ALLOWED=(apps docs .github .claude .githooks .gitignore CLAUDE.md README.md LICENSE)
+
+is_allowed() {
+  local entry="$1"
+  for ok in "${ALLOWED[@]}"; do
+    [[ "$entry" == "$ok" ]] && return 0
+  done
+  return 1
+}
+
+BAD=()
+# Added, copied and renamed paths only — the destination is what appears at the root.
+while IFS= read -r path; do
+  [[ -z "$path" ]] && continue
+  top="${path%%/*}"
+  is_allowed "$top" || BAD+=("$path")
+done < <(git diff --cached --name-only --diff-filter=ACR)
+
+[[ ${#BAD[@]} -eq 0 ]] && exit 0
+
+echo "" >&2
+echo "✗ Commit rejected: it adds something new at the top level of the repository." >&2
+echo "" >&2
+for p in "${BAD[@]}"; do echo "    $p" >&2; done
+echo "" >&2
+echo "  The root is apps/ and docs/ only (SOP §38.11). Put a new folder or file" >&2
+echo "  inside apps/ or docs/. If it genuinely fits neither, raise it in chat and stop." >&2
+echo "" >&2
+echo "  Emergency bypass: git commit --no-verify" >&2
+echo "" >&2
+exit 1

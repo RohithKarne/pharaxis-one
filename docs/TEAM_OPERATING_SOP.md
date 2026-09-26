@@ -2544,6 +2544,13 @@ top-level folder with Rohith first"*, is withdrawn: there is nothing to agree,
 because the answer is always the same. If something genuinely fits neither
 folder, raise it in chat and stop; do not create it and ask afterwards.
 
+**Enforced, not only written (added 2026-09-26).** `.githooks/pre-commit` refuses
+any commit that adds a file or folder at the top level outside the list above —
+the two folders, the three hidden folders and the four pinned files. It runs on
+every machine where `core.hooksPath` points at `.githooks`, which the
+`commit-msg` check already requires. `git commit --no-verify` bypasses it, and a
+bypass is said in chat the same day.
+
 **The four files that stay at the top level, and why each one has to.** These are
 exceptions earned by a tool that will not look anywhere else. No file joins this
 list without Rohith's word.
