@@ -23,6 +23,33 @@ const PRIORITIES = ['high', 'medium', 'low']
 const TRIAGE_STATES = ['new', 'in_review', 'linked', 'converted', 'no_action', 'closed']
 const PRIORITY_ICON = { high: '🔴', medium: '🟡', low: '🟢' }
 const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
+// CSV export asks the server for this many rows of the current filter in one go; the
+// server caps at the same number and the screen says so when more matched.
+const EXPORT_MAX_ROWS = 1000
+// Advanced filter keys → GET /api/inbox query params
+const ADV_FILTER_PARAMS = {
+  color: 'color', priority: 'priority', readStatus: 'read', isLocked: 'locked', assignee: 'assignee',
+  triageState: 'triage_state', queueName: 'queue', firstTouchSla: 'first_touch_sla', responseSla: 'response_sla',
+}
+
+// Everything the list depends on, as one query string: the server does the tab, search,
+// dates, advanced filters, sort and paging and returns only the page asked for.
+function buildInboxListParams({ activeTab, sortAsc, page, pageSize, tenantFilterOrgId, search, filterFrom, filterTo, advFilters }) {
+  const params = new URLSearchParams({
+    status: TAB_STATUS[activeTab] || activeTab.toLowerCase().replace('-', '_'),
+    sort: sortAsc ? 'asc' : 'desc',
+    page: String(page),
+    page_size: String(pageSize),
+  })
+  if (tenantFilterOrgId) params.set('org_id', tenantFilterOrgId)
+  if (search) params.set('search', search)
+  if (filterFrom) params.set('from', filterFrom)
+  if (filterTo) params.set('to', filterTo)
+  for (const [key, param] of Object.entries(ADV_FILTER_PARAMS)) {
+    if (advFilters[key]) params.set(param, advFilters[key])
+  }
+  return params
+}
 
 
 export default function InboxPage() {
@@ -30,24 +57,17 @@ export default function InboxPage() {
   const navigate = useNavigate()
   const { user, siteId, orgId, allOrgs } = useAuth()
 
-  const STORAGE_KEY = `mims_inbox_${user?.id || 'guest'}`
   const DENSITY_KEY = `mims_inbox_density_${user?.id || 'guest'}`
   const SAVED_VIEWS_SCREEN_KEY = 'inbox'  // server-side saved views via /api/admin/user-preferences
 
-  const saveInquiries = useCallback((data) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  }, [STORAGE_KEY])
-
-  function updateInquiries(updaterFn) {
-    setInquiries(prev => {
-      const next = updaterFn(prev)
-      saveInquiries(next)
-      return next
-    })
-  }
-
   // ── Core inbox state ──────────────────────────────────────────
+  // The list is one page from the server. Nothing about an email is kept in browser storage.
   const [inquiries, setInquiries]     = useState([])
+  const [total, setTotal]             = useState(0)      // rows matching the current tab + filters
+  const [tabCounts, setTabCounts]     = useState({})     // per-tab totals within the tenant scope
+  const [queueOptions, setQueueOptions] = useState([])   // queue names present in the tenant scope
+  const [metrics, setMetrics]         = useState(null)   // hero numbers, computed by the server
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [inboxSource, setInboxSource] = useState('seed')
   const [loading, setLoading]         = useState(true)
   const [loadError, setLoadError]     = useState(null)   // L4: surface fetch errors
@@ -124,52 +144,48 @@ export default function InboxPage() {
 
   // ── Data loaders ──────────────────────────────────────────────
 
-  function mergeLocalState(serverItems, localItems) {
-    const localById = new Map((localItems || []).map(i => [i.id, i]))
-    return (serverItems || []).map(s => {
-      const l = localById.get(s.id)
-      if (!l) return s
-      return {
-        ...s,
-        is_locked: l.is_locked, locked_by: l.locked_by,
-        color: l.color,
-        assigned_to: l.assigned_to, priority: l.priority, due_date: l.due_date,
-      }
-    })
-  }
+  // Requests can overtake each other (a fast tab click after a slow search); only the
+  // newest one is allowed to update the screen.
+  const loadSeqRef = useRef(0)
 
   const loadInquiries = useCallback(async (opts = {}) => {
-    const { force = false, background = false } = opts
-    // M3 FIX: guard against writing to 'guest' key before user identity is known
+    const { background = false } = opts
     if (!user?.id) return
-    // C3 FIX: background refreshes don't show a loading spinner
+    const seq = ++loadSeqRef.current
+    // Background refreshes (after an action) keep the current rows on screen; user-driven
+    // changes (tab, page, filter) show the loading state.
     if (!background) setLoading(true)
     setLoadError(null)
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved && !force && !tenantFilterOrgId) {
-      setInquiries(JSON.parse(saved))
-      setLoading(false)
-      return
-    }
     try {
-      const query = tenantFilterOrgId ? `?org_id=${encodeURIComponent(tenantFilterOrgId)}` : ''
-      const res = await httpFetch(`/api/inbox${query}`, { headers: AUTH_H })
-      if (res.ok) {
-        const data = await res.json()
-        const inquiryList = data.inquiries || []
-        setInboxSource(data.source || 'seed')
-        setInquiries(prev => {
-          const merged = mergeLocalState(inquiryList, prev)
-          if (data.source === 'db' || force) saveInquiries(merged)
-          return merged
-        })
+      const params = buildInboxListParams({
+        activeTab, sortAsc, page, pageSize: PAGE_SIZE, tenantFilterOrgId,
+        search: debouncedSearch, filterFrom, filterTo, advFilters,
+      })
+      const res = await httpFetch(`/api/inbox?${params}`, { headers: AUTH_H })
+      const data = res.ok ? await res.json() : null
+      if (seq !== loadSeqRef.current) return
+      if (!data) {
+        // L4 FIX: surface load errors rather than silently swallowing them
+        setLoadError('Failed to load inbox.')
+        return
+      }
+      const list = data.inquiries || []
+      setInboxSource(data.source || 'seed')
+      setInquiries(list)
+      setTotal(Number(data.total || 0))
+      setTabCounts(data.tab_counts || {})
+      setQueueOptions(Array.isArray(data.queues) ? data.queues : [])
+      setMetrics(data.metrics || null)
+      // A page past the end (rows closed by a bulk action, filter narrowed) falls back to the last real page.
+      if (list.length === 0 && page > 1 && Number(data.total || 0) > 0) {
+        setPage(Math.max(1, Math.ceil(Number(data.total) / PAGE_SIZE)))
       }
     } catch (err) {
-      // L4 FIX: surface load errors rather than silently swallowing them
+      if (seq !== loadSeqRef.current) return
       console.error('[Inbox] Failed to load inquiries:', err)
-      setLoadError('Failed to refresh inbox. Showing cached data.')
-    } finally { setLoading(false) }
-  }, [AUTH_H, STORAGE_KEY, saveInquiries, tenantFilterOrgId, user?.id])
+      setLoadError('Failed to load inbox.')
+    } finally { if (seq === loadSeqRef.current) setLoading(false) }
+  }, [AUTH_H, user?.id, activeTab, sortAsc, page, tenantFilterOrgId, debouncedSearch, filterFrom, filterTo, advFilters])
 
   const USERS_KEY = `mims_inbox_users_${user?.id || 'guest'}`
 
@@ -233,19 +249,24 @@ export default function InboxPage() {
     localStorage.setItem(DENSITY_KEY, compactMode ? 'compact' : 'comfort')
   }, [compactMode, DENSITY_KEY])
 
+  // One request per change of tab, page, sort, tenant, search or filter — loadInquiries
+  // is rebuilt whenever any of those change.
   useEffect(() => {
-    // C3 FIX: single load on mount — serves cache first, then silently refreshes in background
-    // without triggering a second loading spinner
     loadInquiries()
+  }, [loadInquiries])
+
+  useEffect(() => {
     loadUsers()
     loadTemplates()
-  }, [loadInquiries, loadTemplates, loadUsers])
+  }, [loadTemplates, loadUsers])
 
-  // C3 FIX: background refresh after cache serve — runs once after mount, no loading spinner
+  // F6: search runs on the server so it covers the whole inbox. Debounced: the request
+  // goes out 300ms after typing stops.
   useEffect(() => {
-    const timer = setTimeout(() => loadInquiries({ force: true, background: true }), 800)
+    const term = search.trim()
+    const timer = setTimeout(() => setDebouncedSearch(term), 300)
     return () => clearTimeout(timer)
-  }, [loadInquiries])
+  }, [search])
 
   useEffect(() => {
     const reportFilters = location.state?.reportFilters
@@ -346,7 +367,6 @@ export default function InboxPage() {
     setBulkSelected(new Set())
     setSelectionMode(false)
     loadUsers()
-    loadInquiries({ force: true, background: true })
   }, [tenantFilterOrgId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Actions ───────────────────────────────────────────────────
@@ -355,7 +375,7 @@ export default function InboxPage() {
     setFetching(true); setFetchResult(null)
     try {
       const res = await httpFetch('/api/inbox/fetch', { method: 'POST', headers: AUTH_H })
-      if (res.ok) { const d = await res.json(); setFetchResult(d); await loadInquiries({ force: true }) }
+      if (res.ok) { const d = await res.json(); setFetchResult(d); await loadInquiries() }
     } catch { /* silently fail */ }
     finally { setFetching(false) }
   }
@@ -369,7 +389,7 @@ export default function InboxPage() {
     if (!inq.read_at) {
       const nowIso = new Date().toISOString()
       patchInquiry(inq.id, { is_read: true })
-      updateInquiries(prev => prev.map(i => i.id === inq.id ? {
+      setInquiries(prev => prev.map(i => i.id === inq.id ? {
         ...i,
         is_read: true,
         read_at: i.read_at || nowIso,
@@ -437,13 +457,13 @@ export default function InboxPage() {
       const data = await res.json()
       if (!res.ok) { setCompose(c => ({ ...c, sending: false, error: data.error || 'Failed to send.' })); return }
       if (compose.mode === 'reply') {
-        updateInquiries(prev => prev.map(i =>
+        setInquiries(prev => prev.map(i =>
           i.id === selected.id ? { ...i, status: 'processed' } : i
         ))
         setSelected(null)
       }
       setCompose(null)
-      loadInquiries({ force: true })
+      loadInquiries()
     } catch {
       setCompose(c => ({ ...c, sending: false, error: 'Network error. Please try again.' }))
     }
@@ -510,7 +530,7 @@ export default function InboxPage() {
       setCaseFlow(prev => ({ ...prev, actionError: data.error || 'Failed to link case.' }))
       return false
     }
-    updateInquiries(prev => prev.map(i => (
+    setInquiries(prev => prev.map(i => (
       i.id === selected.id ? { ...i, status: 'processed', case_id: caseId, triage_state: linkMode } : i
     )))
     setSelected(prev => prev ? ({ ...prev, status: 'processed', case_id: caseId, triage_state: linkMode }) : prev)
@@ -613,7 +633,7 @@ export default function InboxPage() {
 
   function setColor(id, color) {
     patchInquiry(id, { color })
-    updateInquiries(prev => prev.map(inq => inq.id === id ? { ...inq, color } : inq))
+    setInquiries(prev => prev.map(inq => inq.id === id ? { ...inq, color } : inq))
   }
 
   function toggleBulk(id, e) {
@@ -647,7 +667,7 @@ export default function InboxPage() {
       }).catch(() => {})
     }
 
-    await loadInquiries({ force: true })
+    await loadInquiries()
     setBulkSelected(new Set())
     setSelected(null)
     setBulkTriageState('')
@@ -656,12 +676,31 @@ export default function InboxPage() {
     setBulkSnoozeUntil('')
   }
 
-  function exportCSV() {
+  // F14: exports what the current tab + filters show, fetched from the server in one request
+  // (up to EXPORT_MAX_ROWS), not the page on screen.
+  async function exportCSV() {
+    let matched = []
+    try {
+      const params = buildInboxListParams({
+        activeTab, sortAsc, page: 1, pageSize: EXPORT_MAX_ROWS, tenantFilterOrgId,
+        search: search.trim(), filterFrom, filterTo, advFilters,
+      })
+      const res = await httpFetch(`/api/inbox?${params}`, { headers: AUTH_H })
+      if (!res.ok) { setViewNotice('Could not export: the inbox did not respond.'); return }
+      const data = await res.json()
+      matched = data.inquiries || []
+      if (Number(data.total || 0) > matched.length) {
+        setViewNotice(`Exported the first ${matched.length} of ${data.total} matching inquiries.`)
+      }
+    } catch {
+      setViewNotice('Could not export: the inbox did not respond.')
+      return
+    }
     const headers = ['ID', 'From', 'To', 'Subject', 'Received', 'Status', 'Triage State', 'Queue', 'Priority', 'Assigned To', 'Due Date', 'First Touch SLA', 'Response SLA', 'Color', 'Locked By']
     // M1 FIX: escape ALL fields (including headers and non-string columns) to prevent broken CSV when
     // values contain commas, quotes, or newlines; use CRLF for RFC 4180 compliance
     const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const rows = filtered.map(i => [
+    const rows = matched.map(i => [
       esc(i.id), esc(i.sender), esc(i.recipient), esc(i.subject),
       esc(i.received_at), esc(i.status), esc(i.triage_state || ''), esc(i.queue_name || ''),
       esc(i.priority || ''), esc(i.assigned_to || ''), esc(i.due_date || ''),
@@ -776,52 +815,9 @@ export default function InboxPage() {
 
   // ── Computed state ────────────────────────────────────────────
 
-  const tabCounts = useMemo(() => {
-    return TABS.reduce((acc, tab) => {
-      acc[tab] = inquiries.filter(i => i.status === (TAB_STATUS[tab] || tab.toLowerCase().replace('-', '_'))).length
-      return acc
-    }, {})
-  }, [inquiries])
-
-  const filtered = useMemo(() => {
-    let result = inquiries.filter(i => {
-      const matchTab  = i.status === (TAB_STATUS[activeTab] || activeTab.toLowerCase().replace('-', '_'))
-      const q         = search.toLowerCase()
-      const matchSearch = search === '' ||
-        i.sender?.toLowerCase().includes(q) ||
-        i.subject?.toLowerCase().includes(q) ||
-        i.body?.toLowerCase().includes(q)
-      // M2 FIX: append T00:00:00 (no Z) so filterFrom is treated as local midnight, not UTC midnight
-      const matchFrom = !filterFrom || new Date(i.received_at) >= new Date(filterFrom + 'T00:00:00')
-      const matchTo   = !filterTo   || new Date(i.received_at) <= new Date(filterTo + 'T23:59:59')
-      // F8: advanced filters
-      const matchColor    = !advFilters.color    || i.color === advFilters.color
-      const matchPriority = !advFilters.priority || i.priority === advFilters.priority
-      const matchRead     = !advFilters.readStatus ||
-        (advFilters.readStatus === 'unread' ? !i.is_read : !!i.is_read)
-      const matchLock     = !advFilters.isLocked ||
-        (advFilters.isLocked === 'locked' ? i.is_locked : !i.is_locked)
-      const matchAssignee = !advFilters.assignee ||
-        (advFilters.assignee === '__UNASSIGNED__' ? !i.assigned_to : i.assigned_to === advFilters.assignee)
-      const matchTriage   = !advFilters.triageState || i.triage_state === advFilters.triageState
-      const matchQueue    = !advFilters.queueName || i.queue_name === advFilters.queueName
-      const matchFirstTouch = !advFilters.firstTouchSla || i.first_touch_sla_status === advFilters.firstTouchSla
-      const matchResponse = !advFilters.responseSla || i.response_sla_status === advFilters.responseSla
-      return matchTab && matchSearch && matchFrom && matchTo &&
-             matchColor && matchPriority && matchRead && matchLock && matchAssignee &&
-             matchTriage && matchQueue && matchFirstTouch && matchResponse
-    })
-    result.sort((a, b) => {
-      const da = new Date(a.received_at), db = new Date(b.received_at)
-      return sortAsc ? da - db : db - da
-    })
-    return result
-  }, [inquiries, activeTab, search, sortAsc, filterFrom, filterTo, advFilters])
-
-  const queueOptions = useMemo(
-    () => [...new Set(inquiries.map(inquiry => inquiry.queue_name).filter(Boolean))].sort(),
-    [inquiries]
-  )
+  // Tab counts (tab_counts), the filtered total and the queue list all come from the server
+  // with each page; the rows in `inquiries` are already the current page, filtered and sorted.
+  const tabCountFor = (tab) => tabCounts[TAB_STATUS[tab] || tab.toLowerCase().replace('-', '_')] || 0
 
   const tenantOptions = useMemo(() => {
     const options = Array.isArray(allOrgs)
@@ -840,8 +836,8 @@ export default function InboxPage() {
     return [...dedup.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [allOrgs, orgId])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const paginated  = inquiries
 
   const today   = new Date().toDateString()
   // L1 FIX: add Yesterday group so users can distinguish today vs yesterday vs older
@@ -902,24 +898,14 @@ export default function InboxPage() {
 
   const colorBarClass = { red: 'color-bar-red', yellow: 'color-bar-yellow', green: 'color-bar-green', blue: 'color-bar-blue' }
   const dotClass      = { red: 'dot-red', yellow: 'dot-yellow', green: 'dot-green', blue: 'dot-blue' }
+  // Counted by the server over every open inquiry in the tenant scope (inbox, pending,
+  // non-processed), not over the page on screen. '—' until the first response arrives.
   const heroMetrics = useMemo(() => ([
-    {
-      label: 'Open work',
-      value: inquiries.filter(item => ['inbox', 'pending', 'non_processed'].includes(item.status)).length,
-    },
-    {
-      label: 'Unassigned',
-      value: inquiries.filter(item => !item.assigned_to && ['inbox', 'pending', 'non_processed'].includes(item.status)).length,
-    },
-    {
-      label: 'My queue',
-      value: inquiries.filter(item => item.assigned_to === user?.name && ['inbox', 'pending', 'non_processed'].includes(item.status)).length,
-    },
-    {
-      label: 'SLA risk',
-      value: inquiries.filter(item => item.first_touch_sla_status === 'breached' || item.response_sla_status === 'breached').length,
-    },
-  ]), [inquiries, user?.name])
+    { label: 'Open work',  value: metrics ? metrics.open_work  : '—' },
+    { label: 'Unassigned', value: metrics ? metrics.unassigned : '—' },
+    { label: 'My queue',   value: metrics ? metrics.my_queue   : '—' },
+    { label: 'SLA risk',   value: metrics ? metrics.sla_risk   : '—' },
+  ]), [metrics])
 
   const activeFilterChips = useMemo(() => {
     const chips = []
@@ -950,7 +936,8 @@ export default function InboxPage() {
       try { payload = JSON.parse(payload) } catch { payload = {} }
     }
     const urgency = payload?.urgency ? ` / ${payload.urgency}` : ''
-    return `AI: ${type}${urgency}`
+    // A keyword match on the email text, not a model's judgement — say so.
+    return `Keyword hint: ${type}${urgency}`
   }
 
   function renderAiChip(inquiry) {
@@ -977,8 +964,9 @@ export default function InboxPage() {
     if (aiLabel) chips.push({ label: aiLabel, tone: 'ai' })
     if (dueStatus === 'overdue') chips.push({ label: 'Overdue', tone: 'risk' })
     if (dueStatus === 'today') chips.push({ label: 'Due today', tone: 'warning' })
-    if (inquiry.first_touch_sla_status === 'breached' && !inquiry.first_touched_at) chips.push({ label: 'First Touch SLA', tone: 'risk' })
-    if (inquiry.response_sla_status === 'breached' && inquiry.first_touched_at && !inquiry.first_response_at) chips.push({ label: 'Response SLA', tone: 'risk' })
+    // SLA state is the server's verdict on the row; the chips do not re-derive it.
+    if (inquiry.first_touch_sla_status === 'breached') chips.push({ label: 'First Touch SLA', tone: 'risk' })
+    if (inquiry.response_sla_status === 'breached') chips.push({ label: 'Response SLA', tone: 'risk' })
     if (inquiry.assigned_to) chips.push({ label: inquiry.assigned_to, tone: 'neutral' })
 
     return chips
@@ -1078,7 +1066,7 @@ export default function InboxPage() {
                   <button key={tab} className={`inbox-tab ${activeTab === tab ? 'active' : ''}`}
                     onClick={() => { setActiveTab(tab); setPage(1); setSelected(null); setSelectionMode(false) }}>
                     {tab}
-                    {tabCounts[tab] > 0 && <span className="inbox-tab-count">{tabCounts[tab]}</span>}
+                    {tabCountFor(tab) > 0 && <span className="inbox-tab-count">{tabCountFor(tab)}</span>}
                   </button>
                 ))}
               </div>
@@ -1094,7 +1082,7 @@ export default function InboxPage() {
                 </div>
                 <div className="inbox-layout-summary">
                   <span>{activeTab} triage</span>
-                  <span>{filtered.length} in current view</span>
+                  <span>{total} in current view</span>
                 </div>
               </div>
 
@@ -1176,7 +1164,7 @@ export default function InboxPage() {
               )}
               <div className="inbox-sort-bar">
                 <span>
-                  Showing {filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                  Showing {total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
                   {fetchResult != null && (
                     <span style={{ marginLeft: 8, color: 'var(--success, #22c55e)', fontSize: 11 }}>
                       {fetchResult.ingested > 0 ? `+${fetchResult.ingested} new` : 'Up to date'}
@@ -1196,7 +1184,7 @@ export default function InboxPage() {
               <div className="inbox-list">
                 {loading ? (
                   <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
-                ) : filtered.length === 0 ? (
+                ) : inquiries.length === 0 ? (
                   <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
                     <div style={{ fontSize: 32 }}>📭</div>
                     <div style={{ marginTop: 8 }}>No inquiries in {activeTab}</div>
@@ -1293,7 +1281,7 @@ export default function InboxPage() {
                               if (selected.is_locked && selected.locked_by !== user?.name) return
                               const newLockedBy = newLocked ? user?.name : null
                               patchInquiry(selected.id, { is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? selected.color : null })
-                              updateInquiries(prev => prev.map(i =>
+                              setInquiries(prev => prev.map(i =>
                                 i.id === selected.id ? { ...i, is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? i.color : null } : i
                               ))
                               setSelected(s => ({ ...s, is_locked: newLocked, locked_by: newLockedBy, color: newLocked ? s.color : null }))
@@ -1354,7 +1342,7 @@ export default function InboxPage() {
                           onChange={e => {
                             const v = e.target.value || null
                             patchInquiry(selected.id, { assigned_to: v })
-                            updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, assigned_to: v } : i))
+                            setInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, assigned_to: v } : i))
                             setSelected(s => ({ ...s, assigned_to: v }))
                           }}>
                           <option value="">Unassigned</option>
@@ -1369,7 +1357,7 @@ export default function InboxPage() {
                           onChange={e => {
                             const value = e.target.value
                             patchInquiry(selected.id, { triage_state: value })
-                            updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, triage_state: value } : i))
+                            setInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, triage_state: value } : i))
                             setSelected(s => ({ ...s, triage_state: value }))
                           }}>
                           {TRIAGE_STATES.map(state => <option key={state} value={state}>{state.replace(/_/g, ' ')}</option>)}
@@ -1383,7 +1371,7 @@ export default function InboxPage() {
                           onChange={e => {
                             const value = e.target.value || null
                             patchInquiry(selected.id, { queue_name: value })
-                            updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, queue_name: value } : i))
+                            setInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, queue_name: value } : i))
                             setSelected(s => ({ ...s, queue_name: value }))
                           }}>
                           <option value="">Select queue</option>
@@ -1403,7 +1391,7 @@ export default function InboxPage() {
                             onChange={e => {
                               const v = e.target.value || null
                               patchInquiry(selected.id, { due_date: v })
-                              updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, due_date: v } : i))
+                              setInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, due_date: v } : i))
                               setSelected(s => ({ ...s, due_date: v }))
                             }} />
                           {dueDateStatus(selected.due_date) === 'overdue' && <span className="due-badge due-overdue">Overdue</span>}
@@ -1420,7 +1408,7 @@ export default function InboxPage() {
                               onClick={() => {
                                 const v = selected.priority === p ? null : p
                                 patchInquiry(selected.id, { priority: v })
-                                updateInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, priority: v } : i))
+                                setInquiries(prev => prev.map(i => i.id === selected.id ? { ...i, priority: v } : i))
                                 setSelected(s => ({ ...s, priority: v }))
                               }}>
                               {PRIORITY_ICON[p]} {p.charAt(0).toUpperCase() + p.slice(1)}
