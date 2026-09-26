@@ -496,6 +496,25 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
       return res.status(403).json({ error: 'You are not permitted to assign the platform_admin role.' });
     }
 
+    // Break-glass (2026-09-23): never leave the platform with no active platform admin,
+    // otherwise the only way back in is a direct database write.
+    const demoting = existing.role === 'platform_admin' && (
+      (role != null && String(role) !== 'platform_admin') ||
+      (is_active != null && !is_active) ||
+      (is_disabled != null && is_disabled)
+    );
+    if (demoting) {
+      const [[{ others }]] = await pool.execute(
+        `SELECT COUNT(*) AS others FROM users u
+          WHERE u.id != ? AND u.is_active = 1 AND u.is_disabled = 0
+            AND (u.role = 'platform_admin' OR NOT ${PLATFORM_ADMIN_EXCLUSION_SQL})`,
+        [req.params.id]
+      );
+      if (!others) {
+        return res.status(409).json({ error: 'This is the last active platform admin. Make another user a platform admin before demoting or deactivating this one.' });
+      }
+    }
+
     // user_id uniqueness check (exclude self)
     if (user_id !== undefined) {
       const [[dup]] = await pool.execute(
@@ -557,8 +576,13 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
 // ── POST /api/admin/users/:id/expire-password — expire immediately ────────────
 router.post('/users/:id/expire-password', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
+    // Break-glass (2026-09-23): a platform admin may expire another platform admin's password.
+    const canTouchPlatformAdmin = hasGlobalAdminScope(req.user);
     const [[user]] = await pool.execute(
-      'SELECT id FROM users WHERE id = ? AND role != ? LIMIT 1', [req.params.id, 'platform_admin']
+      canTouchPlatformAdmin
+        ? 'SELECT id FROM users WHERE id = ? LIMIT 1'
+        : 'SELECT id FROM users WHERE id = ? AND role != ? LIMIT 1',
+      canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
     );
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
@@ -585,9 +609,13 @@ router.put('/users/:id/change-password', authenticate, requireRole('admin', 'pla
   }
 
   try {
+    // Break-glass (2026-09-23): a platform admin may set a new password for another platform admin.
+    const canTouchPlatformAdmin = hasGlobalAdminScope(req.user);
     const [[user]] = await pool.execute(
-      'SELECT id, network_user_id FROM users WHERE id = ? AND role != ? LIMIT 1',
-      [req.params.id, 'platform_admin']
+      canTouchPlatformAdmin
+        ? 'SELECT id, network_user_id FROM users WHERE id = ? LIMIT 1'
+        : 'SELECT id, network_user_id FROM users WHERE id = ? AND role != ? LIMIT 1',
+      canTouchPlatformAdmin ? [req.params.id] : [req.params.id, 'platform_admin']
     );
     if (!user) return res.status(404).json({ error: 'User not found.' });
     if (user.network_user_id) {
