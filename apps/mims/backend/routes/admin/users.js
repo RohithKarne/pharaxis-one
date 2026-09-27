@@ -13,22 +13,22 @@ const router   = express.Router();
 const bcrypt   = require('bcrypt');
 const pool     = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
-const { hasGlobalAdminScope, LAST_PLATFORM_ADMIN_ERROR, leavesNoActivePlatformAdmin } = require('../../utils/adminScope');
+const { hasGlobalAdminScope, PLATFORM_ADMIN_SQL, LAST_PLATFORM_ADMIN_ERROR, leavesNoActivePlatformAdmin } = require('../../utils/adminScope');
 const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 const { validateBulkUserRows } = require('../../services/bulkUserProvisioningService');
 
 const SALT_ROUNDS = 12;
-const PLATFORM_ADMIN_EXCLUSION_SQL =
-  "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1)";
 
-// WP1: non-platform admins may only see/act on users within their OWN org.
-// Platform admins (global scope) keep full cross-tenant visibility. Returns a SQL
-// fragment (users alias = `u`) plus its bind params to AND into a WHERE clause.
+// WP1: non-platform admins may only see/act on users within their OWN org, and
+// never see a platform admin (role or console permission). Platform admins (global
+// scope) keep full cross-tenant visibility, other platform admins included, so they
+// can find a colleague to rescue. Returns a SQL fragment (users alias = `u`) plus
+// its bind params to AND into a WHERE clause.
 function orgScopeForUsers(req) {
   if (hasGlobalAdminScope(req.user)) return { sql: '1=1', params: [] };
   return {
-    sql: 'EXISTS (SELECT 1 FROM user_org_access uoa_scope WHERE uoa_scope.user_id = u.id AND uoa_scope.org_id = ? AND uoa_scope.is_active = 1)',
+    sql: `EXISTS (SELECT 1 FROM user_org_access uoa_scope WHERE uoa_scope.user_id = u.id AND uoa_scope.org_id = ? AND uoa_scope.is_active = 1) AND NOT ${PLATFORM_ADMIN_SQL}`,
     params: [req.user.orgId ?? null],
   };
 }
@@ -66,8 +66,7 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
               u.password_expires_at, u.created_at, u.updated_at
          FROM users u
     LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-        WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
-          AND ${scope.sql}
+        WHERE ${scope.sql}
           AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
         ORDER BY u.name`,
       [...scope.params, like, like, like]
@@ -147,8 +146,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
          ) AS updated_by_name
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-       WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
-         AND ${scope.sql}
+       WHERE ${scope.sql}
          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
        ORDER BY u.name ASC
        LIMIT ${parseInt(limit, 10)} OFFSET ${parseInt(offset, 10)}`,
@@ -157,8 +155,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) AS total
        FROM users u
-       WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
-         AND ${scope.sql}
+       WHERE ${scope.sql}
          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)`,
       [...scope.params, like, like, like]
     );
@@ -183,7 +180,7 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
          u.password_expires_at, u.created_at, u.updated_at
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-       WHERE u.id = ? AND ${PLATFORM_ADMIN_EXCLUSION_SQL} AND ${scope.sql}`,
+       WHERE u.id = ? AND ${scope.sql}`,
       [req.params.id, ...scope.params]
     );
     if (!user) return res.status(404).json({ error: 'User not found.' });
