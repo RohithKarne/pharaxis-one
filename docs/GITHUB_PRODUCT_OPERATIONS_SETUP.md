@@ -37,8 +37,8 @@ Do not create or maintain production deploy environments unless a new hosting ta
 
 After `gh auth login` is working on an admin machine, these scripts can apply most of the setup:
 
-- `./scripts/github/bootstrap-product-ops.sh`
-- `./scripts/github/apply-main-branch-protection.sh`
+- `./docs/scripts/github/bootstrap-product-ops.sh`
+- `./docs/scripts/github/apply-main-branch-protection.sh`
 
 ## Minimum Environment Rules
 
