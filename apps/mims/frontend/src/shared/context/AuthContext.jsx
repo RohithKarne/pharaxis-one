@@ -19,6 +19,21 @@ function createUnresolvedSecurityAccess() {
   return { resolved: false, unrestricted: false, system_options: {}, case_options: {} }
 }
 
+// Case-form drafts (adverse event, product complaint, medical information,
+// contacts) can hold patient details. The case tabs keep them in sessionStorage
+// so closing the tab discards them, and every sign-in and sign-out wipes them so
+// the next person at this browser never sees them. localStorage is swept too,
+// for drafts left there by builds before 2026-09-27.
+const CASE_DRAFT_PREFIX = 'mims_case_'
+
+function clearCaseDrafts() {
+  for (const store of [globalThis.sessionStorage, globalThis.localStorage]) {
+    try {
+      Object.keys(store).filter(k => k.startsWith(CASE_DRAFT_PREFIX)).forEach(k => store.removeItem(k))
+    } catch { /* storage unavailable */ }
+  }
+}
+
 function isPublicAuthPath() {
   if (typeof window === 'undefined') return false
   const path = window.location.pathname || ''
@@ -127,6 +142,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
 
   function login(userData, authToken, allowedModules = [], orgData = {}) {
     const { orgId: oid = null, siteId: sid = null, orgName: oname = null, siteName: sname = null, allOrgs: all = [], sessionTimeout: timeout = 30 } = orgData
+    clearCaseDrafts()
     applyAuthState({
       user: userData,
       token: authToken,
@@ -149,6 +165,7 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
     setUser(null); setToken(null); setModules([]); setOrgId(null); setSiteId(null); setOrgName(null); setSiteName(null); setAllOrgs([]); setSecurityAccess(createUnrestrictedSecurityAccess()); setSessionTimeout(30)
     ;[`${KEY}_user`,`${KEY}_token`,`${KEY}_modules`,`${KEY}_org_id`,`${KEY}_site_id`,`${KEY}_org_name`,`${KEY}_site_name`,`${KEY}_all_orgs`,`${KEY}_session_timeout`]
       .forEach(k => localStorage.removeItem(k))
+    clearCaseDrafts()
     if (fallbackPrefixes.length > 0) localStorage.setItem(disableFallbackKey, '1')
   }
 

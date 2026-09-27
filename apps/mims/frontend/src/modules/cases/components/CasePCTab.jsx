@@ -173,7 +173,7 @@ export default function CasePCTab({
     if (!versionId) return
     const draftKey = `mims_case_${id}_pc_${versionId}_${activePcTab}`
     try {
-      const raw = localStorage.getItem(draftKey)
+      const raw = sessionStorage.getItem(draftKey)
       if (!raw) return
       const parsed = JSON.parse(raw)
       if (parsed !== null && parsed !== undefined) {
@@ -189,7 +189,7 @@ export default function CasePCTab({
     if (!versionId) return
     const payload = pcTabData[`${versionId}_${activePcTab}`]
     if (payload === undefined) return
-    try { localStorage.setItem(`mims_case_${id}_pc_${versionId}_${activePcTab}`, JSON.stringify(payload)) } catch { /* no-op */ }
+    try { sessionStorage.setItem(`mims_case_${id}_pc_${versionId}_${activePcTab}`, JSON.stringify(payload)) } catch { /* no-op */ }
   }, [activePcTab, activePcVer?.id, id, pcTabData])
 
   async function loadPCVersions() {
@@ -271,7 +271,7 @@ export default function CasePCTab({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: data }))
-      localStorage.removeItem(`mims_case_${id}_pc_${activePcVer.id}_${activePcTab}`)
+      sessionStorage.removeItem(`mims_case_${id}_pc_${activePcVer.id}_${activePcTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) { toast.error(err.message) }
     finally { setPcTabSaving(false) }

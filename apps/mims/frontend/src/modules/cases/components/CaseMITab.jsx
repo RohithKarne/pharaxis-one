@@ -92,7 +92,7 @@ export default function CaseMITab({
   useEffect(() => {
     if (!miRespModal) return
     try {
-      const stored = localStorage.getItem(miDraftStorageKey)
+      const stored = sessionStorage.getItem(miDraftStorageKey)
       if (!stored) return
       const parsed = JSON.parse(stored)
       if (parsed && typeof parsed === 'object' &&
@@ -105,7 +105,7 @@ export default function CaseMITab({
 
   useEffect(() => {
     if (!miRespModal) return
-    try { localStorage.setItem(miDraftStorageKey, JSON.stringify(miRespForm)) } catch { /* no-op */ }
+    try { sessionStorage.setItem(miDraftStorageKey, JSON.stringify(miRespForm)) } catch { /* no-op */ }
   }, [miDraftStorageKey, miRespForm, miRespModal])
 
   function toMiForm(tab) {
@@ -128,7 +128,7 @@ export default function CaseMITab({
     const activeId = miTabs[activeMiTab]?.id
     if (!activeId) return
     try {
-      const raw = localStorage.getItem(`mims_case_${id}_mi_form_${activeId}`)
+      const raw = sessionStorage.getItem(`mims_case_${id}_mi_form_${activeId}`)
       if (!raw) return
       const parsed = JSON.parse(raw)
       if (parsed && typeof parsed === 'object') {
@@ -142,7 +142,7 @@ export default function CaseMITab({
   useEffect(() => {
     const activeId = miTabs[activeMiTab]?.id
     if (!activeId) return
-    try { localStorage.setItem(`mims_case_${id}_mi_form_${activeId}`, JSON.stringify(miForm)) } catch { /* no-op */ }
+    try { sessionStorage.setItem(`mims_case_${id}_mi_form_${activeId}`, JSON.stringify(miForm)) } catch { /* no-op */ }
   }, [activeMiTab, id, miForm, miTabs])
 
   async function loadMI() {
@@ -230,7 +230,7 @@ export default function CaseMITab({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setMiTabs(prev => prev.map((t, i) => i === activeMiTab ? data : t))
-      localStorage.removeItem(`mims_case_${id}_mi_form_${tab.id}`)
+      sessionStorage.removeItem(`mims_case_${id}_mi_form_${tab.id}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) { toast.error(err.message) }
   }
@@ -393,7 +393,7 @@ export default function CaseMITab({
       setBuilderContext(null)
       setBuilderPreview(null)
       setMiRespForm(emptyMiRespForm())
-      localStorage.removeItem(miDraftStorageKey)
+      sessionStorage.removeItem(miDraftStorageKey)
       setSavedMsg(responseStatus === 'DRAFT' ? 'MI response draft saved' : 'MI response recorded')
       setTimeout(() => setSavedMsg(''), 2200)
     } catch (err) { toast.error(err.message) }
