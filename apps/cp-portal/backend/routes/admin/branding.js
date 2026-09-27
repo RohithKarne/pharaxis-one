@@ -24,8 +24,11 @@ const logoStorage = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
+    // A fresh name for every upload. The old fixed name meant multer wrote over the
+    // current logo before any check ran, so an oversize or invalid upload deleted
+    // it. The client's logo now changes only when the new file is accepted and saved.
     const ext = path.extname(file.originalname).toLowerCase() || '.png';
-    cb(null, `client-${req.params.clientId}-logo${ext}`);
+    cb(null, `client-${req.params.clientId}-logo-${Date.now()}${ext}`);
   },
 });
 const uploadLogo = multer({
@@ -50,7 +53,14 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 });
 
 // POST /api/admin/branding/:clientId/upload-logo — logo file upload
-router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, uploadLogo.single('logo'), async (req, res) => {
+router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, (req, res, next) => {
+  // Multer errors (e.g. over 5 MB) otherwise reach the global handler as a 500.
+  uploadLogo.single('logo')(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Logo is larger than 5 MB. Choose a smaller image.' });
+    res.status(400).json({ error: err.message || 'Logo upload failed.' });
+  });
+}, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No valid image file provided. Allowed: PNG, JPG, GIF, WebP (max 5 MB).' });
 
@@ -64,7 +74,7 @@ router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, up
       try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
       return res.status(400).json({ error: 'File is not a valid PNG, JPG, GIF, or WebP image.' });
     }
-    const safeName = `client-${req.params.clientId}-logo${safeExt}`;
+    const safeName = `${path.basename(req.file.filename, path.extname(req.file.filename))}${safeExt}`;
     const safePath = path.join(path.dirname(req.file.path), safeName);
     if (safePath !== req.file.path) {
       try { fs.renameSync(req.file.path, safePath); } catch { /* fall back to original name on rename failure */ }
