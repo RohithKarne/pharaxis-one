@@ -13,14 +13,12 @@ const { validate, schemas } = require('../../middleware/validate');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const accessService = require('../../services/accessConfigurationService');
 const { findSodConflicts, hasBlockingSodConflict, describeSodConflict } = require('../../services/sodEvaluator');
+const { logAudit } = require('../../utils/auditLog');
 
+// O-6: goes through the shared writer, which logs a failed write instead of
+// discarding it. Outside a transaction it does not block the admin action.
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      'INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 function parsePrivileges(value) {
