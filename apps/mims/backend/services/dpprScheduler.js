@@ -26,7 +26,11 @@ function caseHeldSql(caseIdCol) {
                   AND lh.entity_type = 'case' AND lh.entity_id = ${caseIdCol})`;
 }
 
-// Maps domain key → { table, dateField, piiFields, buildWhere, fromSql, heldSql, updateTable }
+// Maps domain key → { table, dateField, piiFields, valueFields, buildWhere, fromSql, heldSql,
+//                       updateTable, hasUpdatedAt }
+// piiFields are text columns: Anonymize writes the marker, Delete writes NULL.
+// valueFields are dates and numbers, which cannot hold the marker: both actions NULL them.
+// Column names are the real ones in the schema (migrations 007, 014, 092, 002).
 const DOMAIN_HANDLERS = {
   contact_pii: {
     table:       'case_contacts',
@@ -64,21 +68,25 @@ const DOMAIN_HANDLERS = {
   medical_data: {
     table:     'case_ae_patient_info',
     dateField: 'case_ae_patient_info.created_at',
-    piiFields: ['patient_dob', 'patient_gender', 'patient_age', 'patient_weight', 'patient_height', 'ethnicity'],
+    // DOB, gender, age, weight, height, ethnicity. The row belongs to an AE version, not a case.
+    piiFields:   ['sex', 'ethnicity'],
+    valueFields: ['date_of_birth', 'age', 'weight_kg', 'height_cm'],
     buildWhere: (rule) => [
       `DATEDIFF(NOW(), case_ae_patient_info.created_at) >= ${parseInt(rule.retention_days, 10)}`,
       `c.org_id = ${parseInt(rule.org_id, 10)}`,
     ].join(' AND '),
     fromSql: `FROM case_ae_patient_info
-              JOIN cases c ON c.id = case_ae_patient_info.case_id`,
-    heldSql:     caseHeldSql('case_ae_patient_info.case_id'),
+              JOIN case_ae_versions v ON v.id = case_ae_patient_info.version_id
+              JOIN cases c ON c.id = v.case_id`,
+    heldSql:     caseHeldSql('(SELECT hv.case_id FROM case_ae_versions hv WHERE hv.id = case_ae_patient_info.version_id)'),
     updateTable: 'case_ae_patient_info',
   },
 
   reporter_info: {
     table:     'case_reporter',
     dateField: 'case_reporter.created_at',
-    piiFields: ['reporter_name', 'reporter_email', 'reporter_phone', 'reporter_address', 'institution'],
+    // name, email, phone, institution. There is no reporter address column.
+    piiFields: ['first_name', 'last_name', 'email', 'phone', 'organisation'],
     buildWhere: (rule) => [
       `DATEDIFF(NOW(), case_reporter.created_at) >= ${parseInt(rule.retention_days, 10)}`,
       `c.org_id = ${parseInt(rule.org_id, 10)}`,
@@ -92,7 +100,8 @@ const DOMAIN_HANDLERS = {
   patient_demographics: {
     table:     'case_patient',
     dateField: 'case_patient.created_at',
-    piiFields: ['patient_name', 'patient_dob', 'patient_address', 'patient_email', 'patient_phone'],
+    // Patient name is held only as initials. There is no DOB, address, email or phone column.
+    piiFields: ['initials'],
     buildWhere: (rule) => [
       `DATEDIFF(NOW(), case_patient.created_at) >= ${parseInt(rule.retention_days, 10)}`,
       `c.org_id = ${parseInt(rule.org_id, 10)}`,
@@ -106,7 +115,8 @@ const DOMAIN_HANDLERS = {
   inquiry_content: {
     table:     'inquiries',
     dateField: 'inquiries.created_at',
-    piiFields: ['body', 'sender_name', 'sender_email', 'subject'],
+    // sender holds the sender's name and address together ("Name" <email>).
+    piiFields: ['body', 'sender', 'subject'],
     buildWhere: (rule) => [
       `DATEDIFF(NOW(), inquiries.created_at) >= ${parseInt(rule.retention_days, 10)}`,
       `inquiries.org_id = ${parseInt(rule.org_id, 10)}`,
@@ -117,6 +127,7 @@ const DOMAIN_HANDLERS = {
                        AND lh.entity_type = 'inquiry' AND lh.entity_id = inquiries.id)
                OR ${caseHeldSql('inquiries.case_id')})`,
     updateTable: 'inquiries',
+    hasUpdatedAt: false,
   },
 };
 
@@ -169,12 +180,15 @@ async function applyDpprRules(orgId, triggeredBy = 'scheduler', triggeredByUserI
         const idPlaceholders = ids.map(() => '?').join(',');
         const notHeld = `AND NOT ${handler.heldSql}`;
 
+        const valueSet = (handler.valueFields || []).map(f => `, ${f} = NULL`).join('');
+        const touch = handler.hasUpdatedAt === false ? '' : ', updated_at = NOW()';
+
         if (rule.action === 'Anonymize') {
           const setClause = handler.piiFields
             .map(f => `${f} = CASE WHEN ${f} IS NOT NULL THEN '${ANON_MARKER}' ELSE NULL END`)
             .join(', ');
           const [upd] = await pool.execute(
-            `UPDATE ${handler.updateTable} SET ${setClause}, updated_at = NOW() WHERE id IN (${idPlaceholders}) ${notHeld}`,
+            `UPDATE ${handler.updateTable} SET ${setClause}${valueSet}${touch} WHERE id IN (${idPlaceholders}) ${notHeld}`,
             ids
           );
           affected = upd.affectedRows;
@@ -182,7 +196,7 @@ async function applyDpprRules(orgId, triggeredBy = 'scheduler', triggeredByUserI
         } else if (rule.action === 'Delete') {
           const setClause = handler.piiFields.map(f => `${f} = NULL`).join(', ');
           const [upd] = await pool.execute(
-            `UPDATE ${handler.updateTable} SET ${setClause}, updated_at = NOW() WHERE id IN (${idPlaceholders}) ${notHeld}`,
+            `UPDATE ${handler.updateTable} SET ${setClause}${valueSet}${touch} WHERE id IN (${idPlaceholders}) ${notHeld}`,
             ids
           );
           affected = upd.affectedRows;

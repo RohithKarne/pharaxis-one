@@ -5,6 +5,7 @@ import MIMSLayout from '../../../shared/components/MIMSLayout'
 import './DPPRPage.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import { isAdminUser } from '../../../shared/utils/adminScope.js'
+import { useAdminTenant } from '../../mimsadmin/utils/AdminTenantContext'
 
 const ACTION_OPTIONS = ['None', 'Anonymize', 'Delete']
 const CONTACT_TYPES  = ['all', 'HCP', 'Patient', 'Other']
@@ -36,6 +37,7 @@ export default function DPPRPage({ embedded = false } = {}) {
   const { token, user } = useAuth()
   const H = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const isAdmin = isAdminUser(user)
+  const { tenantId } = useAdminTenant()   // tenant picked in the admin console; the server ignores it for tenant admins
 
   const [tab, setTab]               = useState('rules')
   const [rules, setRules]           = useState([])
@@ -191,7 +193,7 @@ export default function DPPRPage({ embedded = false } = {}) {
     try {
       const res  = await httpFetch('/api/admin/dppr/run-now', {
         method: 'POST', headers: { ...H, 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ org_id: tenantId || undefined }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Run failed.'); return }

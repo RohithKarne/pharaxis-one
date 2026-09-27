@@ -46,9 +46,9 @@ const DPPR_DOMAINS = [
   {
     key: 'medical_data',
     label: 'Medical / Clinical Data',
-    description: 'Patient demographics and adverse event clinical details (DOB, gender, weight, medical history).',
-    tables: ['case_ae_patient_info', 'case_ae_general'],
-    pii_fields: ['patient_dob', 'patient_gender', 'patient_age', 'patient_weight', 'patient_height', 'ethnicity'],
+    description: 'Adverse event patient details: date of birth, sex, age, weight, height and ethnicity.',
+    tables: ['case_ae_patient_info'],
+    pii_fields: ['date_of_birth', 'sex', 'age', 'weight_kg', 'height_cm', 'ethnicity'],
   },
   {
     key: 'case_narrative',
@@ -62,21 +62,21 @@ const DPPR_DOMAINS = [
     label: 'Reporter / HCP Information',
     description: 'Identifiers for the reporting healthcare professional or consumer.',
     tables: ['case_reporter'],
-    pii_fields: ['reporter_name', 'reporter_email', 'reporter_phone', 'reporter_address', 'institution'],
+    pii_fields: ['first_name', 'last_name', 'email', 'phone', 'organisation'],
   },
   {
     key: 'patient_demographics',
     label: 'Patient Demographics',
-    description: 'Patient name, date of birth, address, and other demographic identifiers.',
+    description: 'Patient initials on the case patient record (the only patient name held there).',
     tables: ['case_patient'],
-    pii_fields: ['patient_name', 'patient_dob', 'patient_address', 'patient_email', 'patient_phone'],
+    pii_fields: ['initials'],
   },
   {
     key: 'inquiry_content',
     label: 'Inbox / Email Content',
     description: 'Email bodies and sender information received through the inbox.',
     tables: ['inquiries'],
-    pii_fields: ['body', 'sender_name', 'sender_email', 'subject'],
+    pii_fields: ['body', 'sender', 'subject'],
   },
 ];
 
