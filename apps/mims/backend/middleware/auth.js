@@ -244,8 +244,14 @@ async function requireAccessNotExpired(req, res, next) {
       });
     }
     next();
-  } catch (_) {
-    next();
+  } catch (err) {
+    // Fail closed: if the expiry cannot be read, an expired grant must not slip through.
+    console.error('requireAccessNotExpired: organisation access lookup failed:', err.message);
+    return res.status(503).json({
+      error: 'Organisation access could not be checked. Please try again shortly.',
+      error_code: 'AUTH_SERVICE_UNAVAILABLE',
+      should_logout: false,
+    });
   }
 }
 
