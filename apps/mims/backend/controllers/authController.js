@@ -1806,7 +1806,8 @@ const authController = {
     const user = await userModel.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
     const runtimePrivileges = await resolveUserRuntimePrivileges(user);
-    if (runtimePrivileges.platformAdmin && !hasGlobalAdminScope(req.user)) {
+    // Never upgrade a forced password-change session into a full one here.
+    if (runtimePrivileges.platformAdmin && !hasGlobalAdminScope(req.user) && !req.user.passwordResetRequired) {
       const platformContext = await resolvePlatformAdminContext(user, req.user.orgId);
       const token = issueToken({
         userId: user.id,

@@ -3,7 +3,7 @@
 const express        = require('express');
 const router         = express.Router();
 const authController = require('../controllers/authController');
-const { authenticate, requireRole, sessionCacheInvalidate, sessionExpiryMs } = require('../middleware/auth');
+const { authenticate, authenticateAllowingPasswordReset, requireRole, sessionCacheInvalidate, sessionExpiryMs } = require('../middleware/auth');
 const pool           = require('../database/db');
 const { logger } = require('../services/logger');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
@@ -83,12 +83,12 @@ router.post('/2fa/verify', verificationRateLimiter, authController.verifyTwoFact
 router.post('/2fa/skip-setup', verificationRateLimiter, authController.skipTwoFactorSetup);
 
 // Protected
-router.get('/me',              authenticate, authController.me);
+router.get('/me',              authenticateAllowingPasswordReset, authController.me);
 router.get('/sso/linked-accounts', authenticate, authController.linkedSsoAccounts);
 router.get('/sso/:provider/link/start', authenticate, authController.startSsoLink);
 router.delete('/sso/linked-accounts/:provider', authenticate, authController.unlinkSsoAccount);
 router.post('/switch-org',     authenticate, authController.switchOrg);
-router.post('/reset-password', authenticate, authController.resetPassword);
+router.post('/reset-password', authenticateAllowingPasswordReset, authController.resetPassword);
 router.post('/change-password', authenticate, authController.changePassword);
 
 // GET /api/auth/sessions — Session management data (Sprint 14 G11)
@@ -195,7 +195,7 @@ router.post('/sessions/:id/revoke', authenticate, async (req, res) => {
 });
 
 // Logout — records logout time in login_audit (AUD-03) + clears tracked session
-router.post('/logout', authenticate, async (req, res) => {
+router.post('/logout', authenticateAllowingPasswordReset, async (req, res) => {
   const token = extractBearerToken(req);
   await pool.execute(
     `UPDATE login_audit SET logout_time = NOW()

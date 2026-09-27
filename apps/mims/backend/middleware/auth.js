@@ -42,7 +42,16 @@ function readBearer(req) {
   return token && token !== 'null' && token !== 'undefined' ? token : null;
 }
 
-async function validateAccessToken(token) {
+// A session opened for a forced password change (sign-in with password_reset_required)
+// may only do what the set-new-password screen needs; everything else refuses it.
+function refusePendingPasswordReset(session, allowPasswordReset) {
+  if (session.passwordResetRequired && !allowPasswordReset) {
+    throw createAuthError('Set a new password before continuing.', 'PASSWORD_RESET_REQUIRED', 403, false);
+  }
+  return session;
+}
+
+async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
   if (!token) throw createAuthError('Access denied. No token provided.', 'AUTH_TOKEN_MISSING');
 
   // ── Redis session cache (60s TTL) — eliminates DB hit on every request ──────
@@ -55,7 +64,7 @@ async function validateAccessToken(token) {
     } catch (_) {
       throw createAuthError('Session revoked or invalid. Please log in again.', 'AUTH_TOKEN_INVALID');
     }
-    return { ...cached, token };
+    return refusePendingPasswordReset({ ...cached, token }, allowPasswordReset);
   }
 
   let decoded;
@@ -103,15 +112,28 @@ async function validateAccessToken(token) {
 
   // Populate cache for subsequent requests
   await sessionCacheSet(token, result);
-  return result;
+  return refusePendingPasswordReset(result, allowPasswordReset);
 }
 
 /**
  * authenticate — verifies JWT and injects req.user
  * req.user = { userId, email, role, orgId, siteId, token }
  * Platform admin compatibility: orgId = null, siteId = null
+ * A forced password-change session is refused (403 PASSWORD_RESET_REQUIRED).
  */
-async function authenticate(req, res, next) {
+function authenticate(req, res, next) {
+  return authenticateRequest(req, res, next, { allowPasswordReset: false });
+}
+
+/**
+ * authenticateAllowingPasswordReset — as authenticate, but also admits a forced
+ * password-change session. Only for the routes the set-new-password screen calls.
+ */
+function authenticateAllowingPasswordReset(req, res, next) {
+  return authenticateRequest(req, res, next, { allowPasswordReset: true });
+}
+
+async function authenticateRequest(req, res, next, options) {
   const token = readBearer(req) || readCookie(req, 'mims_token');
   if (!token) {
     return res.status(401).json({
@@ -122,7 +144,7 @@ async function authenticate(req, res, next) {
   }
 
   try {
-    req.user = await validateAccessToken(token);
+    req.user = await validateAccessToken(token, options);
   } catch (err) {
     const status = Number(err?.status || 401);
     const message = String(err?.message || 'Invalid or expired token. Please log in again.');
@@ -255,4 +277,4 @@ async function requireAccessNotExpired(req, res, next) {
   }
 }
 
-module.exports = { authenticate, requireRole, requireCapability, requireScopedCapability, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, sessionExpiryMs };
+module.exports = { authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, sessionExpiryMs };
