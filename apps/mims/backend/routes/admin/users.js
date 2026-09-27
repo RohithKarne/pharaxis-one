@@ -13,7 +13,7 @@ const router   = express.Router();
 const bcrypt   = require('bcrypt');
 const pool     = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
-const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { hasGlobalAdminScope, LAST_PLATFORM_ADMIN_ERROR, leavesNoActivePlatformAdmin } = require('../../utils/adminScope');
 const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 const { validateBulkUserRows } = require('../../services/bulkUserProvisioningService');
@@ -497,22 +497,14 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     }
 
     // Break-glass (2026-09-23): never leave the platform with no active platform admin,
-    // otherwise the only way back in is a direct database write.
-    const demoting = existing.role === 'platform_admin' && (
-      (role != null && String(role) !== 'platform_admin') ||
-      (is_active != null && !is_active) ||
-      (is_disabled != null && is_disabled)
-    );
-    if (demoting) {
-      const [[{ others }]] = await pool.execute(
-        `SELECT COUNT(*) AS others FROM users u
-          WHERE u.id != ? AND u.is_active = 1 AND u.is_disabled = 0
-            AND (u.role = 'platform_admin' OR NOT ${PLATFORM_ADMIN_EXCLUSION_SQL})`,
-        [req.params.id]
-      );
-      if (!others) {
-        return res.status(409).json({ error: 'This is the last active platform admin. Make another user a platform admin before demoting or deactivating this one.' });
-      }
+    // otherwise the only way back in is a direct database write. A platform admin is
+    // the role or the console permission, as at sign-in.
+    const leavesNone = await leavesNoActivePlatformAdmin(pool, {
+      deactivate: (is_active != null && !is_active) || (is_disabled != null && is_disabled) ? [req.params.id] : [],
+      dropRole: role != null && String(role) !== 'platform_admin' ? [req.params.id] : [],
+    });
+    if (leavesNone) {
+      return res.status(409).json({ error: LAST_PLATFORM_ADMIN_ERROR });
     }
 
     // user_id uniqueness check (exclude self)

@@ -15,6 +15,7 @@ const { validate, schemas } = require('../middleware/validate');
 const { accountCreationRateLimiter } = require('../middleware/rateLimiters');
 const { validateUpload } = require('../middleware/uploadValidation');
 const { emitPlatformAdminAlert, getSystemConfig, parseJson } = require('../services/alertService');
+const { LAST_PLATFORM_ADMIN_ERROR, PLATFORM_ADMIN_CONSOLE_SQL, leavesNoActivePlatformAdmin } = require('../utils/adminScope');
 const {
   bootstrapOrg,
   getOrgReadiness,
@@ -194,6 +195,10 @@ router.put('/users/:id/modules', authenticate, requireRole('platform_admin'), as
     const invalid = modules.filter(m => !ALLOWED_MODULES.includes(m));
     if (invalid.length) {
       return res.status(400).json({ error: `Invalid module(s): ${invalid.join(', ')}` });
+    }
+    // The replace below drops the platform-admin console permission (not an allowed module).
+    if (await leavesNoActivePlatformAdmin(pool, { dropConsole: [id] })) {
+      return res.status(409).json({ error: LAST_PLATFORM_ADMIN_ERROR });
     }
 
     const conn = await pool.getConnection();
@@ -657,6 +662,13 @@ router.put('/users/:id', authenticate, requireRole('platform_admin'), async (req
     const { name, email, role, org_id, is_active } = req.body;
     if (role && !ASSIGNABLE_ROLES.includes(role))
       return res.status(400).json({ error: `Invalid role. Allowed roles: ${ASSIGNABLE_ROLES.join(', ')}.` });
+    // Break-glass: never deactivate or demote the last active platform admin. Any
+    // assignable role takes the user off platform_admin.
+    const leavesNone = await leavesNoActivePlatformAdmin(pool, {
+      deactivate: is_active !== undefined && !is_active ? [req.params.id] : [],
+      dropRole: role ? [req.params.id] : [],
+    });
+    if (leavesNone) return res.status(409).json({ error: LAST_PLATFORM_ADMIN_ERROR });
     // C-07: COALESCE every column so a partial payload (e.g. only is_active) can no longer
     // null out name/email/role. Org membership is managed via the /users/:id/org-access
     // routes (user_org_access); users.org_id is a legacy mirror kept in sync best-effort.
@@ -754,6 +766,13 @@ router.post('/users/bulk-action', authenticate, requireRole('platform_admin'), a
     if (!ids.length) return res.status(400).json({ error: 'Select at least one user.' });
     if (!['activate', 'deactivate', 'force_password_reset'].includes(action)) {
       return res.status(400).json({ error: 'Unsupported bulk action.' });
+    }
+    if (action === 'deactivate') {
+      // The update below skips console-permission holders, so only the others can drop out.
+      const [targets] = await pool.query(`SELECT u.id FROM users u WHERE u.id IN (?) AND NOT ${PLATFORM_ADMIN_CONSOLE_SQL}`, [ids]);
+      if (await leavesNoActivePlatformAdmin(pool, { deactivate: targets.map(t => t.id) })) {
+        return res.status(409).json({ error: LAST_PLATFORM_ADMIN_ERROR });
+      }
     }
 
     if (action === 'force_password_reset') {
