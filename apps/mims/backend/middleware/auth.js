@@ -23,6 +23,18 @@ function readCookie(req, name) {
   return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : null;
 }
 
+// sessions.expires_at is written as a UTC 'YYYY-MM-DD HH:MM:SS' (trackSessionToken).
+// new Date() reads that bare form as local time, so in IST a session was refused
+// 5.5 hours early. A DATETIME column arrives as a Date (the pool runs in UTC) and
+// is used as it is.
+function sessionExpiryMs(value) {
+  if (value == null || value === '') return null;
+  if (value instanceof Date) return value.getTime();
+  const text = String(value).trim();
+  const utc = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) ? `${text.replace(' ', 'T')}Z` : text;
+  return new Date(utc).getTime();
+}
+
 function readBearer(req) {
   const authHeader = req.headers['authorization'] || '';
   if (!authHeader.startsWith('Bearer ')) return null;
@@ -63,7 +75,7 @@ async function validateAccessToken(token) {
 
     if (sessionRow) {
       sessionFound = true;
-      const expiresAt = sessionRow.expires_at ? new Date(sessionRow.expires_at).getTime() : null;
+      const expiresAt = sessionExpiryMs(sessionRow.expires_at);
       if (expiresAt && !Number.isNaN(expiresAt) && expiresAt < Date.now()) {
         await pool.execute('DELETE FROM sessions WHERE id = ?', [sessionRow.id]).catch(() => {});
         throw createAuthError('Session expired. Please log in again.', 'SESSION_EXPIRED');
@@ -237,4 +249,4 @@ async function requireAccessNotExpired(req, res, next) {
   }
 }
 
-module.exports = { authenticate, requireRole, requireCapability, requireScopedCapability, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate };
+module.exports = { authenticate, requireRole, requireCapability, requireScopedCapability, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, sessionExpiryMs };

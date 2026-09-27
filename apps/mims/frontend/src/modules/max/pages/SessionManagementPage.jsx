@@ -8,7 +8,9 @@ const API = '/api'
 
 function formatDateTime(value) {
   if (value == null || value === '') return '—'
-  const dt = new Date(value)
+  // Session expiry arrives as a bare UTC 'YYYY-MM-DD HH:MM:SS'; read it as UTC, not local time.
+  const text = String(value)
+  const dt = new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) ? `${text.replace(' ', 'T')}Z` : value)
   if (Number.isNaN(dt.getTime())) return value
   return dt.toLocaleString()
 }

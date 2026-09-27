@@ -3,7 +3,7 @@
 const express        = require('express');
 const router         = express.Router();
 const authController = require('../controllers/authController');
-const { authenticate, requireRole, sessionCacheInvalidate } = require('../middleware/auth');
+const { authenticate, requireRole, sessionCacheInvalidate, sessionExpiryMs } = require('../middleware/auth');
 const pool           = require('../database/db');
 const { logger } = require('../services/logger');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
@@ -58,9 +58,8 @@ async function resolveSessionTimeoutMinutes(req) {
 }
 
 function isExpired(expiresAt) {
-  if (!expiresAt) return false;
-  const ts = new Date(expiresAt).getTime();
-  if (Number.isNaN(ts)) return false;
+  const ts = sessionExpiryMs(expiresAt);
+  if (ts == null || Number.isNaN(ts)) return false;
   return ts < Date.now();
 }
 
