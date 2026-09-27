@@ -6,7 +6,6 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const bcrypt = require('bcrypt');
-const userModel = require('../../models/userModel');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
 const { logService } = require('../../services/serviceLogger');
@@ -317,47 +316,6 @@ router.get('/audit-logs', authenticate, requireAdminConsoleAccess, async (req, r
     const total = Number(countRow?.total || 0);
     res.json({ logs, total, page, page_size: pageSize, total_pages: Math.max(1, Math.ceil(total / pageSize)) });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
-});
-
-// ─── USERS (admin view) ───────────────────────────────────────
-router.get('/users', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
-  try {
-    const [users] = await pool.execute(
-      hasPlatformAdminScope(req)
-        ? 'SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC'
-        : `SELECT DISTINCT u.id, u.name, u.email, u.role, u.is_active, u.created_at
-           FROM users u
-           INNER JOIN user_org_access uoa ON uoa.user_id = u.id
-           WHERE uoa.org_id = ? AND uoa.is_active = 1
-           ORDER BY u.created_at DESC`,
-      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
-    );
-    res.json({ users });
-  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
-});
-
-router.post('/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required.' });
-    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-    const validRoles = ['admin', 'agent', 'reviewer', 'content_manager'];
-    const userRole = role && validRoles.includes(role) ? role : 'agent';
-    if (await userModel.emailExists(email)) return res.status(409).json({ error: 'An account with this email already exists.' });
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await userModel.create({
-      name,
-      email: email.toLowerCase().trim(),
-      password: hashedPassword,
-      role: userRole,
-      email_verified: 1,
-    });
-    await audit(req.user.userId, req.user.email, 'CREATE', 'user', newUser.id, { name, email, role: userRole });
-    res.status(201).json({ user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role, is_active: 1, created_at: newUser.created_at } });
-  } catch (err) {
-    console.error('Admin create user error:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
 });
 
 // ─── ELECTRONIC SIGNATURE VERIFY (ESIG-01, ESIG-02, ESIG-03) ──
