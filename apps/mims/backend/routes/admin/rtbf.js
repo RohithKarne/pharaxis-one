@@ -8,6 +8,7 @@ const pool = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const { logger } = require('../../services/logger');
+const { caseHeldSql } = require('../../services/dpprScheduler');
 
 function orgScope(req) {
   return hasGlobalAdminScope(req.user) ? (Number(req.query.org_id || req.body?.org_id || 0) || null) : req.user.orgId;
@@ -193,11 +194,20 @@ router.post('/rtbf/:id/execute', authenticate, requireRole('platform_admin'), as
       throw err;
     }
     const affected = await previewAffected(row.org_id, row.subject_identifier);
+    // Cases under an active legal hold are never rewritten; count the ones that
+    // mention the subject so the summary and certificate say what was left.
+    const like = `%${row.subject_identifier}%`;
+    const [[held]] = await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM cases
+       WHERE org_id = ? AND (description LIKE ? OR internal_notes LIKE ?) AND ${caseHeldSql('cases.id')}`,
+      [row.org_id, like, like]
+    );
+    affected.skipped_legal_hold = Number(held?.cnt || 0);
     const manifest = signatureManifest({ id: row.id, affected, at: new Date().toISOString() });
     await conn.execute(
       `UPDATE cases SET description = REPLACE(description, ?, '[RTBF-ANONYMIZED]'),
                         internal_notes = REPLACE(internal_notes, ?, '[RTBF-ANONYMIZED]')
-       WHERE org_id = ?`,
+       WHERE org_id = ? AND NOT ${caseHeldSql('cases.id')}`,
       [row.subject_identifier, row.subject_identifier, row.org_id]
     );
     await conn.execute(
