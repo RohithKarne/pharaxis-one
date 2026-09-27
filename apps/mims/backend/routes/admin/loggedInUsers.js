@@ -34,7 +34,7 @@ router.get('/logged-in-users', authenticate, requireRole('admin', 'platform_admi
       `SELECT s.id, s.user_id, s.token, s.created_at, s.expires_at, u.name
        FROM sessions s
        INNER JOIN users u ON u.id = s.user_id
-       WHERE STR_TO_DATE(s.expires_at, '%Y-%m-%d %H:%i:%s') > NOW()
+       WHERE s.expires_at > NOW()
        ORDER BY s.created_at DESC
        LIMIT 500`
     );

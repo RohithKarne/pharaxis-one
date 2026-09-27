@@ -89,7 +89,7 @@ async function main() {
     };
 
     const [sampleInquiries] = await conn.execute(
-      `SELECT id, sender, subject, status, triage_state, case_id, assigned_to, received_at
+      `SELECT id, sender, subject, status, triage_state, case_id, assigned_to, DATE_FORMAT(received_at, '%Y-%m-%d %H:%i:%s') AS received_at
        FROM inquiries
        WHERE org_id = ?
        ORDER BY id DESC

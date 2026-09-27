@@ -320,10 +320,10 @@ const INBOX_SLA_ALERT_LEAD_MINUTES = Number(process.env.INBOX_SLA_ALERT_LEAD_MIN
 
 // SQL twin of computeSlaStatus() in inboxGovernanceService: same thresholds, same four
 // outcomes, so the SLA filters and the "SLA risk" count can run in the database instead of
-// over a loaded slice. received_at is the poller's 'YYYY-MM-DD HH:MM:SS' text (written in
-// UTC); every pooled session is pinned to UTC in database/db.js, so NOW() compares fairly.
+// over a loaded slice. received_at is a UTC DATETIME (migration 108); every pooled session
+// is pinned to UTC in database/db.js, so NOW() compares fairly.
 function slaStatusSql(alias, kind) {
-  const received = `COALESCE(STR_TO_DATE(${alias}.received_at, '%Y-%m-%d %H:%i:%s'), ${alias}.created_at)`;
+  const received = `COALESCE(${alias}.received_at, ${alias}.created_at)`;
   const hours = Number(kind === 'first_touch' ? FIRST_TOUCH_SLA_HOURS : RESPONSE_SLA_HOURS) || 0;
   const start = kind === 'first_touch' ? received : `COALESCE(${alias}.first_touched_at, ${received})`;
   const done = kind === 'first_touch' ? `${alias}.first_touched_at` : `${alias}.first_response_at`;
@@ -379,8 +379,8 @@ function buildInboxListWhere(scopeWhere, scopeParams, q) {
     clauses.push('(i.sender LIKE ? OR i.subject LIKE ? OR i.body LIKE ?)');
     params.push(like, like, like);
   }
-  // received_at is 'YYYY-MM-DD HH:MM:SS' text, so a string comparison is a date comparison
-  // and the index on it is usable.
+  // received_at is a DATETIME, so MySQL reads the bound text as a date-time and the index on
+  // it is usable.
   if (q.from) { clauses.push('i.received_at >= ?'); params.push(`${q.from} 00:00:00`); }
   if (q.to) { clauses.push('i.received_at <= ?'); params.push(`${q.to} 23:59:59`); }
   if (q.color) { clauses.push('i.color = ?'); params.push(q.color); }
@@ -423,7 +423,7 @@ async function loadInboxPage(req, query = {}) {
         i.recipient,
         i.subject,
         i.body,
-        i.received_at,
+        DATE_FORMAT(i.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
         i.status,
         i.is_locked,
         i.locked_by,
@@ -447,7 +447,7 @@ async function loadInboxPage(req, query = {}) {
         ) AS last_read_by_name,
         i.assigned_to,
         i.priority,
-        i.due_date,
+        DATE_FORMAT(i.due_date, '%Y-%m-%d') AS due_date,
         i.case_id,
         i.created_at,
         i.triage_state,
@@ -584,7 +584,7 @@ router.get('/summary', authenticate, async (req, res) => {
     // counters and the row badges agree. First touch is due FIRST_TOUCH_SLA_HOURS after receipt; the
     // response is due RESPONSE_SLA_HOURS after first touch (or after receipt if never touched). A row
     // is breached when it is past due and still waiting, or when it was completed after the due time.
-    const receivedAtSql = `COALESCE(STR_TO_DATE(i.received_at,'%Y-%m-%d %H:%i:%s'), i.created_at)`;
+    const receivedAtSql = `COALESCE(i.received_at, i.created_at)`;
     const firstTouchDueSql = `(${receivedAtSql} + INTERVAL ? SECOND)`;
     const responseDueSql = `(COALESCE(i.first_touched_at, ${receivedAtSql}) + INTERVAL ? SECOND)`;
     const firstTouchSlaSeconds = Math.round(FIRST_TOUCH_SLA_HOURS * 3600);
@@ -658,11 +658,11 @@ router.get('/case/:caseId/correspondence', authenticate, async (req, res) => {
     }
 
     const [rows] = await pool.execute(
-      `SELECT id, sender, recipient, subject, body, received_at, status, source_tag,
-              attachments_count, is_read, assigned_to, priority, due_date, original_inquiry_id
+      `SELECT id, sender, recipient, subject, body, DATE_FORMAT(received_at, '%Y-%m-%d %H:%i:%s') AS received_at, status, source_tag,
+              attachments_count, is_read, assigned_to, priority, DATE_FORMAT(due_date, '%Y-%m-%d') AS due_date, original_inquiry_id
        FROM inquiries
        WHERE case_id = ?
-       ORDER BY received_at DESC, created_at DESC, id DESC`,
+       ORDER BY inquiries.received_at DESC, created_at DESC, id DESC`,
       [caseId]
     );
 
@@ -1138,10 +1138,10 @@ router.get('/:id/thread', authenticate, async (req, res) => {
 
     const rootId = Number(baseInquiry.original_inquiry_id || baseInquiry.id);
     const [rows] = await pool.execute(
-      `SELECT id, sender, recipient, subject, body, received_at, status, source_tag, original_inquiry_id
+      `SELECT id, sender, recipient, subject, body, DATE_FORMAT(received_at, '%Y-%m-%d %H:%i:%s') AS received_at, status, source_tag, original_inquiry_id
        FROM inquiries
        WHERE id = ? OR original_inquiry_id = ?
-       ORDER BY COALESCE(STR_TO_DATE(received_at, '%Y-%m-%d %H:%i:%s'), created_at) ASC, id ASC`,
+       ORDER BY COALESCE(inquiries.received_at, created_at) ASC, id ASC`,
       [rootId, rootId]
     );
     res.json({ root_id: rootId, thread: rows });
@@ -1366,7 +1366,7 @@ router.patch('/:id', authenticate, async (req, res) => {
     await connection.beginTransaction();
 
     const [[row]] = await connection.execute(
-      `SELECT id, org_id, status, is_locked, locked_by, color, is_read, assigned_to, priority, due_date, case_id,
+      `SELECT id, org_id, status, is_locked, locked_by, color, is_read, assigned_to, priority, DATE_FORMAT(due_date, '%Y-%m-%d') AS due_date, case_id,
               triage_state, queue_name, snoozed_until, first_touched_at, first_response_at, closed_at, routing_reason, exception_reason
        FROM inquiries
        WHERE id = ? FOR UPDATE`,

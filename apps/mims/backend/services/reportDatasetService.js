@@ -230,7 +230,7 @@ async function getTransmissionSlaReport(orgId, filters = {}) {
 function buildInquiryRangeClause(filters = {}) {
   const { dateFrom, dateTo } = normalizeDateRange(filters);
   return {
-    sql: `DATE(COALESCE(STR_TO_DATE(i.received_at, '%Y-%m-%d %H:%i:%s'), i.created_at)) >= ? AND DATE(COALESCE(STR_TO_DATE(i.received_at, '%Y-%m-%d %H:%i:%s'), i.created_at)) <= ?`,
+    sql: `DATE(COALESCE(i.received_at, i.created_at)) >= ? AND DATE(COALESCE(i.received_at, i.created_at)) <= ?`,
     params: [dateFrom, dateTo],
     dateFrom,
     dateTo,
@@ -242,12 +242,13 @@ async function loadInboxRows(orgId, filters = {}) {
   const [rows] = await pool.execute(
     `SELECT
        i.*,
+       DATE_FORMAT(i.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
        COALESCE(i.mailbox_name, ea.account_name) AS mailbox_name
      FROM inquiries i
      LEFT JOIN email_accounts ea ON ea.id = i.email_account_id
      WHERE i.org_id = ?
        AND ${range.sql}
-     ORDER BY COALESCE(STR_TO_DATE(i.received_at, '%Y-%m-%d %H:%i:%s'), i.created_at) DESC, i.id DESC`,
+     ORDER BY COALESCE(i.received_at, i.created_at) DESC, i.id DESC`,
     [orgId, ...range.params]
   );
   return hydrateInquiryRows(rows);

@@ -16,7 +16,7 @@ function parseInquiryDate(value) {
   const normalized = raw.includes('T')
     ? raw
     : raw.replace(' ', 'T');
-  // A bare 'YYYY-MM-DD HH:MM:SS' (how received_at is stored — see toMySqlDateTime, which writes UTC)
+  // A bare 'YYYY-MM-DD HH:MM:SS' (how the API sends received_at, and what toMySqlDateTime writes — UTC)
   // is read as UTC, the same way the database reads it: the pool runs every connection in +00:00.
   const withZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(normalized) ? `${normalized}Z` : normalized;
   const parsed = new Date(withZone);
@@ -163,12 +163,12 @@ async function getInquiryHistory(orgId, inquiryId) {
   const senderEmail = parseEmail(inquiry.sender);
 
   const [recentThreads] = await pool.execute(
-    `SELECT id, subject, status, triage_state, case_id, received_at
+    `SELECT id, subject, status, triage_state, case_id, DATE_FORMAT(received_at, '%Y-%m-%d %H:%i:%s') AS received_at
      FROM inquiries
      WHERE org_id = ?
        AND LOWER(TRIM(COALESCE(sender, ''))) = ?
        AND id <> ?
-     ORDER BY COALESCE(STR_TO_DATE(received_at, '%Y-%m-%d %H:%i:%s'), created_at) DESC, id DESC
+     ORDER BY COALESCE(inquiries.received_at, created_at) DESC, id DESC
      LIMIT 8`,
     [orgId, senderEmail, inquiryId]
   );
