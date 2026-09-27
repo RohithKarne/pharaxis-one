@@ -1019,7 +1019,7 @@ const authController = {
       if (isPlatformAdminUser && profiles.length === 0) {
         await logLoginAudit({
           userId: user.id,
-          role: 'admin',
+          role: 'platform_admin',
           status: 'pending',
           authEvent: 'login_start_platform_admin_password',
           metadata: auditMeta,
@@ -1238,7 +1238,7 @@ const authController = {
         await logLoginAudit({
           userId: user.id,
           userName: user.email,
-          role: 'admin',
+          role: 'platform_admin',
           status: 'success',
           authEvent: `sso_${providerKey}_login_success`,
           req,
@@ -1452,7 +1452,7 @@ const authController = {
         const config = await getSystemConfig();
         const sessionTimeout = getPlatformAdminSessionTimeout(config);
         attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
-        await logLoginAudit({ userId: user.id, userName: user.email, role: 'admin', status: 'success', authEvent: 'login_success', req });
+        await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent: 'login_success', req });
         return res.status(200).json({
           message: 'Login successful.',
           token,
@@ -1924,7 +1924,7 @@ const authController = {
       await logLoginAudit({
         userId: req.user.userId,
         userName: req.user.email,
-        role: roleForOrg,
+        role: hasGlobalAdminScope(req.user) ? 'platform_admin' : roleForOrg,
         status: 'success',
         authEvent: 'org_switch',
         metadata: { fromOrgId: req.user.orgId, toOrgId: Number(orgId) },
