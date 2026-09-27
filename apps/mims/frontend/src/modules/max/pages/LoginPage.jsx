@@ -498,10 +498,12 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       const data = await res.json()
       if (!res.ok) return showAlert(data.error || 'Could not send forgot-password code.')
       // L-02: backend no longer returns maskedEmail (account-enumeration hardening),
-      // so show a generic, existence-agnostic confirmation.
+      // so show a generic, existence-agnostic confirmation. The backend sends the
+      // same message for every email; it also tells platform administrators, who
+      // never get a code, what to do instead.
       setForgotMeta(meta => ({ ...meta, maskedEmail: '' }))
       setForgotStep('code')
-      showAlert('If an account exists for that email, a verification code has been sent.', 'success')
+      showAlert(data.message || 'If this email belongs to an account that can reset its password by email, a verification code has been sent. Platform administrators cannot reset by email: ask another platform administrator to reset your password.', 'success')
     } catch {
       showAlert('Cannot connect to server.')
     } finally {
@@ -889,7 +891,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Forgot Password</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
                 {forgotStep === 'email' && 'Enter your email to receive a verification code.'}
-                {forgotStep === 'code' && `Enter the verification code sent to ${forgotMeta.maskedEmail || 'your email'}.`}
+                {forgotStep === 'code' && `If a code was sent to ${forgotMeta.maskedEmail || 'your email'}, enter it here.`}
                 {forgotStep === 'reset' && 'Verification complete. Set your new password.'}
               </div>
 

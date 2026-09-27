@@ -1998,8 +1998,10 @@ const authController = {
     // L-02: Do NOT reveal whether an account exists / is eligible. Every non-error
     // path returns the same generic response. The actual email-send stays gated on
     // the user being eligible, but that decision is invisible to the caller.
+    // Platform administrators never get a code, so the one message says so for
+    // everyone rather than implying a code went to every existing account.
     const GENERIC_RESPONSE = {
-      message: 'If an account exists for this email, a verification code has been sent.',
+      message: 'If this email belongs to an account that can reset its password by email, a verification code has been sent. Platform administrators cannot reset by email: ask another platform administrator to reset your password.',
       expiresInMinutes: OTP_EXPIRY_MINUTES,
     };
     try {
