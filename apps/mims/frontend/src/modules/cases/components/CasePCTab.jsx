@@ -184,14 +184,6 @@ export default function CasePCTab({
     }
   }, [activePcTab, activePcVer?.id, id])
 
-  useEffect(() => {
-    const versionId = activePcVer?.id
-    if (!versionId) return
-    const payload = pcTabData[`${versionId}_${activePcTab}`]
-    if (payload === undefined) return
-    try { sessionStorage.setItem(`mims_case_${id}_pc_${versionId}_${activePcTab}`, JSON.stringify(payload)) } catch { /* no-op */ }
-  }, [activePcTab, activePcVer?.id, id, pcTabData])
-
   async function loadPCVersions() {
     try {
       const res  = await httpFetch(`${API}/cases/${id}/pc/versions`, { headers })
@@ -208,7 +200,13 @@ export default function CasePCTab({
     try {
       const res  = await httpFetch(`${API}/cases/pc/versions/${versionId}/${tabKey}`, { headers })
       const data = await res.json()
-      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
+      // An unsaved draft for this version + section wins over the server copy,
+      // except on a locked version, which shows only what was saved.
+      let draft = null
+      if (!isLocked(pcVersions.find(v => v.id === versionId))) {
+        try { draft = JSON.parse(sessionStorage.getItem(`mims_case_${id}_pc_${versionId}_${tabKey}`)) } catch { /* no-op */ }
+      }
+      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: draft ?? data }))
     } catch { /* ignore tab fetch errors */ }
     finally { setPcTabLoading(false) }
   }
@@ -259,6 +257,12 @@ export default function CasePCTab({
     } finally {
       setPcClosingVersion(false)
     }
+  }
+
+  // Only what the person types is a draft; loading a section never writes one.
+  function editPCTab(d) {
+    setPcTabData(prev => ({ ...prev, [`${activePcVer?.id}_${activePcTab}`]: d }))
+    try { sessionStorage.setItem(`mims_case_${id}_pc_${activePcVer?.id}_${activePcTab}`, JSON.stringify(d)) } catch { /* no-op */ }
   }
 
   const [pcTabSaving, setPcTabSaving] = useState(false)
@@ -385,7 +389,7 @@ export default function CasePCTab({
                 <PCTabPanel
                   tabKey={activePcTab}
                   data={pcTabData[`${activePcVer?.id}_${activePcTab}`] || {}}
-                  onChange={d => setPcTabData(prev => ({ ...prev, [`${activePcVer?.id}_${activePcTab}`]: d }))}
+                  onChange={editPCTab}
                   locked={isLocked(activePcVer)}
                   getFieldConfig={getFieldConfig}
                   getPicklistOptions={getPicklistOptions}

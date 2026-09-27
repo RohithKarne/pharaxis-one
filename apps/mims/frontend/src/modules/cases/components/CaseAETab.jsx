@@ -233,14 +233,6 @@ export default function CaseAETab({
     }
   }, [activeAeTab, activeAeVer?.id, id])
 
-  useEffect(() => {
-    const versionId = activeAeVer?.id
-    if (!versionId) return
-    const payload = aeTabData[`${versionId}_${activeAeTab}`]
-    if (payload === undefined) return
-    try { sessionStorage.setItem(`mims_case_${id}_ae_${versionId}_${activeAeTab}`, JSON.stringify(payload)) } catch { /* no-op */ }
-  }, [activeAeTab, activeAeVer?.id, aeTabData, id])
-
   async function loadAEVersions() {
     try {
       const res  = await httpFetch(`${API}/cases/${id}/ae/versions`, { headers })
@@ -257,7 +249,13 @@ export default function CaseAETab({
     try {
       const res  = await httpFetch(`${API}/cases/ae/versions/${versionId}/${tabKey}`, { headers })
       const data = await res.json()
-      setAeTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
+      // An unsaved draft for this version + section wins over the server copy,
+      // except on a locked version, which shows only what was saved.
+      let draft = null
+      if (!isLocked(aeVersions.find(v => v.id === versionId))) {
+        try { draft = JSON.parse(sessionStorage.getItem(`mims_case_${id}_ae_${versionId}_${tabKey}`)) } catch { /* no-op */ }
+      }
+      setAeTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: draft ?? data }))
     } catch { /* ignore tab fetch errors */ }
     finally { setAeTabLoading(false) }
   }
@@ -310,6 +308,14 @@ export default function CaseAETab({
     } finally {
       setAeClosingVersion(false)
     }
+  }
+
+  // Only what the person types is a draft. Row lists (arrays) are saved to the
+  // server as each row is added or removed, so they are never kept as a draft.
+  function editAETab(d) {
+    setAeTabData(prev => ({ ...prev, [`${activeAeVer?.id}_${activeAeTab}`]: d }))
+    if (Array.isArray(d)) return
+    try { sessionStorage.setItem(`mims_case_${id}_ae_${activeAeVer?.id}_${activeAeTab}`, JSON.stringify(d)) } catch { /* no-op */ }
   }
 
   const [aeTabSaving, setAeTabSaving] = useState(false)
@@ -436,7 +442,7 @@ export default function CaseAETab({
                 <AETabPanel
                   tabKey={activeAeTab}
                   data={aeTabData[`${activeAeVer?.id}_${activeAeTab}`] || {}}
-                  onChange={d => setAeTabData(prev => ({ ...prev, [`${activeAeVer?.id}_${activeAeTab}`]: d }))}
+                  onChange={editAETab}
                   locked={isLocked(activeAeVer)}
                   getFieldConfig={getFieldConfig}
                   getPicklistOptions={getPicklistOptions}
