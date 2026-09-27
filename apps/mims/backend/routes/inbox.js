@@ -594,7 +594,7 @@ router.get('/summary', authenticate, async (req, res) => {
     const [[agg]] = await pool.execute(`
       SELECT
         COUNT(*) AS total,
-        SUM(CASE WHEN i.assigned_to IS NULL THEN 1 ELSE 0 END) AS unassigned,
+        SUM(CASE WHEN i.assigned_to IS NULL OR i.assigned_to = '' THEN 1 ELSE 0 END) AS unassigned,
         SUM(CASE WHEN i.snoozed_until IS NOT NULL AND i.snoozed_until > NOW() THEN 1 ELSE 0 END) AS snoozed,
         SUM(CASE WHEN i.exception_reason IS NOT NULL AND i.exception_reason != '' THEN 1 ELSE 0 END) AS exceptions,
         SUM(CASE WHEN (i.first_touched_at IS NULL AND NOW() >= ${firstTouchDueSql})
