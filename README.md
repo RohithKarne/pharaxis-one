@@ -28,8 +28,9 @@ apps/          the two products
   mims/
   cp-portal/
 .github/       CI, templates, contributing and security policy
-.claude/       Claude Code settings for this repository
-.githooks/     commit-message check (git config core.hooksPath .githooks)
+.claude/       Claude Code settings, and the /varun /saad /kiranmai /vasu /aditi commands
+.githooks/     commit-message check, and the check that keeps the top level to apps and docs
+               (git config core.hooksPath .githooks)
 docs/          all project documentation, including the change log
 docs/scripts/  developer scripts
 ```
@@ -73,7 +74,7 @@ MySQL:
 Both products, one command (MySQL must already be running):
 
 ```bash
-./scripts/dev-all.sh
+./docs/scripts/dev-all.sh
 ```
 
 Ctrl-C stops everything it started. To run just one product:
