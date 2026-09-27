@@ -14,6 +14,7 @@ const fs   = require('fs');
 const http = require("http");
 const log = require('../../utils/logger');
 const { hasAnalyticsConsent } = require('../../utils/consent');
+const { canSee } = require('../../utils/audience');
 
 function httpPost(url, headers, body) {
   return new Promise((resolve, reject) => {
@@ -107,13 +108,16 @@ router.post('/ai-search', authenticatePortal, requirePortalAuth, async (req, res
       return res.status(403).json({ error: 'Document library is not enabled for this portal.' });
     }
 
-    const [docs] = await pool.execute(`
-      SELECT id, title, category, doc_type, file_size, expires_at
+    const [allDocs] = await pool.execute(`
+      SELECT id, title, category, doc_type, file_size, expires_at, visible_to_json
       FROM cp_documents
       WHERE client_id = ? AND is_active = 1
         AND ${VISIBLE_DOCUMENT_SQL}
       ORDER BY created_at DESC
     `, [client.id]);
+    // CPPM-25: only documents meant for this reader's audience are offered to the AI or returned.
+    const userType = req.portalUser.user_type || 'other';
+    const docs = allDocs.filter(doc => canSee(doc.visible_to_json, userType));
 
     const context = docs.map(doc => ({
       id: doc.id,
