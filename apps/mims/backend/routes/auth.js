@@ -145,10 +145,16 @@ router.post('/sessions/revoke-others', authenticate, async (req, res) => {
     const token = extractBearerToken(req);
     if (!token) return res.status(400).json({ error: 'Current token not found.' });
 
+    const [others] = await pool.execute(
+      'SELECT token FROM sessions WHERE user_id = ? AND token <> ?',
+      [req.user.userId, token]
+    );
     const [result] = await pool.execute(
       'DELETE FROM sessions WHERE user_id = ? AND token <> ?',
       [req.user.userId, token]
     );
+    // Evict the cached copies too, or a revoked token is honoured until the cache expires.
+    await Promise.all(others.map((row) => sessionCacheInvalidate(row.token)));
 
     return res.json({ success: true, revoked: Number(result?.affectedRows || 0) });
   } catch (err) {
@@ -176,6 +182,7 @@ router.post('/sessions/:id/revoke', authenticate, async (req, res) => {
       'DELETE FROM sessions WHERE id = ? AND user_id = ?',
       [sessionId, req.user.userId]
     );
+    await sessionCacheInvalidate(row.token);
 
     return res.json({
       success: !!result?.affectedRows,
