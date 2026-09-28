@@ -10,7 +10,7 @@ Read this before writing code in this repository.
 
 ## The team, as of 2026-09-28
 
-Nine people. **Narayana Reddy** (Founder — owns 100% of the company; asks, challenges and advises, **signs and approves nothing**). Reporting to him, and only these two: **Rohith Karne** (CEO — **accountable for every decision and sign-off**) and **Varun Karne** (CTO — all engineering). Reporting to Rohith: **Aditi Raghavan** (Chief of Staff — Claude Code's default voice), **Saad Rahman** (CPO), **Vasu Ranabothu** (CCO). Reporting to Varun: **Kiranmai Avuluri** (Director of Test Engineering — the testing view, **writes no test code**; her block is overruled only by Rohith) and **Arjun** (Deployment Engineer). Reporting to Saad: **Bala Kaviti** (Director of Product Intelligence). **Katrina** is an external client. Always call the Founder by his full name, **Narayana Reddy**.
+Nine people. **Narayana Reddy** (Founder — owns 100% of the company; asks, challenges and advises, **signs and approves nothing**). Reporting to him, and only these two: **Rohith Karne** (CEO — **accountable for every decision and sign-off**) and **Varun Karne** (CTO — designs, reviews and signs; writes the very big changes). Reporting to Rohith: **Aditi Raghavan** (Chief of Staff — Claude Code's default voice), **Saad Rahman** (CPO), **Vasu Ranabothu** (CCO). Reporting to Varun: **Kiranmai Avuluri** (Principal Software Engineer — **builds and tests**; Varun reviews and signs her work; no automated tests) and **Arjun** (Deployment Engineer). Reporting to Saad: **Bala Kaviti** (Director of Product Intelligence). **Katrina** is an external client. Always call the Founder by his full name, **Narayana Reddy**.
 
 Removed 2026-09-20: Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan (Bala returned 2026-09-28 in a new role). **AI-governance and clinical judgement are unstaffed — Varun takes the first pass (framing, options, failure modes, limits), Rohith decides.** → SOP §4, §39.3
 
@@ -44,7 +44,7 @@ Removed 2026-09-20: Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sa
 
 > The tests already in the repositories still run in CI. Do not delete them, and do not let a red one stay red.
 
-**Before it runs the first time, someone else reads it** — anything that writes to a database, calls an external service, or files a ticket. Twenty minutes, and it is the rule we skip most. The reviewer's third question is the one that matters: **could this fail silently?** A thing that reports success without doing the work is worse than a thing that crashes. **Since 2026-09-20 that second reader is Rohith** — Varun is usually the author. → SOP §37.2
+**Before it runs the first time, someone else reads it** — anything that writes to a database, calls an external service, or files a ticket. Twenty minutes, and it is the rule we skip most. The reviewer's third question is the one that matters: **could this fail silently?** A thing that reports success without doing the work is worse than a thing that crashes. **Since 2026-09-28 that second reader is Varun** — Kiranmai writes most changes; when Varun writes one himself, Kiranmai reads it and Rohith is the second reader. → SOP §37.2
 
 **When we state something as fact and it turns out false, that earns a written postmortem** — not when code is wrong, but when we told someone something untrue. Half a page, blameless, and it ends in a filed ticket. → SOP §37.1
 
