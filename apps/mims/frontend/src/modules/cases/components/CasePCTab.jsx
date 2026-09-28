@@ -135,6 +135,17 @@ export default function CasePCTab({
   saveDynFields, caseType,
 }) {
   const ctx = useCaseFieldContext()
+  // Admin settings for the panel's own fields — formConfig.core entries carry
+  // their section and field name (migration 109 links the rows).
+  const panelField = useMemo(() => {
+    const entries = Object.values(formConfig?.core || {})
+    return (section, name, fallback) => {
+      const def = entries.find(e => e.section_name === section && e.field_name === name)
+      return def
+        ? { label: def.label || fallback, required: !!def.is_required, hidden: !!def.is_hidden }
+        : { label: fallback, required: false, hidden: false }
+    }
+  }, [formConfig])
   const [pcVersions,   setPcVersions]   = useState([])
   const [activePcVer,  setActivePcVer]  = useState(null)
   const [activePcTab,  setActivePcTab]  = useState('general')
@@ -390,6 +401,7 @@ export default function CasePCTab({
                   getFieldConfig={getFieldConfig}
                   getPicklistOptions={getPicklistOptions}
                   versionId={activePcVer?.id}
+                  panelField={panelField}
                   headers={headers}
                   onSave={savePCTab}
                   saving={pcTabSaving}

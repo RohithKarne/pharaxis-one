@@ -16,6 +16,11 @@ const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
+// Admin-required panel fields (Customize Forms) are checked before any
+// PC section save reaches its own route below.
+router.put('/cases/pc/versions/:versionId/:tab', authenticate,
+  require('../services/requiredFields').enforcePanelRequired('pc', 'case_pc_versions'));
+
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write

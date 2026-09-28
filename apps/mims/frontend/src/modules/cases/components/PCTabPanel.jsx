@@ -16,18 +16,42 @@
 
 export default function PCTabPanel({
   tabKey, data, onChange, locked, onSave, getFieldConfig = () => null, getPicklistOptions, saving = false,
+  panelField = null,
 }) {
   const d = data || {}
+  // Admin settings (Customize Forms) for this panel's own fields — label,
+  // required, hidden — from formConfig.core; migration 109 links the rows.
+  const TAB_SECTION = {
+    general: 'PC — General', 'patient-info': 'PC — Patient Information', 'product-info': 'PC — Product Information',
+    'return-retrieval': 'PC — Return & Retrieval', replacement: 'PC — Replacement',
+  }
+  const FIELD_ALIASES = {
+    'PC — Product Information::Lot Number': 'Batch / Lot Number',
+    'PC — Return & Retrieval::Notes': 'Return Notes',
+    'PC — Replacement::Replacement Date': 'Replacement Ship Date',
+    'PC — Replacement::Quantity': 'Replacement Quantity',
+    'PC — Replacement::Notes': 'Replacement Notes',
+  }
+  const pf = (label, sectionName) => {
+    const section = sectionName || TAB_SECTION[tabKey]
+    if (!panelField || !section) return { label: (sectionName && getFieldConfig(sectionName, label)?.custom_label) || label, required: false, hidden: false }
+    return panelField(section, FIELD_ALIASES[`${section}::${label}`] || label, label)
+  }
+  const labelText = (f) => (f.required ? `${f.label} *` : f.label)
   const set = (key, val) => onChange({ ...d, [key]: val })
 
-  const fieldRow = (label, key, type = 'text', { fullWidth = false, sectionName = null } = {}) => (
+  const fieldRow = (label, key, type = 'text', { fullWidth = false, sectionName = null } = {}) => {
+    const f = pf(label, sectionName)
+    if (f.hidden) return null
+    return (
     <div key={key} className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}`}>
-      <label>{(sectionName && getFieldConfig(sectionName, label)?.custom_label) || label}</label>
+      <label>{labelText(f)}</label>
       {type === 'textarea'
         ? <textarea rows={3} value={d[key] || ''} disabled={locked} onChange={e => set(key, e.target.value)} />
         : <input type={type} value={d[key] || ''} disabled={locked} onChange={e => set(key, e.target.value)} />}
     </div>
-  )
+    )
+  }
 
   const boolField = (label, key) => (
     <label key={key} className="cf-bool-field">
@@ -37,11 +61,13 @@ export default function PCTabPanel({
   )
 
   const selectRow = (label, key, sectionName, fieldName) => {
+    const f = pf(label, sectionName)
+    if (f.hidden) return null
     const opts = getPicklistOptions(sectionName, fieldName)
     const hasOpts = Array.isArray(opts) && opts.length > 0
     return (
       <div key={key} className="cf-form-field">
-        <label>{getFieldConfig(sectionName, label)?.custom_label || label}</label>
+        <label>{labelText(f)}</label>
         {hasOpts ? (
           <select value={d[key] ?? ''} disabled={locked} onChange={e => set(key, e.target.value)}>
             <option value="">— Select —</option>

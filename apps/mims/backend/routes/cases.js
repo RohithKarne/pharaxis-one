@@ -672,7 +672,7 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
     // reach the client, otherwise the wizard has no way to know it should stop
     // rendering its own control for it.
     const [coreRows] = await pool.execute(
-      `SELECT core_key, field_name, custom_label, help_text, is_required, is_hidden,
+      `SELECT core_key, section_name, field_name, custom_label, help_text, is_required, is_hidden,
               is_disabled, sort_order, default_value, max_length,
               org_id IS NULL AS is_platform_default
          FROM field_setup
@@ -688,6 +688,8 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
     const core = coreRows.reduce((acc, row) => {
       acc[row.core_key] = {
         core_key: row.core_key,
+        section_name: row.section_name,
+        field_name: row.field_name,
         label: row.custom_label || row.field_name,
         help_text: row.help_text || null,
         is_required: !!row.is_required,

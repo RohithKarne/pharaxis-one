@@ -99,4 +99,31 @@ async function missingRequiredCore(orgId, payload, coreFieldMap) {
   return missing;
 }
 
-module.exports = { CONTACT_FIELDS, MI_CORE_FIELDS, missingRequiredFields, missingRequiredCore };
+// Express guard for the AE/PC section saves (PUT /cases/<scope>/versions/:versionId/:tab):
+// refuses the save when an admin-required panel field on that tab is empty, then
+// hands over to the tab's own route. The panel sends the whole tab, so the body
+// is the record as it will be saved.
+function enforcePanelRequired(scope, versionsTable) {
+  const { PANEL_CORE_FIELDS } = require('../catalogs/panelCoreFields');
+  const { hasGlobalAdminScope } = require('../utils/adminScope');
+  return async (req, res, next) => {
+    const fields = PANEL_CORE_FIELDS.filter(f => f.scope === scope && f.tab === req.params.tab);
+    if (!fields.length) return next();
+    try {
+      const [[row]] = await pool.execute(
+        `SELECT c.org_id FROM ${versionsTable} v JOIN cases c ON c.id = v.case_id WHERE v.id = ?`,
+        [req.params.versionId]
+      );
+      // Unknown version or another org's case: the tab route answers (404 / 403).
+      if (!row || (!hasGlobalAdminScope(req.user) && Number(row.org_id) !== Number(req.user.orgId))) return next();
+      const missing = await missingRequiredCore(row.org_id, req.body || {},
+        Object.fromEntries(fields.map(f => [f.coreKey, f.key])));
+      if (missing.length) return res.status(400).json({ error: `Required: ${missing.join(', ')}.`, missing });
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  };
+}
+
+module.exports = { CONTACT_FIELDS, MI_CORE_FIELDS, missingRequiredFields, missingRequiredCore, enforcePanelRequired };
