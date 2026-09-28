@@ -322,7 +322,7 @@ export default function CaseAETab({
       const res  = await httpFetch(`${API}/cases/ae/versions/${activeAeVer.id}/${activeAeTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setAeTabData(prev => ({ ...prev, [`${activeAeVer.id}_${activeAeTab}`]: data }))
+      setAeTabData(prev => ({ ...prev, [`${activeAeVer.id}_${activeAeTab}`]: toDateInputValues(data) }))
       localStorage.removeItem(`mims_case_${id}_ae_${activeAeVer.id}_${activeAeTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) { toast.error(err.message) }

@@ -271,7 +271,7 @@ export default function CasePCTab({
       const res  = await httpFetch(`${API}/cases/pc/versions/${activePcVer.id}/${activePcTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: data }))
+      setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: toDateInputValues(data) }))
       localStorage.removeItem(`mims_case_${id}_pc_${activePcVer.id}_${activePcTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
     } catch (err) { toast.error(err.message) }
