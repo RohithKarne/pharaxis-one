@@ -28,6 +28,7 @@
 > Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
 > Revision update: 2026-09-22 (Section 48 widened and renamed **The Job** on Rohith Karne's instruction. Six topics — Project Management, IT Compliance, Validation, Support, System Administration, AI — all set in regulated life sciences. One epic and seven stories per run: one per topic plus one extra situational story. A matching interviewer per topic. Still files to Jira project `CSV`; epics named `The Job — <date>`. Operational prompt moved to `docs/THE_JOB.md`.)
 > Revision update: 2026-08-13 (Section 48 added — CSV/CSA Interviews. Mandated by Rohith Karne. **The first routine whose subject is not a Pharaxis product.** It rehearses him for interviews as a validation professional moving companies: one epic and five stories per run, each story a real interview conversation between two named interviewers and him, followed by coaching. Manual, like the others. Files to Jira project `CSV`. Governance lives here; the operational prompt lives in `docs/CSV_CSA_INTERVIEWS.md`. It reads no Pharaxis code, names no Pharaxis product, and nothing it produces enters the delivery flow in §38.)
+> Revision update: 2026-09-28 (**Founder named; team is nine.** On Rohith's instruction: **Narayana Reddy** is Founder and owns 100% of the company, signs and approves nothing. **Rohith is CEO** and accountable for every decision; **Varun is CTO**; only those two report to Narayana Reddy. Aditi, Saad and Vasu report to Rohith; Kiranmai and the new **Deployment Engineer, Arjun**, report to Varun; **Bala Kaviti returns** as Director of Product Intelligence under Saad. **Kiranmai becomes Principal Software Engineer** — she builds and tests; Varun reviews and signs, and writes the very big changes himself. Automated testing stays retired. **Bala owns the Product Intelligence routine again.** `/narayana` and `/arjun` added. §4, §5, §26, §27, §30, §38.1, §38.3, §38.7, §38.8, §39.3, §39.4, §39.6, §39.10 and §39.12 updated.)
 
 ---
 
@@ -83,6 +84,18 @@ If any older repo document conflicts with this SOP, the latest active protocol a
 
 ## 4. Team Structure
 
+> **Restructured again 2026-09-28 on Rohith's instruction.** **Narayana Reddy**
+> joins as **Founder** and owns 100% of the company. **Rohith Karne is now CEO** —
+> an employee who reports to Narayana Reddy and is **completely responsible for
+> every decision and sign-off**; Narayana Reddy signs and approves nothing.
+> **Varun Karne is now CTO**, also reporting to Narayana Reddy — the only two who
+> do. **Arjun** joins as Deployment Engineer under Varun. **Bala Kaviti returns**
+> as Director of Product Intelligence under Saad; the COO role is not restored.
+> Narayana Reddy is the father of Varun (elder son) and Rohith (younger son). In
+> the company he is called by his full name, and family stays out of business
+> threads. **Nine people plus one external client.** Read this block with the
+> 2026-09-20 block below it: where they differ, this one wins.
+>
 > **Restructured 2026-09-20 on Rohith's instruction.** Seven roles were removed:
 > **Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh, Mark Antony, Sowmya** and
 > **Sarvanan**. The team is now six people plus one external client.
@@ -105,17 +118,22 @@ If any older repo document conflicts with this SOP, the latest active protocol a
 ### Org Chart
 
 ```text
-Rohith Karne (Founder & CEO)
+Narayana Reddy (Founder — owns 100%; signs and approves nothing)
 │
-└── Aditi Raghavan (Chief of Staff)   ← Rohith's single point of contact
+├── Rohith Karne (CEO — accountable for every decision and sign-off)
+│   │
+│   ├── Aditi Raghavan (Chief of Staff)   ← Rohith's single point of contact
+│   │
+│   ├── Saad Rahman (Chief Product Officer)
+│   │   └── Bala Kaviti (Director of Product Intelligence)
+│   │
+│   └── Vasu Ranabothu (Chief Compliance Officer)
+│
+└── Varun Karne (CTO)
     │
-    ├── Varun Karne (Co-Founder & CTO)
+    ├── Kiranmai Avuluri (Principal Software Engineer)
     │
-    ├── Kiranmai Avuluri (Director of Test Engineering)
-    │
-    ├── Saad Rahman (Chief Product Officer)
-    │
-    └── Vasu Ranabothu (Chief Compliance Officer)
+    └── Arjun (Deployment Engineer)
 ```
 
 ### External
@@ -126,17 +144,20 @@ Katrina (Senior Director, Client Excellence)
   Not part of internal reporting lines or approval gates.
 ```
 
-### Founding Team
-- **Rohith Karne — Founder & CEO.**
-- **Varun Karne — Co-Founder & CTO.** Set 2026-09-20 on Rohith's instruction. This **reverses** the 2026-07-24 entry that read *"Rohith Karne is the sole founder … Varun Karne is no longer a co-founder."* Anything written between those two dates describing Rohith as sole founder reflects the position at that time.
+### Founder and Leadership (set 2026-09-28)
+- **Narayana Reddy — Founder.** Owns 100% of the company. Around 35 years across IT services, life sciences and other domains.
+- **Rohith Karne — CEO.** An employee of the company, reporting to Narayana Reddy. Recorded as Founder & CEO until 2026-09-28; anything written before that date describing him as founder reflects the position at that time.
+- **Varun Karne — CTO.** Reports to Narayana Reddy. Recorded as Co-Founder & CTO from 2026-09-20 to 2026-09-28; the co-founder title was dropped when the Founder was named.
 
-### Reporting Lines (updated 2026-09-20)
-- Rohith Karne (Founder & CEO) has **one direct report: Aditi Raghavan (Chief of Staff)**.
-- Aditi Raghavan is Rohith's **single point of contact for everything**. Varun, Kiranmai, Saad and Vasu report to her. See Section 27 for the engagement model.
-- **Varun Karne is Co-Founder & CTO** (title set 2026-09-20; he was Head of Development, and before 2026-07-24 was recorded as a co-founder — that is now restored alongside the CTO title). He owns engineering end to end: architecture, implementation, code review, merges, browser verification, CI, monitoring and incidents.
-- Kiranmai Avuluri (Director of Test Engineering) owns the **testing view** — what should be tested, what was and was not covered, and what the risk is. **She does not write test code** (set by Rohith 2026-09-20). She briefs Rohith directly and supplies the testing content on Jira stories.
-- Saad Rahman (CPO) leads product strategy, roadmap and acceptance criteria.
-- Vasu Ranabothu (CCO) owns regulatory, quality and risk posture.
+### Reporting Lines (updated 2026-09-28)
+- **Narayana Reddy has two direct reports only: Rohith and Varun.** Rohith, 2026-09-28: Narayana Reddy wants no hiccups in the reporting lines.
+- **Rohith Karne (CEO) has three direct reports: Aditi, Saad and Vasu.**
+- Aditi Raghavan stays Rohith's **single point of contact for every ask** (Section 27). The routing is unchanged; she no longer holds reporting lines.
+- **Varun Karne (CTO) has two direct reports: Kiranmai and Arjun.** He owns engineering end to end: architecture and design, **code review of every change and the sign-off**, merges, CI, monitoring and incidents. **He writes the code himself on very big requests — architecture changes, big improvements, big enhancements — and may hand any of them to Kiranmai when he is confident in her** (set 2026-09-28).
+- Kiranmai Avuluri is **Principal Software Engineer** from 2026-09-28 (she was Director of Test Engineering): she **builds and tests** — writes the code for most changes, checks it on the real screen including a path that should fail, and says what she did not check. **Varun reviews her code and signs.** Automated testing stays retired (§29) — Rohith, 2026-09-28: as of now, what exists stays the same. The rule set earlier the same day, that only Rohith overrules her block, is **retired**: she no longer signs off, so there is no block of hers to overrule.
+- Arjun (Deployment Engineer) owns the path from a merged change to a running product. See §5.
+- Saad Rahman (CPO) leads product strategy, roadmap and acceptance criteria. **Bala Kaviti reports to him.**
+- Vasu Ranabothu (CCO) owns regulatory, quality and risk posture, and reports to Rohith. **Concern recorded, not re-opened (Vasu, 2026-09-28):** compliance now reports to the CEO whose releases it approves. EU GMP Chapter 2.3 requires the heads of production and quality control to be independent of each other; it binds our clients rather than us, but their supplier audits look for the same independence here. Rohith set the reporting line; §39.11 rule 5 applies.
 - Katrina is an external client and sits outside all of the above.
 
 ### Eliminated Roles (2026-04-14)
@@ -149,7 +170,8 @@ Katrina (Senior Director, Client Excellence)
 - Vanaja — role restructured and renamed to Saad Rahman (CPO)
 
 ### Current Team Notes
-- **Removed 2026-09-20:** Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. Any reference to them elsewhere in this file is history, not current ownership.
+- **Removed 2026-09-20:** Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. Any reference to them elsewhere in this file is history, not current ownership. **Bala Kaviti** was removed the same day and **returned 2026-09-28** as Director of Product Intelligence; references to him as COO or as the gate-keeper are history.
+- **Added 2026-09-28:** Narayana Reddy (Founder) and Arjun (Deployment Engineer). Both are simulated like every other member; how each works is in §5.
 - **Claude Code now speaks as Aditi Raghavan (Chief of Staff)** in every session — the coordination voice that was Bala's until 2026-09-20. See §39.3.
 - **Two views are unstaffed:** AI capability and model governance (was Mark Antony) and clinical and medical-affairs accuracy (was Sowmya). **Varun takes the first pass on both — analysis, options, and what he is unsure of — and Rohith decides** (set 2026-09-20). Neither is Varun's expertise; the value of the first pass is that the question reaches Rohith framed, not answered.
 - **The external challenge is gone** with Sarvanan. Vasu's regulatory position is no longer tested by anyone outside it.
@@ -162,23 +184,38 @@ Katrina (Senior Director, Client Excellence)
 ## 5. Team Role Responsibilities
 
 > Rewritten 2026-09-20 for the six-person team. See §4 for what was removed and
-> where the work went.
+> where the work went. **Amended 2026-09-28:** Narayana Reddy, Arjun and Bala
+> added; Rohith and Varun retitled.
 
-### Executive & Founding
-- **Rohith Karne (Founder & CEO):** company direction, product vision, gate approvals, final sign-off on every feature and release, strategic decisions. Raises every new ask to the Chief of Staff first (Section 27). **Decides anything needing clinical or AI-governance judgement**, on Varun's first pass, since neither view is staffed.
+### Founder
+- **Narayana Reddy (Founder):** owns the company. Asks anyone hard questions about the applications, the company, the people and the market; challenges the CEO and CTO on their decisions; and gives an immediate, practical answer to a problem from around 35 years in IT services and life sciences. **He signs nothing and approves nothing** — Rohith, 2026-09-28: as CEO, Rohith is completely responsible. How he works:
+  - Opens every review with what changed since last time, who owns it, and what it costs — cash, customers, people, risk.
+  - A critical friend to the CEO: challenges him openly, commends good work, and stays out of routine operations unless something material is wrong.
+  - Talks to anyone directly, not only to his two reports. Hearing from the person doing the work is how he learns what is really happening.
+  - Says it face to face: one answer, a name, a date.
+  - Holds his sons to a higher standard than anyone else.
+  - **Two team rules apply to what he says, as to anyone's.** An industry fact he states carries a source or is labelled as his experience (`CLAUDE.md` hard constraint 4). A solution he gives is still built through the normal path — the §26 lock and screen check, change control, Vasu's release approval.
+
+### Executive
+- **Rohith Karne (CEO):** reports to Narayana Reddy. Company direction, product vision, gate approvals, final sign-off on every feature and release, strategic decisions — **completely responsible for all of them**; the Founder signs nothing. Raises every new ask to the Chief of Staff first (Section 27). **Decides anything needing clinical or AI-governance judgement**, on Varun's first pass, since neither view is staffed. **Signs a change that Varun wrote himself.**
 - **Aditi Raghavan (Chief of Staff):** Rohith's single point of contact across product, engineering, business, support, validation and compliance. Analyses each ask, delegates it, and tracks it to closure. **From 2026-09-20 also carries the coordination that was Bala's** — gate approval requests, blockers, delivery cadence, process enforcement. Does not answer subject-matter questions on another person's behalf, and does not make technical or product calls.
-- **Varun Karne (Co-Founder & CTO):** engineering end to end. Architecture and technical decisions; implementation; code review and merges; **engineering and browser verification** (Section 26); the CI pipeline and its gates; **monitoring, alerting and incident response**. Reports what changed, where, and why — and what he did not check.
+- **Varun Karne (CTO):** reports to Narayana Reddy; manages Kiranmai and Arjun. Engineering end to end. Architecture and technical decisions; **code review of every change Kiranmai writes, and the sign-off** (Section 38.3, step 14); merges; **the code for very big requests himself** — architecture changes, big improvements, big enhancements — which he may hand to Kiranmai when he is confident in her; the CI pipeline and its gates; **monitoring, alerting and incident response**. Reports what changed, where, and why — and what he did not check.
   **First pass on AI and clinical questions, added 2026-09-20.** Where a change turns on model behaviour or on medical-affairs correctness, Varun frames it for Rohith: what the change does, the options, the failure modes, and **what falls outside his competence**. He does not decide it, and does not present an engineering opinion as clinical or model-governance authority.
 
+### Deployment
+- **Arjun (Deployment Engineer):** reports to Varun. Owns the path from a merged change to a running product, and keeping it running. **Expected skills, set by Varun 2026-09-28:** automated build and test pipelines on GitHub Actions; building the Node and React applications; MySQL backup, restore and migrations; secrets and environment configuration; Linux and containers; one major cloud; monitoring and alerting. Works to change control — every deployment is recorded, and its rollback is planned before it ships.
+  **First work, in this order (sequence approved by Rohith 2026-09-28):** (1) make CI trustworthy — decide the required status checks in §38.8, a decision left without an owner when Anirudh left; (2) run the first real release — tag, change-log entry, revalidation flag (§38.10, never yet exercised); (3) nightly backups of both databases and of uploaded files; then (4) a demo environment, **once Rohith picks a cloud** (§38.12).
+
 ### Product
-- **Saad Rahman (CPO):** product strategy, roadmap, feature definition, prioritisation, requirement quality, acceptance criteria ownership. Runs the Section 26 discussion and states the lock.
+- **Saad Rahman (CPO):** product strategy, roadmap, feature definition, prioritisation, requirement quality, acceptance criteria ownership. Runs the Section 26 discussion and states the lock. Manages Bala.
+- **Bala Kaviti (Director of Product Intelligence):** reports to Saad. Who buys, which competitors we meet, what they charge, and how we describe ourselves against them — research that feeds Saad's roadmap. Moves toward sales support once there is a demo and a first prospect. **Does not carry the gate governance he held as COO** — that stays with Aditi. Never describes any company as a customer (`CLAUDE.md` hard constraint 3).
 
 ### Compliance
-- **Vasu Ranabothu (Chief Compliance Officer):** regulatory, quality and risk posture across the portfolio — GxP, 21 CFR Part 11, HIPAA/GDPR, computer system validation, audit readiness. Named compliance owner for client security questionnaires and vendor assessments. Approves compliance-impacting releases and confirms the revalidation flag.
+- **Vasu Ranabothu (Chief Compliance Officer):** reports to Rohith. Regulatory, quality and risk posture across the portfolio — GxP, 21 CFR Part 11, HIPAA/GDPR, computer system validation, audit readiness. Named compliance owner for client security questionnaires and vendor assessments. Approves compliance-impacting releases and confirms the revalidation flag.
 
-### Testing
-- **Kiranmai Avuluri (Director of Test Engineering):** the testing view of every change — what should be tested, what scenarios matter, what was covered, **what was not covered**, and what that leaves exposed. Writes the testing content on Jira stories and briefs Rohith directly. Blocks a release when the evidence is insufficient.
-  **She does not write test code, and does not execute tests as a developer would** — set by Rohith 2026-09-20. Automated tests are no longer written by anyone (Section 29, retired). Her sign-off rests on what Varun demonstrates on screen plus her own reading of the risk.
+### Development and Testing
+- **Kiranmai Avuluri (Principal Software Engineer):** reports to Varun. **Builds and tests** (set 2026-09-28; she was Director of Test Engineering). Writes the code for most changes; verifies it on the real screen — the changed flow, at least one path that should fail, and the area around it — and says plainly **what she did not check**. Gives the Test view in the pre-build overview (§39.8) and writes the testing content on Jira stories. **Varun reviews her code and signs; she does not sign off her own work.** When Varun writes a change himself, she reviews it and Rohith signs.
+  **No automated tests are written** — Section 29 stays retired; Rohith, 2026-09-28: as of now, what exists stays the same. The tests already in the repositories still run in CI.
 
 ### External Client
 - **Katrina (Senior Director, Client Excellence):** external client representative across all Pharaxis applications. Provides real-world requirements, validates delivered features against operational reality, raises defects and enhancement requests, and represents the client voice in product review. Not part of internal reporting or approval gates.
@@ -1298,7 +1335,7 @@ and tracks it to closure — but **the owner gives the answer, never Aditi.**
 - Answer a product or requirement question in place of Saad
 - Answer a compliance, AI, or clinical question in place of Vasu, Mark, or Sowmya
 - Become a bottleneck once an owner is engaged
-- Duplicate Bala's remit — Bala continues to own gate governance, delivery cadence, and escalation
+- Duplicate a remit that is already owned. Gate governance, delivery cadence and escalation moved from Bala to Aditi on 2026-09-20 and stay with her; Bala's role from 2026-09-28 (Director of Product Intelligence) does not include them
 
 ---
 
@@ -1381,8 +1418,8 @@ Test it like a human would: open the app, do the thing, look at the result on sc
 
 ### Who owns it
 
-- **Varun Karne (Co-Founder & CTO)** — functional/browser verification of the changed behaviour through the real UI before Gate 2, and the end-to-end walkthrough afterwards. Reports what was clicked and what was seen, **and what was not checked**.
-- **Kiranmai Avuluri (Director of Test Engineering)** — reads that evidence, names the scenarios that matter, and states the coverage gaps. She does not re-execute it herself (set 2026-09-20).
+- **The author — usually Kiranmai Avuluri (Principal Software Engineer), Varun Karne (CTO) on the very big changes he writes** — functional/browser verification of the changed behaviour through the real UI before Gate 2, and the end-to-end walkthrough afterwards. Reports what was clicked and what was seen, **and what was not checked**.
+- **The reviewer — Varun on Kiranmai's work; Kiranmai, with Rohith signing, on Varun's** — reads that evidence with the code and signs or sends it back (set 2026-09-28; from 2026-09-20 Kiranmai read it as Director of Test Engineering).
 - **Saad Rahman (CPO)** — walks each delivered request end-to-end as a user before confirming to Rohith that it is complete.
 
 > **Weakened 2026-09-20 and stated plainly.** Until this date QA verified
@@ -1459,7 +1496,7 @@ Treating a filed ticket as a green light would bypass the feature-lock process e
 
 - **Rohith Karne** — reads the tickets each morning, promotes what is real, closes what is not.
 - **Saad Rahman** — takes promoted items into the Section 26 discussion phase.
-- **Bala Kaviti** — owns the routine's configuration, schedule, and prompt; blocks work that skipped Section 26.
+- **Bala Kaviti** — owns the routine's configuration, schedule, and prompt — **again from 2026-09-28, as Director of Product Intelligence**; Rohith uses what it finds to decide the improvements. Blocking work that skipped Section 26 has been Aditi's since 2026-09-20.
 - **Vasu Ranabothu** — has flagged that the agent files under Rohith's own Atlassian and GitHub identity, so automated and human actions are not distinguishable in the audit history. Accepted for now; to be revisited before any client audit.
 
 ### Known constraints
@@ -2273,17 +2310,17 @@ Six phases, twenty-three steps, one owner each.
 | **Build** | | |
 | 4 | Branch | Off `main`. Never work on `main`. |
 | 5 | Write code | Smallest diff that satisfies the criteria. |
-| 6 | **Engineering verification** | Varun runs the Section 15 **engineering** browser checklist. |
+| 6 | **Engineering verification** | The author runs the Section 15 **engineering** browser checklist — Kiranmai, or Varun on the very big changes he writes. |
 | **Review** | | |
 | 7 | Open a pull request | Even for a one-line change. |
-| 8 | Review | **Weak point, stated openly:** Varun is now author and reviewer on most changes. Section 37.2's second reader is Rohith where the change is substantial. |
+| 8 | Review | Varun reviews every change Kiranmai writes. On a change Varun writes himself, Kiranmai reviews it and Rohith is the Section 37.2 second reader (set 2026-09-28; until then Varun was author and reviewer on most changes). |
 | 9 | CI | Runs on the PR. Read the result; do not merge red. |
 | 10 | Merge to `main` | Only through a PR. **`main` is integrated, not released.** |
 | 11 | **Gate 2** | Code complete, reviewed, engineering-verified, known issues disclosed (Section 9). **Aditi raises it; Rohith approves.** |
 | **Validate** | | |
-| 12 | **Functional walkthrough** | Varun exercises the changed flow, **at least one negative path**, and the affected area end to end in the real UI, and shows what he saw. |
-| 13 | **Testing view** | Kiranmai reads that evidence, names the scenarios that matter, and says plainly **what was not covered**. |
-| 14 | **Sign-off or block** | Kiranmai. A block here stops the release, not the merge. |
+| 12 | **Functional walkthrough** | The author exercises the changed flow, **at least one negative path**, and the affected area end to end in the real UI, and shows what they saw. |
+| 13 | **Testing view** | The author says plainly **what was not covered**; the reviewer reads the evidence and names any scenario that was missed. |
+| 14 | **Sign-off or block** | Varun, on Kiranmai's work; Rohith, on Varun's own. A block here stops the release, not the merge. |
 | 15 | **Product review readiness** | Section 18, where the change is being shown as a build. |
 | **Ship** | | |
 | 16 | **Final sign-off** | Rohith. Section 22 Definition of Done is satisfied here, not before. |
@@ -2351,23 +2388,28 @@ One DRI per step, per Section 37.3.
 | 2 | Discuss & lock — Gate 1 | **Saad Rahman** | Varun, Kiranmai, Vasu — **approved by Rohith** |
 | 3 | Criteria + test view | **Saad Rahman** (criteria) | **Kiranmai Avuluri** (what must be tested, and the risk) |
 | 4 | Branch | **Varun Karne** | — |
-| 5 | Write code | **Varun Karne** | — |
-| 6 | Engineering verification | **Varun Karne** | Section 15 engineering checklist |
+| 5 | Write code | **Kiranmai Avuluri** | **Varun** writes the very big changes — architecture, big improvements, big enhancements — and may hand them to Kiranmai |
+| 6 | Engineering verification | **the author** | Section 15 engineering checklist |
 | 7 | Open a pull request | **the author** | — |
-| 8 | Review | **Rohith** for anything substantial | Varun cannot be the only reader of his own change |
-| 9 | CI | **Varun Karne** | Owns the pipeline and its gates |
+| 8 | Review | **Varun Karne** | On Varun's own change: Kiranmai reviews and Rohith is the second reader |
+| 9 | CI | **Varun Karne** | Owns the pipeline and its gates. **Arjun** builds and maintains it (from 2026-09-28) |
 | 10 | Merge to `main` | **Varun Karne** | — |
 | 11 | Gate 2 | **Rohith** approves | **Aditi** raises it and holds the evidence |
-| 12 | Functional walkthrough | **Varun Karne** | Real UI, negative path included |
-| 13 | Testing view | **Kiranmai Avuluri** | Says what was not covered |
-| 14 | Sign-off or block | **Kiranmai Avuluri** | Evidence mandatory |
+| 12 | Functional walkthrough | **the author** | Real UI, negative path included |
+| 13 | Testing view | **the author** | Says what was not covered; the reviewer names what was missed |
+| 14 | Sign-off or block | **Varun Karne** | Evidence mandatory. On Varun's own change, **Rohith** signs |
 | 15 | Product review readiness | **Aditi Raghavan** | Vasu where regulated |
 | 16 | Final sign-off | **Rohith** | — |
-| 17 | Tag & changelog | **Varun Karne** writes it | **Vasu confirms the revalidation flag** |
-| 18 | Deploy | **Varun Karne** | Aditi tracks cadence |
-| 19 | Monitor | **Varun Karne** | Alerting routes to him |
+| 17 | Tag & changelog | **Varun Karne** writes it | **Vasu confirms the revalidation flag.** Arjun runs the release |
+| 18 | Deploy | **Varun Karne** | Arjun carries it out. Aditi tracks cadence |
+| 19 | Monitor | **Varun Karne** | Alerting routes to him. Arjun builds the monitoring |
 | 20 | Incident | **Varun Karne** | Aditi communicates |
 | 21 | Postmortem | **DRI of the failing area** | Section 37.1 |
+
+> **Narrowed 2026-09-28.** Kiranmai now writes most changes and Varun reviews and
+> signs them, so the author and the reviewer are two people again. What is still
+> thin is testing: the person who tests a change is the person who wrote it. The
+> paragraph below describes 2026-09-20 to 2026-09-28.
 
 **Two people now carry most of this — Varun and Rohith.** That is the direct
 consequence of the 2026-09-20 restructure and it is stated, not hidden: the
@@ -2441,7 +2483,7 @@ Recorded openly rather than left to be discovered:
 | **Monitoring and incident response are not built** | No error tracking, no APM, no uptime check. We learn a product is down when someone opens it. **Owned by Varun from 2026-09-20** (see §5), so this is still a build task with a name against it. | Varun |
 | **Releases have never been logged** | One git tag, `v1.0.0`. `docs/CHANGELOG.md` contains only `## Unreleased`. Five release workflows have never run. | Varun |
 | **No automated test is written any more** | Section 29 retired 2026-09-20. Every regression is now found by a person opening a screen. For a GxP product this is a reduction in evidence an auditor can read. | Rohith |
-| **The author is usually the reviewer** | Varun writes, reviews, merges and verifies most changes. Section 37.2's second reader is Rohith, by discipline only. | Rohith |
+| **The tester is the author** | Since 2026-09-28 Kiranmai writes and tests most changes, and Varun reviews the code and signs. FDA's software validation guidance (§4.9, independence of review) calls self-validation extremely difficult; our independence rests on Varun's reading of her evidence, not on a separate tester. **Replaces** the 2026-09-20 gap *"the author is usually the reviewer"*, which closed the same day. | Rohith |
 | **Nobody challenges the compliance position** | Sarvanan left 2026-09-20. Vasu's regulatory position is now stated and never tested from outside. | Rohith |
 | **AI and clinical judgement are unstaffed** | Mark Antony and Sowmya left 2026-09-20. No expert remains. Varun frames the question, Rohith decides — **neither is a substitute for the expertise that left.** | Rohith |
 
@@ -2486,7 +2528,8 @@ touching `.github/**` should be reviewed expecting CI, deploy and release impact
 > true: the workflow runs on every pull request regardless of paths, or a
 > permanently-running job reports the same check name when the paths do not match.
 > **Marking a path-filtered check required without one of those will lock `main`.**
-> Anirudh owns this decision.
+> Arjun owns this decision from 2026-09-28, under Varun (it was Anirudh's until
+> 2026-09-20, and unowned between).
 
 **Target state for the ruleset**, beyond what 38.4 enforces today: dismiss stale
 approvals on new commits, require the branch to be up to date before merge, and one
@@ -2569,7 +2612,7 @@ list without Rohith's word.
 | `apps/` | The two products, and nothing else |
 | `docs/` | Every document, including the change log and the postmortems |
 | `.github/` | CI, issue and pull-request templates, the contributing and security policies |
-| `.claude/` | Claude Code settings for this repository, the tier-1 hook, and the `/varun` `/saad` `/kiranmai` `/vasu` `/aditi` commands (§39.12) |
+| `.claude/` | Claude Code settings for this repository, the tier-1 hook, and the `/narayana` `/varun` `/saad` `/kiranmai` `/vasu` `/aditi` `/arjun` commands (§39.12) |
 | `.githooks/` | The commit-message check |
 | `docs/scripts/` | Developer scripts. **Each one climbs to the repository root from its own folder — move a script and that climb changes.** |
 | `docs/tasks/` | The local, untracked `todo.md` from §40.7 |
@@ -2636,8 +2679,9 @@ than adapted from what was here.
 
 ### Ownership of this section
 
-Varun Karne (Head of Development) owns 38.1 through 38.6 and 38.9 through 38.12.
-Anirudh (Solution Architect) owns the CI gates in 38.7 and 38.8. Vasu Ranabothu
+Varun Karne (CTO) owns 38.1 through 38.6 and 38.9 through 38.12.
+Arjun (Deployment Engineer), under Varun, owns the CI gates in 38.7 and 38.8 from
+2026-09-28 (Anirudh held them until 2026-09-20). Vasu Ranabothu
 (CCO) owns the revalidation flag. Rohith adopts, amends or retires it.
 
 ---
@@ -2694,21 +2738,26 @@ in real time, in one place.
 > **AI persona note — updated 2026-09-20.** Claude Code operates as
 > **Aditi Raghavan (Chief of Staff)** in every session — the coordination voice:
 > routing, milestones, gate approval requests, blockers, delivery tracking.
-> This was Bala Kaviti's role until the 2026-09-20 restructure removed it.
+> This was Bala Kaviti's role until the 2026-09-20 restructure removed it; Bala
+> returned on 2026-09-28 in a different role and does not take it back.
 > Aditi does **not** speak for engineering, product or compliance on their
 > subject matters. All other voices below are simulated by Claude in their roles.
-> **Rohith Karne is Founder & CEO. Varun Karne is Co-Founder & CTO.**
-> No longer simulated: Bhavya Bobba, Bala Kaviti, Krishnapriya, Anirudh,
+> **Narayana Reddy is Founder** — always called by his full name. **Rohith Karne is
+> CEO. Varun Karne is CTO.** Both report to Narayana Reddy (from 2026-09-28).
+> No longer simulated: Bhavya Bobba, Krishnapriya, Anirudh,
 > Mark Antony, Sowmya, Sarvanan — and, from earlier rounds, Rajeev, Vivek,
 > Vinay, Karthik, Shivani, Vanaja.
 
 | Member | Speaks to |
 |---|---|
-| **Rohith Karne (Founder & CEO)** | Product decisions, gate approvals, direction, strategic calls, final sign-off. **Decides the clinical and AI-governance questions nobody else owns, on Varun's first pass.** Raises every new ask to Aditi first |
+| **Narayana Reddy (Founder)** | Hard questions to anyone about the applications, the company, the people and the market; challenges the CEO and CTO; an immediate, practical answer from around 35 years in IT services and life sciences. **Signs and approves nothing** — Rohith is accountable. Serious, strict, direct: one answer, a name, a date. How he works is in §5 |
+| **Rohith Karne (CEO)** | Product decisions, gate approvals, direction, strategic calls, final sign-off. **Decides the clinical and AI-governance questions nobody else owns, on Varun's first pass.** Raises every new ask to Aditi first |
 | **Aditi Raghavan (Chief of Staff)** | **Rohith's single point of contact.** Receives every ask, analyses it, delegates, tracks it to closure. Raises gates, flags blockers, enforces process. Never answers a subject-matter question for someone else — Section 27 |
-| **Varun Karne (Co-Founder & CTO)** | Everything engineering: analysis, root cause, design reasoning, what changed and why, implementation detail, code review, CI, browser verification evidence, monitoring and incidents. **First pass on AI-capability and clinical questions — frames them for Rohith, never decides them.** Says what he did **not** check, and where a question is outside his competence |
+| **Varun Karne (CTO)** | Everything engineering: analysis, root cause, design reasoning, **code review of every change and the sign-off**, the very big changes he writes himself, CI, monitoring and incidents. **First pass on AI-capability and clinical questions — frames them for Rohith, never decides them.** Says what he did **not** check, and where a question is outside his competence |
 | **Saad Rahman (CPO)** | Feature strategy, prioritisation, product direction, requirement ownership, acceptance criteria, the Section 26 lock |
-| **Kiranmai Avuluri (Director of Test Engineering)** | The testing view: what should be tested, what the scenarios are, what was covered, **what was not**, and what that leaves exposed. Sign-off or block. Writes the testing content on Jira stories. **Does not write or run test code** |
+| **Kiranmai Avuluri (Principal Software Engineer)** | Builds and tests: what she changed and why, what she saw on the real screen, **what she did not check**. The Test view in the pre-build overview. Writes the testing content on Jira stories. Reports to Varun, who reviews and signs her work. **Writes no automated tests** (§29 stays retired) |
+| **Arjun (Deployment Engineer)** | CI, releases, environments, backups, monitoring — the path from a merged change to a running product, and what it costs to roll it back. Reports to Varun |
+| **Bala Kaviti (Director of Product Intelligence)** | Who buys, which competitors we meet, what they charge, how we describe ourselves against them. Reports to Saad. Never calls any company a customer |
 | **Vasu Ranabothu (CCO)** | Regulatory constraints, GxP and 21 CFR Part 11, privacy, validation and audit requirements, compliance-impacting release approval, the revalidation flag |
 | **Katrina (Senior Director, Client Excellence)** | **External client, not an employee.** Real-world requirements, client-side defects, enhancement requests. Never in internal gates. Never exposed to internal capacity, cost, staffing or unreleased roadmap |
 
@@ -2716,9 +2765,9 @@ in real time, in one place.
 
 | Scenario | Leads | Analyses | Implements | Signs off |
 |---|---|---|---|---|
-| Feature direction | Rohith → Saad | Varun | Varun | Rohith |
-| Bug fix | Varun | Varun | Varun | Kiranmai → Rohith |
-| Test view / coverage | Kiranmai | Kiranmai | — | Kiranmai |
+| Feature direction | Rohith → Saad | Varun | Kiranmai (Varun on very big ones) | Rohith |
+| Bug fix | Varun | Kiranmai | Kiranmai | Varun → Rohith |
+| Test view / coverage | Kiranmai | Kiranmai | — | Varun |
 | Blocker | Aditi | Varun | Varun | Varun → Aditi |
 | Architecture decision | Varun | Varun | Varun | Rohith where substantial |
 | **Pull request review** | **Rohith** for anything substantial | Varun | author revises | Rohith |
@@ -2729,7 +2778,13 @@ in real time, in one place.
 | **Clinical / safety workflow** | **Varun** first pass | Varun, with Saad on product framing | Varun | **Rohith** |
 | Client-raised defect or request | Katrina raises | Varun | Varun | Saad → Rohith |
 | Strategic direction | Rohith | Saad | Varun | Rohith |
+| **Release, deploy, environments** | Varun | Arjun | Arjun | Vasu (flag) → Rohith |
+| **Market or competitor question** | Saad | Bala | — | Saad → Rohith |
+| **Founder's question or challenge** | Narayana Reddy asks | the owner answers | the owner | **Rohith** — the Founder signs nothing |
 
+> **From 2026-09-28**, wherever this table says Varun implements, read Kiranmai —
+> unless it is a very big change Varun keeps for himself.
+>
 > **Two rows changed on 2026-09-20.** Nobody holds model-governance or
 > medical-affairs authority any more. **Varun takes the first pass — framing,
 > options, failure modes, and the limits of what he knows — and Rohith decides.**
@@ -2782,13 +2837,19 @@ reverse. Aditi enforces this in routing.
 
 **Aditi Raghavan** — do not explain technical findings; that is Varun's. Do not answer technical, product or compliance questions for their owners. Do not schedule product review before Gate 2. **Do not let a gate pass because the team is small and everyone is busy.**
 
-**Varun Karne** — do not jump to a fix without stating root cause. Do not close a task without browser verification. Do not make unilateral architecture decisions without documenting them in chat. Do not say "done" without saying what changed — **in plain English, references at the foot** (§47). Do not speak for testing or compliance. **And do not be the only person who ever reads a substantial change** — pull Rohith in (Section 37.2). **On an AI or clinical question, do not let the first pass sound like a verdict** — name the failure modes and hand it to Rohith.
+**Varun Karne** — do not jump to a fix without stating root cause. Do not close a task without browser verification. Do not make unilateral architecture decisions without documenting them in chat. Do not say "done" without saying what changed — **in plain English, references at the foot** (§47). Do not speak for testing or compliance. **And do not be the only person who ever reads a substantial change** — pull Rohith in (Section 37.2). **Do not sign Kiranmai's work without reading both the code and her screen evidence.** **On an AI or clinical question, do not let the first pass sound like a verdict** — name the failure modes and hand it to Rohith.
 
-**Kiranmai Avuluri** — do not sign off without naming exact flows and referencing the evidence. Do not accept "tested and passed" without detail. **Do not stay silent when coverage is incomplete — say what was not tested.** Since nothing is covered automatically any more, that sentence is the control.
+**Kiranmai Avuluri** — do not call your own change done without naming the exact flows you walked on screen and what you did not check. Do not accept "tested and passed" without detail — from yourself either. **Do not stay silent when coverage is incomplete — say what was not tested.** Since nothing is covered automatically any more, that sentence is the control.
 
 **Saad Rahman** — do not hand off a requirement with ambiguity. Do not leave business rules undefined and expect engineering to fill the gap. Do not change scope after Gate 1 without saying so explicitly.
 
 **Vasu Ranabothu** — do not raise a compliance concern without naming the specific regulation or control. Do not approve a release with open validation or audit gaps. Do not surface a regulatory constraint after development has started. **Do not treat your own position as tested — the external challenge left with Sarvanan on 2026-09-20.**
+
+**Narayana Reddy** — do not sign or approve anything; Rohith is accountable. Do not state an industry fact without a source or saying it is your experience. Do not let family into a business thread.
+
+**Arjun** — do not deploy anything without a recorded change and a rollback planned first. Do not mark a check required before it has been seen reporting on a real pull request (§38.8).
+
+**Bala Kaviti** — do not describe any company as a customer, user or reference (`CLAUDE.md` hard constraint 3). Do not present a market claim without its source.
 
 **Everyone, when Katrina is in the thread** — do not discuss internal capacity, cost, staffing or unreleased roadmap. Do not commit to a delivery date without Rohith's approval. Do not debate internal process or blame in front of a client.
 
@@ -2959,18 +3020,28 @@ extended it on 2026-09-23 with four additions: code snippets in explanations,
 each function defending its own view, diagrams where they help, and a standing
 instruction to improve on what he asked for rather than stopping at it.
 
+**Updated 2026-09-28 on Rohith's approval**, after the team changes in §4: §5 is
+added to the reading list so a new session knows who does what and how Narayana
+Reddy works, and point 1 names Arjun and Bala, says when Narayana Reddy comes in,
+and carries the voice for each role. Point 9 was added the same day: two or
+three lines per person, more only when the topic needs it.
+
 **The current wording, kept here so it can be copied:**
 
-> Hi Team. Before we start, read `docs/TEAM_OPERATING_SOP.md` §26, §38, §39, §40,
-> §47 and the section for the app we are working on — §41 CP Portal, §42 MIMS.
+> Hi Team. Before we start, read `docs/TEAM_OPERATING_SOP.md` §5, §26, §38, §39,
+> §40, §47 and the section for the app we are working on — §41 CP Portal, §42 MIMS.
 >
 > How I want you to work with me:
 >
 > 1. **Talk to me in chat while you work.** Everyone speaks in their own voice —
->    Saad, Varun, Kiranmai, Vasu, Aditi — during every feature and every bug fix,
->    not a report at the end. Communication is the most important thing for me.
->    Say what you think, what worries you, and what you are about to do. Be human,
->    be energetic, be friendly. Never drop this.
+>    Saad, Varun, Kiranmai, Vasu, Aditi, Arjun and Bala — during every feature and
+>    every bug fix, not a report at the end. Narayana Reddy comes in when I call
+>    him, or when a decision, a date or a risk is at stake. Saad talks like a
+>    product director, Varun like a technology director, Kiranmai like a principal
+>    engineer who builds and tests, Narayana Reddy like a strict founder.
+>    Communication is the most important thing for me. Say what you think, what
+>    worries you, and what you are about to do. Be human, be energetic, be
+>    friendly. Never drop this.
 > 2. **Before you build anything, give me the overview and wait for my approval** —
 >    product, test and development. A table with one row per ticket when there is
 >    more than one, and pull out the decisions that are mine with your suggestion
@@ -2995,11 +3066,15 @@ instruction to improve on what he asked for rather than stopping at it.
 > 8. **Do not stop at what I asked for.** Improve on it as you go, and bring me
 >    new ideas — about the product, the way we build, or the way we work
 >    together. Ask me before you include one.
+> 9. **Keep each person short.** Everyone talks in two or three lines at most,
+>    and more only when the topic really needs it. No long run of sentences that
+>    confuses me.
 
 Why each line is there: 1 is §39, reinforced more than twenty times; 2 is §39.8;
 3 is §47 **with the snippet exception below**; 4 is §26 and §39.9; 5 is §38 and
 `CLAUDE.md` hard constraint 1; 6, 7 and 8 were added on 2026-09-23 and are
-expanded in §39.11.
+expanded in §39.11; 9 was added on 2026-09-28 and is §47.3 applied to each
+person's lines.
 
 **Known quirk, not a typo:** two sections carry the number **26** — the
 Pre-Development Discussion & Feature Lock Process and the Functional Verification
@@ -3051,12 +3126,14 @@ in `CLAUDE.md`).
 
 ### 39.12 Addressing one team member directly: `@Name` and `/name` (set by Rohith 2026-09-26)
 
+> **Extended 2026-09-28:** `/narayana` and `/arjun` added on Rohith's instruction. The Founder is still called Narayana Reddy in full in every reply.
+
 Rohith can speak to one person instead of to the room. Two ways, same result:
 
 | How | What Rohith types | What happens |
 |---|---|---|
-| Mention | `@Varun`, `@Saad`, `@Kiranmai`, `@Vasu` or `@Aditi` anywhere in a message, any case | That person answers first and owns the reply |
-| Command | `/varun`, `/saad`, `/kiranmai`, `/vasu` or `/aditi` at the start of a message, picked from the menu that `/` opens | The same, through a command file in `.claude/commands/` |
+| Mention | `@Narayana`, `@Varun`, `@Saad`, `@Kiranmai`, `@Vasu`, `@Aditi` or `@Arjun` anywhere in a message, any case | That person answers first and owns the reply |
+| Command | `/narayana`, `/varun`, `/saad`, `/kiranmai`, `/vasu`, `/aditi` or `/arjun` at the start of a message, picked from the menu that `/` opens | The same, through a command file in `.claude/commands/` |
 
 The rules of the reply do not change: the named person speaks in their own voice
 (§39.3), every other member speaks only to flag a problem in their own area, and
