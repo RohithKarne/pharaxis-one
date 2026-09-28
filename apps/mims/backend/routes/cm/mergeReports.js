@@ -323,12 +323,13 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
       const scopedCase = await getScopedCase(req, case_id);
       if (!scopedCase) return res.status(404).json({ error: 'Case not found for active organisation.' });
       const [[caseRow]] = await pool.execute(
-        `SELECT c.case_number, c.case_type, c.status AS case_status, c.priority,
+        `SELECT c.case_number, c.case_type, ws.name AS case_status, c.priority,
                 o.name AS org_name,
-                CONCAT(COALESCE(ua.first_name,''), ' ', COALESCE(ua.last_name,'')) AS assigned_name
+                ua.name AS assigned_name
          FROM cases c
          LEFT JOIN organisations o ON o.id = c.org_id
-         LEFT JOIN users ua ON ua.id = c.assigned_to
+         LEFT JOIN workflow_states ws ON ws.id = c.status_id
+         LEFT JOIN users ua ON ua.id = c.case_owner_id
          WHERE c.id = ?`,
         [scopedCase.id]
       );
@@ -352,7 +353,9 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
       }
 
       const [[miRow]] = await pool.execute(
-        `SELECT product FROM case_mi WHERE case_id = ? ORDER BY id ASC LIMIT 1`,
+        `SELECT p.trade_name AS product
+           FROM case_mi mi JOIN products p ON p.id = mi.product_id
+          WHERE mi.case_id = ? ORDER BY mi.id ASC LIMIT 1`,
         [scopedCase.id]
       );
       if (miRow?.product) mergeData.product_name = miRow.product;
