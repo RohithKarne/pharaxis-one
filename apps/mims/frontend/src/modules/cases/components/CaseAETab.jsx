@@ -182,6 +182,17 @@ export default function CaseAETab({
   saveDynFields, caseType, registerSectionSave,
 }) {
   const ctx = useCaseFieldContext()
+  // Admin settings for the panel's own fields — formConfig.core entries carry
+  // their section and field name (migration 109 links the rows).
+  const panelField = useMemo(() => {
+    const entries = Object.values(formConfig?.core || {})
+    return (section, name, fallback) => {
+      const def = entries.find(e => e.section_name === section && e.field_name === name)
+      return def
+        ? { label: def.label || fallback, required: !!def.is_required, hidden: !!def.is_hidden }
+        : { label: fallback, required: false, hidden: false }
+    }
+  }, [formConfig])
   const [aeVersions,   setAeVersions]   = useState([])
   const [activeAeVer,  setActiveAeVer]  = useState(null)
   const [activeAeTab,  setActiveAeTab]  = useState('general')
@@ -459,6 +470,7 @@ export default function CaseAETab({
                   getFieldConfig={getFieldConfig}
                   getPicklistOptions={getPicklistOptions}
                   versionId={activeAeVer?.id}
+                  panelField={panelField}
                   headers={headers}
                   caseId={id}
                   onSave={saveAETab}

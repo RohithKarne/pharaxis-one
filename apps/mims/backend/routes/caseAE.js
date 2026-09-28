@@ -24,6 +24,11 @@ router.use('/cases/ae', require('../services/caseHelpers').normalizeDateOnlyBody
 
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
+// Admin-required panel fields (Customize Forms) are checked before any
+// AE section save reaches its own route below.
+router.put('/cases/ae/versions/:versionId/:tab', authenticate,
+  require('../services/requiredFields').enforcePanelRequired('ae', 'case_ae_versions'));
+
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
