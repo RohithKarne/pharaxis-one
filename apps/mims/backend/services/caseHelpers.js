@@ -589,7 +589,7 @@ async function getPcTransmissionRow(caseId, transmissionId) {
 
 async function getCasePrimaryProductContext(caseId) {
   const [[row]] = await pool.execute(
-    `SELECT c.product_id AS case_product_id, c.org_id,
+    `SELECT c.org_id,
             mi.product_id AS mi_product_id,
             ae.product_id AS ae_product_id,
             pc.product_id AS pc_product_id
@@ -606,7 +606,7 @@ async function getCasePrimaryProductContext(caseId) {
   );
   if (!row) return { productId: null, orgId: null };
   return {
-    productId: row.case_product_id || row.mi_product_id || row.ae_product_id || row.pc_product_id || null,
+    productId: row.mi_product_id || row.ae_product_id || row.pc_product_id || null,
     orgId:     row.org_id || null,
   };
 }
