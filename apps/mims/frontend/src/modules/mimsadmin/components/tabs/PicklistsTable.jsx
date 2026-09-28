@@ -760,7 +760,7 @@ function ValueModal({ mode, row, categories, tenants, H, onClose, onSaved }) {
                     <label>Tenant <span className="req">*</span></label>
                     <select className="ma-pt-select" value={form.org_id} onChange={e => set('org_id', e.target.value)}>
                       <option value="">— Select tenant —</option>
-                      <option value="all">★ All Tenants (bulk-apply)</option>
+                      {tenants.length > 1 && <option value="all">★ All Tenants (bulk-apply)</option>}
                       {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                   </div>

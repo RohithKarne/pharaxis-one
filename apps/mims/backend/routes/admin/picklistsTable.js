@@ -3,8 +3,9 @@
 /**
  * admin/picklistsTable.js — MIMS Admin > Tables > General (Picklists)
  *
- * Cross-tenant picklist value management. Admin sees all values across
- * all tenants, filtered by Category, Tenant, and Department dropdowns.
+ * Picklist value management, filtered by Category, Tenant, and Department.
+ * A platform admin works across all tenants; a tenant admin only ever reads
+ * or changes their own organisation's values (ownOrgId / canTouchOrg).
  *
  * Data model:
  *   `picklists` rows have (id, category, field_type, value, status, org_id, department, ...)
@@ -21,8 +22,35 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { isPlatformAdmin } = require('../../utils/adminScope');
 
 const ROLE = ['admin', 'platform_admin'];
+const NOT_YOUR_ORG = "You can only manage your own organisation's picklists.";
+
+// A platform admin works across tenants; a tenant admin only ever reads or
+// changes their own organisation's rows. null = no tenant restriction.
+function ownOrgId(req) {
+  if (isPlatformAdmin(req.user)) return null;
+  const orgId = Number(req.user?.orgId);
+  return Number.isFinite(orgId) && orgId > 0 ? orgId : -1;
+}
+
+function canTouchOrg(req, orgId) {
+  const own = ownOrgId(req);
+  return own === null || Number(orgId) === own;
+}
+
+// True when every id belongs to a tenant the caller may change.
+async function allIdsInScope(db, req, table, ids) {
+  const own = ownOrgId(req);
+  if (own === null || !ids.length) return true;
+  const placeholders = ids.map(() => '?').join(',');
+  const [[{ cnt }]] = await db.execute(
+    `SELECT COUNT(*) AS cnt FROM ${table} WHERE id IN (${placeholders}) AND org_id = ?`,
+    [...ids, own]
+  );
+  return Number(cnt) === new Set(ids.map(Number)).size;
+}
 
 async function audit(userId, action, entityId, details) {
   try {
@@ -118,14 +146,16 @@ async function getWhereUsed(valueRow) {
 // GET /api/admin/picklists-table/categories
 // Returns the 8 distinct categories (with row counts).
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/picklists-table/categories', authenticate, requireRole(...ROLE), async (_req, res) => {
+router.get('/picklists-table/categories', authenticate, requireRole(...ROLE), async (req, res) => {
+  const own = ownOrgId(req);
   try {
     const [rows] = await pool.execute(
       `SELECT category, COUNT(*) AS value_count
          FROM picklists
-        WHERE category IS NOT NULL AND category != ''
+        WHERE category IS NOT NULL AND category != ''${own === null ? '' : ' AND org_id = ?'}
         GROUP BY category
-        ORDER BY category ASC`
+        ORDER BY category ASC`,
+      own === null ? [] : [own]
     );
     res.json({ categories: rows });
   } catch (err) {
@@ -140,15 +170,17 @@ router.get('/picklists-table/categories', authenticate, requireRole(...ROLE), as
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/picklists-table/fields', authenticate, requireRole(...ROLE), async (req, res) => {
   const { category } = req.query;
+  const own = ownOrgId(req);
+  const orgSql = own === null ? '' : ' AND org_id = ?';
   try {
     const sql = category
       ? `SELECT DISTINCT category, field_type, COUNT(*) AS value_count
-           FROM picklists WHERE category = ?
+           FROM picklists WHERE category = ?${orgSql}
            GROUP BY category, field_type ORDER BY field_type ASC`
       : `SELECT DISTINCT category, field_type, COUNT(*) AS value_count
-           FROM picklists
+           FROM picklists WHERE 1 = 1${orgSql}
            GROUP BY category, field_type ORDER BY category, field_type ASC`;
-    const params = category ? [category] : [];
+    const params = [...(category ? [category] : []), ...(own === null ? [] : [own])];
     const [rows] = await pool.execute(sql, params);
     res.json({ fields: rows });
   } catch (err) {
@@ -161,13 +193,15 @@ router.get('/picklists-table/fields', authenticate, requireRole(...ROLE), async 
 // GET /api/admin/picklists-table/departments
 // Returns distinct non-null departments for the filter dropdown.
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/picklists-table/departments', authenticate, requireRole(...ROLE), async (_req, res) => {
+router.get('/picklists-table/departments', authenticate, requireRole(...ROLE), async (req, res) => {
+  const own = ownOrgId(req);
   try {
     const [rows] = await pool.execute(
       `SELECT DISTINCT department
          FROM picklists
-        WHERE department IS NOT NULL AND department != ''
-        ORDER BY department ASC`
+        WHERE department IS NOT NULL AND department != ''${own === null ? '' : ' AND org_id = ?'}
+        ORDER BY department ASC`,
+      own === null ? [] : [own]
     );
     res.json({ departments: rows.map(r => r.department) });
   } catch (err) {
@@ -180,10 +214,12 @@ router.get('/picklists-table/departments', authenticate, requireRole(...ROLE), a
 // GET /api/admin/picklists-table/tenants
 // Returns the org list for the Tenant filter dropdown.
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/picklists-table/tenants', authenticate, requireRole(...ROLE), async (_req, res) => {
+router.get('/picklists-table/tenants', authenticate, requireRole(...ROLE), async (req, res) => {
+  const own = ownOrgId(req);
   try {
     const [rows] = await pool.execute(
-      `SELECT id, name FROM organisations WHERE is_active = 1 ORDER BY name ASC`
+      `SELECT id, name FROM organisations WHERE is_active = 1${own === null ? '' : ' AND id = ?'} ORDER BY name ASC`,
+      own === null ? [] : [own]
     );
     res.json({ tenants: rows });
   } catch (err) {
@@ -204,7 +240,10 @@ router.get('/picklists-table/values', authenticate, requireRole(...ROLE), async 
   const params = [];
   if (category)   { where.push('p.category = ?');    params.push(category); }
   if (field_type) { where.push('p.field_type = ?');  params.push(field_type); }
-  if (tenant_id)  { where.push('p.org_id = ?');      params.push(parseInt(tenant_id, 10)); }
+  const own = ownOrgId(req);
+  if (own !== null && tenant_id && Number(tenant_id) !== own) return res.status(403).json({ error: NOT_YOUR_ORG });
+  const scopedTenant = own !== null ? own : (tenant_id ? parseInt(tenant_id, 10) : null);
+  if (scopedTenant !== null) { where.push('p.org_id = ?'); params.push(scopedTenant); }
   if (department) { where.push('p.department = ?');  params.push(department); }
   if (search)     { where.push('p.value LIKE ?');    params.push(`%${search}%`); }
 
@@ -249,6 +288,10 @@ router.post('/picklists-table/values', authenticate, requireRole(...ROLE), async
   if (!field_type?.trim()) return res.status(400).json({ error: 'Field type is required.' });
   if (!value?.trim())      return res.status(400).json({ error: 'Value is required.' });
   if (org_id == null)      return res.status(400).json({ error: 'Tenant is required (use "all" to apply to every tenant).' });
+  const allTenants = org_id === 'all' || org_id === '*';
+  if (ownOrgId(req) !== null && (allTenants || !canTouchOrg(req, org_id))) {
+    return res.status(403).json({ error: NOT_YOUR_ORG });
+  }
 
   const conn = await pool.getConnection();
   try {
@@ -318,7 +361,7 @@ router.put('/picklists-table/values/:id(\\d+)', authenticate, requireRole(...ROL
   const { value, department, status, description, external_codes, translations, parent_value_id, sort_order } = req.body;
   try {
     const [[existing]] = await pool.execute('SELECT * FROM picklists WHERE id = ? LIMIT 1', [req.params.id]);
-    if (!existing) return res.status(404).json({ error: 'Picklist value not found.' });
+    if (!existing || !canTouchOrg(req, existing.org_id)) return res.status(404).json({ error: 'Picklist value not found.' });
 
     await pool.execute(
       `UPDATE picklists
@@ -362,6 +405,8 @@ router.put('/picklists-table/values/:id(\\d+)', authenticate, requireRole(...ROL
 router.put('/picklists-table/values/reorder', authenticate, requireRole(...ROLE), async (req, res) => {
   const rows = Array.isArray(req.body) ? req.body : (req.body?.items || []);
   if (!rows.length) return res.status(400).json({ error: 'Reorder body is required.' });
+  const rowIds = rows.map(r => Number(r?.id)).filter(Boolean);
+  if (!(await allIdsInScope(pool, req, 'picklists', rowIds))) return res.status(403).json({ error: NOT_YOUR_ORG });
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -382,6 +427,7 @@ router.post('/picklists-table/values/bulk-status', authenticate, requireRole(...
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
   const status = req.body?.status;
   if (!ids.length || !['Active', 'Inactive'].includes(status)) return res.status(400).json({ error: 'ids and valid status are required.' });
+  if (!(await allIdsInScope(pool, req, 'picklists', ids))) return res.status(403).json({ error: NOT_YOUR_ORG });
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -401,13 +447,15 @@ router.post('/picklists-table/values/bulk-status', authenticate, requireRole(...
 router.get('/picklists-table/values/:id/where-used', authenticate, requireRole(...ROLE), async (req, res) => {
   try {
     const [[row]] = await pool.execute('SELECT * FROM picklists WHERE id = ?', [req.params.id]);
-    if (!row) return res.status(404).json({ error: 'Picklist value not found.' });
+    if (!row || !canTouchOrg(req, row.org_id)) return res.status(404).json({ error: 'Picklist value not found.' });
     res.json(await getWhereUsed(row));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.get('/picklists-table/values/:id/history', authenticate, requireRole(...ROLE), async (req, res) => {
   try {
+    const [[value]] = await pool.execute('SELECT org_id FROM picklists WHERE id = ?', [req.params.id]);
+    if (value && !canTouchOrg(req, value.org_id)) return res.status(404).json({ error: 'Picklist value not found.' });
     const [rows] = await pool.execute(
       `SELECT v.*, u.name AS changed_by_name
        FROM picklist_value_versions v
@@ -428,7 +476,7 @@ router.get('/picklists-table/values/:id/history', authenticate, requireRole(...R
 router.delete('/picklists-table/values/:id(\\d+)', authenticate, requireRole(...ROLE), async (req, res) => {
   try {
     const [[existing]] = await pool.execute('SELECT id, value, category, field_type, org_id FROM picklists WHERE id = ?', [req.params.id]);
-    if (!existing) return res.status(404).json({ error: 'Picklist value not found.' });
+    if (!existing || !canTouchOrg(req, existing.org_id)) return res.status(404).json({ error: 'Picklist value not found.' });
 
     const usage = await getWhereUsed(existing);
     if (usage.total > 0 && req.query.force !== '1') {
@@ -498,7 +546,10 @@ router.get('/picklists-table/export', authenticate, requireRole(...ROLE), async 
   const params = [];
   if (category)   { where.push('p.category = ?');    params.push(category); }
   if (field_type) { where.push('p.field_type = ?');  params.push(field_type); }
-  if (tenant_id)  { where.push('p.org_id = ?');      params.push(parseInt(tenant_id, 10)); }
+  const own = ownOrgId(req);
+  if (own !== null && tenant_id && Number(tenant_id) !== own) return res.status(403).json({ error: NOT_YOUR_ORG });
+  const scopedTenant = own !== null ? own : (tenant_id ? parseInt(tenant_id, 10) : null);
+  if (scopedTenant !== null) { where.push('p.org_id = ?'); params.push(scopedTenant); }
   if (department) { where.push('p.department = ?');  params.push(department); }
   if (search)     { where.push('p.value LIKE ?');    params.push(`%${search}%`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -557,6 +608,7 @@ router.post('/picklists-table/import', authenticate, requireRole(...ROLE), async
     // Tenant lookup
     const [orgs] = await pool.execute('SELECT id, name FROM organisations');
     const tenantByName = new Map(orgs.map(o => [o.name.toLowerCase(), o.id]));
+    const own = ownOrgId(req);
 
     const parsed = rows.map((row, idx) => {
       const tenant = (row.tenant || '').trim();
@@ -569,6 +621,7 @@ router.post('/picklists-table/import', authenticate, requireRole(...ROLE), async
       if (!row.value?.trim())    errors.push('Value empty');
       if (!tenant)               errors.push('Tenant empty');
       else if (orgId === undefined) errors.push(`Tenant "${tenant}" not found`);
+      else if (own !== null && orgId !== own) errors.push(`Tenant "${tenant}" is not your organisation`);
 
       return {
         row_index: idx + 2, // header is line 1
@@ -653,6 +706,7 @@ router.post('/picklists-table/import', authenticate, requireRole(...ROLE), async
 router.get('/picklists-table/schema/categories', authenticate, requireRole(...ROLE), async (req, res) => {
   const tenantId = parseInt(req.query.tenant_id, 10);
   if (!Number.isFinite(tenantId)) return res.status(400).json({ error: 'tenant_id is required.' });
+  if (!canTouchOrg(req, tenantId)) return res.status(403).json({ error: NOT_YOUR_ORG });
   try {
     const [rows] = await pool.execute(
       `SELECT id, name, is_active, sort_order, created_at, updated_at
@@ -670,6 +724,7 @@ router.get('/picklists-table/schema/categories', authenticate, requireRole(...RO
 router.post('/picklists-table/schema/categories', authenticate, requireRole(...ROLE), async (req, res) => {
   const { tenant_id, name } = req.body || {};
   if (!tenant_id || !name?.trim()) return res.status(400).json({ error: 'tenant_id and name are required.' });
+  if (!canTouchOrg(req, tenant_id)) return res.status(403).json({ error: NOT_YOUR_ORG });
   try {
     const [r] = await pool.execute(
       `INSERT INTO picklist_categories (org_id, name, is_active, sort_order, created_by)
@@ -688,6 +743,7 @@ router.post('/picklists-table/schema/categories', authenticate, requireRole(...R
 // PUT /api/admin/picklists-table/schema/categories/:id — body {name?, is_active?}
 router.put('/picklists-table/schema/categories/:id', authenticate, requireRole(...ROLE), async (req, res) => {
   const { name, is_active } = req.body || {};
+  if (!(await allIdsInScope(pool, req, 'picklist_categories', [Number(req.params.id)]))) return res.status(404).json({ error: 'Category not found.' });
   try {
     await pool.execute(
       `UPDATE picklist_categories
@@ -707,6 +763,7 @@ router.put('/picklists-table/schema/categories/:id', authenticate, requireRole(.
 
 // DELETE /api/admin/picklists-table/schema/categories/:id — soft delete (is_active = 0)
 router.delete('/picklists-table/schema/categories/:id', authenticate, requireRole(...ROLE), async (req, res) => {
+  if (!(await allIdsInScope(pool, req, 'picklist_categories', [Number(req.params.id)]))) return res.status(404).json({ error: 'Category not found.' });
   try {
     await pool.execute('UPDATE picklist_categories SET is_active = 0, updated_at = NOW() WHERE id = ?', [req.params.id]);
     await audit(req.user.userId, 'DEACTIVATE_PICKLIST_CATEGORY', req.params.id, {});
@@ -722,6 +779,7 @@ router.get('/picklists-table/schema/fields', authenticate, requireRole(...ROLE),
   const tenantId = parseInt(req.query.tenant_id, 10);
   const categoryId = req.query.category_id ? parseInt(req.query.category_id, 10) : null;
   if (!Number.isFinite(tenantId)) return res.status(400).json({ error: 'tenant_id is required.' });
+  if (!canTouchOrg(req, tenantId)) return res.status(403).json({ error: NOT_YOUR_ORG });
   try {
     const params = [tenantId];
     let where = 'WHERE pf.org_id = ?';
@@ -748,6 +806,9 @@ router.post('/picklists-table/schema/fields', authenticate, requireRole(...ROLE)
   if (!tenant_id || !category_id || !name?.trim()) {
     return res.status(400).json({ error: 'tenant_id, category_id, and name are required.' });
   }
+  if (!canTouchOrg(req, tenant_id) || !(await allIdsInScope(pool, req, 'picklist_categories', [Number(category_id)]))) {
+    return res.status(403).json({ error: NOT_YOUR_ORG });
+  }
   try {
     const [r] = await pool.execute(
       `INSERT INTO picklist_fields (org_id, category_id, name, legacy_field_type, is_active, sort_order, created_by)
@@ -766,6 +827,7 @@ router.post('/picklists-table/schema/fields', authenticate, requireRole(...ROLE)
 // PUT /api/admin/picklists-table/schema/fields/:id — body {name?, is_active?}
 router.put('/picklists-table/schema/fields/:id', authenticate, requireRole(...ROLE), async (req, res) => {
   const { name, is_active } = req.body || {};
+  if (!(await allIdsInScope(pool, req, 'picklist_fields', [Number(req.params.id)]))) return res.status(404).json({ error: 'Field not found.' });
   try {
     await pool.execute(
       `UPDATE picklist_fields
@@ -785,6 +847,7 @@ router.put('/picklists-table/schema/fields/:id', authenticate, requireRole(...RO
 
 // DELETE /api/admin/picklists-table/schema/fields/:id — soft delete
 router.delete('/picklists-table/schema/fields/:id', authenticate, requireRole(...ROLE), async (req, res) => {
+  if (!(await allIdsInScope(pool, req, 'picklist_fields', [Number(req.params.id)]))) return res.status(404).json({ error: 'Field not found.' });
   try {
     await pool.execute('UPDATE picklist_fields SET is_active = 0, updated_at = NOW() WHERE id = ?', [req.params.id]);
     await audit(req.user.userId, 'DEACTIVATE_PICKLIST_FIELD', req.params.id, {});
