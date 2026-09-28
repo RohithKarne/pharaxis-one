@@ -54,10 +54,13 @@ export default function CasesPage() {
   const [orgs, setOrgs]               = useState([])
   const [newCase, setNewCase]         = useState({ org_id: '', case_type: '' })
   const [creating, setCreating]       = useState(false)
+  // The chosen org's governed lists (reporter type, gender, …) — the values the
+  // server checks the intake against. Loaded when the reporter step opens.
+  const [intakeLists, setIntakeLists] = useState({})
   // Reporter fields
-  const [reporter, setReporter]       = useState({ first_name: '', last_name: '', email: '', phone: '', reporter_type: 'HCP', country: '', organisation: '' })
+  const [reporter, setReporter]       = useState({ first_name: '', last_name: '', email: '', phone: '', reporter_type: '', country: '', organisation: '' })
   // Patient fields (AE/PC)
-  const [patient, setPatient]         = useState({ initials: '', age: '', age_unit: 'years', gender: '', weight_kg: '' })
+  const [patient, setPatient]         = useState({ initials: '', age: '', age_unit: '', gender: '', weight_kg: '' })
   // AE intake
   const [aeIntake, setAeIntake]       = useState({
     suspect_drug_name: '', batch_lot_number: '', dose: '', route_of_admin: '',
@@ -313,8 +316,8 @@ export default function CasesPage() {
   async function openModal() {
     setNewCase({ org_id: orgId ? String(orgId) : '', case_type: '' })
     setModalStep(1)
-    setReporter({ first_name: '', last_name: '', email: '', phone: '', reporter_type: 'HCP', country: '', organisation: '' })
-    setPatient({ initials: '', age: '', age_unit: 'years', gender: '', weight_kg: '' })
+    setReporter({ first_name: '', last_name: '', email: '', phone: '', reporter_type: '', country: '', organisation: '' })
+    setPatient({ initials: '', age: '', age_unit: '', gender: '', weight_kg: '' })
     setAeIntake({ suspect_drug_name: '', batch_lot_number: '', dose: '', route_of_admin: '', treatment_start_date: '', treatment_stop_date: '', reaction_description: '', reaction_onset_date: '', outcome: '', is_death: false, is_life_threatening: false, is_hospitalization: false, is_prolonged_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false })
     setPcIntake({ product_name: '', batch_lot_number: '', expiry_date: '', purchase_date: '', complaint_category: '', complaint_description: '', sample_available: false, sample_return_requested: false })
     setDupCandidates([])
@@ -336,6 +339,19 @@ export default function CasesPage() {
     // Site concept retired — selecting an org no longer loads/asks for a site.
     setNewCase(p => ({ ...p, org_id: orgId }))
   }
+
+  async function goToReporterStep() {
+    setModalStep(2)
+    setIntakeLists({})
+    try {
+      const res  = await httpFetch(`${API}/cases/intake-lists?org_id=${newCase.org_id}`, { headers })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load the lists for this organisation')
+      setIntakeLists(data)
+    } catch (err) { toast.error(err.message) }
+  }
+
+  const listOptions = (name) => (intakeLists[name] || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)
 
   function step1Valid() { return newCase.org_id && newCase.case_type }
   function step2Valid() { return reporter.first_name && reporter.last_name }
@@ -733,7 +749,7 @@ export default function CasesPage() {
                     </div>
                   </div>
                   <div className="cf-modal-actions">
-                    <button className="cf-modal-confirm" disabled={!step1Valid()} onClick={() => setModalStep(2)}>Next: Reporter →</button>
+                    <button className="cf-modal-confirm" disabled={!step1Valid()} onClick={goToReporterStep}>Next: Reporter →</button>
                   </div>
                 </div>
               )}
@@ -762,7 +778,8 @@ export default function CasesPage() {
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Reporter Type</label>
                       <select className="cf-modal-select" value={reporter.reporter_type} onChange={e => setReporter(p => ({ ...p, reporter_type: e.target.value }))}>
-                        {['HCP', 'Patient', 'Consumer', 'Caregiver', 'Other'].map(t => <option key={t}>{t}</option>)}
+                        <option value="">— Select —</option>
+                        {listOptions('reporter_type')}
                       </select>
                     </div>
                     <div className="cf-form-field" style={{ margin: 0 }}>
@@ -791,14 +808,15 @@ export default function CasesPage() {
                         <div className="cf-form-field" style={{ margin: 0 }}>
                           <label className="cf-modal-label">Age Unit</label>
                           <select className="cf-modal-select" value={patient.age_unit} onChange={e => setPatient(p => ({ ...p, age_unit: e.target.value }))}>
-                            {['years', 'months', 'weeks', 'days'].map(u => <option key={u}>{u}</option>)}
+                            <option value="">— Select —</option>
+                            {listOptions('age_unit')}
                           </select>
                         </div>
                         <div className="cf-form-field" style={{ margin: 0 }}>
                           <label className="cf-modal-label">Gender</label>
                           <select className="cf-modal-select" value={patient.gender} onChange={e => setPatient(p => ({ ...p, gender: e.target.value }))}>
-                            <option value="">— Unknown —</option>
-                            {['Male', 'Female', 'Non-binary', 'Prefer not to say'].map(g => <option key={g}>{g}</option>)}
+                            <option value="">— Select —</option>
+                            {listOptions('gender')}
                           </select>
                         </div>
                         <div className="cf-form-field" style={{ margin: 0 }}>
@@ -826,17 +844,22 @@ export default function CasesPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Suspect Product</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    {[['suspect_drug_name','Drug / Product Name','text'],['batch_lot_number','Batch / Lot Number','text'],['dose','Dose','text'],['route_of_admin','Route of Administration','text'],['treatment_start_date','Treatment Start Date','date'],['treatment_stop_date','Treatment Stop Date','date'],['reaction_onset_date','Reaction Onset Date','date']].map(([key, label, type]) => (
+                    {[['suspect_drug_name','Drug / Product Name','text'],['batch_lot_number','Batch / Lot Number','text'],['dose','Dose','text'],['route_of_admin','Route of Administration','list'],['treatment_start_date','Treatment Start Date','date'],['treatment_stop_date','Treatment Stop Date','date'],['reaction_onset_date','Reaction Onset Date','date']].map(([key, label, type]) => (
                       <div key={key} className="cf-form-field" style={{ margin: 0 }}>
                         <label className="cf-modal-label">{label}</label>
-                        <input className="cf-modal-select" type={type} value={aeIntake[key]} onChange={e => setAeIntake(p => ({ ...p, [key]: e.target.value }))} placeholder={label} />
+                        {type === 'list'
+                          ? <select className="cf-modal-select" value={aeIntake[key]} onChange={e => setAeIntake(p => ({ ...p, [key]: e.target.value }))}>
+                              <option value="">— Select —</option>
+                              {listOptions(key)}
+                            </select>
+                          : <input className="cf-modal-select" type={type} value={aeIntake[key]} onChange={e => setAeIntake(p => ({ ...p, [key]: e.target.value }))} placeholder={label} />}
                       </div>
                     ))}
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Outcome</label>
                       <select className="cf-modal-select" value={aeIntake.outcome} onChange={e => setAeIntake(p => ({ ...p, outcome: e.target.value }))}>
                         <option value="">— Select —</option>
-                        {['Recovered', 'Recovering', 'Not Recovered', 'Fatal', 'Unknown'].map(o => <option key={o}>{o}</option>)}
+                        {listOptions('ae_outcome')}
                       </select>
                     </div>
                   </div>
@@ -876,7 +899,7 @@ export default function CasesPage() {
                       <label className="cf-modal-label">Complaint Category</label>
                       <select className="cf-modal-select" value={pcIntake.complaint_category} onChange={e => setPcIntake(p => ({ ...p, complaint_category: e.target.value }))}>
                         <option value="">— Select —</option>
-                        {['Product Defect', 'Labelling Error', 'Packaging Issue', 'Performance Issue', 'Adverse Reaction'].map(c => <option key={c}>{c}</option>)}
+                        {listOptions('pc_category')}
                       </select>
                     </div>
                   </div>

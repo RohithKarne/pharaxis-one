@@ -401,7 +401,9 @@ async function assertActivePicklistValue(orgId, fieldType, value, asOfDate, labe
   if (value === null || value === undefined || String(value).trim() === '') return null;
   const row = await findActivePicklistEntry(orgId, fieldType, value, asOfDate);
   if (!row) {
-    throw new Error(`${label || fieldType} must be an active governed value.`);
+    const err = new Error(`${label || fieldType} must be an active governed value.`);
+    err.status = 400; // the caller sent a value outside the org's list — not a server fault
+    throw err;
   }
   return row;
 }

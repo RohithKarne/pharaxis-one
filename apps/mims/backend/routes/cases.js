@@ -797,6 +797,35 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/cases/intake-lists?org_id= — the New Case screen's choices: the org's
+// active governed values that POST /cases checks the intake against. The screen
+// used its own fixed lists, most of which the check refuses (360 walk M-49).
+const INTAKE_LISTS = ['reporter_type', 'age_unit', 'gender', 'route_of_admin', 'ae_outcome', 'pc_category'];
+router.get('/cases/intake-lists', authenticate, requireOrg, requireCapability('case.create'), async (req, res) => {
+  try {
+    // Same org resolution as POST /cases, so the lists match what it checks.
+    const orgId = hasGlobalAdminScope(req.user) ? (parseInt(req.query.org_id, 10) || null) : req.user.orgId;
+    if (!orgId) return res.status(400).json({ error: 'org_id is required' });
+    const today = toDateOnlyOrNull(new Date());
+    const [rows] = await pool.execute(
+      `SELECT LOWER(TRIM(COALESCE(pf.name, p.field_type))) AS list, p.value, p.name AS label
+         FROM picklists p
+         LEFT JOIN picklist_fields pf ON p.field_id = pf.id
+        WHERE p.org_id = ? AND p.status = 'Active'
+          AND LOWER(TRIM(COALESCE(pf.name, p.field_type))) IN (${INTAKE_LISTS.map(() => '?').join(',')})
+          AND COALESCE(p.effective_from, '1900-01-01') <= ? AND COALESCE(p.effective_to, '2999-12-31') >= ?
+        ORDER BY list, p.sort_order ASC, p.value ASC, p.id ASC`,
+      [orgId, ...INTAKE_LISTS, today, today]
+    );
+    const lists = Object.fromEntries(INTAKE_LISTS.map((name) => [name, []]));
+    for (const row of rows) lists[row.list].push({ value: row.value, label: row.label || row.value });
+    return res.json(lists);
+  } catch (err) {
+    logger.error({ err, route: '/api/cases/intake-lists', user_id: req.user?.userId }, 'Failed to load intake lists');
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/cases/:id/comments — list case comments newest-first
 router.get('/cases/:id/comments', authenticate, async (req, res) => {
   try {
@@ -1133,8 +1162,10 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
     const validationDate = dateReceived || toDateOnlyOrNull(new Date());
     const defaultStatusId = await resolveDefaultWorkflowStateId(conn, org_id);
 
-    // Sprint 17 governance: strict controlled vocab and taxonomy validation
-    let reporterTypeValue = reporter?.reporter_type || 'HCP';
+    // Sprint 17 governance: strict controlled vocab and taxonomy validation.
+    // Reporter Type is optional: an unselected type stays empty rather than
+    // becoming 'HCP', which is not in the governed reporter-type list (migration 110).
+    let reporterTypeValue = reporter?.reporter_type || null;
     let patientGenderValue = patient?.gender || null;
     let patientAgeUnitValue = patient?.age_unit || (patient ? 'years' : null);
     let aeRouteValue = ae_intake?.route_of_admin || null;
@@ -1201,8 +1232,19 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
            email=VALUES(email), phone=VALUES(phone), reporter_type=VALUES(reporter_type),
            country=VALUES(country), organisation=VALUES(organisation)`,
         [caseId, reporter.first_name || null, reporter.last_name || null, reporter.email || null,
-         reporter.phone || null, reporterTypeValue || 'HCP', reporter.country || null, reporter.organisation || null]
+         reporter.phone || null, reporterTypeValue, reporter.country || null, reporter.organisation || null]
       );
+      // The intake reporter is also the case's first contact, so Step 1 shows
+      // who reported it (Saad, 2026-09-28 — 360 walk M-50).
+      if (reporter.first_name || reporter.last_name) {
+        await conn.execute(
+          `INSERT INTO case_contacts
+             (case_id, contact_role, is_primary, first_name, last_name, reporter_type, institution, country, phone, email)
+           VALUES (?, 'reporter', 1, ?, ?, ?, ?, ?, ?, ?)`,
+          [caseId, reporter.first_name || null, reporter.last_name || null, reporterTypeValue,
+           reporter.organisation || null, reporter.country || null, reporter.phone || null, reporter.email || null]
+        );
+      }
     }
 
     // 3. Patient — AE/PC only (CF-E3)
@@ -1362,7 +1404,7 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
   } catch (err) {
     await conn.rollback();
     logger.error({ err, route: '/api/cases', user_id: req.user?.userId }, 'Failed to create case');
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   } finally {
     conn.release();
   }
