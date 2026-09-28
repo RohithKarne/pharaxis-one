@@ -263,7 +263,7 @@ router.get('/cases/contacts/:contactId/history', authenticate, async (req, res) 
     }
     const [rows] = await pool.execute(
       `SELECT c.id, c.case_number, c.case_type, c.date_received, c.priority,
-              ws.name AS status, cc.role_in_case, cc.is_primary
+              ws.name AS status, cc.contact_role AS role_in_case, cc.is_primary
          FROM case_contacts cc
          JOIN cases c ON c.id = cc.case_id
          LEFT JOIN workflow_states ws ON ws.id = c.status_id

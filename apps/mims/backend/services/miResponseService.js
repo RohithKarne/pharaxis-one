@@ -60,7 +60,7 @@ async function getResponseBuilderRecipient(caseId, recipientContactId = null, fa
             COALESCE(cc.last_name,  ct.last_name,  '') AS last_name,
             COALESCE(cc.email,      ct.email,       '') AS email,
             COALESCE(cc.institution, ct.institution, '') AS institution,
-            cc.role_in_case, cc.is_primary
+            cc.contact_role AS role_in_case, cc.is_primary
        FROM case_contacts cc
        LEFT JOIN contacts ct ON ct.id = cc.contact_id
       WHERE cc.case_id = ? ${extra}
@@ -86,7 +86,7 @@ async function listResponseBuilderRecipients(caseId) {
             COALESCE(cc.last_name,  ct.last_name,  '') AS last_name,
             COALESCE(cc.email,      ct.email,       '') AS email,
             COALESCE(cc.institution, ct.institution, '') AS institution,
-            cc.role_in_case, cc.is_primary
+            cc.contact_role AS role_in_case, cc.is_primary
        FROM case_contacts cc
        LEFT JOIN contacts ct ON ct.id = cc.contact_id
       WHERE cc.case_id = ?
