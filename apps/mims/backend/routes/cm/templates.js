@@ -428,7 +428,9 @@ router.post('/templates/:id/render', authenticate, async (req, res) => {
       }
 
       const [[miRow]] = await pool.execute(
-        `SELECT product FROM case_mi WHERE case_id = ? ORDER BY id ASC LIMIT 1`,
+        `SELECT p.trade_name AS product
+           FROM case_mi mi JOIN products p ON p.id = mi.product_id
+          WHERE mi.case_id = ? ORDER BY mi.id ASC LIMIT 1`,
         [case_id]
       );
       if (miRow?.product) mergeData.product_name = miRow.product;
