@@ -23,7 +23,7 @@ export default function PCTabPanel({
   // required, hidden — from formConfig.core; migration 109 links the rows.
   const TAB_SECTION = {
     general: 'PC — General', 'patient-info': 'PC — Patient Information', 'product-info': 'PC — Product Information',
-    'return-retrieval': 'PC — Return & Retrieval', replacement: 'PC — Replacement',
+    'return-retrieval': 'PC — Return & Retrieval', replacement: 'PC — Replacement', 'refund-credit': 'PC — Refund & Credit',
   }
   const FIELD_ALIASES = {
     'PC — Product Information::Lot Number': 'Batch / Lot Number',
@@ -31,6 +31,7 @@ export default function PCTabPanel({
     'PC — Replacement::Replacement Date': 'Replacement Ship Date',
     'PC — Replacement::Quantity': 'Replacement Quantity',
     'PC — Replacement::Notes': 'Replacement Notes',
+    'PC — Refund & Credit::Notes': 'Refund Notes',
   }
   const pf = (label, sectionName) => {
     const section = sectionName || TAB_SECTION[tabKey]
@@ -53,12 +54,17 @@ export default function PCTabPanel({
     )
   }
 
-  const boolField = (label, key) => (
+  // Tick-boxes follow the admin's label and hidden setting; never required.
+  const boolField = (label, key) => {
+    const f = pf(label)
+    if (f.hidden) return null
+    return (
     <label key={key} className="cf-bool-field">
       <input type="checkbox" checked={!!d[key]} disabled={locked} onChange={e => set(key, e.target.checked ? 1 : 0)} />
-      {label}
+      {f.label}
     </label>
-  )
+    )
+  }
 
   const selectRow = (label, key, sectionName, fieldName) => {
     const f = pf(label, sectionName)
