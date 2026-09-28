@@ -18,6 +18,7 @@ const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // Verify parent case belongs to requesting user's org
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+const { CONTACT_FIELDS, missingRequiredFields } = require('../services/requiredFields');
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
 // paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
@@ -91,6 +92,11 @@ router.post('/cases/:id/contacts', authenticate, async (req, res) => {
     if (contact_id && !await verifyMasterContactOrg(contact_id, req)) {
       return res.status(403).json({ error: 'Invalid contact reference for your organisation.' });
     }
+
+    // The admin's required fields (Customize Forms) are enforced here, not only shown.
+    const [[caseRow]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [req.params.id]);
+    const missing = await missingRequiredFields(caseRow?.org_id, 'Contact / Requestor', req.body, CONTACT_FIELDS);
+    if (missing.length) return res.status(400).json({ error: `Required: ${missing.join(', ')}.`, missing });
 
     const [result] = await pool.execute(
       `INSERT INTO case_contacts
