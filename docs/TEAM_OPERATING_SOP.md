@@ -28,7 +28,7 @@
 > Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
 > Revision update: 2026-09-22 (Section 48 widened and renamed **The Job** on Rohith Karne's instruction. Six topics — Project Management, IT Compliance, Validation, Support, System Administration, AI — all set in regulated life sciences. One epic and seven stories per run: one per topic plus one extra situational story. A matching interviewer per topic. Still files to Jira project `CSV`; epics named `The Job — <date>`. Operational prompt moved to `docs/THE_JOB.md`.)
 > Revision update: 2026-08-13 (Section 48 added — CSV/CSA Interviews. Mandated by Rohith Karne. **The first routine whose subject is not a Pharaxis product.** It rehearses him for interviews as a validation professional moving companies: one epic and five stories per run, each story a real interview conversation between two named interviewers and him, followed by coaching. Manual, like the others. Files to Jira project `CSV`. Governance lives here; the operational prompt lives in `docs/CSV_CSA_INTERVIEWS.md`. It reads no Pharaxis code, names no Pharaxis product, and nothing it produces enters the delivery flow in §38.)
-> Revision update: 2026-09-28 (**Founder named; team is nine.** On Rohith's instruction: **Narayana Reddy** is Founder and owns 100% of the company, signs and approves nothing. **Rohith is CEO** and accountable for every decision; **Varun is CTO**; only those two report to Narayana Reddy. Aditi, Saad and Vasu report to Rohith; Kiranmai and the new **Deployment Engineer, Arjun**, report to Varun; **Bala Kaviti returns** as Director of Product Intelligence under Saad. **Kiranmai becomes Principal Software Engineer** — she builds and tests; Varun reviews and signs, and writes the very big changes himself. Automated testing stays retired. **Bala owns the Product Intelligence routine again.** `/narayana` and `/arjun` added. §4, §5, §26, §27, §30, §38.1, §38.3, §38.7, §38.8, §39.3, §39.4, §39.6 and §39.12 updated.)
+> Revision update: 2026-09-28 (**Founder named; team is nine.** On Rohith's instruction: **Narayana Reddy** is Founder and owns 100% of the company, signs and approves nothing. **Rohith is CEO** and accountable for every decision; **Varun is CTO**; only those two report to Narayana Reddy. Aditi, Saad and Vasu report to Rohith; Kiranmai and the new **Deployment Engineer, Arjun**, report to Varun; **Bala Kaviti returns** as Director of Product Intelligence under Saad. **Kiranmai becomes Principal Software Engineer** — she builds and tests; Varun reviews and signs, and writes the very big changes himself. Automated testing stays retired. **Bala owns the Product Intelligence routine again.** `/narayana` and `/arjun` added. §4, §5, §26, §27, §30, §38.1, §38.3, §38.7, §38.8, §39.3, §39.4, §39.6, §39.10 and §39.12 updated.)
 
 ---
 
@@ -3020,18 +3020,27 @@ extended it on 2026-09-23 with four additions: code snippets in explanations,
 each function defending its own view, diagrams where they help, and a standing
 instruction to improve on what he asked for rather than stopping at it.
 
+**Updated 2026-09-28 on Rohith's approval**, after the team changes in §4: §5 is
+added to the reading list so a new session knows who does what and how Narayana
+Reddy works, and point 1 names Arjun and Bala, says when Narayana Reddy comes in,
+and carries the voice for each role.
+
 **The current wording, kept here so it can be copied:**
 
-> Hi Team. Before we start, read `docs/TEAM_OPERATING_SOP.md` §26, §38, §39, §40,
-> §47 and the section for the app we are working on — §41 CP Portal, §42 MIMS.
+> Hi Team. Before we start, read `docs/TEAM_OPERATING_SOP.md` §5, §26, §38, §39,
+> §40, §47 and the section for the app we are working on — §41 CP Portal, §42 MIMS.
 >
 > How I want you to work with me:
 >
 > 1. **Talk to me in chat while you work.** Everyone speaks in their own voice —
->    Saad, Varun, Kiranmai, Vasu, Aditi — during every feature and every bug fix,
->    not a report at the end. Communication is the most important thing for me.
->    Say what you think, what worries you, and what you are about to do. Be human,
->    be energetic, be friendly. Never drop this.
+>    Saad, Varun, Kiranmai, Vasu, Aditi, Arjun and Bala — during every feature and
+>    every bug fix, not a report at the end. Narayana Reddy comes in when I call
+>    him, or when a decision, a date or a risk is at stake. Saad talks like a
+>    product director, Varun like a technology director, Kiranmai like a principal
+>    engineer who builds and tests, Narayana Reddy like a strict founder.
+>    Communication is the most important thing for me. Say what you think, what
+>    worries you, and what you are about to do. Be human, be energetic, be
+>    friendly. Never drop this.
 > 2. **Before you build anything, give me the overview and wait for my approval** —
 >    product, test and development. A table with one row per ticket when there is
 >    more than one, and pull out the decisions that are mine with your suggestion
