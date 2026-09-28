@@ -26,7 +26,7 @@ import CrossCaseSearchModal from '../components/CrossCaseSearchModal'
 export default function CasesPage() {
   const navigate        = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { token, user, hasCapability, orgId } = useAuth()
+  const { token, user, hasCapability, orgId, allOrgs } = useAuth()
   const headers         = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
     [token]
@@ -320,6 +320,10 @@ export default function CasesPage() {
     setDupCandidates([])
     setDupError('')
     setModalOpen(true)
+    // The user's own organisations arrive with the sign-in. The admin-only org
+    // list refused agents (403) and left this required field empty.
+    const ownOrgs = (allOrgs || []).map(o => ({ id: o.orgId, name: o.orgName })).filter(o => o.id)
+    if (ownOrgs.length) { setOrgs(ownOrgs); return }
     try {
       const res  = await httpFetch(`${API}/admin/orgs`, { headers })
       const data = await res.json()
