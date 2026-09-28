@@ -98,7 +98,7 @@ router.post('/cases/:id/contacts', authenticate, async (req, res) => {
          first_name, last_name, contact_type, prefix, reporter_type, source, consent_status,
          specialty, institution, country, country_of_reporter, qualification,
          preferred_contact_method, language_preference, phone, email, address)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.params.id, contact_id || null, contact_role,
         do_not_update_master ? 1 : 0, is_primary ? 1 : 0,
