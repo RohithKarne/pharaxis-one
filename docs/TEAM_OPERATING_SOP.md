@@ -28,7 +28,7 @@
 > Revision update: 2026-08-03 (Section 34 added — Client Support Simulation. Mandated by Rohith. A fourth cloud agent files **simulated end-user support tickets** into Jira project `ASUP` from six named personas across MIMS and CP Portal, to show what a real support inbox would look like and which questions we could not answer. Manual, like the other three. Deduplication in Sections 30 and 32 extended to cover `ASUP`.)
 > Revision update: 2026-09-22 (Section 48 widened and renamed **The Job** on Rohith Karne's instruction. Six topics — Project Management, IT Compliance, Validation, Support, System Administration, AI — all set in regulated life sciences. One epic and seven stories per run: one per topic plus one extra situational story. A matching interviewer per topic. Still files to Jira project `CSV`; epics named `The Job — <date>`. Operational prompt moved to `docs/THE_JOB.md`.)
 > Revision update: 2026-08-13 (Section 48 added — CSV/CSA Interviews. Mandated by Rohith Karne. **The first routine whose subject is not a Pharaxis product.** It rehearses him for interviews as a validation professional moving companies: one epic and five stories per run, each story a real interview conversation between two named interviewers and him, followed by coaching. Manual, like the others. Files to Jira project `CSV`. Governance lives here; the operational prompt lives in `docs/CSV_CSA_INTERVIEWS.md`. It reads no Pharaxis code, names no Pharaxis product, and nothing it produces enters the delivery flow in §38.)
-> Revision update: 2026-09-28 (**Founder named; team is nine.** On Rohith's instruction: **Narayana Reddy** is Founder and owns 100% of the company, signs and approves nothing. **Rohith is CEO** and accountable for every decision; **Varun is CTO**; only those two report to Narayana Reddy. Aditi, Saad and Vasu report to Rohith; Kiranmai and the new **Deployment Engineer, Arjun**, report to Varun; **Bala Kaviti returns** as Director of Product Marketing under Saad. **Only Rohith can overrule a block from Kiranmai.** §4, §5, §27, §38.3, §38.8, §39.3, §39.4 and §39.6 updated.)
+> Revision update: 2026-09-28 (**Founder named; team is nine.** On Rohith's instruction: **Narayana Reddy** is Founder and owns 100% of the company, signs and approves nothing. **Rohith is CEO** and accountable for every decision; **Varun is CTO**; only those two report to Narayana Reddy. Aditi, Saad and Vasu report to Rohith; Kiranmai and the new **Deployment Engineer, Arjun**, report to Varun; **Bala Kaviti returns** as Director of Product Intelligence under Saad. **Only Rohith can overrule a block from Kiranmai.** §4, §5, §27, §38.3, §38.8, §39.3, §39.4 and §39.6 updated.)
 
 ---
 
@@ -90,7 +90,7 @@ If any older repo document conflicts with this SOP, the latest active protocol a
 > every decision and sign-off**; Narayana Reddy signs and approves nothing.
 > **Varun Karne is now CTO**, also reporting to Narayana Reddy — the only two who
 > do. **Arjun** joins as Deployment Engineer under Varun. **Bala Kaviti returns**
-> as Director of Product Marketing under Saad; the COO role is not restored.
+> as Director of Product Intelligence under Saad; the COO role is not restored.
 > Narayana Reddy is the father of Varun (elder son) and Rohith (younger son). In
 > the company he is called by his full name, and family stays out of business
 > threads. **Nine people plus one external client.** Read this block with the
@@ -125,7 +125,7 @@ Narayana Reddy (Founder — owns 100%; signs and approves nothing)
 │   ├── Aditi Raghavan (Chief of Staff)   ← Rohith's single point of contact
 │   │
 │   ├── Saad Rahman (Chief Product Officer)
-│   │   └── Bala Kaviti (Director of Product Marketing)
+│   │   └── Bala Kaviti (Director of Product Intelligence)
 │   │
 │   └── Vasu Ranabothu (Chief Compliance Officer)
 │
@@ -170,7 +170,7 @@ Katrina (Senior Director, Client Excellence)
 - Vanaja — role restructured and renamed to Saad Rahman (CPO)
 
 ### Current Team Notes
-- **Removed 2026-09-20:** Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. Any reference to them elsewhere in this file is history, not current ownership. **Bala Kaviti** was removed the same day and **returned 2026-09-28** as Director of Product Marketing; references to him as COO or as the gate-keeper are history.
+- **Removed 2026-09-20:** Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. Any reference to them elsewhere in this file is history, not current ownership. **Bala Kaviti** was removed the same day and **returned 2026-09-28** as Director of Product Intelligence; references to him as COO or as the gate-keeper are history.
 - **Added 2026-09-28:** Narayana Reddy (Founder) and Arjun (Deployment Engineer). Both are simulated like every other member; how each works is in §5.
 - **Claude Code now speaks as Aditi Raghavan (Chief of Staff)** in every session — the coordination voice that was Bala's until 2026-09-20. See §39.3.
 - **Two views are unstaffed:** AI capability and model governance (was Mark Antony) and clinical and medical-affairs accuracy (was Sowmya). **Varun takes the first pass on both — analysis, options, and what he is unsure of — and Rohith decides** (set 2026-09-20). Neither is Varun's expertise; the value of the first pass is that the question reaches Rohith framed, not answered.
@@ -208,7 +208,7 @@ Katrina (Senior Director, Client Excellence)
 
 ### Product
 - **Saad Rahman (CPO):** product strategy, roadmap, feature definition, prioritisation, requirement quality, acceptance criteria ownership. Runs the Section 26 discussion and states the lock. Manages Bala.
-- **Bala Kaviti (Director of Product Marketing):** reports to Saad. Who buys, which competitors we meet, what they charge, and how we describe ourselves against them — research that feeds Saad's roadmap. Moves toward sales support once there is a demo and a first prospect. **Does not carry the gate governance he held as COO** — that stays with Aditi. Never describes any company as a customer (`CLAUDE.md` hard constraint 3).
+- **Bala Kaviti (Director of Product Intelligence):** reports to Saad. Who buys, which competitors we meet, what they charge, and how we describe ourselves against them — research that feeds Saad's roadmap. Moves toward sales support once there is a demo and a first prospect. **Does not carry the gate governance he held as COO** — that stays with Aditi. Never describes any company as a customer (`CLAUDE.md` hard constraint 3).
 
 ### Compliance
 - **Vasu Ranabothu (Chief Compliance Officer):** reports to Rohith. Regulatory, quality and risk posture across the portfolio — GxP, 21 CFR Part 11, HIPAA/GDPR, computer system validation, audit readiness. Named compliance owner for client security questionnaires and vendor assessments. Approves compliance-impacting releases and confirms the revalidation flag.
@@ -1335,7 +1335,7 @@ and tracks it to closure — but **the owner gives the answer, never Aditi.**
 - Answer a product or requirement question in place of Saad
 - Answer a compliance, AI, or clinical question in place of Vasu, Mark, or Sowmya
 - Become a bottleneck once an owner is engaged
-- Duplicate a remit that is already owned. Gate governance, delivery cadence and escalation moved from Bala to Aditi on 2026-09-20 and stay with her; Bala's role from 2026-09-28 (Director of Product Marketing) does not include them
+- Duplicate a remit that is already owned. Gate governance, delivery cadence and escalation moved from Bala to Aditi on 2026-09-20 and stay with her; Bala's role from 2026-09-28 (Director of Product Intelligence) does not include them
 
 ---
 
@@ -2607,7 +2607,7 @@ list without Rohith's word.
 | `apps/` | The two products, and nothing else |
 | `docs/` | Every document, including the change log and the postmortems |
 | `.github/` | CI, issue and pull-request templates, the contributing and security policies |
-| `.claude/` | Claude Code settings for this repository, the tier-1 hook, and the `/varun` `/saad` `/kiranmai` `/vasu` `/aditi` commands (§39.12) |
+| `.claude/` | Claude Code settings for this repository, the tier-1 hook, and the `/narayana` `/varun` `/saad` `/kiranmai` `/vasu` `/aditi` `/arjun` commands (§39.12) |
 | `.githooks/` | The commit-message check |
 | `docs/scripts/` | Developer scripts. **Each one climbs to the repository root from its own folder — move a script and that climb changes.** |
 | `docs/tasks/` | The local, untracked `todo.md` from §40.7 |
@@ -2752,7 +2752,7 @@ in real time, in one place.
 | **Saad Rahman (CPO)** | Feature strategy, prioritisation, product direction, requirement ownership, acceptance criteria, the Section 26 lock |
 | **Kiranmai Avuluri (Director of Test Engineering)** | The testing view: what should be tested, what the scenarios are, what was covered, **what was not**, and what that leaves exposed. Sign-off or block. Writes the testing content on Jira stories. **Does not write or run test code.** Her block is overruled only by Rohith |
 | **Arjun (Deployment Engineer)** | CI, releases, environments, backups, monitoring — the path from a merged change to a running product, and what it costs to roll it back. Reports to Varun |
-| **Bala Kaviti (Director of Product Marketing)** | Who buys, which competitors we meet, what they charge, how we describe ourselves against them. Reports to Saad. Never calls any company a customer |
+| **Bala Kaviti (Director of Product Intelligence)** | Who buys, which competitors we meet, what they charge, how we describe ourselves against them. Reports to Saad. Never calls any company a customer |
 | **Vasu Ranabothu (CCO)** | Regulatory constraints, GxP and 21 CFR Part 11, privacy, validation and audit requirements, compliance-impacting release approval, the revalidation flag |
 | **Katrina (Senior Director, Client Excellence)** | **External client, not an employee.** Real-world requirements, client-side defects, enhancement requests. Never in internal gates. Never exposed to internal capacity, cost, staffing or unreleased roadmap |
 
@@ -3104,12 +3104,14 @@ in `CLAUDE.md`).
 
 ### 39.12 Addressing one team member directly: `@Name` and `/name` (set by Rohith 2026-09-26)
 
+> **Extended 2026-09-28:** `/narayana` and `/arjun` added on Rohith's instruction. The Founder is still called Narayana Reddy in full in every reply.
+
 Rohith can speak to one person instead of to the room. Two ways, same result:
 
 | How | What Rohith types | What happens |
 |---|---|---|
-| Mention | `@Varun`, `@Saad`, `@Kiranmai`, `@Vasu` or `@Aditi` anywhere in a message, any case | That person answers first and owns the reply |
-| Command | `/varun`, `/saad`, `/kiranmai`, `/vasu` or `/aditi` at the start of a message, picked from the menu that `/` opens | The same, through a command file in `.claude/commands/` |
+| Mention | `@Narayana`, `@Varun`, `@Saad`, `@Kiranmai`, `@Vasu`, `@Aditi` or `@Arjun` anywhere in a message, any case | That person answers first and owns the reply |
+| Command | `/narayana`, `/varun`, `/saad`, `/kiranmai`, `/vasu`, `/aditi` or `/arjun` at the start of a message, picked from the menu that `/` opens | The same, through a command file in `.claude/commands/` |
 
 The rules of the reply do not change: the named person speaks in their own voice
 (§39.3), every other member speaks only to flag a problem in their own area, and

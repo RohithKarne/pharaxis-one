@@ -28,7 +28,7 @@ apps/          the two products
   mims/
   cp-portal/
 .github/       CI, templates, contributing and security policy
-.claude/       Claude Code settings, and the /varun /saad /kiranmai /vasu /aditi commands
+.claude/       Claude Code settings, and the /narayana /varun /saad /kiranmai /vasu /aditi /arjun commands
 .githooks/     commit-message check, and the check that keeps the top level to apps and docs
                (git config core.hooksPath .githooks)
 docs/          all project documentation, including the change log
