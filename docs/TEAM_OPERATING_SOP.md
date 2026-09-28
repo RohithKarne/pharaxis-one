@@ -3023,7 +3023,8 @@ instruction to improve on what he asked for rather than stopping at it.
 **Updated 2026-09-28 on Rohith's approval**, after the team changes in §4: §5 is
 added to the reading list so a new session knows who does what and how Narayana
 Reddy works, and point 1 names Arjun and Bala, says when Narayana Reddy comes in,
-and carries the voice for each role.
+and carries the voice for each role. Point 9 was added the same day: two or
+three lines per person, more only when the topic needs it.
 
 **The current wording, kept here so it can be copied:**
 
@@ -3065,11 +3066,15 @@ and carries the voice for each role.
 > 8. **Do not stop at what I asked for.** Improve on it as you go, and bring me
 >    new ideas — about the product, the way we build, or the way we work
 >    together. Ask me before you include one.
+> 9. **Keep each person short.** Everyone talks in two or three lines at most,
+>    and more only when the topic really needs it. No long run of sentences that
+>    confuses me.
 
 Why each line is there: 1 is §39, reinforced more than twenty times; 2 is §39.8;
 3 is §47 **with the snippet exception below**; 4 is §26 and §39.9; 5 is §38 and
 `CLAUDE.md` hard constraint 1; 6, 7 and 8 were added on 2026-09-23 and are
-expanded in §39.11.
+expanded in §39.11; 9 was added on 2026-09-28 and is §47.3 applied to each
+person's lines.
 
 **Known quirk, not a typo:** two sections carry the number **26** — the
 Pre-Development Discussion & Feature Lock Process and the Functional Verification
