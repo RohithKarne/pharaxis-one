@@ -14,6 +14,9 @@ const pool    = require('../database/db');
 const { authenticate } = require('../middleware/auth');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 
+// PC sections round-trip DATE columns; accept a re-saved midnight timestamp.
+router.use('/cases/pc', require('../services/caseHelpers').normalizeDateOnlyBody);
+
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;

@@ -3,6 +3,7 @@ import toast from '../../../shared/utils/toast'
 import AETabPanel from './AETabPanel'
 import StickySectionNav from '../../../shared/components/StickySectionNav'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { toDateInputValues } from '../../../shared/utils/dateOnly.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
 
@@ -257,7 +258,7 @@ export default function CaseAETab({
     try {
       const res  = await httpFetch(`${API}/cases/ae/versions/${versionId}/${tabKey}`, { headers })
       const data = await res.json()
-      setAeTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
+      setAeTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: toDateInputValues(data) }))
     } catch { /* ignore tab fetch errors */ }
     finally { setAeTabLoading(false) }
   }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import PCTabPanel from './PCTabPanel'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { toDateInputValues } from '../../../shared/utils/dateOnly.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
 import StickySectionNav from '../../../shared/components/StickySectionNav'
@@ -208,7 +209,7 @@ export default function CasePCTab({
     try {
       const res  = await httpFetch(`${API}/cases/pc/versions/${versionId}/${tabKey}`, { headers })
       const data = await res.json()
-      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
+      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: toDateInputValues(data) }))
     } catch { /* ignore tab fetch errors */ }
     finally { setPcTabLoading(false) }
   }

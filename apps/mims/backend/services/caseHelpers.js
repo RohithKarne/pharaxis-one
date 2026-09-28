@@ -85,6 +85,23 @@ function isValidDateOnly(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+// A DATE column read back through JSON arrives as '2026-09-22T00:00:00.000Z';
+// STRICT mode rejects that on write. Express middleware: turn exact UTC-midnight
+// stamps in the body back into 'YYYY-MM-DD' so a section saved once saves again.
+const UTC_MIDNIGHT_STAMP = /^\d{4}-\d{2}-\d{2}T00:00:00(?:\.000)?Z$/;
+function normalizeDateOnlyBody(req, _res, next) {
+  const walk = (value) => {
+    if (Array.isArray(value)) return value.map(walk);
+    if (value && typeof value === 'object') {
+      for (const key of Object.keys(value)) value[key] = walk(value[key]);
+      return value;
+    }
+    return typeof value === 'string' && UTC_MIDNIGHT_STAMP.test(value) ? value.slice(0, 10) : value;
+  };
+  if (req.body && typeof req.body === 'object') walk(req.body);
+  next();
+}
+
 function parseIntSafe(value, fallback) {
   const n = parseInt(value, 10);
   return Number.isFinite(n) ? n : fallback;
@@ -624,6 +641,7 @@ module.exports = {
   applyMergeFields,
   toDateOnlyOrNull,
   isValidDateOnly,
+  normalizeDateOnlyBody,
   parseIntSafe,
   clamp,
   hasOwn,
