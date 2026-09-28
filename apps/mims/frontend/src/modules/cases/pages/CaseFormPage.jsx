@@ -229,6 +229,7 @@ export default function CaseFormPage() {
               {caseData?.case_type === 'MI' && (
                 <CaseMITab
                   view="capture"
+                  coreField={coreField}
                   id={id} token={token} headers={headers} setSavedMsg={setSavedMsg}
                   onCountChange={n => setTabCounts(p => ({ ...p, mi: n }))}
                   formConfig={formConfig}

@@ -56,10 +56,15 @@ function emptyMiRespForm(tab = null) {
 export default function CaseMITab({
   id, token, headers, setSavedMsg, onCountChange,
   formConfig, getPicklistOptions, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType, registerSectionSave,
+  saveDynFields, caseType, registerSectionSave, coreField,
   view = 'full',
 }) {
   const ctx = useCaseFieldContext()
+  // Admin settings (Customize Forms) for this panel's own fields — label,
+  // required, hidden — via formConfig.core; migration 108 links the rows.
+  const miField = (key, fallback) => (coreField ? coreField(key, fallback) : { label: fallback, required: false, hidden: false })
+  const miLabel = (key, fallback) => { const f = miField(key, fallback); return f.required ? `${f.label} *` : f.label }
+  const miHide = (key) => (miField(key, '').hidden ? { display: 'none' } : undefined)
   // B8 — Draft storage MUST be scoped by both case and MI tab id, otherwise a
   // draft started against MI tab #1 leaks into MI tab #2 on the same case.
   // Key is computed below once activeMiTab is known.
@@ -538,60 +543,60 @@ export default function CaseMITab({
               </div>
             )}
             <div className="cf-form-grid">
-              <div className="cf-form-field">
-                <label>MI Category</label>
+              <div className="cf-form-field" style={miHide('mi_category')}>
+                <label>{miLabel('mi_category', 'MI Category')}</label>
                 <select value={miForm.mi_category || ''} onChange={e => setMiForm(p => ({ ...p, mi_category: e.target.value }))}>
                   {miCategoryOptions.map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
-              <div className="cf-form-field">
-                <label>Subcategory</label>
+              <div className="cf-form-field" style={miHide('mi_subcategory')}>
+                <label>{miLabel('mi_subcategory', 'Subcategory')}</label>
                 <select value={miForm.subcategory || ''} onChange={e => setMiForm(p => ({ ...p, subcategory: e.target.value }))}>
                   {miSubcategoryOptions.map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
-              <div className="cf-form-field">
-                <label>Response Required By</label>
+              <div className="cf-form-field" style={miHide('mi_response_required_by')}>
+                <label>{miLabel('mi_response_required_by', 'Response Required By')}</label>
                 <input type="date" value={miForm.response_required_by || ''} onChange={e => setMiForm(p => ({ ...p, response_required_by: e.target.value }))} />
               </div>
-              <div className="cf-form-field">
-                <label>Response Date</label>
+              <div className="cf-form-field" style={miHide('mi_response_date')}>
+                <label>{miLabel('mi_response_date', 'Response Date')}</label>
                 <input type="date" value={miForm.response_date || ''} onChange={e => setMiForm(p => ({ ...p, response_date: e.target.value }))} />
               </div>
-              <div className="cf-form-field">
-                <label>Response Channel</label>
+              <div className="cf-form-field" style={miHide('mi_response_channel')}>
+                <label>{miLabel('mi_response_channel', 'Response Channel')}</label>
                 <select value={miForm.response_channel || ''} onChange={e => setMiForm(p => ({ ...p, response_channel: e.target.value }))}>
                   {responseChannelOptions.map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
-              <div className="cf-form-field">
-                <label>Product</label>
+              <div className="cf-form-field" style={miHide('mi_product')}>
+                <label>{miLabel('mi_product', 'Product')}</label>
                 <select value={miForm.product_id || ''} onChange={e => setMiForm(p => ({ ...p, product_id: e.target.value || null }))}>
                   <option value="">- None -</option>
                   {miProducts.map(p => <option key={p.id} value={p.id}>{formatProductOption(p)}</option>)}
                 </select>
               </div>
-              <div className="cf-form-field">
-                <label>MI Status</label>
+              <div className="cf-form-field" style={miHide('mi_status')}>
+                <label>{miLabel('mi_status', 'MI Status')}</label>
                 <select value={miForm.status || 'Open'} onChange={e => setMiForm(p => ({ ...p, status: e.target.value }))}>
                   {(miStatusOptions.length > 1 ? miStatusOptions : [{ value: 'Open', label: 'Open' }, { value: 'In Progress', label: 'In Progress' }, { value: 'Pending Information', label: 'Pending Information' }, { value: 'Answered', label: 'Answered' }, { value: 'Closed', label: 'Closed' }]).map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
             </div>
-            <div className="cf-form-field cf-form-field--full">
-              <label>Question Summary</label>
+            <div className="cf-form-field cf-form-field--full" style={miHide('mi_question_summary')}>
+              <label>{miLabel('mi_question_summary', 'Question Summary')}</label>
               <textarea rows={2} value={miForm.question_summary || ''} onChange={e => setMiForm(p => ({ ...p, question_summary: e.target.value }))} />
             </div>
-            <div className="cf-form-field cf-form-field--full">
-              <label>Detailed Question</label>
+            <div className="cf-form-field cf-form-field--full" style={miHide('mi_detailed_question')}>
+              <label>{miLabel('mi_detailed_question', 'Detailed Question')}</label>
               <textarea rows={4} value={miForm.detailed_question || ''} onChange={e => setMiForm(p => ({ ...p, detailed_question: e.target.value }))} />
             </div>
-            <div className="cf-form-field cf-form-field--full">
-              <label>Response Provided</label>
+            <div className="cf-form-field cf-form-field--full" style={miHide('mi_response_provided')}>
+              <label>{miLabel('mi_response_provided', 'Response Provided')}</label>
               <textarea rows={4} value={miForm.response_provided || ''} onChange={e => setMiForm(p => ({ ...p, response_provided: e.target.value }))} />
             </div>
-            <div className="cf-form-field cf-form-field--full">
-              <label>Literature Reference</label>
+            <div className="cf-form-field cf-form-field--full" style={miHide('mi_literature_reference')}>
+              <label>{miLabel('mi_literature_reference', 'Literature Reference')}</label>
               <textarea rows={3} value={miForm.literature_reference || ''} onChange={e => setMiForm(p => ({ ...p, literature_reference: e.target.value }))} />
             </div>
             <div className="cf-form-field cf-form-field--full">
