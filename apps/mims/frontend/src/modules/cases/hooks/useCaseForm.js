@@ -42,12 +42,15 @@ export default function useCaseForm(id, token) {
 
   const loadCase = useCallback(async () => {
     try {
-      const [cRes, sRes, uRes] = await Promise.all([
+      const [cRes, sRes] = await Promise.all([
         httpFetch(`${API}/cases/${id}`, { headers }),
-        httpFetch(`${API}/admin/workflow-states`, { headers }),
-        httpFetch(`${API}/users`, { headers }),
+        httpFetch(`${API}/cases/workflow-states`, { headers }),
       ])
-      const [c, s, u] = await Promise.all([cRes.json(), sRes.json(), uRes.json()])
+      const [c, s] = await Promise.all([cRes.json(), sRes.json()])
+      // Owners and PV assignees are the case's own org's active users — a list
+      // every case user may read, not the admin-only user list.
+      const uRes = await httpFetch(`${API}/inbox/users?org_id=${encodeURIComponent(c.org_id || '')}`, { headers })
+      const u = await uRes.json()
       setCaseData(c)
       setInfoForm({
         status_id:      c.status_id      ? String(c.status_id)      : '',
@@ -61,8 +64,8 @@ export default function useCaseForm(id, token) {
         internal_notes: c.internal_notes || '',
         intake_channel: c.intake_channel || 'manual',
       })
-      setStatuses(Array.isArray(s) ? s : [])
-      setUsers(Array.isArray(u) ? u.filter(x => x.is_active) : [])
+      setStatuses(Array.isArray(s?.states) ? s.states : [])
+      setUsers(Array.isArray(u?.users) ? u.users : [])
       setReassignForm(prev => ({ ...prev, new_owner_id: c.case_owner_id ? String(c.case_owner_id) : '' }))
       restoreDraftIfNewer(c)
     } catch (err) {

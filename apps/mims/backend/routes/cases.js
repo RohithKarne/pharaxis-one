@@ -604,6 +604,24 @@ router.get('/cases/dashboard-summary', authenticate, requireScopedCapability('ca
   }
 });
 
+// GET /api/cases/workflow-states — read-only states for the case form's Status
+// field. Anyone who may view cases reads their org's states (plus global ones);
+// only admins change them, through /api/admin/workflow-states.
+router.get('/cases/workflow-states', authenticate, requireScopedCapability('case.view'), async (req, res) => {
+  try {
+    const orgId = hasGlobalAdminScope(req.user) ? null : Number(req.user.orgId);
+    const [states] = await pool.execute(
+      orgId
+        ? 'SELECT id, name, is_active, org_id FROM workflow_states WHERE org_id = ? OR org_id IS NULL ORDER BY org_id IS NULL DESC, name'
+        : 'SELECT id, name, is_active, org_id FROM workflow_states ORDER BY name',
+      orgId ? [orgId] : []
+    );
+    res.json({ states });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // GET /api/cases/form-config — section/field config for case form
 router.get('/cases/form-config', authenticate, async (req, res) => {
   try {
