@@ -58,6 +58,7 @@ const {
   getMiResponseRow, getAeTransmissionRow, getPcTransmissionRow,
   getCasePrimaryProductContext, resolveTransmissionGroupSnapshot,
 } = require('../services/caseHelpers');
+const { ISO_COUNTRIES } = require('../catalogs/isoCountries');
 
 const {
   getResponseBuilderCase, getResponseBuilderMiTab, getResponseBuilderRecipient,
@@ -725,6 +726,16 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
       });
       return acc;
     }, {});
+
+    // Country fields: an org's own "country" picklist wins; otherwise the
+    // built-in ISO 3166 list — stores the code E2B needs, shows the name.
+    if (!picklistMap.country) {
+      picklistMap.country = ISO_COUNTRIES.map(([code, name], i) => ({
+        id: null, value: code, label: name, description: '',
+        external_codes: { iso3166_alpha2: code }, translations: null,
+        parent_value_id: null, sort_order: i,
+      }));
+    }
 
     const [rules] = await pool.execute(
       `SELECT id, org_id, case_type, section_name, field_name, rule_type,
