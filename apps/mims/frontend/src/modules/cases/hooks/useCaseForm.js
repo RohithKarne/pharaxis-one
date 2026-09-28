@@ -29,6 +29,8 @@ export default function useCaseForm(id, token) {
   const [draftStatus, setDraftStatus] = useState('')
 
   const autoSaveTimer = useRef(null)
+  // Last loaded/saved additional-field values, so Save Case knows if they changed.
+  const dynSaved = useRef('{}')
   const draftRef = useRef({ infoForm, dynFieldValues, caseType: '' })
 
   // WP6: clear the pending autosave timer on unmount — otherwise the 15s timer can fire
@@ -253,11 +255,17 @@ export default function useCaseForm(id, token) {
       const map = {}
       ;(Array.isArray(data) ? data : []).forEach(f => { map[f.field_definition_id] = f.value })
       setDynFieldValues(map)
+      dynSaved.current = JSON.stringify(map)
     } catch { /* no-op */ }
   }
 
+  function dynFieldsChanged() {
+    return JSON.stringify(dynFieldValues) !== dynSaved.current
+  }
+
+  // Returns true when saved, false when it failed (the error is already shown).
   async function saveDynFields() {
-    if (dynFieldSaving || !formConfig) return
+    if (dynFieldSaving || !formConfig) return false
     setDynFieldSaving(true)
     try {
       const validateRes = await httpFetch(`${API}/cases/${id}/validate`, {
@@ -282,9 +290,11 @@ export default function useCaseForm(id, token) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      dynSaved.current = JSON.stringify(dynFieldValues)
       setSavedMsg('Additional fields saved')
       setTimeout(() => setSavedMsg(''), 2200)
-    } catch (err) { toast.error(err.message) }
+      return true
+    } catch (err) { toast.error(err.message); return false }
     finally { setDynFieldSaving(false) }
   }
 
@@ -327,7 +337,7 @@ export default function useCaseForm(id, token) {
     dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
     draftStatus,
     autoSaveTimer, loadCase, saveInfo, scheduleAutoSave, reassignCase, escalateCase,
-    loadDynFields, saveDynFields,
+    loadDynFields, saveDynFields, dynFieldsChanged,
     getFieldConfig, getSectionVisible, getPicklistOptions,
     headers,
   }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import PCTabPanel from './PCTabPanel'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
@@ -133,13 +133,15 @@ function computePcCompletion(data, fields, formConfig, sectionName) {
 export default function CasePCTab({
   id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType,
+  saveDynFields, caseType, registerSectionSave,
 }) {
   const ctx = useCaseFieldContext()
   const [pcVersions,   setPcVersions]   = useState([])
   const [activePcVer,  setActivePcVer]  = useState(null)
   const [activePcTab,  setActivePcTab]  = useState('general')
   const [pcTabData,    setPcTabData]    = useState({})
+  // Last loaded/saved copy of each PC section, so Save Case knows what changed.
+  const pcSaved = useRef({})
   const [pcTabLoading, setPcTabLoading] = useState(false)
 
   const [pcTransmissions, setPcTransmissions] = useState([])
@@ -208,8 +210,9 @@ export default function CasePCTab({
     setPcTabLoading(true)
     try {
       const res  = await httpFetch(`${API}/cases/pc/versions/${versionId}/${tabKey}`, { headers })
-      const data = await res.json()
-      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: toDateInputValues(data) }))
+      const data = toDateInputValues(await res.json())
+      pcSaved.current[`${versionId}_${tabKey}`] = JSON.stringify(data)
+      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
     } catch { /* ignore tab fetch errors */ }
     finally { setPcTabLoading(false) }
   }
@@ -264,19 +267,33 @@ export default function CasePCTab({
 
   const [pcTabSaving, setPcTabSaving] = useState(false)
   async function savePCTab() {
-    if (!activePcVer || isLocked(activePcVer) || pcTabSaving) return
+    if (!activePcVer || isLocked(activePcVer) || pcTabSaving) return false
     setPcTabSaving(true)
     const tabData = pcTabData[`${activePcVer.id}_${activePcTab}`] || {}
     try {
       const res  = await httpFetch(`${API}/cases/pc/versions/${activePcVer.id}/${activePcTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: toDateInputValues(data) }))
+      const saved = toDateInputValues(data)
+      pcSaved.current[`${activePcVer.id}_${activePcTab}`] = JSON.stringify(saved)
+      setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: saved }))
       localStorage.removeItem(`mims_case_${id}_pc_${activePcVer.id}_${activePcTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
-    } catch (err) { toast.error(err.message) }
+      return true
+    } catch (err) { toast.error(err.message); return false }
     finally { setPcTabSaving(false) }
   }
+
+  // Let the page's Save Case save this PC section too when it has unsaved edits.
+  useEffect(() => {
+    if (!registerSectionSave || !activePcVer || isLocked(activePcVer)) return undefined
+    const key = `${activePcVer.id}_${activePcTab}`
+    return registerSectionSave('pc', {
+      label: `PC ${activePcTab}`,
+      isDirty: () => pcSaved.current[key] !== undefined && JSON.stringify(pcTabData[key]) !== pcSaved.current[key],
+      save: savePCTab,
+    })
+  })
 
   async function loadPcTransmissions() {
     setPcTxLoading(true)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import AETabPanel from './AETabPanel'
 import StickySectionNav from '../../../shared/components/StickySectionNav'
@@ -179,13 +179,15 @@ function computeAeRowCompletion(rows, fields, getFieldConfig, sectionName) {
 export default function CaseAETab({
   id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType,
+  saveDynFields, caseType, registerSectionSave,
 }) {
   const ctx = useCaseFieldContext()
   const [aeVersions,   setAeVersions]   = useState([])
   const [activeAeVer,  setActiveAeVer]  = useState(null)
   const [activeAeTab,  setActiveAeTab]  = useState('general')
   const [aeTabData,    setAeTabData]    = useState({})
+  // Last loaded/saved copy of each AE section, so Save Case knows what changed.
+  const aeSaved = useRef({})
   const [aeTabLoading, setAeTabLoading] = useState(false)
 
   const [aeTransmissions, setAeTransmissions] = useState([])
@@ -257,8 +259,9 @@ export default function CaseAETab({
     setAeTabLoading(true)
     try {
       const res  = await httpFetch(`${API}/cases/ae/versions/${versionId}/${tabKey}`, { headers })
-      const data = await res.json()
-      setAeTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: toDateInputValues(data) }))
+      const data = toDateInputValues(await res.json())
+      aeSaved.current[`${versionId}_${tabKey}`] = JSON.stringify(data)
+      setAeTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
     } catch { /* ignore tab fetch errors */ }
     finally { setAeTabLoading(false) }
   }
@@ -315,19 +318,33 @@ export default function CaseAETab({
 
   const [aeTabSaving, setAeTabSaving] = useState(false)
   async function saveAETab() {
-    if (!activeAeVer || isLocked(activeAeVer) || aeTabSaving) return
+    if (!activeAeVer || isLocked(activeAeVer) || aeTabSaving) return false
     setAeTabSaving(true)
     const tabData = aeTabData[`${activeAeVer.id}_${activeAeTab}`] || {}
     try {
       const res  = await httpFetch(`${API}/cases/ae/versions/${activeAeVer.id}/${activeAeTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setAeTabData(prev => ({ ...prev, [`${activeAeVer.id}_${activeAeTab}`]: toDateInputValues(data) }))
+      const saved = toDateInputValues(data)
+      aeSaved.current[`${activeAeVer.id}_${activeAeTab}`] = JSON.stringify(saved)
+      setAeTabData(prev => ({ ...prev, [`${activeAeVer.id}_${activeAeTab}`]: saved }))
       localStorage.removeItem(`mims_case_${id}_ae_${activeAeVer.id}_${activeAeTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
-    } catch (err) { toast.error(err.message) }
+      return true
+    } catch (err) { toast.error(err.message); return false }
     finally { setAeTabSaving(false) }
   }
+
+  // Let the page's Save Case save this AE section too when it has unsaved edits.
+  useEffect(() => {
+    if (!registerSectionSave || !activeAeVer || isLocked(activeAeVer)) return undefined
+    const key = `${activeAeVer.id}_${activeAeTab}`
+    return registerSectionSave('ae', {
+      label: `AE ${activeAeTab}`,
+      isDirty: () => aeSaved.current[key] !== undefined && JSON.stringify(aeTabData[key]) !== aeSaved.current[key],
+      save: saveAETab,
+    })
+  })
 
   async function loadAeTransmissions() {
     setAeTxLoading(true)

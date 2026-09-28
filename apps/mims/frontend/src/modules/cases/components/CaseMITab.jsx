@@ -56,7 +56,7 @@ function emptyMiRespForm(tab = null) {
 export default function CaseMITab({
   id, token, headers, setSavedMsg, onCountChange,
   formConfig, getPicklistOptions, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType,
+  saveDynFields, caseType, registerSectionSave,
   view = 'full',
 }) {
   const ctx = useCaseFieldContext()
@@ -222,9 +222,10 @@ export default function CaseMITab({
     } catch (err) { toast.error(err.message) }
   }
 
+  // Returns true when saved, false when it failed (the error is already shown).
   async function saveMI() {
     const tab = miTabs[activeMiTab]
-    if (!tab) return
+    if (!tab) return false
     try {
       const res  = await httpFetch(`${API}/cases/mi/${tab.id}`, { method: 'PUT', headers, body: JSON.stringify(miForm) })
       const data = await res.json()
@@ -232,8 +233,23 @@ export default function CaseMITab({
       setMiTabs(prev => prev.map((t, i) => i === activeMiTab ? data : t))
       localStorage.removeItem(`mims_case_${id}_mi_form_${tab.id}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
-    } catch (err) { toast.error(err.message) }
+      return true
+    } catch (err) { toast.error(err.message); return false }
   }
+
+  // Let the page's Save Case save this MI too when it has unsaved edits.
+  useEffect(() => {
+    const tab = miTabs[activeMiTab]
+    if (!registerSectionSave || !tab) return undefined
+    return registerSectionSave('mi', {
+      label: `MI ${activeMiTab + 1}`,
+      isDirty: () => {
+        const saved = toMiForm(tab)
+        return Object.keys({ ...saved, ...miForm }).some(k => String(miForm[k] ?? '') !== String(saved[k] ?? ''))
+      },
+      save: saveMI,
+    })
+  })
 
   async function deleteMITab() {
     const tab = miTabs[activeMiTab]
