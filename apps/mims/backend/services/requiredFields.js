@@ -107,7 +107,7 @@ function enforcePanelRequired(scope, versionsTable) {
   const { PANEL_CORE_FIELDS } = require('../catalogs/panelCoreFields');
   const { hasGlobalAdminScope } = require('../utils/adminScope');
   return async (req, res, next) => {
-    const fields = PANEL_CORE_FIELDS.filter(f => f.scope === scope && f.tab === req.params.tab);
+    const fields = PANEL_CORE_FIELDS.filter(f => f.scope === scope && f.tab === req.params.tab && f.type !== 'bool');
     if (!fields.length) return next();
     try {
       const [[row]] = await pool.execute(

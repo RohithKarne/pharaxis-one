@@ -55,17 +55,25 @@ const ROWS = [
   ['pc', 'product-info',     'PC — Product Information',   'Manufacturing Date',       'manufacturing_date'],
   ['pc', 'product-info',     'PC — Product Information',   'Pack Size',                'pack_size'],
   ['pc', 'product-info',     'PC — Product Information',   'Storage Conditions',       'storage_conditions'],
+  ['pc', 'return-retrieval', 'PC — Return & Retrieval',    'Return Requested',         'return_requested', 'bool'],
   ['pc', 'return-retrieval', 'PC — Return & Retrieval',    'Return Date',              'return_date'],
   ['pc', 'return-retrieval', 'PC — Return & Retrieval',    'Return Address',           'return_address'],
   ['pc', 'return-retrieval', 'PC — Return & Retrieval',    'Retrieval Method',         'retrieval_method'],
   ['pc', 'return-retrieval', 'PC — Return & Retrieval',    'Return Notes',             'notes_return'],
+  ['pc', 'replacement',      'PC — Replacement',           'Replacement Approved',     'replacement_approved', 'bool'],
   ['pc', 'replacement',      'PC — Replacement',           'Replacement Ship Date',    'replacement_date'],
   ['pc', 'replacement',      'PC — Replacement',           'Replacement Quantity',     'quantity'],
   ['pc', 'replacement',      'PC — Replacement',           'Replacement Notes',        'notes_replacement'],
+  ['pc', 'refund-credit',    'PC — Refund & Credit',       'Refund Approved',          'refund_approved', 'bool'],
+  ['pc', 'refund-credit',    'PC — Refund & Credit',       'Refund Amount',            'refund_amount'],
+  ['pc', 'refund-credit',    'PC — Refund & Credit',       'Credit Note Number',       'credit_note_number'],
+  ['pc', 'refund-credit',    'PC — Refund & Credit',       'Refund Notes',             'notes_refund'],
 ];
 
-const PANEL_CORE_FIELDS = ROWS.map(([scope, tab, section, field, key]) => ({
-  scope, tab, section, field, key,
+// A tick-box ('bool') takes the admin's label and hidden setting but is never
+// required — unticked is a valid answer, not a missing one.
+const PANEL_CORE_FIELDS = ROWS.map(([scope, tab, section, field, key, type = 'value']) => ({
+  scope, tab, section, field, key, type,
   coreKey: `${scope}_${slug(tab)}_${slug(field)}`.slice(0, 64),
 }));
 
