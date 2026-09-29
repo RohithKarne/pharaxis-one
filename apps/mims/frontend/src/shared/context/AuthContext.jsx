@@ -336,7 +336,10 @@ export function AuthProvider({ children, storageKeyPrefix = 'mims', fallbackPref
   function hasCapability(key) {
     if (!user) return false
     if (hasGlobalAdminScope({ ...user, modules })) return true
-    if (securityAccess?.unrestricted) return true
+    // The resolved list already merges group grants with role defaults, as the
+    // server check does. "unrestricted" only means no option matrix applies (the
+    // user is in no security group); it used to make every capability true for
+    // such users, whatever their role (M-93).
     const privs = securityAccess?.privileges
     if (privs == null) return true // null = unrestricted; not yet resolved → don't hide
     return privs.includes(key)
