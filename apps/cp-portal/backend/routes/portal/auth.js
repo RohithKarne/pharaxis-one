@@ -59,8 +59,14 @@ router.post('/login', async (req, res) => {
     if (email.length    > 254) return res.status(400).json({ error: 'Input exceeds maximum length.' });
     if (password.length > 128) return res.status(400).json({ error: 'Input exceeds maximum length.' });
 
-    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
+    const [[client]] = await pool.execute('SELECT id, login_mode FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    // CPPM-50: the sign-in page hides the password form for a single-sign-on-only
+    // portal; refuse the password itself too, before it is checked, so a password
+    // set before the switch cannot be used by posting here directly.
+    if (sso.normalizeLoginMode(client.login_mode) === 'sso_only') {
+      return res.status(403).json({ error: 'This portal uses single sign-on. Use the sign-on button to sign in.' });
+    }
 
     const [[user]] = await pool.execute('SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ? AND is_active = 1', [client.id, email]);
     if (!user || !bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Invalid email or password.' });
