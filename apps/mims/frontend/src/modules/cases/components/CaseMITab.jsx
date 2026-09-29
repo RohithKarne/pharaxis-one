@@ -69,7 +69,7 @@ export default function CaseMITab({
   // Approve and Send follow the letter permissions the server checks (M-86).
   // Read the resolved privilege list: hasCapability says yes to everything for
   // a user in no security group ("unrestricted"), whatever their role (M-93).
-  const { securityAccess, hasCapability } = useAuth()
+  const { securityAccess, hasCapability, user } = useAuth()
   const letterPrivs = securityAccess?.privileges
   const canLetter = (key) => (Array.isArray(letterPrivs) ? letterPrivs.includes(key) : hasCapability(key))
   const canApproveLetters = canLetter('case.letter.approve')
@@ -677,7 +677,7 @@ export default function CaseMITab({
                     <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => advanceMiStatus(r.id, 'READY')}>Submit for Review</button>
                     <button className="cf-mi-trans-btn cf-mi-trans-discard" onClick={() => discardMiResponse(r.id)}>Discard Draft</button>
                   </>}
-                  {st === 'READY' && canApproveLetters && !r.two_signers_required && <button className="cf-mi-trans-btn cf-mi-trans-approve" onClick={() => advanceMiStatus(r.id, 'APPROVED')}>Approve (e-sign required)</button>}
+                  {st === 'READY' && canApproveLetters && !r.two_signers_required && Number(r.author_id) !== Number(user?.id ?? user?.userId) && <button className="cf-mi-trans-btn cf-mi-trans-approve" onClick={() => advanceMiStatus(r.id, 'APPROVED')}>Approve (e-sign required)</button>}
                   {st === 'APPROVED' && canSendLetters && <button className="cf-mi-trans-btn cf-mi-trans-send"    onClick={() => advanceMiStatus(r.id, 'SENT')}>Send Response (e-sign required)</button>}
                 </div>
               )}

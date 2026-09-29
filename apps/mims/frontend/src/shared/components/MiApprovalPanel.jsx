@@ -151,8 +151,9 @@ function ClassificationCard({ miTabId, H, onChange }) {
 // ── Two-signer approval card ────────────────────────────────────────────────
 
 function ApprovalCard({ responseId, H, onChange }) {
-  const { securityAccess, hasCapability } = useAuth()
-  // Both signatures need "Approve letter"; the server refuses anyone else (M-86).
+  const { securityAccess, hasCapability, user } = useAuth()
+  // Both signatures need "Approve letter", and the writer does not sign their
+  // own response; the server refuses anyone else (M-86).
   // Read the resolved privilege list: hasCapability says yes to everything for
   // a user in no security group ("unrestricted"), whatever their role (M-93).
   const privs = securityAccess?.privileges
@@ -201,6 +202,7 @@ function ApprovalCard({ responseId, H, onChange }) {
   }
 
   if (!state) return null
+  const isWriter = state.author_id != null && Number(state.author_id) === Number(user?.id ?? user?.userId)
   if (!state.required && !state.reviewer && !state.approver) {
     return (
       <div style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)',
@@ -222,7 +224,7 @@ function ApprovalCard({ responseId, H, onChange }) {
           subtitle="Technical accuracy"
           signed={state.reviewer}
           status={state.status}
-          showSignBtn={canSign && state.status === 'READY'}
+          showSignBtn={canSign && !isWriter && state.status === 'READY'}
           waitingText={state.status === 'READY' ? 'waiting for a reviewer' : 'waiting for Submit for Review'}
           onSign={() => { setSigning('reviewer'); setPassword(''); setReason('') }}
         />
@@ -231,7 +233,7 @@ function ApprovalCard({ responseId, H, onChange }) {
           subtitle="Compliance / release"
           signed={state.approver}
           status={state.status}
-          showSignBtn={canSign && state.status === 'REVIEWED'}
+          showSignBtn={canSign && !isWriter && state.status === 'REVIEWED'}
           waitingText={state.status === 'REVIEWED' ? 'waiting for an approver' : 'waiting for the reviewer'}
           onSign={() => { setSigning('approver'); setPassword(''); setReason('') }}
         />

@@ -51,7 +51,7 @@ router.get('/mi-responses/:id/approval-state', authenticate, async (req, res) =>
     const orgClause = globalScope ? '1 = 1' : 'c.org_id = ?';
     const params = globalScope ? [req.params.id] : [req.params.id, req.user.orgId];
     const [[r]] = await pool.execute(
-      `SELECT mr.id, mr.response_status, mr.mi_tab_id, mr.requires_two_signers,
+      `SELECT mr.id, mr.response_status, mr.mi_tab_id, mr.requires_two_signers, mr.author_id,
               mr.reviewer_id, mr.reviewer_name, mr.reviewed_at,
               mr.approver_id, mr.approver_name, mr.approved_at,
               t.is_off_label, c.org_id
@@ -65,6 +65,7 @@ router.get('/mi-responses/:id/approval-state', authenticate, async (req, res) =>
     const needs = await miApproval.needsTwoSigners({ orgId: r.org_id || req.user.orgId, response: r });
     res.json({
       status: r.response_status,
+      author_id: r.author_id,
       reviewer: r.reviewed_at ? { id: r.reviewer_id, name: r.reviewer_name, at: r.reviewed_at } : null,
       // approved_at is also set by the single-signer Approve, which has no approver slot.
       approver: r.approver_id && r.approved_at ? { id: r.approver_id, name: r.approver_name, at: r.approved_at } : null,
