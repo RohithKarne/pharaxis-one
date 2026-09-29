@@ -7,7 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { audit } = require('../../utils/audit');
+const { audit, changesBetween } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
 const { autoTranslate } = require('../../utils/translator');
 const { validateUploads } = require('../../utils/fileValidation');
@@ -160,8 +160,14 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, async 
     fields.push('updated_at = NOW()');
     values.push(req.params.alertId, req.params.clientId);
 
+    const ROW = 'SELECT * FROM cp_safety_alerts WHERE id = ? AND client_id = ?';
+    const [[before]] = await pool.execute(ROW, [req.params.alertId, req.params.clientId]);
     await pool.execute(`UPDATE cp_safety_alerts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
-    await audit(req.admin, req.params.clientId, 'UPDATE', 'safety_alert', req.params.alertId, { fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute(ROW, [req.params.alertId, req.params.clientId]);
+    // CPPM-43: what changed, from → to, with the alert body in full — for a safety
+    // communication the old wording is exactly what an auditor needs.
+    await audit(req.admin, req.params.clientId, 'UPDATE', 'safety_alert', req.params.alertId, { changes: changesBetween(before, after,
+      ['title', 'alert_type', 'severity', 'product_name', 'ref_number', 'body_html', 'effective_date', 'target_types_json', 'status', 'publish_at']) });
     const transFields = {};
     if (title     !== undefined) transFields.title     = title;
     if (body_html !== undefined) transFields.body_html = sanitiseHtml(body_html);

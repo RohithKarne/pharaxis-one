@@ -40,6 +40,39 @@ async function systemAudit(actorName, clientId, action, entity, entityId, detail
   return audit({ adminId: null, name: actorName || 'system' }, clientId, action, entity, entityId, details);
 }
 
+// A stored value in one comparable, readable form: dates as ISO text, JSON columns
+// as JSON text, everything else as text. null when empty.
+function auditValue(v) {
+  if (v === undefined || v === null) return null;
+  if (v instanceof Date) return v.toISOString();
+  if (Buffer.isBuffer(v)) return v.toString();
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
+/**
+ * changesBetween(before, after, fields, hideValues) — CPPM-43: what an edit actually
+ * changed, read from the row before and after the save, as
+ *   { status: { from: 'Recruiting', to: 'Active, not recruiting' } }
+ * Only fields whose stored value differs are listed, so a screen that re-sends
+ * every field records only the one that changed. Values are kept in full: for
+ * long text the old wording is exactly what an auditor needs.
+ *
+ * Fields in hideValues are recorded as { changed: true } with neither value —
+ * secrets (API keys) and people's personal details, so the audit trail can never
+ * hold a key or undo an erasure (Vasu, 29 Sep 2026).
+ */
+function changesBetween(before, after, fields, hideValues = []) {
+  const changes = {};
+  for (const f of fields) {
+    const from = auditValue(before?.[f]);
+    const to   = auditValue(after?.[f]);
+    if (from === to) continue;
+    changes[f] = hideValues.includes(f) ? { changed: true } : { from, to };
+  }
+  return changes;
+}
+
 const WRITE_METHODS  = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
 const DEFAULT_ACTION = { POST: 'CREATE', PATCH: 'UPDATE', PUT: 'UPDATE', DELETE: 'DELETE' };
 
@@ -91,4 +124,4 @@ function auditWrites(entity) {
   };
 }
 
-module.exports = { audit, systemAudit, auditWrites };
+module.exports = { audit, systemAudit, auditWrites, changesBetween };

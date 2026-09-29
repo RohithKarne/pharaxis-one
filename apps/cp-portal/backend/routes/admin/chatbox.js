@@ -7,7 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { audit } = require('../../utils/audit');
+const { audit, changesBetween } = require('../../utils/audit');
 const { encryptSecret } = require('../../utils/secretCrypto');
 const log = require('../../utils/logger');
 
@@ -60,8 +60,14 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     updates.push(`updated_at = NOW()`);
     params.push(req.params.clientId);
+    const ROW = 'SELECT * FROM cp_chatbox_config WHERE client_id = ?';
+    const [[before]] = await pool.execute(ROW, [req.params.clientId]);
     await pool.execute(`UPDATE cp_chatbox_config SET ${updates.join(', ')} WHERE client_id = ?`, params);
-    await audit(req.admin, req.params.clientId, 'UPDATE', 'chatbox', req.params.clientId, { fields: Object.keys(req.body).filter(k => k !== 'api_key') });
+    const [[after]] = await pool.execute(ROW, [req.params.clientId]);
+    // CPPM-43: what changed, from → to. The API key is a secret: recorded as changed,
+    // never its value (it is re-encrypted on every save, so any save that sends one shows).
+    await audit(req.admin, req.params.clientId, 'UPDATE', 'chatbox', req.params.clientId,
+      { changes: changesBetween(before, after, [...allowed, 'api_key'], ['api_key']) });
     res.json({ message: 'Chatbox config updated.' });
   } catch (err) {
     log.error('admin.chatbox.error', { err, route: 'PATCH /:clientId', path: req.path, request_id: req.requestId || null });

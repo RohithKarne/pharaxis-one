@@ -21,13 +21,30 @@ const ACTION_BADGE_STYLES = {
 
 const LIMIT = 50
 
+// CPPM-43: an edit records { changes: { field: { from, to } } }. Shown as
+// "status: Recruiting → Active, not recruiting"; long values are shortened here
+// and kept in full in the View panel and the export.
+function shortValue(v) {
+  if (v === null || v === undefined || v === '') return '(empty)'
+  const s = String(v)
+  return s.length > 60 ? s.slice(0, 57) + '…' : s
+}
+
+function formatChanges(changes) {
+  const parts = Object.entries(changes).map(([field, c]) =>
+    c && c.changed ? `${field}: changed` : `${field}: ${shortValue(c?.from)} → ${shortValue(c?.to)}`)
+  return parts.length ? parts.join('; ') : 'no changes'
+}
+
 function formatDetails(detailsRaw) {
   if (!detailsRaw) return '—'
   try {
     const obj = typeof detailsRaw === 'string' ? JSON.parse(detailsRaw) : detailsRaw
     if (typeof obj !== 'object' || obj === null) return String(detailsRaw)
     return Object.entries(obj)
-      .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
+      .map(([k, v]) => k === 'changes' && v && typeof v === 'object'
+        ? formatChanges(v)
+        : `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
       .join(', ')
   } catch {
     return String(detailsRaw)
