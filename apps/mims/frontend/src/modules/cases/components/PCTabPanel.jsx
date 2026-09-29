@@ -80,6 +80,12 @@ export default function PCTabPanel({
             {opts.map((o, i) => (
               <option key={`${key}-${o.value ?? o.id ?? i}`} value={o.value}>{o.label || o.value}</option>
             ))}
+            {/* A value an admin has since switched off stays on the record and
+                must stay visible, or the box shows blank and the next save
+                clears it. */}
+            {d[key] && !opts.some(o => String(o.value) === String(d[key])) && (
+              <option value={d[key]}>{d[key]} (no longer offered)</option>
+            )}
           </select>
         ) : (
           <div className="cf-picklist-empty" title="Picklist source missing — define it in Picklists Table.">
