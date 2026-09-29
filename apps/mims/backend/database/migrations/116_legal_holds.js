@@ -1,5 +1,5 @@
 'use strict';
-// Migration 110 — legal holds for data-privacy enforcement (gap register row 16).
+// Migration 116 — legal holds for data-privacy enforcement (gap register row 16).
 //
 // Scheduled DPPR enforcement was suspended on 2026-08-03 (DCI-5) because it
 // anonymises or deletes personal data with no way for legal to stop it touching

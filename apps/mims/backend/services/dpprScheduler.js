@@ -8,7 +8,7 @@
  *
  * For each org's active rules:
  *   1. Find records older than retention_days matching domain + contact_type + consent_type
- *   2. Leave out records under an active legal hold (legal_holds, migration 110)
+ *   2. Leave out records under an active legal hold (legal_holds, migration 116)
  *   3. Apply action: Anonymize (replace PII text) | Delete (NULL out fields)
  *   4. Log results to dppr_execution_log, including how many were skipped for hold
  */
@@ -256,7 +256,7 @@ async function runScheduledDppr() {
 // ── Scheduled enforcement — off unless ENABLE_SCHEDULED_DPPR=true ────────────
 // Suspended 2026-08-03 on Rohith Karne's instruction (DCI-5) because
 // applyDpprRules() destroyed PII with no legal-hold interlock. The interlock now
-// exists (legal_holds, migration 110): every run, scheduled or manual, leaves
+// exists (legal_holds, migration 116): every run, scheduled or manual, leaves
 // held records untouched and logs how many it skipped.
 //
 // The daily run stays OFF by default. It registers only when the deployment sets
