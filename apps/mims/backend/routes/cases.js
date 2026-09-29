@@ -1839,6 +1839,24 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
       if (ownerChanged) {
         await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'OWNER_CHANGED', 'case_owner_id', previousOwnerId, updatedOwnerId, conn);
       }
+      // Every other field this update can change is audited too. Only status and
+      // owner were, so a priority or description change left no trail — and the
+      // Cases page's bulk actions now come through here (item 7, 2026-09-29).
+      const dateOnly = (v) => (v ? toDateOnlyOrNull(v) : null);
+      const fieldChanges = [
+        ['priority', currentCase.priority, nextPriority],
+        ['date_received', dateOnly(currentCase.date_received), dateOnly(nextDateReceived)],
+        ['awareness_date', dateOnly(currentCase.awareness_date), dateOnly(nextAwarenessDate)],
+        ['learn_of_validity_date', dateOnly(currentCase.learn_of_validity_date), dateOnly(nextLearnOfValidityDate)],
+        ['follow_up_received_date', dateOnly(currentCase.follow_up_received_date), dateOnly(nextFollowUpReceivedDate)],
+        ['description', currentCase.description, nextDescription],
+        ['internal_notes', currentCase.internal_notes, nextInternalNotes],
+        ['intake_channel', currentCase.intake_channel, nextIntakeChannel],
+      ];
+      for (const [field, before, after] of fieldChanges) {
+        if ((before ?? '') === (after ?? '')) continue;
+        await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'FIELD_UPDATED', field, before ?? null, after ?? null, conn);
+      }
     });
 
     // Notifications fire only after the update + audit have durably committed (best-effort).
@@ -2975,6 +2993,8 @@ router.delete('/cases/:id', authenticate, requireRole('admin', 'platform_admin')
     if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
 
     await pool.execute('UPDATE cases SET is_deleted = 1 WHERE id = ?', [req.params.id]);
+    // In the case audit trail, not only the server log (item 7, 2026-09-29).
+    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'CASE_DELETED', 'is_deleted', 0, 1);
     logger.warn({ case_id: req.params?.id, user_id: req.user?.userId }, 'Case soft deleted');
     res.json({ success: true });
   } catch (err) {
