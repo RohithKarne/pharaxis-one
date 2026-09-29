@@ -31,7 +31,7 @@ const STATUS_ALLOWED_ROLES = {
   archived:  PUBLISH_ROLES,
   draft:     APPROVE_ROLES,  // reject (going back to draft from review/approved)
 };
-const { audit } = require('../../utils/audit');
+const { audit, changesBetween } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
 
 // CP-28: shared allow-list sanitizer (replaces the bypassable blocklist).
@@ -196,8 +196,13 @@ router.put('/:clientId/:postId', authenticateAdmin, requireClientAccess, async (
     fields.push('updated_at = NOW()');
     values.push(req.params.postId, req.params.clientId);
 
+    const ROW = 'SELECT * FROM cp_news_posts WHERE id = ? AND client_id = ?';
+    const [[before]] = await pool.execute(ROW, [req.params.postId, req.params.clientId]);
     await pool.execute(`UPDATE cp_news_posts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
-    await audit(req.admin, req.params.clientId, 'UPDATE', 'news', req.params.postId, { fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute(ROW, [req.params.postId, req.params.clientId]);
+    // CPPM-43: what changed, from → to, with the body in full.
+    await audit(req.admin, req.params.clientId, 'UPDATE', 'news', req.params.postId, { changes: changesBetween(before, after,
+      ['title', 'body_html', 'category', 'is_pinned', 'thumbnail_path', 'target_types_json', 'status', 'publish_at']) });
     if (status === 'published' && title) notifyPortalUsers(req.params.clientId, 'news', title, req.params.postId);
     // Re-translate whenever title or body changes
     const transFields = {};

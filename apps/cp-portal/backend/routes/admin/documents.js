@@ -35,7 +35,7 @@ const DOC_STATUS_ROLES = {
 const DEFAULT_REVIEW_MONTHS = 12;
 const REVIEW_WARNING_DAYS   = 30;
 
-const { audit } = require('../../utils/audit');
+const { audit, changesBetween } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
 const { sendEmail } = require('../../utils/mailer');
 const { autoTranslate } = require('../../utils/translator');
@@ -138,8 +138,12 @@ router.put('/:clientId/categories/:catId', authenticateAdmin, requireClientAcces
     if (sort_order !== undefined) { fields.push('sort_order = ?'); values.push(sort_order); }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     values.push(req.params.catId, req.params.clientId);
+    const CAT_ROW = 'SELECT * FROM cp_document_categories WHERE id = ? AND client_id = ?';
+    const [[before]] = await pool.execute(CAT_ROW, [req.params.catId, req.params.clientId]);
     await pool.execute(`UPDATE cp_document_categories SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
-    await audit(req.admin, req.params.clientId, 'UPDATE', 'document_category', Number(req.params.catId), { fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute(CAT_ROW, [req.params.catId, req.params.clientId]);
+    // CPPM-43: what changed, from → to — not just which fields the screen sent.
+    await audit(req.admin, req.params.clientId, 'UPDATE', 'document_category', Number(req.params.catId), { changes: changesBetween(before, after, ['name', 'sort_order']) });
     res.json({ ok: true });
   } catch (err) {
     log.error('admin.documents.error', { err, route: 'PUT /:clientId/categories/:catId', path: req.path, request_id: req.requestId || null });
@@ -522,8 +526,17 @@ router.put('/:clientId/:docId', authenticateAdmin, requireClientAccess, async (r
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     fields.push('updated_at = NOW()');
     values.push(req.params.docId, req.params.clientId);
+    // CPPM-43: the row before and after the save, so the audit entry records what
+    // changed from → to. `current` is only read above when a status or certified
+    // field was sent; otherwise read it here, still before the update.
+    const DOC_ROW = 'SELECT * FROM cp_documents WHERE id = ? AND client_id = ?';
+    const before = current || (await pool.execute(DOC_ROW, [req.params.docId, req.params.clientId]))[0][0];
     await pool.execute(`UPDATE cp_documents SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
-    await audit(req.admin, req.params.clientId, 'UPDATE', 'document', req.params.docId, { fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute(DOC_ROW, [req.params.docId, req.params.clientId]);
+    await audit(req.admin, req.params.clientId, 'UPDATE', 'document', req.params.docId, { changes: changesBetween(before, after, [
+      'title', 'category', 'doc_type', 'visible_to_json', 'source', 'is_active', 'status', 'version',
+      'expires_at', 'publish_at', 'review_due_at', 'approved_by_name', 'approved_at', 'retired_at',
+    ]) });
     // CPPM-31: the lifecycle step gets its own audit entry, so approve, publish
     // and retire are findable in the trail without reading every UPDATE.
     if (lifecycleAction) {
