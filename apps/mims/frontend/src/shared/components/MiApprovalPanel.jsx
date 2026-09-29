@@ -202,7 +202,10 @@ function ApprovalCard({ responseId, H, onChange }) {
   }
 
   if (!state) return null
-  const isWriter = state.author_id != null && Number(state.author_id) === Number(user?.id ?? user?.userId)
+  const myId = Number(user?.id ?? user?.userId)
+  const isWriter = state.author_id != null && Number(state.author_id) === myId
+  // The approver must be someone other than the reviewer (the server refuses).
+  const isReviewer = state.reviewer?.id != null && Number(state.reviewer.id) === myId
   if (!state.required && !state.reviewer && !state.approver) {
     return (
       <div style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)',
@@ -233,7 +236,7 @@ function ApprovalCard({ responseId, H, onChange }) {
           subtitle="Compliance / release"
           signed={state.approver}
           status={state.status}
-          showSignBtn={canSign && !isWriter && state.status === 'REVIEWED'}
+          showSignBtn={canSign && !isWriter && !isReviewer && state.status === 'REVIEWED'}
           waitingText={state.status === 'REVIEWED' ? 'waiting for an approver' : 'waiting for the reviewer'}
           onSign={() => { setSigning('approver'); setPassword(''); setReason('') }}
         />
