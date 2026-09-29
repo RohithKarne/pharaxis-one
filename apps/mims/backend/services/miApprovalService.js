@@ -92,9 +92,11 @@ async function sign({ orgId, globalScope = false, responseId, role, userId, user
     toStatus:   role === 'reviewer' ? 'REVIEWED' : 'APPROVED',
     signedBy:   userId,
     signedName: userName,
+    // Must match the statement the signer sees in MiApprovalPanel — the recorded
+    // meaning is what they attested to (no regulation cited on screen, M-77).
     meaning:    role === 'reviewer'
-      ? 'I have reviewed this MI response for technical accuracy under 21 CFR Part 11.'
-      : 'I approve this MI response for release under 21 CFR Part 11.',
+      ? 'I have reviewed this MI response for technical accuracy.'
+      : 'I approve this MI response for release.',
     reason,
     authMethod: 'password',
     password,

@@ -244,8 +244,8 @@ function ApprovalCard({ responseId, H, onChange }) {
             </h3>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 0 }}>
               {signing === 'reviewer'
-                ? 'I have reviewed this MI response for technical accuracy under 21 CFR Part 11.'
-                : 'I approve this MI response for release under 21 CFR Part 11.'}
+                ? 'I have reviewed this MI response for technical accuracy.'
+                : 'I approve this MI response for release.'}
             </p>
             <label style={{ ...lbl, marginBottom: 4 }}>Password</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)}
