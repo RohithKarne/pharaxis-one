@@ -18,15 +18,19 @@ async function getSystemConfig() {
   }, {});
 }
 
+// Same rule as isPlatformAdmin (utils/adminScope): the platform_admin role OR the
+// platform-admin module grant. Only the grant was counted, so the platform admins
+// (role platform_admin, no grant row) got no alerts and every rule logged "can
+// reach nobody" (360 walk M-6).
 async function getActivePlatformAdminUsers() {
   const placeholders = PLATFORM_ADMIN_MODULE_KEYS.map(() => '?').join(', ');
   const [rows] = await pool.execute(
     `SELECT DISTINCT u.id, u.email, u.name
      FROM users u
-     JOIN user_module_permissions ump ON ump.user_id = u.id
+     LEFT JOIN user_module_permissions ump
+       ON ump.user_id = u.id AND ump.module IN (${placeholders}) AND ump.can_access = 1
      WHERE u.is_active = 1
-       AND ump.module IN (${placeholders})
-       AND ump.can_access = 1
+       AND (LOWER(u.role) = 'platform_admin' OR ump.user_id IS NOT NULL)
      ORDER BY u.id`
     ,
     PLATFORM_ADMIN_MODULE_KEYS
