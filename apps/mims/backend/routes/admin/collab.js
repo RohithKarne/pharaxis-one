@@ -4,10 +4,7 @@
  * collab.js — Theme 5 surface (Wave 4).
  *
  * Endpoints:
- *   GET    /api/cases/:caseId/comments?section=&field=
- *   POST   /api/cases/:caseId/comments     body { body, section?, field?, parent_id? }
- *   PUT    /api/cases/:caseId/comments/:id/resolve
- *   DELETE /api/cases/:caseId/comments/:id
+ *   (GET / POST /api/cases/:caseId/comments are served by routes/cases.js)
  *
  *   GET    /api/cases/:caseId/watchers
  *   POST   /api/cases/:caseId/watchers     body { user_id, reason? }
@@ -38,47 +35,13 @@ async function gated(req, res) {
 }
 
 // ── Comments ─────────────────────────────────────────────────────────────────
-router.get('/cases/:caseId/comments', authenticate, async (req, res) => {
-  try {
-    const on = await flags.isEnabledForOrg(FLAG, req.user.orgId);
-    if (!on) return res.json({ enabled: false, comments: [] });
-    const comments = await collab.listComments({
-      orgId: req.user.orgId, caseId: Number(req.params.caseId),
-      section: req.query.section || null, field: req.query.field || null,
-    });
-    res.json({ enabled: true, comments });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.post('/cases/:caseId/comments', authenticate, async (req, res) => {
-  try {
-    if (!(await gated(req, res))) return;
-    const { body, section, field, parent_id } = req.body || {};
-    const c = await collab.postComment({
-      orgId: req.user.orgId, caseId: Number(req.params.caseId),
-      section: section || null, field: field || null,
-      parentId: parent_id || null, body,
-      authorId: req.user.userId,
-    });
-    res.json({ ok: true, comment: c });
-  } catch (err) { res.status(400).json({ error: err.message }); }
-});
-
-router.put('/cases/:caseId/comments/:id/resolve', authenticate, async (req, res) => {
-  try {
-    if (!(await gated(req, res))) return;
-    await collab.resolveComment({ orgId: req.user.orgId, commentId: req.params.id, userId: req.user.userId });
-    res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.delete('/cases/:caseId/comments/:id', authenticate, async (req, res) => {
-  try {
-    if (!(await gated(req, res))) return;
-    await collab.deleteComment({ orgId: req.user.orgId, commentId: req.params.id, userId: req.user.userId });
-    res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
+// Listing and posting case comments is answered by routes/cases.js. The copies
+// that lived here were mounted first, so they shadowed it: behind this flag they
+// refused every post, and with the flag on they read columns the deployed
+// case_comments table does not have (it is the migration 007 shape).
+// Resolve and delete are gone too: the deployed table has no resolved /
+// deleted_at / org_id columns, so both always failed (T16). Comments are kept
+// as written — they are part of the case record.
 
 // ── Watchers ─────────────────────────────────────────────────────────────────
 router.get('/cases/:caseId/watchers', authenticate, async (req, res) => {

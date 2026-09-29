@@ -1,45 +1,46 @@
 /**
- * CommentThread — Theme 5 (Wave 4) comment list + composer.
+ * CommentThread — case comment list + composer.
  *
- * Loads /api/cases/:caseId/comments (optionally scoped to a section/field).
- * Posts via MentionInput. Resolve / delete are owner-or-admin actions.
+ * Loads and posts /api/cases/:caseId/comments, answered by routes/cases.js:
+ * GET returns an array (newest first) of { id, user_name, user_email, comment,
+ * created_at }; POST takes { comment } and is refused (403) when the user has
+ * no access to the case. The deployed table has no section/field scoping,
+ * resolve or soft-delete, so this thread offers none of them.
  *
  * Props:
  *   caseId   — required
- *   section? — scope thread to a section
- *   field?   — scope thread to a single field
  *   compact? — small mode
  */
 
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { useFeatureFlag } from '../../context/FeatureFlagsContext'
 import { httpFetch } from '../../api/httpFetch.js'
-import MentionInput from './MentionInput'
 
-export default function CommentThread({ caseId, section = null, field = null, compact = false }) {
-  const { token, user } = useAuth()
-  const enabled = useFeatureFlag('cf.theme5_realtime_collab')
+export default function CommentThread({ caseId, compact = false }) {
+  const { token } = useAuth()
   const [items, setItems] = useState([])
   const [body, setBody]   = useState('')
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [posting, setPosting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (section) params.set('section', section)
-      if (field)   params.set('field', field)
-      const r = await httpFetch(`/api/cases/${caseId}/comments?${params}`, {
+      const r = await httpFetch(`/api/cases/${caseId}/comments`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const d = await r.json()
-      setItems(d.comments || [])
-    } catch { setItems([]) } finally { setLoading(false) }
-  }, [caseId, section, field, token])
+      if (!r.ok) throw new Error(d.error || 'Could not load comments.')
+      setItems(Array.isArray(d) ? d : [])
+      setError('')
+    } catch (err) {
+      setItems([])
+      setError(err.message || 'Could not load comments.')
+    } finally { setLoading(false) }
+  }, [caseId, token])
 
-  useEffect(() => { if (enabled && caseId) load() }, [enabled, caseId, load])
+  useEffect(() => { if (caseId) load() }, [caseId, load])
 
   async function post() {
     if (!body.trim()) return
@@ -48,71 +49,49 @@ export default function CommentThread({ caseId, section = null, field = null, co
       const r = await httpFetch(`/api/cases/${caseId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ body, section, field }),
+        body: JSON.stringify({ comment: body }),
       })
-      if (r.ok) { setBody(''); load() }
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || 'Comment was not saved.')
+      setBody('')
+      load()
+    } catch (err) {
+      setError(`Comment was not saved — ${err.message}`)
     } finally { setPosting(false) }
-  }
-
-  async function resolve(id) {
-    await httpFetch(`/api/cases/${caseId}/comments/${id}/resolve`, {
-      method: 'PUT', headers: { Authorization: `Bearer ${token}` },
-    })
-    load()
-  }
-  async function del(id) {
-    if (!confirm('Delete comment?')) return
-    await httpFetch(`/api/cases/${caseId}/comments/${id}`, {
-      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
-    })
-    load()
-  }
-
-  if (!enabled) {
-    return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-      Comments require the <strong>cf.theme5_realtime_collab</strong> flag.
-    </div>
   }
 
   return (
     <div style={{ padding: compact ? 6 : 10 }}>
+      {error && <div className="cf-corr-error" style={{ marginBottom: 8 }}>{error}</div>}
       {loading && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>}
-      {!loading && items.length === 0 && (
+      {!loading && !error && items.length === 0 && (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-          No comments yet{field ? ` on ${field}` : ''}.
+          No comments yet.
         </div>
       )}
       {items.map(c => (
         <div key={c.id} style={{
           padding: '8px 10px', marginBottom: 6, borderRadius: 6,
-          background: c.resolved ? 'var(--surface-alt,#fafafa)' : 'var(--surface,#fff)',
+          background: 'var(--surface,#fff)',
           border: '1px solid var(--border)',
-          opacity: c.resolved ? 0.6 : 1,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)' }}>
-            <strong>{c.author_name || c.author_email || `User ${c.author_id}`}</strong>
+            <strong>{c.user_name || c.user_email || 'System'}</strong>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               {new Date(c.created_at).toLocaleString()}
             </span>
           </div>
           <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
-            {renderMentions(c.body_md)}
-          </div>
-          <div style={{ marginTop: 6, display: 'flex', gap: 8, fontSize: 11 }}>
-            {!c.resolved && (
-              <button onClick={() => resolve(c.id)} style={linkBtn('#1a7a3f')}>✓ Resolve</button>
-            )}
-            {c.author_id === user?.userId && (
-              <button onClick={() => del(c.id)} style={linkBtn('#b91c1c')}>Delete</button>
-            )}
-            {c.field_name && (
-              <span style={{ color: 'var(--text-muted)' }}>· field: {c.field_name}</span>
-            )}
+            {c.comment}
           </div>
         </div>
       ))}
       <div style={{ marginTop: 8 }}>
-        <MentionInput value={body} onChange={setBody} rows={compact ? 2 : 3} />
+        <textarea
+          value={body} onChange={e => setBody(e.target.value)} rows={compact ? 2 : 3}
+          placeholder="Write a comment…" maxLength={4000}
+          style={{ width: '100%', boxSizing: 'border-box' }}
+        />
         <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
           <button onClick={post} disabled={posting || !body.trim()}
             style={{
@@ -127,25 +106,4 @@ export default function CommentThread({ caseId, section = null, field = null, co
       </div>
     </div>
   )
-}
-
-function linkBtn(color) {
-  return { padding: 0, background: 'transparent', border: 'none', color, cursor: 'pointer', fontWeight: 600 }
-}
-
-// Very light @mention highlighting (no markdown lib dependency)
-function renderMentions(text) {
-  if (!text) return null
-  const out = []
-  const re = /@"([^"]+)"|@([A-Za-z0-9._-]{2,40})/g
-  let last = 0; let m
-  while ((m = re.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index))
-    out.push(<mark key={m.index} style={{ background: '#eaf2ff', color: '#1a4f9c', padding: '0 3px', borderRadius: 3 }}>
-      @{m[1] || m[2]}
-    </mark>)
-    last = m.index + m[0].length
-  }
-  if (last < text.length) out.push(text.slice(last))
-  return out
 }
