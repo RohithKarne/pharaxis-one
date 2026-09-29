@@ -73,6 +73,7 @@ import FAQPortalPage           from './portal/pages/FAQPage'
 
 import ClinicalTrialsPage      from './portal/pages/ClinicalTrialsPage'
 import TrainingPage            from './portal/pages/TrainingPage'
+import TrainingModulePage      from './portal/pages/TrainingModulePage'
 
 import TrialsAdminPage         from './admin/pages/TrialsAdminPage'
 import TrainingAdminPage       from './admin/pages/TrainingAdminPage'
@@ -152,6 +153,7 @@ function PortalRoutes() {
           <Route path="search"          element={<SearchResultsPage />} />
           <Route path="trials"          element={<ClinicalTrialsPage />} />
           <Route path="training"        element={<TrainingPage />} />
+          <Route path="training/:moduleId" element={<PortalAuthGuard><TrainingModulePage /></PortalAuthGuard>} />
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
       </PortalLayout>
