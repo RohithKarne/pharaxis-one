@@ -6,6 +6,25 @@ import SeriousnessChecklist from '../../../shared/components/SeriousnessChecklis
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
+// Readable table cells: a date as dd/mm/yyyy (it arrived as
+// "2026-09-20T00:00:00.000Z"), a stored decimal without trailing zeros
+// ("10.0000" → "10"), and a stored code as words ("not_recovered" →
+// "Not recovered").
+function formatCell(value) {
+  if (value == null || value === '') return '—'
+  const s = String(value)
+  const d = s.match(/^(\d{4})-(\d{2})-(\d{2})(T00:00:00(\.0+)?Z)?$/)
+  if (d) return `${d[3]}/${d[2]}/${d[1]}`
+  if (/^-?\d+\.\d+$/.test(s)) return String(Number(s))
+  return s
+}
+
+function codeToWords(value) {
+  if (value == null || value === '') return '—'
+  const s = String(value).replace(/_/g, ' ')
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 function picklistOptions(getPicklistOptions, sectionName, fieldName) {
   const list = getPicklistOptions?.(sectionName, fieldName) || []
   return Array.isArray(list) ? list : []
@@ -142,7 +161,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
   const eventCols = [
     { key: 'event_description', label: 'Event Description' },
     { key: 'meddra_term',       label: 'MedDRA Term' },
-    { key: 'outcome',           label: 'Outcome' },
+    { key: 'outcome',           label: 'Outcome', render: codeToWords },
     { key: 'reported_causality', label: 'Reported Causality' },
     { key: 'frequency',         label: 'Frequency' },
     { key: 'causality_assessment', label: 'Causality Assessment' },
@@ -173,7 +192,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                 <tr key={row.id} style={{ opacity: deleting === row.id ? 0.4 : 1 }}>
                   {cols.map(c => (
                     <td key={c.key}>
-                      {c.render ? c.render(row[c.key]) : (row[c.key] != null && row[c.key] !== '' ? String(row[c.key]) : '—')}
+                      {c.render ? c.render(row[c.key]) : formatCell(row[c.key])}
                     </td>
                   ))}
                   {!locked && (

@@ -354,7 +354,7 @@ export default function CasePCTab({
           </p>
           <ul className="cf-empty-hints">
             <li>Click <strong>+ New Version</strong> above to start.</li>
-            <li>Close a version when investigation results are submitted to QMS.</li>
+            <li>Close a version when the investigation results are submitted to the quality system.</li>
             <li>Investigation updates create a new version — never overwrite prior data.</li>
           </ul>
         </div>
@@ -453,7 +453,9 @@ export default function CasePCTab({
           <div key={tx.id} className="cf-tx-card">
             <div className="cf-tx-card-top">
               <span className={`cf-tx-status-badge cf-tx-status--${(tx.status || '').toLowerCase().replace(/\s+/g, '-')}`}>{tx.status}</span>
-              <span className="cf-tx-meta">Priority: <strong>{tx.priority}</strong></span>
+              {/* Stored as standard / high / urgent; the form offers Routine / Expedited / Urgent. */}
+              <span className="cf-tx-meta">Priority: <strong>{({ standard: 'Routine', high: 'Expedited', urgent: 'Urgent' })[tx.priority] || tx.priority}</strong></span>
+              {tx.due_date && <span className="cf-tx-meta">Due: <strong>{String(tx.due_date).slice(0, 10)}</strong></span>}
               <span className="cf-tx-meta">→ {tx.assignee_name || 'Unassigned'}</span>
             </div>
             {tx.notes && <div className="cf-tx-narrative">{tx.notes}</div>}
