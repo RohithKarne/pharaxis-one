@@ -187,7 +187,7 @@ export default function CasePCTab({
     if (!versionId) return
     const draftKey = `mims_case_${id}_pc_${versionId}_${activePcTab}`
     try {
-      const raw = localStorage.getItem(draftKey)
+      const raw = sessionStorage.getItem(draftKey)
       if (!raw) return
       const parsed = JSON.parse(raw)
       if (parsed !== null && parsed !== undefined) {
@@ -197,14 +197,6 @@ export default function CasePCTab({
       // no-op
     }
   }, [activePcTab, activePcVer?.id, id])
-
-  useEffect(() => {
-    const versionId = activePcVer?.id
-    if (!versionId) return
-    const payload = pcTabData[`${versionId}_${activePcTab}`]
-    if (payload === undefined) return
-    try { localStorage.setItem(`mims_case_${id}_pc_${versionId}_${activePcTab}`, JSON.stringify(payload)) } catch { /* no-op */ }
-  }, [activePcTab, activePcVer?.id, id, pcTabData])
 
   async function loadPCVersions() {
     try {
@@ -223,7 +215,14 @@ export default function CasePCTab({
       const res  = await httpFetch(`${API}/cases/pc/versions/${versionId}/${tabKey}`, { headers })
       const data = toDateInputValues(await res.json())
       pcSaved.current[`${versionId}_${tabKey}`] = JSON.stringify(data)
-      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
+      // An unsaved draft for this version + section wins over the server copy,
+      // except on a locked version, which shows only what was saved. The saved
+      // copy stays in pcSaved, so a restored draft counts as an unsaved change.
+      let draft = null
+      if (!isLocked(pcVersions.find(v => v.id === versionId))) {
+        try { draft = JSON.parse(sessionStorage.getItem(`mims_case_${id}_pc_${versionId}_${tabKey}`)) } catch { /* no-op */ }
+      }
+      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: draft ?? data }))
     } catch { /* ignore tab fetch errors */ }
     finally { setPcTabLoading(false) }
   }
@@ -276,6 +275,12 @@ export default function CasePCTab({
     }
   }
 
+  // Only what the person types is a draft; loading a section never writes one.
+  function editPCTab(d) {
+    setPcTabData(prev => ({ ...prev, [`${activePcVer?.id}_${activePcTab}`]: d }))
+    try { sessionStorage.setItem(`mims_case_${id}_pc_${activePcVer?.id}_${activePcTab}`, JSON.stringify(d)) } catch { /* no-op */ }
+  }
+
   const [pcTabSaving, setPcTabSaving] = useState(false)
   async function savePCTab() {
     if (!activePcVer || isLocked(activePcVer) || pcTabSaving) return false
@@ -288,7 +293,7 @@ export default function CasePCTab({
       const saved = toDateInputValues(data)
       pcSaved.current[`${activePcVer.id}_${activePcTab}`] = JSON.stringify(saved)
       setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: saved }))
-      localStorage.removeItem(`mims_case_${id}_pc_${activePcVer.id}_${activePcTab}`)
+      sessionStorage.removeItem(`mims_case_${id}_pc_${activePcVer.id}_${activePcTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
       return true
     } catch (err) { toast.error(err.message); return false }
@@ -414,7 +419,7 @@ export default function CasePCTab({
                 <PCTabPanel
                   tabKey={activePcTab}
                   data={pcTabData[`${activePcVer?.id}_${activePcTab}`] || {}}
-                  onChange={d => setPcTabData(prev => ({ ...prev, [`${activePcVer?.id}_${activePcTab}`]: d }))}
+                  onChange={editPCTab}
                   locked={isLocked(activePcVer)}
                   getFieldConfig={getFieldConfig}
                   getPicklistOptions={getPicklistOptions}

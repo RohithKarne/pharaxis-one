@@ -48,7 +48,7 @@ function toOptions(list, fallback = []) {
 function useDraft(key, value, setValue) {
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(key)
+      const raw = sessionStorage.getItem(key)
       if (!raw) return
       const parsed = JSON.parse(raw)
       if (parsed && typeof parsed === 'object') setValue(prev => ({ ...prev, ...parsed }))
@@ -58,7 +58,7 @@ function useDraft(key, value, setValue) {
   }, [key, setValue])
 
   useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* no-op */ }
+    try { sessionStorage.setItem(key, JSON.stringify(value)) } catch { /* no-op */ }
   }, [key, value])
 }
 
@@ -80,7 +80,7 @@ export default function CaseContactsTab({
   useDraft(`mims_case_${id}_contact_draft`, addContactForm, setAddContactForm)
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(`mims_case_${id}_contact_ui`)
+      const raw = sessionStorage.getItem(`mims_case_${id}_contact_ui`)
       if (!raw) return
       const parsed = JSON.parse(raw)
       setShowContactAdd(!!parsed?.showContactAdd)
@@ -91,7 +91,7 @@ export default function CaseContactsTab({
   }, [id])
   useEffect(() => {
     try {
-      localStorage.setItem(`mims_case_${id}_contact_ui`, JSON.stringify({ showContactAdd, contactSearch }))
+      sessionStorage.setItem(`mims_case_${id}_contact_ui`, JSON.stringify({ showContactAdd, contactSearch }))
     } catch {
       // no-op
     }
@@ -172,8 +172,8 @@ export default function CaseContactsTab({
       setShowContactAdd(false)
       setAddContactForm(BLANK_CONTACT)
       setContactSearch('')
-      localStorage.removeItem(`mims_case_${id}_contact_draft`)
-      localStorage.removeItem(`mims_case_${id}_contact_ui`)
+      sessionStorage.removeItem(`mims_case_${id}_contact_draft`)
+      sessionStorage.removeItem(`mims_case_${id}_contact_ui`)
     } catch (err) {
       toast.error(err.message)
     }
