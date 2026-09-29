@@ -406,31 +406,4 @@ router.delete('/customize-forms/:orgId/flex-field/:id', authenticate, requireRol
   }
 });
 
-// PUT /api/admin/customize-forms/:orgId/case-form-def
-// Body: { case_type, section_name, field_overrides } — writes the rare advanced JSON
-router.put('/customize-forms/:orgId/case-form-def', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  const orgId = parseInt(req.params.orgId, 10);
-  const { case_type, section_name, field_overrides } = req.body || {};
-  if (!Number.isFinite(orgId) || !case_type || !section_name) {
-    return res.status(400).json({ error: 'orgId, case_type, and section_name are required.' });
-  }
-  try {
-    await pool.execute(
-      `INSERT INTO case_form_definition (org_id, case_type, section_name, is_visible, field_overrides)
-       VALUES (?, ?, ?, 1, ?)
-       ON DUPLICATE KEY UPDATE field_overrides = VALUES(field_overrides)`,
-      [orgId, case_type, section_name, field_overrides ? JSON.stringify(field_overrides) : null]
-    );
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details)
-       VALUES (?, 'case_form_def', NULL, 'UPDATE_FIELD_OVERRIDES', ?)`,
-      [req.user.userId, JSON.stringify({ orgId, case_type, section_name })]
-    );
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('PUT /customize-forms/:orgId/case-form-def error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 module.exports = router;
