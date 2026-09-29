@@ -8,6 +8,16 @@ const DEFAULT_CHOICES = {
   marketing:  false,
 }
 
+// CPPM-29: the server keeps an anonymous visitor's choice 12 months (Vasu, CCO), so
+// the browser forgets it after 12 months too and asks again. Browsers that stored
+// "true" with no date are asked once more — re-asking is the safe direction.
+const CONSENT_KEEP_MS = 365 * 24 * 60 * 60 * 1000
+
+function rememberedConsent(key) {
+  const savedAt = Number(localStorage.getItem(key))
+  return savedAt > 0 && Date.now() - savedAt < CONSENT_KEEP_MS
+}
+
 const PREFERENCE_TOGGLES = [
   { key: 'functional', label: 'Functional', desc: 'Enables personalised features and remembers your preferences.' },
   { key: 'analytics',  label: 'Analytics',  desc: 'Helps us understand how you use the portal to improve it.' },
@@ -28,11 +38,13 @@ export default function ConsentBanner() {
   const [step, setStep]       = useState('banner') // 'banner' | 'preferences'
   const [choices, setChoices] = useState(DEFAULT_CHOICES)
   const [saving, setSaving]   = useState(false)
+  // CPPM-13: the wording this visitor actually accepted, read back from the record.
+  const [agreed, setAgreed]   = useState(null)
 
   useEffect(() => {
     if (!compliance) return
-    // Already dismissed in this browser session
-    if (localStorage.getItem(`cp_consent_v${version}`)) return
+    // Already chosen in this browser within the last 12 months
+    if (rememberedConsent(`cp_consent_v${version}`)) return
     // Signed-in user — check DB first
     if (user) {
       portalFetch(`/api/portal/consent/check?clientCode=${clientCode}&version=${version}`)
@@ -53,8 +65,10 @@ export default function ConsentBanner() {
         const res = await fetch(`/api/portal/consent/my-choice?clientCode=${clientCode}`)
         const d = res.ok ? await res.json() : {}
         setChoices({ ...DEFAULT_CHOICES, ...(d.choices || {}), necessary: true })
+        setAgreed(d.agreed || null)
       } catch {
         setChoices(DEFAULT_CHOICES)
+        setAgreed(null)
       }
       setStep('preferences')
       setShow(true)
@@ -92,7 +106,7 @@ export default function ConsentBanner() {
       setSaving(false)
       return
     }
-    localStorage.setItem(`cp_consent_v${version}`, 'true')
+    localStorage.setItem(`cp_consent_v${version}`, String(Date.now()))
     setSaving(false)
     setShow(false)
   }
@@ -174,6 +188,18 @@ export default function ConsentBanner() {
                 </label>
               </div>
             ))}
+
+            {/* CPPM-13: what this visitor agreed to, in the words they were shown. */}
+            {agreed && (
+              <div style={{ marginTop: 18, padding: 14, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+                  What you agreed to (version {agreed.version}
+                  {agreed.consented_at ? ` on ${new Date(agreed.consented_at).toLocaleDateString()}` : ''})
+                </div>
+                {agreed.title && <div style={{ fontSize: 13, fontWeight: 600 }}>{agreed.title}</div>}
+                <div style={{ fontSize: 13, color: '#475569', whiteSpace: 'pre-wrap' }}>{agreed.body}</div>
+              </div>
+            )}
 
             <div className="pp-consent-actions" style={{ marginTop: 20 }}>
               <button className="pp-consent-btn-primary" onClick={handleSavePreferences} disabled={saving}>

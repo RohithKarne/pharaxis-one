@@ -10,8 +10,9 @@ const fs      = require('fs');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { audit } = require('../../utils/audit');
-const { validateContent } = require('../../utils/fileValidation');
+const { audit, changesBetween } = require('../../utils/audit');
+const { validateContent, inspectDangerousContent } = require('../../utils/fileValidation');
+const { refuseUnlessClean } = require('../../utils/virusScan');
 const { ratio, AA_NORMAL } = require('../../utils/contrast');
 const cache = require('../../utils/cache');
 const log = require('../../utils/logger');
@@ -24,8 +25,11 @@ const logoStorage = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
+    // CPPM-46: a fresh name for every upload. The old fixed name meant multer wrote over
+    // the current logo before any check ran, so a refused upload deleted it. The new file
+    // replaces the logo only after every check passes (the rename in the route below).
     const ext = path.extname(file.originalname).toLowerCase() || '.png';
-    cb(null, `client-${req.params.clientId}-logo${ext}`);
+    cb(null, `client-${req.params.clientId}-logo-upload-${Date.now()}${ext}`);
   },
 });
 const uploadLogo = multer({
@@ -50,7 +54,14 @@ router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res
 });
 
 // POST /api/admin/branding/:clientId/upload-logo — logo file upload
-router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, uploadLogo.single('logo'), async (req, res) => {
+router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, (req, res, next) => {
+  // CPPM-46: multer errors (e.g. over 5 MB) otherwise reach the global handler as a 500.
+  uploadLogo.single('logo')(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Logo is larger than 5 MB. Choose a smaller image.' });
+    res.status(400).json({ error: err.message || 'Logo upload failed.' });
+  });
+}, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No valid image file provided. Allowed: PNG, JPG, GIF, WebP (max 5 MB).' });
 
@@ -59,16 +70,26 @@ router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, up
     // (magic bytes) and force a safe, content-derived extension so a disguised
     // .html/.svg can never be written to a public path and executed as XSS.
     const LOGO_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-    const { ok, safeExt } = validateContent(req.file.path, req.file.mimetype, LOGO_MIMES);
+    const { ok, safeExt, signature } = validateContent(req.file.path, req.file.mimetype, LOGO_MIMES);
     if (!ok) {
       try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
       return res.status(400).json({ error: 'File is not a valid PNG, JPG, GIF, or WebP image.' });
     }
+    // CPPM-12: the logo is served publicly; refuse anything carrying a payload.
+    const danger = inspectDangerousContent(req.file.path, signature);
+    if (!danger.ok) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      return res.status(400).json({ error: `This image was not accepted because ${danger.reason}.` });
+    }
+    // CPPM-39: and against ClamAV's list of known viruses.
+    const scanRefusal = await refuseUnlessClean([req.file]);
+    if (scanRefusal) return res.status(scanRefusal.status).json({ error: scanRefusal.error });
     const safeName = `client-${req.params.clientId}-logo${safeExt}`;
     const safePath = path.join(path.dirname(req.file.path), safeName);
-    if (safePath !== req.file.path) {
-      try { fs.renameSync(req.file.path, safePath); } catch { /* fall back to original name on rename failure */ }
-    }
+    // CPPM-46: only now, with every check passed, does the new file take the logo's name.
+    // If that fails, drop the upload and report it rather than point the logo at nothing.
+    try { fs.renameSync(req.file.path, safePath); }
+    catch (err) { try { fs.unlinkSync(req.file.path); } catch { /* ignore */ } throw err; }
     const logoUrl = `/uploads/logos/${safeName}`;
     await pool.execute(`UPDATE cp_branding SET logo_url = ?, updated_at = NOW() WHERE client_id = ?`, [logoUrl, req.params.clientId]);
     await audit(req.admin, req.params.clientId, 'UPLOAD', 'branding', req.params.clientId, { logo_url: logoUrl });
@@ -123,8 +144,11 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
     updates.push(`updated_at = NOW()`);
     params.push(clientId);
+    const [[before]] = await pool.execute('SELECT * FROM cp_branding WHERE client_id = ?', [clientId]);
     await pool.execute(`UPDATE cp_branding SET ${updates.join(', ')} WHERE client_id = ?`, params);
-    await audit(req.admin, clientId, 'UPDATE', 'branding', clientId, { fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute('SELECT * FROM cp_branding WHERE client_id = ?', [clientId]);
+    // CPPM-43: what changed, from → to — not just which fields the screen sent.
+    await audit(req.admin, clientId, 'UPDATE', 'branding', clientId, { changes: changesBetween(before, after, allowed) });
     cache.invalidate('config:'); // CP-22: refresh portal config cache after edits
     res.json({ message: 'Branding updated.' });
   } catch (err) {
@@ -151,6 +175,7 @@ router.post('/:clientId/reset', authenticateAdmin, requireClientAccess, async (r
         updated_at=NOW()
       WHERE client_id = ?
     `, [req.params.clientId]);
+    await audit(req.admin, req.params.clientId, 'RESET', 'branding', Number(req.params.clientId), {});
     res.json({ message: 'Branding reset to defaults.' });
   } catch (err) {
     log.error('admin.branding.error', { err, route: 'POST /:clientId/reset', path: req.path, request_id: req.requestId || null });

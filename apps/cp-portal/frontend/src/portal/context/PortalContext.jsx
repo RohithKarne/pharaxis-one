@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { translate } from '../utils/translations'
 
 const PortalContext = createContext(null)
+const PENDING_SIGNOUT = 'cp_portal_signout_pending' // CPPM-40
 
 export function PortalProvider({ children }) {
   const { clientCode: rawClientCode } = useParams()
@@ -110,6 +111,7 @@ export function PortalProvider({ children }) {
 
   function login(userData, _token) {
     localStorage.removeItem('cp_portal_token')
+    localStorage.removeItem(PENDING_SIGNOUT)
     localStorage.setItem('cp_portal_user', JSON.stringify(userData))
     setUser(userData)
     // Hide gate immediately after confirm-type saves (user_type_confirmed becomes 1)
@@ -120,6 +122,23 @@ export function PortalProvider({ children }) {
     localStorage.removeItem('cp_portal_token')
     localStorage.removeItem('cp_portal_user')
     setUser(null)
+  }
+
+  // CPPM-40: Sign Out and the idle timeout also end the session on the server — the
+  // sign-in cookie is httpOnly, so clearing the browser alone left the person signed in
+  // on the next page load. If the server can't be reached, the sign-out is remembered
+  // and finished before the next session check. logout() stays browser-only: it also
+  // runs on every anonymous page load, which has no server session to end.
+  function endServerSession() {
+    return fetch('/api/portal/auth/logout', { method: 'POST', credentials: 'same-origin', keepalive: true })
+      .then(res => { if (res.ok) localStorage.removeItem(PENDING_SIGNOUT) })
+      .catch(() => {})
+  }
+
+  function signOut() {
+    localStorage.setItem(PENDING_SIGNOUT, '1')
+    endServerSession()
+    logout()
   }
 
   function setLanguage(lang) {
@@ -158,7 +177,9 @@ export function PortalProvider({ children }) {
   useEffect(() => {
     if (!clientCode) return
     localStorage.removeItem('cp_portal_token')
-    fetch(`/api/portal/auth/me`, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } })
+    const pending = localStorage.getItem(PENDING_SIGNOUT) ? endServerSession() : Promise.resolve()
+    pending
+      .then(() => fetch(`/api/portal/auth/me`, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }))
       .then(async res => {
         if (res.status === 200) {
           const d = await res.json()
@@ -173,7 +194,7 @@ export function PortalProvider({ children }) {
   }, [clientCode])
 
   return (
-    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, portalHeaders, portalFetch, isFeatureEnabled, clientCode, showGate, refetchConfig: fetchConfig, language, setLanguage, t }}>
+    <PortalContext.Provider value={{ portalConfig, loading, error, user, login, logout, signOut, portalHeaders, portalFetch, isFeatureEnabled, clientCode, showGate, refetchConfig: fetchConfig, language, setLanguage, t }}>
       {children}
     </PortalContext.Provider>
   )

@@ -13,12 +13,15 @@
  *   - All other engagement data (MI/other inquiries, saved items, follows,
  *     notifications, feedback, MSL bookings, SSO identities) is DELETED.
  *
- * MIMS-synced case data is out of scope for this ticket (separate system) —
- * tracked as CP-76 under the Deferred epic.
+ * CPPM-11 (was CP-76): the erasure now reaches MIMS too. A retained submission
+ * that was synced keeps its safety case there, but the reporter identity on that
+ * case is removed — the same ruling, applied on both sides of the integration.
  */
 const { pool } = require('../database/db');
 const fs = require('fs');
 const path = require('path');
+const mimsRedaction = require('./mimsRedaction');
+const log = require('../utils/logger');
 
 const RETAINED_SUBMISSION_TYPES = new Set(['adverse_event', 'product_complaint']);
 const ERASED = '[erased]';
@@ -51,7 +54,16 @@ async function buildExport(userId, clientId) {
   }
 
   const [consent, savedItems, follows, notifications, feedback, mslBookings, ssoIdentities] = await Promise.all([
-    q(`SELECT id, version, choices_json, consented_at FROM cp_consent_records WHERE user_id = ? AND client_id = ?`, [userId, clientId]),
+    // CPPM-13: the wording accepted, not just the version number behind it.
+    // consent_text is null for records taken before the wording was stored —
+    // we have the version they agreed to but not the text, and we do not guess.
+    // consent_text_effective_from says when that wording was last saved: after
+    // consented_at means the wording may have moved under the record.
+    q(`SELECT cr.id, cr.version, cr.choices_json, cr.consented_at,
+              v.title AS consent_title, v.body AS consent_text, v.effective_from AS consent_text_effective_from
+         FROM cp_consent_records cr
+         LEFT JOIN cp_consent_text_versions v ON v.id = cr.consent_text_version_id
+        WHERE cr.user_id = ? AND cr.client_id = ?`, [userId, clientId]),
     q(`SELECT id, item_type, item_id, created_at FROM cp_saved_items WHERE portal_user_id = ? AND client_id = ?`, [userId, clientId]),
     q(`SELECT id, item_type, item_id, created_at FROM cp_user_follows WHERE portal_user_id = ? AND client_id = ?`, [userId, clientId]),
     q(`SELECT id, type, title, item_id, is_read, created_at FROM cp_notifications WHERE portal_user_id = ? AND client_id = ?`, [userId, clientId]),
@@ -70,6 +82,12 @@ async function buildExport(userId, clientId) {
       [c.id, clientId]);
   }
 
+  // CPPM-15: every training attempt, with the questions as asked and the answers given.
+  const trainingAttempts = (await q(
+    `SELECT id, module_title, module_version, score, pass_score, passed, reference, answers_json, taken_at
+       FROM cp_training_attempts WHERE portal_user_id = ? AND client_id = ? ORDER BY id`, [userId, clientId]))
+    .map(({ answers_json, ...a }) => ({ ...a, answers: JSON.parse(answers_json || '[]') }));
+
   return {
     export_metadata: { generated_at: new Date().toISOString(), scope: 'CP Portal', user_id: userId, client_id: clientId, note: 'MIMS-synced case data is held in a separate system and is not included in this export.' },
     profile: profile || null,
@@ -83,6 +101,7 @@ async function buildExport(userId, clientId) {
     msl_bookings: mslBookings,
     sso_identities: ssoIdentities,
     chat_conversations: chats,
+    training_attempts: trainingAttempts,
   };
 }
 
@@ -93,6 +112,7 @@ async function buildExport(userId, clientId) {
 async function eraseUser(userId, clientId) {
   const conn = await pool.getConnection();
   const summary = { anonymized: [], retained: [], deleted: [] };
+  let mimsTargets = [];   // CPPM-11: retained submissions that reached MIMS
   try {
     await conn.beginTransaction();
 
@@ -117,6 +137,15 @@ async function eraseUser(userId, clientId) {
     // Retain regulated submissions but sever the reporter identity.
     if (retainIds.length) {
       const ph = retainIds.map(() => '?').join(',');
+      // CPPM-11: the ones already sent to MIMS hold the identity over there too.
+      // Recorded inside this transaction, so the outstanding work either lands
+      // with the erasure or not at all — it can never be lost between the two.
+      const [synced] = await conn.execute(
+        `SELECT id, external_ref FROM cp_submissions
+          WHERE id IN (${ph}) AND external_ref IS NOT NULL AND external_ref <> ''`, retainIds);
+      mimsTargets = synced;
+      await mimsRedaction.queueRedactions(conn, clientId, userId, synced);
+
       await conn.execute(
         `UPDATE cp_submissions SET user_id = NULL, submitter_name = ?, submitter_email = ?, ip_address = NULL WHERE id IN (${ph})`,
         [ERASED, ERASED, ...retainIds]
@@ -132,6 +161,15 @@ async function eraseUser(userId, clientId) {
           AND EXISTS (SELECT 1 FROM cp_ae_review_tasks t WHERE t.chat_conversation_id = c.id)`, [userId, clientId]);
     if (flaggedChats.affectedRows) {
       summary.retained.push(`chat_conversations(${flaggedChats.affectedRows}) [safety review raised — identity severed, record retained]`);
+    }
+
+    // CPPM-15 (decision C, Rohith 29 Sep): a training attempt is the record that a
+    // module was completed — keep it, remove who took it (as for AE/PC submissions).
+    const [trainingKept] = await conn.execute(
+      `UPDATE cp_training_attempts SET portal_user_id = NULL, person_name = ?, person_email = ?
+        WHERE portal_user_id = ? AND client_id = ?`, [ERASED, ERASED, userId, clientId]);
+    if (trainingKept.affectedRows) {
+      summary.retained.push(`training_attempts(${trainingKept.affectedRows}) [completion record retained — name and email removed]`);
     }
 
     // Delete engagement/identity-link data.
@@ -166,6 +204,19 @@ async function eraseUser(userId, clientId) {
     summary.anonymized.push('cp_portal_users(identity)');
 
     await conn.commit();
+
+    // CPPM-11: MIMS is called only after the CP erasure has committed — never
+    // with a transaction held open across a network call. Every case is already
+    // recorded as owed, so a failure here delays the redaction, it never loses it.
+    try {
+      const flushed = await mimsRedaction.flushForSubmissions(clientId, mimsTargets.map(s => s.id));
+      summary.mims = { ...flushed, detail: mimsRedaction.describe(flushed) };
+    } catch (err) {
+      log.error('dataSubject.mims_redaction_flush_failed', { err, user_id: userId, client_id: clientId });
+      const pendingRefs = mimsTargets.map(s => String(s.external_ref));
+      summary.mims = { done: [], pending: pendingRefs, detail: mimsRedaction.describe({ done: [], pending: pendingRefs }) };
+    }
+
     return summary;
   } catch (err) {
     await conn.rollback();

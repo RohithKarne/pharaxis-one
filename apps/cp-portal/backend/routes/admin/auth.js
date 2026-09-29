@@ -10,6 +10,8 @@ const log     = require('../../utils/logger');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, ADMIN_SECRET } = require('../../middleware/auth');
+const { audit } = require('../../utils/audit');
+const lockout = require('../../utils/loginLockout');
 
 // SEC: admin console is same-origin only and never linked cross-site, so Strict
 // SameSite is safe here and gives full CSRF protection on the admin surface.
@@ -27,13 +29,36 @@ router.post('/login', async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
 
     const [[user]] = await pool.execute('SELECT * FROM cp_admin_users WHERE email = ? AND is_active = 1', [email]);
+    // CPPM-49: five wrong passwords in a row lock this sign-in. While locked it is
+    // refused before the password is checked, so the right password is refused too.
+    const who = user ? { adminId: user.id, name: user.name } : { adminId: null, name: email };
+    const lockKey = lockout.loginKey('admin', null, email);
+    if (await lockout.isLocked(lockKey)) {
+      await audit(who, user?.client_id ?? null, 'LOGIN_FAILED', 'admin_user', user?.id ?? null, { email, reason: 'locked' });
+      return res.status(423).json({ error: lockout.LOCKED_MESSAGE });
+    }
+    const refuse = async () => {
+      if (await lockout.recordFailure(lockKey)) {
+        await audit(who, user?.client_id ?? null, 'LOGIN_LOCKED', 'admin_user', user?.id ?? null, { email, minutes: lockout.LOCK_MINUTES });
+        return res.status(423).json({ error: lockout.LOCKED_MESSAGE });
+      }
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    };
+
+    // CPPM-10: sign-in attempts are recorded. The email identifies the attempt;
+    // the password and the issued token are never written to the trail.
     if (!user) {
       bcrypt.compareSync(password, DUMMY_HASH); // equalize timing with the valid-user path
-      return res.status(401).json({ error: 'Invalid credentials.' });
+      await audit({ adminId: null, name: email }, null, 'LOGIN_FAILED', 'admin_user', null, { email, reason: 'unknown_or_inactive_email' });
+      return refuse();
     }
 
     const valid = bcrypt.compareSync(password, user.password);
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials.' });
+    if (!valid) {
+      await audit({ adminId: user.id, name: user.name }, user.client_id, 'LOGIN_FAILED', 'admin_user', user.id, { email: user.email, reason: 'wrong_password' });
+      return refuse();
+    }
+    await lockout.clearAttempts(lockKey);
 
     const token = jwt.sign(
       // CP-26: embed token_version for revocation on password change.
@@ -43,6 +68,7 @@ router.post('/login', async (req, res) => {
     );
 
     await pool.execute(`UPDATE cp_admin_users SET updated_at = NOW() WHERE id = ?`, [user.id]);
+    await audit({ adminId: user.id, name: user.name }, user.client_id, 'LOGIN', 'admin_user', user.id, { email: user.email, role: user.role });
 
     // SEC: token is delivered only via the httpOnly cookie, never in the body.
     res.cookie('cp_admin_token', token, { ...COOKIE_OPTS, maxAge: 12 * 60 * 60 * 1000 })
@@ -80,6 +106,7 @@ router.patch('/password', authenticateAdmin, async (req, res) => {
 
     const hash = bcrypt.hashSync(new_password, 12);
     await pool.execute(`UPDATE cp_admin_users SET password = ?, token_version = token_version + 1, updated_at = NOW() WHERE id = ?`, [hash, user.id]);
+    await audit(req.admin, req.admin.clientId ?? null, 'PASSWORD_CHANGED', 'admin_user', user.id, {});
     res.json({ message: 'Password updated.' });
   } catch (err) {
     // SEC: as in /login — `current_password` and `new_password` are in scope and

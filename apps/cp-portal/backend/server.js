@@ -170,6 +170,7 @@ app.use('/api/admin/email-config', require('./routes/admin/emailConfig'));
 app.use('/api/admin/feedback',     require('./routes/admin/feedback'));
 app.use('/api/admin/faq',          require('./routes/admin/faq'));
 app.use('/api/admin/language',     require('./routes/admin/language'));
+app.use('/api/admin/scanner',      require('./routes/admin/scanner'));
 
 // ── Public Portal Routes ──────────────────────────────────────
 app.use('/api/portal/config',        require('./routes/portal/config'));
@@ -189,6 +190,7 @@ app.use('/api/portal/faq',           require('./routes/portal/faq'));
 app.use('/api/portal/search',        require('./routes/portal/search'));
 app.use('/api/portal/personal',      require('./routes/portal/personal'));
 app.use('/api/portal/bookings',      require('./routes/portal/bookings'));
+app.use('/api/portal/training',      require('./routes/portal/training'));   // CPPM-15
 
 // ── S5-6: Content Scheduler — auto-promote scheduled → published ──
 // CP-14: returns the tick fn (no side effects) so it can be driven either by the
@@ -244,6 +246,12 @@ function createContentScheduler() {
       // CPPM-17: remove chat records past retention.
       const { purgeExpiredChats } = require('./utils/chatRecords');
       await purgeExpiredChats().catch(err => log.error('chat.records.purge_failed', { err }));
+      // CPPM-29: remove anonymous visitors' cookie choices past retention.
+      const { purgeExpiredConsent } = require('./utils/consent');
+      await purgeExpiredConsent().catch(err => log.error('consent.records.purge_failed', { err }));
+      // CPPM-39: scan attachments held because the virus scanner was unreachable.
+      const { rescanHeldAttachments } = require('./services/attachmentScan');
+      await rescanHeldAttachments().catch(err => log.error('attachments.rescan_failed', { err }));
     } catch { /* silently ignore scheduler errors */ }
     finally {
       if (lockAcquired) {

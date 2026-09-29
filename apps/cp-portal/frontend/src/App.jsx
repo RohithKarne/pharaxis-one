@@ -73,17 +73,19 @@ import FAQPortalPage           from './portal/pages/FAQPage'
 
 import ClinicalTrialsPage      from './portal/pages/ClinicalTrialsPage'
 import TrainingPage            from './portal/pages/TrainingPage'
+import TrainingModulePage      from './portal/pages/TrainingModulePage'
 
 import TrialsAdminPage         from './admin/pages/TrialsAdminPage'
 import TrainingAdminPage       from './admin/pages/TrainingAdminPage'
 
 function AdminGuard({ children }) {
-  const { admin, authLoading, logout } = useAdminAuth()
+  const { admin, authLoading, signOut } = useAdminAuth()
   const location = useLocation()
   if (authLoading) return <div className="cp-loading">Restoring admin session...</div>
   if (!admin) return <Navigate to="/admin/login" replace state={{ from: location.pathname + location.search }} />
   // CP-64: idle auto-logoff active only while authenticated in the admin console.
-  return <><IdleTimeout timeoutMinutes={ADMIN_IDLE_MINUTES} onTimeout={logout} />{children}</>
+  // CPPM-40: signOut, so the server session ends too.
+  return <><IdleTimeout timeoutMinutes={ADMIN_IDLE_MINUTES} onTimeout={signOut} />{children}</>
 }
 
 function FeatureGuard({ featureKey, children }) {
@@ -104,8 +106,8 @@ function PortalAuthGuard({ children }) {
 // CP-64: portal idle auto-logoff — active only when a portal user is logged in
 // (anonymous browsing has no session to expire). Reads user/logout from context.
 function PortalIdleTimeout() {
-  const { user, logout } = usePortal()
-  return <IdleTimeout timeoutMinutes={user ? PORTAL_IDLE_MINUTES : 0} onTimeout={logout} />
+  const { user, signOut } = usePortal()
+  return <IdleTimeout timeoutMinutes={user ? PORTAL_IDLE_MINUTES : 0} onTimeout={signOut} />
 }
 
 // PortalContext records a failed config load in `error` and, until 2026-09-14,
@@ -151,6 +153,7 @@ function PortalRoutes() {
           <Route path="search"          element={<SearchResultsPage />} />
           <Route path="trials"          element={<ClinicalTrialsPage />} />
           <Route path="training"        element={<TrainingPage />} />
+          <Route path="training/:moduleId" element={<PortalAuthGuard><TrainingModulePage /></PortalAuthGuard>} />
           <Route path="*"                 element={<PortalNotFoundPage />} />
         </Routes>
       </PortalLayout>

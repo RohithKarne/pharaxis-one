@@ -58,7 +58,7 @@ function NavDropdown({ label, items, base, location, onNavigate }) {
 }
 
 export default function PortalLayout({ children }) {
-  const { portalConfig, loading, user, logout, isFeatureEnabled, clientCode, showGate, language, setLanguage, t } = usePortal()
+  const { portalConfig, loading, user, signOut, isFeatureEnabled, clientCode, showGate, language, setLanguage, t } = usePortal()
   const has_active_safety_alert = portalConfig?.has_active_safety_alert
   const safetySig = portalConfig?.safety_alert_sig || ''
   const [bannerDismissed, setBannerDismissed] = useState(false)
@@ -175,7 +175,7 @@ export default function PortalLayout({ children }) {
   const base = `/portal/${clientCode}`
 
   function handleLogout() {
-    logout()
+    signOut()
     navigate(`${base}`)
   }
 

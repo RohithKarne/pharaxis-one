@@ -9,6 +9,7 @@ const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
 const log = require('../../utils/logger');
+const { wordingFrom, bumpVersion, ensureVersion, saveWording } = require('../../utils/consentText');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
 
@@ -35,9 +36,16 @@ router.patch('/:clientId', authenticateAdmin, async (req, res) => {
     const { clientId } = req.params;
     const { jurisdictions, banner_config, version, require_reconsent } = req.body;
 
-    const [[existing]] = await pool.execute('SELECT id FROM cp_compliance_config WHERE client_id = ?', [clientId]);
+    let [[existing]] = await pool.execute('SELECT id, version FROM cp_compliance_config WHERE client_id = ?', [clientId]);
     if (!existing) {
       await pool.execute(`INSERT INTO cp_compliance_config (client_id) VALUES (?)`, [clientId]);
+      [[existing]] = await pool.execute('SELECT id, version FROM cp_compliance_config WHERE client_id = ?', [clientId]);
+    }
+
+    // CPPM-42: the version is not typed. It moves on by itself when the wording changes
+    // (below) or through Force Re-acceptance, so a request may only repeat the current one.
+    if (version !== undefined && String(version) !== existing.version) {
+      return res.status(400).json({ error: `The consent version cannot be set by hand. It changes by itself when the banner wording changes, or with Force Re-acceptance. Current version: ${existing.version}.` });
     }
 
     const fields = [];
@@ -51,10 +59,6 @@ router.patch('/:clientId', authenticateAdmin, async (req, res) => {
       fields.push('banner_config_json = ?');
       values.push(JSON.stringify(banner_config));
     }
-    if (version !== undefined) {
-      fields.push('version = ?');
-      values.push(version);
-    }
     if (require_reconsent !== undefined) {
       fields.push('require_reconsent = ?');
       values.push(require_reconsent ? 1 : 0);
@@ -67,9 +71,25 @@ router.patch('/:clientId', authenticateAdmin, async (req, res) => {
 
     await pool.execute(`UPDATE cp_compliance_config SET ${fields.join(', ')} WHERE client_id = ?`, values);
 
-    const [[updated]] = await pool.execute('SELECT * FROM cp_compliance_config WHERE client_id = ?', [clientId]);
-    await audit(req.admin, clientId, 'UPDATE', 'compliance', clientId, { jurisdictions, version });
-    res.json({ compliance: updated });
+    // CPPM-13: a version's wording is evidence, so it is stored once and never
+    // rewritten. Saving different wording moves the notice on to a new version
+    // instead of editing the old one under everyone who already accepted it.
+    let [[updated]] = await pool.execute('SELECT * FROM cp_compliance_config WHERE client_id = ?', [clientId]);
+    let rewordedTo = null;
+    if (banner_config !== undefined) {
+      const saved = await saveWording(clientId, updated.version, wordingFrom(JSON.stringify(banner_config)), req.admin?.adminId || null);
+      if (saved.version !== updated.version) {
+        await pool.execute('UPDATE cp_compliance_config SET version = ?, updated_at = NOW() WHERE client_id = ?', [saved.version, clientId]);
+        rewordedTo = saved.version;
+        [[updated]] = await pool.execute('SELECT * FROM cp_compliance_config WHERE client_id = ?', [clientId]);
+      }
+    }
+
+    await audit(req.admin, clientId, 'UPDATE', 'compliance', clientId, { jurisdictions, version: existing.version, reworded_to_version: rewordedTo });
+    res.json({
+      compliance: updated,
+      ...(rewordedTo ? { message: `The wording changed, so it was saved as consent version ${rewordedTo}. Version ${existing.version} keeps the text people have already accepted.` } : {}),
+    });
   } catch (err) {
     log.error('admin.compliance.error', { err, route: 'PATCH /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -89,9 +109,11 @@ router.post('/:clientId/trigger-reconsent', authenticateAdmin, async (req, res) 
 
     // Bump the patch version: 1.0 → 1.1, 1.9 → 1.10, 2 → 2.1
     const current = (row.version || '1.0').replace(/^v/i, '')
-    const parts   = current.split('.')
-    parts[parts.length - 1] = String(Number(parts[parts.length - 1]) + 1)
-    const newVersion = parts.join('.')
+    const newVersion = bumpVersion(current)
+
+    // CPPM-13: the new version carries the wording as it stands now, so what
+    // people are about to re-accept is recorded before anyone accepts it.
+    await ensureVersion(clientId, newVersion, wordingFrom(row.banner_config_json), req.admin?.adminId || null)
 
     await pool.execute(`UPDATE cp_compliance_config SET version=?, require_reconsent=1, updated_at=NOW() WHERE client_id=?`,
       [newVersion, clientId])

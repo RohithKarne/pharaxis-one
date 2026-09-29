@@ -13,8 +13,14 @@ const { requirePortalAuth, authenticatePortal, PORTAL_SECRET } = require('../../
 const { queueEmail } = require('../../utils/emailOutbox');
 const sso = require('../../services/ssoService');
 const log = require('../../utils/logger');
+const { systemAudit } = require('../../utils/audit');
+const lockout = require('../../utils/loginLockout');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' };
+
+// CPPM-49: compared against when the email has no account, so a wrong address takes
+// as long as a wrong password and the timing does not reveal who is registered.
+const DUMMY_HASH = bcrypt.hashSync('cp-timing-equalizer', 12);
 
 const DEFAULT_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other'];
 
@@ -59,11 +65,30 @@ router.post('/login', async (req, res) => {
     if (email.length    > 254) return res.status(400).json({ error: 'Input exceeds maximum length.' });
     if (password.length > 128) return res.status(400).json({ error: 'Input exceeds maximum length.' });
 
-    const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
+    const [[client]] = await pool.execute('SELECT id, login_mode FROM cp_clients WHERE code = ? AND is_active = 1', [client_code]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    // CPPM-50: the sign-in page hides the password form for a single-sign-on-only
+    // portal; refuse the password itself too, before it is checked, so a password
+    // set before the switch cannot be used by posting here directly.
+    if (sso.normalizeLoginMode(client.login_mode) === 'sso_only') {
+      return res.status(403).json({ error: 'This portal uses single sign-on. Use the sign-on button to sign in.' });
+    }
+
+    // CPPM-49: while locked, refuse before the password is checked, so the right
+    // password is refused too.
+    const lockKey = lockout.loginKey('portal', client.id, email);
+    if (await lockout.isLocked(lockKey)) return res.status(423).json({ error: lockout.LOCKED_MESSAGE });
 
     const [[user]] = await pool.execute('SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ? AND is_active = 1', [client.id, email]);
-    if (!user || !bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Invalid email or password.' });
+    const valid = bcrypt.compareSync(password, user ? user.password : DUMMY_HASH);
+    if (!user || !valid) {
+      if (await lockout.recordFailure(lockKey)) {
+        if (user) await systemAudit('portal sign-in', client.id, 'LOGIN_LOCKED', 'portal_user', user.id, { minutes: lockout.LOCK_MINUTES });
+        return res.status(423).json({ error: lockout.LOCKED_MESSAGE });
+      }
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+    await lockout.clearAttempts(lockKey);
     if (!user.email_verified) return res.status(403).json({ error: 'Please verify your email address before signing in. Check your inbox for the verification link.', unverified: true });
 
     await pool.execute(`UPDATE cp_portal_users SET last_login_at = NOW() WHERE id = ?`, [user.id]);
@@ -390,18 +415,17 @@ router.get('/sso/:provider/callback', async (req, res) => {
         'SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ? AND is_active = 1 LIMIT 1',
         [client.id, identity.email]
       );
+      // CPPM-51: access is by administrator approval only, so single sign-on never
+      // creates an account — an email with no active account is refused. (It did
+      // create one from 29 Jul, contrary to the SSO settings screen.) Only the
+      // email's domain is recorded: the person has no account with us.
       if (!byEmail) {
-        // Auto-provision verified SSO user for seamless onboarding
-        const [resIns] = await pool.execute(
-          `INSERT INTO cp_portal_users (client_id, email, first_name, last_name, email_verified, is_active)
-           VALUES (?, ?, ?, ?, 1, 1)`,
-          [client.id, identity.email, identity.name || 'SSO User', '']
-        );
-        const [[createdUser]] = await pool.execute('SELECT * FROM cp_portal_users WHERE id = ?', [resIns.insertId]);
-        user = createdUser;
-      } else {
-        user = byEmail;
+        const domain = identity.email.split('@')[1] || '';
+        await systemAudit('portal sign-on', client.id, 'LOGIN_REFUSED', 'portal_user', null,
+          { provider: providerKey, reason: 'no_account', email_domain: domain });
+        return fail('no_account');
       }
+      user = byEmail;
       // Link this IdP identity to the matched account for future logins.
       await pool.execute(
         `INSERT INTO cp_sso_identities (client_id, portal_user_id, provider_key, subject, email, last_login_at)

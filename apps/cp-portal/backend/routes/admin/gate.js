@@ -7,7 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { audit } = require('../../utils/audit');
+const { audit, changesBetween } = require('../../utils/audit');
 const log = require('../../utils/logger');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
@@ -49,7 +49,7 @@ router.patch('/:clientId', authenticateAdmin, async (req, res) => {
     updates.push(`updated_at = NOW()`);
     params.push(clientId);
 
-    const [[existing]] = await pool.execute('SELECT id FROM cp_gate_config WHERE client_id = ?', [clientId]);
+    const [[existing]] = await pool.execute('SELECT * FROM cp_gate_config WHERE client_id = ?', [clientId]);
     if (existing) {
       await pool.execute(`UPDATE cp_gate_config SET ${updates.join(', ')} WHERE client_id = ?`, params);
     } else {
@@ -60,7 +60,9 @@ router.patch('/:clientId', authenticateAdmin, async (req, res) => {
         insertParams
       );
     }
-    await audit(req.admin, clientId, 'UPDATE', 'gate', clientId, { fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute('SELECT * FROM cp_gate_config WHERE client_id = ?', [clientId]);
+    // CPPM-43: what changed, from → to (a first save shows every field as from null).
+    await audit(req.admin, clientId, 'UPDATE', 'gate', clientId, { changes: changesBetween(existing, after, ALLOWED) });
     res.json({ message: 'Gate config updated.' });
   } catch (err) {
     log.error('admin.gate.error', { err, route: 'PATCH /:clientId', path: req.path, request_id: req.requestId || null });
@@ -90,8 +92,12 @@ router.patch('/:clientId/user-types/:typeId', authenticateAdmin, async (req, res
     }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(typeId, clientId);
+    const ROW = 'SELECT * FROM cp_gate_user_types WHERE id = ? AND client_id = ?';
+    const [[before]] = await pool.execute(ROW, [typeId, clientId]);
     await pool.execute(`UPDATE cp_gate_user_types SET ${updates.join(', ')} WHERE id = ? AND client_id = ?`, params);
-    await audit(req.admin, clientId, 'UPDATE', 'gate', typeId, { entity: 'user_type', fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute(ROW, [typeId, clientId]);
+    // CPPM-43: what changed, from → to — not just which fields the screen sent.
+    await audit(req.admin, clientId, 'UPDATE', 'gate', typeId, { entity: 'user_type', changes: changesBetween(before, after, ALLOWED) });
     res.json({ message: 'User type updated.' });
   } catch (err) {
     log.error('admin.gate.error', { err, route: 'PATCH /:clientId/user-types/:typeId', path: req.path, request_id: req.requestId || null });

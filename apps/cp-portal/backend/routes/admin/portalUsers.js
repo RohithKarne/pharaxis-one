@@ -11,8 +11,9 @@ const { authenticateAdmin, requireClientAccess } = require('../../middleware/aut
 const { queueEmail } = require('../../utils/emailOutbox');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
-const { audit } = require('../../utils/audit');
+const { audit, changesBetween } = require('../../utils/audit');
 const log = require('../../utils/logger');
+const lockout = require('../../utils/loginLockout');
 
 const VALID_USER_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other'];
 
@@ -297,6 +298,22 @@ router.post('/:clientId/:userId/resend-invite', authenticateAdmin, async (req, r
   }
 });
 
+// POST /api/admin/users/:clientId/:userId/unlock — CPPM-49: lift a sign-in lock
+// before its 30 minutes are up.
+router.post('/:clientId/:userId/unlock', authenticateAdmin, async (req, res) => {
+  try {
+    const [[user]] = await pool.execute(
+      'SELECT id, email FROM cp_portal_users WHERE id = ? AND client_id = ?', [req.params.userId, req.params.clientId]);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    const removed = await lockout.clearAttempts(lockout.loginKey('portal', req.params.clientId, user.email));
+    if (removed) await audit(req.admin, req.params.clientId, 'UNLOCK', 'portal_user', user.id, {});
+    res.json({ message: removed ? 'Sign-in unlocked.' : 'This user’s sign-in was not locked.' });
+  } catch (err) {
+    log.error('admin.portalUsers.error', { err, route: 'POST /:clientId/:userId/unlock', path: req.path, request_id: req.requestId || null });
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 router.get('/:clientId', authenticateAdmin, async (req, res) => {
   try {
     const { user_type, search } = req.query;
@@ -306,7 +323,9 @@ router.get('/:clientId', authenticateAdmin, async (req, res) => {
     if (search) { query += ' AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)'; const s = `%${search}%`; params.push(s, s, s); }
     query += ' ORDER BY created_at DESC';
     const [rows] = await pool.execute(query, params);
-    res.json({ users: rows });
+    // CPPM-49: when a user's sign-in is locked, and until when (UTC).
+    const locked = await lockout.lockedUntilByEmail('portal', req.params.clientId, rows.map(r => r.email));
+    res.json({ users: rows.map(r => ({ ...r, locked_until: locked[r.email] || null })) });
   } catch (err) {
     log.error('admin.portalUsers.error', { err, route: 'GET /:clientId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
@@ -354,8 +373,15 @@ router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
     }
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.userId, req.params.clientId);
+    const ROW = 'SELECT * FROM cp_portal_users WHERE id = ? AND client_id = ?';
+    const [[before]] = await pool.execute(ROW, [req.params.userId, req.params.clientId]);
     await pool.execute(`UPDATE cp_portal_users SET ${updates.join(', ')} WHERE id=? AND client_id=?`, params);
-    await audit(req.admin, req.params.clientId, 'UPDATE', 'portal_user', req.params.userId, { fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute(ROW, [req.params.userId, req.params.clientId]);
+    // CPPM-43: what changed. A person's name, email and country are personal details:
+    // recorded as changed, never their values, so the audit trail cannot undo an erasure.
+    await audit(req.admin, req.params.clientId, 'UPDATE', 'portal_user', req.params.userId, { changes: changesBetween(before, after,
+      ['first_name', 'last_name', 'email', 'user_type', 'country', 'is_active', 'is_verified', 'email_verified'],
+      ['first_name', 'last_name', 'email', 'country']) });
     res.json({ message: 'User updated.' });
   } catch (err) {
     log.error('admin.portalUsers.error', { err, route: 'PATCH /:clientId/:userId', path: req.path, request_id: req.requestId || null });

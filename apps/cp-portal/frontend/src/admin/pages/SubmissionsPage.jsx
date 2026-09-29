@@ -1,7 +1,7 @@
 import { useState, useEffect, Fragment } from 'react'
 import { useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
-import { adminHeaders } from '../context/AdminAuthContext'
+import { adminHeaders, useAdminAuth } from '../context/AdminAuthContext'
 
 const TYPE_LABELS = {
   medical_inquiry:   'Medical Inquiry',
@@ -26,7 +26,73 @@ const STATUS_LABELS = {
   closed: 'Closed',
 }
 
+// CPPM-14: draft the medical answer, then a reviewer approves and sends it.
+function AnswerPanel({ clientId, submissionId, canApprove }) {
+  const [answer, setAnswer] = useState(null)
+  const [body, setBody] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    fetch(`/api/admin/submissions/${clientId}/${submissionId}/answer`, { headers: adminHeaders() })
+      .then(r => r.json()).then(d => { setAnswer(d.answer); setBody(d.answer?.body || '') }).catch(() => {})
+  }, [clientId, submissionId])
+
+  async function call(method, path, okMsg) {
+    setBusy(true); setMsg(''); setErr('')
+    try {
+      const res = await fetch(`/api/admin/submissions/${clientId}/${submissionId}/answer${path}`, {
+        method, headers: adminHeaders(), ...(method === 'PUT' ? { body: JSON.stringify({ body }) } : {}),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setErr(d.error || 'Could not save.'); return }
+      setMsg(d.message || okMsg)
+      const fresh = await fetch(`/api/admin/submissions/${clientId}/${submissionId}/answer`, { headers: adminHeaders() }).then(r => r.json())
+      setAnswer(fresh.answer)
+    } catch { setErr('Network error — please try again.') } finally { setBusy(false) }
+  }
+
+  const sent = answer?.status === 'sent'
+  return (
+    <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #E5E7EB' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>Medical answer</div>
+      {sent ? (
+        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: 12, fontSize: 13, whiteSpace: 'pre-wrap' }}>
+          {answer.body}
+          <div style={{ fontSize: 11, color: '#166534', marginTop: 8 }}>
+            Approved by {answer.approved_by_name || 'unknown'} · sent {answer.sent_at ? new Date(answer.sent_at).toLocaleString() : ''}
+            {answer.send_error ? ` · ${answer.send_error}` : ''}
+          </div>
+        </div>
+      ) : (
+        <>
+          <textarea rows={5} value={body} onChange={e => setBody(e.target.value)} disabled={busy}
+            placeholder="Write the approved answer that goes back to the person who asked."
+            style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #CBD5E1', fontSize: 13, fontFamily: 'inherit' }} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+            <button disabled={busy || body.trim().length < 10} onClick={() => call('PUT', '', 'Draft saved.')}
+              style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid #CBD5E1', background: '#fff', fontWeight: 600, cursor: 'pointer' }}>
+              Save draft
+            </button>
+            <button disabled={busy || !answer || !canApprove} onClick={() => call('POST', '/send', 'Answer sent.')}
+              title={canApprove ? 'Approves the answer and emails it to the person who asked' : 'Only a reviewer can approve and send'}
+              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: canApprove && answer ? '#6B3FA0' : '#C4B5FD', color: '#fff', fontWeight: 600, cursor: canApprove && answer ? 'pointer' : 'not-allowed' }}>
+              Approve &amp; send
+            </button>
+            {answer?.drafted_by_name && <span style={{ fontSize: 11, color: '#6B7280' }}>Draft by {answer.drafted_by_name}</span>}
+          </div>
+        </>
+      )}
+      {msg && <div style={{ fontSize: 12, color: '#166534', marginTop: 8, fontWeight: 600 }}>{msg}</div>}
+      {err && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 8, fontWeight: 600 }}>{err}</div>}
+    </div>
+  )
+}
+
 export default function SubmissionsPage() {
+  const { hasRole } = useAdminAuth()
+  const canApprove = hasRole('superadmin', 'admin', 'reviewer')
   const { clientId }            = useParams()
   const [submissions, setSubmissions] = useState([])
   const [counts, setCounts]     = useState([])
@@ -317,7 +383,15 @@ export default function SubmissionsPage() {
                           <>
                             <div style={{ fontSize: 12, fontWeight: 600, margin: '14px 0 8px', color: '#374151' }}>Attachments ({s.attachments.length})</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {s.attachments.map(a => (
+                              {s.attachments.map(a => a.scan_status && a.scan_status !== 'clean' ? (
+                                /* CPPM-39: only files cleared by the virus scan are downloadable. */
+                                <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6B7280' }}>
+                                  {a.file_name}{' '}
+                                  <span style={{ color: a.scan_status === 'infected' ? '#B91C1C' : '#92400E', fontSize: 11, fontWeight: 600 }}>
+                                    {{ infected: 'Removed — contained a known virus', missing: 'File no longer available' }[a.scan_status] || 'Held — being checked for viruses'}
+                                  </span>
+                                </span>
+                              ) : (
                                 <a key={a.id} href={`/api/admin/submissions/${clientId}/attachments/${a.id}`} target="_blank" rel="noopener noreferrer"
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#2563EB', textDecoration: 'none' }}>
                                   ⬇ {a.file_name} <span style={{ color: '#9CA3AF', fontSize: 11 }}>({Math.round((a.file_size || 0) / 1024)} KB)</span>
@@ -326,6 +400,7 @@ export default function SubmissionsPage() {
                             </div>
                           </>
                         )}
+                        <AnswerPanel clientId={clientId} submissionId={s.id} canApprove={canApprove} />
                       </td>
                     </tr>
                   )}

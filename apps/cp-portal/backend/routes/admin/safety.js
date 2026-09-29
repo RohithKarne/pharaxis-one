@@ -7,10 +7,11 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { audit } = require('../../utils/audit');
+const { audit, changesBetween } = require('../../utils/audit');
 const { notifyPortalUsers } = require('../../utils/notify');
 const { autoTranslate } = require('../../utils/translator');
 const { validateUploads } = require('../../utils/fileValidation');
+const { refuseUnlessClean } = require('../../utils/virusScan');
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
@@ -48,7 +49,9 @@ const upload = multer({
 const { sanitizeHtml: sanitiseHtml } = require('../../utils/sanitizeHtml');
 const log = require('../../utils/logger');
 
-const VALID_TYPES     = ['dhcp_letter','product_recall','urgent_safety_restriction','field_safety_notice','other'];
+// CPPM-47: 'safety_update' added (Rohith, 29 Sep) — existing alerts already carry it,
+// and without it they could not be saved. Keep in step with admin/pages/SafetyPage.jsx.
+const VALID_TYPES     = ['dhcp_letter','product_recall','urgent_safety_restriction','field_safety_notice','safety_update','other'];
 const VALID_SEVERITIES = ['critical','high','medium','informational'];
 
 // GET /api/admin/safety/:clientId
@@ -76,6 +79,9 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
     if (req.file) {
       const failure = validateUploads([req.file], ALLOWED_MIMES);
       if (failure) return res.status(400).json({ error: failure });
+      // CPPM-39: and against ClamAV's list of known viruses.
+      const scanRefusal = await refuseUnlessClean([req.file]);
+      if (scanRefusal) return res.status(scanRefusal.status).json({ error: scanRefusal.error });
     }
 
     try {
@@ -129,35 +135,65 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, (req, res) => 
 });
 
 // PUT /api/admin/safety/:clientId/:alertId
-router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, async (req, res) => {
+// CPPM-47: the edit box sends the same upload form as "new alert" (it can carry a PDF).
+// This route used to read only plain JSON, so every save from the screen arrived empty
+// and was refused with "No fields to update". It now reads both.
+router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, (req, res) => {
+  upload.single('attachment')(req, res, async (uploadErr) => {
+  if (uploadErr) return res.status(400).json({ error: uploadErr.message });
+  if (req.file) {
+    const failure = validateUploads([req.file], ALLOWED_MIMES);
+    if (failure) return res.status(400).json({ error: failure });
+    const scanRefusal = await refuseUnlessClean([req.file]);
+    if (scanRefusal) return res.status(scanRefusal.status).json({ error: scanRefusal.error });
+  }
   try {
     const { title, alert_type, severity, product_name, ref_number, body_html, effective_date, target_types, status, publish_at } = req.body;
     const fields = [], values = [];
 
+    if (title !== undefined && !String(title).trim()) return res.status(400).json({ error: 'Title cannot be empty.' });
     if (req.body.alert_type && !VALID_TYPES.includes(req.body.alert_type)) {
       return res.status(400).json({ error: `Invalid alert_type. Must be one of: ${VALID_TYPES.join(', ')}` });
     }
     if (req.body.severity && !VALID_SEVERITIES.includes(req.body.severity)) {
       return res.status(400).json({ error: `Invalid severity. Must be one of: ${VALID_SEVERITIES.join(', ')}` });
     }
+    // The upload form carries target_types as a JSON string; plain JSON callers send an array.
+    let targetTypes;
+    if (target_types !== undefined) {
+      try { targetTypes = typeof target_types === 'string' ? JSON.parse(target_types || '[]') : target_types; }
+      catch { return res.status(400).json({ error: 'target_types must be a JSON array.' }); }
+      if (!Array.isArray(targetTypes)) return res.status(400).json({ error: 'target_types must be a JSON array.' });
+    }
 
     if (title !== undefined)          { fields.push('title = ?');              values.push(title); }
     if (alert_type !== undefined)     { fields.push('alert_type = ?');         values.push(alert_type); }
     if (severity !== undefined)       { fields.push('severity = ?');           values.push(severity); }
-    if (product_name !== undefined)   { fields.push('product_name = ?');       values.push(product_name); }
-    if (ref_number !== undefined)     { fields.push('ref_number = ?');         values.push(ref_number); }
+    if (product_name !== undefined)   { fields.push('product_name = ?');       values.push(product_name || null); }
+    if (ref_number !== undefined)     { fields.push('ref_number = ?');         values.push(ref_number || null); }
     if (body_html !== undefined)      { fields.push('body_html = ?');          values.push(sanitiseHtml(body_html)); }
-    if (effective_date !== undefined) { fields.push('effective_date = ?');     values.push(effective_date); }
-    if (target_types !== undefined)   { fields.push('target_types_json = ?'); values.push(JSON.stringify(target_types)); }
+    // An empty date from the form means "leave it", not "set it to nothing".
+    if (effective_date)               { fields.push('effective_date = ?');     values.push(effective_date); }
+    if (targetTypes !== undefined)    { fields.push('target_types_json = ?'); values.push(JSON.stringify(targetTypes)); }
     if (status !== undefined)         { fields.push('status = ?');             values.push(status); }
     if (publish_at !== undefined)     { fields.push('publish_at = ?');         values.push(publish_at || null); }
+    if (req.file) {
+      fields.push('attachment_path = ?', 'attachment_name = ?');
+      values.push(`/uploads/private/safety/${req.params.clientId}/${req.file.filename}`, req.file.originalname);
+    }
 
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     fields.push('updated_at = NOW()');
     values.push(req.params.alertId, req.params.clientId);
 
+    const ROW = 'SELECT * FROM cp_safety_alerts WHERE id = ? AND client_id = ?';
+    const [[before]] = await pool.execute(ROW, [req.params.alertId, req.params.clientId]);
     await pool.execute(`UPDATE cp_safety_alerts SET ${fields.join(', ')} WHERE id = ? AND client_id = ?`, values);
-    await audit(req.admin, req.params.clientId, 'UPDATE', 'safety_alert', req.params.alertId, { fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute(ROW, [req.params.alertId, req.params.clientId]);
+    // CPPM-43: what changed, from → to, with the alert body in full — for a safety
+    // communication the old wording is exactly what an auditor needs.
+    await audit(req.admin, req.params.clientId, 'UPDATE', 'safety_alert', req.params.alertId, { changes: changesBetween(before, after,
+      ['title', 'alert_type', 'severity', 'product_name', 'ref_number', 'body_html', 'effective_date', 'target_types_json', 'status', 'publish_at', 'attachment_name']) });
     const transFields = {};
     if (title     !== undefined) transFields.title     = title;
     if (body_html !== undefined) transFields.body_html = sanitiseHtml(body_html);
@@ -167,6 +203,7 @@ router.put('/:clientId/:alertId', authenticateAdmin, requireClientAccess, async 
     log.error('admin.safety.error', { err, route: 'PUT /:clientId/:alertId', path: req.path, request_id: req.requestId || null });
     res.status(500).json({ error: 'Server error.' });
   }
+  });
 });
 
 // PATCH /api/admin/safety/:clientId/:alertId/resolve — mark as resolved
