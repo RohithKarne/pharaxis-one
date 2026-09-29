@@ -157,6 +157,17 @@ export default function AdminLayout({ children }) {
     document.title = `${pageTitle} | CP Admin`
   }, [pageTitle])
 
+  // CPPM-44: a stopped virus scanner holds every portal attachment and refuses admin
+  // uploads. Say so on every admin page, and say when the virus list last updated.
+  const [scanner, setScanner] = useState(null)
+  useEffect(() => {
+    fetch('/api/admin/scanner', { headers: adminHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(setScanner)
+      .catch(() => setScanner(null))
+  }, [location.pathname])
+  const listDate = scanner?.listDate ? new Date(scanner.listDate).toLocaleDateString() : null
+
   function handleLogout() {
     sessionStorage.removeItem('cp_sidebar_compact')
     sessionStorage.removeItem('cp_nav_groups')
@@ -300,6 +311,21 @@ export default function AdminLayout({ children }) {
           )}
         </div>
         <div className="cp-admin-content">
+          {scanner && !scanner.up && (
+            <div className="cp-error" role="alert" style={{ marginBottom: 16 }}>
+              The virus scanner is not running. Portal attachments are held and admin uploads are refused until it starts. It starts with the portal (npm run dev or npm start in apps/cp-portal/backend).
+            </div>
+          )}
+          {scanner?.up && scanner.listAgeDays >= 2 && (
+            <div role="alert" style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: '#FFFBEB', border: '1px solid #FCD34D', color: '#92400E', fontSize: 13 }}>
+              The virus list was last updated on {listDate} ({scanner.listAgeDays} days ago). It should refresh itself several times a day.
+            </div>
+          )}
+          {scanner?.up && location.pathname === '/admin' && listDate && scanner.listAgeDays < 2 && (
+            <div style={{ marginBottom: 12, fontSize: 12, color: '#6B7280' }}>
+              Virus scanner running · virus list updated {listDate}
+            </div>
+          )}
           {children}
         </div>
       </div>

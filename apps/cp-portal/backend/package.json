@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "db:migrate": "node scripts/run-migrations.js",
+    "predev": "bash ../scripts/start-scanner.sh",
     "dev": "nodemon server.js",
+    "prestart": "bash ../scripts/start-scanner.sh",
     "start": "node server.js",
     "test:static": "node tests/syntax-check.js",
     "test:smoke": "node tests/smoke-health.js",

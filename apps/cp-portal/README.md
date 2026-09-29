@@ -47,9 +47,15 @@ still saved) and admin uploads are **refused** with "could not be checked for vi
 
 ```bash
 brew install clamav
-freshclam       # downloads the virus list; run it again to update
-clamd --foreground --config-file=/opt/homebrew/etc/clamav/clamd.conf
+freshclam       # downloads the virus list the first time
 ```
+
+After that, **the scanner starts with the portal** (CPPM-44): `npm run dev` and `npm start`
+in `backend/` first run `scripts/start-scanner.sh`, which starts `clamd` if it is not
+running and `freshclam` in daemon mode so the virus list refreshes itself through the day.
+Both keep running after the portal stops. The admin screens show a red warning when the
+scanner is down, and an amber one when the virus list is two or more days old; the
+Dashboard shows when it last updated.
 
 `clamd.conf` needs `TCPSocket 3310`, `TCPAddr 127.0.0.1` and the same `DatabaseDirectory`
 as `freshclam.conf`. If `freshclam` fails with "NULL X509 store", add

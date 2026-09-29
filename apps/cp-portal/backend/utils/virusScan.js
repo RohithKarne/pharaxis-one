@@ -69,6 +69,30 @@ async function refuseUnlessClean(files) {
   return null;
 }
 
+/**
+ * CPPM-44: is the scanner up, and how old is its virus list? clamd's VERSION reply is
+ * "ClamAV 1.5.1/27777/Mon Sep 29 08:22:10 2026" — the date is when the list was built.
+ * Resolves { up: true, listDate, listAgeDays } | { up: false, error }. Never throws.
+ */
+function scannerStatus() {
+  return new Promise(resolve => {
+    let settled = false;
+    let reply = '';
+    const socket = net.createConnection({ host: HOST, port: PORT });
+    const done = result => { if (!settled) { settled = true; socket.destroy(); resolve(result); } };
+    socket.setTimeout(5000, () => done({ up: false, error: 'the virus scanner did not answer in time' }));
+    socket.on('error', err => done({ up: false, error: `virus scanner unreachable (${err.code || err.message})` }));
+    socket.on('connect', () => socket.write('zVERSION\0'));
+    socket.on('data', chunk => { reply += chunk.toString('utf8'); });
+    socket.on('end', () => {
+      const [, , built] = reply.replace(/\0/g, '').trim().split('/');
+      const listDate = built ? new Date(built) : null;
+      if (!listDate || isNaN(listDate)) return done({ up: true, listDate: null, listAgeDays: null });
+      done({ up: true, listDate: listDate.toISOString(), listAgeDays: Math.floor((Date.now() - listDate) / 86400000) });
+    });
+  });
+}
+
 /** Downloads: only a file ClamAV has cleared is served. Returns null when it may be served. */
 function downloadRefusal(scanStatus) {
   if (scanStatus === 'clean') return null;
@@ -77,4 +101,4 @@ function downloadRefusal(scanStatus) {
   return { status: 409, error: 'This file is still being checked for viruses. Please try again shortly.' };
 }
 
-module.exports = { scanFile, refuseUnlessClean, downloadRefusal };
+module.exports = { scanFile, refuseUnlessClean, downloadRefusal, scannerStatus };
