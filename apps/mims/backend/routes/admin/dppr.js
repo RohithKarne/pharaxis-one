@@ -46,9 +46,23 @@ const DPPR_DOMAINS = [
   {
     key: 'medical_data',
     label: 'Medical / Clinical Data',
-    description: 'Adverse event patient details: date of birth, sex, age, weight, height and ethnicity.',
+    description: 'Adverse event patient details: initials, date of birth, sex, age, weight, height and ethnicity.',
     tables: ['case_ae_patient_info'],
-    pii_fields: ['date_of_birth', 'sex', 'age', 'weight_kg', 'height_cm', 'ethnicity'],
+    pii_fields: ['patient_initials', 'date_of_birth', 'sex', 'age', 'weight_kg', 'height_cm', 'ethnicity'],
+  },
+  {
+    key: 'pc_patient_info',
+    label: 'Product Complaint Patient',
+    description: 'The patient named on a product complaint: name and date of birth.',
+    tables: ['case_pc_patient_info'],
+    pii_fields: ['patient_name', 'date_of_birth'],
+  },
+  {
+    key: 'medical_history',
+    label: 'AE Medical History',
+    description: "The adverse event patient's medical history: condition, notes and dates.",
+    tables: ['case_ae_medical_history'],
+    pii_fields: ['condition_name', 'notes', 'start_date', 'end_date'],
   },
   {
     key: 'case_narrative',
@@ -74,9 +88,9 @@ const DPPR_DOMAINS = [
   {
     key: 'inquiry_content',
     label: 'Inbox / Email Content',
-    description: 'Email bodies and sender information received through the inbox.',
+    description: 'Email bodies, sender information and the AI notes read from them, received through the inbox.',
     tables: ['inquiries'],
-    pii_fields: ['body', 'sender', 'subject'],
+    pii_fields: ['body', 'sender', 'subject', 'ai_suggested_payload'],
   },
 ];
 

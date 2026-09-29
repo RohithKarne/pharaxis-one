@@ -68,8 +68,9 @@ const DOMAIN_HANDLERS = {
   medical_data: {
     table:     'case_ae_patient_info',
     dateField: 'case_ae_patient_info.created_at',
-    // DOB, gender, age, weight, height, ethnicity. The row belongs to an AE version, not a case.
-    piiFields:   ['sex', 'ethnicity'],
+    // Initials, DOB, gender, age, weight, height, ethnicity. The row belongs to an AE
+    // version, not a case. Initials added 2026-09-29 (T18, Vasu's field list).
+    piiFields:   ['patient_initials', 'sex', 'ethnicity'],
     valueFields: ['date_of_birth', 'age', 'weight_kg', 'height_cm'],
     buildWhere: (rule) => [
       `DATEDIFF(NOW(), case_ae_patient_info.created_at) >= ${parseInt(rule.retention_days, 10)}`,
@@ -80,6 +81,40 @@ const DOMAIN_HANDLERS = {
               JOIN cases c ON c.id = v.case_id`,
     heldSql:     caseHeldSql('(SELECT hv.case_id FROM case_ae_versions hv WHERE hv.id = case_ae_patient_info.version_id)'),
     updateTable: 'case_ae_patient_info',
+  },
+
+  // T18 (Vasu's field list, 2026-09-29): the PC patient's name and date of birth.
+  pc_patient_info: {
+    table:       'case_pc_patient_info',
+    dateField:   'case_pc_patient_info.created_at',
+    piiFields:   ['patient_name'],
+    valueFields: ['date_of_birth'],
+    buildWhere: (rule) => [
+      `DATEDIFF(NOW(), case_pc_patient_info.created_at) >= ${parseInt(rule.retention_days, 10)}`,
+      `c.org_id = ${parseInt(rule.org_id, 10)}`,
+    ].join(' AND '),
+    fromSql: `FROM case_pc_patient_info
+              JOIN case_pc_versions v ON v.id = case_pc_patient_info.version_id
+              JOIN cases c ON c.id = v.case_id`,
+    heldSql:     caseHeldSql('(SELECT hv.case_id FROM case_pc_versions hv WHERE hv.id = case_pc_patient_info.version_id)'),
+    updateTable: 'case_pc_patient_info',
+  },
+
+  // T18: the AE patient's medical history — condition, notes and dates.
+  medical_history: {
+    table:       'case_ae_medical_history',
+    dateField:   'case_ae_medical_history.created_at',
+    piiFields:   ['condition_name', 'notes'],
+    valueFields: ['start_date', 'end_date'],
+    buildWhere: (rule) => [
+      `DATEDIFF(NOW(), case_ae_medical_history.created_at) >= ${parseInt(rule.retention_days, 10)}`,
+      `c.org_id = ${parseInt(rule.org_id, 10)}`,
+    ].join(' AND '),
+    fromSql: `FROM case_ae_medical_history
+              JOIN case_ae_versions v ON v.id = case_ae_medical_history.version_id
+              JOIN cases c ON c.id = v.case_id`,
+    heldSql:     caseHeldSql('(SELECT hv.case_id FROM case_ae_versions hv WHERE hv.id = case_ae_medical_history.version_id)'),
+    updateTable: 'case_ae_medical_history',
   },
 
   reporter_info: {
@@ -116,7 +151,10 @@ const DOMAIN_HANDLERS = {
     table:     'inquiries',
     dateField: 'inquiries.created_at',
     // sender holds the sender's name and address together ("Name" <email>).
+    // ai_suggested_payload (JSON: product / therapy-area guesses read from the
+    // body) cannot hold the text marker, so both actions clear it (T18).
     piiFields: ['body', 'sender', 'subject'],
+    valueFields: ['ai_suggested_payload'],
     buildWhere: (rule) => [
       `DATEDIFF(NOW(), inquiries.created_at) >= ${parseInt(rule.retention_days, 10)}`,
       `inquiries.org_id = ${parseInt(rule.org_id, 10)}`,
