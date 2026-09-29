@@ -9,8 +9,6 @@ import { isAdminUser } from '../../../shared/utils/adminScope.js'
 import { Button } from '../../../shared/ui'
 
 import ReportFilterBar from '../components/ReportFilterBar'
-import ReportMetricsGrid from '../components/ReportMetricsGrid'
-import ReportChartPanel from '../components/ReportChartPanel'
 import ReportTableViewer from '../components/ReportTableViewer'
 import CustomReportBuilderPanel from '../components/CustomReportBuilderPanel'
 
@@ -869,9 +867,9 @@ export default function ReportsPage() {
           <div style={cardStyle()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 800 }}>Release 1 Reporting Workspace</div>
+                <div style={{ fontSize: 18, fontWeight: 800 }}>Reporting Workspace</div>
                 <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>
-                  Clean navigation for report library, dashboards, schedulers, run history, and configuration.
+                  Report library, dashboards, schedules and run history.
                 </div>
               </div>
               <button onClick={() => pushSection('reports')} style={pillButtonStyle(true)}>Open Report Library</button>
@@ -968,8 +966,8 @@ export default function ReportsPage() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
                   <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{definition.name}</div>
-                  <span style={{ fontSize: 11, color: definition.is_system ? '#4338ca' : '#0f766e', fontWeight: 800 }}>
-                    {definition.is_system ? 'SYSTEM' : 'CUSTOM'}
+                  <span style={{ fontSize: 11, color: definition.is_built === false ? 'var(--text-muted)' : definition.is_system ? '#4338ca' : '#0f766e', fontWeight: 800 }}>
+                    {definition.is_built === false ? 'NOT BUILT YET' : definition.is_system ? 'SYSTEM' : 'CUSTOM'}
                   </span>
                 </div>
                 <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>{definition.group_label}</div>
@@ -1002,7 +1000,7 @@ export default function ReportsPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(true)}>Run Report</button>
+                  {selectedReport.is_built !== false && <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(true)}>Run Report</button>}
                   <button onClick={() => toggleFavorite('report', selectedReport.id)} style={pillButtonStyle(false)}>{isFavorite('report', selectedReport.id) ? 'Unfavorite' : 'Favorite'}</button>
                   <button onClick={() => loadVersions('report', selectedReport.id)} style={pillButtonStyle(false)}>Versions</button>
                   {canManageReports && <button onClick={() => duplicateReport(selectedReport.id)} style={pillButtonStyle(false)}>Duplicate</button>}
@@ -1067,7 +1065,7 @@ export default function ReportsPage() {
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Dataset</span>
                   <select value={reportForm.dataset_key} onChange={(event) => setReportForm((current) => ({ ...current, dataset_key: event.target.value }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
                     <option value="">Select dataset</option>
-                    {datasets.map((dataset) => (
+                    {datasets.filter((dataset) => dataset.is_built !== false).map((dataset) => (
                       <option key={dataset.dataset_key} value={dataset.dataset_key}>{dataset.name}</option>
                     ))}
                   </select>
@@ -1154,25 +1152,25 @@ export default function ReportsPage() {
                   <div style={{ fontSize: 18, fontWeight: 800 }}>Report Preview</div>
                   <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-muted)' }}>Manual preview before sharing or scheduling.</div>
                 </div>
-                <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(false)}>
-                  {reportPreviewLoading ? 'Running…' : 'Refresh Preview'}
-                </button>
+                {selectedReport.is_built !== false && (
+                  <button onClick={() => runSelectedReport(selectedReport.id)} style={pillButtonStyle(false)}>
+                    {reportPreviewLoading ? 'Running…' : 'Refresh Preview'}
+                  </button>
+                )}
               </div>
-              {reportPreview ? (
+              {selectedReport.is_built === false ? (
+                <div style={{ marginTop: 14, fontSize: 13, color: 'var(--text-muted)' }}>
+                  This report is not built yet. It cannot be run or scheduled.
+                </div>
+              ) : reportPreview ? (
                 <div style={{ marginTop: 14 }}>
-                  <ReportFilterBar 
-                    onFilterChange={() => {}} 
-                    onExport={() => exportRowsAsCsv(reportPreview.rows, `${selectedReport.report_key}.csv`)} 
-                    disableExport={!reportPreview.rows.length} 
+                  {/* The made-up figures (turnaround 2.5h, conversion 94%), the filters
+                      wired to nothing and the placeholder chart are gone (M-90). */}
+                  <ReportFilterBar
+                    onExport={() => exportRowsAsCsv(reportPreview.rows, `${selectedReport.report_key}.csv`)}
+                    disableExport={!reportPreview.rows.length}
                     onSchedule={scheduleSelectedReport}
                   />
-                  <ReportMetricsGrid metrics={{
-                    total_cases: reportPreview.rows.length,
-                    open_slas: reportPreview.rows.filter(r => r.status === 'open' || r.status === 'pending').length,
-                    avg_turnaround: '2.5h',
-                    conversion_rate: '94%'
-                  }} />
-                  <ReportChartPanel data={reportPreview.rows} />
                   <ReportTableViewer columns={reportPreview.columns} rows={reportPreview.rows} />
                 </div>
               ) : (
@@ -1188,6 +1186,9 @@ export default function ReportsPage() {
   }
 
   function renderDashboardWidgetPreview(widget) {
+    if (widget.not_built) {
+      return <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>This report is not built yet.</div>
+    }
     if (widget.display_mode === 'kpi-grid') {
       return (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10 }}>
@@ -1394,7 +1395,7 @@ export default function ReportsPage() {
                             widgets: current.widgets.map((item, itemIndex) => itemIndex === index ? { ...item, report_key: event.target.value } : item),
                           }))} style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
                             <option value="">Select report</option>
-                            {definitions.map((definition) => (
+                            {definitions.filter((definition) => definition.is_built !== false).map((definition) => (
                               <option key={definition.report_key} value={definition.report_key}>{definition.name}</option>
                             ))}
                           </select>
@@ -1480,7 +1481,7 @@ export default function ReportsPage() {
   }
 
   function renderSchedulesSection() {
-    const targetOptions = scheduleForm.target_type === 'dashboard' ? dashboards : definitions
+    const targetOptions = scheduleForm.target_type === 'dashboard' ? dashboards : definitions.filter((definition) => definition.is_built !== false)
     return (
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 18 }}>
         <div style={cardStyle()}>

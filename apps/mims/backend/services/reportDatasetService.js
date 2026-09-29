@@ -441,6 +441,20 @@ async function getLegacyCaseSummary(orgId, filters = {}) {
   return rows;
 }
 
+// The datasets this service actually produces. Every other report in the
+// library fell through to the plain case list and showed it under its own name
+// — Security Events, Case Closure Rate and 14 more (M-91). They now say so.
+const BUILT_DATASETS = new Set([
+  'daily-case-openings',
+  'daily-case-closures',
+  'daily-case-summary',
+  'daily-operations-pack',
+  'inbox-performance',
+  'inbox-sla',
+  'transmission-sla',
+  'case-summary',
+]);
+
 async function getDatasetByReportKey(reportKey, orgId, filters = {}) {
   switch (reportKey) {
     case 'daily-case-openings':
@@ -458,8 +472,12 @@ async function getDatasetByReportKey(reportKey, orgId, filters = {}) {
     case 'transmission-sla':
       return getTransmissionSlaReport(orgId, filters);
     case 'case-summary':
-    default:
       return getLegacyCaseSummary(orgId, filters);
+    default: {
+      const err = new Error('This report is not built yet.');
+      err.code = 'REPORT_NOT_BUILT';
+      throw err;
+    }
   }
 }
 
@@ -473,4 +491,5 @@ module.exports = {
   getTransmissionSlaReport,
   getLegacyCaseSummary,
   getDatasetByReportKey,
+  BUILT_DATASETS,
 };
