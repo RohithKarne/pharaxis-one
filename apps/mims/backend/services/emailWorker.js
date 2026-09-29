@@ -102,6 +102,10 @@ function stripHtml(html) {
 }
 
 function parseJsonSafe(raw, fallback) {
+  // email_job_queue.payload is a JSON column, which mysql2 returns already
+  // parsed. JSON.parse on the object threw, the fallback {} was used, and every
+  // MI letter failed as "missing smtp_host" while the case said SENT (M-97).
+  if (raw && typeof raw === 'object') return raw;
   try { return raw ? JSON.parse(raw) : fallback; } catch (_) { return fallback; }
 }
 
