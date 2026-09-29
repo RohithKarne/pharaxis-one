@@ -152,7 +152,7 @@ router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
     // not type it again (M-108). Same mapping as the API intake path.
     if (!latest) {
       const [[intake]] = await conn.execute(
-        `SELECT suspect_drug_name, batch_lot_number, reaction_description, reaction_onset_date, outcome,
+        `SELECT suspect_drug_name, batch_lot_number, dose, route_of_admin, reaction_description, reaction_onset_date, outcome,
                 is_serious, is_death, is_life_threatening, is_hospitalization, is_disability,
                 is_congenital_anomaly, is_other_medically_important
            FROM case_ae_intake WHERE case_id = ? ORDER BY id DESC LIMIT 1`,
@@ -183,8 +183,8 @@ router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
         }
         if (intake.suspect_drug_name || intake.batch_lot_number) {
           await conn.execute(
-            `INSERT INTO case_ae_product_info (version_id, product_name, batch_lot_number, is_suspect) VALUES (?, ?, ?, 1)`,
-            [result.insertId, intake.suspect_drug_name || null, intake.batch_lot_number || null]
+            `INSERT INTO case_ae_product_info (version_id, product_name, batch_lot_number, dose, route_of_admin, is_suspect) VALUES (?, ?, ?, ?, ?, 1)`,
+            [result.insertId, intake.suspect_drug_name || null, intake.batch_lot_number || null, intake.dose || null, intake.route_of_admin || null]
           );
         }
       }
