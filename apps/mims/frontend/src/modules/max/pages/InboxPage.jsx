@@ -578,6 +578,7 @@ export default function InboxPage() {
           description:    bodySnippet  || null,
           internal_notes: contextNotes || null,
           reporter:       senderAsReporter(selected.sender),
+          assign_to_me:   true,
         }),
       })
       const created = await createRes.json().catch(() => ({}))

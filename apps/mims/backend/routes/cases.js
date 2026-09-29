@@ -1151,7 +1151,9 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       pc_intake,
       // CF-E1: Dynamic fields [{field_id, field_value}]
       dynamic_fields,
+      assign_to_me,
     } = req.body;
+    const ownerId = assign_to_me === true ? req.user.userId : null;
 
     const requestedOrgId = parseInt(req.body?.org_id, 10) || null;
     const org_id = hasGlobalAdminScope(req.user) ? requestedOrgId : req.user.orgId;
@@ -1227,20 +1229,23 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by, case_owner_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId, ownerId]
       );
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY' && String(err.message || '').includes('case_number')) {
         [result] = await conn.execute(
-          `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId]
+          `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by, case_owner_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId, ownerId]
         );
       } else { throw err; }
     }
     const caseId = result.insertId;
+    if (ownerId) {
+      await writeCaseAudit(caseId, req.user.userId, req.user.email, 'REASSIGNED', 'case_owner_id', null, ownerId, conn);
+    }
 
     // 2. Reporter (CF-E3)
     if (reporter && typeof reporter === 'object') {
