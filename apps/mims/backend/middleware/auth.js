@@ -34,12 +34,17 @@ function sessionExpiryMs(value) {
   const utc = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) ? `${text.replace(' ', 'T')}Z` : text;
   return new Date(utc).getTime();
 }
+// A bearer value counts only when it looks like a JWT (three base64url parts).
+// The web app no longer receives the session token (T15), so its "signed in"
+// marker still rides along as `Bearer cookie-session`; ignoring anything that is
+// not a JWT lets the httpOnly cookie carry the session instead.
+const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
 function readBearer(req) {
   const authHeader = req.headers['authorization'] || '';
   if (!authHeader.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7).trim();
-  return token && token !== 'null' && token !== 'undefined' ? token : null;
+  return JWT_SHAPE.test(token) ? token : null;
 }
 
 // A session opened for a forced password change (sign-in with password_reset_required)
@@ -305,4 +310,4 @@ function requireModule(moduleKey) {
   };
 }
 
-module.exports = { authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, sessionExpiryMs };
+module.exports = { authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, sessionExpiryMs, readBearer };

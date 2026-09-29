@@ -14,18 +14,13 @@ const {
   verificationRateLimiter,
 } = require('../middleware/rateLimiters');
 
+// The current session's token: a JWT bearer header if one is sent, otherwise the
+// httpOnly cookie. The web app sends a non-JWT marker instead of the token (T15);
+// taking that marker as "the current session" made revoke-others delete every
+// session, the current one included.
 function extractBearerToken(req) {
-  const authHeader = req.headers.authorization || '';
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (token && token !== 'null' && token !== 'undefined') return token;
-  }
-  const cookieHeader = req.headers.cookie || '';
-  const cookie = cookieHeader
-    .split(';')
-    .map(part => part.trim())
-    .find(part => part.startsWith('mims_token='));
-  return cookie ? decodeURIComponent(cookie.slice('mims_token='.length)) : null;
+  const { readBearer, readCookie } = require('../middleware/auth');
+  return readBearer(req) || readCookie(req, 'mims_token');
 }
 
 function toNumber(value, fallback = 0) {

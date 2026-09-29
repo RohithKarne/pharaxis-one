@@ -393,18 +393,11 @@ function parsePositiveInt(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+// JWT bearer if sent, else the httpOnly cookie (same rule as middleware/auth; T15).
 function extractOptionalAuthToken(req) {
-  const authHeader = req?.headers?.authorization || '';
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (token && token !== 'null' && token !== 'undefined') return token;
-  }
-  const cookieHeader = req?.headers?.cookie || '';
-  const cookie = cookieHeader
-    .split(';')
-    .map((part) => part.trim())
-    .find((part) => part.startsWith('mims_token='));
-  return cookie ? decodeURIComponent(cookie.slice('mims_token='.length)) : null;
+  if (!req?.headers) return null;
+  const { readBearer, readCookie } = require('../middleware/auth');
+  return readBearer(req) || readCookie(req, 'mims_token');
 }
 
 function decodeOptionalAuthToken(req) {
@@ -446,10 +439,15 @@ async function resolveRegularLoginContext(user, requestedOrgId = null) {
   };
 }
 
+// T15 / 360 walk M-9: the session token is never put in a response body. It
+// travels only in the httpOnly mims_token cookie (attachAuthCookie), which page
+// scripts cannot read — a body copy let any script on the page (an XSS, a
+// compromised dependency) read the session and use it elsewhere. `token` stays
+// a parameter so the callers that set the cookie are unchanged.
+// eslint-disable-next-line no-unused-vars
 function buildLoginResponse({ user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, roleForOrg, extra = {} }) {
   return {
     message: 'Login successful.',
-    token,
     user: {
       id: user.id,
       name: user.name,
@@ -1451,7 +1449,6 @@ const authController = {
         await trackSessionToken(user.id, resetToken);
         return res.status(200).json({
           passwordResetRequired: true,
-          token: resetToken,
           user: toRuntimeUser(user, privileges),
         });
       }
@@ -1474,7 +1471,6 @@ const authController = {
         await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent: 'login_success', req });
         return res.status(200).json({
           message: 'Login successful.',
-          token,
           user: toRuntimeUser(user, privileges),
           modules,
           orgId: platformContext.orgId,
@@ -1842,7 +1838,6 @@ const authController = {
       attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
       return res.status(200).json({
         user: toRuntimeUser(user, { platformAdmin: true }),
-        token,
         modules: await getUserModules(user.id),
         allOrgs: platformContext.allOrgs,
         orgId: platformContext.orgId,
@@ -1858,7 +1853,6 @@ const authController = {
       const config = await getSystemConfig();
       return res.status(200).json({
         user: toRuntimeUser(user, { platformAdmin: true }),
-        token: req.user.token,
         modules,
         allOrgs: platformContext.allOrgs,
         orgId: platformContext.orgId,
@@ -1881,7 +1875,6 @@ const authController = {
     const current = allOrgs.find(o => Number(o.orgId) === Number(req.user.orgId)) || allOrgs[0] || null;
     return res.status(200).json({
       user,
-      token: req.user.token,
       modules,
       allOrgs,
       orgId: current?.orgId ?? null,
@@ -1953,7 +1946,6 @@ const authController = {
 
       return res.status(200).json({
         message: 'Org switched.',
-        token,
         orgId: Number(orgId),
         siteId,
         orgName: access.org_name,
