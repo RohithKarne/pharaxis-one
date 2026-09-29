@@ -13,8 +13,14 @@ const { requirePortalAuth, authenticatePortal, PORTAL_SECRET } = require('../../
 const { queueEmail } = require('../../utils/emailOutbox');
 const sso = require('../../services/ssoService');
 const log = require('../../utils/logger');
+const { systemAudit } = require('../../utils/audit');
+const lockout = require('../../utils/loginLockout');
 
 const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' };
+
+// CPPM-49: compared against when the email has no account, so a wrong address takes
+// as long as a wrong password and the timing does not reveal who is registered.
+const DUMMY_HASH = bcrypt.hashSync('cp-timing-equalizer', 12);
 
 const DEFAULT_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other'];
 
@@ -68,8 +74,21 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'This portal uses single sign-on. Use the sign-on button to sign in.' });
     }
 
+    // CPPM-49: while locked, refuse before the password is checked, so the right
+    // password is refused too.
+    const lockKey = lockout.loginKey('portal', client.id, email);
+    if (await lockout.isLocked(lockKey)) return res.status(423).json({ error: lockout.LOCKED_MESSAGE });
+
     const [[user]] = await pool.execute('SELECT * FROM cp_portal_users WHERE client_id = ? AND email = ? AND is_active = 1', [client.id, email]);
-    if (!user || !bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Invalid email or password.' });
+    const valid = bcrypt.compareSync(password, user ? user.password : DUMMY_HASH);
+    if (!user || !valid) {
+      if (await lockout.recordFailure(lockKey)) {
+        if (user) await systemAudit('portal sign-in', client.id, 'LOGIN_LOCKED', 'portal_user', user.id, { minutes: lockout.LOCK_MINUTES });
+        return res.status(423).json({ error: lockout.LOCKED_MESSAGE });
+      }
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+    await lockout.clearAttempts(lockKey);
     if (!user.email_verified) return res.status(403).json({ error: 'Please verify your email address before signing in. Check your inbox for the verification link.', unverified: true });
 
     await pool.execute(`UPDATE cp_portal_users SET last_login_at = NOW() WHERE id = ?`, [user.id]);
