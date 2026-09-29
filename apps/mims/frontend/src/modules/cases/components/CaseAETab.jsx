@@ -470,6 +470,10 @@ export default function CaseAETab({
                 <option value="expedited">Expedited (15 days)</option>
                 <option value="urgent">Urgent (7 days)</option>
               </select>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                The case sets the minimum, counted from the awareness date: serious → 15 days;
+                fatal or life-threatening in a clinical trial → 7 days. You can choose a stricter one.
+              </div>
             </div>
             <div className="cf-form-field cf-form-field--full">
               <label>Clinical Narrative</label>
