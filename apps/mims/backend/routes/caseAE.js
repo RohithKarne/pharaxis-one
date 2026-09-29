@@ -28,6 +28,10 @@ router.use('/cases/ae', require('../services/caseHelpers').normalizeDateOnlyBody
 // AE section save reaches its own route below.
 router.put('/cases/ae/versions/:versionId/:tab', authenticate,
   require('../services/requiredFields').enforcePanelRequired('ae', 'case_ae_versions'));
+// The list tabs add one record per POST (events, product-info, lab-results,
+// medical-history): the new row must carry the admin-required fields too.
+router.post('/cases/ae/versions/:versionId/:tab', authenticate,
+  require('../services/requiredFields').enforcePanelRequired('ae', 'case_ae_versions'));
 
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
 

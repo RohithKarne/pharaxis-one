@@ -117,6 +117,7 @@ export default function AETabPanel({
           getPicklistOptions={getPicklistOptions}
           onRowsChange={onChange}
           caseId={caseId}
+          panelField={panelField}
         />
       )}
 
@@ -171,15 +172,21 @@ export default function AETabPanel({
           getPicklistOptions={getPicklistOptions}
           onRowsChange={onChange}
           caseId={caseId}
+          panelField={panelField}
         />
       )}
 
-      {(tabKey === 'lab-notes' || tabKey === 'medical-notes') && (
-        <div className="cf-form-field cf-form-field--full">
-          <label>Notes</label>
-          <textarea rows={8} value={read('notes')} disabled={locked} onChange={e => write('notes', e.target.value)} />
-        </div>
-      )}
+      {(tabKey === 'lab-notes' || tabKey === 'medical-notes') && (() => {
+        // The notes box follows its admin setting (migration 118 links the row).
+        const f = tabKey === 'lab-notes' ? pf('Lab Notes', 'AE — Lab Notes') : pf('Medical Notes', 'AE — Medical Notes')
+        if (f.hidden) return null
+        return (
+          <div className="cf-form-field cf-form-field--full">
+            <label>{f.label === 'Lab Notes' || f.label === 'Medical Notes' ? (f.required ? 'Notes *' : 'Notes') : labelText(f)}</label>
+            <textarea rows={8} value={read('notes')} disabled={locked} onChange={e => write('notes', e.target.value)} />
+          </div>
+        )
+      })()}
 
       {!locked && !['events','drugs','meddra-coding','causality','lab-results','medical-history','product-info'].includes(tabKey) && (
         <div className="cf-form-actions">
