@@ -11,6 +11,7 @@
 const express  = require('express');
 const router   = express.Router();
 const bcrypt   = require('bcrypt');
+const crypto   = require('crypto');
 const pool     = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
@@ -295,8 +296,11 @@ router.post('/users', authenticate, requireRole('admin', 'platform_admin'), asyn
       }
     }
 
-    // Temporary default password — user must reset on first login
-    const tempPassword = await bcrypt.hash('Temp@12345!', SALT_ROUNDS);
+    // A random, never-shown starting password; the user sets their own with
+    // "Forgot password". Every account used to start with the same fixed
+    // password, written in this file — anyone could sign in to a new account
+    // before its owner (T11 / M-72).
+    const tempPassword = await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), SALT_ROUNDS);
     const { expiry_days } = await passwordPolicy.getPolicy();
     const expiresAt    = addDays(new Date(), expiry_days);
 
@@ -412,7 +416,7 @@ router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'),
       return res.status(403).json({ error: 'Batch rejected. No users were created.', errors: permissionErrors });
     }
 
-    const tempPassword = await bcrypt.hash('Temp@12345!', SALT_ROUNDS);
+    const tempPassword = await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), SALT_ROUNDS); // M-72, as above
     const { expiry_days } = await passwordPolicy.getPolicy();
     const expiresAt = addDays(new Date(), expiry_days);
 

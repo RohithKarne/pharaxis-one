@@ -237,4 +237,32 @@ async function requireAccessNotExpired(req, res, next) {
   }
 }
 
-module.exports = { authenticate, requireRole, requireCapability, requireScopedCapability, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate };
+/**
+ * requireModule(moduleKey) — the admin's module grant, enforced on the server.
+ * Same rule as the browser's ModuleAccessGuard: platform admins pass; everyone
+ * else needs a user_module_permissions row for the module. Module grants were
+ * checked only in the browser, so any signed-in user could call e.g. the report
+ * APIs directly (T11 / M-69). Use after authenticate.
+ */
+function requireModule(moduleKey) {
+  return async (req, res, next) => {
+    try {
+      if (hasGlobalAdminScope(req.user)) return next();
+      const [[row]] = await pool.execute(
+        'SELECT 1 AS ok FROM user_module_permissions WHERE user_id = ? AND module = ? AND can_access = 1 LIMIT 1',
+        [req.user?.userId, moduleKey]
+      );
+      if (row) return next();
+      return res.status(403).json({
+        error: 'You do not have access to this module.',
+        error_code: 'MODULE_FORBIDDEN',
+        should_logout: false,
+      });
+    } catch (err) {
+      console.error(`requireModule(${moduleKey}) failed:`, err);
+      return res.status(500).json({ error: 'Permission check failed.', error_code: 'MODULE_CHECK_ERROR' });
+    }
+  };
+}
+
+module.exports = { authenticate, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate };

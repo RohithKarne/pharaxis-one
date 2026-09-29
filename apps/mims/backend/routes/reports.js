@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, requireCapability } = require('../middleware/auth');
+const { authenticate, requireCapability, requireModule } = require('../middleware/auth');
 const pool = require('../database/db');
 const {
   getDailyCaseOpenings,
@@ -21,6 +21,8 @@ const scheduledReportService = new Proxy({}, {
   get: (_t, prop) => (...args) => require('../services/scheduledReportService')[prop](...args),
 });
 const router = express.Router();
+// Every /reports/* call needs the admin's Reports grant, as the screen does (T11 / M-69).
+router.use('/reports', authenticate, requireModule('reports'));
 
 function dateFilters(from, to, col) {
   const parts = [];

@@ -40,6 +40,8 @@ const { getDisplayRole, hasGlobalAdminScope } = require('../utils/adminScope');
 const { sessionCacheInvalidate } = require('../middleware/auth');
 
 const SALT_ROUNDS = Math.max(10, parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10) || 12);
+// Compared against when an email has no account, so sign-in costs the same (M-3).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(require('crypto').randomBytes(24).toString('hex'), SALT_ROUNDS);
 
 // M-01: After a password change/reset, invalidate all of the user's existing
 // JWT sessions so previously-issued tokens can no longer be used. Sessions are
@@ -992,7 +994,10 @@ const authController = {
           metadata: { ...auditMeta, reason: !user ? 'not_found' : !user.is_active ? 'inactive' : 'disabled' },
           req,
         });
-        return res.status(200).json({ outcome: 'denied', error: genericError });
+        // M-2: answer exactly as for an ordinary password account, so this step
+        // does not reveal which emails have accounts. The password step then
+        // fails with the same "Invalid email or password." as a wrong password.
+        return res.status(200).json({ outcome: 'local_password', webauthnAvailable: false });
       }
 
       // Touch ID / passkey is a parallel fast-path available regardless of
@@ -1013,7 +1018,7 @@ const authController = {
           metadata: { ...auditMeta, reason: 'no_org_access' },
           req,
         });
-        return res.status(200).json({ outcome: 'denied', error: genericError });
+        return res.status(200).json({ outcome: 'local_password', webauthnAvailable: false }); // M-2, as above
       }
 
       if (isPlatformAdminUser && profiles.length === 0) {
@@ -1330,33 +1335,16 @@ const authController = {
       }
 
       const user = await userModel.findByEmail(identity);
+      // M-2 / M-3: the password is checked first — against a stand-in hash when
+      // the email has no account — so the answer and the time it takes are the
+      // same for an unknown email as for a wrong password. Nothing about the
+      // account (deactivated, no organisation) is said until the password is right.
+      const passwordMatch = await bcrypt.compare(String(password), user?.password || DUMMY_PASSWORD_HASH);
       if (!user) {
         await logLoginAudit({ userName: email, status: 'failed', failReason: 'User not found', authEvent: 'password_login_failed', req });
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
-      if (!user.is_active) {
-        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Account deactivated', authEvent: 'password_login_failed', req });
-        return res.status(403).json({ error: 'Your account has been deactivated. Contact your administrator.' });
-      }
 
-      let requestedOrgId = null;
-      let loginOptions = null;
-      if (!hasGlobalAdminScope(user)) {
-        requestedOrgId = await resolvePasswordOrgIdForUser(user, parsePositiveInt(req.body?.org_id));
-        if (!requestedOrgId) {
-          await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'No org assigned', authEvent: 'password_login_failed', req });
-          return res.status(200).json({ noOrgAccess: true });
-        }
-        loginOptions = await getPublicLoginOptions(requestedOrgId);
-        if (!loginOptions) {
-          return res.status(403).json({ error: 'Selected organisation is inactive or unavailable.' });
-        }
-        if (!loginOptions.local_login_allowed) {
-          return res.status(403).json({ error: 'This organisation requires SSO sign-in. Use Google or Microsoft sign-in instead.' });
-        }
-      }
-
-      const passwordMatch = await bcrypt.compare(password, user.password);
       if (!passwordMatch) {
         await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Wrong password', authEvent: 'password_login_failed', req });
 
@@ -1388,6 +1376,28 @@ const authController = {
         );
 
         return res.status(401).json({ error: 'Invalid email or password.' });
+      }
+
+      if (!user.is_active) {
+        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Account deactivated', authEvent: 'password_login_failed', req });
+        return res.status(403).json({ error: 'Your account has been deactivated. Contact your administrator.' });
+      }
+
+      let requestedOrgId = null;
+      let loginOptions = null;
+      if (!hasGlobalAdminScope(user)) {
+        requestedOrgId = await resolvePasswordOrgIdForUser(user, parsePositiveInt(req.body?.org_id));
+        if (!requestedOrgId) {
+          await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'No org assigned', authEvent: 'password_login_failed', req });
+          return res.status(200).json({ noOrgAccess: true });
+        }
+        loginOptions = await getPublicLoginOptions(requestedOrgId);
+        if (!loginOptions) {
+          return res.status(403).json({ error: 'Selected organisation is inactive or unavailable.' });
+        }
+        if (!loginOptions.local_login_allowed) {
+          return res.status(403).json({ error: 'This organisation requires SSO sign-in. Use Google or Microsoft sign-in instead.' });
+        }
       }
 
       // Successful password match — reset failed login counter
@@ -2006,30 +2016,36 @@ const authController = {
       const { email } = req.body || {};
       if (!email) return res.status(400).json({ error: 'Email is required.' });
 
-      const user = await findUserByLoginIdentifier(email);
-      // Silently no-op (but return the generic response) for any ineligible case:
-      // no such user, global-admin scope, malformed email, inactive, or no org.
-      if (
-        user &&
-        !hasGlobalAdminScope(user) &&
-        String(user.email || '').includes('@') &&
-        user.is_active
-      ) {
-        const orgId = await getLatestActiveOrgIdForUser(user.id);
-        if (orgId) {
-          await createEmailChallenge(user, orgId, 'password_reset_email');
-          await logLoginAudit({
-            userId: user.id,
-            userName: user.email,
-            role: user.role,
-            status: 'success',
-            authEvent: 'forgot_password_code_sent',
-            metadata: { orgId },
-          });
+      // M-3: answer before any account-specific work. Sending the code took
+      // ~5 s and only happened for a real account, so the response time said
+      // whether the account exists. The work continues after the reply; a
+      // failure is logged.
+      res.json(GENERIC_RESPONSE);
+      (async () => {
+        const user = await findUserByLoginIdentifier(email);
+        // Silently no-op for any ineligible case: no such user, global-admin
+        // scope, malformed email, inactive, or no org.
+        if (
+          user &&
+          !hasGlobalAdminScope(user) &&
+          String(user.email || '').includes('@') &&
+          user.is_active
+        ) {
+          const orgId = await getLatestActiveOrgIdForUser(user.id);
+          if (orgId) {
+            await createEmailChallenge(user, orgId, 'password_reset_email');
+            await logLoginAudit({
+              userId: user.id,
+              userName: user.email,
+              role: user.role,
+              status: 'success',
+              authEvent: 'forgot_password_code_sent',
+              metadata: { orgId },
+            });
+          }
         }
-      }
-
-      return res.json(GENERIC_RESPONSE);
+      })().catch((err) => console.error('sendForgotPasswordCode background error:', err));
+      return undefined;
     } catch (err) {
       console.error('sendForgotPasswordCode error:', err);
       // Return the generic response even on internal failure so timing/behaviour
@@ -2046,7 +2062,8 @@ const authController = {
       }
       const user = await findUserByLoginIdentifier(email);
       if (!user || hasGlobalAdminScope(user) || !String(user.email || '').includes('@')) {
-        return res.status(404).json({ error: 'No eligible user found for this email.' });
+        // Same answer as a wrong code (L-02 / M-2) — "no eligible user" said the account did not exist.
+        return res.status(401).json({ error: 'Invalid verification code.' });
       }
 
       const verified = await verifyEmailChallengeWithoutOrg(user.id, 'password_reset_email', String(code).trim());

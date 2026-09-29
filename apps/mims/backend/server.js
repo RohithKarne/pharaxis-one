@@ -120,7 +120,11 @@ const allowedOrigins = parseAllowedOrigins(
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowAllOrigins || allowedOrigins.has(origin)) return callback(null, true);
-    return callback(new Error(`CORS origin not allowed: ${origin}`));
+    // 403 with a plain message, not a 500 "Internal server error" (T11 / M-5).
+    const err = new Error('This site is not allowed to call the MIMS API.');
+    err.statusCode = 403;
+    err.origin = origin;
+    return callback(err);
   },
   credentials: true,
 }));

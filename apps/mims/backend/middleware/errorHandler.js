@@ -1,7 +1,11 @@
 const { logger } = require('../services/logger');
 
 function notFoundHandler(req, res, next) {
-  if (!req.path.startsWith('/api')) return next();
+  // Full path: mounted as app.use('/api', …) req.path is relative ('/x'), so the
+  // old check never matched there and every unknown /api/* fell through to the
+  // SPA fallback — 200 + index.html instead of a 404 (T11 / M-64).
+  const fullPath = String(req.originalUrl || '').split('?')[0];
+  if (!fullPath.startsWith('/api') && !fullPath.startsWith('/oauth')) return next();
   return res.status(404).json({
     error: 'API route not found',
     request_id: req.id || null,

@@ -73,7 +73,8 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   const [loginStage, setLoginStage] = useState('email')
   const [ssoChoices, setSsoChoices] = useState([])
 
-  // Login form state — prefill the last-used email so it's always there
+  // Login form state — prefill the last-used email (kept after a session timeout,
+  // forgotten on sign-out — see AuthContext.logout, M-33)
   const [loginForm, setLoginForm] = useState({
     email: (typeof localStorage !== 'undefined' && localStorage.getItem('mims_last_email')) || '',
     password: '',
