@@ -1418,13 +1418,14 @@ const authController = {
       const privileges = await resolveUserRuntimePrivileges(user);
 
       if (user.password_reset_required) {
+        // Ten minutes, the same as its cookie: the token and its session row expire with it.
         const resetToken = issueToken({
           userId: user.id,
           email: user.email,
           role: user.role,
           passwordResetRequired: true,
           platformAdmin: privileges.platformAdmin,
-        });
+        }, '10m');
         attachAuthCookie(res, resetToken, 10 * 60 * 1000);
         // Every other sign-in path records the session; without this the reset
         // screen's first request is rejected as SESSION_REVOKED and the user is
