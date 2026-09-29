@@ -164,9 +164,9 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       return
     }
 
-    if (data.rememberedDeviceToken) {
-      localStorage.setItem('mims_2fa_device_token', data.rememberedDeviceToken)
-    }
+    // A remembered device is now an httpOnly cookie per person, set by the
+    // server (M-96). Drop the old browser-wide copy.
+    localStorage.removeItem('mims_2fa_device_token')
     // Remember the email so the username field is prefilled next time
     const signedInEmail = data.user?.email || loginForm.email
     if (signedInEmail) localStorage.setItem('mims_last_email', signedInEmail)
@@ -352,10 +352,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       const res = await httpFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...loginForm,
-          rememberedDeviceToken: localStorage.getItem('mims_2fa_device_token') || '',
-        })
+        body: JSON.stringify(loginForm)
       })
       const data = await res.json()
 

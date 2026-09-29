@@ -139,6 +139,26 @@ function attachAuthCookie(res, token, maxAgeMs = 8 * 60 * 60 * 1000) {
   return token;
 }
 
+// A remembered device is kept per person in an httpOnly cookie, so each person
+// on a shared browser is remembered separately and page scripts cannot read the
+// token (M-96). It was one localStorage key per browser, returned in the login
+// response: the last person to tick "remember" replaced everyone else.
+const { readCookie: readRequestCookie } = require('../middleware/auth');
+
+function trustedDeviceCookieName(userId) {
+  return `mims_tdv_${Number(userId)}`;
+}
+
+function attachTrustedDeviceCookie(res, userId, rawToken, rememberDays) {
+  res.cookie(trustedDeviceCookieName(userId), rawToken, {
+    httpOnly: true,
+    path: '/api/auth',
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: Number(rememberDays || 7) * 24 * 60 * 60 * 1000,
+  });
+}
+
 function issueTwoFactorToken(payload) {
   return issueToken({ ...payload, twoFactorPending: true }, '10m');
 }
@@ -1306,7 +1326,7 @@ const authController = {
 
   async login(req, res) {
     try {
-      const { email, password, rememberedDeviceToken } = req.body;
+      const { email, password } = req.body;
       if (!email || !password) {
         return res.status(400).json({ error: 'Email and password are required.' });
       }
@@ -1491,7 +1511,7 @@ const authController = {
         return res.status(423).json({ error: '2FA is locked after 3 failed attempts. Contact your platform admin for reset.' });
       }
 
-      if (settings?.is_enabled && await isTrustedDevice(user.id, context.orgId, rememberedDeviceToken)) {
+      if (settings?.is_enabled && await isTrustedDevice(user.id, context.orgId, readRequestCookie(req, trustedDeviceCookieName(user.id)))) {
         return finalizeRegularLogin({ res, req, user, context, authEvent: '2fa_trusted_device_bypass' });
       }
 
@@ -1742,6 +1762,7 @@ const authController = {
       const trustedDeviceToken = rememberDevice
         ? await createTrustedDevice(pending.userId, pending.orgId, pending.rememberDays ?? 7, req.headers['user-agent'])
         : null;
+      if (trustedDeviceToken) attachTrustedDeviceCookie(res, pending.userId, trustedDeviceToken, pending.rememberDays ?? 7);
 
       const context = {
         orgId: pending.orgId,
@@ -1789,7 +1810,6 @@ const authController = {
         allOrgs: pending.allOrgs || [],
         sessionTimeout: pending.sessionTimeout ?? 30,
         extra: {
-          rememberedDeviceToken: trustedDeviceToken,
           twoFactorSetupCompleted: setupCompleted,
           backupCodes: generatedBackupCodes,
         },
