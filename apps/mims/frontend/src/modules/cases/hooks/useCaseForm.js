@@ -263,7 +263,10 @@ export default function useCaseForm(id, token) {
       const validateRes = await httpFetch(`${API}/cases/${id}/validate`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ payload: buildDynamicPayload(), values_by_id: dynFieldValues }),
+        body: JSON.stringify({
+          payload: buildDynamicPayload(),
+          values_by_id: Object.fromEntries(Object.entries(dynFieldValues).filter(([, v]) => hasValue(v))),
+        }),
       })
       const validateData = await validateRes.json()
       if (validateRes.ok && Array.isArray(validateData.errors) && validateData.errors.length) {
@@ -289,11 +292,16 @@ export default function useCaseForm(id, token) {
     finally { setDynFieldSaving(false) }
   }
 
+  // Only fields with a value are sent; a missing one reads as empty on the
+  // server. Sending every field (blank ones too) put 200+ keys in one object on
+  // AE cases, which the input guard refuses — so validate never ran there.
+  const hasValue = (v) => v !== undefined && v !== null && String(v).trim() !== ''
+
   function buildDynamicPayload() {
     const payload = {}
     for (const section of formConfig?.sections || []) {
       for (const field of section.fields || []) {
-        payload[field.field_name] = dynFieldValues[field.id] ?? ''
+        if (hasValue(dynFieldValues[field.id])) payload[field.field_name] = dynFieldValues[field.id]
       }
     }
     return payload
