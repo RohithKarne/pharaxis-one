@@ -85,7 +85,7 @@ function MergeReportDrawer({ report, folders, token, onClose, onSaved }) {
           </div>
           <div className="cm-form-group">
             <label className="cm-form-label">Content</label>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Use merge fields like {'{{patient_name}}'}, {'{{product_name}}'}, {'{{case_id}}'}.</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Use merge fields like {'{{case_number}}'}, {'{{contact_name}}'}, {'{{product_name}}'}, {'{{patient_name}}'} (initials).</p>
             <RichTextEditor value={form.content_html} onChange={v => setForm(p => ({ ...p, content_html: v }))} />
           </div>
         </div>
@@ -251,7 +251,7 @@ export default function MergeReportsSection({ token }) {
       const res = await httpFetch(`/api/cm/merge-reports/${generateTarget.id}/generate`, {
         method: 'POST',
         headers: authHeaders,
-        body: JSON.stringify({ case_id: genCaseId ? Number(genCaseId) : undefined }),
+        body: JSON.stringify({ case_number: genCaseId.trim() || undefined }),
       })
       const d = await res.json()
       if (!res.ok) { setGenError(d.error || 'Generate failed.'); return }
@@ -432,12 +432,11 @@ ${safeHtml}
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
               <div style={{ flex: 1 }}>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
-                  Case ID <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional — leave blank to preview field placeholders)</span>
+                  Case number <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional — leave blank to preview field placeholders)</span>
                 </label>
                 <input
-                  type="number"
-                  min="1"
-                  placeholder="e.g. 142"
+                  type="text"
+                  placeholder="e.g. MI-289396"
                   value={genCaseId}
                   onChange={e => setGenCaseId(e.target.value)}
                   style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
@@ -487,7 +486,7 @@ td,th{border:1px solid #d1d5db;padding:6px 10px;}th{background:#f9fafb;}</style>
                     🖨 Print / Save as PDF
                   </button>
                   <span style={{ fontSize: 12, color: '#94a3b8', alignSelf: 'center', marginLeft: 'auto' }}>
-                    Generated {genResult.case_id ? `for Case #${genResult.case_id}` : 'without case data'} · {new Date().toLocaleTimeString()}
+                    Generated {genResult.case_id ? `for case ${genResult.merge_data?.case_number || genResult.case_id}` : 'without case data'} · {new Date().toLocaleTimeString()}
                   </span>
                 </div>
               </div>
