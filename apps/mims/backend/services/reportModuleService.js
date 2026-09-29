@@ -1,7 +1,7 @@
 'use strict';
 
 const pool = require('../database/db');
-const { getDatasetByReportKey } = require('./reportDatasetService');
+const { getDatasetByReportKey, BUILT_DATASETS } = require('./reportDatasetService');
 
 const DEFAULT_MODULE_CONFIG = Object.freeze({
   default_timezone: 'America/New_York',
@@ -200,7 +200,7 @@ const BUILTIN_REPORT_DEFINITIONS = Object.freeze([
     report_key: 'integration-sync',
     dataset_key: 'integration-sync',
     name: 'Integration Sync',
-    description: 'Vault, MIR, and CRM sync state visibility.',
+    description: 'MIR and CRM sync state visibility.',
     group_key: 'platform_deep_analytics',
     default_filters: {},
     allowed_filters: [],
@@ -358,6 +358,7 @@ function normalizeDefinition(row) {
     org_id: row.org_id,
     report_key: row.report_key,
     dataset_key: row.dataset_key,
+    is_built: BUILT_DATASETS.has(row.dataset_key),
     name: row.name,
     description: row.description || '',
     group_key: row.group_key,
@@ -552,6 +553,7 @@ async function ensureReportModuleSeed() {
 function getDatasetCatalog() {
   return BUILTIN_REPORT_DEFINITIONS.map((item) => ({
     dataset_key: item.dataset_key,
+    is_built: BUILT_DATASETS.has(item.dataset_key),
     default_report_key: item.report_key,
     name: item.name,
     description: item.description,
@@ -663,6 +665,7 @@ async function validateReportPayload(orgId, payload = {}, existing = null) {
   if (!datasetKey) throw new Error('dataset_key is required.');
   const catalogItem = getDatasetCatalog().find((item) => item.dataset_key === datasetKey);
   if (!catalogItem) throw new Error('Unsupported dataset_key.');
+  if (!catalogItem.is_built) throw new Error('This dataset is not built yet, so no report can be made from it.');
   const name = sanitizeText(payload.name || existing?.name || catalogItem.name);
   if (!name) throw new Error('Report name is required.');
   const formulaFields = parseFormulaFields(payload.formula_fields || existing?.formula_fields || []);
@@ -985,6 +988,22 @@ async function runDashboard(dashboard, orgId, filters = {}) {
       ? await getReportDefinitionById(orgId, widget.report_definition_id)
       : await getReportDefinitionByKey(orgId, widget.report_key);
     if (!definition) continue;
+    // A widget on an unbuilt report shows that, instead of failing the dashboard.
+    if (!definition.is_built) {
+      widgets.push({
+        id: widget.id || `${definition.report_key}-${widgets.length + 1}`,
+        title: widget.title || definition.name,
+        display_mode: widget.display_mode || 'table',
+        report_key: definition.report_key,
+        definition_id: definition.id,
+        not_built: true,
+        rows: [],
+        columns: [],
+        row_count: 0,
+        kpis: [],
+      });
+      continue;
+    }
     const result = await runReportDefinition(definition, orgId, filters);
     widgets.push({
       id: widget.id || `${definition.report_key}-${widgets.length + 1}`,

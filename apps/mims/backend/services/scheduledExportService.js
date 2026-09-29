@@ -408,6 +408,11 @@ async function createExportConfig(orgId, userId, data) {
     err.statusCode = 400;
     throw err;
   }
+  if (reportDefinition && !reportDefinition.is_built) {
+    const err = new Error('This report is not built yet, so it cannot be scheduled.');
+    err.statusCode = 400;
+    throw err;
+  }
   if (targetType === 'dashboard' && !dashboardDefinition) {
     const err = new Error('A valid dashboard target is required');
     err.statusCode = 400;
@@ -489,8 +494,16 @@ async function updateExportConfig(id, orgId, data) {
   };
   nextConfig.report_key = data.report_key || existing.report_key || (nextConfig.target_type === 'dashboard' ? `dashboard-${nextConfig.target_id || 'bundle'}` : 'case-summary');
 
-  if (nextConfig.target_type === 'report' && nextConfig.target_id && !await getReportDefinitionById(orgId, nextConfig.target_id)) {
+  const nextReport = nextConfig.target_type === 'report' && nextConfig.target_id
+    ? await getReportDefinitionById(orgId, nextConfig.target_id)
+    : null;
+  if (nextConfig.target_type === 'report' && nextConfig.target_id && !nextReport) {
     const err = new Error('A valid report target is required');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (nextReport && !nextReport.is_built) {
+    const err = new Error('This report is not built yet, so it cannot be scheduled.');
     err.statusCode = 400;
     throw err;
   }

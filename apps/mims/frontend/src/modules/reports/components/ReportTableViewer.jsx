@@ -1,8 +1,22 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+
+// Dates arrive as ISO text ("2026-09-29T00:00:00.000Z"). A date with no time is
+// shown as its day; a time is shown in the viewer's own time (M-90).
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
+
+function formatCell(value) {
+  if (value == null || value === '') return '—'
+  if (typeof value === 'string' && ISO_DATE_TIME.test(value)) {
+    if (value.slice(10) === 'T00:00:00.000Z') {
+      const [y, m, d] = value.slice(0, 10).split('-')
+      return `${d}/${m}/${y}`
+    }
+    return new Date(value).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })
+  }
+  return value
+}
 
 export default function ReportTableViewer({ columns, rows }) {
-  const navigate = useNavigate()
   const [sortCol, setSortCol] = useState(null)
   const [sortAsc, setSortAsc] = useState(true)
   const [page, setPage] = useState(1)
@@ -51,34 +65,14 @@ export default function ReportTableViewer({ columns, rows }) {
                 {sortCol === column ? (sortAsc ? ' ↑' : ' ↓') : ''}
               </th>
             ))}
-            <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.7, color: 'var(--text-muted)' }}>
-              Action
-            </th>
           </tr>
         </thead>
         <tbody>
           {displayRows.map((row, index) => (
             <tr key={index} style={{ borderBottom: '1px solid var(--border)', background: index % 2 === 0 ? '#fff' : '#fcfcfd' }}>
               {columns.map((column) => (
-                <td key={column} style={{ padding: '10px 12px', verticalAlign: 'top' }}>{row[column] ?? '—'}</td>
+                <td key={column} style={{ padding: '10px 12px', verticalAlign: 'top' }}>{formatCell(row[column])}</td>
               ))}
-              <td style={{ padding: '10px 12px', verticalAlign: 'top', textAlign: 'center' }}>
-                <button 
-                  onClick={() => navigate(`/cases?drilldown=${encodeURIComponent(row[columns[0]] || 'row')}`)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '999px',
-                    border: '1px solid var(--primary)',
-                    background: 'rgba(var(--primary-rgb, 79,70,229),0.08)',
-                    color: 'var(--primary)',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Drill-down
-                </button>
-              </td>
             </tr>
           ))}
         </tbody>
