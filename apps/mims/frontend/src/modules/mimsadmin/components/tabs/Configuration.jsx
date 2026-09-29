@@ -2,12 +2,11 @@ import { lazy, Suspense } from 'react'
 import { CONFIG_NAV, findConfigLabel } from '../configItems'
 
 const EmailCaseImportConfig = lazy(() => import('../EmailCaseImportConfig'))
-const CaseFieldsConfig = lazy(() => import('../CaseFieldsConfig'))
 
-// Topics with a real configuration surface (no longer placeholder tiles).
+// Topics with a real configuration surface. Case Form Fields moved to System ›
+// Setup › Forms & Fields, where its menu item is (T10 / M-35).
 const TOPIC_COMPONENTS = {
   'imp-email-case': EmailCaseImportConfig,
-  'sys-setup-case-fields': CaseFieldsConfig,
 }
 
 function flattenNav(items, parent = []) {
@@ -29,7 +28,7 @@ export default function Configuration({ selectedItem, onSelect }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: 'var(--text-primary)' }}>Configuration Workspace</h2>
           <div style={{ marginTop: 6, fontSize: 14, color: 'var(--text-muted)' }}>
-            Use this surface to move between legacy configuration topics without landing on a dead-end placeholder.
+            Configuration topics for this organisation.
           </div>
         </div>
 
@@ -38,11 +37,7 @@ export default function Configuration({ selectedItem, onSelect }) {
           <div style={{ marginTop: 8, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>
             {selectedLabel || 'Select a configuration topic'}
           </div>
-          {!TopicComponent && (
-            <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>
-              The embedded admin now keeps this tab usable by exposing direct topic navigation instead of an empty stub screen.
-            </div>
-          )}
+
         </div>
 
         {TopicComponent && (

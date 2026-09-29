@@ -10,6 +10,7 @@ import { lazy, Suspense, useState, useEffect, useCallback, useMemo } from 'react
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../../shared/context/AuthContext'
 import { httpFetch } from '../../../../shared/api/httpFetch.js'
+import { isPlatformAdmin } from '../../../../shared/utils/adminScope.js'
 
 const MentionsInbox = lazy(() => import('../../../../shared/components/collab/MentionsInbox'))
 const RecentPinnedWidget = lazy(() => import('../../../../shared/components/caseActions/RecentPinnedWidget'))
@@ -30,28 +31,33 @@ export default function Dashboard({ onNavigateTab }) {
   const navigate = useNavigate()
   const H = useMemo(() => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }), [token])
 
+  // Platform Health is platform-wide (all orgs, all users). An org admin was
+  // sent to the platform-only endpoint, got a 403 banner and every tile read 0
+  // (T10 / M-34) — the card is now for platform admins only, and a failed load
+  // says so instead of showing zeros.
+  const platform = isPlatformAdmin(user)
   const [summary, setSummary] = useState(null)
+  const [summaryError, setSummaryError] = useState('')
   const [loading, setLoading] = useState(true)
   const [activity, setActivity] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [secondaryReady, setSecondaryReady] = useState(false)
-  const [mode, setMode] = useState(() => {
-    if (user?.role === 'compliance_officer') return 'Compliance Admin'
-    if (user?.role === 'operations_manager') return 'Operations Admin'
-    if (user?.role === 'system_admin') return 'IT / Security Admin'
-    return 'Platform Overview'
-  })
-
   const load = useCallback(async () => {
+    if (!platform) { setLoading(false); return }
     setLoading(true)
+    setSummaryError('')
     try {
       const res  = await httpFetch('/api/admin/platform/dashboard', { headers: H })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || `Could not load platform health (${res.status}).`)
       setSummary(data)
+    } catch (err) {
+      setSummary(null)
+      setSummaryError(err.message || 'Could not load platform health.')
     } finally {
       setLoading(false)
     }
-  }, [H])
+  }, [H, platform])
 
   const loadActivity = useCallback(async () => {
     setActivityLoading(true)
@@ -87,11 +93,11 @@ export default function Dashboard({ onNavigateTab }) {
   }, [])
 
   useEffect(() => {
-    if (!secondaryReady) return undefined
+    if (!secondaryReady || !platform) return undefined
     loadActivity()
     const id = setInterval(loadActivity, 45_000)
     return () => clearInterval(id)
-  }, [loadActivity, secondaryReady])
+  }, [loadActivity, secondaryReady, platform])
 
   const kpis      = summary?.kpis      || {}
   const readiness = summary?.readiness || {}
@@ -116,23 +122,14 @@ export default function Dashboard({ onNavigateTab }) {
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '24px 28px' }}>
       
-      {/* Role-Based Admin Mode Selector Bar */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
-        {['Platform Overview', 'Compliance Admin', 'Operations Admin', 'IT / Security Admin'].map(m => (
-          <button
-            key={m}
-            className={`btn ${mode === m ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setMode(m)}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
-
-      {mode === 'Platform Overview' && (
-        <>
+      {/* No role "modes": the Compliance / Operations / IT-Security views were
+          fixed sentences shown as data ("E-signature chains 100% intact", "All
+          users have 2FA enabled", "Active sessions: 142") — none read anything,
+          and some were false. Removed (T10, 2026-09-29); this page shows only
+          what it loads. */}
 
       {/* Platform Health card */}
+      {platform && (
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>Platform Health</h3>
@@ -143,7 +140,8 @@ export default function Dashboard({ onNavigateTab }) {
           >Refresh</button>
         </div>
         {loading && <div className="card-body" style={{ color: 'var(--text-muted)' }}>Loading dashboard…</div>}
-        {!loading && (
+        {!loading && summaryError && <div className="card-body" style={{ color: '#b91c1c' }}>{summaryError}</div>}
+        {!loading && !summaryError && (
           <div
             className="card-body"
             style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}
@@ -176,6 +174,7 @@ export default function Dashboard({ onNavigateTab }) {
           </div>
         )}
       </div>
+      )}
 
       {/* Wave 4 + Sprint 2 widgets — mentions inbox, recent/pinned cases, PC signals */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 14 }}>
@@ -194,7 +193,8 @@ export default function Dashboard({ onNavigateTab }) {
         )}
       </div>
 
-      {/* Three side-by-side panels */}
+      {/* Three side-by-side panels — platform summary data, platform admins only (M-34) */}
+      {platform && (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
 
         {/* Org Readiness */}
@@ -275,8 +275,11 @@ export default function Dashboard({ onNavigateTab }) {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Recent Platform Activity — live feed across audit + login + case audit + transmissions */}
+      {/* Recent Platform Activity — live feed across audit + login + case audit + transmissions.
+          Spans every organisation, so platform admins only (M-34). */}
+      {platform && (
       <div className="card" style={{ marginTop: 14 }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, fontSize: 15 }}>
@@ -325,62 +328,6 @@ export default function Dashboard({ onNavigateTab }) {
           ))}
         </div>
       </div>
-      </>
-      )}
-
-      {mode === 'Compliance Admin' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
-          <div className="card">
-            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Audit Trail Activity</h3></div>
-            <div className="card-body">Recent significant audit trail changes.</div>
-          </div>
-          <div className="card">
-            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>E-Signature Hash Chain Status</h3></div>
-            <div className="card-body">Validating chains: 100% Intact.</div>
-          </div>
-          <div className="card">
-            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>PII Rules & Field Lock Summary</h3></div>
-            <div className="card-body">Active rules: 24. No anomalies detected.</div>
-          </div>
-        </div>
-      )}
-
-      {mode === 'Operations Admin' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
-          <div className="card">
-            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>SLA Breach Rates</h3></div>
-            <div className="card-body">Overall SLA breach rate: &lt; 2%.</div>
-          </div>
-          <div className="card">
-            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Unassigned Intake Throughput</h3></div>
-            <div className="card-body">Current unassigned: 12 items.</div>
-          </div>
-          <div className="card">
-            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Workload Distribution</h3></div>
-            <div className="card-body">Even distribution across regions.</div>
-          </div>
-        </div>
-      )}
-
-      {mode === 'IT / Security Admin' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
-          <div className="card">
-            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>2FA Enforcement</h3></div>
-            <div className="card-body">All users have 2FA enabled.</div>
-          </div>
-          <div className="card">
-            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Failed Login Spikes</h3></div>
-            <div className="card-body">No significant spikes in the last 24h.</div>
-          </div>
-          <div className="card">
-            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Active User Sessions</h3></div>
-            <div className="card-body">Currently active sessions: 142.</div>
-          </div>
-          <div className="card">
-            <div className="card-header"><h3 style={{ margin: 0, fontSize: 15 }}>Integration Health Status</h3></div>
-            <div className="card-body">All integrations operational.</div>
-          </div>
-        </div>
       )}
 
     </div>

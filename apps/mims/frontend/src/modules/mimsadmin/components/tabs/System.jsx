@@ -6,6 +6,7 @@ const AdminUATPanel = lazy(() => import('../../../admin/components/AdminUATPanel
 const CopyDivision = lazy(() => import('./CopyDivision'))
 const DivisionParameters = lazy(() => import('./DivisionParameters'))
 const CustomizeForms = lazy(() => import('./CustomizeForms'))
+const CaseFieldsConfig = lazy(() => import('../CaseFieldsConfig'))
 const ExceptionLog = lazy(() => import('./ExceptionLog'))
 const FeatureFlags = lazy(() => import('./FeatureFlags'))
 const SmartFields = lazy(() => import('./SmartFields'))
@@ -56,6 +57,8 @@ export default function System({ selectedItem, auditItem = 'admin', onAuditSelec
     selectedItem === 'sys-maint-copy-division' ? <CopyDivision />
     : selectedItem === 'sys-division-params' ? <DivisionParameters H={H} />
     : selectedItem === 'sys-setup-customize-forms' ? <CustomizeForms />
+    // Its menu item lives here (Setup › Forms & Fields); it opened "Under Development" (M-35).
+    : selectedItem === 'sys-setup-case-fields' ? <CaseFieldsConfig />
     : selectedItem === 'sys-exception-log' ? <ExceptionLog />
     : selectedItem === 'sys-sec-group' ? <CapabilityGroupSecurity />
     : selectedItem === 'sys-sec-logged-in' ? <LoggedInUsers />
