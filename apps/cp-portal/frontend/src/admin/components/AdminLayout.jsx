@@ -108,7 +108,7 @@ function deriveTitle(pathname) {
 }
 
 export default function AdminLayout({ children }) {
-  const { admin, logout } = useAdminAuth()
+  const { admin, signOut } = useAdminAuth()
   const navigate  = useNavigate()
   const { clientId } = useParams()
   const location  = useLocation()
@@ -160,7 +160,7 @@ export default function AdminLayout({ children }) {
   function handleLogout() {
     sessionStorage.removeItem('cp_sidebar_compact')
     sessionStorage.removeItem('cp_nav_groups')
-    logout()
+    signOut()
     navigate('/admin/login')
   }
 
