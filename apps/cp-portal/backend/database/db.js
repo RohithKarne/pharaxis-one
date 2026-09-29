@@ -698,7 +698,7 @@ async function initializeDatabase() {
       action     VARCHAR(100) NOT NULL,
       entity     VARCHAR(100) NOT NULL,
       entity_id  INT          NULL,
-      details    TEXT         NULL,
+      details    MEDIUMTEXT   NULL,
       created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       CONSTRAINT fk_audit_admin FOREIGN KEY (admin_id) REFERENCES cp_admin_users(id) ON DELETE SET NULL

@@ -10,8 +10,8 @@
 -- uq_notif_dedup) and 0009 (mims_case_url_base) as duplicate-column errors.
 --
 -- This file is the complete current schema — the union of db.js and migrations
--- 0002-0021 — so an empty database is provisioned by the migration runner alone.
--- It then records 0002-0021 as applied, because their contents are already
+-- 0002-0022 — so an empty database is provisioned by the migration runner alone.
+-- It then records 0002-0022 as applied, because their contents are already
 -- included here and re-running them would duplicate columns.
 -- Every new migration must be folded in here as well (tests/fresh-provision.js).
 --
@@ -598,7 +598,7 @@ CREATE TABLE IF NOT EXISTS cp_audit_logs (
   action     VARCHAR(100) NOT NULL,
   entity     VARCHAR(100) NOT NULL,
   entity_id  INT          NULL,
-  details    TEXT         NULL,
+  details    MEDIUMTEXT   NULL,
   created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_cp_audit_created (created_at),
@@ -1027,7 +1027,7 @@ CREATE TABLE IF NOT EXISTS cp_mims_redactions (
   CONSTRAINT fk_mims_redaction_client FOREIGN KEY (client_id) REFERENCES cp_clients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── RECORD 0002-0021 AS APPLIED ────────────────────────────────
+-- ── RECORD 0002-0022 AS APPLIED ────────────────────────────────
 -- Everything those files do is already included above, and re-running them on the
 -- schema created here would fail on duplicate columns and keys. On an existing
 -- database these rows are already present, so INSERT IGNORE leaves them untouched
@@ -1054,4 +1054,5 @@ INSERT IGNORE INTO cp_schema_migrations (filename, checksum) VALUES
   ('0018_add_consent_text_versions.sql',        NULL),
   ('0019_add_document_lifecycle.sql',           NULL),
   ('0020_add_mims_redactions.sql',              NULL),
-  ('0021_add_attachment_scan_status.sql',       NULL);
+  ('0021_add_attachment_scan_status.sql',       NULL),
+  ('0022_widen_audit_details.sql',              NULL);

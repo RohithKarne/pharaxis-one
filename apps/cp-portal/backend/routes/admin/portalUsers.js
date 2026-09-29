@@ -11,7 +11,7 @@ const { authenticateAdmin, requireClientAccess } = require('../../middleware/aut
 const { queueEmail } = require('../../utils/emailOutbox');
 
 router.use('/:clientId', authenticateAdmin, requireClientAccess);
-const { audit } = require('../../utils/audit');
+const { audit, changesBetween } = require('../../utils/audit');
 const log = require('../../utils/logger');
 
 const VALID_USER_TYPES = ['hcp', 'physician', 'patient', 'non_hcp', 'other'];
@@ -354,8 +354,15 @@ router.patch('/:clientId/:userId', authenticateAdmin, async (req, res) => {
     }
     if (!updates.length) return res.status(400).json({ error: 'Nothing to update.' });
     params.push(req.params.userId, req.params.clientId);
+    const ROW = 'SELECT * FROM cp_portal_users WHERE id = ? AND client_id = ?';
+    const [[before]] = await pool.execute(ROW, [req.params.userId, req.params.clientId]);
     await pool.execute(`UPDATE cp_portal_users SET ${updates.join(', ')} WHERE id=? AND client_id=?`, params);
-    await audit(req.admin, req.params.clientId, 'UPDATE', 'portal_user', req.params.userId, { fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute(ROW, [req.params.userId, req.params.clientId]);
+    // CPPM-43: what changed. A person's name, email and country are personal details:
+    // recorded as changed, never their values, so the audit trail cannot undo an erasure.
+    await audit(req.admin, req.params.clientId, 'UPDATE', 'portal_user', req.params.userId, { changes: changesBetween(before, after,
+      ['first_name', 'last_name', 'email', 'user_type', 'country', 'is_active', 'is_verified', 'email_verified'],
+      ['first_name', 'last_name', 'email', 'country']) });
     res.json({ message: 'User updated.' });
   } catch (err) {
     log.error('admin.portalUsers.error', { err, route: 'PATCH /:clientId/:userId', path: req.path, request_id: req.requestId || null });

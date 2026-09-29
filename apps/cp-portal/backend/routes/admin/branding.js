@@ -10,7 +10,7 @@ const fs      = require('fs');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
-const { audit } = require('../../utils/audit');
+const { audit, changesBetween } = require('../../utils/audit');
 const { validateContent, inspectDangerousContent } = require('../../utils/fileValidation');
 const { refuseUnlessClean } = require('../../utils/virusScan');
 const { ratio, AA_NORMAL } = require('../../utils/contrast');
@@ -144,8 +144,11 @@ router.patch('/:clientId', authenticateAdmin, requireClientAccess, async (req, r
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
     updates.push(`updated_at = NOW()`);
     params.push(clientId);
+    const [[before]] = await pool.execute('SELECT * FROM cp_branding WHERE client_id = ?', [clientId]);
     await pool.execute(`UPDATE cp_branding SET ${updates.join(', ')} WHERE client_id = ?`, params);
-    await audit(req.admin, clientId, 'UPDATE', 'branding', clientId, { fields: Object.keys(req.body) });
+    const [[after]] = await pool.execute('SELECT * FROM cp_branding WHERE client_id = ?', [clientId]);
+    // CPPM-43: what changed, from → to — not just which fields the screen sent.
+    await audit(req.admin, clientId, 'UPDATE', 'branding', clientId, { changes: changesBetween(before, after, allowed) });
     cache.invalidate('config:'); // CP-22: refresh portal config cache after edits
     res.json({ message: 'Branding updated.' });
   } catch (err) {
