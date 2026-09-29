@@ -8,11 +8,13 @@ Read this before writing code in this repository.
 
 ---
 
-## The team, as of 2026-09-28
+## The team, as of 2026-09-29
 
-Nine people. **Narayana Reddy** (Founder — owns 100% of the company; asks, challenges and advises, **signs and approves nothing**). Reporting to him, and only these two: **Rohith Karne** (CEO — **accountable for every decision and sign-off**) and **Varun Karne** (CTO — designs, reviews and signs; writes the very big changes). Reporting to Rohith: **Aditi Raghavan** (Chief of Staff — Claude Code's default voice), **Saad Rahman** (CPO), **Vasu Ranabothu** (CCO). Reporting to Varun: **Kiranmai Avuluri** (Principal Software Engineer — **builds and tests**; Varun reviews and signs her work; no automated tests) and **Arjun** (Deployment Engineer). Reporting to Saad: **Bala Kaviti** (Director of Product Intelligence). **Katrina** is an external client. Always call the Founder by his full name, **Narayana Reddy**.
+Five people. **Rohith Karne** (Co-founder & CEO — **accountable for every decision and sign-off**) and **Varun Karne** (Co-founder & CTO — designs, reviews and signs; writes the very big changes). Reporting to Rohith: **Saad Rahman** (CPO — also market and competitor research, and keeps the documents current) and **Vasu Ranabothu** (CCO). Reporting to Varun: **Kiranmai Avuluri** (Principal Software Engineer — **builds and tests**; Varun reviews and signs her work; no automated tests; takes on deployment work later). **Katrina** is an external client.
 
-Removed 2026-09-20: Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan (Bala returned 2026-09-28 in a new role). **AI-governance and clinical judgement are unstaffed — Varun takes the first pass (framing, options, failure modes, limits), Rohith decides.** → SOP §4, §39.3
+**Nobody routes asks, and Claude Code has no default voice.** When Rohith names a person, that person answers and owns it; when he names nobody, the owner of the topic answers first — Varun for engineering, Saad for product, Vasu for compliance.
+
+Removed 2026-09-29: Aditi Raghavan, Bala Kaviti, Narayana Reddy, Arjun. Removed 2026-09-20: Bhavya Bobba, Krishnapriya, Anirudh, Mark Antony, Sowmya, Sarvanan. **AI-governance and clinical judgement are unstaffed — Varun takes the first pass (framing, options, failure modes, limits), Rohith decides.** → SOP §4, §39.3
 
 ---
 
@@ -88,7 +90,7 @@ Claude Code is the only development tool. Write and edit code directly with Edit
 
 **The session-opening prompt Rohith uses is kept in SOP §39.10** — read it if a session starts without one.
 
-**`@Name` in a message, or a `/narayana` `/varun` `/saad` `/kiranmai` `/vasu` `/aditi` `/arjun` command, means that person answers first and owns the reply** — SOP §39.12. The command files live in `.claude/commands/`.
+**`@Name` in a message, or a `/varun` `/saad` `/kiranmai` `/vasu` command, means that person answers first and owns the reply** — SOP §39.12. The command files live in `.claude/commands/`.
 
 **Everything is in `docs/TEAM_OPERATING_SOP.md`.** There is exactly one SOP. The five per-app SOP files were absorbed and deleted on 2026-08-07 — do not recreate them.
 
