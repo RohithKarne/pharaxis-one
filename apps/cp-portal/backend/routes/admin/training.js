@@ -36,6 +36,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [req.params.clientId, title, type || 'CME Accredited', duration || '30 mins', credits || '1.5 CME', Number(pass_score) || 80, status || 'Available']
     );
+    await audit(req.admin, req.params.clientId, 'CREATE', 'training_module', result.insertId, { title });
     res.json({ id: result.insertId, message: 'Training module created.' });
   } catch (err) {
     log.error('admin.training.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
@@ -72,6 +73,7 @@ router.delete('/:clientId/:moduleId', authenticateAdmin, requireClientAccess, as
       'DELETE FROM cp_training_modules WHERE id = ? AND client_id = ?',
       [req.params.moduleId, req.params.clientId]
     );
+    await audit(req.admin, req.params.clientId, 'DELETE', 'training_module', Number(req.params.moduleId), {});
     res.json({ message: 'Training module deleted.' });
   } catch (err) {
     log.error('admin.training.error', { err, route: 'DELETE /:clientId/:moduleId', path: req.path, request_id: req.requestId || null });

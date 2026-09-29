@@ -29,6 +29,7 @@
 > Revision update: 2026-09-22 (Section 48 widened and renamed **The Job** on Rohith Karne's instruction. Six topics — Project Management, IT Compliance, Validation, Support, System Administration, AI — all set in regulated life sciences. One epic and seven stories per run: one per topic plus one extra situational story. A matching interviewer per topic. Still files to Jira project `CSV`; epics named `The Job — <date>`. Operational prompt moved to `docs/THE_JOB.md`.)
 > Revision update: 2026-08-13 (Section 48 added — CSV/CSA Interviews. Mandated by Rohith Karne. **The first routine whose subject is not a Pharaxis product.** It rehearses him for interviews as a validation professional moving companies: one epic and five stories per run, each story a real interview conversation between two named interviewers and him, followed by coaching. Manual, like the others. Files to Jira project `CSV`. Governance lives here; the operational prompt lives in `docs/CSV_CSA_INTERVIEWS.md`. It reads no Pharaxis code, names no Pharaxis product, and nothing it produces enters the delivery flow in §38.)
 > Revision update: 2026-09-28 (**Founder named; team is nine.** On Rohith's instruction: **Narayana Reddy** is Founder and owns 100% of the company, signs and approves nothing. **Rohith is CEO** and accountable for every decision; **Varun is CTO**; only those two report to Narayana Reddy. Aditi, Saad and Vasu report to Rohith; Kiranmai and the new **Deployment Engineer, Arjun**, report to Varun; **Bala Kaviti returns** as Director of Product Intelligence under Saad. **Kiranmai becomes Principal Software Engineer** — she builds and tests; Varun reviews and signs, and writes the very big changes himself. Automated testing stays retired. **Bala owns the Product Intelligence routine again.** `/narayana` and `/arjun` added. §4, §5, §26, §27, §30, §38.1, §38.3, §38.7, §38.8, §39.3, §39.4, §39.6, §39.10 and §39.12 updated.)
+> Revision update: 2026-09-29 (**Done means merged to `main`.** On Rohith's approval: a Jira ticket moves to Done only once its code is in `main`; built and screen-verified but unmerged stays In Progress. §22 updated.)
 
 ---
 
@@ -1085,6 +1086,7 @@ Work is done only when:
 - Gate 2 is approved
 - QA has executed and evidenced it
 - no blocking issue remains
+- **the code is merged to `main`** — a Jira ticket moves to Done only then; built and screen-verified but unmerged stays In Progress (Rohith, 2026-09-29, after eight "Done" CP Portal tickets were found on an unmerged branch a week later)
 - Rohith gives final sign-off
 
 ---

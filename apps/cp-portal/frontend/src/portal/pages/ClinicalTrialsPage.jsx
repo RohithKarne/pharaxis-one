@@ -7,7 +7,6 @@ export default function ClinicalTrialsPage() {
   const [trials, setTrials]   = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
-  const [referredId, setReferredId] = useState(null)
 
   useEffect(() => {
     fetch(`/api/portal/content/${clientCode}/trials`)
@@ -22,16 +21,11 @@ export default function ClinicalTrialsPage() {
     t.nct_id.toLowerCase().includes(search.toLowerCase())
   )
 
-  function handleReferral(trial) {
-    setReferredId(trial.id)
-    setTimeout(() => setReferredId(null), 3000)
-  }
-
   return (
     <div className="pp-container pp-page-content" style={{ padding: '24px 0' }}>
       <div className="pp-page-header" style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1A1A2E' }}>Clinical Trials & Real-World Evidence</h1>
-        <p style={{ color: '#6B7280', fontSize: 14 }}>Browse active clinical trials, eligibility criteria, and submit patient referrals directly to study sites.</p>
+        <p style={{ color: '#6B7280', fontSize: 14 }}>Browse clinical trials: their status, indication, study sites and investigators.</p>
       </div>
 
       <div className="pp-filter-bar" style={{ marginBottom: 20 }}>
@@ -61,14 +55,6 @@ export default function ClinicalTrialsPage() {
               <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 4 }}><strong>Indication:</strong> {trial.indication}</div>
               <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 4 }}><strong>Locations:</strong> {trial.site_location}</div>
               <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 14 }}><strong>Principal Investigator:</strong> {trial.pi}</div>
-              
-              <button
-                className="pp-btn pp-btn-primary"
-                onClick={() => handleReferral(trial)}
-                style={{ width: '100%', padding: '8px 12px', fontSize: 13, fontWeight: 600, background: 'var(--pp-primary, #0284c7)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
-              >
-                {referredId === trial.id ? '✓ Patient Referral Initiated' : '1-Click Patient Referral'}
-              </button>
             </div>
           ))}
         </div>

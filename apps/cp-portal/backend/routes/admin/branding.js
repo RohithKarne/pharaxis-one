@@ -11,7 +11,8 @@ const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
 const { audit } = require('../../utils/audit');
-const { validateContent } = require('../../utils/fileValidation');
+const { validateContent, inspectDangerousContent } = require('../../utils/fileValidation');
+const { refuseUnlessClean } = require('../../utils/virusScan');
 const { ratio, AA_NORMAL } = require('../../utils/contrast');
 const cache = require('../../utils/cache');
 const log = require('../../utils/logger');
@@ -69,12 +70,21 @@ router.post('/:clientId/upload-logo', authenticateAdmin, requireClientAccess, (r
     // (magic bytes) and force a safe, content-derived extension so a disguised
     // .html/.svg can never be written to a public path and executed as XSS.
     const LOGO_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-    const { ok, safeExt } = validateContent(req.file.path, req.file.mimetype, LOGO_MIMES);
+    const { ok, safeExt, signature } = validateContent(req.file.path, req.file.mimetype, LOGO_MIMES);
     if (!ok) {
       try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
       return res.status(400).json({ error: 'File is not a valid PNG, JPG, GIF, or WebP image.' });
     }
-    const safeName = `${path.basename(req.file.filename, path.extname(req.file.filename))}${safeExt}`;
+    // CPPM-12: the logo is served publicly; refuse anything carrying a payload.
+    const danger = inspectDangerousContent(req.file.path, signature);
+    if (!danger.ok) {
+      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      return res.status(400).json({ error: `This image was not accepted because ${danger.reason}.` });
+    }
+    // CPPM-39: and against ClamAV's list of known viruses.
+    const scanRefusal = await refuseUnlessClean([req.file]);
+    if (scanRefusal) return res.status(scanRefusal.status).json({ error: scanRefusal.error });
+    const safeName = `client-${req.params.clientId}-logo${safeExt}`;
     const safePath = path.join(path.dirname(req.file.path), safeName);
     if (safePath !== req.file.path) {
       try { fs.renameSync(req.file.path, safePath); } catch { /* fall back to original name on rename failure */ }
@@ -161,6 +171,7 @@ router.post('/:clientId/reset', authenticateAdmin, requireClientAccess, async (r
         updated_at=NOW()
       WHERE client_id = ?
     `, [req.params.clientId]);
+    await audit(req.admin, req.params.clientId, 'RESET', 'branding', Number(req.params.clientId), {});
     res.json({ message: 'Branding reset to defaults.' });
   } catch (err) {
     log.error('admin.branding.error', { err, route: 'POST /:clientId/reset', path: req.path, request_id: req.requestId || null });

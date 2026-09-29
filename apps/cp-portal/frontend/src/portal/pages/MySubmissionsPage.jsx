@@ -3,13 +3,21 @@ import { Link, useNavigate } from 'react-router-dom'
 import { usePortal } from '../context/PortalContext'
 import { SkeletonCards } from '../../shared/components/Skeleton'
 import Icon from '../../shared/components/Icon'
-import { formatDateTime } from '../../shared/utils/datetime'
+import { formatDate as formatDayOnly, formatDateTime } from '../../shared/utils/datetime'
 
+// What the person is told. The internal sync states (submitted / pending_sync /
+// synced / failed_sync) describe our copy of the request, not the request, so they
+// all read as "In progress" — a visitor can do nothing with "failed_sync", and
+// showing it invites a support call about our plumbing.
 const STATUS_LABELS = {
-  pending:    { label: 'Pending',     cls: 'pp-status-pending'    },
-  in_review:  { label: 'In Review',   cls: 'pp-status-in-review'  },
-  completed:  { label: 'Completed',   cls: 'pp-status-completed'  },
-  closed:     { label: 'Closed',      cls: 'pp-status-closed'     },
+  submitted:    { label: 'In progress', cls: 'pp-status-pending'    },
+  pending_sync: { label: 'In progress', cls: 'pp-status-pending'    },
+  synced:       { label: 'In progress', cls: 'pp-status-pending'    },
+  failed_sync:  { label: 'In progress', cls: 'pp-status-pending'    },
+  pending:      { label: 'Pending',     cls: 'pp-status-pending'    },
+  in_review:    { label: 'In Review',   cls: 'pp-status-in-review'  },
+  completed:    { label: 'Completed',   cls: 'pp-status-completed'  },
+  closed:       { label: 'Closed',      cls: 'pp-status-closed'     },
 }
 
 const TYPE_LABELS = {
@@ -27,7 +35,8 @@ export default function MySubmissionsPage() {
 
   useEffect(() => {
     if (!user) { navigate(`/portal/${clientCode}/login`); return }
-    fetch(`/api/portal/auth/me`, { headers: portalHeaders() })
+    // CPPM-4: this endpoint returns the same list plus each request's history.
+    fetch(`/api/portal/submit/${clientCode}/submissions`, { headers: portalHeaders() })
       .then(r => r.json()).then(d => { setSubs(d.submissions || []); setLoading(false) }).catch(() => setLoading(false))
   }, [user, clientCode])
 
@@ -75,14 +84,7 @@ export default function MySubmissionsPage() {
       ) : (
         <div className="pp-submissions-list">
           {subs.map(s => {
-            const status = STATUS_LABELS[s.status] || { label: s.status, cls: 'pp-status-pending' }
-            const steps = [
-              { key: 'submitted', label: 'Submitted' },
-              { key: 'triage', label: 'Triage' },
-              { key: 'in_review', label: 'In Review' },
-              { key: 'completed', label: 'Resolved' },
-            ]
-            const currentStepIdx = s.status === 'completed' || s.status === 'closed' ? 3 : s.status === 'in_review' ? 2 : s.status === 'triage' ? 1 : 0
+            const status = STATUS_LABELS[s.status] || { label: 'In progress', cls: 'pp-status-pending' }
 
             return (
               <div key={s.id} className="pp-submission-card" style={{ padding: '20px', borderRadius: '10px', background: 'var(--pp-card-bg, #ffffff)', border: '1px solid var(--pp-border-color, #e2e8f0)', marginBottom: '16px' }}>
@@ -96,34 +98,33 @@ export default function MySubmissionsPage() {
                 <div className="pp-submission-meta" style={{ marginTop: '8px', color: '#64748b', fontSize: '0.85rem', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span>Submitted {formatDate(s.submitted_at)}</span>
                   {s.external_ref && <span> · MIMS Ref: {s.external_ref}</span>}
-                  <span style={{ background: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: 12, fontSize: '11px', fontWeight: 600 }}>
-                    ⚡ SLA Target: &lt; 24h Response
-                  </span>
                 </div>
 
-                {/* Milestone Progress Bar */}
-                <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
-                    {steps.map((st, idx) => {
-                      const isDone = idx <= currentStepIdx
-                      return (
-                        <div key={st.key} style={{ flex: 1, textAlign: 'center', position: 'relative' }}>
-                          <div style={{
-                            width: '24px', height: '24px', borderRadius: '50%', margin: '0 auto 6px',
-                            background: isDone ? 'var(--pp-primary, #0284c7)' : '#e2e8f0',
-                            color: isDone ? '#ffffff' : '#64748b',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold'
-                          }}>
-                            {isDone ? '✓' : idx + 1}
-                          </div>
-                          <span style={{ fontSize: '12px', color: isDone ? '#0f172a' : '#94a3b8', fontWeight: isDone ? 600 : 400 }}>
-                            {st.label}
-                          </span>
-                        </div>
-                      )
-                    })}
+                {/* CPPM-4: what has actually happened to this request, and when.
+                    Each step is a recorded status change — nothing is inferred. */}
+                {s.timeline?.length > 0 && (
+                  <ol className="pp-timeline">
+                    {s.timeline.map((step, idx) => (
+                      <li key={idx} className="pp-timeline-step">
+                        <span className="pp-timeline-label">{step.label}</span>
+                        <span className="pp-timeline-date">{formatDayOnly(step.at)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+
+                {/* CPPM-14: the approved medical answer, once it has been sent. */}
+                {s.answer && (
+                  <div style={{ marginTop: 16, padding: '14px 16px', borderRadius: 8, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#166534', marginBottom: 6 }}>
+                      Our answer{s.answered_at ? ` · ${formatDate(s.answered_at)}` : ''}
+                    </div>
+                    <div style={{ whiteSpace: 'pre-wrap', color: '#14532d', fontSize: '0.9rem', lineHeight: 1.55 }}>{s.answer}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#166534', marginTop: 8 }}>
+                      A copy was emailed to you. Reply through the portal if you need anything further.
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Expandable Activity Details */}
                 <details style={{ marginTop: '12px', fontSize: '0.85rem', color: '#475569' }}>
@@ -136,16 +137,11 @@ export default function MySubmissionsPage() {
                       {s.form_data?.inquiry_details || s.form_data?.event_description || s.form_data?.complaint_details || 'Request submitted successfully to Medical Affairs team.'}
                     </p>
                     <div style={{ marginTop: 8, fontSize: '11px', color: '#94a3b8' }}>
-                      Assigned Agent: Medical Safety & Triage Specialist · Last update: {formatDate(s.submitted_at)}
+                      Last update: {formatDate(s.timeline?.length ? s.timeline[s.timeline.length - 1].at : s.submitted_at)}
                     </div>
                   </div>
                 </details>
 
-                {s.status && !['submitted', 'closed'].includes(s.status) && (
-                  <div className={`pp-sync-tag pp-sync-${s.status}`} style={{ marginTop: '12px', fontSize: '0.8rem' }}>
-                    {s.status === 'synced' ? '✓ Synced to system' : s.status === 'pending_sync' ? '⏳ Sync pending' : s.status === 'failed_sync' ? '⚠️ Sync failed' : ''}
-                  </div>
-                )}
               </div>
             )
           })}

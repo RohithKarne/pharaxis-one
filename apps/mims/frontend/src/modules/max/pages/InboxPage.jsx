@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { parseServerTime } from '../../../shared/utils/serverTime.js'
 
 import EmailBody, { compactEmailBodyText, normalizeEmailBodyText } from '../components/EmailBody'
 import InboxFilterBar from '../components/InboxFilterBar'
@@ -565,7 +566,7 @@ export default function InboxPage() {
       // S19-P1: carry inquiry context into case — pre-fill description + internal notes
       const subjectText  = selected.subject || '(No subject)'
       const bodySnippet  = (selected.body || '').slice(0, 1000).trim()
-      const contextNotes = `[Inbox] From: ${selected.sender || '—'} | Subject: ${subjectText} | Received: ${selected.received_at ? new Date(selected.received_at).toLocaleString() : '—'}`
+      const contextNotes = `[Inbox] From: ${selected.sender || '—'} | Subject: ${subjectText} | Received: ${selected.received_at ? parseServerTime(selected.received_at).toLocaleString() : '—'}`
 
       const createRes = await httpFetch('/api/cases', {
         method: 'POST',
@@ -863,7 +864,7 @@ export default function InboxPage() {
   const _yesterday = new Date(); _yesterday.setDate(_yesterday.getDate() - 1)
   const yesterdayStr = _yesterday.toDateString()
   const grouped = paginated.reduce((acc, inq) => {
-    const dateStr = new Date(inq.received_at).toDateString()
+    const dateStr = parseServerTime(inq.received_at)?.toDateString()
     const group = dateStr === today ? 'Today' : dateStr === yesterdayStr ? 'Yesterday' : 'Older'
     if (!acc[group]) acc[group] = []
     acc[group].push(inq)
@@ -873,13 +874,13 @@ export default function InboxPage() {
   // ── Helpers ───────────────────────────────────────────────────
 
   function formatTime(dateStr) {
-    const d = new Date(dateStr)
+    const d = parseServerTime(dateStr)
     if (d.toDateString() === today) return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
   function formatFullDate(dateStr) {
-    return new Date(dateStr).toLocaleString('en-US', {
+    return parseServerTime(dateStr).toLocaleString('en-US', {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
     })
   }

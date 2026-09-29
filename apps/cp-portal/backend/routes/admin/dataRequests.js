@@ -43,7 +43,10 @@ router.post('/:clientId/:requestId/fulfill', authenticateAdmin, requireClientAcc
     if (!reqRow.portal_user_id) return res.status(400).json({ error: 'Request has no linked user.' });
 
     const summary = await eraseUser(reqRow.portal_user_id, Number(clientId));
-    const notes = `Deleted: ${summary.deleted.join(', ') || 'none'} | Retained: ${summary.retained.join(', ') || 'none'} | Anonymized: ${summary.anonymized.join(', ')}`;
+    // CPPM-11: the MIMS line says what was removed there and what is still owed,
+    // so "fulfilled" never reads as more complete than it is.
+    const notes = `Deleted: ${summary.deleted.join(', ') || 'none'} | Retained: ${summary.retained.join(', ') || 'none'} | Anonymized: ${summary.anonymized.join(', ')}`
+      + (summary.mims ? ` | ${summary.mims.detail}` : '');
 
     await pool.execute(
       `UPDATE cp_data_requests SET status = 'fulfilled', fulfilled_at = NOW(), fulfilled_by = ?, notes = ? WHERE id = ?`,

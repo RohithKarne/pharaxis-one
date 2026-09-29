@@ -11,6 +11,7 @@ const { pool } = require('../database/db');
 const { getAuthHeaders } = require('./mimsAuth');
 const { safeFetch } = require('../utils/networkGuard');
 const { systemAudit } = require('../utils/audit');
+const { recordStatusEvent } = require('../utils/submissionStatus');
 
 const BATCH = 100;
 
@@ -62,6 +63,11 @@ async function pollOnce() {
         );
         if (upd.affectedRows > 0) {
           closedCount++;
+          // CPPM-4: the last entry the person sees on their own report.
+          await recordStatusEvent({
+            submissionId: s.id, clientId: integ.client_id,
+            status: 'closed', source: 'mims-close-sync',
+          });
           // A1: attributable auto-close — who (system), what (source MIMS case), when (implicit).
           systemAudit('MIMS integration', integ.client_id, 'CLOSED_AUTO', 'submission', s.id, {
             mims_case_id: s.external_ref, source: 'mims-close-sync',

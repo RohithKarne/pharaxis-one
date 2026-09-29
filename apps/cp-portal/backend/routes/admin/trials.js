@@ -38,6 +38,7 @@ router.post('/:clientId', authenticateAdmin, requireClientAccess, async (req, re
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [req.params.clientId, nct_id, title, phase || 'Phase III', indication, status || 'Recruiting', site_location || '', pi || '']
     );
+    await audit(req.admin, req.params.clientId, 'CREATE', 'clinical_trial', result.insertId, { nct_id, title });
     res.json({ id: result.insertId, message: 'Clinical trial created.' });
   } catch (err) {
     log.error('admin.trials.error', { err, route: 'POST /:clientId', path: req.path, request_id: req.requestId || null });
@@ -74,6 +75,7 @@ router.delete('/:clientId/:trialId', authenticateAdmin, requireClientAccess, asy
       'DELETE FROM cp_clinical_trials WHERE id = ? AND client_id = ?',
       [req.params.trialId, req.params.clientId]
     );
+    await audit(req.admin, req.params.clientId, 'DELETE', 'clinical_trial', Number(req.params.trialId), {});
     res.json({ message: 'Trial deleted.' });
   } catch (err) {
     log.error('admin.trials.error', { err, route: 'DELETE /:clientId/:trialId', path: req.path, request_id: req.requestId || null });
