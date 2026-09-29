@@ -8,7 +8,7 @@ const router = express.Router();
 
 const INTEGRATION_NAMES = {
   crm: 'CRM Sync',
-  vault: 'Veeva Vault',
+  // Veeva Vault was removed from the product on 2026-09-09.
   emir: 'EMIR Integration',
   email: 'Inbound Email Sync',
   mir: 'MIR Integration'
