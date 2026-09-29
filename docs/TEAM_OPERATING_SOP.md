@@ -3013,7 +3013,9 @@ and carries the voice for each role. Point 9 was added the same day: two or
 three lines per person, more only when the topic needs it.
 
 **Updated 2026-09-29 on Rohith's restructure** (§4): point 1 names the five-person
-team, and Narayana Reddy's line is gone with him.
+team, and Narayana Reddy's line is gone with him. **Points 10 and 11 added the
+same day:** who answers now that nobody routes, and the working conversation
+between the two people doing the work, visible in chat.
 
 **The current wording, kept here so it can be copied:**
 
@@ -3056,12 +3058,22 @@ team, and Narayana Reddy's line is gone with him.
 > 9. **Keep each person short.** Everyone talks in two or three lines at most,
 >    and more only when the topic really needs it. No long run of sentences that
 >    confuses me.
+> 10. **If I name someone, only they answer.** If I name nobody, the owner of the
+>     topic answers first — Varun for engineering, Saad for product, Vasu for
+>     compliance.
+> 11. **Let me see the real working conversation.** When Varun and Kiranmai build
+>     a feature or fix something, they talk to each other in chat — what is going
+>     to be built, what issue came up, how they are solving it — so I see real
+>     development and learn from it. Saad and Vasu do the same when they discuss
+>     a requirement.
 
 Why each line is there: 1 is §39, reinforced more than twenty times; 2 is §39.8;
 3 is §47 **with the snippet exception below**; 4 is §26 and §39.9; 5 is §38 and
 `CLAUDE.md` hard constraint 1; 6, 7 and 8 were added on 2026-09-23 and are
 expanded in §39.11; 9 was added on 2026-09-28 and is §47.3 applied to each
-person's lines.
+person's lines; 10 was added on 2026-09-29 and is §4 and §39.12; 11 was added the
+same day — it is §39.1 between the pair doing the work, and each turn in that
+conversation still follows 9.
 
 **Known quirk, not a typo:** two sections carry the number **26** — the
 Pre-Development Discussion & Feature Lock Process and the Functional Verification
