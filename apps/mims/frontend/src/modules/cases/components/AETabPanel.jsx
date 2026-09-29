@@ -101,6 +101,7 @@ export default function AETabPanel({
           headers={headers}
           getPicklistOptions={getPicklistOptions}
           onRowsChange={onChange}
+          caseId={caseId}
         />
       )}
 
@@ -154,6 +155,7 @@ export default function AETabPanel({
           headers={headers}
           getPicklistOptions={getPicklistOptions}
           onRowsChange={onChange}
+          caseId={caseId}
         />
       )}
 

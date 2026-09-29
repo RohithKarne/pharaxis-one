@@ -11,8 +11,11 @@ function picklistOptions(getPicklistOptions, sectionName, fieldName) {
   return Array.isArray(list) ? list : []
 }
 
-export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, getPicklistOptions, onRowsChange }) {
-  const [showForm, setShowForm] = useState(false)
+export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers, getPicklistOptions, onRowsChange, caseId }) {
+  // Text typed into the add-row form is kept per case, version and section until the row is added or cancelled.
+  const draftKey = `mims_case_${caseId}_ae_${versionId}_${tabKey}_add_row`
+  const readDraft = () => { try { return JSON.parse(sessionStorage.getItem(draftKey)) } catch { return null } }
+  const [showForm, setShowForm] = useState(() => !!readDraft())
   const [saving,   setSaving]   = useState(false)
   const [deleting, setDeleting] = useState(null)
 
@@ -23,8 +26,12 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
     if (tabKey === 'events')          return { event_description: '', meddra_term: '', outcome: '', reported_causality: '', frequency: '', causality_assessment: '', seriousness: '', start_date: '', end_date: '', is_serious: false, is_death: false, is_life_threatening: false, is_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false, is_required_intervention: false, is_lab_abnormality: false }
     return {}
   }
-  const [form, setForm] = useState(blankForm)
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  const [form, setForm] = useState(() => readDraft() || blankForm())
+  const editForm = next => {
+    setForm(next)
+    try { sessionStorage.setItem(draftKey, JSON.stringify(next)) } catch { /* no-op */ }
+  }
+  const set = (k, v) => editForm({ ...form, [k]: v })
 
   const deleteUrl = (rowId) => {
     if (tabKey === 'lab-results')     return `${API}/cases/ae/lab-results/${rowId}`
@@ -48,6 +55,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
       onRowsChange([...(Array.isArray(rows) ? rows : []), data])
       setForm(blankForm())
       setShowForm(false)
+      sessionStorage.removeItem(draftKey)
     } catch { toast.error('Network error') } finally { setSaving(false) }
   }
 
@@ -177,7 +185,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                   <div className="cf-form-field"><label>Start Date</label><input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></div>
                   <div className="cf-form-field"><label>End Date</label><input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} /></div>
                   <div className="cf-form-field cf-form-field--full">
-                    <SeriousnessChecklist value={form} onChange={setForm} />
+                    <SeriousnessChecklist value={form} onChange={editForm} />
                   </div>
                 </>}
                 {tabKey === 'product-info' && <>
@@ -210,7 +218,7 @@ export default function AEMultiRowTab({ tabKey, rows, locked, versionId, headers
                 </>}
               </div>
               <div className="cf-form-actions" style={{ paddingLeft: 0, marginTop: 10 }}>
-                <button type="button" className="cf-cancel-btn" onClick={() => { setShowForm(false); setForm(blankForm()) }}>Cancel</button>
+                <button type="button" className="cf-cancel-btn" onClick={() => { setShowForm(false); setForm(blankForm()); sessionStorage.removeItem(draftKey) }}>Cancel</button>
                 <button type="submit" className="cf-save-btn" disabled={saving}>{saving ? 'Adding…' : '+ Add Record'}</button>
               </div>
             </form>
