@@ -3,7 +3,7 @@
 const path = require('path');
 
 try {
-  process.loadEnvFile(process.env.MIMS_ENV_FILE || path.join(__dirname, '..', '.env'));
+  process.loadEnvFile(process.env.MIMS_ENV_FILE || path.join(__dirname, '..', '..', '.env'));
 } catch (_) {
   // Best-effort only.
 }

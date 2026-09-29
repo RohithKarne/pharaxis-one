@@ -177,7 +177,7 @@ async function getToken() {
   if (process.env.NODE_ENV !== 'production') {
     const devFallback = await resolveAuthToken('vanaja_admin@reviewco.com', 'Test@1234');
     if (devFallback) {
-      console.warn('[Regression] Using dev fallback credentials. Set REGRESSION_EMAIL/PASSWORD in backend/.env to suppress this warning.');
+      console.warn('[Regression] Using dev fallback credentials. Set REGRESSION_EMAIL/PASSWORD in apps/mims/.env to suppress this warning.');
       return devFallback;
     }
   }

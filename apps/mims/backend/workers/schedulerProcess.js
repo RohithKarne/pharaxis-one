@@ -9,11 +9,11 @@
  * On SIGTERM (from processManager graceful shutdown): stops both workers and exits cleanly.
  */
 
-// Load .env from the backend directory.
-// IMPORTANT: process.loadEnvFile() reads from CWD, so this process must be
-// started with CWD = backend/. processManager.js forks with the parent's CWD
-// which is backend/ (the npm start script cd's there). If you run this file
-// directly, ensure: cd apps/mims/backend && node workers/schedulerProcess.js
+// Load apps/mims/.env — the one settings file MIMS uses.
+// process.loadEnvFile() reads from CWD. processManager.js forks with the
+// parent's CWD, which is apps/mims (npm run dev / npm start run there), and the
+// child inherits the parent's environment anyway. If you run this file
+// directly: cd apps/mims && node backend/workers/schedulerProcess.js
 try { process.loadEnvFile(); } catch (_) {}
 
 const { startScheduler, stopScheduler } = require('../services/scheduler');
