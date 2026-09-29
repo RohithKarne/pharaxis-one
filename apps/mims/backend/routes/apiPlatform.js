@@ -387,8 +387,15 @@ router.get('/api/v1/picklists', scopeGuard('picklists:read'), async (req, res) =
   res.json({ rows });
 });
 
+// T16 — read a `product_dictionary` table that does not exist, and the catch
+// turned the error into 200 + zero rows: a client read it as "no products"
+// (same trap as PAUD-3 contacts below). The org's products live in `products`.
 router.get('/api/v1/products', scopeGuard('products:read'), async (req, res) => {
-  const [rows] = await pool.execute('SELECT * FROM product_dictionary WHERE org_id=? ORDER BY product_name ASC LIMIT 100', [req.apiClient.org_id]).catch(async () => [ [] ]);
+  const [rows] = await pool.execute(
+    `SELECT id, trade_name AS product_name, mah, dosage, atc_code, authorization_country, is_active
+       FROM products WHERE org_id = ? ORDER BY trade_name ASC LIMIT 100`,
+    [req.apiClient.org_id]
+  );
   res.json({ rows });
 });
 

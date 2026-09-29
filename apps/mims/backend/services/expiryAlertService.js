@@ -83,17 +83,10 @@ async function runExpiryAlerts() {
       const total = items.docs.length + items.faqs.length;
       if (total === 0) continue;
 
-      try {
-        await pool.execute(
-          `INSERT INTO notifications (org_id, type, title, message, created_at)
-           VALUES (?, 'expiry_alert', ?, ?, NOW())`,
-          [
-            orgId,
-            `Content Expiry Alert — ${total} item(s) expiring within ${DAYS_AHEAD} days`,
-            JSON.stringify({ docs: items.docs.map(d => ({ id: d.id, name: d.name, expiry_date: d.expiry_date })), faqs: items.faqs.map(f => ({ id: f.id, question: f.question, expiry_date: f.expiry_date })) }),
-          ]
-        );
-      } catch (_) { /* notifications table may not have org_id — silently skip */ }
+      // No in-app notification here: notifications are per user (no org_id /
+      // type columns), so the insert this job made always failed and was
+      // swallowed (T16). The cm-expiry-alerts job already notifies each user
+      // in-app for the same documents and FAQs.
 
       const recipients = await getAdminEmails(parseInt(orgId, 10));
       const docLines = items.docs.map(d => `  - [DOC] ${d.name} (${d.doc_id}) — expires ${d.expiry_date}`).join('\n');

@@ -47,25 +47,31 @@ router.post('/impact-preview', authenticate, async (req, res) => {
 
     // ── Change type: field_definition ────────────────────────────────────────
     if (change_type === 'field_definition') {
-      // How many case dynamic field values use this field definition
+      // entity_id is a field_setup id; values reference it as field_id. Counts are
+      // this org's cases only. (Was field_definition_id + a case_form_fields table
+      // that does not exist, the latter hidden behind a catch that returned 0.)
       const [[dynVals]] = await pool.execute(
-        `SELECT COUNT(*) AS cnt FROM case_dynamic_field_values WHERE field_definition_id = ?`,
-        [entity_id]
+        `SELECT COUNT(*) AS cnt FROM case_dynamic_field_values v
+           JOIN cases c ON c.id = v.case_id
+          WHERE v.field_id = ? AND c.org_id = ?`,
+        [entity_id, orgId]
       );
-      // How many form configs reference this field (via case_form_fields)
+      // Case forms (MI / AE / PC) that show this field's section.
       const [[formConfigs]] = await pool.execute(
-        `SELECT COUNT(*) AS cnt FROM case_form_fields WHERE id = ? OR section_name LIKE ?`,
-        [entity_id, `%field_${entity_id}%`]
-      ).catch(() => [[{ cnt: 0 }]]);
+        `SELECT COUNT(*) AS cnt FROM case_form_definition d
+           JOIN field_setup f ON f.section_name = d.section_name
+          WHERE f.id = ? AND d.org_id = ? AND d.is_visible = 1`,
+        [entity_id, orgId]
+      );
 
       // Breakdown by case type
       const [byType] = await pool.execute(
         `SELECT c.case_type, COUNT(*) AS cnt
          FROM case_dynamic_field_values v
          JOIN cases c ON c.id = v.case_id
-         WHERE v.field_definition_id = ?
+         WHERE v.field_id = ? AND c.org_id = ?
          GROUP BY c.case_type`,
-        [entity_id]
+        [entity_id, orgId]
       );
       const breakdownByCaseType = {};
       byType.forEach(r => { breakdownByCaseType[r.case_type] = Number(r.cnt); });
@@ -86,23 +92,40 @@ router.post('/impact-preview', authenticate, async (req, res) => {
 
     // ── Change type: taxonomy ─────────────────────────────────────────────────
     else if (change_type === 'taxonomy') {
+      // entity_id is a picklist row id; case records store the picklist VALUE, so
+      // look it up and count this org's records holding it. (Was: the id compared
+      // against AE columns that do not exist, behind catches that returned 0.)
+      const [[pick]] = await pool.execute(
+        'SELECT value FROM picklists WHERE id = ? AND org_id = ?',
+        [entity_id, orgId]
+      );
+      if (!pick) return res.status(404).json({ error: 'Picklist value not found for this organisation.' });
+
       // Picklist value used in AE general
       const [[aeCount]] = await pool.execute(
-        `SELECT COUNT(*) AS cnt FROM case_ae_general WHERE pc_status = ? OR pc_category = ? OR pc_classification = ?`,
-        [entity_id, entity_id, entity_id]
-      ).catch(() => [[{ cnt: 0 }]]);
+        `SELECT COUNT(*) AS cnt FROM case_ae_general g
+           JOIN case_ae_versions v ON v.id = g.version_id
+           JOIN cases c ON c.id = v.case_id
+          WHERE c.org_id = ? AND ? IN (g.ae_status, g.report_type, g.regulatory_reportability)`,
+        [orgId, pick.value]
+      );
 
       // Picklist value used in PC general
       const [[pcCount]] = await pool.execute(
-        `SELECT COUNT(*) AS cnt FROM case_pc_general WHERE pc_status = ? OR pc_category = ? OR pc_classification = ?`,
-        [entity_id, entity_id, entity_id]
-      ).catch(() => [[{ cnt: 0 }]]);
+        `SELECT COUNT(*) AS cnt FROM case_pc_general g
+           JOIN case_pc_versions v ON v.id = g.version_id
+           JOIN cases c ON c.id = v.case_id
+          WHERE c.org_id = ? AND ? IN (g.pc_status, g.pc_category, g.pc_classification, g.severity)`,
+        [orgId, pick.value]
+      );
 
       // Dynamic field values matching this taxonomy value
       const [[dynCount]] = await pool.execute(
-        `SELECT COUNT(*) AS cnt FROM case_dynamic_field_values WHERE value = ?`,
-        [String(entity_id)]
-      ).catch(() => [[{ cnt: 0 }]]);
+        `SELECT COUNT(*) AS cnt FROM case_dynamic_field_values dv
+           JOIN cases c ON c.id = dv.case_id
+          WHERE c.org_id = ? AND dv.field_value = ?`,
+        [orgId, pick.value]
+      );
 
       const totalAffected = Number(aeCount.cnt || 0) + Number(pcCount.cnt || 0) + Number(dynCount.cnt || 0);
       impact = {
