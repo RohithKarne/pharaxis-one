@@ -9,12 +9,14 @@ import { useCaseFieldContext } from '../../../shared/components/WiredField'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
+// "Reactions Coding" (MedDRA coder) and "Causality" (company causality matrix)
+// are not shown: coding and company causality belong to the receiving safety
+// system (product boundary 2026-07-28; Rohith, 2026-09-29). The panels are
+// kept — restoring a section is putting its line back here.
 const AE_TABS = [
   { key: 'general',         label: 'General' },
   { key: 'events',          label: 'Events' },
   { key: 'drugs',           label: 'Drugs' },
-  { key: 'meddra-coding',   label: 'Reactions Coding' },
-  { key: 'causality',       label: 'Causality' },
   { key: 'patient-info',    label: 'AE Patient Info' },
   { key: 'lab-results',     label: 'Lab Results' },
   { key: 'lab-notes',       label: 'Lab Notes' },
@@ -146,9 +148,12 @@ function isFilled(value) {
 
 function getTrackedAeFields(fields, getFieldConfig, sectionName) {
   if (!Array.isArray(fields) || fields.length === 0) return []
-  const requiredFields = fields.filter(field => getFieldConfig?.(sectionName, field.label)?.is_required)
+  // A field the admin has hidden is not drawn, so it does not count either —
+  // otherwise a section with a hidden field can never reach 100%.
+  const shown = fields.filter(field => !getFieldConfig?.(sectionName, field.label)?.is_hidden)
+  const requiredFields = shown.filter(field => getFieldConfig?.(sectionName, field.label)?.is_required)
   // Prefer admin-configured required fields when present; otherwise fall back to the fields this tab actually renders.
-  return requiredFields.length > 0 ? requiredFields : fields
+  return requiredFields.length > 0 ? requiredFields : shown
 }
 
 function readAeFieldValue(field, data) {
