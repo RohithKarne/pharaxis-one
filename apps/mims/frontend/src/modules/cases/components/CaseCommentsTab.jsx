@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import RealtimeChatPanel from '../../../shared/components/RealtimeChatPanel'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
 import CommentThread from '../../../shared/components/collab/CommentThread'
-import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
 
 // B16 (KNOWN, DEFERRED) — when this tab is active AND a case is open in the
 // shell, two WebSocket connections per user are live:
@@ -27,7 +26,6 @@ export default function CaseCommentsTab({
 }) {
   const [conversationId, setConversationId] = useState('')
   const [conversationError, setConversationError] = useState('')
-  const t5 = useFeatureFlag('cf.theme5_realtime_collab')
 
   useEffect(() => {
     if (!includeLiveChat) return
@@ -53,13 +51,13 @@ export default function CaseCommentsTab({
 
   return (
     <div id="tab-comments" style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '8px 14px' }}>
-      {/* Theme 5 audit-style threaded comments with @-mentions + resolve */}
-      {includeThreadedComments && t5 && (
+      {/* Case comments — not behind the collaboration flag; they predate it */}
+      {includeThreadedComments && (
         <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface,#fff)' }}>
           <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
             <strong style={{ fontSize: 13 }}>Threaded Comments</strong>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-              Audit-style with @-mentions, resolve, and per-field scoping. Watchers get notified.
+              Each comment is recorded in the case audit trail. The case owner is notified of comments from others.
             </div>
           </div>
           <CommentThread caseId={id} />

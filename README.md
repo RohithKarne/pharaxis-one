@@ -77,7 +77,9 @@ Both products, one command (MySQL must already be running):
 ./docs/scripts/dev-all.sh
 ```
 
-Ctrl-C stops everything it started. To run just one product:
+Ctrl-C stops everything it started. `./docs/scripts/health-check.sh` says, one line each, whether both apps and MySQL are up, and exits non-zero if any is down.
+
+To run just one product:
 
 ```bash
 # MIMS

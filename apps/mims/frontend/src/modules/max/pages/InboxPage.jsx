@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { parseServerTime } from '../../../shared/utils/serverTime.js'
 
 import EmailBody, { compactEmailBodyText, normalizeEmailBodyText } from '../components/EmailBody'
 import InboxFilterBar from '../components/InboxFilterBar'
@@ -537,6 +538,23 @@ export default function InboxPage() {
     return true
   }
 
+  // '"Name" <email>' → the case's reporter, so the sender becomes the first
+  // contact instead of only a line in the internal notes (M-18). A sender with no
+  // display name is kept as the reporter's email only.
+  function senderAsReporter(sender) {
+    const raw = String(sender || '').trim()
+    const match = /^(.*?)\s*<([^>]+)>$/.exec(raw)
+    const email = (match ? match[2] : raw).trim()
+    const name = (match ? match[1] : '').replace(/^["']|["']$/g, '').trim()
+    if (!name && !email.includes('@')) return undefined
+    const parts = name.split(/\s+/).filter(Boolean)
+    return {
+      first_name: parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || ''),
+      last_name: parts.length > 1 ? parts[parts.length - 1] : '',
+      email: email.includes('@') ? email : '',
+    }
+  }
+
   async function createCaseFromInquiry() {
     if (!selected) return
     if (!siteId) {
@@ -548,7 +566,7 @@ export default function InboxPage() {
       // S19-P1: carry inquiry context into case — pre-fill description + internal notes
       const subjectText  = selected.subject || '(No subject)'
       const bodySnippet  = (selected.body || '').slice(0, 1000).trim()
-      const contextNotes = `[Inbox] From: ${selected.sender || '—'} | Subject: ${subjectText} | Received: ${selected.received_at ? new Date(selected.received_at).toLocaleString() : '—'}`
+      const contextNotes = `[Inbox] From: ${selected.sender || '—'} | Subject: ${subjectText} | Received: ${selected.received_at ? parseServerTime(selected.received_at).toLocaleString() : '—'}`
 
       const createRes = await httpFetch('/api/cases', {
         method: 'POST',
@@ -560,6 +578,8 @@ export default function InboxPage() {
           date_received: toDateOnly(selected.received_at),
           description:    bodySnippet  || null,
           internal_notes: contextNotes || null,
+          reporter:       senderAsReporter(selected.sender),
+          assign_to_me:   true,
         }),
       })
       const created = await createRes.json().catch(() => ({}))
@@ -844,7 +864,7 @@ export default function InboxPage() {
   const _yesterday = new Date(); _yesterday.setDate(_yesterday.getDate() - 1)
   const yesterdayStr = _yesterday.toDateString()
   const grouped = paginated.reduce((acc, inq) => {
-    const dateStr = new Date(inq.received_at).toDateString()
+    const dateStr = parseServerTime(inq.received_at)?.toDateString()
     const group = dateStr === today ? 'Today' : dateStr === yesterdayStr ? 'Yesterday' : 'Older'
     if (!acc[group]) acc[group] = []
     acc[group].push(inq)
@@ -854,13 +874,13 @@ export default function InboxPage() {
   // ── Helpers ───────────────────────────────────────────────────
 
   function formatTime(dateStr) {
-    const d = new Date(dateStr)
+    const d = parseServerTime(dateStr)
     if (d.toDateString() === today) return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
   function formatFullDate(dateStr) {
-    return new Date(dateStr).toLocaleString('en-US', {
+    return parseServerTime(dateStr).toLocaleString('en-US', {
       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
     })
   }
@@ -1376,9 +1396,10 @@ export default function InboxPage() {
                           }}>
                           <option value="">Select queue</option>
                           {queueOptions.map(queue => <option key={queue} value={queue}>{queue}</option>)}
+                          {/* "Safety" and "Quality" were added here beside the real "Safety
+                              Intake" / "Quality Complaints" queues — near-duplicates that split
+                              work across two names (M-28). */}
                           {!queueOptions.includes('Medical Information') && <option value="Medical Information">Medical Information</option>}
-                          {!queueOptions.includes('Safety') && <option value="Safety">Safety</option>}
-                          {!queueOptions.includes('Quality') && <option value="Quality">Quality</option>}
                           {!queueOptions.includes('Regulatory') && <option value="Regulatory">Regulatory</option>}
                         </select>
                       </div>

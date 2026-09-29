@@ -32,6 +32,13 @@ async function loadCase(req, id) {
   return row;
 }
 
+// An org admin acts on their own organisation only; a platform admin may name
+// another one. body.org_id used to be trusted from anyone with the admin role
+// (M-74), so one organisation could rewrite another's AI provider settings.
+function targetOrgId(req) {
+  return hasGlobalAdminScope(req.user) ? (req.body?.org_id || req.user.orgId) : req.user.orgId;
+}
+
 async function logSuggestion(req, caseId, type, payload, meta = {}) {
   const hash = crypto.createHash('sha256').update(JSON.stringify(payload || {})).digest('hex');
   const [result] = await pool.execute(
@@ -45,7 +52,7 @@ async function logSuggestion(req, caseId, type, payload, meta = {}) {
 
 router.post('/admin/ai-config', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const orgId = req.body.org_id || req.user.orgId;
+    const orgId = targetOrgId(req);
     if (!orgId && !hasGlobalAdminScope(req.user)) return res.status(403).json({ error: 'No active organisation.' });
     const id = await saveProviderConfig(orgId || 0, req.body || {});
     await audit(req, 'UPSERT', 'ai_provider_config', id, { provider_key: req.body.provider_key, enabled: Boolean(req.body.enabled) });
@@ -57,11 +64,22 @@ router.get('/admin/ai/usage', authenticate, requireRole('admin', 'platform_admin
   try {
     const params = [];
     let where = '1=1';
-    if (req.query.from) { where += ' AND created_at >= ?'; params.push(req.query.from); }
-    if (req.query.to) { where += ' AND created_at <= ?'; params.push(`${req.query.to} 23:59:59`); }
+    if (req.query.from) { where += ' AND s.created_at >= ?'; params.push(req.query.from); }
+    if (req.query.to) { where += ' AND s.created_at <= ?'; params.push(`${req.query.to} 23:59:59`); }
+    // An org admin sees their organisation's calls only (M-76: every organisation's
+    // counts were shown). ai_suggestions has no org column: a case suggestion is
+    // the case's organisation; an inbox classification (case_id 0) carries its
+    // inquiry id in the payload.
+    if (!hasGlobalAdminScope(req.user)) {
+      where += ` AND (EXISTS (SELECT 1 FROM cases c WHERE c.id = s.case_id AND c.org_id = ?)
+                 OR (s.case_id = 0 AND EXISTS (SELECT 1 FROM inquiries i
+                      WHERE i.id = CAST(JSON_UNQUOTE(JSON_EXTRACT(s.suggestion_payload, '$.inquiry_id')) AS UNSIGNED)
+                        AND i.org_id = ?)))`;
+      params.push(req.user.orgId, req.user.orgId);
+    }
     const [rows] = await pool.execute(
-      `SELECT model, suggestion_type, COUNT(*) calls, SUM(tokens_in) tokens_in, SUM(tokens_out) tokens_out, AVG(latency_ms) avg_latency_ms
-         FROM ai_suggestions WHERE ${where} GROUP BY model, suggestion_type ORDER BY calls DESC`,
+      `SELECT s.model, s.suggestion_type, COUNT(*) calls, SUM(s.tokens_in) tokens_in, SUM(s.tokens_out) tokens_out, AVG(s.latency_ms) avg_latency_ms
+         FROM ai_suggestions s WHERE ${where} GROUP BY s.model, s.suggestion_type ORDER BY calls DESC`,
       params
     );
     res.json({ rows });
@@ -139,6 +157,7 @@ router.post('/cases/:id/ai/quality-check', authenticate, async (req, res) => {
 
 router.post('/cases/:id/ai/suggestions/:sid/accept', authenticate, async (req, res) => {
   try {
+    if (!(await loadCase(req, req.params.id))) return res.status(404).json({ error: 'Case not found.' });
     await pool.execute('UPDATE ai_suggestions SET accepted=1, accepted_by=?, accepted_at=CURRENT_TIMESTAMP WHERE id=? AND case_id=?', [req.user.userId, req.params.sid, req.params.id]);
     await audit(req, 'ACCEPT', 'ai_suggestion', req.params.sid, { case_id: Number(req.params.id) });
     res.json({ accepted: true });
@@ -147,6 +166,7 @@ router.post('/cases/:id/ai/suggestions/:sid/accept', authenticate, async (req, r
 
 router.post('/cases/:id/ai/suggestions/:sid/reject', authenticate, async (req, res) => {
   try {
+    if (!(await loadCase(req, req.params.id))) return res.status(404).json({ error: 'Case not found.' });
     await pool.execute('UPDATE ai_suggestions SET accepted=0, accepted_by=?, accepted_at=CURRENT_TIMESTAMP WHERE id=? AND case_id=?', [req.user.userId, req.params.sid, req.params.id]);
     await audit(req, 'REJECT', 'ai_suggestion', req.params.sid, { case_id: Number(req.params.id) });
     res.json({ accepted: false });
@@ -155,6 +175,10 @@ router.post('/cases/:id/ai/suggestions/:sid/reject', authenticate, async (req, r
 
 router.post('/inquiries/:id/ai/classify', authenticate, async (req, res) => {
   try {
+    if (!hasGlobalAdminScope(req.user)) {
+      const [[own]] = await pool.execute('SELECT id FROM inquiries WHERE id = ? AND org_id = ? LIMIT 1', [req.params.id, req.user.orgId]);
+      if (!own) return res.status(404).json({ error: 'Inquiry not found.' });
+    }
     const suggestion = await classifyInquiry(req.params.id, req.user.userId);
     if (!suggestion) return res.status(404).json({ error: 'Inquiry not found.' });
     res.json({ suggestion });
@@ -163,7 +187,7 @@ router.post('/inquiries/:id/ai/classify', authenticate, async (req, res) => {
 
 router.post('/admin/ai/classify-inbox', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const results = await classifyRecentInquiries(req.body.org_id || req.user.orgId, req.body.limit || 25);
+    const results = await classifyRecentInquiries(targetOrgId(req), req.body.limit || 25);
     res.json({ results });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

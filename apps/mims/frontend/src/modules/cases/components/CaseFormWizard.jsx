@@ -20,6 +20,7 @@ export default function CaseFormWizard({
   caseNumber,
   saving,
   onSave,
+  doneSteps = {},
   children
 }) {
   const nextStep = () => setActiveStep(prev => Math.min(prev + 1, LAST_STEP))
@@ -67,10 +68,14 @@ export default function CaseFormWizard({
         </div>
 
         {/* Step Progress Tracker */}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${LAST_STEP}, 1fr)`, gap: 8 }}>
+        {/* minmax(0, 1fr) + minWidth 0: the step labels shorten with an ellipsis on
+            narrow panes instead of pushing the strip off to the right (M-78). */}
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${LAST_STEP}, minmax(0, 1fr))`, gap: 8 }}>
           {WIZARD_STEPS.map(step => {
             const isActive = activeStep === step.id
-            const isCompleted = activeStep > step.id
+            // A tick means the step has what it needs, not that it was passed
+            // (Step 1 showed a green tick with no reporter, M-23).
+            const isCompleted = !isActive && Boolean(doneSteps[step.id])
             return (
               <button
                 key={step.id}
@@ -80,6 +85,7 @@ export default function CaseFormWizard({
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
+                  minWidth: 0,
                   padding: '10px 12px',
                   borderRadius: 8,
                   border: '1px solid',

@@ -3,13 +3,14 @@
 /**
  * dpprScheduler.js — DPPR daily enforcement engine
  *
- * Runs at 02:00 UTC every day via node-cron.
+ * Runs at 02:00 UTC every day via node-cron — only when ENABLE_SCHEDULED_DPPR=true.
  * Can also be triggered manually via POST /api/admin/dppr/run-now.
  *
  * For each org's active rules:
  *   1. Find records older than retention_days matching domain + contact_type + consent_type
- *   2. Apply action: Anonymize (replace PII text) | Delete (NULL out fields)
- *   3. Log results to dppr_execution_log
+ *   2. Leave out records under an active legal hold (legal_holds, migration 116)
+ *   3. Apply action: Anonymize (replace PII text) | Delete (NULL out fields)
+ *   4. Log results to dppr_execution_log, including how many were skipped for hold
  */
 
 const cron = require('node-cron');
@@ -17,7 +18,19 @@ const pool = require('../database/db');
 
 const ANON_MARKER = '[ANONYMIZED]';
 
-// Maps domain key → { table, orgJoinSql, dateField, piiFields, filterFn }
+// True when an active legal hold names the case in caseIdCol. It references only
+// the updated table's own columns, so the same text works in the SELECT that
+// finds targets and in the UPDATE — a hold placed mid-run still wins.
+function caseHeldSql(caseIdCol) {
+  return `EXISTS (SELECT 1 FROM legal_holds lh WHERE lh.released_at IS NULL
+                  AND lh.entity_type = 'case' AND lh.entity_id = ${caseIdCol})`;
+}
+
+// Maps domain key → { table, dateField, piiFields, valueFields, buildWhere, fromSql, heldSql,
+//                       updateTable, hasUpdatedAt }
+// piiFields are text columns: Anonymize writes the marker, Delete writes NULL.
+// valueFields are dates and numbers, which cannot hold the marker: both actions NULL them.
+// Column names are the real ones in the schema (migrations 007, 014, 092, 002).
 const DOMAIN_HANDLERS = {
   contact_pii: {
     table:       'case_contacts',
@@ -33,8 +46,9 @@ const DOMAIN_HANDLERS = {
       }
       return parts.join(' AND ');
     },
-    baseQuery: `SELECT case_contacts.id FROM case_contacts
-                JOIN cases c ON c.id = case_contacts.case_id`,
+    fromSql: `FROM case_contacts
+              JOIN cases c ON c.id = case_contacts.case_id`,
+    heldSql:     caseHeldSql('case_contacts.case_id'),
     updateTable: 'case_contacts',
   },
 
@@ -46,59 +60,112 @@ const DOMAIN_HANDLERS = {
       `DATEDIFF(NOW(), cases.created_at) >= ${parseInt(rule.retention_days, 10)}`,
       `cases.org_id = ${parseInt(rule.org_id, 10)}`,
     ].join(' AND '),
-    baseQuery:   'SELECT cases.id FROM cases',
+    fromSql:     'FROM cases',
+    heldSql:     caseHeldSql('cases.id'),
     updateTable: 'cases',
   },
 
   medical_data: {
     table:     'case_ae_patient_info',
     dateField: 'case_ae_patient_info.created_at',
-    piiFields: ['patient_dob', 'patient_gender', 'patient_age', 'patient_weight', 'patient_height', 'ethnicity'],
+    // Initials, DOB, gender, age, weight, height, ethnicity. The row belongs to an AE
+    // version, not a case. Initials added 2026-09-29 (T18, Vasu's field list).
+    piiFields:   ['patient_initials', 'sex', 'ethnicity'],
+    valueFields: ['date_of_birth', 'age', 'weight_kg', 'height_cm'],
     buildWhere: (rule) => [
       `DATEDIFF(NOW(), case_ae_patient_info.created_at) >= ${parseInt(rule.retention_days, 10)}`,
       `c.org_id = ${parseInt(rule.org_id, 10)}`,
     ].join(' AND '),
-    baseQuery: `SELECT case_ae_patient_info.id FROM case_ae_patient_info
-                JOIN cases c ON c.id = case_ae_patient_info.case_id`,
+    fromSql: `FROM case_ae_patient_info
+              JOIN case_ae_versions v ON v.id = case_ae_patient_info.version_id
+              JOIN cases c ON c.id = v.case_id`,
+    heldSql:     caseHeldSql('(SELECT hv.case_id FROM case_ae_versions hv WHERE hv.id = case_ae_patient_info.version_id)'),
     updateTable: 'case_ae_patient_info',
+  },
+
+  // T18 (Vasu's field list, 2026-09-29): the PC patient's name and date of birth.
+  pc_patient_info: {
+    table:       'case_pc_patient_info',
+    dateField:   'case_pc_patient_info.created_at',
+    piiFields:   ['patient_name'],
+    valueFields: ['date_of_birth'],
+    buildWhere: (rule) => [
+      `DATEDIFF(NOW(), case_pc_patient_info.created_at) >= ${parseInt(rule.retention_days, 10)}`,
+      `c.org_id = ${parseInt(rule.org_id, 10)}`,
+    ].join(' AND '),
+    fromSql: `FROM case_pc_patient_info
+              JOIN case_pc_versions v ON v.id = case_pc_patient_info.version_id
+              JOIN cases c ON c.id = v.case_id`,
+    heldSql:     caseHeldSql('(SELECT hv.case_id FROM case_pc_versions hv WHERE hv.id = case_pc_patient_info.version_id)'),
+    updateTable: 'case_pc_patient_info',
+  },
+
+  // T18: the AE patient's medical history — condition, notes and dates.
+  medical_history: {
+    table:       'case_ae_medical_history',
+    dateField:   'case_ae_medical_history.created_at',
+    piiFields:   ['condition_name', 'notes'],
+    valueFields: ['start_date', 'end_date'],
+    buildWhere: (rule) => [
+      `DATEDIFF(NOW(), case_ae_medical_history.created_at) >= ${parseInt(rule.retention_days, 10)}`,
+      `c.org_id = ${parseInt(rule.org_id, 10)}`,
+    ].join(' AND '),
+    fromSql: `FROM case_ae_medical_history
+              JOIN case_ae_versions v ON v.id = case_ae_medical_history.version_id
+              JOIN cases c ON c.id = v.case_id`,
+    heldSql:     caseHeldSql('(SELECT hv.case_id FROM case_ae_versions hv WHERE hv.id = case_ae_medical_history.version_id)'),
+    updateTable: 'case_ae_medical_history',
   },
 
   reporter_info: {
     table:     'case_reporter',
     dateField: 'case_reporter.created_at',
-    piiFields: ['reporter_name', 'reporter_email', 'reporter_phone', 'reporter_address', 'institution'],
+    // name, email, phone, institution. There is no reporter address column.
+    piiFields: ['first_name', 'last_name', 'email', 'phone', 'organisation'],
     buildWhere: (rule) => [
       `DATEDIFF(NOW(), case_reporter.created_at) >= ${parseInt(rule.retention_days, 10)}`,
       `c.org_id = ${parseInt(rule.org_id, 10)}`,
     ].join(' AND '),
-    baseQuery: `SELECT case_reporter.id FROM case_reporter
-                JOIN cases c ON c.id = case_reporter.case_id`,
+    fromSql: `FROM case_reporter
+              JOIN cases c ON c.id = case_reporter.case_id`,
+    heldSql:     caseHeldSql('case_reporter.case_id'),
     updateTable: 'case_reporter',
   },
 
   patient_demographics: {
     table:     'case_patient',
     dateField: 'case_patient.created_at',
-    piiFields: ['patient_name', 'patient_dob', 'patient_address', 'patient_email', 'patient_phone'],
+    // Patient name is held only as initials. There is no DOB, address, email or phone column.
+    piiFields: ['initials'],
     buildWhere: (rule) => [
       `DATEDIFF(NOW(), case_patient.created_at) >= ${parseInt(rule.retention_days, 10)}`,
       `c.org_id = ${parseInt(rule.org_id, 10)}`,
     ].join(' AND '),
-    baseQuery: `SELECT case_patient.id FROM case_patient
-                JOIN cases c ON c.id = case_patient.case_id`,
+    fromSql: `FROM case_patient
+              JOIN cases c ON c.id = case_patient.case_id`,
+    heldSql:     caseHeldSql('case_patient.case_id'),
     updateTable: 'case_patient',
   },
 
   inquiry_content: {
     table:     'inquiries',
     dateField: 'inquiries.created_at',
-    piiFields: ['body', 'sender_name', 'sender_email', 'subject'],
+    // sender holds the sender's name and address together ("Name" <email>).
+    // ai_suggested_payload (JSON: product / therapy-area guesses read from the
+    // body) cannot hold the text marker, so both actions clear it (T18).
+    piiFields: ['body', 'sender', 'subject'],
+    valueFields: ['ai_suggested_payload'],
     buildWhere: (rule) => [
       `DATEDIFF(NOW(), inquiries.created_at) >= ${parseInt(rule.retention_days, 10)}`,
       `inquiries.org_id = ${parseInt(rule.org_id, 10)}`,
     ].join(' AND '),
-    baseQuery:   'SELECT inquiries.id FROM inquiries',
+    fromSql:     'FROM inquiries',
+    // held when the inquiry itself is held, or the case it is linked to is
+    heldSql: `(EXISTS (SELECT 1 FROM legal_holds lh WHERE lh.released_at IS NULL
+                       AND lh.entity_type = 'inquiry' AND lh.entity_id = inquiries.id)
+               OR ${caseHeldSql('inquiries.case_id')})`,
     updateTable: 'inquiries',
+    hasUpdatedAt: false,
   },
 };
 
@@ -136,25 +203,30 @@ async function applyDpprRules(orgId, triggeredBy = 'scheduler', triggeredByUserI
     }
 
     const start = Date.now();
-    let scanned = 0, affected = 0, status = 'success', errorMsg = null;
+    let scanned = 0, affected = 0, skippedHold = 0, status = 'success', errorMsg = null;
 
     try {
       const whereClause = handler.buildWhere(rule);
       const [targets] = await pool.execute(
-        `${handler.baseQuery} WHERE ${whereClause}`, []
+        `SELECT ${handler.updateTable}.id, ${handler.heldSql} AS held ${handler.fromSql} WHERE ${whereClause}`, []
       );
       scanned = targets.length;
+      const ids = targets.filter(r => !Number(r.held)).map(r => r.id);
+      skippedHold = scanned - ids.length;
 
-      if (targets.length > 0) {
-        const ids = targets.map(r => r.id);
+      if (ids.length > 0) {
         const idPlaceholders = ids.map(() => '?').join(',');
+        const notHeld = `AND NOT ${handler.heldSql}`;
+
+        const valueSet = (handler.valueFields || []).map(f => `, ${f} = NULL`).join('');
+        const touch = handler.hasUpdatedAt === false ? '' : ', updated_at = NOW()';
 
         if (rule.action === 'Anonymize') {
           const setClause = handler.piiFields
             .map(f => `${f} = CASE WHEN ${f} IS NOT NULL THEN '${ANON_MARKER}' ELSE NULL END`)
             .join(', ');
           const [upd] = await pool.execute(
-            `UPDATE ${handler.updateTable} SET ${setClause}, updated_at = NOW() WHERE id IN (${idPlaceholders})`,
+            `UPDATE ${handler.updateTable} SET ${setClause}${valueSet}${touch} WHERE id IN (${idPlaceholders}) ${notHeld}`,
             ids
           );
           affected = upd.affectedRows;
@@ -162,7 +234,7 @@ async function applyDpprRules(orgId, triggeredBy = 'scheduler', triggeredByUserI
         } else if (rule.action === 'Delete') {
           const setClause = handler.piiFields.map(f => `${f} = NULL`).join(', ');
           const [upd] = await pool.execute(
-            `UPDATE ${handler.updateTable} SET ${setClause}, updated_at = NOW() WHERE id IN (${idPlaceholders})`,
+            `UPDATE ${handler.updateTable} SET ${setClause}${valueSet}${touch} WHERE id IN (${idPlaceholders}) ${notHeld}`,
             ids
           );
           affected = upd.affectedRows;
@@ -178,12 +250,12 @@ async function applyDpprRules(orgId, triggeredBy = 'scheduler', triggeredByUserI
     await pool.execute(
       `INSERT INTO dppr_execution_log
          (org_id, rule_id, triggered_by, records_scanned, records_affected,
-          action_taken, status, error_message, duration_ms,
+          records_skipped_legal_hold, action_taken, status, error_message, duration_ms,
           run_summary)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         orgId, rule.id, triggeredBy, scanned, affected,
-        rule.action, status, errorMsg, duration,
+        skippedHold, rule.action, status, errorMsg, duration,
         JSON.stringify({ rule_name: rule.rule_name, domain: rule.domain,
                          contact_type: rule.contact_type, consent_type: rule.consent_type }),
       ]
@@ -191,7 +263,8 @@ async function applyDpprRules(orgId, triggeredBy = 'scheduler', triggeredByUserI
 
     results.push({
       rule_id: rule.id, rule_name: rule.rule_name, domain: rule.domain,
-      action: rule.action, scanned, affected, status, duration_ms: duration,
+      action: rule.action, scanned, affected, skipped_legal_hold: skippedHold,
+      status, duration_ms: duration,
     });
   }
 
@@ -207,28 +280,37 @@ async function runScheduledDppr() {
     const [orgs] = await pool.execute(
       'SELECT id FROM organisations WHERE is_active = 1'
     );
+    let skippedHold = 0;
     for (const org of orgs) {
-      await applyDpprRules(org.id, 'scheduler', null);
+      const results = await applyDpprRules(org.id, 'scheduler', null);
+      skippedHold += results.reduce((n, r) => n + (r.skipped_legal_hold || 0), 0);
     }
-    console.log(`[DPPR] Scheduled run complete — ${orgs.length} org(s) processed.`);
+    console.log(`[DPPR] Scheduled run complete — ${orgs.length} org(s) processed, ${skippedHold} record(s) skipped for legal hold.`);
   } catch (err) {
     console.error('[DPPR] Scheduled run failed:', err.message);
   }
 }
 
-// ── Scheduled enforcement — SUSPENDED 2026-08-03 ─────────────────────────────
-// Suspended on Rohith Karne's instruction (DCI-5). applyDpprRules() destroys
-// PII (Anonymize/Delete) with no legal-hold interlock — an unattended job can
-// overwrite a record that legal has placed under hold. No hold mechanism
-// exists anywhere in MIMS today.
+// ── Scheduled enforcement — off unless ENABLE_SCHEDULED_DPPR=true ────────────
+// Suspended 2026-08-03 on Rohith Karne's instruction (DCI-5) because
+// applyDpprRules() destroyed PII with no legal-hold interlock. The interlock now
+// exists (legal_holds, migration 116): every run, scheduled or manual, leaves
+// held records untouched and logs how many it skipped.
 //
-// Re-enable ONLY when a hold can be placed, enforced on every destructive
-// path, released with recorded reason and authority, and audited.
-// The manual path (POST /api/admin/dppr/run-now) is deliberately left in
-// place — it requires an admin to trigger it and is not unattended.
-function startDpprScheduler() {
-  console.log('[DPPR] Scheduler SUSPENDED — no legal-hold interlock (DCI-5). No scheduled run will occur.');
-  // cron.schedule('0 2 * * *', runScheduledDppr, { timezone: 'UTC' });
+// The daily run stays OFF by default. It registers only when the deployment sets
+// ENABLE_SCHEDULED_DPPR=true — a decision for Rohith Karne, not a default.
+// The manual path (POST /api/admin/dppr/run-now) works either way.
+function isScheduledDpprEnabled() {
+  return process.env.ENABLE_SCHEDULED_DPPR === 'true';
 }
 
-module.exports = { startDpprScheduler, applyDpprRules };
+function startDpprScheduler() {
+  if (!isScheduledDpprEnabled()) {
+    console.log('[DPPR] Scheduled enforcement OFF — set ENABLE_SCHEDULED_DPPR=true to run daily at 02:00 UTC. Manual Run Now still works.');
+    return;
+  }
+  cron.schedule('0 2 * * *', runScheduledDppr, { timezone: 'UTC' });
+  console.log('[DPPR] Scheduler registered — daily 02:00 UTC; records under legal hold are skipped.');
+}
+
+module.exports = { startDpprScheduler, applyDpprRules, caseHeldSql, isScheduledDpprEnabled };

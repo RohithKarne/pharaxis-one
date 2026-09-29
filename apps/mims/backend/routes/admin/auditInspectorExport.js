@@ -35,24 +35,37 @@ router.post('/audit/inspector-export', authenticate, requireRole('admin', 'platf
     // EMPTY chronology — signed, and containing nothing. Found 2026-08-05 while
     // browser-verifying the truncation fix.
     //
-    // The catch is kept for deployments where the table is absent, but it now
-    // says so instead of failing silently. An audit artifact that quietly
-    // contains nothing is worse than one that errors.
-    const [audit] = await pool.execute(
-      'SELECT * FROM case_audit_trail WHERE case_id=? ORDER BY timestamp ASC',
-      [caseId]
-    ).catch(async (err) => {
-      console.error(`inspector-export: case_audit_trail query failed for case ${caseId} — chronology will be empty:`, err.message);
-      return [ [] ];
-    });
+    // An audit artifact that quietly contains nothing is worse than one that
+    // errors. O-9 (2026-09-27): a read failure used to be logged and the pack
+    // produced anyway with an empty chronology; now no pack is produced and the
+    // requester is told why.
+    let audit;
+    try {
+      [audit] = await pool.execute(
+        'SELECT * FROM case_audit_trail WHERE case_id=? ORDER BY timestamp ASC',
+        [caseId]
+      );
+    } catch (err) {
+      console.error(`inspector-export: case_audit_trail query failed for case ${caseId} — no export produced:`, err.message);
+      return res.status(500).json({
+        error: 'The case audit trail could not be read, so no inspector export was produced. Try again, or contact your administrator if this continues.',
+      });
+    }
+    // Same rule for the case's rows in the general audit log: they are part of
+    // the signed payload, so a read failure must not pass as "no rows".
     const entityPlaceholders = CASE_SCOPED_AUDIT_ENTITIES.map(() => '?').join(',');
-    const [generic] = await pool.execute(
-      `SELECT * FROM audit_logs WHERE entity_id=? AND entity IN (${entityPlaceholders}) ORDER BY created_at ASC`,
-      [caseId, ...CASE_SCOPED_AUDIT_ENTITIES]
-    ).catch(async (err) => {
-      console.error(`inspector-export: audit_logs query failed for case ${caseId}:`, err.message);
-      return [ [] ];
-    });
+    let generic;
+    try {
+      [generic] = await pool.execute(
+        `SELECT * FROM audit_logs WHERE entity_id=? AND entity IN (${entityPlaceholders}) ORDER BY created_at ASC`,
+        [caseId, ...CASE_SCOPED_AUDIT_ENTITIES]
+      );
+    } catch (err) {
+      console.error(`inspector-export: audit_logs query failed for case ${caseId} — no export produced:`, err.message);
+      return res.status(500).json({
+        error: 'The audit log could not be read, so no inspector export was produced. Try again, or contact your administrator if this continues.',
+      });
+    }
     const payload = { case_id: caseId, generated_at: new Date().toISOString(), audit, generic, signature_manifest: { hash: sha256(JSON.stringify({ audit, generic })) } };
     if (process.env.ESIGN_PRIVATE_KEY_PATH) {
       payload.signature_manifest = await createESignManifest({

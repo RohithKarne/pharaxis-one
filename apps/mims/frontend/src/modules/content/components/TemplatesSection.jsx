@@ -138,7 +138,7 @@ function TemplateDrawer({ template, token, folders, onClose, onSaved }) {
           <div style={{ padding: '0 24px 16px', borderTop: '1px solid var(--border)' }}>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '12px 0 8px', fontWeight: 600 }}>MERGE FIELD PREVIEW</p>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 8px' }}>
-              Supported fields: {'{{case_number}} {{case_type}} {{patient_name}} {{patient_email}} {{product_name}} {{agent_name}} {{org_name}} {{date}}'}
+              Supported fields: {'{{case_number}} {{case_type}} {{contact_name}} {{contact_email}} {{patient_name}} (initials) {{product_name}} {{agent_name}} {{org_name}} {{date}}'}
             </p>
             <div style={{ marginBottom: 8 }}>
               <div style={{ position: 'relative' }}>

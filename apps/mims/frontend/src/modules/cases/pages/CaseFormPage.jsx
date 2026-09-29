@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, lazy, Suspense } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
@@ -15,6 +15,7 @@ import { WiredTextarea }   from '../../../shared/components/WiredField'
 import useCoreFields       from '../hooks/useCoreFields'
 import CaseFormShell        from '../../../shared/components/CaseFormShell'
 import useUnsavedChangesGuard from '../../../shared/hooks/useUnsavedChangesGuard'
+import toast from '../../../shared/utils/toast'
 
 const TYPE_COLOR = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 
@@ -31,11 +32,36 @@ export default function CaseFormPage() {
     reassignForm, setReassignForm, reassignSaving,
     escalateForm, setEscalateForm, escalateSaving, escalateCase,
     dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-    draftStatus,
-    saveInfo, scheduleAutoSave, reassignCase, saveDynFields,
+    draftStatus, draftRestored, discardDraft,
+    saveInfo, scheduleAutoSave, reassignCase, saveDynFields, dynFieldsChanged,
     getFieldConfig, getPicklistOptions,
     headers,
   } = useCaseForm(id, token)
+
+  // Sections with their own save (MI, AE, PC) register here, so Save Case also
+  // saves whatever changed in them — instead of showing "Saved" while their
+  // edits stay unsaved.
+  const sectionSaves = useRef(new Map())
+  const registerSectionSave = useCallback((key, entry) => {
+    sectionSaves.current.set(key, entry)
+    return () => { if (sectionSaves.current.get(key) === entry) sectionSaves.current.delete(key) }
+  }, [])
+
+  async function saveCaseAndSections() {
+    await saveInfo(false)
+    const sections = [
+      ...sectionSaves.current.values(),
+      { label: 'Additional fields', isDirty: dynFieldsChanged, save: saveDynFields },
+    ]
+    const failed = []
+    for (const section of sections.filter(s => s.isDirty())) {
+      if (!(await section.save())) failed.push(section.label)
+    }
+    if (failed.length) {
+      setSavedMsg(`Not saved: ${failed.join(', ')}`)
+      toast.error(`Case saved, but not: ${failed.join(', ')}`)
+    }
+  }
 
   const routeTarget = useMemo(() => {
     const params = new URLSearchParams(location.search || '')
@@ -130,7 +156,7 @@ export default function CaseFormPage() {
               Response →
             </button>
           )}
-          <button className="cf-save-btn" onClick={() => saveInfo(false)} disabled={saving}>
+          <button className="cf-save-btn" onClick={saveCaseAndSections} disabled={saving}>
             {saving ? 'Saving…' : 'Save Case'}
           </button>
         </div>
@@ -139,6 +165,13 @@ export default function CaseFormPage() {
       {/* Read-only summary. Replaces the five panels that used to occupy the
           deleted "Case Meta" step — one line, no extra queries, visible on
           every step. */}
+      {draftRestored && (
+        <div className="cf-inline-note" role="status" style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>Unsaved changes from your last visit were restored. Save Case to keep them, or discard them.</span>
+          <button type="button" className="cf-back-btn" onClick={discardDraft}>Discard</button>
+        </div>
+      )}
+
       <CaseHeaderStrip
         caseData={caseData}
         infoForm={infoForm}
@@ -174,8 +207,9 @@ export default function CaseFormPage() {
           setActiveStep={setActiveStep}
           caseType={caseData?.case_type}
           caseNumber={caseData?.case_number}
+          doneSteps={{ 1: tabCounts.contacts > 0 }}
           saving={saving}
-          onSave={saveInfo}
+          onSave={saveCaseAndSections}
         >
           {activeStep === 1 && (
             <CaseContactsTab
@@ -203,6 +237,7 @@ export default function CaseFormPage() {
               {caseData?.case_type === 'MI' && (
                 <CaseMITab
                   view="capture"
+                  coreField={coreField}
                   id={id} token={token} headers={headers} setSavedMsg={setSavedMsg}
                   onCountChange={n => setTabCounts(p => ({ ...p, mi: n }))}
                   formConfig={formConfig}
@@ -211,6 +246,7 @@ export default function CaseFormPage() {
                   dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
                   saveDynFields={saveDynFields}
                   caseType={caseData?.case_type}
+                  registerSectionSave={registerSectionSave}
                 />
               )}
               {caseData?.case_type === 'AE' && (
@@ -223,6 +259,7 @@ export default function CaseFormPage() {
                   dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
                   saveDynFields={saveDynFields}
                   caseType={caseData?.case_type}
+                  registerSectionSave={registerSectionSave}
                 />
               )}
               {caseData?.case_type === 'PC' && (
@@ -235,6 +272,7 @@ export default function CaseFormPage() {
                   dynFieldSaving={dynFieldSaving} dynFieldErrors={dynFieldErrors}
                   saveDynFields={saveDynFields}
                   caseType={caseData?.case_type}
+                  registerSectionSave={registerSectionSave}
                 />
               )}
             </>

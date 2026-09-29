@@ -8,6 +8,10 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 // https://vite.dev/config/
 export default defineConfig({
   base: '/mims/',
+  // Tests compile JSX with the automatic runtime too. Without it vitest used the
+  // classic one, so every component test failed with "React is not defined"
+  // (M-65) while the app itself built fine.
+  esbuild: { jsx: 'automatic' },
   test: {
     environment: 'jsdom',
     globals: true,

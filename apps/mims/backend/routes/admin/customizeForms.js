@@ -9,13 +9,19 @@
  *
  * Placeholder items live in field_setup under section '__customize_placeholder__'.
  *
- * All routes: admin + platform admin. No requireOrg — admin is global.
+ * All routes: admin + platform admin. A tenant admin may only read or save
+ * their own organisation's form setup; a platform admin may use any orgId.
  */
 
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
+const { isPlatformAdmin } = require('../../utils/adminScope');
+
+function isOwnOrg(req, orgId) {
+  return isPlatformAdmin(req.user) || Number(req.user?.orgId) === orgId;
+}
 const { CATALOG, CATEGORIES_LIST, PLACEHOLDER_SECTION, getCategory } = require('../../catalogs/customizeFormsCatalog');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -63,6 +69,7 @@ router.get('/customize-forms/:orgId/:category', authenticate, requireRole('admin
   if (!cat) return res.status(404).json({ error: 'Unknown category.' });
   const orgId = parseInt(req.params.orgId, 10);
   if (!Number.isFinite(orgId)) return res.status(400).json({ error: 'Invalid orgId.' });
+  if (!isOwnOrg(req, orgId)) return res.status(403).json({ error: "You can only manage your own organisation's forms." });
 
   try {
     // Real sections — read is_visible from case_form_definition
@@ -189,6 +196,7 @@ router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin
   if (!cat) return res.status(404).json({ error: 'Unknown category.' });
   const orgId = parseInt(req.params.orgId, 10);
   if (!Number.isFinite(orgId)) return res.status(400).json({ error: 'Invalid orgId.' });
+  if (!isOwnOrg(req, orgId)) return res.status(403).json({ error: "You can only manage your own organisation's forms." });
 
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
   if (!items.length) return res.status(400).json({ error: 'No items to save.' });
@@ -339,6 +347,7 @@ router.put('/customize-forms/:orgId/:category', authenticate, requireRole('admin
 router.post('/customize-forms/:orgId/flex-field', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const orgId = parseInt(req.params.orgId, 10);
   if (!Number.isFinite(orgId)) return res.status(400).json({ error: 'Invalid orgId.' });
+  if (!isOwnOrg(req, orgId)) return res.status(403).json({ error: "You can only manage your own organisation's forms." });
   const { section_name, field_name, field_type = 'text', help_text, max_length, default_value, picklist_type, lookup_target } = req.body || {};
   if (!section_name?.trim() || !field_name?.trim()) {
     return res.status(400).json({ error: 'section_name and field_name are required.' });
@@ -377,6 +386,7 @@ router.post('/customize-forms/:orgId/flex-field', authenticate, requireRole('adm
 router.delete('/customize-forms/:orgId/flex-field/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   const orgId = parseInt(req.params.orgId, 10);
   if (!Number.isFinite(orgId)) return res.status(400).json({ error: 'Invalid orgId.' });
+  if (!isOwnOrg(req, orgId)) return res.status(403).json({ error: "You can only manage your own organisation's forms." });
   try {
     const [[row]] = await pool.execute(
       'SELECT id, section_name, field_name FROM field_setup WHERE id = ? AND org_id = ? LIMIT 1',
@@ -392,33 +402,6 @@ router.delete('/customize-forms/:orgId/flex-field/:id', authenticate, requireRol
     res.json({ ok: true });
   } catch (err) {
     console.error('DELETE /customize-forms/:orgId/flex-field/:id error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// PUT /api/admin/customize-forms/:orgId/case-form-def
-// Body: { case_type, section_name, field_overrides } — writes the rare advanced JSON
-router.put('/customize-forms/:orgId/case-form-def', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  const orgId = parseInt(req.params.orgId, 10);
-  const { case_type, section_name, field_overrides } = req.body || {};
-  if (!Number.isFinite(orgId) || !case_type || !section_name) {
-    return res.status(400).json({ error: 'orgId, case_type, and section_name are required.' });
-  }
-  try {
-    await pool.execute(
-      `INSERT INTO case_form_definition (org_id, case_type, section_name, is_visible, field_overrides)
-       VALUES (?, ?, ?, 1, ?)
-       ON DUPLICATE KEY UPDATE field_overrides = VALUES(field_overrides)`,
-      [orgId, case_type, section_name, field_overrides ? JSON.stringify(field_overrides) : null]
-    );
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details)
-       VALUES (?, 'case_form_def', NULL, 'UPDATE_FIELD_OVERRIDES', ?)`,
-      [req.user.userId, JSON.stringify({ orgId, case_type, section_name })]
-    );
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('PUT /customize-forms/:orgId/case-form-def error:', err);
     res.status(500).json({ error: err.message });
   }
 });

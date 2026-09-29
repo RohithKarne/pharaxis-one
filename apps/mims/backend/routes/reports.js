@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, requireCapability } = require('../middleware/auth');
+const { authenticate, requireCapability, requireModule } = require('../middleware/auth');
 const pool = require('../database/db');
 const {
   getDailyCaseOpenings,
@@ -12,15 +12,9 @@ const {
 } = require('../services/reportDatasetService');
 const { recordReportRun, listReportRunLedger } = require('../services/reportOpsService');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
-// Loaded on first use rather than at module load. This service is mid-write —
-// two of the modules it requires have not been written yet — and requiring it
-// here threw MODULE_NOT_FOUND during mountRoutes, which stopped the entire
-// backend from starting. An unfinished endpoint should fail by itself; the
-// handlers below already return 500 on error, so that is what now happens.
-const scheduledReportService = new Proxy({}, {
-  get: (_t, prop) => (...args) => require('../services/scheduledReportService')[prop](...args),
-});
 const router = express.Router();
+// Every /reports/* call needs the admin's Reports grant, as the screen does (T11 / M-69).
+router.use('/reports', authenticate, requireModule('reports'));
 
 function dateFilters(from, to, col) {
   const parts = [];
@@ -438,35 +432,6 @@ router.get('/reports/case-source', authenticate, async (req, res) => {
   }
 });
 
-router.get('/reports/case-audit-trail', authenticate, async (req, res) => {
-  try {
-    const caseId = parseInt(req.query.case_id, 10);
-    const orgId = resolveReportOrgId(req);
-
-    if (Number.isNaN(caseId)) {
-      return res.status(400).json({ error: 'case_id is required' });
-    }
-
-    const sql = `
-      SELECT aal.*, u.name as actor_name
-      FROM admin_audit_log aal
-      LEFT JOIN users u ON aal.user_id = u.id
-      WHERE aal.target_type = 'case' AND aal.target_id = ? AND aal.org_id = ?
-      ORDER BY aal.created_at DESC
-      LIMIT 100
-    `;
-
-    try {
-      const [rows] = await pool.execute(sql, [caseId, orgId]);
-      return res.json({ data: rows });
-    } catch (queryErr) {
-      return res.json({ data: [], message: 'Audit log not available' });
-    }
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
 router.get('/reports/regulatory-readiness', authenticate, async (req, res) => {
   try {
     const orgId = resolveReportOrgId(req);
@@ -664,30 +629,6 @@ router.get('/reports/user-roles', authenticate, async (req, res) => {
   }
 });
 
-router.get('/reports/content-usage', authenticate, async (req, res) => {
-  try {
-    const orgId = resolveReportOrgId(req);
-
-    const sql = `
-      SELECT d.title, d.doc_type, d.view_count,
-        d.expiry_date, d.created_at
-      FROM cm_documents d
-      WHERE d.org_id = ? AND d.is_active = 1
-      ORDER BY d.view_count DESC, d.created_at DESC
-      LIMIT 50
-    `;
-
-    try {
-      const [rows] = await pool.execute(sql, [orgId]);
-      return res.json({ data: rows });
-    } catch (queryErr) {
-      return res.json({ data: [], message: 'view_count tracking not enabled' });
-    }
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
 router.get('/reports/integration-sync', authenticate, async (req, res) => {
   try {
     const orgId = resolveReportOrgId(req);
@@ -757,31 +698,6 @@ router.get('/reports/system-health', authenticate, async (req, res) => {
   }
 });
 
-router.get('/reports/field-usage', authenticate, async (req, res) => {
-  try {
-    const orgId = resolveReportOrgId(req);
-
-    const sql = `
-      SELECT fs.section_name, fs.field_name, fs.field_type,
-        COUNT(cv.id) as populated_count
-      FROM field_setup fs
-      LEFT JOIN case_values cv ON cv.field_name = fs.field_name AND cv.org_id = fs.org_id
-      WHERE fs.org_id = ?
-      GROUP BY fs.id, fs.section_name, fs.field_name, fs.field_type
-      ORDER BY populated_count DESC
-    `;
-
-    try {
-      const [rows] = await pool.execute(sql, [orgId]);
-      return res.json({ data: rows });
-    } catch (queryErr) {
-      return res.json({ data: [], message: 'case_values table not available' });
-    }
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
 // ─── F3 FIX: Report Presets — backend persistence (replaces localStorage) ────
 
 // GET /api/reports/presets
@@ -829,44 +745,7 @@ router.delete('/presets/:id', authenticate, requireCapability('reports.manage'),
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Scheduled Reports Routes
-router.get('/reports/scheduled', authenticate, async (req, res) => {
-  try {
-    const orgId = resolveReportOrgId(req);
-    const schedules = await scheduledReportService.listSchedules(orgId);
-    return res.json({ data: schedules });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/reports/scheduled', authenticate, async (req, res) => {
-  try {
-    const orgId = resolveReportOrgId(req);
-    const data = { ...req.body, org_id: orgId, created_by: req.user.userId };
-    const schedule = await scheduledReportService.createSchedule(data);
-    return res.json({ data: schedule, success: true });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-router.delete('/reports/scheduled/:id', authenticate, async (req, res) => {
-  try {
-    await scheduledReportService.deleteSchedule(req.params.id);
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/reports/scheduled/:id/run-now', authenticate, async (req, res) => {
-  try {
-    await scheduledReportService.executeScheduledReport(req.params.id);
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
+// No /reports/scheduled: schedules are /reports/module/schedules (reportModule.js,
+// scheduled_export_configs). The legacy service here never worked (T16).
 
 module.exports = router;

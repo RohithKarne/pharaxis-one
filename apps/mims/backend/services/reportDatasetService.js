@@ -230,7 +230,7 @@ async function getTransmissionSlaReport(orgId, filters = {}) {
 function buildInquiryRangeClause(filters = {}) {
   const { dateFrom, dateTo } = normalizeDateRange(filters);
   return {
-    sql: `DATE(COALESCE(STR_TO_DATE(i.received_at, '%Y-%m-%d %H:%i:%s'), i.created_at)) >= ? AND DATE(COALESCE(STR_TO_DATE(i.received_at, '%Y-%m-%d %H:%i:%s'), i.created_at)) <= ?`,
+    sql: `DATE(COALESCE(i.received_at, i.created_at)) >= ? AND DATE(COALESCE(i.received_at, i.created_at)) <= ?`,
     params: [dateFrom, dateTo],
     dateFrom,
     dateTo,
@@ -242,12 +242,13 @@ async function loadInboxRows(orgId, filters = {}) {
   const [rows] = await pool.execute(
     `SELECT
        i.*,
+       DATE_FORMAT(i.received_at, '%Y-%m-%d %H:%i:%s') AS received_at,
        COALESCE(i.mailbox_name, ea.account_name) AS mailbox_name
      FROM inquiries i
      LEFT JOIN email_accounts ea ON ea.id = i.email_account_id
      WHERE i.org_id = ?
        AND ${range.sql}
-     ORDER BY COALESCE(STR_TO_DATE(i.received_at, '%Y-%m-%d %H:%i:%s'), i.created_at) DESC, i.id DESC`,
+     ORDER BY COALESCE(i.received_at, i.created_at) DESC, i.id DESC`,
     [orgId, ...range.params]
   );
   return hydrateInquiryRows(rows);
@@ -440,6 +441,20 @@ async function getLegacyCaseSummary(orgId, filters = {}) {
   return rows;
 }
 
+// The datasets this service actually produces. Every other report in the
+// library fell through to the plain case list and showed it under its own name
+// — Security Events, Case Closure Rate and 14 more (M-91). They now say so.
+const BUILT_DATASETS = new Set([
+  'daily-case-openings',
+  'daily-case-closures',
+  'daily-case-summary',
+  'daily-operations-pack',
+  'inbox-performance',
+  'inbox-sla',
+  'transmission-sla',
+  'case-summary',
+]);
+
 async function getDatasetByReportKey(reportKey, orgId, filters = {}) {
   switch (reportKey) {
     case 'daily-case-openings':
@@ -457,8 +472,12 @@ async function getDatasetByReportKey(reportKey, orgId, filters = {}) {
     case 'transmission-sla':
       return getTransmissionSlaReport(orgId, filters);
     case 'case-summary':
-    default:
       return getLegacyCaseSummary(orgId, filters);
+    default: {
+      const err = new Error('This report is not built yet.');
+      err.code = 'REPORT_NOT_BUILT';
+      throw err;
+    }
   }
 }
 
@@ -472,4 +491,5 @@ module.exports = {
   getTransmissionSlaReport,
   getLegacyCaseSummary,
   getDatasetByReportKey,
+  BUILT_DATASETS,
 };

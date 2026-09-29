@@ -14,7 +14,15 @@ const pool    = require('../database/db');
 const { authenticate } = require('../middleware/auth');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
 
+// PC sections round-trip DATE columns; accept a re-saved midnight timestamp.
+router.use('/cases/pc', require('../services/caseHelpers').normalizeDateOnlyBody);
+
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
+
+// Admin-required panel fields (Customize Forms) are checked before any
+// PC section save reaches its own route below.
+router.put('/cases/pc/versions/:versionId/:tab', authenticate,
+  require('../services/requiredFields').enforcePanelRequired('pc', 'case_pc_versions'));
 
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
 
@@ -98,6 +106,31 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
       'INSERT INTO case_pc_versions (case_id, version_number, created_by) VALUES (?, ?, ?)',
       [req.params.id, nextNum, req.user.userId]
     );
+
+    // The first version starts from what was captured at intake — description,
+    // category, received date, product, lot and expiry — instead of blank, so
+    // the agent does not type it again (M-108).
+    if (!latest) {
+      const [[intake]] = await conn.execute(
+        `SELECT i.product_name, i.batch_lot_number, i.expiry_date, i.complaint_category, i.complaint_description,
+                c.date_received
+           FROM case_pc_intake i JOIN cases c ON c.id = i.case_id
+          WHERE i.case_id = ? ORDER BY i.id DESC LIMIT 1`,
+        [req.params.id]
+      );
+      if (intake) {
+        await conn.execute(
+          `INSERT INTO case_pc_general (version_id, complaint_description, pc_category, date_received) VALUES (?, ?, ?, ?)`,
+          [result.insertId, intake.complaint_description || null, intake.complaint_category || null, intake.date_received || null]
+        );
+        if (intake.product_name || intake.batch_lot_number) {
+          await conn.execute(
+            `INSERT INTO case_pc_product_info (version_id, product_name, lot_number, expiry_date) VALUES (?, ?, ?, ?)`,
+            [result.insertId, intake.product_name || null, intake.batch_lot_number || null, intake.expiry_date || null]
+          );
+        }
+      }
+    }
 
     // "Copy from PC" — copy complaint_description from previous version's general tab only
     if (latest) {

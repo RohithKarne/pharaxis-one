@@ -26,7 +26,7 @@ import CrossCaseSearchModal from '../components/CrossCaseSearchModal'
 export default function CasesPage() {
   const navigate        = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { token, user, hasCapability, orgId } = useAuth()
+  const { token, user, hasCapability, orgId, allOrgs } = useAuth()
   const headers         = useMemo(
     () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
     [token]
@@ -54,10 +54,13 @@ export default function CasesPage() {
   const [orgs, setOrgs]               = useState([])
   const [newCase, setNewCase]         = useState({ org_id: '', case_type: '' })
   const [creating, setCreating]       = useState(false)
+  // The chosen org's governed lists (reporter type, gender, …) — the values the
+  // server checks the intake against. Loaded when the reporter step opens.
+  const [intakeLists, setIntakeLists] = useState({})
   // Reporter fields
-  const [reporter, setReporter]       = useState({ first_name: '', last_name: '', email: '', phone: '', reporter_type: 'HCP', country: '', organisation: '' })
+  const [reporter, setReporter]       = useState({ first_name: '', last_name: '', email: '', phone: '', reporter_type: '', country: '', organisation: '' })
   // Patient fields (AE/PC)
-  const [patient, setPatient]         = useState({ initials: '', age: '', age_unit: 'years', gender: '', weight_kg: '' })
+  const [patient, setPatient]         = useState({ initials: '', age: '', age_unit: '', gender: '', weight_kg: '' })
   // AE intake
   const [aeIntake, setAeIntake]       = useState({
     suspect_drug_name: '', batch_lot_number: '', dose: '', route_of_admin: '',
@@ -97,7 +100,10 @@ export default function CasesPage() {
         const u = await uRes.json()
         const s = await sRes.json()
         if (Array.isArray(u)) setBulkUsers(u.filter(x => x.is_active !== false))
-        if (Array.isArray(s)) setBulkStatuses(s.filter(x => x.is_active !== false))
+        // The endpoint answers { states: [...] }; reading only a bare array left
+        // "Change Status" with no choices (item 7, 2026-09-29).
+        const states = Array.isArray(s) ? s : (Array.isArray(s?.states) ? s.states : [])
+        setBulkStatuses(states.filter(x => x.is_active !== false))
       }).catch(err => console.error('Bulk load error:', err))
       .finally(() => setBulkLoading(false))
     }
@@ -113,12 +119,16 @@ export default function CasesPage() {
     else setSelectedCaseIds(prev => prev.filter(x => x !== id))
   }
 
+  // Each selected case goes through the same request as a single-case edit
+  // (PUT /cases/:id) or delete (DELETE /cases/:id), so every case gets that
+  // path's permission, access-scope, workflow and audit checks, and a case the
+  // server refuses is reported by name instead of being counted as updated.
   async function applyBulkAction(action) {
     if (!selectedCaseIds.length) return
     let payload = {}
     if (action === 'reassign') {
       if (!bulkNewOwnerId) return toast.error('Select an owner')
-      payload = { new_owner_id: bulkNewOwnerId === 'null' ? null : Number(bulkNewOwnerId) }
+      payload = { case_owner_id: bulkNewOwnerId === 'null' ? null : Number(bulkNewOwnerId) }
     } else if (action === 'update_status') {
       if (!bulkStatusId) return toast.error('Select a status')
       payload = { status_id: Number(bulkStatusId) }
@@ -130,22 +140,33 @@ export default function CasesPage() {
     }
 
     setBulkActionLoading(true)
+    const failures = []
     try {
-      const res = await httpFetch(`${API}/cases/bulk-update`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ case_ids: selectedCaseIds, action, payload })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed bulk update')
-      toast.success(`Successfully updated ${data.updated_count} cases.`)
+      for (const caseId of selectedCaseIds) {
+        const label = cases.find(c => c.id === caseId)?.case_number || `Case ${caseId}`
+        try {
+          const res = action === 'delete'
+            ? await httpFetch(`${API}/cases/${caseId}`, { method: 'DELETE', headers })
+            : await httpFetch(`${API}/cases/${caseId}`, { method: 'PUT', headers, body: JSON.stringify(payload) })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            failures.push(`${label}: ${data.error || `request failed (${res.status})`}`)
+          }
+        } catch (err) {
+          failures.push(`${label}: ${err.message}`)
+        }
+      }
+      const done = selectedCaseIds.length - failures.length
+      if (done > 0) toast.success(`Updated ${done} of ${selectedCaseIds.length} case(s).`)
+      if (failures.length) {
+        const shown = failures.slice(0, 3).join('; ') + (failures.length > 3 ? `; and ${failures.length - 3} more` : '')
+        toast.error(`${failures.length} of ${selectedCaseIds.length} case(s) not updated — ${shown}`, 10000)
+      }
       setSelectedCaseIds([])
       setBulkStatusId('')
       setBulkPriority('')
       setBulkNewOwnerId('')
       loadCases()
-    } catch (err) {
-      toast.error(err.message)
     } finally {
       setBulkActionLoading(false)
     }
@@ -313,13 +334,17 @@ export default function CasesPage() {
   async function openModal() {
     setNewCase({ org_id: orgId ? String(orgId) : '', case_type: '' })
     setModalStep(1)
-    setReporter({ first_name: '', last_name: '', email: '', phone: '', reporter_type: 'HCP', country: '', organisation: '' })
-    setPatient({ initials: '', age: '', age_unit: 'years', gender: '', weight_kg: '' })
+    setReporter({ first_name: '', last_name: '', email: '', phone: '', reporter_type: '', country: '', organisation: '' })
+    setPatient({ initials: '', age: '', age_unit: '', gender: '', weight_kg: '' })
     setAeIntake({ suspect_drug_name: '', batch_lot_number: '', dose: '', route_of_admin: '', treatment_start_date: '', treatment_stop_date: '', reaction_description: '', reaction_onset_date: '', outcome: '', is_death: false, is_life_threatening: false, is_hospitalization: false, is_prolonged_hospitalization: false, is_disability: false, is_congenital_anomaly: false, is_other_medically_important: false })
     setPcIntake({ product_name: '', batch_lot_number: '', expiry_date: '', purchase_date: '', complaint_category: '', complaint_description: '', sample_available: false, sample_return_requested: false })
     setDupCandidates([])
     setDupError('')
     setModalOpen(true)
+    // The user's own organisations arrive with the sign-in. The admin-only org
+    // list refused agents (403) and left this required field empty.
+    const ownOrgs = (allOrgs || []).map(o => ({ id: o.orgId, name: o.orgName })).filter(o => o.id)
+    if (ownOrgs.length) { setOrgs(ownOrgs); return }
     try {
       const res  = await httpFetch(`${API}/admin/orgs`, { headers })
       const data = await res.json()
@@ -333,7 +358,23 @@ export default function CasesPage() {
     setNewCase(p => ({ ...p, org_id: orgId }))
   }
 
+  async function goToReporterStep() {
+    setModalStep(2)
+    setIntakeLists({})
+    try {
+      const res  = await httpFetch(`${API}/cases/intake-lists?org_id=${newCase.org_id}`, { headers })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load the lists for this organisation')
+      setIntakeLists(data)
+    } catch (err) { toast.error(err.message) }
+  }
+
+  const listOptions = (name) => (intakeLists[name] || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)
+
   function step1Valid() { return newCase.org_id && newCase.case_type }
+  // One list drives both the header count and the step strip — they disagreed
+  // ("Step 1 of 3" then "Step 2 of 2", M-44). No count until a case type is picked.
+  const newCaseSteps = ['Case Details', 'Reporter', newCase.case_type === 'AE' ? 'AE Intake' : newCase.case_type === 'PC' ? 'PC Intake' : null].filter(Boolean)
   function step2Valid() { return reporter.first_name && reporter.last_name }
 
   async function createCase() {
@@ -370,6 +411,10 @@ export default function CasesPage() {
       const res  = await httpFetch(`${API}/cases`, { method: 'POST', headers, body: JSON.stringify(body) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create case')
+      // A case needs its number (MI-000123) — the inbox's Create Case asks for one;
+      // New Case never did, so every case made here stayed unnumbered (M-85).
+      const numRes = await httpFetch(`${API}/cases/${data.id}/assign-number`, { method: 'POST', headers })
+      if (!numRes.ok) toast.error('Case created, but its case number could not be assigned. Reopen the case to retry.')
       setModalOpen(false)
       navigate(`/cases/${data.id}`, { state: { from: '/cases' } })
     } catch (err) {
@@ -425,7 +470,10 @@ export default function CasesPage() {
     return cases.filter(c => {
       if (typeFilter !== 'all' && c.case_type !== typeFilter) return false
       
-      const p = c.priority || 'normal'
+      // The case form saves the list's capitalised value ("Urgent", "High");
+      // imported cases hold lowercase. Compare without case, or dropdown-set
+      // priorities never match the filters (M-80).
+      const p = String(c.priority || 'normal').toLowerCase()
       if (priorityFilter === 'high_urgent') {
         if (p !== 'high' && p !== 'urgent') return false
       } else if (priorityFilter !== 'all' && p !== priorityFilter) {
@@ -685,13 +733,13 @@ export default function CasesPage() {
         <div className="cf-modal-overlay" onClick={() => setModalOpen(false)}>
           <div className="cf-modal" style={{ maxWidth: 640, width: '95vw' }} onClick={e => e.stopPropagation()}>
             <div className="cf-modal-header">
-              <span className="cf-modal-title">New Case — Step {modalStep} of {newCase.case_type === 'MI' ? 2 : 3}</span>
+              <span className="cf-modal-title">New Case — Step {modalStep}{newCase.case_type ? ` of ${newCaseSteps.length}` : ''}</span>
               <button className="cf-modal-close" onClick={() => setModalOpen(false)}>✕</button>
             </div>
 
             {/* Step indicator */}
             <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border, #e5e7eb)' }}>
-              {['Case Details', 'Reporter', newCase.case_type === 'AE' ? 'AE Intake' : newCase.case_type === 'PC' ? 'PC Intake' : null].filter(Boolean).map((label, i) => (
+              {newCaseSteps.map((label, i) => (
                 <div key={i} style={{ flex: 1, padding: '8px 0', textAlign: 'center', fontSize: 12, fontWeight: modalStep === i + 1 ? 700 : 400,
                   color: modalStep === i + 1 ? 'var(--primary, #2563eb)' : 'var(--text-muted, #9ca3af)',
                   borderBottom: modalStep === i + 1 ? '2px solid var(--primary, #2563eb)' : '2px solid transparent' }}>
@@ -717,11 +765,12 @@ export default function CasesPage() {
                     <div style={{ display: 'flex', gap: 10 }}>
                       {[{ key: 'MI', label: 'Medical Information', color: '#2563eb' }, { key: 'AE', label: 'Adverse Event', color: '#dc2626' }, { key: 'PC', label: 'Product Complaint', color: '#d97706' }].map(ct => (
                         <button key={ct.key} type="button"
+                          aria-label={ct.label} aria-pressed={newCase.case_type === ct.key}
                           onClick={() => setNewCase(p => ({ ...p, case_type: ct.key }))}
                           style={{ flex: 1, padding: '10px 6px', border: `2px solid ${newCase.case_type === ct.key ? ct.color : 'var(--border, #e5e7eb)'}`,
                             borderRadius: 8, background: newCase.case_type === ct.key ? ct.color + '15' : 'transparent',
                             color: newCase.case_type === ct.key ? ct.color : 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: newCase.case_type === ct.key ? 700 : 400 }}>
-                          <div style={{ fontSize: 18, marginBottom: 4 }}>{ct.key === 'MI' ? '💊' : ct.key === 'AE' ? '⚠️' : '📦'}</div>
+                          <div aria-hidden="true" style={{ fontSize: 18, marginBottom: 4 }}>{ct.key === 'MI' ? '💊' : ct.key === 'AE' ? '⚠️' : '📦'}</div>
                           <div>{ct.key}</div>
                           <div style={{ fontSize: 10, opacity: 0.8 }}>{ct.label}</div>
                         </button>
@@ -729,7 +778,7 @@ export default function CasesPage() {
                     </div>
                   </div>
                   <div className="cf-modal-actions">
-                    <button className="cf-modal-confirm" disabled={!step1Valid()} onClick={() => setModalStep(2)}>Next: Reporter →</button>
+                    <button className="cf-modal-confirm" disabled={!step1Valid()} onClick={goToReporterStep}>Next: Reporter →</button>
                   </div>
                 </div>
               )}
@@ -758,7 +807,8 @@ export default function CasesPage() {
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Reporter Type</label>
                       <select className="cf-modal-select" value={reporter.reporter_type} onChange={e => setReporter(p => ({ ...p, reporter_type: e.target.value }))}>
-                        {['HCP', 'Patient', 'Consumer', 'Caregiver', 'Other'].map(t => <option key={t}>{t}</option>)}
+                        <option value="">— Select —</option>
+                        {listOptions('reporter_type')}
                       </select>
                     </div>
                     <div className="cf-form-field" style={{ margin: 0 }}>
@@ -787,14 +837,15 @@ export default function CasesPage() {
                         <div className="cf-form-field" style={{ margin: 0 }}>
                           <label className="cf-modal-label">Age Unit</label>
                           <select className="cf-modal-select" value={patient.age_unit} onChange={e => setPatient(p => ({ ...p, age_unit: e.target.value }))}>
-                            {['years', 'months', 'weeks', 'days'].map(u => <option key={u}>{u}</option>)}
+                            <option value="">— Select —</option>
+                            {listOptions('age_unit')}
                           </select>
                         </div>
                         <div className="cf-form-field" style={{ margin: 0 }}>
                           <label className="cf-modal-label">Gender</label>
                           <select className="cf-modal-select" value={patient.gender} onChange={e => setPatient(p => ({ ...p, gender: e.target.value }))}>
-                            <option value="">— Unknown —</option>
-                            {['Male', 'Female', 'Non-binary', 'Prefer not to say'].map(g => <option key={g}>{g}</option>)}
+                            <option value="">— Select —</option>
+                            {listOptions('gender')}
                           </select>
                         </div>
                         <div className="cf-form-field" style={{ margin: 0 }}>
@@ -822,17 +873,22 @@ export default function CasesPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Suspect Product</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    {[['suspect_drug_name','Drug / Product Name','text'],['batch_lot_number','Batch / Lot Number','text'],['dose','Dose','text'],['route_of_admin','Route of Administration','text'],['treatment_start_date','Treatment Start Date','date'],['treatment_stop_date','Treatment Stop Date','date'],['reaction_onset_date','Reaction Onset Date','date']].map(([key, label, type]) => (
+                    {[['suspect_drug_name','Drug / Product Name','text'],['batch_lot_number','Batch / Lot Number','text'],['dose','Dose','text'],['route_of_admin','Route of Administration','list'],['treatment_start_date','Treatment Start Date','date'],['treatment_stop_date','Treatment Stop Date','date'],['reaction_onset_date','Reaction Onset Date','date']].map(([key, label, type]) => (
                       <div key={key} className="cf-form-field" style={{ margin: 0 }}>
                         <label className="cf-modal-label">{label}</label>
-                        <input className="cf-modal-select" type={type} value={aeIntake[key]} onChange={e => setAeIntake(p => ({ ...p, [key]: e.target.value }))} placeholder={label} />
+                        {type === 'list'
+                          ? <select className="cf-modal-select" value={aeIntake[key]} onChange={e => setAeIntake(p => ({ ...p, [key]: e.target.value }))}>
+                              <option value="">— Select —</option>
+                              {listOptions(key)}
+                            </select>
+                          : <input className="cf-modal-select" type={type} value={aeIntake[key]} onChange={e => setAeIntake(p => ({ ...p, [key]: e.target.value }))} placeholder={label} />}
                       </div>
                     ))}
                     <div className="cf-form-field" style={{ margin: 0 }}>
                       <label className="cf-modal-label">Outcome</label>
                       <select className="cf-modal-select" value={aeIntake.outcome} onChange={e => setAeIntake(p => ({ ...p, outcome: e.target.value }))}>
                         <option value="">— Select —</option>
-                        {['Recovered', 'Recovering', 'Not Recovered', 'Fatal', 'Unknown'].map(o => <option key={o}>{o}</option>)}
+                        {listOptions('ae_outcome')}
                       </select>
                     </div>
                   </div>
@@ -872,7 +928,7 @@ export default function CasesPage() {
                       <label className="cf-modal-label">Complaint Category</label>
                       <select className="cf-modal-select" value={pcIntake.complaint_category} onChange={e => setPcIntake(p => ({ ...p, complaint_category: e.target.value }))}>
                         <option value="">— Select —</option>
-                        {['Product Defect', 'Labelling Error', 'Packaging Issue', 'Performance Issue', 'Adverse Reaction'].map(c => <option key={c}>{c}</option>)}
+                        {listOptions('pc_category')}
                       </select>
                     </div>
                   </div>

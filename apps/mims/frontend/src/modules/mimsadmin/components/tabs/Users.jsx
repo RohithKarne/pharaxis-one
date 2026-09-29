@@ -105,7 +105,7 @@ export default function Users() {
   async function onSaved() {
     closeModal()
     await loadUsers()
-    showFlash(editUser ? 'User updated.' : 'User created successfully.')
+    showFlash(editUser ? 'User updated.' : 'User created. They set their password with “Forgot password” on the sign-in page.')
   }
 
   const filtered = users.filter(u => {

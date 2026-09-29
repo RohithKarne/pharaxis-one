@@ -38,7 +38,7 @@ export default function ReasonForChangeModal({ open, onClose, onConfirm, field, 
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
           <strong>Reason for change</strong>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-            21 CFR Part 11 requires a reason for every audited change.
+            A reason is required for every audited change.
           </div>
         </div>
         <div style={{ padding: 16 }}>

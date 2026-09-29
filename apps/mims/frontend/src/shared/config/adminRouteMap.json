@@ -20,7 +20,6 @@
     "/admin-console/case-import": "/mims-admin?system=sys-setup-int-case-import"
   },
   "serviceConfigRoutes": {
-    "expiry-alerts": "/mims-admin",
     "cm-expiry-alerts": "/browse-content",
     "cm-module-lifecycle": "/browse-content",
     "cm-content-auto-archive": "/browse-content",

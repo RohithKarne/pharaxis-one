@@ -30,6 +30,8 @@ const { resolveDefaultWorkflowStateId } = require('../services/orgBootstrapServi
 const changeControl = require('../services/changeControlService');
 const {
   calculateAeDueDate,
+  computeAeHandoffClock,
+  stricterAePriority,
   calculatePcDueDate,
   computeTransmissionSlaStatus,
   findDuplicateCandidates,
@@ -37,6 +39,7 @@ const {
 } = require('../services/caseGovernanceService');
 const { resolveProductGroups } = require('../services/productGroupService');
 const { evaluateRule } = require('../../shared/services/ruleEvaluator');
+const { missingRequiredAdditional } = require('../services/requiredFields');
 const { recalculateAll: recalculateHaClocks } = require('../services/haClockService');
 const { hasGlobalAdminScope, isAdminUser } = require('../utils/adminScope');
 
@@ -58,11 +61,14 @@ const {
   getMiResponseRow, getAeTransmissionRow, getPcTransmissionRow,
   getCasePrimaryProductContext, resolveTransmissionGroupSnapshot,
 } = require('../services/caseHelpers');
+const { ISO_COUNTRIES } = require('../catalogs/isoCountries');
 
 const {
   getResponseBuilderCase, getResponseBuilderMiTab, getResponseBuilderRecipient,
   listResponseBuilderRecipients, buildResponsePackage,
 } = require('../services/miResponseService');
+const { needsTwoSigners } = require('../services/miApprovalService');
+const { userHasActivityPrivilege } = require('../services/accessConfigurationService');
 
 // ─── SPRINT 17: SAVED CASE VIEWS ────────────────────────────────────────────
 
@@ -222,14 +228,39 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     const sortBy = CASE_SORT_MAP[sort_by] || CASE_SORT_MAP.created_at;
     const sortDir = String(sort_dir || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-    let query = `
-      SELECT c.*,
-        o.name  AS org_name,
-        s.name  AS site_name,
-        ws.name AS status_name,
-        u.name  AS owner_name,
+    // Correspondence totals are built over every inquiry in the database, so join
+    // them only when a correspondence filter or sort needs them; otherwise they
+    // are read for the page's cases alone after the page query (M-30: the first
+    // page took 7-13 s with 482k cases, 3.4 s page + 4.3 s count).
+    // Only the two correspondence sorts need totals for every case; the
+    // correspondence filters below look up each candidate case's own inquiries
+    // (idx_inquiries_case) — 0.5 s instead of 6.5 s on 482k cases (M-30).
+    const needsComm = sort_by === 'communication_count' || sort_by === 'last_comm_at';
+    const commJoin = needsComm ? `
+      LEFT JOIN (
+        SELECT i.case_id,
+          COUNT(*) AS communication_count,
+          (
+            SELECT i2.received_at
+            FROM inquiries i2
+            WHERE i2.case_id = i.case_id
+            ORDER BY i2.received_at DESC, i2.id DESC
+            LIMIT 1
+          ) AS last_comm_at,
+          (
+            SELECT i2.source_tag
+            FROM inquiries i2
+            WHERE i2.case_id = i.case_id
+            ORDER BY i2.received_at DESC, i2.id DESC
+            LIMIT 1
+          ) AS last_comm_source
+        FROM inquiries i
+        WHERE i.case_id IS NOT NULL
+        GROUP BY i.case_id
+      ) comm ON comm.case_id = c.id` : '';
+    const commColumns = needsComm ? `
         COALESCE(comm.communication_count, 0) AS communication_count,
-        comm.last_comm_at,
+        DATE_FORMAT(comm.last_comm_at, '%Y-%m-%d %H:%i:%s') AS last_comm_at,
         CASE
           WHEN comm.last_comm_source IS NULL THEN NULL
           WHEN LOWER(comm.last_comm_source) LIKE '%reply%'
@@ -238,59 +269,25 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
             OR LOWER(comm.last_comm_source) LIKE '%transmission%'
           THEN 'sent'
           ELSE 'inbox'
-        END AS last_comm_box
+        END AS last_comm_box` : `
+        0 AS communication_count, NULL AS last_comm_at, NULL AS last_comm_box`;
+
+    let query = `
+      SELECT c.*,
+        o.name  AS org_name,
+        s.name  AS site_name,
+        ws.name AS status_name,
+        u.name  AS owner_name,${commColumns}
       FROM cases c
       LEFT JOIN organisations  o  ON c.org_id        = o.id
       LEFT JOIN sites          s  ON c.site_id        = s.id
       LEFT JOIN workflow_states ws ON c.status_id     = ws.id
-      LEFT JOIN users           u  ON c.case_owner_id = u.id
-      LEFT JOIN (
-        SELECT i.case_id,
-          COUNT(*) AS communication_count,
-          (
-            SELECT i2.received_at
-            FROM inquiries i2
-            WHERE i2.case_id = i.case_id
-            ORDER BY i2.received_at DESC, i2.id DESC
-            LIMIT 1
-          ) AS last_comm_at,
-          (
-            SELECT i2.source_tag
-            FROM inquiries i2
-            WHERE i2.case_id = i.case_id
-            ORDER BY i2.received_at DESC, i2.id DESC
-            LIMIT 1
-          ) AS last_comm_source
-        FROM inquiries i
-        WHERE i.case_id IS NOT NULL
-        GROUP BY i.case_id
-      ) comm ON comm.case_id = c.id
+      LEFT JOIN users           u  ON c.case_owner_id = u.id${commJoin}
       WHERE c.is_deleted = ${deleted === 'true' ? 1 : 0}
     `;
     let countQuery = `
       SELECT COUNT(*) AS total
-      FROM cases c
-      LEFT JOIN (
-        SELECT i.case_id,
-          COUNT(*) AS communication_count,
-          (
-            SELECT i2.received_at
-            FROM inquiries i2
-            WHERE i2.case_id = i.case_id
-            ORDER BY i2.received_at DESC, i2.id DESC
-            LIMIT 1
-          ) AS last_comm_at,
-          (
-            SELECT i2.source_tag
-            FROM inquiries i2
-            WHERE i2.case_id = i.case_id
-            ORDER BY i2.received_at DESC, i2.id DESC
-            LIMIT 1
-          ) AS last_comm_source
-        FROM inquiries i
-        WHERE i.case_id IS NOT NULL
-        GROUP BY i.case_id
-      ) comm ON comm.case_id = c.id
+      FROM cases c${commJoin}
       WHERE c.is_deleted = ${deleted === 'true' ? 1 : 0}
     `;
     const params = [];
@@ -324,55 +321,28 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
       countQuery += globalSearch.clause;
       countParams.push(...globalSearch.params);
     }
-    if (has_correspondence === 'yes' || has_correspondence === 'true') {
-      query += ' AND COALESCE(comm.communication_count, 0) > 0';
-      countQuery += ' AND COALESCE(comm.communication_count, 0) > 0';
-    }
-    if (has_correspondence === 'no' || has_correspondence === 'false') {
-      query += ' AND COALESCE(comm.communication_count, 0) = 0';
-      countQuery += ' AND COALESCE(comm.communication_count, 0) = 0';
-    }
-    if (corr_from) {
-      query += ' AND DATE(comm.last_comm_at) >= ?';
-      params.push(corr_from);
-      countQuery += ' AND DATE(comm.last_comm_at) >= ?';
-      countParams.push(corr_from);
-    }
-    if (corr_to) {
-      query += ' AND DATE(comm.last_comm_at) <= ?';
-      params.push(corr_to);
-      countQuery += ' AND DATE(comm.last_comm_at) <= ?';
-      countParams.push(corr_to);
-    }
+    // The newest inquiry on the case decides the date and the inbox/sent box —
+    // the same rule the correspondence columns use.
+    const hasComm = 'EXISTS (SELECT 1 FROM inquiries iq WHERE iq.case_id = c.id)';
+    const lastCommAt = '(SELECT MAX(iq.received_at) FROM inquiries iq WHERE iq.case_id = c.id)';
+    const lastCommSource = `(SELECT iq.source_tag FROM inquiries iq WHERE iq.case_id = c.id
+                              ORDER BY iq.received_at DESC, iq.id DESC LIMIT 1)`;
+    const addFilter = (clause, ...values) => {
+      query += ` AND ${clause}`; params.push(...values);
+      countQuery += ` AND ${clause}`; countParams.push(...values);
+    };
+    if (has_correspondence === 'yes' || has_correspondence === 'true') addFilter(hasComm);
+    if (has_correspondence === 'no' || has_correspondence === 'false') addFilter(`NOT ${hasComm}`);
+    if (corr_from) addFilter(`DATE(${lastCommAt}) >= ?`, corr_from);
+    if (corr_to) addFilter(`DATE(${lastCommAt}) <= ?`, corr_to);
     if (corr_box === 'inbox' || corr_box === 'sent') {
-      query += `
-        AND (
+      addFilter(`(
           CASE
-            WHEN comm.last_comm_source IS NULL THEN NULL
-            WHEN LOWER(comm.last_comm_source) LIKE '%reply%'
-              OR LOWER(comm.last_comm_source) LIKE '%forward%'
-              OR LOWER(comm.last_comm_source) LIKE '%sent%'
-              OR LOWER(comm.last_comm_source) LIKE '%transmission%'
-            THEN 'sent'
+            WHEN ${lastCommSource} IS NULL THEN NULL
+            WHEN LOWER(${lastCommSource}) REGEXP 'reply|forward|sent|transmission' THEN 'sent'
             ELSE 'inbox'
           END
-        ) = ?
-      `;
-      params.push(corr_box);
-      countQuery += `
-        AND (
-          CASE
-            WHEN comm.last_comm_source IS NULL THEN NULL
-            WHEN LOWER(comm.last_comm_source) LIKE '%reply%'
-              OR LOWER(comm.last_comm_source) LIKE '%forward%'
-              OR LOWER(comm.last_comm_source) LIKE '%sent%'
-              OR LOWER(comm.last_comm_source) LIKE '%transmission%'
-            THEN 'sent'
-            ELSE 'inbox'
-          END
-        ) = ?
-      `;
-      countParams.push(corr_box);
+        ) = ?`, corr_box);
     }
     if (corr_party) {
       query += ' AND EXISTS (SELECT 1 FROM inquiries iq WHERE iq.case_id = c.id AND (iq.sender LIKE ? OR iq.recipient LIKE ?))';
@@ -383,6 +353,29 @@ router.get('/cases', authenticate, requireOrg, requireScopedCapability('case.vie
     query += ` ORDER BY ${sortBy} ${sortDir}, c.id DESC LIMIT ${limit} OFFSET ${offset}`;
 
     const [rows] = await pool.execute(query, params);
+    if (!needsComm && rows.length) {
+      const ids = rows.map(r => r.id);
+      const [commRows] = await pool.execute(
+        `SELECT case_id, received_at, source_tag FROM inquiries
+          WHERE case_id IN (${ids.map(() => '?').join(',')})
+          ORDER BY case_id, received_at DESC, id DESC`,
+        ids
+      );
+      const byCase = new Map();
+      for (const r of commRows) {
+        const seen = byCase.get(r.case_id);
+        if (seen) seen.count += 1;
+        else byCase.set(r.case_id, { count: 1, at: r.received_at, source: r.source_tag });
+      }
+      for (const row of rows) {
+        const comm = byCase.get(row.id);
+        if (!comm) continue;
+        const source = comm.source == null ? null : String(comm.source).toLowerCase();
+        row.communication_count = comm.count;
+        row.last_comm_at = comm.at;
+        row.last_comm_box = source == null ? null : /reply|forward|sent|transmission/.test(source) ? 'sent' : 'inbox';
+      }
+    }
     if (String(include_meta) === 'true') {
       const [[{ total }]] = await pool.execute(countQuery, countParams);
       return res.json({ rows, total, limit, offset });
@@ -569,15 +562,16 @@ router.get('/cases/dashboard-summary', authenticate, requireScopedCapability('ca
     const [[miStats]] = await pool.execute(
       `SELECT
         COALESCE(SUM(CASE WHEN r.response_status IN ('DRAFT','READY') THEN 1 ELSE 0 END), 0) AS pending_responses,
+       COALESCE(SUM(CASE WHEN r.response_status IN ('DRAFT','READY') AND (c.case_owner_id = ? OR r.author_id = ?) THEN 1 ELSE 0 END), 0) AS my_pending_responses,
        COALESCE(SUM(CASE WHEN r.response_status = 'READY' THEN 1 ELSE 0 END), 0)            AS pending_approval,
-       COALESCE(SUM(CASE WHEN r.response_status = 'SENT' AND DATE(r.approved_at) = CURDATE() THEN 1 ELSE 0 END), 0) AS sent_today,
+       COALESCE(SUM(CASE WHEN r.response_status = 'SENT' AND DATE(r.sent_at) = CURDATE() THEN 1 ELSE 0 END), 0) AS sent_today,
        COALESCE(COUNT(DISTINCT CASE WHEN mi.response_required_by IS NOT NULL AND mi.response_required_by < CURDATE()
                            AND r.response_status NOT IN ('SENT','VOIDED') THEN mi.id END), 0) AS sla_breached
        FROM case_mi_responses r
        JOIN cases c ON c.id = r.case_id
        JOIN case_mi mi ON mi.id = r.mi_tab_id
        WHERE c.is_deleted = 0 AND r.response_status != 'VOIDED'${miOrgClause}${ownClause}`,
-      [...miOrgParams, ...ownParams]
+      [req.user.userId, req.user.userId, ...miOrgParams, ...ownParams]
     );
 
     return res.json({
@@ -590,6 +584,7 @@ router.get('/cases/dashboard-summary', authenticate, requireScopedCapability('ca
       },
       mi_stats: {
         pending_responses: Number(miStats?.pending_responses || 0),
+        my_pending_responses: Number(miStats?.my_pending_responses || 0),
         pending_approval:  Number(miStats?.pending_approval  || 0),
         sent_today:        Number(miStats?.sent_today        || 0),
         sla_breached:      Number(miStats?.sla_breached      || 0),
@@ -601,6 +596,24 @@ router.get('/cases/dashboard-summary', authenticate, requireScopedCapability('ca
   } catch (err) {
     logger.error({ err, route: '/api/cases/dashboard-summary', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to load dashboard summary');
     return res.status(500).json({ error: err.message || 'Failed to load dashboard summary.' });
+  }
+});
+
+// GET /api/cases/workflow-states — read-only states for the case form's Status
+// field. Anyone who may view cases reads their org's states (plus global ones);
+// only admins change them, through /api/admin/workflow-states.
+router.get('/cases/workflow-states', authenticate, requireScopedCapability('case.view'), async (req, res) => {
+  try {
+    const orgId = hasGlobalAdminScope(req.user) ? null : Number(req.user.orgId);
+    const [states] = await pool.execute(
+      orgId
+        ? 'SELECT id, name, is_active, org_id FROM workflow_states WHERE org_id = ? OR org_id IS NULL ORDER BY org_id IS NULL DESC, name'
+        : 'SELECT id, name, is_active, org_id FROM workflow_states ORDER BY name',
+      orgId ? [orgId] : []
+    );
+    res.json({ states });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
   }
 });
 
@@ -632,7 +645,7 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
               max_length, default_value, is_sensitive, masking_pattern, unmask_roles,
               case_type_scope, display_tab, core_key
        FROM field_setup
-       WHERE (org_id = ? OR org_id IS NULL) AND is_hidden = 0 AND is_disabled = 0
+       WHERE (org_id = ? OR org_id IS NULL)
          AND section_name != '__customize_placeholder__'
          AND (case_type_scope = 'shared' OR case_type_scope = ?)
        ORDER BY section_name, sort_order, id`,
@@ -657,7 +670,11 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
         fieldsByKey.set(key, row);
       }
     }
-    const fields = [...fieldsByKey.values()].sort((a, b) =>
+    // Hidden / disabled is applied AFTER the org's row has won. Filtering first
+    // dropped the org's hidden row and let the platform default through, so a
+    // field the admin hid still showed (Refund Approved, disabled for org 1
+    // since 2026-05-16, was drawn in the additional block — 360 walk).
+    const fields = [...fieldsByKey.values()].filter(f => !f.is_hidden && !f.is_disabled).sort((a, b) =>
       a.section_name.localeCompare(b.section_name) ||
       (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
       a.id - b.id
@@ -672,7 +689,7 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
     // reach the client, otherwise the wizard has no way to know it should stop
     // rendering its own control for it.
     const [coreRows] = await pool.execute(
-      `SELECT core_key, field_name, custom_label, help_text, is_required, is_hidden,
+      `SELECT core_key, section_name, field_name, custom_label, help_text, is_required, is_hidden,
               is_disabled, sort_order, default_value, max_length,
               org_id IS NULL AS is_platform_default
          FROM field_setup
@@ -688,6 +705,8 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
     const core = coreRows.reduce((acc, row) => {
       acc[row.core_key] = {
         core_key: row.core_key,
+        section_name: row.section_name,
+        field_name: row.field_name,
         label: row.custom_label || row.field_name,
         help_text: row.help_text || null,
         is_required: !!row.is_required,
@@ -726,6 +745,16 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
       return acc;
     }, {});
 
+    // Country fields: an org's own "country" picklist wins; otherwise the
+    // built-in ISO 3166 list — stores the code E2B needs, shows the name.
+    if (!picklistMap.country) {
+      picklistMap.country = ISO_COUNTRIES.map(([code, name], i) => ({
+        id: null, value: code, label: name, description: '',
+        external_codes: { iso3166_alpha2: code }, translations: null,
+        parent_value_id: null, sort_order: i,
+      }));
+    }
+
     const [rules] = await pool.execute(
       `SELECT id, org_id, case_type, section_name, field_name, rule_type,
               condition_json, action_json, is_active, priority
@@ -762,6 +791,35 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
     return res.json({ case_type, rule_precedence: FORM_RULE_PRECEDENCE, sections: sectionsWithFields, rules: normalizedRules, core });
   } catch (err) {
     logger.error({ err, route: '/api/cases/form-config', user_id: req.user?.userId, org_id: req.user?.orgId }, 'Failed to load case form config');
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/cases/intake-lists?org_id= — the New Case screen's choices: the org's
+// active governed values that POST /cases checks the intake against. The screen
+// used its own fixed lists, most of which the check refuses (360 walk M-49).
+const INTAKE_LISTS = ['reporter_type', 'age_unit', 'gender', 'route_of_admin', 'ae_outcome', 'pc_category'];
+router.get('/cases/intake-lists', authenticate, requireOrg, requireCapability('case.create'), async (req, res) => {
+  try {
+    // Same org resolution as POST /cases, so the lists match what it checks.
+    const orgId = hasGlobalAdminScope(req.user) ? (parseInt(req.query.org_id, 10) || null) : req.user.orgId;
+    if (!orgId) return res.status(400).json({ error: 'org_id is required' });
+    const today = toDateOnlyOrNull(new Date());
+    const [rows] = await pool.execute(
+      `SELECT LOWER(TRIM(COALESCE(pf.name, p.field_type))) AS list, p.value, p.name AS label
+         FROM picklists p
+         LEFT JOIN picklist_fields pf ON p.field_id = pf.id
+        WHERE p.org_id = ? AND p.status = 'Active'
+          AND LOWER(TRIM(COALESCE(pf.name, p.field_type))) IN (${INTAKE_LISTS.map(() => '?').join(',')})
+          AND COALESCE(p.effective_from, '1900-01-01') <= ? AND COALESCE(p.effective_to, '2999-12-31') >= ?
+        ORDER BY list, p.sort_order ASC, p.value ASC, p.id ASC`,
+      [orgId, ...INTAKE_LISTS, today, today]
+    );
+    const lists = Object.fromEntries(INTAKE_LISTS.map((name) => [name, []]));
+    for (const row of rows) lists[row.list].push({ value: row.value, label: row.label || row.value });
+    return res.json(lists);
+  } catch (err) {
+    logger.error({ err, route: '/api/cases/intake-lists', user_id: req.user?.userId }, 'Failed to load intake lists');
     return res.status(500).json({ error: err.message });
   }
 });
@@ -1072,7 +1130,9 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       pc_intake,
       // CF-E1: Dynamic fields [{field_id, field_value}]
       dynamic_fields,
+      assign_to_me,
     } = req.body;
+    const ownerId = assign_to_me === true ? req.user.userId : null;
 
     const requestedOrgId = parseInt(req.body?.org_id, 10) || null;
     const org_id = hasGlobalAdminScope(req.user) ? requestedOrgId : req.user.orgId;
@@ -1095,15 +1155,20 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
       await conn.rollback(); /* WP2: release handled by the finally — was double-released, which could hand the same pooled connection to two requests */
       return res.status(400).json({ error: 'case_type must be MI, AE, or PC' });
     }
-    const dateReceived = toDateOnlyOrNull(date_received);
+    // "Date received is set by the system" (Case Meta step removed 2026-07-28), but
+    // nothing set it: a New Case had none (M-85). Today unless the caller sends one
+    // (the inbox sends the email's received date).
+    const dateReceived = toDateOnlyOrNull(date_received) || toDateOnlyOrNull(new Date());
     const awarenessDate = awareness_date ? toDateOnlyOrNull(awareness_date) : null;
     const learnOfValidityDate = learn_of_validity_date ? toDateOnlyOrNull(learn_of_validity_date) : null;
     const followUpReceivedDate = follow_up_received_date ? toDateOnlyOrNull(follow_up_received_date) : null;
     const validationDate = dateReceived || toDateOnlyOrNull(new Date());
     const defaultStatusId = await resolveDefaultWorkflowStateId(conn, org_id);
 
-    // Sprint 17 governance: strict controlled vocab and taxonomy validation
-    let reporterTypeValue = reporter?.reporter_type || 'HCP';
+    // Sprint 17 governance: strict controlled vocab and taxonomy validation.
+    // Reporter Type is optional: an unselected type stays empty rather than
+    // becoming 'HCP', which is not in the governed reporter-type list (migration 110).
+    let reporterTypeValue = reporter?.reporter_type || null;
     let patientGenderValue = patient?.gender || null;
     let patientAgeUnitValue = patient?.age_unit || (patient ? 'years' : null);
     let aeRouteValue = ae_intake?.route_of_admin || null;
@@ -1146,20 +1211,23 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
     let result;
     try {
       [result] = await conn.execute(
-        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId]
+        `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by, case_owner_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, case_number ?? null, defaultStatusId, req.user.userId, ownerId]
       );
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY' && String(err.message || '').includes('case_number')) {
         [result] = await conn.execute(
-          `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId]
+          `INSERT INTO cases (org_id, site_id, case_type, intake_channel, date_received, awareness_date, learn_of_validity_date, follow_up_received_date, case_number, status_id, created_by, case_owner_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [org_id, resolvedSiteId, case_type ?? null, intake_channel, dateReceived, awarenessDate, learnOfValidityDate, followUpReceivedDate, `${case_number}-${Date.now()}`, defaultStatusId, req.user.userId, ownerId]
         );
       } else { throw err; }
     }
     const caseId = result.insertId;
+    if (ownerId) {
+      await writeCaseAudit(caseId, req.user.userId, req.user.email, 'REASSIGNED', 'case_owner_id', null, ownerId, conn);
+    }
 
     // 2. Reporter (CF-E3)
     if (reporter && typeof reporter === 'object') {
@@ -1170,8 +1238,19 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
            email=VALUES(email), phone=VALUES(phone), reporter_type=VALUES(reporter_type),
            country=VALUES(country), organisation=VALUES(organisation)`,
         [caseId, reporter.first_name || null, reporter.last_name || null, reporter.email || null,
-         reporter.phone || null, reporterTypeValue || 'HCP', reporter.country || null, reporter.organisation || null]
+         reporter.phone || null, reporterTypeValue, reporter.country || null, reporter.organisation || null]
       );
+      // The intake reporter is also the case's first contact, so Step 1 shows
+      // who reported it (Saad, 2026-09-28 — 360 walk M-50).
+      if (reporter.first_name || reporter.last_name) {
+        await conn.execute(
+          `INSERT INTO case_contacts
+             (case_id, contact_role, is_primary, first_name, last_name, reporter_type, institution, country, phone, email)
+           VALUES (?, 'reporter', 1, ?, ?, ?, ?, ?, ?, ?)`,
+          [caseId, reporter.first_name || null, reporter.last_name || null, reporterTypeValue,
+           reporter.organisation || null, reporter.country || null, reporter.phone || null, reporter.email || null]
+        );
+      }
     }
 
     // 3. Patient — AE/PC only (CF-E3)
@@ -1331,7 +1410,7 @@ router.post('/cases', authenticate, requireOrg, requireCapability('case.create')
   } catch (err) {
     await conn.rollback();
     logger.error({ err, route: '/api/cases', user_id: req.user?.userId }, 'Failed to create case');
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   } finally {
     conn.release();
   }
@@ -1444,75 +1523,10 @@ router.post('/cases/:id/assign-number', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/cases/bulk-update — bulk operations on cases
-router.post('/cases/bulk-update', authenticate, requireOrg, async (req, res) => {
-  try {
-    const { case_ids, action, payload } = req.body;
-    if (!Array.isArray(case_ids) || case_ids.length === 0) {
-      return res.status(400).json({ error: 'case_ids must be a non-empty array' });
-    }
-    const orgId = req.user.orgId;
-    const placeholders = case_ids.map(() => '?').join(',');
-    const [validCases] = await pool.execute(
-      `SELECT id, case_number, status_id, priority, case_owner_id, is_deleted FROM cases WHERE id IN (${placeholders}) AND org_id = ?`,
-      [...case_ids, orgId]
-    );
-
-    const validIds = validCases.map(c => c.id);
-    const failedIds = case_ids.filter(id => !validIds.includes(id));
-    if (validIds.length === 0) {
-      return res.json({ ok: true, updated_count: 0, failed_ids: failedIds });
-    }
-
-    const validIdsStr = validIds.join(',');
-    let updatedCount = 0;
-
-    if (action === 'reassign') {
-      const newOwnerId = payload?.new_owner_id || null;
-      await pool.execute(`UPDATE cases SET case_owner_id = ?, updated_at = NOW() WHERE id IN (${validIdsStr})`, [newOwnerId]);
-      for (const c of validCases) {
-        await writeCaseAudit(c.id, req.user.userId, req.user.email, 'OWNER_CHANGED', 'case_owner_id', c.case_owner_id, newOwnerId);
-      }
-      updatedCount = validIds.length;
-    } else if (action === 'update_status') {
-      const statusId = payload?.status_id;
-      if (!statusId) return res.status(400).json({ error: 'status_id is required' });
-      await pool.execute(`UPDATE cases SET status_id = ?, updated_at = NOW() WHERE id IN (${validIdsStr})`, [statusId]);
-      for (const c of validCases) {
-        await writeCaseAudit(c.id, req.user.userId, req.user.email, 'STATUS_CHANGED', 'status_id', c.status_id, statusId);
-      }
-      updatedCount = validIds.length;
-    } else if (action === 'update_priority') {
-      const priority = payload?.priority;
-      if (!priority) return res.status(400).json({ error: 'priority is required' });
-      await pool.execute(`UPDATE cases SET priority = ?, updated_at = NOW() WHERE id IN (${validIdsStr})`, [priority]);
-      for (const c of validCases) {
-        await writeCaseAudit(c.id, req.user.userId, req.user.email, 'FIELD_UPDATED', 'priority', c.priority, priority);
-      }
-      updatedCount = validIds.length;
-    } else if (action === 'delete') {
-      await pool.execute(`UPDATE cases SET is_deleted = 1, updated_at = NOW() WHERE id IN (${validIdsStr})`);
-      for (const c of validCases) {
-        await writeCaseAudit(c.id, req.user.userId, req.user.email, 'CASE_DELETED', 'is_deleted', c.is_deleted, 1);
-      }
-      updatedCount = validIds.length;
-    } else {
-      return res.status(400).json({ error: 'Invalid action' });
-    }
-
-    emitDataSync({
-      orgIds: [orgId],
-      domains: ['cases', 'dashboard'],
-      reason: 'case.bulk_update',
-      payload: { count: updatedCount, action }
-    });
-
-    return res.json({ ok: true, updated_count: updatedCount, failed_ids: failedIds });
-  } catch (err) {
-    logger.error({ err, route: '/api/cases/bulk-update', user_id: req.user?.userId }, 'Failed bulk update');
-    return res.status(500).json({ error: err.message });
-  }
-});
+// No POST /api/cases/bulk-update: the Cases screen applies a bulk action by sending
+// each selected case through PUT /api/cases/:id or DELETE /api/cases/:id, so every
+// case gets the same permission, access-scope, workflow and audit checks as a
+// single-case edit. The copy that stood here had none of those checks.
 
 // POST /api/cases/:id/reassign — dedicated reassignment flow with audit + notifications
 router.post('/cases/:id/reassign', authenticate, requireScopedCapability('case.assign'), async (req, res) => {
@@ -1746,7 +1760,7 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
         const isClose = newName === 'Closed' && oldName !== 'Closed';
         const isReopen = oldName === 'Closed' && newName !== 'Closed';
         if (isClose && !(await verifyCaseOrg(req.params.id, req, 'case.close'))) {
-          return res.status(403).json({ error: 'Access denied' });
+          return res.status(403).json({ error: 'You do not have permission to close cases.' });
         }
         const isAE = currentCase.case_type === 'AE', isPC = currentCase.case_type === 'PC';
         if (isClose) {
@@ -1904,6 +1918,24 @@ router.put('/cases/:id', authenticate, requireScopedCapability('case.update'), v
       if (ownerChanged) {
         await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'OWNER_CHANGED', 'case_owner_id', previousOwnerId, updatedOwnerId, conn);
       }
+      // Every other field this update can change is audited too. Only status and
+      // owner were, so a priority or description change left no trail — and the
+      // Cases page's bulk actions now come through here (item 7, 2026-09-29).
+      const dateOnly = (v) => (v ? toDateOnlyOrNull(v) : null);
+      const fieldChanges = [
+        ['priority', currentCase.priority, nextPriority],
+        ['date_received', dateOnly(currentCase.date_received), dateOnly(nextDateReceived)],
+        ['awareness_date', dateOnly(currentCase.awareness_date), dateOnly(nextAwarenessDate)],
+        ['learn_of_validity_date', dateOnly(currentCase.learn_of_validity_date), dateOnly(nextLearnOfValidityDate)],
+        ['follow_up_received_date', dateOnly(currentCase.follow_up_received_date), dateOnly(nextFollowUpReceivedDate)],
+        ['description', currentCase.description, nextDescription],
+        ['internal_notes', currentCase.internal_notes, nextInternalNotes],
+        ['intake_channel', currentCase.intake_channel, nextIntakeChannel],
+      ];
+      for (const [field, before, after] of fieldChanges) {
+        if ((before ?? '') === (after ?? '')) continue;
+        await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'FIELD_UPDATED', field, before ?? null, after ?? null, conn);
+      }
     });
 
     // Notifications fire only after the update + audit have durably committed (best-effort).
@@ -1999,6 +2031,18 @@ router.post('/cases/:id/validate', authenticate, async (req, res) => {
         }
         if (!valid) errors.push({ field: rule.field_name, section: rule.section_name, message: action.message || `${rule.field_name} is invalid.` });
       }
+    }
+    // The admin's "required" (Customize Forms) on the additional fields — until
+    // now only drawn as a *, never checked (360 walk M-37). Panel fields are
+    // checked by their own section saves. Values by field id when the screen sends
+    // them: names repeat across AE sections (Dose, Start Date…), so a name-keyed
+    // payload can hide one field's blank behind another's value.
+    const byId = req.body?.values_by_id && typeof req.body.values_by_id === 'object' ? req.body.values_by_id : null;
+    const missing = await missingRequiredAdditional(owned.org_id, owned.case_type,
+      f => (byId ? byId[f.id] : formData[f.field_name]));
+    for (const m of missing) {
+      if (errors.some(e => e.field === m.field)) continue;
+      errors.push({ field: byId ? m.id : m.field, section: m.section, message: `${m.label} is required.` });
     }
     res.json({ valid: errors.length === 0, errors });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2217,6 +2261,8 @@ router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
          r.sent_at,
          r.author_id,
          r.author_name AS responded_by_name,
+         r.requires_two_signers,
+         r.delivery_metadata,
          r.created_at
        FROM case_mi_responses r
        LEFT JOIN cm_documents d ON d.id = r.cm_document_id
@@ -2224,6 +2270,11 @@ router.get('/cases/:id/mi-responses', authenticate, async (req, res) => {
        WHERE r.case_id = ? ORDER BY r.created_at DESC`,
       [req.params.id]
     );
+    // The page offers the single Approve button only when one signer is enough (M-86).
+    const [[caseOrg]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [req.params.id]);
+    for (const row of rows) {
+      row.two_signers_required = (await needsTwoSigners({ orgId: caseOrg?.org_id, response: row })).required;
+    }
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2337,9 +2388,10 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
     const [[existing]] = await pool.execute(
-      `SELECT id, response_status
-       FROM case_mi_responses
-       WHERE id = ? AND case_id = ?`,
+      `SELECT r.id, r.response_status, r.author_id, r.mi_tab_id, r.requires_two_signers, c.org_id
+       FROM case_mi_responses r
+       JOIN cases c ON c.id = r.case_id
+       WHERE r.id = ? AND r.case_id = ?`,
       [req.params.responseId, req.params.id]
     );
     if (!existing) return res.status(404).json({ error: 'Response not found.' });
@@ -2371,6 +2423,89 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     if (responseStatus === 'SENT' && existing.response_status !== 'APPROVED') {
       return res.status(400).json({ error: 'Response must be APPROVED before it can be SENT.' });
     }
+    // Sign-off rules (M-86). Only the password was checked, so anyone who could
+    // open the case could approve and send, including the person who wrote it.
+    // Approving needs "Approve letter" and someone other than the writer;
+    // sending needs "Send response letter"; an off-label response is signed off
+    // by two people through the reviewer and approver signatures instead.
+    if (responseStatus === 'APPROVED') {
+      if (!(await userHasActivityPrivilege(req.user, 'case.letter.approve'))) {
+        return res.status(403).json({ error: 'You do not have permission to approve response letters.' });
+      }
+      if (existing.author_id && Number(existing.author_id) === Number(req.user.userId)) {
+        return res.status(403).json({ error: 'You wrote this response, so someone else must approve it.' });
+      }
+      const twoSigners = await needsTwoSigners({ orgId: existing.org_id, response: existing });
+      if (twoSigners.required) {
+        return res.status(409).json({ error: 'This response needs two signers. Use Sign as reviewer, then Sign as approver.' });
+      }
+    }
+    if (responseStatus === 'SENT' && !(await userHasActivityPrivilege(req.user, 'case.letter.send'))) {
+      return res.status(403).json({ error: 'You do not have permission to send response letters.' });
+    }
+    // Work out who the letter goes to and which mailbox sends it before anything
+    // is marked SENT (M-88). The send used to fall back to the first mailbox in
+    // the database, whichever organisation owned it, and with no mailbox or no
+    // recipient the email was skipped while the response still said SENT.
+    let sendPackage = null;
+    if (responseStatus === 'SENT') {
+      // 1. Fetch composed response package
+      const [[respRow]] = await pool.execute(
+        `SELECT response_text, response_body_html, response_subject,
+                recipient_email, recipient_name, selected_documents
+           FROM case_mi_responses WHERE id = ?`,
+        [req.params.responseId]
+      );
+
+      // 2. Resolve recipient — package first, then primary contact fallback
+      let recipientEmail = respRow?.recipient_email || '';
+      let recipientName  = respRow?.recipient_name  || '';
+      if (!recipientEmail) {
+        const [[fb]] = await pool.execute(
+          `SELECT COALESCE(cc.email, ct.email) AS recipient_email,
+                  CONCAT(COALESCE(cc.first_name, ct.first_name, ''), ' ', COALESCE(cc.last_name, ct.last_name, '')) AS recipient_name
+             FROM case_contacts cc
+             LEFT JOIN contacts ct ON ct.id = cc.contact_id
+            WHERE cc.case_id = ? AND cc.email IS NOT NULL AND cc.email != ''
+            ORDER BY cc.is_primary DESC, cc.id ASC LIMIT 1`,
+          [req.params.id]
+        );
+        if (fb) { recipientEmail = fb.recipient_email; recipientName = fb.recipient_name; }
+      }
+      if (!recipientEmail) {
+        return res.status(400).json({ error: 'This response has no recipient email address. Add one to the case contact before sending.' });
+      }
+
+      // 3. Resolve outbound SMTP account: the site's response mailbox, else the
+      //    case organisation's own. Never another organisation's mailbox.
+      const [[siteRow]] = await pool.execute(`SELECT site_id FROM cases WHERE id = ?`, [req.params.id]);
+      const siteId = siteRow?.site_id;
+      let smtpAccount = null;
+      if (siteId) {
+        const [[byPurpose]] = await pool.execute(
+          `SELECT ea.* FROM site_email_purpose sep
+             JOIN email_accounts ea ON ea.id = sep.email_account_id
+            WHERE sep.site_id = ? AND sep.purpose = 'response' AND ea.org_id = ?
+              AND ea.is_active = 1 AND ea.smtp_host IS NOT NULL LIMIT 1`,
+          [siteId, existing.org_id]
+        );
+        smtpAccount = byPurpose || null;
+      }
+      if (!smtpAccount) {
+        const [[fallback]] = await pool.execute(
+          `SELECT * FROM email_accounts
+            WHERE org_id = ? AND is_active = 1 AND smtp_host IS NOT NULL
+              AND smtp_port IS NOT NULL AND smtp_username IS NOT NULL
+            ORDER BY is_default_outbound DESC, id LIMIT 1`,
+          [existing.org_id]
+        );
+        smtpAccount = fallback || null;
+      }
+      if (!smtpAccount) {
+        return res.status(400).json({ error: 'No outbound mailbox is set up for this organisation. An admin can add one under Email Accounts.' });
+      }
+      sendPackage = { respRow, recipientEmail, recipientName, smtpAccount };
+    }
     if (['APPROVED', 'SENT'].includes(responseStatus)) {
       if (!password || !reason) {
         return res.status(400).json({ error: 'password and reason are required for electronic signature.' });
@@ -2384,15 +2519,17 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
 
     // F7 FIX: set is_finalized=1 when advancing beyond DRAFT (DB-level immutability guard)
     const isFinalized = responseStatus !== 'DRAFT' ? 1 : 0;
-    // C-09: MI response status change + its two audit rows commit atomically
+    // C-09: MI response status change + its two audit rows commit atomically.
+    // Sending no longer overwrites who approved it and when (M-92): the sender
+    // was recorded as the approver.
     await withTxn(async (conn) => {
       await conn.execute(
         `UPDATE case_mi_responses
          SET response_status = ?,
              is_finalized = CASE WHEN ? != 'DRAFT' THEN 1 ELSE is_finalized END,
              draft_saved_at = CASE WHEN ? = 'DRAFT' THEN NOW() ELSE draft_saved_at END,
-             approved_by = CASE WHEN ? IN ('APPROVED', 'SENT') THEN ? ELSE approved_by END,
-             approved_at = CASE WHEN ? IN ('APPROVED', 'SENT') THEN NOW() ELSE approved_at END,
+             approved_by = CASE WHEN ? = 'APPROVED' THEN ? ELSE approved_by END,
+             approved_at = CASE WHEN ? = 'APPROVED' THEN NOW() ELSE approved_at END,
              sent_at = CASE WHEN ? = 'SENT' THEN NOW() ELSE sent_at END
          WHERE id = ? AND case_id = ?`,
         [responseStatus, responseStatus, responseStatus, responseStatus, req.user.userId, responseStatus, responseStatus, req.params.responseId, req.params.id]
@@ -2432,58 +2569,12 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
     // ── S19-P0 / Fix-9: Enqueue MI email via emailWorker (non-blocking) ────────
     // SMTP delivery is fully decoupled from the request path.
     // enqueueMiEmail writes one DB row and returns in < 5ms; the worker sends async.
-    if (responseStatus === 'SENT') {
+    if (sendPackage) {
       try {
         const { enqueueMiEmail } = require('../services/emailWorker');
+        const { respRow, recipientEmail, recipientName, smtpAccount } = sendPackage;
 
-        // 1. Fetch composed response package
-        const [[respRow]] = await pool.execute(
-          `SELECT response_text, response_body_html, response_subject,
-                  recipient_email, recipient_name, selected_documents
-             FROM case_mi_responses WHERE id = ?`,
-          [req.params.responseId]
-        );
-
-        // 2. Resolve recipient — package first, then primary contact fallback
-        let recipientEmail = respRow?.recipient_email || '';
-        let recipientName  = respRow?.recipient_name  || '';
-        if (!recipientEmail) {
-          const [[fb]] = await pool.execute(
-            `SELECT COALESCE(cc.email, ct.email) AS recipient_email,
-                    CONCAT(COALESCE(cc.first_name, ct.first_name, ''), ' ', COALESCE(cc.last_name, ct.last_name, '')) AS recipient_name
-               FROM case_contacts cc
-               LEFT JOIN contacts ct ON ct.id = cc.contact_id
-              WHERE cc.case_id = ? AND cc.email IS NOT NULL AND cc.email != ''
-              ORDER BY cc.is_primary DESC, cc.id ASC LIMIT 1`,
-            [req.params.id]
-          );
-          if (fb) { recipientEmail = fb.recipient_email; recipientName = fb.recipient_name; }
-        }
-
-        // 3. Resolve outbound SMTP account (site purpose → org fallback)
-        const [[siteRow]] = await pool.execute(`SELECT site_id FROM cases WHERE id = ?`, [req.params.id]);
-        const siteId = siteRow?.site_id;
-        let smtpAccount = null;
-        if (siteId) {
-          const [[byPurpose]] = await pool.execute(
-            `SELECT ea.* FROM site_email_purpose sep
-               JOIN email_accounts ea ON ea.id = sep.email_account_id
-              WHERE sep.site_id = ? AND sep.purpose = 'response'
-                AND ea.is_active = 1 AND ea.smtp_host IS NOT NULL LIMIT 1`,
-            [siteId]
-          );
-          smtpAccount = byPurpose || null;
-        }
-        if (!smtpAccount) {
-          const [[fallback]] = await pool.execute(
-            `SELECT * FROM email_accounts
-              WHERE is_active = 1 AND smtp_host IS NOT NULL
-                AND smtp_port IS NOT NULL AND smtp_username IS NOT NULL LIMIT 1`
-          );
-          smtpAccount = fallback || null;
-        }
-
-        // 4. Enqueue — fire and forget (emailWorker picks up within 15s)
+        // Enqueue — fire and forget (emailWorker picks up within 15s)
         await enqueueMiEmail({
           orgId:             req.user.orgId,
           caseId:            req.params.id,
@@ -2500,8 +2591,13 @@ router.patch('/cases/:id/mi-responses/:responseId/status', authenticate, async (
           enactedByEmail:    req.user.email,
         });
       } catch (enqueueErr) {
-        // Non-fatal — SENT is already committed; log failure to enqueue
+        // Non-fatal — SENT is already committed; log failure to enqueue and mark
+        // the response not delivered so the case does not simply say SENT (M-99).
         logger.error({ err: enqueueErr, case_id: req.params.id, response_id: req.params.responseId }, 'MI email enqueue failed');
+        await pool.execute(
+          `UPDATE case_mi_responses SET delivery_metadata = ? WHERE id = ?`,
+          [JSON.stringify({ status: 'failed', error: `The letter could not be queued for sending: ${String(enqueueErr.message).slice(0, 200)}`, failed_at: new Date().toISOString() }), req.params.responseId]
+        ).catch(() => {});
         await logResponseError(req.user.orgId, req.params.id, 'EMAIL_ENQUEUE_FAILED', enqueueErr.message,
           { response_id: req.params.responseId, user: req.user.email }
         );
@@ -2576,16 +2672,24 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
     const assignedTo = Number(req.body?.assigned_to || req.body?.assigned_to_id || 0);
-    const priority = normalizeAeTransmissionPriority(req.body?.priority || 'standard');
+    const requestedPriority = normalizeAeTransmissionPriority(req.body?.priority || 'standard');
     const due_date = req.body?.due_date || null;
     const narrative = req.body?.narrative || null;
     if (!assignedTo) return res.status(400).json({ error: 'assigned_to is required.' });
+    // T14: the case sets the minimum clock (serious → 15 days, fatal or
+    // life-threatening in a clinical trial → 7 days, from the awareness date);
+    // a person may choose a stricter one, not a looser one.
+    const clock = await computeAeHandoffClock(req.params.id);
+    const priority = stricterAePriority(requestedPriority, clock.priority);
 
     const [[assignee]] = await pool.execute('SELECT name, email FROM users WHERE id = ? AND is_active = 1', [assignedTo]);
     if (!assignee) return res.status(404).json({ error: 'Assignee user not found.' });
 
-    // Auto-calculate due_date if not provided (7-day = 7d, 15-day = 15d, standard = 30d)
-    const dueDate = calculateAeDueDate(priority, due_date || null);
+    // Due date: the case's clock (from the awareness date) when the case sets the
+    // priority; otherwise the requested priority counted from today. An explicit
+    // due_date may only bring it earlier.
+    const computed = priority === clock.priority ? clock.dueDate : calculateAeDueDate(priority, null);
+    const dueDate = due_date && String(due_date) < computed ? String(due_date) : computed;
     const slaStatus = computeTransmissionSlaStatus(dueDate, 'Pending');
     const productGroup = await resolveTransmissionGroupSnapshot(req.params.id);
 
@@ -2831,9 +2935,28 @@ router.get('/cases/:id/dynamic-fields', authenticate, async (req, res) => {
 // POST /api/cases/:id/dynamic-fields — bulk upsert dynamic field values
 router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('case.update'), async (req, res) => {
   try {
-    if (!(await verifyCaseOrg(req.params.id, req, 'case.update'))) return res.status(403).json({ error: 'Access denied' });
+    const owned = await verifyCaseOrg(req.params.id, req, 'case.update');
+    if (!owned) return res.status(403).json({ error: 'Access denied' });
     const { fields } = req.body; // [{field_id, field_value}]
-    if (!Array.isArray(fields) || !fields.length) return res.status(400).json({ error: 'fields array required.' });
+    if (!Array.isArray(fields)) return res.status(400).json({ error: 'fields array required.' });
+
+    // Enforce the admin's "required" on the record as it will be after this save:
+    // what is stored, with what was just sent on top (360 walk M-37).
+    const [stored] = await pool.execute(
+      'SELECT field_id, field_value FROM case_dynamic_field_values WHERE case_id = ?', [req.params.id]
+    );
+    const effective = new Map(stored.map(r => [Number(r.field_id), r.field_value]));
+    for (const f of fields) {
+      const fieldId = Number(f.field_id || f.field_definition_id || 0);
+      if (fieldId) effective.set(fieldId, Object.prototype.hasOwnProperty.call(f, 'field_value') ? f.field_value : f.value);
+    }
+    const missing = await missingRequiredAdditional(owned.org_id, owned.case_type, f => effective.get(Number(f.id)));
+    if (missing.length) {
+      return res.status(400).json({ error: `Required: ${missing.map(m => m.label).join(', ')}.`, missing });
+    }
+    // Nothing typed is not an error (M-38 — was a raw "fields array required.").
+    if (!fields.length) return res.json({ message: 'Nothing to save.' });
+
     for (const f of fields) {
       const fieldId = Number(f.field_id || f.field_definition_id || 0);
       if (!fieldId) continue;
@@ -3040,6 +3163,8 @@ router.delete('/cases/:id', authenticate, requireRole('admin', 'platform_admin')
     if (ccErr) return res.status(ccErr.status).json({ error: ccErr.error, code: ccErr.code });
 
     await pool.execute('UPDATE cases SET is_deleted = 1 WHERE id = ?', [req.params.id]);
+    // In the case audit trail, not only the server log (item 7, 2026-09-29).
+    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'CASE_DELETED', 'is_deleted', 0, 1);
     logger.warn({ case_id: req.params?.id, user_id: req.user?.userId }, 'Case soft deleted');
     res.json({ success: true });
   } catch (err) {
@@ -3077,6 +3202,10 @@ router.post('/cases/:id/escalate', authenticate, requireCapability('case.escalat
 router.post('/cases/:id/mi-responses/:responseId/supersede', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
+    // Amending a sent letter marks it superseded; it needs "Amend letter" (M-98).
+    if (!(await userHasActivityPrivilege(req.user, 'case.letter.supersede'))) {
+      return res.status(403).json({ error: 'You do not have permission to amend response letters.' });
+    }
     const [[original]] = await pool.execute(
       `SELECT * FROM case_mi_responses WHERE id = ? AND case_id = ?`,
       [req.params.responseId, req.params.id]

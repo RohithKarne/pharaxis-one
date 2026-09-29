@@ -37,7 +37,6 @@ const TransmissionsPage        = lazy(() => import('../transmissions/pages/Trans
 const BrowseContentPage        = lazy(() => import('../browse/pages/BrowseContentPage'))
 const ResponseLogPage          = lazy(() => import('../responselog/pages/ResponseLogPage'))
 const MIMSAdminPage            = lazy(() => import('../mimsadmin/pages/MIMSAdminPage'))
-const UnifiedTrackingDashboardPage = lazy(() => import('../transmissions/pages/UnifiedTrackingDashboardPage'))
 
 // Shared Suspense fallback — minimal spinner so Suspense boundary doesn't flash
 function PageLoader() {
@@ -97,6 +96,14 @@ function AuthIssueBanner({ issue, onDismiss, onAction }) {
 
 function buildAuthIssuePresentation(detail, canOpenAdmin) {
   switch (detail?.error_code) {
+    case 'PASSWORD_RESET_REQUIRED':
+      return {
+        title: 'Set a new password first',
+        message: 'Your account requires a new password. Nothing else is available until it is set.',
+        tone: 'warning',
+        actionLabel: 'Set new password',
+        actionTo: '/reset-password',
+      }
     case 'ORG_CONTEXT_MISSING':
       return {
         title: 'Organisation context missing',
@@ -202,7 +209,7 @@ function AppRoutes() {
       <ConfirmModal />
       <ExceptionToast />
       <AuthIssueBanner
-        issue={onPublicAuthRoute ? null : authIssue}
+        issue={onPublicAuthRoute || location.pathname === '/reset-password' ? null : authIssue}
         onDismiss={() => setAuthIssue(null)}
         onAction={authIssue?.actionTo ? () => {
           navigate(authIssue.actionTo)
@@ -312,10 +319,12 @@ function AppRoutes() {
           } />
           <Route path="/reports" element={
             <ProtectedRoute loginPath="/reports/login">
+              {/* The admin's Reports grant is the gate (T10 / M-31): an agent it is
+                  granted to gets the page as a viewer — ReportsPage keeps schedules,
+                  configuration and governance to managers. An extra admin-role
+                  guard sent granted agents to "No System Access". */}
               <ModuleAccessGuard moduleKey="reports">
-                <AdminRoleGuard>
-                  <ReportsPage />
-                </AdminRoleGuard>
+                <ReportsPage />
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
@@ -364,13 +373,10 @@ function AppRoutes() {
               </ModuleAccessGuard>
             </ProtectedRoute>
           } />
-          <Route path="/unified-tracking" element={
-            <ProtectedRoute>
-              <ModuleAccessGuard moduleKey="mims_core">
-                <UnifiedTrackingDashboardPage />
-              </ModuleAccessGuard>
-            </ProtectedRoute>
-          } />
+          {/* PARK (T10, 2026-09-29): Unified Tracking was a placeholder page — every
+              tab a sentence describing future content, filters wired to nothing —
+              listed in the menu as a live module. Removed until it is built. */}
+          <Route path="/unified-tracking" element={<Navigate to="/cases" replace />} />
           <Route path="/browse-content" element={
             <ProtectedRoute>
               <ModuleAccessGuard moduleKey="mims_core">

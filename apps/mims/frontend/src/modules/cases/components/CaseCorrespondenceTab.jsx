@@ -3,12 +3,13 @@ import { httpFetch } from '../../../shared/api/httpFetch.js'
 import DropzoneUpload from '../../../shared/components/documents/DropzoneUpload'
 import AttachmentGallery from '../../../shared/components/documents/AttachmentGallery'
 import { useFeatureFlag } from '../../../shared/context/FeatureFlagsContext'
+import { parseServerTime } from '../../../shared/utils/serverTime.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
 function formatDate(v) {
   if (!v) return '-'
-  const dt = new Date(v)
+  const dt = parseServerTime(v)
   return Number.isNaN(dt.getTime()) ? v : dt.toLocaleString()
 }
 
@@ -22,6 +23,12 @@ function getCorrDirection(item) {
 
 function getCorrBox(item) {
   return getCorrDirection(item) === 'outbound' ? 'sent' : 'inbox'
+}
+
+// Replies and forwards are stored as "outbox" once the mail has gone, which
+// read as not yet sent.
+function corrStatusLabel(item) {
+  return item?.status === 'outbox' ? 'sent' : (item?.status || '-')
 }
 
 function getThreadRootId(item) {
@@ -147,7 +154,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
       if (!haystack.includes(q)) return false
     }
     if (corrFromDate || corrToDate) {
-      const dt = item?.received_at ? new Date(item.received_at) : null
+      const dt = item?.received_at ? parseServerTime(item.received_at) : null
       if (!dt || Number.isNaN(dt.getTime())) return false
       if (corrFromDate && dt < new Date(`${corrFromDate}T00:00:00`)) return false
       if (corrToDate   && dt > new Date(`${corrToDate}T23:59:59`))   return false
@@ -156,7 +163,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
   }).sort((a, b) => {
     const ra = getThreadRootId(a), rb = getThreadRootId(b)
     if (ra !== rb) return ra - rb
-    return new Date(a?.received_at || 0).getTime() - new Date(b?.received_at || 0).getTime()
+    return (parseServerTime(a?.received_at)?.getTime() || 0) - (parseServerTime(b?.received_at)?.getTime() || 0)
   })
 
   const t6 = useFeatureFlag('cf.theme6_documents')
@@ -223,7 +230,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
                     <div className="cf-corr-meta">
                       <span><strong>From:</strong> {item.sender || '-'}</span>
                       <span><strong>To:</strong> {item.recipient || '-'}</span>
-                      <span><strong>Status:</strong> {item.status || '-'}</span>
+                      <span><strong>Status:</strong> {corrStatusLabel(item)}</span>
                       <span><strong>Attachments:</strong> {item.attachments_count || 0}</span>
                       {item.original_inquiry_id ? <span><strong>Thread Root:</strong> #{item.original_inquiry_id}</span> : null}
                     </div>
@@ -259,7 +266,7 @@ export default function CaseCorrespondenceTab({ id, headers, setSavedMsg, onCoun
               <span><strong>Direction:</strong> {getCorrDirection(activeCorrItem)}</span>
               <span><strong>Type:</strong> {activeCorrItem.source_tag || 'Email'}</span>
               <span><strong>Time:</strong> {formatDate(activeCorrItem.received_at)}</span>
-              <span><strong>Status:</strong> {activeCorrItem.status || '-'}</span>
+              <span><strong>Status:</strong> {corrStatusLabel(activeCorrItem)}</span>
             </div>
             <div className="cf-corr-modal-body">{activeCorrItem.body || '(No content)'}</div>
             <div className="cf-corr-attachments">

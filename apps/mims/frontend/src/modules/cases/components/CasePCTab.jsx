@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import PCTabPanel from './PCTabPanel'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { toDateInputValues } from '../../../shared/utils/dateOnly.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
 import StickySectionNav from '../../../shared/components/StickySectionNav'
@@ -132,13 +133,26 @@ function computePcCompletion(data, fields, formConfig, sectionName) {
 export default function CasePCTab({
   id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType,
+  saveDynFields, caseType, registerSectionSave,
 }) {
   const ctx = useCaseFieldContext()
+  // Admin settings for the panel's own fields — formConfig.core entries carry
+  // their section and field name (migration 109 links the rows).
+  const panelField = useMemo(() => {
+    const entries = Object.values(formConfig?.core || {})
+    return (section, name, fallback) => {
+      const def = entries.find(e => e.section_name === section && e.field_name === name)
+      return def
+        ? { label: def.label || fallback, required: !!def.is_required, hidden: !!def.is_hidden }
+        : { label: fallback, required: false, hidden: false }
+    }
+  }, [formConfig])
   const [pcVersions,   setPcVersions]   = useState([])
   const [activePcVer,  setActivePcVer]  = useState(null)
   const [activePcTab,  setActivePcTab]  = useState('general')
   const [pcTabData,    setPcTabData]    = useState({})
+  // Last loaded/saved copy of each PC section, so Save Case knows what changed.
+  const pcSaved = useRef({})
   const [pcTabLoading, setPcTabLoading] = useState(false)
 
   const [pcTransmissions, setPcTransmissions] = useState([])
@@ -173,7 +187,7 @@ export default function CasePCTab({
     if (!versionId) return
     const draftKey = `mims_case_${id}_pc_${versionId}_${activePcTab}`
     try {
-      const raw = localStorage.getItem(draftKey)
+      const raw = sessionStorage.getItem(draftKey)
       if (!raw) return
       const parsed = JSON.parse(raw)
       if (parsed !== null && parsed !== undefined) {
@@ -183,14 +197,6 @@ export default function CasePCTab({
       // no-op
     }
   }, [activePcTab, activePcVer?.id, id])
-
-  useEffect(() => {
-    const versionId = activePcVer?.id
-    if (!versionId) return
-    const payload = pcTabData[`${versionId}_${activePcTab}`]
-    if (payload === undefined) return
-    try { localStorage.setItem(`mims_case_${id}_pc_${versionId}_${activePcTab}`, JSON.stringify(payload)) } catch { /* no-op */ }
-  }, [activePcTab, activePcVer?.id, id, pcTabData])
 
   async function loadPCVersions() {
     try {
@@ -207,8 +213,16 @@ export default function CasePCTab({
     setPcTabLoading(true)
     try {
       const res  = await httpFetch(`${API}/cases/pc/versions/${versionId}/${tabKey}`, { headers })
-      const data = await res.json()
-      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
+      const data = toDateInputValues(await res.json())
+      pcSaved.current[`${versionId}_${tabKey}`] = JSON.stringify(data)
+      // An unsaved draft for this version + section wins over the server copy,
+      // except on a locked version, which shows only what was saved. The saved
+      // copy stays in pcSaved, so a restored draft counts as an unsaved change.
+      let draft = null
+      if (!isLocked(pcVersions.find(v => v.id === versionId))) {
+        try { draft = JSON.parse(sessionStorage.getItem(`mims_case_${id}_pc_${versionId}_${tabKey}`)) } catch { /* no-op */ }
+      }
+      setPcTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: draft ?? data }))
     } catch { /* ignore tab fetch errors */ }
     finally { setPcTabLoading(false) }
   }
@@ -261,21 +275,41 @@ export default function CasePCTab({
     }
   }
 
+  // Only what the person types is a draft; loading a section never writes one.
+  function editPCTab(d) {
+    setPcTabData(prev => ({ ...prev, [`${activePcVer?.id}_${activePcTab}`]: d }))
+    try { sessionStorage.setItem(`mims_case_${id}_pc_${activePcVer?.id}_${activePcTab}`, JSON.stringify(d)) } catch { /* no-op */ }
+  }
+
   const [pcTabSaving, setPcTabSaving] = useState(false)
   async function savePCTab() {
-    if (!activePcVer || isLocked(activePcVer) || pcTabSaving) return
+    if (!activePcVer || isLocked(activePcVer) || pcTabSaving) return false
     setPcTabSaving(true)
     const tabData = pcTabData[`${activePcVer.id}_${activePcTab}`] || {}
     try {
       const res  = await httpFetch(`${API}/cases/pc/versions/${activePcVer.id}/${activePcTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: data }))
-      localStorage.removeItem(`mims_case_${id}_pc_${activePcVer.id}_${activePcTab}`)
+      const saved = toDateInputValues(data)
+      pcSaved.current[`${activePcVer.id}_${activePcTab}`] = JSON.stringify(saved)
+      setPcTabData(prev => ({ ...prev, [`${activePcVer.id}_${activePcTab}`]: saved }))
+      sessionStorage.removeItem(`mims_case_${id}_pc_${activePcVer.id}_${activePcTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
-    } catch (err) { toast.error(err.message) }
+      return true
+    } catch (err) { toast.error(err.message); return false }
     finally { setPcTabSaving(false) }
   }
+
+  // Let the page's Save Case save this PC section too when it has unsaved edits.
+  useEffect(() => {
+    if (!registerSectionSave || !activePcVer || isLocked(activePcVer)) return undefined
+    const key = `${activePcVer.id}_${activePcTab}`
+    return registerSectionSave('pc', {
+      label: `PC ${activePcTab}`,
+      isDirty: () => pcSaved.current[key] !== undefined && JSON.stringify(pcTabData[key]) !== pcSaved.current[key],
+      save: savePCTab,
+    })
+  })
 
   async function loadPcTransmissions() {
     setPcTxLoading(true)
@@ -343,7 +377,7 @@ export default function CasePCTab({
           </p>
           <ul className="cf-empty-hints">
             <li>Click <strong>+ New Version</strong> above to start.</li>
-            <li>Close a version when investigation results are submitted to QMS.</li>
+            <li>Close a version when the investigation results are submitted to the quality system.</li>
             <li>Investigation updates create a new version — never overwrite prior data.</li>
           </ul>
         </div>
@@ -385,11 +419,12 @@ export default function CasePCTab({
                 <PCTabPanel
                   tabKey={activePcTab}
                   data={pcTabData[`${activePcVer?.id}_${activePcTab}`] || {}}
-                  onChange={d => setPcTabData(prev => ({ ...prev, [`${activePcVer?.id}_${activePcTab}`]: d }))}
+                  onChange={editPCTab}
                   locked={isLocked(activePcVer)}
                   getFieldConfig={getFieldConfig}
                   getPicklistOptions={getPicklistOptions}
                   versionId={activePcVer?.id}
+                  panelField={panelField}
                   headers={headers}
                   onSave={savePCTab}
                   saving={pcTabSaving}
@@ -441,7 +476,9 @@ export default function CasePCTab({
           <div key={tx.id} className="cf-tx-card">
             <div className="cf-tx-card-top">
               <span className={`cf-tx-status-badge cf-tx-status--${(tx.status || '').toLowerCase().replace(/\s+/g, '-')}`}>{tx.status}</span>
-              <span className="cf-tx-meta">Priority: <strong>{tx.priority}</strong></span>
+              {/* Stored as standard / high / urgent; the form offers Routine / Expedited / Urgent. */}
+              <span className="cf-tx-meta">Priority: <strong>{({ standard: 'Routine', high: 'Expedited', urgent: 'Urgent' })[tx.priority] || tx.priority}</strong></span>
+              {tx.due_date && <span className="cf-tx-meta">Due: <strong>{String(tx.due_date).slice(0, 10)}</strong></span>}
               <span className="cf-tx-meta">→ {tx.assignee_name || 'Unassigned'}</span>
             </div>
             {tx.notes && <div className="cf-tx-narrative">{tx.notes}</div>}

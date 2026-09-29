@@ -8,6 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
+const { getCaseProductName } = require('../../services/caseProductName');
 const { authenticate } = require('../../middleware/auth');
 const { enforceEvidenceGate } = require('../../services/contentIntelligenceService');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
@@ -369,8 +370,9 @@ router.get('/templates/:id/versions', authenticate, async (req, res) => {
 });
 
 // POST /api/cm/templates/:id/render — render template with live case data (merge fields)
-// Supported merge fields: {{case_number}}, {{case_type}}, {{patient_name}}, {{patient_email}},
-//   {{product_name}}, {{agent_name}}, {{org_name}}, {{date}}
+// Supported merge fields: {{case_number}}, {{case_type}}, {{patient_name}},
+//   {{contact_name}}, {{contact_email}}, {{product_name}}, {{agent_name}},
+//   {{org_name}}, {{date}}. {{patient_email}} is kept but always blank.
 router.post('/templates/:id/render', authenticate, async (req, res) => {
   try {
     const { case_id } = req.body;
@@ -401,13 +403,17 @@ router.post('/templates/:id/render', authenticate, async (req, res) => {
     }
 
     // Build merge data
+    // The token carries no display name, so agent_name printed an email (M-47).
+    const [[agent]] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
     const mergeData = {
       date: new Date().toLocaleDateString('en-US', { dateStyle: 'long' }),
-      agent_name: req.user.name || req.user.email || '',
+      agent_name: agent?.name || req.user.name || req.user.email || '',
       case_number: '',
       case_type: '',
       patient_name: '',
       patient_email: '',
+      contact_name: '',
+      contact_email: '',
       product_name: '',
       org_name: '',
     };
@@ -422,16 +428,18 @@ router.post('/templates/:id/render', authenticate, async (req, res) => {
          FROM case_contacts WHERE case_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`,
         [case_id]
       );
+      // The first contact is who the letter is for, not the patient (M-47).
       if (contactRow) {
-        mergeData.patient_name  = contactRow.full_name?.trim() || '';
-        mergeData.patient_email = contactRow.email || '';
+        mergeData.contact_name  = contactRow.full_name?.trim() || '';
+        mergeData.contact_email = contactRow.email || '';
       }
-
-      const [[miRow]] = await pool.execute(
-        `SELECT product FROM case_mi WHERE case_id = ? ORDER BY id ASC LIMIT 1`,
+      const [[patientRow]] = await pool.execute(
+        'SELECT initials FROM case_patient WHERE case_id = ? LIMIT 1',
         [case_id]
       );
-      if (miRow?.product) mergeData.product_name = miRow.product;
+      mergeData.patient_name = patientRow?.initials || '';
+
+      mergeData.product_name = await getCaseProductName(case_id);
     }
 
     // Apply merge fields to subject and body

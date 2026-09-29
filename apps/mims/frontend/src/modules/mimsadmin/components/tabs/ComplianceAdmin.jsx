@@ -23,7 +23,7 @@ export default function ComplianceAdmin() {
   return (
     <div style={shell}>
       <Header title="Compliance Hardening"
-        sub="Field locks · E-signatures · Masked reveals · Audit trail (21 CFR Part 11)" />
+        sub="Field locks · E-signatures · Masked reveals · Audit trail" />
       <div style={tabbar}>
         <Tab active={tab==='locks'} onClick={() => setTab('locks')} label="Field Locks" />
         <Tab active={tab==='audit'} onClick={() => setTab('audit')} label="Audit Reader" />

@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const pool = require('../../database/db');
+const { getCaseProductName } = require('../../services/caseProductName');
 const { authenticate } = require('../../middleware/auth');
 const { validateUpload } = require('../../middleware/uploadValidation');
 
@@ -91,6 +92,19 @@ async function getScopedCase(req, caseId) {
     hasPlatformAdminScope(req) ? [caseId] : [caseId, req.user.orgId]
   );
   return rows[0] || null;
+}
+
+// People know a case by its number (MI-289396), not the internal id the dialog
+// used to ask for (M-46). Numbers are unique per organisation, so a platform
+// admin searching across organisations can get more than one — refused.
+async function getScopedCaseByNumber(req, caseNumber) {
+  const [rows] = await pool.execute(
+    hasPlatformAdminScope(req)
+      ? 'SELECT id, org_id FROM cases WHERE case_number = ? AND is_deleted = 0 LIMIT 2'
+      : 'SELECT id, org_id FROM cases WHERE case_number = ? AND org_id = ? AND is_deleted = 0 LIMIT 2',
+    hasPlatformAdminScope(req) ? [caseNumber] : [caseNumber, req.user.orgId]
+  );
+  return rows.length === 1 ? rows[0] : null;
 }
 
 // GET /api/cm/merge-reports — list merge reports
@@ -293,20 +307,30 @@ router.post('/merge-reports/:id/checkin', authenticate, async (req, res) => {
 // ── CM-E15: Generate merge report from live case data ────────────────────────
 // POST /api/cm/merge-reports/:id/generate
 // Supported merge fields: {{case_number}}, {{case_type}}, {{patient_name}},
-//   {{patient_email}}, {{product_name}}, {{agent_name}}, {{org_name}}, {{date}},
-//   {{report_name}}, {{case_status}}, {{case_priority}}, {{case_assigned_to}}
+//   {{contact_name}}, {{contact_email}}, {{product_name}}, {{agent_name}},
+//   {{org_name}}, {{date}}, {{report_name}}, {{case_status}}, {{case_priority}},
+//   {{case_assigned_to}}. {{patient_email}} is kept but always blank.
+// Body: { case_number } (what users type) or { case_id }.
 router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
   try {
-    const { case_id } = req.body;
+    const caseNumber = String(req.body?.case_number || '').trim();
+    let case_id = req.body?.case_id;
+    if (caseNumber) {
+      const byNumber = await getScopedCaseByNumber(req, caseNumber);
+      if (!byNumber) return res.status(404).json({ error: `No case ${caseNumber} in this organisation.` });
+      case_id = byNumber.id;
+    }
 
     const report = await getScopedMergeReport(req, req.params.id);
     if (!report) return res.status(404).json({ error: 'Merge report not found.' });
     if (!report.content_html) return res.status(422).json({ error: 'Merge report has no HTML content to generate from.' });
 
     // Build merge data (same pattern as template render)
+    // The token carries no display name, so agent_name printed an email (M-47).
+    const [[agent]] = await pool.execute('SELECT name FROM users WHERE id = ? LIMIT 1', [req.user.userId]);
     const mergeData = {
       date:             new Date().toLocaleDateString('en-US', { dateStyle: 'long' }),
-      agent_name:       req.user.name || req.user.email || '',
+      agent_name:       agent?.name || req.user.name || req.user.email || '',
       report_name:      report.name || '',
       case_number:      '',
       case_type:        '',
@@ -315,6 +339,8 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
       case_assigned_to: '',
       patient_name:     '',
       patient_email:    '',
+      contact_name:     '',
+      contact_email:    '',
       product_name:     '',
       org_name:         '',
     };
@@ -323,12 +349,13 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
       const scopedCase = await getScopedCase(req, case_id);
       if (!scopedCase) return res.status(404).json({ error: 'Case not found for active organisation.' });
       const [[caseRow]] = await pool.execute(
-        `SELECT c.case_number, c.case_type, c.status AS case_status, c.priority,
+        `SELECT c.case_number, c.case_type, ws.name AS case_status, c.priority,
                 o.name AS org_name,
-                CONCAT(COALESCE(ua.first_name,''), ' ', COALESCE(ua.last_name,'')) AS assigned_name
+                ua.name AS assigned_name
          FROM cases c
          LEFT JOIN organisations o ON o.id = c.org_id
-         LEFT JOIN users ua ON ua.id = c.assigned_to
+         LEFT JOIN workflow_states ws ON ws.id = c.status_id
+         LEFT JOIN users ua ON ua.id = c.case_owner_id
          WHERE c.id = ?`,
         [scopedCase.id]
       );
@@ -346,16 +373,21 @@ router.post('/merge-reports/:id/generate', authenticate, async (req, res) => {
          FROM case_contacts WHERE case_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`,
         [scopedCase.id]
       );
+      // The first contact is the person the letter is for (usually the reporting
+      // HCP), not the patient: printing it as {{patient_name}} put the reporter's
+      // name where a patient's belongs (M-47). The patient is recorded by
+      // initials only, and has no email in MIMS.
       if (contactRow) {
-        mergeData.patient_name  = contactRow.full_name?.trim() || '';
-        mergeData.patient_email = contactRow.email             || '';
+        mergeData.contact_name  = contactRow.full_name?.trim() || '';
+        mergeData.contact_email = contactRow.email             || '';
       }
-
-      const [[miRow]] = await pool.execute(
-        `SELECT product FROM case_mi WHERE case_id = ? ORDER BY id ASC LIMIT 1`,
+      const [[patientRow]] = await pool.execute(
+        'SELECT initials FROM case_patient WHERE case_id = ? LIMIT 1',
         [scopedCase.id]
       );
-      if (miRow?.product) mergeData.product_name = miRow.product;
+      mergeData.patient_name = patientRow?.initials || '';
+
+      mergeData.product_name = await getCaseProductName(scopedCase.id);
     }
 
     function applyMerge(text) {

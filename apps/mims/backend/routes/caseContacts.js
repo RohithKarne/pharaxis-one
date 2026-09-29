@@ -18,6 +18,12 @@ const { hasGlobalAdminScope } = require('../utils/adminScope');
 
 // Verify parent case belongs to requesting user's org
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+const { CONTACT_FIELDS, missingRequiredFields } = require('../services/requiredFields');
+const { writeCaseAudit } = require('../services/caseHelpers');
+
+// Contact changes go into the case audit trail (M-110): a reporter's details
+// could be added, changed or removed with no record.
+const contactLabel = (c) => [c?.first_name, c?.last_name].filter(Boolean).join(' ') || `contact ${c?.id || ''}`.trim();
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
 // paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
@@ -92,13 +98,18 @@ router.post('/cases/:id/contacts', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Invalid contact reference for your organisation.' });
     }
 
+    // The admin's required fields (Customize Forms) are enforced here, not only shown.
+    const [[caseRow]] = await pool.execute('SELECT org_id FROM cases WHERE id = ?', [req.params.id]);
+    const missing = await missingRequiredFields(caseRow?.org_id, 'Contact / Requestor', req.body, CONTACT_FIELDS);
+    if (missing.length) return res.status(400).json({ error: `Required: ${missing.join(', ')}.`, missing });
+
     const [result] = await pool.execute(
       `INSERT INTO case_contacts
         (case_id, contact_id, contact_role, do_not_update_master, is_primary,
          first_name, last_name, contact_type, prefix, reporter_type, source, consent_status,
          specialty, institution, country, country_of_reporter, qualification,
          preferred_contact_method, language_preference, phone, email, address)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.params.id, contact_id || null, contact_role,
         do_not_update_master ? 1 : 0, is_primary ? 1 : 0,
@@ -118,6 +129,8 @@ router.post('/cases/:id/contacts', authenticate, async (req, res) => {
     const [[row]] = await pool.execute(
       'SELECT * FROM case_contacts WHERE id = ?', [result.insertId]
     );
+    await writeCaseAudit(req.params.id, req.user.userId, req.user.email, 'CONTACT_ADDED', 'contact',
+      null, `${contactLabel(row)} (${row.contact_role || 'contact'}${row.is_primary ? ', primary' : ''})`);
     res.status(201).json(row);
   } catch (err) {
     console.error('POST case contacts error:', err);
@@ -131,66 +144,50 @@ router.put('/cases/contacts/:ccId', authenticate, async (req, res) => {
     if (!await verifyCaseContactOrg(req.params.ccId, req)) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    const {
-      contact_role, do_not_update_master, is_primary,
-      first_name, last_name, contact_type,
-      prefix, reporter_type, source, consent_status,
-      specialty, institution, country, country_of_reporter,
-      qualification, preferred_contact_method, language_preference,
-      phone, email, address
-    } = req.body;
-
-    await pool.execute(
-      `UPDATE case_contacts SET
-        contact_role         = COALESCE(?, contact_role),
-        do_not_update_master = COALESCE(?, do_not_update_master),
-        is_primary           = COALESCE(?, is_primary),
-        first_name           = COALESCE(?, first_name),
-        last_name            = COALESCE(?, last_name),
-        contact_type         = COALESCE(?, contact_type),
-        prefix               = COALESCE(?, prefix),
-        reporter_type        = COALESCE(?, reporter_type),
-        source               = COALESCE(?, source),
-        consent_status       = COALESCE(?, consent_status),
-        specialty            = COALESCE(?, specialty),
-        institution          = COALESCE(?, institution),
-        country              = COALESCE(?, country),
-        country_of_reporter  = COALESCE(?, country_of_reporter),
-        qualification        = COALESCE(?, qualification),
-        preferred_contact_method = COALESCE(?, preferred_contact_method),
-        language_preference  = COALESCE(?, language_preference),
-        phone                = COALESCE(?, phone),
-        email                = COALESCE(?, email),
-        address              = COALESCE(?, address)
-       WHERE id = ?`,
-      [
-        contact_role         ?? null,
-        do_not_update_master ?? null,
-        is_primary           ?? null,
-        first_name           ?? null,
-        last_name            ?? null,
-        contact_type         ?? null,
-        prefix               ?? null,
-        reporter_type        ?? null,
-        source               ?? null,
-        consent_status       ?? null,
-        specialty            ?? null,
-        institution          ?? null,
-        country              ?? null,
-        country_of_reporter  ?? null,
-        qualification        ?? null,
-        preferred_contact_method ?? null,
-        language_preference  ?? null,
-        phone                ?? null,
-        email                ?? null,
-        address              ?? null,
-        req.params.ccId
-      ]
-    );
+    // Only the fields sent are changed, and a field sent blank is cleared. The
+    // COALESCE update kept the old value for anything sent empty, so a detail
+    // could never be removed; nothing on the page called this route until the
+    // contact Edit button (M-104).
+    const EDITABLE = [
+      'contact_role', 'do_not_update_master', 'is_primary',
+      'first_name', 'last_name', 'contact_type',
+      'prefix', 'reporter_type', 'source', 'consent_status',
+      'specialty', 'institution', 'country', 'country_of_reporter',
+      'qualification', 'preferred_contact_method', 'language_preference',
+      'phone', 'email', 'address',
+    ];
+    const body = req.body || {};
+    const sets = [];
+    const values = [];
+    for (const key of EDITABLE) {
+      if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+      let value = body[key];
+      if (key === 'do_not_update_master' || key === 'is_primary') value = value ? 1 : 0;
+      else if (typeof value === 'string') value = value.trim() === '' ? null : value.trim();
+      sets.push(`${key} = ?`);
+      values.push(value ?? null);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
+    const [[before]] = await pool.execute('SELECT * FROM case_contacts WHERE id = ?', [req.params.ccId]);
+    if (body.first_name !== undefined && !String(body.first_name || '').trim()) {
+      return res.status(400).json({ error: 'First name is required.' });
+    }
+    await pool.execute(`UPDATE case_contacts SET ${sets.join(', ')} WHERE id = ?`, [...values, req.params.ccId]);
+    const { first_name, specialty, institution, phone, email } = body;
 
     const [[cc]] = await pool.execute(
       'SELECT * FROM case_contacts WHERE id = ?', [req.params.ccId]
     );
+    if (before && cc) {
+      for (const key of EDITABLE) {
+        const was = before[key] ?? null;
+        const now = cc[key] ?? null;
+        if (String(was ?? '') !== String(now ?? '')) {
+          await writeCaseAudit(cc.case_id, req.user.userId, req.user.email, 'CONTACT_UPDATED',
+            `contact.${key} (${contactLabel(cc)})`, was, now);
+        }
+      }
+    }
 
     // DNUMD sync-back on edit
     if (cc && !cc.do_not_update_master && cc.contact_id) {
@@ -212,7 +209,12 @@ router.delete('/cases/contacts/:ccId', authenticate, async (req, res) => {
     if (!await verifyCaseContactOrg(req.params.ccId, req)) {
       return res.status(403).json({ error: 'Access denied' });
     }
+    const [[gone]] = await pool.execute('SELECT * FROM case_contacts WHERE id = ?', [req.params.ccId]);
     await pool.execute('DELETE FROM case_contacts WHERE id = ?', [req.params.ccId]);
+    if (gone) {
+      await writeCaseAudit(gone.case_id, req.user.userId, req.user.email, 'CONTACT_REMOVED', 'contact',
+        `${contactLabel(gone)} (${gone.contact_role || 'contact'}${gone.email ? `, ${gone.email}` : ''}${gone.phone ? `, ${gone.phone}` : ''})`, null);
+    }
     res.json({ success: true });
   } catch (err) {
     console.error('DELETE case contact error:', err);
@@ -263,7 +265,7 @@ router.get('/cases/contacts/:contactId/history', authenticate, async (req, res) 
     }
     const [rows] = await pool.execute(
       `SELECT c.id, c.case_number, c.case_type, c.date_received, c.priority,
-              ws.name AS status, cc.role_in_case, cc.is_primary
+              ws.name AS status, cc.contact_role AS role_in_case, cc.is_primary
          FROM case_contacts cc
          JOIN cases c ON c.id = cc.case_id
          LEFT JOIN workflow_states ws ON ws.id = c.status_id

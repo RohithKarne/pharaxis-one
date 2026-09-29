@@ -101,7 +101,7 @@ router.post('/cases/:caseId/esign', authenticate, async (req, res) => {
       orgId: req.user.orgId, caseId: Number(req.params.caseId),
       transition, fromStatus: from_status || null, toStatus: to_status || null,
       signedBy: req.user.userId, signedName: req.user.name || req.user.email,
-      meaning: meaning || `I confirm this ${transition} action under 21 CFR Part 11.`,
+      meaning: meaning || `I confirm this ${transition} action.`,
       reason: reason || null,
       authMethod: auth_method || 'password', password,
       ip: meta.ip, userAgent: meta.userAgent,

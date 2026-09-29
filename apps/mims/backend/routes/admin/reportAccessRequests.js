@@ -1,11 +1,16 @@
 'use strict';
 const express = require('express');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireRole } = require('../../middleware/auth');
+
+// Admin only (T11, 2026-09-29): these had just sign-in, so any user could list
+// everyone's report access (names, emails, reports) and file requests for any
+// user id. No screen calls them; the managed flow is admin/reportsAccess.js.
+const ADMIN = requireRole('admin', 'platform_admin');
 const pool = require('../../database/db');
 const router = express.Router();
 
 // GET /api/admin/reports/access
-router.get('/reports/access', authenticate, async (req, res) => {
+router.get('/reports/access', authenticate, ADMIN, async (req, res) => {
   try {
     const orgId = req.user.orgId;
     const [access] = await pool.query(`
@@ -22,7 +27,7 @@ router.get('/reports/access', authenticate, async (req, res) => {
 });
 
 // POST /api/admin/reports/access/request
-router.post('/reports/access/request', authenticate, async (req, res) => {
+router.post('/reports/access/request', authenticate, ADMIN, async (req, res) => {
   try {
     const orgId = req.user.orgId;
     const { user_id, report_key } = req.body;
@@ -37,7 +42,7 @@ router.post('/reports/access/request', authenticate, async (req, res) => {
 });
 
 // GET /api/admin/reports/access/requests
-router.get('/reports/access/requests', authenticate, async (req, res) => {
+router.get('/reports/access/requests', authenticate, ADMIN, async (req, res) => {
   try {
     const orgId = req.user.orgId;
     const [requests] = await pool.query(`

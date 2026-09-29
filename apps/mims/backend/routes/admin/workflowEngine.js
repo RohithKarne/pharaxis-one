@@ -36,10 +36,12 @@ router.post('/workflow-definitions', ...guard, async (req, res) => {
     const validation = validateDefinition(graph);
     if (!validation.valid) return res.status(422).json(validation);
     const orgId = req.body.org_id || req.user.orgId;
+    // workflow_definitions has no updated_by column — every write here failed on
+    // it (T16). Who changed a definition is recorded by audit() below.
     const [result] = await pool.execute(
-      `INSERT INTO workflow_definitions (org_id, name, scope, graph_json, version, status, created_by, updated_by)
-       VALUES (?, ?, ?, ?, 1, 'draft', ?, ?)`,
-      [orgId, req.body.name || 'Untitled Workflow', req.body.scope || 'case', JSON.stringify(graph), req.user.userId, req.user.userId]
+      `INSERT INTO workflow_definitions (org_id, name, scope, graph_json, version, status, created_by)
+       VALUES (?, ?, ?, ?, 1, 'draft', ?)`,
+      [orgId, req.body.name || 'Untitled Workflow', req.body.scope || 'case', JSON.stringify(graph), req.user.userId]
     );
     await audit(req, 'CREATE', 'workflow_definition', result.insertId, { name: req.body.name });
     res.status(201).json({ id: result.insertId });
@@ -55,8 +57,8 @@ router.put('/workflow-definitions/:id', ...guard, async (req, res) => {
     const validation = validateDefinition(graph);
     if (!validation.valid) return res.status(422).json(validation);
     await pool.execute(
-      'UPDATE workflow_definitions SET name=?, scope=?, graph_json=?, updated_by=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-      [req.body.name || existing.name, req.body.scope || existing.scope, JSON.stringify(graph), req.user.userId, req.params.id]
+      'UPDATE workflow_definitions SET name=?, scope=?, graph_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [req.body.name || existing.name, req.body.scope || existing.scope, JSON.stringify(graph), req.params.id]
     );
     await audit(req, 'UPDATE', 'workflow_definition', req.params.id, {});
     res.json({ id: Number(req.params.id) });
@@ -65,7 +67,7 @@ router.put('/workflow-definitions/:id', ...guard, async (req, res) => {
 
 router.delete('/workflow-definitions/:id', ...guard, async (req, res) => {
   try {
-    await pool.execute('UPDATE workflow_definitions SET status="archived", updated_by=? WHERE id=?', [req.user.userId, req.params.id]);
+    await pool.execute('UPDATE workflow_definitions SET status="archived" WHERE id=?', [req.params.id]);
     await audit(req, 'ARCHIVE', 'workflow_definition', req.params.id, {});
     res.json({ archived: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -77,7 +79,7 @@ router.post('/workflow-definitions/:id/publish', ...guard, async (req, res) => {
     if (!row) return res.status(404).json({ error: 'Workflow definition not found.' });
     const validation = validateDefinition(JSON.parse(row.graph_json || '{}'));
     if (!validation.valid) return res.status(422).json(validation);
-    await pool.execute('UPDATE workflow_definitions SET status="published", published_at=CURRENT_TIMESTAMP, published_by=?, updated_by=? WHERE id=?', [req.user.userId, req.user.userId, req.params.id]);
+    await pool.execute('UPDATE workflow_definitions SET status="published", published_at=CURRENT_TIMESTAMP, published_by=? WHERE id=?', [req.user.userId, req.params.id]);
     await audit(req, 'PUBLISH', 'workflow_definition', req.params.id, {});
     res.json({ status: 'published' });
   } catch (err) { res.status(500).json({ error: err.message }); }

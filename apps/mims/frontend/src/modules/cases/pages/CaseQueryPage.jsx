@@ -4,6 +4,7 @@ import { useAuth } from '../../../shared/context/AuthContext'
 import MIMSLayout from '../../../shared/components/MIMSLayout'
 import '../cases.css'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { parseServerTime } from '../../../shared/utils/serverTime.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -11,7 +12,7 @@ const CASE_TYPE_COLORS = { MI: '#2563eb', AE: '#dc2626', PC: '#d97706' }
 
 function formatDateTime(value) {
   if (!value) return '—'
-  const dt = new Date(value)
+  const dt = parseServerTime(value)
   if (Number.isNaN(dt.getTime())) return value
   return dt.toLocaleString()
 }

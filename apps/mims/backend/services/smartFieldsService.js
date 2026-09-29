@@ -206,11 +206,12 @@ function registerSource(name, handler) {
 // Built-in sources — connect to existing tables.
 registerSource('products', async ({ q, orgId }) => {
   const [rows] = await pool.execute(
-    `SELECT id AS value, name AS label, manufacturer AS meta
+    // products has trade_name / mah, not name / manufacturer (T16).
+    `SELECT id AS value, trade_name AS label, mah AS meta
        FROM products
       WHERE (? IS NULL OR org_id = ?)
-        AND name LIKE ?
-      ORDER BY name LIMIT 25`,
+        AND trade_name LIKE ?
+      ORDER BY trade_name LIMIT 25`,
     [orgId, orgId, `%${q || ''}%`]
   );
   return rows;
@@ -245,11 +246,12 @@ registerSource('picklists', async ({ q, orgId, filter }) => {
   try { f = filter ? JSON.parse(filter) : {}; } catch {}
   const type = f.type || '';
   const [rows] = await pool.execute(
-    `SELECT id AS value, value AS label, display_text AS meta
+    // A picklist's display label is `name`; there is no display_text (T16).
+    `SELECT id AS value, value AS label, name AS meta
        FROM picklists
       WHERE (? IS NULL OR org_id = ?)
         AND (? = '' OR field_type = ?)
-        AND (value LIKE ? OR display_text LIKE ?)
+        AND (value LIKE ? OR name LIKE ?)
       ORDER BY sort_order, value LIMIT 25`,
     [orgId, orgId, type, type, `%${q}%`, `%${q}%`]
   );

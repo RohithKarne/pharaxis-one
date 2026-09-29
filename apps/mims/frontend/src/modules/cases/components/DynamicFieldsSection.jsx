@@ -318,7 +318,7 @@ export default function DynamicFieldsSection({
           <select id={`dyn-field-${fid}`} value={val} onChange={e => attemptSet(field, e.target.value)} onFocus={onFocus} onBlur={onBlur} required={isRequired}>
             <option value="">— Select —</option>
             {options.map(o => (
-              <option key={o.value} value={o.value} title={o.description || ''}>{optionLabel(o)}</option>
+              <option key={o.id ?? o.value} value={o.value} title={o.description || ''}>{optionLabel(o)}</option>
             ))}
           </select>
           {footer}
@@ -333,7 +333,7 @@ export default function DynamicFieldsSection({
           {labelEl}
           <div className="cf-multi-select">
             {opts.map(o => (
-              <label key={o.value} className="cf-multi-opt">
+              <label key={o.id ?? o.value} className="cf-multi-opt">
                 <input type="checkbox" checked={selected.includes(String(o.value))}
                   onChange={e => {
                     const next = e.target.checked

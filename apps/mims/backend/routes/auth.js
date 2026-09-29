@@ -3,7 +3,7 @@
 const express        = require('express');
 const router         = express.Router();
 const authController = require('../controllers/authController');
-const { authenticate, requireRole, sessionCacheInvalidate } = require('../middleware/auth');
+const { authenticate, authenticateAllowingPasswordReset, requireRole, sessionCacheInvalidate, sessionExpiryMs } = require('../middleware/auth');
 const pool           = require('../database/db');
 const { logger } = require('../services/logger');
 const { hasGlobalAdminScope } = require('../utils/adminScope');
@@ -14,18 +14,13 @@ const {
   verificationRateLimiter,
 } = require('../middleware/rateLimiters');
 
+// The current session's token: a JWT bearer header if one is sent, otherwise the
+// httpOnly cookie. The web app sends a non-JWT marker instead of the token (T15);
+// taking that marker as "the current session" made revoke-others delete every
+// session, the current one included.
 function extractBearerToken(req) {
-  const authHeader = req.headers.authorization || '';
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (token && token !== 'null' && token !== 'undefined') return token;
-  }
-  const cookieHeader = req.headers.cookie || '';
-  const cookie = cookieHeader
-    .split(';')
-    .map(part => part.trim())
-    .find(part => part.startsWith('mims_token='));
-  return cookie ? decodeURIComponent(cookie.slice('mims_token='.length)) : null;
+  const { readBearer, readCookie } = require('../middleware/auth');
+  return readBearer(req) || readCookie(req, 'mims_token');
 }
 
 function toNumber(value, fallback = 0) {
@@ -58,9 +53,8 @@ async function resolveSessionTimeoutMinutes(req) {
 }
 
 function isExpired(expiresAt) {
-  if (!expiresAt) return false;
-  const ts = new Date(expiresAt).getTime();
-  if (Number.isNaN(ts)) return false;
+  const ts = sessionExpiryMs(expiresAt);
+  if (ts == null || Number.isNaN(ts)) return false;
   return ts < Date.now();
 }
 
@@ -84,12 +78,12 @@ router.post('/2fa/verify', verificationRateLimiter, authController.verifyTwoFact
 router.post('/2fa/skip-setup', verificationRateLimiter, authController.skipTwoFactorSetup);
 
 // Protected
-router.get('/me',              authenticate, authController.me);
+router.get('/me',              authenticateAllowingPasswordReset, authController.me);
 router.get('/sso/linked-accounts', authenticate, authController.linkedSsoAccounts);
 router.get('/sso/:provider/link/start', authenticate, authController.startSsoLink);
 router.delete('/sso/linked-accounts/:provider', authenticate, authController.unlinkSsoAccount);
 router.post('/switch-org',     authenticate, authController.switchOrg);
-router.post('/reset-password', authenticate, authController.resetPassword);
+router.post('/reset-password', authenticateAllowingPasswordReset, authController.resetPassword);
 router.post('/change-password', authenticate, authController.changePassword);
 
 // GET /api/auth/sessions — Session management data (Sprint 14 G11)
@@ -98,7 +92,7 @@ router.get('/sessions', authenticate, async (req, res) => {
     const token = extractBearerToken(req);
 
     const [rows] = await pool.execute(
-      `SELECT id, token, created_at, expires_at
+      `SELECT id, token, created_at, expires_at, DATE_FORMAT(expires_at, '%Y-%m-%d %H:%i:%s') AS expires_at_text
        FROM sessions
        WHERE user_id = ?
        ORDER BY created_at DESC
@@ -110,7 +104,7 @@ router.get('/sessions', authenticate, async (req, res) => {
       id: row.id,
       is_current: !!token && row.token === token,
       created_at: row.created_at,
-      expires_at: row.expires_at,
+      expires_at: row.expires_at_text,
       is_expired: isExpired(row.expires_at),
     }));
 
@@ -146,10 +140,16 @@ router.post('/sessions/revoke-others', authenticate, async (req, res) => {
     const token = extractBearerToken(req);
     if (!token) return res.status(400).json({ error: 'Current token not found.' });
 
+    const [others] = await pool.execute(
+      'SELECT token FROM sessions WHERE user_id = ? AND token <> ?',
+      [req.user.userId, token]
+    );
     const [result] = await pool.execute(
       'DELETE FROM sessions WHERE user_id = ? AND token <> ?',
       [req.user.userId, token]
     );
+    // Evict the cached copies too, or a revoked token is honoured until the cache expires.
+    await Promise.all(others.map((row) => sessionCacheInvalidate(row.token)));
 
     return res.json({ success: true, revoked: Number(result?.affectedRows || 0) });
   } catch (err) {
@@ -177,6 +177,7 @@ router.post('/sessions/:id/revoke', authenticate, async (req, res) => {
       'DELETE FROM sessions WHERE id = ? AND user_id = ?',
       [sessionId, req.user.userId]
     );
+    await sessionCacheInvalidate(row.token);
 
     return res.json({
       success: !!result?.affectedRows,
@@ -189,7 +190,7 @@ router.post('/sessions/:id/revoke', authenticate, async (req, res) => {
 });
 
 // Logout — records logout time in login_audit (AUD-03) + clears tracked session
-router.post('/logout', authenticate, async (req, res) => {
+router.post('/logout', authenticateAllowingPasswordReset, async (req, res) => {
   const token = extractBearerToken(req);
   await pool.execute(
     `UPDATE login_audit SET logout_time = NOW()

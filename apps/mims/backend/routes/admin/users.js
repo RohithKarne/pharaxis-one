@@ -11,24 +11,26 @@
 const express  = require('express');
 const router   = express.Router();
 const bcrypt   = require('bcrypt');
+const crypto   = require('crypto');
 const pool     = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
-const { hasGlobalAdminScope } = require('../../utils/adminScope');
+const { hasGlobalAdminScope, PLATFORM_ADMIN_SQL, LAST_PLATFORM_ADMIN_ERROR, leavesNoActivePlatformAdmin } = require('../../utils/adminScope');
 const passwordPolicy = require('../../services/passwordPolicy');
 const { toCsv, setCsvDownloadHeaders } = require('../../shared/csvHelpers');
 const { validateBulkUserRows } = require('../../services/bulkUserProvisioningService');
+const { logAudit } = require('../../utils/auditLog');
 
 const SALT_ROUNDS = 12;
-const PLATFORM_ADMIN_EXCLUSION_SQL =
-  "u.id NOT IN (SELECT ump.user_id FROM user_module_permissions ump WHERE ump.module = 'platform_admin_console' AND ump.can_access = 1)";
 
-// WP1: non-platform admins may only see/act on users within their OWN org.
-// Platform admins (global scope) keep full cross-tenant visibility. Returns a SQL
-// fragment (users alias = `u`) plus its bind params to AND into a WHERE clause.
+// WP1: non-platform admins may only see/act on users within their OWN org, and
+// never see a platform admin (role or console permission). Platform admins (global
+// scope) keep full cross-tenant visibility, other platform admins included, so they
+// can find a colleague to rescue. Returns a SQL fragment (users alias = `u`) plus
+// its bind params to AND into a WHERE clause.
 function orgScopeForUsers(req) {
   if (hasGlobalAdminScope(req.user)) return { sql: '1=1', params: [] };
   return {
-    sql: 'EXISTS (SELECT 1 FROM user_org_access uoa_scope WHERE uoa_scope.user_id = u.id AND uoa_scope.org_id = ? AND uoa_scope.is_active = 1)',
+    sql: `EXISTS (SELECT 1 FROM user_org_access uoa_scope WHERE uoa_scope.user_id = u.id AND uoa_scope.org_id = ? AND uoa_scope.is_active = 1) AND NOT ${PLATFORM_ADMIN_SQL}`,
     params: [req.user.orgId ?? null],
   };
 }
@@ -40,13 +42,10 @@ function addDays(date, days) {
 }
 
 // ── Helper: audit log ─────────────────────────────────────────────────────────
+// O-6: goes through the shared writer, which logs a failed write instead of
+// discarding it. Outside a transaction it does not block the admin action.
 async function audit(userId, action, entityId, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details) VALUES (?, 'user', ?, ?, ?)`,
-      [userId, entityId, action, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, null, action, 'user', entityId, details);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,8 +65,7 @@ router.get('/users/export', authenticate, requireRole('admin', 'platform_admin')
               u.password_expires_at, u.created_at, u.updated_at
          FROM users u
     LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-        WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
-          AND ${scope.sql}
+        WHERE ${scope.sql}
           AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
         ORDER BY u.name`,
       [...scope.params, like, like, like]
@@ -110,9 +108,14 @@ router.get('/users/security-groups', authenticate, requireRole('admin', 'platfor
 // GET /api/admin/users/orgs — all organisations for tenant assignment tab
 router.get('/users/orgs', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
   try {
-    const [orgs] = await pool.execute(
+    // An organisation's admin gets only the organisations they belong to — the
+    // same set they may assign users to. Every client's name went to every
+    // admin, and the admin Tenant picker offered them all (M-112).
+    const allowed = await callerAssignableOrgIds(req);
+    const [all] = await pool.execute(
       `SELECT id, name, is_active FROM organisations ORDER BY name ASC`
     );
+    const orgs = allowed ? all.filter(o => allowed.has(Number(o.id))) : all;
     res.json({ orgs });
   } catch (err) {
     console.error('GET /users/orgs error:', err);
@@ -147,8 +150,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
          ) AS updated_by_name
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-       WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
-         AND ${scope.sql}
+       WHERE ${scope.sql}
          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)
        ORDER BY u.name ASC
        LIMIT ${parseInt(limit, 10)} OFFSET ${parseInt(offset, 10)}`,
@@ -157,8 +159,7 @@ router.get('/users', authenticate, requireRole('admin', 'platform_admin'), async
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) AS total
        FROM users u
-       WHERE ${PLATFORM_ADMIN_EXCLUSION_SQL}
-         AND ${scope.sql}
+       WHERE ${scope.sql}
          AND (u.name LIKE ? OR u.email LIKE ? OR u.user_id LIKE ?)`,
       [...scope.params, like, like, like]
     );
@@ -183,7 +184,7 @@ router.get('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
          u.password_expires_at, u.created_at, u.updated_at
        FROM users u
        LEFT JOIN security_groups sg ON sg.id = u.security_group_id
-       WHERE u.id = ? AND ${PLATFORM_ADMIN_EXCLUSION_SQL} AND ${scope.sql}`,
+       WHERE u.id = ? AND ${scope.sql}`,
       [req.params.id, ...scope.params]
     );
     if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -295,8 +296,11 @@ router.post('/users', authenticate, requireRole('admin', 'platform_admin'), asyn
       }
     }
 
-    // Temporary default password — user must reset on first login
-    const tempPassword = await bcrypt.hash('Temp@12345!', SALT_ROUNDS);
+    // A random, never-shown starting password; the user sets their own with
+    // "Forgot password". Every account used to start with the same fixed
+    // password, written in this file — anyone could sign in to a new account
+    // before its owner (T11 / M-72).
+    const tempPassword = await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), SALT_ROUNDS);
     const { expiry_days } = await passwordPolicy.getPolicy();
     const expiresAt    = addDays(new Date(), expiry_days);
 
@@ -412,7 +416,7 @@ router.post('/users/bulk', authenticate, requireRole('admin', 'platform_admin'),
       return res.status(403).json({ error: 'Batch rejected. No users were created.', errors: permissionErrors });
     }
 
-    const tempPassword = await bcrypt.hash('Temp@12345!', SALT_ROUNDS);
+    const tempPassword = await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), SALT_ROUNDS); // M-72, as above
     const { expiry_days } = await passwordPolicy.getPolicy();
     const expiresAt = addDays(new Date(), expiry_days);
 
@@ -497,22 +501,14 @@ router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), a
     }
 
     // Break-glass (2026-09-23): never leave the platform with no active platform admin,
-    // otherwise the only way back in is a direct database write.
-    const demoting = existing.role === 'platform_admin' && (
-      (role != null && String(role) !== 'platform_admin') ||
-      (is_active != null && !is_active) ||
-      (is_disabled != null && is_disabled)
-    );
-    if (demoting) {
-      const [[{ others }]] = await pool.execute(
-        `SELECT COUNT(*) AS others FROM users u
-          WHERE u.id != ? AND u.is_active = 1 AND u.is_disabled = 0
-            AND (u.role = 'platform_admin' OR NOT ${PLATFORM_ADMIN_EXCLUSION_SQL})`,
-        [req.params.id]
-      );
-      if (!others) {
-        return res.status(409).json({ error: 'This is the last active platform admin. Make another user a platform admin before demoting or deactivating this one.' });
-      }
+    // otherwise the only way back in is a direct database write. A platform admin is
+    // the role or the console permission, as at sign-in.
+    const leavesNone = await leavesNoActivePlatformAdmin(pool, {
+      deactivate: (is_active != null && !is_active) || (is_disabled != null && is_disabled) ? [req.params.id] : [],
+      dropRole: role != null && String(role) !== 'platform_admin' ? [req.params.id] : [],
+    });
+    if (leavesNone) {
+      return res.status(409).json({ error: LAST_PLATFORM_ADMIN_ERROR });
     }
 
     // user_id uniqueness check (exclude self)

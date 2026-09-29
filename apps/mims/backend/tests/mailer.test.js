@@ -89,7 +89,6 @@ describe('every sender is routed and classified', () => {
   // than left to whoever edits these files next.
   test.each([
     ['./services/alertService.js', 'alert'],
-    ['./services/expiryAlertService.js', 'alert'],
     ['./services/cmExpiryAlertService.js', 'alert'],
     ['./services/twoFactorService.js', 'operational'],
     ['./services/emailWorker.js', 'operational'],

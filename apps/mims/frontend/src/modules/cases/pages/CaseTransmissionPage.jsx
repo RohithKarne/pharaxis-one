@@ -163,7 +163,7 @@ export default function CaseTransmissionPage() {
             {/* Stated on screen so nobody in a demo assumes MIMS submits to a
                 regulator. It does not — no MedDRA licence, no E2B, by design. */}
             <div className="cf-handoff-note">
-              MIMS sends a canonical intake payload with verbatim reaction text. Coding, causality assessment and
+              MIMS sends a canonical intake payload with the text as recorded, not coded. Coding, causality assessment and
               regulatory submission are performed by the receiving system.
             </div>
           </section>

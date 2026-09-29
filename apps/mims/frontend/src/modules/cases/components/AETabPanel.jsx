@@ -27,8 +27,19 @@ export default function AETabPanel({
   getFieldConfig = () => null, versionId, headers,
   caseId,
   saving = false,
+  panelField = null,
 }) {
   const d = data || {}
+  // Admin settings (Customize Forms) for this panel's own fields — label,
+  // required, hidden — from formConfig.core; migration 109 links the rows.
+  const TAB_SECTION = { general: 'AE — General', 'patient-info': 'AE — Patient Information' }
+  const FIELD_ALIASES = { 'Ethnicity': 'Race / Ethnicity', 'Last Menstrual Date': 'Last Menstrual Period' }
+  const pf = (label, sectionName) => {
+    const section = sectionName || TAB_SECTION[tabKey]
+    if (!panelField || !section) return { label: (sectionName && getFieldConfig(sectionName, label)?.custom_label) || label, required: false, hidden: false }
+    return panelField(section, FIELD_ALIASES[label] || label, label)
+  }
+  const labelText = (f) => (f.required ? `${f.label} *` : f.label)
   const set = (key, val) => onChange({ ...d, [key]: val })
 
   // B6 — tab-namespaced key with backward-compatible read of legacy un-namespaced value.
@@ -37,7 +48,9 @@ export default function AETabPanel({
   const write = (k, v) => set(nsKey(k), v)
 
   const fieldRow = (label, key, type = 'text', { fullWidth = false, sectionName = null } = {}) => {
-    const displayLabel = (sectionName && getFieldConfig(sectionName, label)?.custom_label) || label
+    const f = pf(label, sectionName)
+    if (f.hidden) return null
+    const displayLabel = labelText(f)
     return (
       <div key={key} className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}`}>
         <label>{displayLabel}</label>
@@ -49,16 +62,24 @@ export default function AETabPanel({
   }
 
   const selectRow = (label, key, sectionName, fieldName = label, { fullWidth = false } = {}) => {
+    const f = pf(label, sectionName)
+    if (f.hidden) return null
     const options = getPicklistOptions(sectionName, fieldName)
     return (
       <div key={key} className={`cf-form-field${fullWidth ? ' cf-form-field--full' : ''}`}>
-        <label>{(sectionName && getFieldConfig(sectionName, label)?.custom_label) || label}</label>
+        <label>{labelText(f)}</label>
         {Array.isArray(options) && options.length > 0 ? (
           <select value={d[key] ?? ''} disabled={locked} onChange={e => set(key, e.target.value)}>
             <option value="">— Select —</option>
             {options.map((option, index) => (
               <option key={`${key}-${option.value ?? index}`} value={option.value}>{option.label || option.value}</option>
             ))}
+            {/* A value an admin has since switched off stays on the record and
+                must stay visible, or the box shows blank and the next save
+                clears it. */}
+            {d[key] && !options.some(option => String(option.value) === String(d[key])) && (
+              <option value={d[key]}>{d[key]} (no longer offered)</option>
+            )}
           </select>
         ) : (
           <div className="cf-picklist-empty"><em>No options configured for this picklist.</em></div>
@@ -101,6 +122,8 @@ export default function AETabPanel({
           headers={headers}
           getPicklistOptions={getPicklistOptions}
           onRowsChange={onChange}
+          caseId={caseId}
+          panelField={panelField}
         />
       )}
 
@@ -127,20 +150,20 @@ export default function AETabPanel({
           {fieldRow('Height (cm)',         'height_cm', 'number')}
           {fieldRow('Ethnicity',           'ethnicity')}
           {fieldRow('Last Menstrual Date', 'last_menstrual_date', 'date')}
-          <PicklistRow
-            label="Pregnant"
+          {!pf('Pregnant').hidden && <PicklistRow
+            label={labelText(pf('Pregnant'))}
             value={d.pregnant ?? ''}
             onChange={v => set('pregnant', v === '' ? null : parseInt(v))}
             options={getPicklistOptions('AE — Patient Information', 'Pregnant')}
             locked={locked}
-          />
-          <PicklistRow
-            label="Patient Country"
+          />}
+          {!pf('Patient Country').hidden && <PicklistRow
+            label={labelText(pf('Patient Country'))}
             value={d.patient_country ?? ''}
             onChange={v => set('patient_country', v)}
             options={getPicklistOptions('AE — Patient Information', 'Patient Country')}
             locked={locked}
-          />
+          />}
           {nsFieldRow('Additional Info', 'additional_info', 'textarea', { fullWidth: true })}
         </div>
       )}
@@ -154,15 +177,22 @@ export default function AETabPanel({
           headers={headers}
           getPicklistOptions={getPicklistOptions}
           onRowsChange={onChange}
+          caseId={caseId}
+          panelField={panelField}
         />
       )}
 
-      {(tabKey === 'lab-notes' || tabKey === 'medical-notes') && (
-        <div className="cf-form-field cf-form-field--full">
-          <label>Notes</label>
-          <textarea rows={8} value={read('notes')} disabled={locked} onChange={e => write('notes', e.target.value)} />
-        </div>
-      )}
+      {(tabKey === 'lab-notes' || tabKey === 'medical-notes') && (() => {
+        // The notes box follows its admin setting (migration 118 links the row).
+        const f = tabKey === 'lab-notes' ? pf('Lab Notes', 'AE — Lab Notes') : pf('Medical Notes', 'AE — Medical Notes')
+        if (f.hidden) return null
+        return (
+          <div className="cf-form-field cf-form-field--full">
+            <label>{f.label === 'Lab Notes' || f.label === 'Medical Notes' ? (f.required ? 'Notes *' : 'Notes') : labelText(f)}</label>
+            <textarea rows={8} value={read('notes')} disabled={locked} onChange={e => write('notes', e.target.value)} />
+          </div>
+        )
+      })()}
 
       {!locked && !['events','drugs','meddra-coding','causality','lab-results','medical-history','product-info'].includes(tabKey) && (
         <div className="cf-form-actions">

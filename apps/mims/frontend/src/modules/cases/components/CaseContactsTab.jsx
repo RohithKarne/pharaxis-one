@@ -48,7 +48,7 @@ function toOptions(list, fallback = []) {
 function useDraft(key, value, setValue) {
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(key)
+      const raw = sessionStorage.getItem(key)
       if (!raw) return
       const parsed = JSON.parse(raw)
       if (parsed && typeof parsed === 'object') setValue(prev => ({ ...prev, ...parsed }))
@@ -58,7 +58,7 @@ function useDraft(key, value, setValue) {
   }, [key, setValue])
 
   useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* no-op */ }
+    try { sessionStorage.setItem(key, JSON.stringify(value)) } catch { /* no-op */ }
   }, [key, value])
 }
 
@@ -76,11 +76,14 @@ export default function CaseContactsTab({
   const [searchLoading, setSearchLoading] = useState(false)
   const [addContactForm, setAddContactForm] = useState(BLANK_CONTACT)
   const [showContactAdd, setShowContactAdd] = useState(false)
+  // A case contact can be edited in place; it could only be removed and added
+  // again, e.g. to give the reporter a missing email (M-104).
+  const [editingId, setEditingId] = useState(null)
 
   useDraft(`mims_case_${id}_contact_draft`, addContactForm, setAddContactForm)
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(`mims_case_${id}_contact_ui`)
+      const raw = sessionStorage.getItem(`mims_case_${id}_contact_ui`)
       if (!raw) return
       const parsed = JSON.parse(raw)
       setShowContactAdd(!!parsed?.showContactAdd)
@@ -91,7 +94,7 @@ export default function CaseContactsTab({
   }, [id])
   useEffect(() => {
     try {
-      localStorage.setItem(`mims_case_${id}_contact_ui`, JSON.stringify({ showContactAdd, contactSearch }))
+      sessionStorage.setItem(`mims_case_${id}_contact_ui`, JSON.stringify({ showContactAdd, contactSearch }))
     } catch {
       // no-op
     }
@@ -157,23 +160,46 @@ export default function CaseContactsTab({
     setContactHits([])
   }
 
+  function startEdit(c) {
+    const form = { ...BLANK_CONTACT }
+    for (const key of Object.keys(BLANK_CONTACT)) {
+      if (c[key] !== undefined && c[key] !== null) form[key] = typeof BLANK_CONTACT[key] === 'boolean' ? !!c[key] : c[key]
+    }
+    setAddContactForm(form)
+    setEditingId(c.id)
+    setContactSearch('')
+    setContactHits([])
+    setShowContactAdd(true)
+  }
+
+  function closeContactForm() {
+    setShowContactAdd(false)
+    setEditingId(null)
+    setAddContactForm(BLANK_CONTACT)
+  }
+
   async function saveContact() {
     try {
-      const res = await httpFetch(`${API}/cases/${id}/contacts`, {
-        method: 'POST',
+      const res = await httpFetch(editingId ? `${API}/cases/contacts/${editingId}` : `${API}/cases/${id}/contacts`, {
+        method: editingId ? 'PUT' : 'POST',
         headers,
         body: JSON.stringify(addContactForm),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      if (editingId) {
+        setContacts(prev => prev.map(c => (c.id === editingId ? { ...c, ...data } : c)))
+        closeContactForm()
+        return
+      }
       const updated = [...contacts, data]
       setContacts(updated)
       onCountChange?.(updated.length)
       setShowContactAdd(false)
       setAddContactForm(BLANK_CONTACT)
       setContactSearch('')
-      localStorage.removeItem(`mims_case_${id}_contact_draft`)
-      localStorage.removeItem(`mims_case_${id}_contact_ui`)
+      sessionStorage.removeItem(`mims_case_${id}_contact_draft`)
+      sessionStorage.removeItem(`mims_case_${id}_contact_ui`)
     } catch (err) {
       toast.error(err.message)
     }
@@ -207,7 +233,7 @@ export default function CaseContactsTab({
   return (
     <div id="tab-contacts" className="cf-tab-pane">
       <div className="cf-section-header-row">
-        <button className="cf-add-btn" onClick={() => setShowContactAdd(true)}>+ Add Contact</button>
+        <button className="cf-add-btn" onClick={() => { setEditingId(null); setAddContactForm(BLANK_CONTACT); setShowContactAdd(true) }}>+ Add Contact</button>
       </div>
 
       {contacts.length === 0 && !showContactAdd && <div className="cf-empty-msg">No contacts added yet.</div>}
@@ -215,26 +241,28 @@ export default function CaseContactsTab({
       {contacts.map(c => (
         <div key={c.id} className={`cf-contact-card ${c.is_primary ? 'primary' : ''}`}>
           <div className="cf-contact-name">
-            {[c.prefix, c.first_name, c.last_name].filter(Boolean).join(' ')}
-            {c.is_primary && <span className="cf-primary-badge">Primary</span>}
+            <span className="cf-contact-name-text">{[c.prefix, c.first_name, c.last_name].filter(Boolean).join(' ')}</span>
+            {/* is_primary is 0/1 from MySQL: `0 && …` printed a stray "0" after every name (M-42) */}
+            {c.is_primary ? <span className="cf-primary-badge">Primary</span> : null}
             {c.do_not_update_master ? <span className="cf-dnumd-badge">DNUMD</span> : null}
           </div>
           <div className="cf-contact-meta">
             <span>{c.contact_type || 'Contact'}</span>
-            {c.reporter_type && <span> · {c.reporter_type}</span>}
+            {c.reporter_type && c.reporter_type !== c.contact_type && <span> · {c.reporter_type}</span>}
             {c.specialty && <span> · {c.specialty}</span>}
             {c.institution && <span> · {c.institution}</span>}
             {c.email && <span> · {c.email}</span>}
             {c.phone && <span> · {c.phone}</span>}
           </div>
+          <button className="cf-remove-btn" onClick={() => startEdit(c)}>Edit</button>
           <button className="cf-remove-btn" onClick={() => removeContact(c.id)}>Remove</button>
         </div>
       ))}
 
       {showContactAdd && (
         <div className="cf-add-contact-form">
-          <h3 className="cf-subsection-title">Add Contact</h3>
-          <div className="cf-contact-search-row">
+          <h3 className="cf-subsection-title">{editingId ? 'Edit Contact' : 'Add Contact'}</h3>
+          {!editingId && <div className="cf-contact-search-row">
             <input
               className="cf-contact-search"
               placeholder="Search existing contacts by name, email, phone…"
@@ -242,8 +270,8 @@ export default function CaseContactsTab({
               onChange={e => { setContactSearch(e.target.value); searchContacts(e.target.value) }}
             />
             {searchLoading && <span className="cf-search-loading">Searching…</span>}
-          </div>
-          {contactHits.length > 0 && (
+          </div>}
+          {!editingId && contactHits.length > 0 && (
             <div className="cf-contact-hits">
               {contactHits.map(h => (
                 <div key={h.id} className="cf-contact-hit" onClick={() => pickContact(h)}>
@@ -310,8 +338,8 @@ export default function CaseContactsTab({
             <label><input type="checkbox" checked={addContactForm.do_not_update_master} onChange={e => setAddContactForm(prev => ({ ...prev, do_not_update_master: e.target.checked }))} /> Do Not Update Master Data</label>
           </div>
           <div className="cf-form-actions">
-            <button className="cf-cancel-btn" onClick={() => setShowContactAdd(false)}>Cancel</button>
-            <button className="cf-save-btn" onClick={saveContact}>Add Contact</button>
+            <button className="cf-cancel-btn" onClick={closeContactForm}>Cancel</button>
+            <button className="cf-save-btn" onClick={saveContact}>{editingId ? 'Save Changes' : 'Add Contact'}</button>
           </div>
         </div>
       )}

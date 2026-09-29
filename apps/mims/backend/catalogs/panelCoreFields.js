@@ -1,0 +1,121 @@
+'use strict';
+
+/**
+ * Fields the AE and PC panels draw themselves (AETabPanel / PCTabPanel), tied to
+ * the field_setup row the admin configures in Customize Forms.
+ *
+ * - migration 109 gives each row its core_key, so formConfig.core carries the
+ *   admin's label / required / hidden for it and the "additional fields" block
+ *   stops drawing it a second time;
+ * - the AE/PC save routes check required against `key` (what the panel sends).
+ *
+ * `field` is the field_setup name; where the panel's label differs, the panel
+ * maps it (AETabPanel/PCTabPanel FIELD_ALIASES). Panel fields with no field_setup
+ * row are not listed — admins cannot configure them yet.
+ */
+
+const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+const ROWS = [
+  // scope, tab,             section,                      field,                      key
+  ['ae', 'general',          'AE — General',               'AE Status',                'ae_status'],
+  ['ae', 'general',          'AE — General',               'Date of Awareness',        'date_of_awareness'],
+  ['ae', 'general',          'AE — General',               'Report Type',              'report_type'],
+  ['ae', 'general',          'AE — General',               'Regulatory Reportability', 'regulatory_reportability'],
+  ['ae', 'general',          'AE — General',               'Date of Report',           'date_of_report'],
+  ['ae', 'general',          'AE — General',               'Reporter Awareness Date',  'reporter_awareness_date'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Patient Initials',         'patient_initials'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Date of Birth',            'date_of_birth'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Age',                      'age'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Age Unit',                 'age_unit'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Gender',                   'sex'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Weight (kg)',              'weight_kg'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Height (cm)',              'height_cm'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Race / Ethnicity',         'ethnicity'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Last Menstrual Period',    'last_menstrual_date'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Pregnant',                 'pregnant'],
+  ['ae', 'patient-info',     'AE — Patient Information',   'Patient Country',          'patient_country'],
+  // AE list tabs (each row is one record) and the notes tabs. Linked by
+  // migration 118; the row forms and the notes box read the admin's label /
+  // required / hidden, and a new row missing a required field is refused.
+  ['ae', 'events',           'AE — Events & Seriousness',  'Event Description',        'event_description'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Onset Date',               'start_date'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Outcome',                  'outcome'],
+  // The rest of the event row (M-101), linked by migration 121 so the
+  // additional-fields block stops asking for them a second time.
+  ['ae', 'events',           'AE — Events & Seriousness',  'MedDRA Term',              'meddra_term'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Reported Causality',       'reported_causality'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Frequency',                'frequency'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Causality Assessment',     'causality_assessment'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'End Date',                 'end_date'],
+  // Set by the seriousness tick-boxes, which have no input of their own for
+  // it — so, like a tick-box, it is never required.
+  ['ae', 'events',           'AE — Events & Seriousness',  'Seriousness',              'seriousness', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Death',          'is_death', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Life Threatening', 'is_life_threatening', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Hospitalisation', 'is_hospitalization', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Disability',     'is_disability', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Congenital Anomaly', 'is_congenital_anomaly', 'bool'],
+  ['ae', 'events',           'AE — Events & Seriousness',  'Serious — Other Medically Important', 'is_other_medically_important', 'bool'],
+  ['ae', 'product-info',     'AE — Product Information',   'Product Name',             'product_name'],
+  ['ae', 'product-info',     'AE — Product Information',   'Batch / Lot Number',       'batch_lot_number'],
+  ['ae', 'product-info',     'AE — Product Information',   'Dose',                     'dose'],
+  ['ae', 'product-info',     'AE — Product Information',   'Dose Unit',                'dose_unit'],
+  ['ae', 'product-info',     'AE — Product Information',   'Route of Administration',  'route_of_admin'],
+  ['ae', 'product-info',     'AE — Product Information',   'Start Date',               'start_date'],
+  ['ae', 'product-info',     'AE — Product Information',   'Stop Date',                'end_date'],
+  ['ae', 'product-info',     'AE — Product Information',   'Indication',               'indication'],
+  ['ae', 'product-info',     'AE — Product Information',   'Action Taken',             'action_taken'],
+  ['ae', 'product-info',     'AE — Product Information',   'Concomitant Medications',  'is_concomitant', 'bool'],
+  ['ae', 'lab-results',      'AE — Lab Results',           'Lab Name',                 'lab_name'],
+  ['ae', 'lab-results',      'AE — Lab Results',           'Test Date',                'test_date'],
+  ['ae', 'lab-results',      'AE — Lab Results',           'Test Name',                'test_name'],
+  ['ae', 'lab-results',      'AE — Lab Results',           'Result Value',             'result'],
+  ['ae', 'lab-results',      'AE — Lab Results',           'Normal Range',             'normal_range'],
+  ['ae', 'medical-history',  'AE — Medical History',       'Medical History',          'condition_name'],
+  ['ae', 'medical-history',  'AE — Medical History',       'Relevant History',         'notes'],
+  ['ae', 'lab-notes',        'AE — Lab Notes',             'Lab Notes',                'lab-notes__notes'],
+  ['ae', 'medical-notes',    'AE — Medical Notes',         'Medical Notes',            'medical-notes__notes'],
+  ['pc', 'general',          'PC — General',               'Complaint Description',    'complaint_description'],
+  ['pc', 'general',          'PC — General',               'PC Status',                'pc_status'],
+  ['pc', 'general',          'PC — General',               'PC Category',              'pc_category'],
+  ['pc', 'general',          'PC — General',               'PC Classification',        'pc_classification'],
+  ['pc', 'general',          'PC — General',               'Date of Complaint',        'date_of_complaint'],
+  ['pc', 'general',          'PC — General',               'Date Received',            'date_received'],
+  ['pc', 'general',          'PC — General',               'Severity',                 'severity'],
+  ['pc', 'general',          'PC — General',               'Root Cause',               'root_cause'],
+  ['pc', 'patient-info',     'PC — Patient Information',   'Patient Name',             'patient_name'],
+  ['pc', 'patient-info',     'PC — Patient Information',   'Date of Birth',            'date_of_birth'],
+  ['pc', 'patient-info',     'PC — Patient Information',   'Gender',                   'sex'],
+  ['pc', 'patient-info',     'PC — Patient Information',   'Injury Experienced',       'injury_experienced'],
+  ['pc', 'product-info',     'PC — Product Information',   'Product Name',             'product_name'],
+  ['pc', 'product-info',     'PC — Product Information',   'Product Type',             'product_type'],
+  ['pc', 'product-info',     'PC — Product Information',   'Product Category',         'product_category'],
+  ['pc', 'product-info',     'PC — Product Information',   'Batch / Lot Number',       'lot_number'],
+  ['pc', 'product-info',     'PC — Product Information',   'Expiry Date',              'expiry_date'],
+  ['pc', 'product-info',     'PC — Product Information',   'Manufacturing Date',       'manufacturing_date'],
+  ['pc', 'product-info',     'PC — Product Information',   'Pack Size',                'pack_size'],
+  ['pc', 'product-info',     'PC — Product Information',   'Storage Conditions',       'storage_conditions'],
+  ['pc', 'return-retrieval', 'PC — Return & Retrieval',    'Return Requested',         'return_requested', 'bool'],
+  ['pc', 'return-retrieval', 'PC — Return & Retrieval',    'Return Date',              'return_date'],
+  ['pc', 'return-retrieval', 'PC — Return & Retrieval',    'Return Address',           'return_address'],
+  ['pc', 'return-retrieval', 'PC — Return & Retrieval',    'Retrieval Method',         'retrieval_method'],
+  ['pc', 'return-retrieval', 'PC — Return & Retrieval',    'Return Notes',             'notes_return'],
+  ['pc', 'replacement',      'PC — Replacement',           'Replacement Approved',     'replacement_approved', 'bool'],
+  ['pc', 'replacement',      'PC — Replacement',           'Replacement Ship Date',    'replacement_date'],
+  ['pc', 'replacement',      'PC — Replacement',           'Replacement Quantity',     'quantity'],
+  ['pc', 'replacement',      'PC — Replacement',           'Replacement Notes',        'notes_replacement'],
+  ['pc', 'refund-credit',    'PC — Refund & Credit',       'Refund Approved',          'refund_approved', 'bool'],
+  ['pc', 'refund-credit',    'PC — Refund & Credit',       'Refund Amount',            'refund_amount'],
+  ['pc', 'refund-credit',    'PC — Refund & Credit',       'Credit Note Number',       'credit_note_number'],
+  ['pc', 'refund-credit',    'PC — Refund & Credit',       'Refund Notes',             'notes_refund'],
+];
+
+// A tick-box ('bool') takes the admin's label and hidden setting but is never
+// required — unticked is a valid answer, not a missing one.
+const PANEL_CORE_FIELDS = ROWS.map(([scope, tab, section, field, key, type = 'value']) => ({
+  scope, tab, section, field, key, type,
+  coreKey: `${scope}_${slug(tab)}_${slug(field)}`.slice(0, 64),
+}));
+
+module.exports = { PANEL_CORE_FIELDS };

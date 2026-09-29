@@ -96,6 +96,13 @@ function getLoginCandidates() {
 // configured. The fixture guarantees the happy path is always exercised; the
 // ambient candidates are kept so a CI environment with real seeded credentials
 // still works.
+// T15: the session token is sent only as the httpOnly mims_token cookie, never in
+// the body. This reads it the way a browser would receive it.
+function sessionCookie(res) {
+  const cookies = [].concat(res.headers['set-cookie'] || []);
+  return cookies.map(c => c.split(';')[0]).find(c => c.startsWith('mims_token=')) || null;
+}
+
 async function loginWithCandidates() {
   const failures = [];
   const candidates = [
@@ -108,13 +115,13 @@ async function loginWithCandidates() {
       .post('/api/auth/login')
       .send({ email: candidate.email, password: candidate.password });
 
-    if (res.status === 200 && res.body?.token) return res;
+    if (res.status === 200 && sessionCookie(res)) return res;
 
     if (res.status === 200 && res.body?.challengeToken) {
       const skip = await request(app)
         .post('/api/auth/2fa/skip-setup')
         .send({ challengeToken: res.body.challengeToken });
-      if (skip.status === 200 && skip.body?.token) return skip;
+      if (skip.status === 200 && sessionCookie(skip)) return skip;
       failures.push(`challenge status ${skip.status} for ${candidate.email}`);
       continue;
     }
@@ -156,10 +163,13 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns 200 + token for valid platform admin credentials', async () => {
+  it('returns 200 + a session cookie, and no token in the body, for valid platform admin credentials', async () => {
     const res = await loginWithCandidates()
     expect(res.status).toBe(200)
-    expect(res.body).toHaveProperty('token')
+    expect(sessionCookie(res)).toBeTruthy()
+    expect(String(res.headers['set-cookie'])).toMatch(/HttpOnly/i)
+    // The token must never be readable by page scripts (M-9).
+    expect(res.body).not.toHaveProperty('token')
   })
 })
 
@@ -169,13 +179,14 @@ describe('GET /api/admin/orgs — auth guard', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns 200 with valid token', async () => {
+  it('returns 200 with the session cookie (and ignores a non-token bearer marker)', async () => {
     const login = await loginWithCandidates()
-    const token = login.body.token
+    const cookie = sessionCookie(login)
 
     const res = await request(app)
       .get('/api/admin/orgs')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', cookie)
+      .set('Authorization', 'Bearer cookie-session')
     expect(res.status).toBe(200)
     expect(res.body).toHaveProperty('orgs')
   })

@@ -73,7 +73,8 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
   const [loginStage, setLoginStage] = useState('email')
   const [ssoChoices, setSsoChoices] = useState([])
 
-  // Login form state — prefill the last-used email so it's always there
+  // Login form state — prefill the last-used email (kept after a session timeout,
+  // forgotten on sign-out — see AuthContext.logout, M-33)
   const [loginForm, setLoginForm] = useState({
     email: (typeof localStorage !== 'undefined' && localStorage.getItem('mims_last_email')) || '',
     password: '',
@@ -164,9 +165,9 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       return
     }
 
-    if (data.rememberedDeviceToken) {
-      localStorage.setItem('mims_2fa_device_token', data.rememberedDeviceToken)
-    }
+    // A remembered device is now an httpOnly cookie per person, set by the
+    // server (M-96). Drop the old browser-wide copy.
+    localStorage.removeItem('mims_2fa_device_token')
     // Remember the email so the username field is prefilled next time
     const signedInEmail = data.user?.email || loginForm.email
     if (signedInEmail) localStorage.setItem('mims_last_email', signedInEmail)
@@ -352,10 +353,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       const res = await httpFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...loginForm,
-          rememberedDeviceToken: localStorage.getItem('mims_2fa_device_token') || '',
-        })
+        body: JSON.stringify(loginForm)
       })
       const data = await res.json()
 
@@ -498,10 +496,12 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
       const data = await res.json()
       if (!res.ok) return showAlert(data.error || 'Could not send forgot-password code.')
       // L-02: backend no longer returns maskedEmail (account-enumeration hardening),
-      // so show a generic, existence-agnostic confirmation.
+      // so show a generic, existence-agnostic confirmation. The backend sends the
+      // same message for every email; it also tells platform administrators, who
+      // never get a code, what to do instead.
       setForgotMeta(meta => ({ ...meta, maskedEmail: '' }))
       setForgotStep('code')
-      showAlert('If an account exists for that email, a verification code has been sent.', 'success')
+      showAlert(data.message || 'If this email belongs to an account that can reset its password by email, a verification code has been sent. Platform administrators cannot reset by email: ask another platform administrator to reset your password.', 'success')
     } catch {
       showAlert('Cannot connect to server.')
     } finally {
@@ -740,14 +740,18 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                       ? 'Backup Codes'
                       : twoFactor.twoFactorRequired
                         ? 'Two-Factor Verification'
-                        : 'Optional Two-Factor Setup'}
+                        : twoFactor.twoFactorSetupRequired
+                          ? 'Set Up Two-Factor Authentication'
+                          : 'Optional Two-Factor Setup'}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
                     {postLoginData?.backupCodes?.length
                       ? 'Save these backup codes now. Each code works once if you lose access to email or your authenticator app.'
                       : twoFactor.twoFactorRequired
                         ? 'Password is correct. Complete 2FA below to finish signing in.'
-                        : 'This organisation allows 2FA. You can enable it now or skip and continue.'}
+                        : twoFactor.twoFactorSetupRequired
+                          ? 'Your organisation requires two-factor authentication. Set it up below to finish signing in.'
+                          : 'This organisation allows 2FA. You can enable it now or skip and continue.'}
                   </div>
 
                   {postLoginData?.backupCodes?.length ? (
@@ -851,7 +855,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
                       <button className="btn btn-primary btn-block" type="button" onClick={verifyTwoFactor} disabled={loading}>
                         {loading ? 'Processing...' : (twoFactor.twoFactorRequired ? 'Verify and Sign In' : 'Enable 2FA and Continue')}
                       </button>
-                      {!twoFactor.twoFactorRequired && (
+                      {!twoFactor.twoFactorRequired && !twoFactor.twoFactorSetupRequired && (
                         <button className="btn btn-outline btn-block mt-8" type="button" onClick={skipTwoFactorSetup} disabled={loading}>
                           Skip for Now
                         </button>
@@ -889,7 +893,7 @@ export default function LoginPage({ adminMode = false, moduleMode = 'app' }) {
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Forgot Password</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
                 {forgotStep === 'email' && 'Enter your email to receive a verification code.'}
-                {forgotStep === 'code' && `Enter the verification code sent to ${forgotMeta.maskedEmail || 'your email'}.`}
+                {forgotStep === 'code' && `If a code was sent to ${forgotMeta.maskedEmail || 'your email'}, enter it here.`}
                 {forgotStep === 'reset' && 'Verification complete. Set your new password.'}
               </div>
 

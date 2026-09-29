@@ -111,12 +111,16 @@ async function buildPayload({ orgId, caseId }) {
   );
   if (!caseRow) return null;
 
+  // The reporter the validity check approved — the first one we can go back to
+  // (email or phone), primary first — so the case that passes the check is the
+  // one that is sent. The primary reporter with no contact details was sent
+  // while the check passed on another (M-105).
   const reporter = await _one(
     `SELECT first_name, last_name, email, phone, qualification, reporter_type,
             COALESCE(country_of_reporter, country) AS country, institution
        FROM case_contacts
       WHERE case_id = ? AND LOWER(contact_role) = 'reporter'
-      ORDER BY is_primary DESC, id ASC LIMIT 1`,
+      ORDER BY (email IS NOT NULL OR phone IS NOT NULL) DESC, is_primary DESC, id ASC LIMIT 1`,
     [caseId]
   );
 
@@ -165,8 +169,11 @@ async function buildPayload({ orgId, caseId }) {
               p.dose, p.dose_unit, p.route_of_admin AS route, p.indication,
               p.start_date, p.end_date, p.action_taken, p.rechallenge,
               p.batch_lot_number AS lot_number
-         FROM case_ae_versions v JOIN case_ae_product_info p ON p.version_id = v.id
-        WHERE v.case_id = ? ORDER BY v.version_number DESC, p.id ASC`,
+         FROM case_ae_product_info p
+        WHERE p.version_id = (SELECT v.id FROM case_ae_versions v
+                                JOIN case_ae_product_info p2 ON p2.version_id = v.id
+                               WHERE v.case_id = ? ORDER BY v.version_number DESC LIMIT 1)
+        ORDER BY p.id ASC`,
       [caseId]
     );
   }
@@ -197,8 +204,11 @@ async function buildPayload({ orgId, caseId }) {
             e.reported_causality, e.start_date AS onset_date, e.end_date,
             e.is_serious, e.is_death, e.is_life_threatening, e.is_hospitalization,
             e.is_disability, e.is_congenital_anomaly, e.is_other_medically_important
-       FROM case_ae_versions v JOIN case_ae_events e ON e.version_id = v.id
-      WHERE v.case_id = ? ORDER BY v.version_number DESC, e.id ASC`,
+       FROM case_ae_events e
+      WHERE e.version_id = (SELECT v.id FROM case_ae_versions v
+                              JOIN case_ae_events e2 ON e2.version_id = v.id
+                             WHERE v.case_id = ? ORDER BY v.version_number DESC LIMIT 1)
+      ORDER BY e.id ASC`,
     [caseId]
   );
   if (!events.length && aeIntake?.reaction_description) {
@@ -222,6 +232,41 @@ async function buildPayload({ orgId, caseId }) {
        FROM case_pc_intake WHERE case_id = ? ORDER BY id DESC LIMIT 1`,
     [caseId]
   );
+  // What the investigator records on the latest PC version wins over the
+  // intake, key by key; the complaint's keys are unchanged (M-102).
+  const pcGeneral = await _one(
+    `SELECT g.complaint_description, g.pc_category
+       FROM case_pc_versions v JOIN case_pc_general g ON g.version_id = v.id
+      WHERE v.case_id = ? ORDER BY v.version_number DESC LIMIT 1`,
+    [caseId]
+  );
+  const pcProduct = await _one(
+    `SELECT p.product_name, p.lot_number, p.expiry_date
+       FROM case_pc_versions v JOIN case_pc_product_info p ON p.version_id = v.id
+      WHERE v.case_id = ? ORDER BY v.version_number DESC, p.id ASC LIMIT 1`,
+    [caseId]
+  );
+  const complaint = pcIntake || pcGeneral || pcProduct
+    ? {
+        ...(pcIntake || {}),
+        product_name: pcProduct?.product_name || pcIntake?.product_name || null,
+        batch_lot_number: pcProduct?.lot_number || pcIntake?.batch_lot_number || null,
+        expiry_date: pcProduct?.expiry_date || pcIntake?.expiry_date || null,
+        complaint_category: pcGeneral?.pc_category || pcIntake?.complaint_category || null,
+        complaint_description: pcGeneral?.complaint_description || pcIntake?.complaint_description || null,
+      }
+    : null;
+
+  // Day 0: the awareness date the agent records on the AE version, from the
+  // latest version that has one; the case field and the received date only
+  // when no version records it. The version's date was never sent (M-102).
+  const aeAwareness = await _one(
+    `SELECT g.date_of_awareness
+       FROM case_ae_versions v JOIN case_ae_general g ON g.version_id = v.id
+      WHERE v.case_id = ? AND g.date_of_awareness IS NOT NULL
+      ORDER BY v.version_number DESC LIMIT 1`,
+    [caseId]
+  );
 
   const payload = {
     payload_version: PAYLOAD_VERSION,
@@ -238,7 +283,7 @@ async function buildPayload({ orgId, caseId }) {
       // Day 0 for the regulatory clock is the day MIMS became aware, NOT the day
       // the receiving system ingests this. It is non-delegable (GVP Module VI)
       // and must travel with the case.
-      awareness_date: caseRow.awareness_date || caseRow.date_received || null,
+      awareness_date: aeAwareness?.date_of_awareness || caseRow.awareness_date || caseRow.date_received || null,
       date_received: caseRow.date_received || null,
       intake_channel: caseRow.intake_channel || null,
       priority: caseRow.priority || null,
@@ -255,7 +300,7 @@ async function buildPayload({ orgId, caseId }) {
     patient,
     drugs,
     events,
-    complaint: pcIntake || null,
+    complaint,
     coding: {
       // Stated explicitly so a receiving system never mistakes absence for an
       // omission: MIMS does not code, by design.

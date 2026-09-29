@@ -13,6 +13,7 @@ const router  = express.Router();
 const pool    = require('../../database/db');
 const { authenticate, requireRole } = require('../../middleware/auth');
 const { invalidateCache: invalidatePasswordPolicyCache } = require('../../services/passwordPolicy');
+const { logAudit } = require('../../utils/auditLog');
 
 // ── Config keys + defaults ────────────────────────────────────────────────────
 const KEYS = {
@@ -63,14 +64,10 @@ async function upsertConfig(key, value) {
   );
 }
 
+// Shared writer: logs a failed write instead of discarding it; outside a
+// transaction it does not block the admin action.
 async function audit(userId, action, details) {
-  try {
-    await pool.execute(
-      `INSERT INTO audit_logs (user_id, entity, entity_id, action, details)
-       VALUES (?, 'system_params', NULL, ?, ?)`,
-      [userId, action, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, null, action, 'system_params', null, details);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

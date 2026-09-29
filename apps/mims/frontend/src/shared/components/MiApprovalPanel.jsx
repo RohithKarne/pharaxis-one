@@ -122,7 +122,7 @@ function ClassificationCard({ miTabId, H, onChange }) {
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <label style={lbl}>
             <input type="checkbox" checked={offLabel} onChange={e => save({ is_off_label: e.target.checked })} />
-            Off-label inquiry (will require two-signer approval per FDA guidance)
+            Off-label inquiry (needs two signers before release)
           </label>
           <label style={lbl}>
             <input type="checkbox" checked={solicited} onChange={e => save({ is_solicited: e.target.checked })} />
@@ -151,6 +151,13 @@ function ClassificationCard({ miTabId, H, onChange }) {
 // ── Two-signer approval card ────────────────────────────────────────────────
 
 function ApprovalCard({ responseId, H, onChange }) {
+  const { securityAccess, hasCapability, user } = useAuth()
+  // Both signatures need "Approve letter", and the writer does not sign their
+  // own response; the server refuses anyone else (M-86).
+  // Read the resolved privilege list: hasCapability says yes to everything for
+  // a user in no security group ("unrestricted"), whatever their role (M-93).
+  const privs = securityAccess?.privileges
+  const canSign = Array.isArray(privs) ? privs.includes('case.letter.approve') : hasCapability('case.letter.approve')
   const [state, setState] = useState(null)
   const [signing, setSigning] = useState(null) // 'reviewer' | 'approver' | null
   const [password, setPassword] = useState('')
@@ -195,6 +202,10 @@ function ApprovalCard({ responseId, H, onChange }) {
   }
 
   if (!state) return null
+  const myId = Number(user?.id ?? user?.userId)
+  const isWriter = state.author_id != null && Number(state.author_id) === myId
+  // The approver must be someone other than the reviewer (the server refuses).
+  const isReviewer = state.reviewer?.id != null && Number(state.reviewer.id) === myId
   if (!state.required && !state.reviewer && !state.approver) {
     return (
       <div style={{ padding: 10, fontSize: 12, color: 'var(--text-muted)',
@@ -216,7 +227,8 @@ function ApprovalCard({ responseId, H, onChange }) {
           subtitle="Technical accuracy"
           signed={state.reviewer}
           status={state.status}
-          showSignBtn={state.status === 'DRAFT'}
+          showSignBtn={canSign && !isWriter && state.status === 'READY'}
+          waitingText={state.status === 'READY' ? 'waiting for a reviewer' : 'waiting for Submit for Review'}
           onSign={() => { setSigning('reviewer'); setPassword(''); setReason('') }}
         />
         <SignerSlot
@@ -224,8 +236,8 @@ function ApprovalCard({ responseId, H, onChange }) {
           subtitle="Compliance / release"
           signed={state.approver}
           status={state.status}
-          showSignBtn={state.status === 'REVIEWED'}
-          requiredRole={state.required_approver_role}
+          showSignBtn={canSign && !isWriter && !isReviewer && state.status === 'REVIEWED'}
+          waitingText={state.status === 'REVIEWED' ? 'waiting for an approver' : 'waiting for the reviewer'}
           onSign={() => { setSigning('approver'); setPassword(''); setReason('') }}
         />
       </div>
@@ -244,8 +256,8 @@ function ApprovalCard({ responseId, H, onChange }) {
             </h3>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 0 }}>
               {signing === 'reviewer'
-                ? 'I have reviewed this MI response for technical accuracy under 21 CFR Part 11.'
-                : 'I approve this MI response for release under 21 CFR Part 11.'}
+                ? 'I have reviewed this MI response for technical accuracy.'
+                : 'I approve this MI response for release.'}
             </p>
             <label style={{ ...lbl, marginBottom: 4 }}>Password</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)}
@@ -269,7 +281,7 @@ function ApprovalCard({ responseId, H, onChange }) {
   )
 }
 
-function SignerSlot({ title, subtitle, signed, showSignBtn, requiredRole, onSign }) {
+function SignerSlot({ title, subtitle, signed, showSignBtn, waitingText, onSign }) {
   return (
     <div style={{
       padding: 10, borderRadius: 6, border: '1px solid var(--border)',
@@ -284,17 +296,12 @@ function SignerSlot({ title, subtitle, signed, showSignBtn, requiredRole, onSign
         </div>
       ) : (
         <>
-          {requiredRole && (
-            <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
-              required role: {requiredRole}
-            </div>
-          )}
           {showSignBtn && (
             <button onClick={onSign} style={{ ...primaryBtnSm, marginTop: 6, width: '100%' }}>Sign as {title.toLowerCase()}</button>
           )}
           {!showSignBtn && (
             <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              waiting for previous step
+              {waitingText}
             </div>
           )}
         </>

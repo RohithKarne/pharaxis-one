@@ -23,14 +23,40 @@ function readCookie(req, name) {
   return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : null;
 }
 
+// sessions.expires_at is written as a UTC 'YYYY-MM-DD HH:MM:SS' (trackSessionToken).
+// new Date() reads that bare form as local time, so in IST a session was refused
+// 5.5 hours early. A DATETIME column arrives as a Date (the pool runs in UTC) and
+// is used as it is.
+function sessionExpiryMs(value) {
+  if (value == null || value === '') return null;
+  if (value instanceof Date) return value.getTime();
+  const text = String(value).trim();
+  const utc = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) ? `${text.replace(' ', 'T')}Z` : text;
+  return new Date(utc).getTime();
+}
+// A bearer value counts only when it looks like a JWT (three base64url parts).
+// The web app no longer receives the session token (T15), so its "signed in"
+// marker still rides along as `Bearer cookie-session`; ignoring anything that is
+// not a JWT lets the httpOnly cookie carry the session instead.
+const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
 function readBearer(req) {
   const authHeader = req.headers['authorization'] || '';
   if (!authHeader.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7).trim();
-  return token && token !== 'null' && token !== 'undefined' ? token : null;
+  return JWT_SHAPE.test(token) ? token : null;
 }
 
-async function validateAccessToken(token) {
+// A session opened for a forced password change (sign-in with password_reset_required)
+// may only do what the set-new-password screen needs; everything else refuses it.
+function refusePendingPasswordReset(session, allowPasswordReset) {
+  if (session.passwordResetRequired && !allowPasswordReset) {
+    throw createAuthError('Set a new password before continuing.', 'PASSWORD_RESET_REQUIRED', 403, false);
+  }
+  return session;
+}
+
+async function validateAccessToken(token, { allowPasswordReset = false } = {}) {
   if (!token) throw createAuthError('Access denied. No token provided.', 'AUTH_TOKEN_MISSING');
 
   // ── Redis session cache (60s TTL) — eliminates DB hit on every request ──────
@@ -43,7 +69,7 @@ async function validateAccessToken(token) {
     } catch (_) {
       throw createAuthError('Session revoked or invalid. Please log in again.', 'AUTH_TOKEN_INVALID');
     }
-    return { ...cached, token };
+    return refusePendingPasswordReset({ ...cached, token }, allowPasswordReset);
   }
 
   let decoded;
@@ -63,7 +89,7 @@ async function validateAccessToken(token) {
 
     if (sessionRow) {
       sessionFound = true;
-      const expiresAt = sessionRow.expires_at ? new Date(sessionRow.expires_at).getTime() : null;
+      const expiresAt = sessionExpiryMs(sessionRow.expires_at);
       if (expiresAt && !Number.isNaN(expiresAt) && expiresAt < Date.now()) {
         await pool.execute('DELETE FROM sessions WHERE id = ?', [sessionRow.id]).catch(() => {});
         throw createAuthError('Session expired. Please log in again.', 'SESSION_EXPIRED');
@@ -91,15 +117,28 @@ async function validateAccessToken(token) {
 
   // Populate cache for subsequent requests
   await sessionCacheSet(token, result);
-  return result;
+  return refusePendingPasswordReset(result, allowPasswordReset);
 }
 
 /**
  * authenticate — verifies JWT and injects req.user
  * req.user = { userId, email, role, orgId, siteId, token }
  * Platform admin compatibility: orgId = null, siteId = null
+ * A forced password-change session is refused (403 PASSWORD_RESET_REQUIRED).
  */
-async function authenticate(req, res, next) {
+function authenticate(req, res, next) {
+  return authenticateRequest(req, res, next, { allowPasswordReset: false });
+}
+
+/**
+ * authenticateAllowingPasswordReset — as authenticate, but also admits a forced
+ * password-change session. Only for the routes the set-new-password screen calls.
+ */
+function authenticateAllowingPasswordReset(req, res, next) {
+  return authenticateRequest(req, res, next, { allowPasswordReset: true });
+}
+
+async function authenticateRequest(req, res, next, options) {
   const token = readBearer(req) || readCookie(req, 'mims_token');
   if (!token) {
     return res.status(401).json({
@@ -110,7 +149,7 @@ async function authenticate(req, res, next) {
   }
 
   try {
-    req.user = await validateAccessToken(token);
+    req.user = await validateAccessToken(token, options);
   } catch (err) {
     const status = Number(err?.status || 401);
     const message = String(err?.message || 'Invalid or expired token. Please log in again.');
@@ -232,9 +271,43 @@ async function requireAccessNotExpired(req, res, next) {
       });
     }
     next();
-  } catch (_) {
-    next();
+  } catch (err) {
+    // Fail closed: if the expiry cannot be read, an expired grant must not slip through.
+    console.error('requireAccessNotExpired: organisation access lookup failed:', err.message);
+    return res.status(503).json({
+      error: 'Organisation access could not be checked. Please try again shortly.',
+      error_code: 'AUTH_SERVICE_UNAVAILABLE',
+      should_logout: false,
+    });
   }
 }
 
-module.exports = { authenticate, requireRole, requireCapability, requireScopedCapability, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate };
+/**
+ * requireModule(moduleKey) — the admin's module grant, enforced on the server.
+ * Same rule as the browser's ModuleAccessGuard: platform admins pass; everyone
+ * else needs a user_module_permissions row for the module. Module grants were
+ * checked only in the browser, so any signed-in user could call e.g. the report
+ * APIs directly (T11 / M-69). Use after authenticate.
+ */
+function requireModule(moduleKey) {
+  return async (req, res, next) => {
+    try {
+      if (hasGlobalAdminScope(req.user)) return next();
+      const [[row]] = await pool.execute(
+        'SELECT 1 AS ok FROM user_module_permissions WHERE user_id = ? AND module = ? AND can_access = 1 LIMIT 1',
+        [req.user?.userId, moduleKey]
+      );
+      if (row) return next();
+      return res.status(403).json({
+        error: 'You do not have access to this module.',
+        error_code: 'MODULE_FORBIDDEN',
+        should_logout: false,
+      });
+    } catch (err) {
+      console.error(`requireModule(${moduleKey}) failed:`, err);
+      return res.status(500).json({ error: 'Permission check failed.', error_code: 'MODULE_CHECK_ERROR' });
+    }
+  };
+}
+
+module.exports = { authenticate, authenticateAllowingPasswordReset, requireRole, requireCapability, requireScopedCapability, requireModule, requireOrg, requireAccessNotExpired, readCookie, validateAccessToken, sessionCacheInvalidate, sessionExpiryMs, readBearer };

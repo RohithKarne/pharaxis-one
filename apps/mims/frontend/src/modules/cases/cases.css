@@ -1964,6 +1964,14 @@
   flex-wrap: wrap;
 }
 
+/* Narrow panes (~730 px): name, badge and Remove stay on one line and the
+   details wrap onto their own line below, instead of the name wrapping under
+   the badge and over the details (M-52). */
+.cf-contact-card { flex-wrap: wrap; }
+.cf-contact-name { flex-wrap: wrap; }
+.cf-contact-name-text { overflow-wrap: anywhere; }
+.cf-contact-card .cf-contact-meta { order: 3; flex: 1 1 100%; }
+
 .cf-add-contact-form {
   background: #f8fafc;
   border: 1px solid #d1d9e6;
@@ -4146,6 +4154,12 @@
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--text-muted, #6b7280);
+}
+
+/* An unsaved edit shown beside the saved value (M-109). */
+.cf-strip-pending {
+  color: #b45309;
+  font-style: italic;
 }
 
 .cf-strip-sep { color: var(--border, #d1d5db); }

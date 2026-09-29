@@ -1,19 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from '../../../shared/utils/toast'
 import AETabPanel from './AETabPanel'
 import StickySectionNav from '../../../shared/components/StickySectionNav'
 import { httpFetch } from '../../../shared/api/httpFetch.js'
+import { toDateInputValues } from '../../../shared/utils/dateOnly.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
+// "Reactions Coding" (MedDRA coder) and "Causality" (company causality matrix)
+// are not shown: coding and company causality belong to the receiving safety
+// system (product boundary 2026-07-28; Rohith, 2026-09-29). The panels are
+// kept — restoring a section is putting its line back here.
 const AE_TABS = [
   { key: 'general',         label: 'General' },
   { key: 'events',          label: 'Events' },
   { key: 'drugs',           label: 'Drugs' },
-  { key: 'meddra-coding',   label: 'Reactions Coding' },
-  { key: 'causality',       label: 'Causality' },
   { key: 'patient-info',    label: 'AE Patient Info' },
   { key: 'lab-results',     label: 'Lab Results' },
   { key: 'lab-notes',       label: 'Lab Notes' },
@@ -145,9 +148,12 @@ function isFilled(value) {
 
 function getTrackedAeFields(fields, getFieldConfig, sectionName) {
   if (!Array.isArray(fields) || fields.length === 0) return []
-  const requiredFields = fields.filter(field => getFieldConfig?.(sectionName, field.label)?.is_required)
+  // A field the admin has hidden is not drawn, so it does not count either —
+  // otherwise a section with a hidden field can never reach 100%.
+  const shown = fields.filter(field => !getFieldConfig?.(sectionName, field.label)?.is_hidden)
+  const requiredFields = shown.filter(field => getFieldConfig?.(sectionName, field.label)?.is_required)
   // Prefer admin-configured required fields when present; otherwise fall back to the fields this tab actually renders.
-  return requiredFields.length > 0 ? requiredFields : fields
+  return requiredFields.length > 0 ? requiredFields : shown
 }
 
 function readAeFieldValue(field, data) {
@@ -178,13 +184,26 @@ function computeAeRowCompletion(rows, fields, getFieldConfig, sectionName) {
 export default function CaseAETab({
   id, headers, setSavedMsg, users, getFieldConfig, getPicklistOptions, onCountChange,
   formConfig, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType,
+  saveDynFields, caseType, registerSectionSave,
 }) {
   const ctx = useCaseFieldContext()
+  // Admin settings for the panel's own fields — formConfig.core entries carry
+  // their section and field name (migration 109 links the rows).
+  const panelField = useMemo(() => {
+    const entries = Object.values(formConfig?.core || {})
+    return (section, name, fallback) => {
+      const def = entries.find(e => e.section_name === section && e.field_name === name)
+      return def
+        ? { label: def.label || fallback, required: !!def.is_required, hidden: !!def.is_hidden }
+        : { label: fallback, required: false, hidden: false }
+    }
+  }, [formConfig])
   const [aeVersions,   setAeVersions]   = useState([])
   const [activeAeVer,  setActiveAeVer]  = useState(null)
   const [activeAeTab,  setActiveAeTab]  = useState('general')
   const [aeTabData,    setAeTabData]    = useState({})
+  // Last loaded/saved copy of each AE section, so Save Case knows what changed.
+  const aeSaved = useRef({})
   const [aeTabLoading, setAeTabLoading] = useState(false)
 
   const [aeTransmissions, setAeTransmissions] = useState([])
@@ -222,7 +241,7 @@ export default function CaseAETab({
     if (!versionId) return
     const draftKey = `mims_case_${id}_ae_${versionId}_${activeAeTab}`
     try {
-      const raw = localStorage.getItem(draftKey)
+      const raw = sessionStorage.getItem(draftKey)
       if (!raw) return
       const parsed = JSON.parse(raw)
       if (parsed !== null && parsed !== undefined) {
@@ -232,14 +251,6 @@ export default function CaseAETab({
       // no-op
     }
   }, [activeAeTab, activeAeVer?.id, id])
-
-  useEffect(() => {
-    const versionId = activeAeVer?.id
-    if (!versionId) return
-    const payload = aeTabData[`${versionId}_${activeAeTab}`]
-    if (payload === undefined) return
-    try { localStorage.setItem(`mims_case_${id}_ae_${versionId}_${activeAeTab}`, JSON.stringify(payload)) } catch { /* no-op */ }
-  }, [activeAeTab, activeAeVer?.id, aeTabData, id])
 
   async function loadAEVersions() {
     try {
@@ -256,8 +267,16 @@ export default function CaseAETab({
     setAeTabLoading(true)
     try {
       const res  = await httpFetch(`${API}/cases/ae/versions/${versionId}/${tabKey}`, { headers })
-      const data = await res.json()
-      setAeTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: data }))
+      const data = toDateInputValues(await res.json())
+      aeSaved.current[`${versionId}_${tabKey}`] = JSON.stringify(data)
+      // An unsaved draft for this version + section wins over the server copy,
+      // except on a locked version, which shows only what was saved. The saved
+      // copy stays in aeSaved, so a restored draft counts as an unsaved change.
+      let draft = null
+      if (!isLocked(aeVersions.find(v => v.id === versionId))) {
+        try { draft = JSON.parse(sessionStorage.getItem(`mims_case_${id}_ae_${versionId}_${tabKey}`)) } catch { /* no-op */ }
+      }
+      setAeTabData(prev => ({ ...prev, [`${versionId}_${tabKey}`]: draft ?? data }))
     } catch { /* ignore tab fetch errors */ }
     finally { setAeTabLoading(false) }
   }
@@ -312,21 +331,43 @@ export default function CaseAETab({
     }
   }
 
+  // Only what the person types is a draft. Row lists (arrays) are saved to the
+  // server as each row is added or removed, so they are never kept as a draft.
+  function editAETab(d) {
+    setAeTabData(prev => ({ ...prev, [`${activeAeVer?.id}_${activeAeTab}`]: d }))
+    if (Array.isArray(d)) return
+    try { sessionStorage.setItem(`mims_case_${id}_ae_${activeAeVer?.id}_${activeAeTab}`, JSON.stringify(d)) } catch { /* no-op */ }
+  }
+
   const [aeTabSaving, setAeTabSaving] = useState(false)
   async function saveAETab() {
-    if (!activeAeVer || isLocked(activeAeVer) || aeTabSaving) return
+    if (!activeAeVer || isLocked(activeAeVer) || aeTabSaving) return false
     setAeTabSaving(true)
     const tabData = aeTabData[`${activeAeVer.id}_${activeAeTab}`] || {}
     try {
       const res  = await httpFetch(`${API}/cases/ae/versions/${activeAeVer.id}/${activeAeTab}`, { method: 'PUT', headers, body: JSON.stringify(tabData) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setAeTabData(prev => ({ ...prev, [`${activeAeVer.id}_${activeAeTab}`]: data }))
-      localStorage.removeItem(`mims_case_${id}_ae_${activeAeVer.id}_${activeAeTab}`)
+      const saved = toDateInputValues(data)
+      aeSaved.current[`${activeAeVer.id}_${activeAeTab}`] = JSON.stringify(saved)
+      setAeTabData(prev => ({ ...prev, [`${activeAeVer.id}_${activeAeTab}`]: saved }))
+      sessionStorage.removeItem(`mims_case_${id}_ae_${activeAeVer.id}_${activeAeTab}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
-    } catch (err) { toast.error(err.message) }
+      return true
+    } catch (err) { toast.error(err.message); return false }
     finally { setAeTabSaving(false) }
   }
+
+  // Let the page's Save Case save this AE section too when it has unsaved edits.
+  useEffect(() => {
+    if (!registerSectionSave || !activeAeVer || isLocked(activeAeVer)) return undefined
+    const key = `${activeAeVer.id}_${activeAeTab}`
+    return registerSectionSave('ae', {
+      label: `AE ${activeAeTab}`,
+      isDirty: () => aeSaved.current[key] !== undefined && JSON.stringify(aeTabData[key]) !== aeSaved.current[key],
+      save: saveAETab,
+    })
+  })
 
   async function loadAeTransmissions() {
     setAeTxLoading(true)
@@ -436,11 +477,12 @@ export default function CaseAETab({
                 <AETabPanel
                   tabKey={activeAeTab}
                   data={aeTabData[`${activeAeVer?.id}_${activeAeTab}`] || {}}
-                  onChange={d => setAeTabData(prev => ({ ...prev, [`${activeAeVer?.id}_${activeAeTab}`]: d }))}
+                  onChange={editAETab}
                   locked={isLocked(activeAeVer)}
                   getFieldConfig={getFieldConfig}
                   getPicklistOptions={getPicklistOptions}
                   versionId={activeAeVer?.id}
+                  panelField={panelField}
                   headers={headers}
                   caseId={id}
                   onSave={saveAETab}
@@ -470,6 +512,10 @@ export default function CaseAETab({
                 <option value="expedited">Expedited (15 days)</option>
                 <option value="urgent">Urgent (7 days)</option>
               </select>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                The case sets the minimum, counted from the awareness date: serious → 15 days;
+                fatal or life-threatening in a clinical trial → 7 days. You can choose a stricter one.
+              </div>
             </div>
             <div className="cf-form-field cf-form-field--full">
               <label>Clinical Narrative</label>

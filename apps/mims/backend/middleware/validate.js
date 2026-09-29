@@ -77,6 +77,16 @@ const schemas = {
     product_id:        id().optional(),
     workflow_state_id: id().optional(),
     assigned_to:       id().optional(),
+    // Inbox "Create case": the agent working the email owns the case it becomes
+    // (decision 2026-09-29, M-18). New Case does not send it — stays unassigned.
+    assign_to_me:      Joi.boolean().optional(),
+    // The New Case screen's steps 2–3. Unlisted keys are stripped, so without
+    // these the reporter, patient and AE/PC intake were silently thrown away and
+    // never reached case_reporter / case_patient / case_*_intake (360 walk M-49).
+    reporter:          Joi.object().optional(),
+    patient:           Joi.object().optional(),
+    ae_intake:         Joi.object().optional(),
+    pc_intake:         Joi.object().optional(),
   }),
 
   updateCase: Joi.object({

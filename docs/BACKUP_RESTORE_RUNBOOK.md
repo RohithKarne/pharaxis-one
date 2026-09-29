@@ -72,6 +72,60 @@ If deploy fails:
 3. restore DB only if migration/data corruption occurred
 4. rerun postdeploy smoke on rolled-back release
 
+## Uploaded Files
+
+Added 2026-09-27. A database backup holds only where each uploaded file sits, not the file. Restore the database alone and every logo, document and attachment it points to is missing. Back up each app's upload folder with its database, and restore them together.
+
+What each app keeps on disk:
+
+- `mims` — organisation logos, content-management documents, case attachments, email attachments, and the original email behind each imported case. All under one storage folder.
+- `cp-portal` — client logos, documents, safety-alert attachments and portal submission attachments. All under one uploads folder.
+
+Settings that move them:
+
+- `mims` — one setting can move case attachments to another folder; back that folder up too. Another sends case attachments to cloud storage instead; they are then protected by that bucket, not by this procedure. Everything else stays in the storage folder.
+- `cp-portal` — none. Local disk is the only storage it has.
+
+Backup, in the same window as each database backup:
+
+1. take the database backup first, then the file archive — a file is saved before its record, so this order never leaves a record without its file
+2. keep the archive off-host with the database backup, same retention
+3. record the archive name next to the backup artifact id
+
+Restore:
+
+1. stop the app
+2. restore the database as above
+3. move the current upload folder aside, then unpack the archive in its place
+4. make sure the app's user can read and write the restored folder
+5. start the app, then open one logo and download one document or attachment named in the restored database — each must come back as the file itself; MIMS answers a missing logo with its home page, not an error, so check it is an image
+
+Commands, run from the repository root on the app host:
+
+```bash
+# backup
+tar -czf mims-files-$(date +%Y%m%d-%H%M).tar.gz -C apps/mims/backend storage
+tar -czf cp-files-$(date +%Y%m%d-%H%M).tar.gz -C apps/cp-portal/backend uploads
+# mims only, when STORAGE_LOCAL_ROOT points outside apps/mims/backend/storage
+tar -czf mims-attachments-$(date +%Y%m%d-%H%M).tar.gz -C "$(dirname "$STORAGE_LOCAL_ROOT")" "$(basename "$STORAGE_LOCAL_ROOT")"
+
+# restore (app stopped)
+mv apps/mims/backend/storage apps/mims/backend/storage.pre-restore
+tar -xzf mims-files-<stamp>.tar.gz -C apps/mims/backend
+mv apps/cp-portal/backend/uploads apps/cp-portal/backend/uploads.pre-restore
+tar -xzf cp-files-<stamp>.tar.gz -C apps/cp-portal/backend
+```
+
+Where these folders are set:
+
+- `apps/mims/backend/routes/platformAdmin.js` — org logos, `storage/org_logos`
+- `apps/mims/backend/routes/cm/documents.js`, `modules.js`, `mergeReports.js` — `storage/cm_documents`
+- `apps/mims/backend/services/fileStorageService.js` — attachments, `storage/uploads`, or `STORAGE_LOCAL_ROOT`; `STORAGE_PROVIDER=s3` with `STORAGE_S3_BUCKET` for cloud
+- `apps/mims/backend/services/emailPoller.js` — `storage/email_attachments`
+- `apps/mims/backend/services/emailCaseImportService.js` — `storage/email_case_sources`
+- `apps/cp-portal/backend/routes/admin/branding.js`, `admin/documents.js`, `admin/safety.js`, `portal/submit.js` — `uploads/logos`, `uploads/private/…`
+- `apps/cp-portal/backend/utils/storage.js` — only `local` is implemented
+
 ## Evidence Required
 
 Record each drill:

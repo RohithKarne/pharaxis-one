@@ -6,7 +6,6 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../database/db');
 const bcrypt = require('bcrypt');
-const userModel = require('../../models/userModel');
 const { authenticate, requireRole, requireOrg } = require('../../middleware/auth');
 const { validate, schemas } = require('../../middleware/validate');
 const { logService } = require('../../services/serviceLogger');
@@ -317,47 +316,6 @@ router.get('/audit-logs', authenticate, requireAdminConsoleAccess, async (req, r
     const total = Number(countRow?.total || 0);
     res.json({ logs, total, page, page_size: pageSize, total_pages: Math.max(1, Math.ceil(total / pageSize)) });
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
-});
-
-// ─── USERS (admin view) ───────────────────────────────────────
-router.get('/users', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
-  try {
-    const [users] = await pool.execute(
-      hasPlatformAdminScope(req)
-        ? 'SELECT id, name, email, role, is_active, created_at FROM users ORDER BY created_at DESC'
-        : `SELECT DISTINCT u.id, u.name, u.email, u.role, u.is_active, u.created_at
-           FROM users u
-           INNER JOIN user_org_access uoa ON uoa.user_id = u.id
-           WHERE uoa.org_id = ? AND uoa.is_active = 1
-           ORDER BY u.created_at DESC`,
-      hasPlatformAdminScope(req) ? [] : [req.user.orgId]
-    );
-    res.json({ users });
-  } catch (err) { res.status(500).json({ error: 'Server error.' }); }
-});
-
-router.post('/users', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password are required.' });
-    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-    const validRoles = ['admin', 'agent', 'reviewer', 'content_manager'];
-    const userRole = role && validRoles.includes(role) ? role : 'agent';
-    if (await userModel.emailExists(email)) return res.status(409).json({ error: 'An account with this email already exists.' });
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await userModel.create({
-      name,
-      email: email.toLowerCase().trim(),
-      password: hashedPassword,
-      role: userRole,
-      email_verified: 1,
-    });
-    await audit(req.user.userId, req.user.email, 'CREATE', 'user', newUser.id, { name, email, role: userRole });
-    res.status(201).json({ user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role, is_active: 1, created_at: newUser.created_at } });
-  } catch (err) {
-    console.error('Admin create user error:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
 });
 
 // ─── ELECTRONIC SIGNATURE VERIFY (ESIG-01, ESIG-02, ESIG-03) ──
@@ -674,6 +632,22 @@ router.delete('/email-accounts/:id', authenticate, requireRole('admin', 'platfor
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 
+// imapflow words its timeouts and an early hang-up differently from the old `imap` client.
+// Reworded to the old text so the result an admin sees, and the stored test error, are
+// unchanged. Everything else already reads the same: the socket error for a bad host or a
+// refused port, the server's own reply for a refused login or a missing folder.
+const IMAP_TEST_ERROR_TEXT = {
+  CONNECT_TIMEOUT: 'Timed out while connecting to server',
+  GREETING_TIMEOUT: 'Timed out while authenticating with server',
+  ETIMEOUT: 'Timed out while authenticating with server', // only reaches us from inside connect()
+  ClosedAfterConnectText: 'Connection ended unexpectedly',
+  ClosedAfterConnectTLS: 'Connection ended unexpectedly',
+};
+
+function imapTestErrorText(err) {
+  return IMAP_TEST_ERROR_TEXT[err.code] || err.responseText || err.message;
+}
+
 // POST — test IMAP connection
 router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 'platform_admin'), requireOrg, async (req, res) => {
   try {
@@ -690,28 +664,30 @@ router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 
     if (!account.imap_host || !account.imap_port || !account.imap_username || !account.imap_password)
       return res.status(400).json({ error: 'IMAP configuration incomplete.' });
 
-    const Imap = require('imap');
-    const tls = account.imap_encryption === 'SSL/TLS';
-    const starttls = account.imap_encryption === 'STARTTLS';
-
-    const imap = new Imap({
-      user: account.imap_username,
-      password: decryptMailboxSecret(account.imap_password),
+    // Same client and settings as the email poller, so a pass here means the poller can
+    // get in too. The 10s budgets are the ones the old client had: to connect, then to be
+    // greeted and logged in. socketTimeout stops a server that goes quiet mid-session from
+    // holding the request for imapflow's five-minute default.
+    const { ImapFlow } = require('imapflow');
+    const client = new ImapFlow({
       host: account.imap_host,
       port: account.imap_port,
-      tls,
-      starttls,
-      tlsOptions: { rejectUnauthorized: false },
-      connTimeout: 10000,
-      authTimeout: 10000,
+      secure: account.imap_encryption === 'SSL/TLS',
+      auth: {
+        user: account.imap_username,
+        pass: decryptMailboxSecret(account.imap_password),
+      },
+      tls: { rejectUnauthorized: false },
+      logger: false,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
     });
-
-    let settled = false;
+    // A failure after connect() is also emitted as an 'error' event. The awaited calls
+    // below already report it; left unheard, the event would crash the API process.
+    client.on('error', () => {});
 
     function finish(status, rawError) {
-      if (settled) return;
-      settled = true;
-      try { imap.destroy(); } catch (_) {}
       const errorMsg = rawError ? sanitizeError(rawError, account) : null;
       const tested_at = new Date().toISOString().replace('T', ' ').substring(0, 19);
       pool.execute(
@@ -730,16 +706,18 @@ router.post('/email-accounts/:id/test-imap', authenticate, requireRole('admin', 
       res.json({ status, error: errorMsg, tested_at });
     }
 
-    imap.once('ready', () => {
-      imap.openBox(account.mailbox_folder || 'INBOX', true, (err) => {
-        if (err) return finish('fail', err.message);
-        finish('pass', null);
-      });
-    });
-    imap.once('error', (err) => finish('fail', err.message));
-    imap.once('end', () => { if (!settled) finish('fail', 'Connection ended unexpectedly'); });
-
-    try { imap.connect(); } catch (err) { finish('fail', err.message); }
+    let status = 'pass';
+    let rawError = null;
+    try {
+      await client.connect();
+      await client.mailboxOpen(account.mailbox_folder || 'INBOX', { readOnly: true });
+    } catch (err) {
+      status = 'fail';
+      rawError = imapTestErrorText(err);
+    }
+    finish(status, rawError);
+    // Sends LOGOUT only if logged in, and always closes the socket.
+    await client.logout().catch(() => {});
   } catch (err) { res.status(500).json({ error: 'Server error.' }); }
 });
 

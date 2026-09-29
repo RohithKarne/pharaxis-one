@@ -27,8 +27,13 @@ export default function useCaseForm(id, token) {
   const [dynFieldSaving, setDynFieldSaving] = useState(false)
   const [dynFieldErrors, setDynFieldErrors] = useState({})
   const [draftStatus, setDraftStatus] = useState('')
+  // A restored draft stays flagged until it is saved or discarded; the
+  // "Draft restored" chip alone vanished after four seconds (M-109).
+  const [draftRestored, setDraftRestored] = useState(false)
 
   const autoSaveTimer = useRef(null)
+  // Last loaded/saved additional-field values, so Save Case knows if they changed.
+  const dynSaved = useRef('{}')
   const draftRef = useRef({ infoForm, dynFieldValues, caseType: '' })
 
   // WP6: clear the pending autosave timer on unmount — otherwise the 15s timer can fire
@@ -42,12 +47,15 @@ export default function useCaseForm(id, token) {
 
   const loadCase = useCallback(async () => {
     try {
-      const [cRes, sRes, uRes] = await Promise.all([
+      const [cRes, sRes] = await Promise.all([
         httpFetch(`${API}/cases/${id}`, { headers }),
-        httpFetch(`${API}/admin/workflow-states`, { headers }),
-        httpFetch(`${API}/users`, { headers }),
+        httpFetch(`${API}/cases/workflow-states`, { headers }),
       ])
-      const [c, s, u] = await Promise.all([cRes.json(), sRes.json(), uRes.json()])
+      const [c, s] = await Promise.all([cRes.json(), sRes.json()])
+      // Owners and PV assignees are the case's own org's active users — a list
+      // every case user may read, not the admin-only user list.
+      const uRes = await httpFetch(`${API}/inbox/users?org_id=${encodeURIComponent(c.org_id || '')}`, { headers })
+      const u = await uRes.json()
       setCaseData(c)
       setInfoForm({
         status_id:      c.status_id      ? String(c.status_id)      : '',
@@ -61,8 +69,8 @@ export default function useCaseForm(id, token) {
         internal_notes: c.internal_notes || '',
         intake_channel: c.intake_channel || 'manual',
       })
-      setStatuses(Array.isArray(s) ? s : [])
-      setUsers(Array.isArray(u) ? u.filter(x => x.is_active) : [])
+      setStatuses(Array.isArray(s?.states) ? s.states : [])
+      setUsers(Array.isArray(u?.users) ? u.users : [])
       setReassignForm(prev => ({ ...prev, new_owner_id: c.case_owner_id ? String(c.case_owner_id) : '' }))
       restoreDraftIfNewer(c)
     } catch (err) {
@@ -109,8 +117,18 @@ export default function useCaseForm(id, token) {
       if (payload.infoForm) setInfoForm(prev => ({ ...prev, ...payload.infoForm }))
       if (payload.dynFieldValues) setDynFieldValues(payload.dynFieldValues)
       setDraftStatus('Draft restored')
+      setDraftRestored(true)
       setTimeout(() => setDraftStatus(''), 4000)
     } catch { /* draft restore is best-effort */ }
+  }
+
+  // Drop the unsaved changes and show the case as saved.
+  async function discardDraft() {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    try { await httpFetch(`${API}/cases/drafts/${id}`, { method: 'DELETE', headers }) } catch { /* reload shows the truth either way */ }
+    setDraftRestored(false)
+    setDraftStatus('')
+    await loadCase()
   }
 
   function scheduleAutoSave() {
@@ -183,6 +201,7 @@ export default function useCaseForm(id, token) {
       }
       setSavedMsg(isAutoSave ? 'Auto-saved' : 'Saved')
       setDraftStatus('')
+      setDraftRestored(false)
       httpFetch(`${API}/cases/drafts/${id}`, { method: 'DELETE', headers }).catch(() => {})
       setTimeout(() => setSavedMsg(''), 2500)
     } catch (err) {
@@ -195,8 +214,12 @@ export default function useCaseForm(id, token) {
         toast.error(`Save failed — ${err.message}`)
         setTimeout(() => setSavedMsg(''), 8000)
       } else {
-        setSavedMsg('Save failed')
-        setTimeout(() => setSavedMsg(''), 3000)
+        // Say why: a refusal ("You do not have permission to close cases.")
+        // used to read only "Save failed" (M-109).
+        const why = err?.message && err.message !== 'Save failed' ? ` — ${err.message}` : ''
+        setSavedMsg(`Save failed${why}`)
+        if (why) toast.error(`Save failed${why}`)
+        setTimeout(() => setSavedMsg(''), why ? 8000 : 3000)
       }
     } finally {
       setSaving(false)
@@ -253,24 +276,39 @@ export default function useCaseForm(id, token) {
       const map = {}
       ;(Array.isArray(data) ? data : []).forEach(f => { map[f.field_definition_id] = f.value })
       setDynFieldValues(map)
+      dynSaved.current = JSON.stringify(map)
     } catch { /* no-op */ }
   }
 
+  function dynFieldsChanged() {
+    return JSON.stringify(dynFieldValues) !== dynSaved.current
+  }
+
+  // Returns true when saved, false when it failed (the error is already shown).
   async function saveDynFields() {
-    if (dynFieldSaving || !formConfig) return
+    if (dynFieldSaving || !formConfig) return false
     setDynFieldSaving(true)
     try {
       const validateRes = await httpFetch(`${API}/cases/${id}/validate`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ payload: buildDynamicPayload() }),
+        body: JSON.stringify({
+          payload: buildDynamicPayload(),
+          values_by_id: Object.fromEntries(Object.entries(dynFieldValues).filter(([, v]) => hasValue(v))),
+        }),
       })
-      const validateData = await validateRes.json()
-      if (validateRes.ok && Array.isArray(validateData.errors) && validateData.errors.length) {
+      const validateData = await validateRes.json().catch(() => ({}))
+      // A failed check is not "no errors" — stop and say so (M-55). The server
+      // still refuses a blank required field on save, but the user should know.
+      if (!validateRes.ok) {
+        throw new Error(`Could not check the fields, so nothing was saved: ${validateData.error || `error ${validateRes.status}`}. Try again.`)
+      }
+      if (Array.isArray(validateData.errors) && validateData.errors.length) {
         const nextErrors = {}
         validateData.errors.forEach(err => { nextErrors[err.field] = err.message })
         setDynFieldErrors(nextErrors)
-        throw new Error('Please fix validation errors before saving.')
+        // Name the fields — a required one may sit on another step or tab.
+        throw new Error(`Please fix before saving: ${validateData.errors.map(e => e.message).join(' ')}`)
       }
       setDynFieldErrors({})
       const fields = Object.entries(dynFieldValues).map(([field_definition_id, value]) => ({
@@ -282,17 +320,24 @@ export default function useCaseForm(id, token) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      dynSaved.current = JSON.stringify(dynFieldValues)
       setSavedMsg('Additional fields saved')
       setTimeout(() => setSavedMsg(''), 2200)
-    } catch (err) { toast.error(err.message) }
+      return true
+    } catch (err) { toast.error(err.message); return false }
     finally { setDynFieldSaving(false) }
   }
+
+  // Only fields with a value are sent; a missing one reads as empty on the
+  // server. Sending every field (blank ones too) put 200+ keys in one object on
+  // AE cases, which the input guard refuses — so validate never ran there.
+  const hasValue = (v) => v !== undefined && v !== null && String(v).trim() !== ''
 
   function buildDynamicPayload() {
     const payload = {}
     for (const section of formConfig?.sections || []) {
       for (const field of section.fields || []) {
-        payload[field.field_name] = dynFieldValues[field.id] ?? ''
+        if (hasValue(dynFieldValues[field.id])) payload[field.field_name] = dynFieldValues[field.id]
       }
     }
     return payload
@@ -325,9 +370,9 @@ export default function useCaseForm(id, token) {
     reassignForm, setReassignForm, reassignSaving,
     escalateForm, setEscalateForm, escalateSaving,
     dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-    draftStatus,
+    draftStatus, draftRestored, discardDraft,
     autoSaveTimer, loadCase, saveInfo, scheduleAutoSave, reassignCase, escalateCase,
-    loadDynFields, saveDynFields,
+    loadDynFields, saveDynFields, dynFieldsChanged,
     getFieldConfig, getSectionVisible, getPicklistOptions,
     headers,
   }

@@ -180,7 +180,7 @@ const FIELD_SETUP_ROWS = [
 const PICKLIST_GROUPS = [
   { category: 'Case', field: 'case_status', values: ['Draft', 'Open', 'In Review', 'Pending Information', 'Closed', 'Reopened', 'Submitted', 'Acknowledged', 'Amendment Submitted', 'Withdrawn', 'Investigating', 'Analysed', 'Escalated'] },
   { category: 'Case', field: 'case_type', values: ['MI', 'AE', 'PC'] },
-  { category: 'Case', field: 'priority', values: ['Critical', 'High', 'Normal', 'Low'] },
+  { category: 'Case', field: 'priority', values: ['Urgent', 'High', 'Normal', 'Low'] }, // "urgent" is what the app filters and counts (M-80)
   { category: 'Case', field: 'intake_channel', values: ['Manual', 'Email', 'Phone', 'Web Form', 'Healthcare Provider', 'Patient', 'Internal', 'EMIR', 'CRM', 'Portal', 'Other'] },
 
   { category: 'Reporter', field: 'contact_type', values: ['Healthcare Professional', 'Patient', 'Consumer', 'Pharmacist', 'Company Rep', 'Distributor', 'Regulatory Authority', 'Lawyer', 'Other'] },
@@ -217,7 +217,9 @@ const PICKLIST_GROUPS = [
   { category: 'Product', field: 'action_taken', values: ['Dose Reduced', 'Drug Withdrawn', 'Dose Not Changed', 'Drug Interrupted', 'Unknown', 'Not Applicable'] },
   { category: 'Product', field: 'product_type', values: ['Prescription', 'Over the Counter', 'Biological', 'Medical Device', 'Combination Product'] },
   { category: 'Product', field: 'product_category', values: ['Brand', 'Generic', 'Biosimilar', 'Investigational'] },
-  { category: 'Product', field: 'frequency', values: ['Once Daily (QD)', 'Twice Daily (BID)', 'Three Times Daily (TID)', 'Four Times Daily (QID)', 'Every 6 Hours (Q6H)', 'Every 8 Hours (Q8H)', 'Every 12 Hours (Q12H)', 'Once Weekly', 'Once Monthly', 'As Needed (PRN)', 'Continuous', 'Per Protocol', 'Other'] },
+  // Dosing frequency has its own name: the event Frequency box reads the
+  // 'frequency' list, and two lists with one name were merged into it (M-111).
+  { category: 'Product', field: 'dosing_frequency', values: ['Once Daily (QD)', 'Twice Daily (BID)', 'Three Times Daily (TID)', 'Four Times Daily (QID)', 'Every 6 Hours (Q6H)', 'Every 8 Hours (Q8H)', 'Every 12 Hours (Q12H)', 'Once Weekly', 'Once Monthly', 'As Needed (PRN)', 'Continuous', 'Per Protocol', 'Other'] },
 
   { category: 'Product Complaint', field: 'pc_status', values: ['Open', 'Investigating', 'Analysed', 'Closed', 'Reopened', 'Escalated'] },
   { category: 'Product Complaint', field: 'pc_category', values: ['Quality Defect', 'Contamination', 'Packaging Damage', 'Efficacy Complaint', 'Safety Concern', 'Regulatory Issue', 'Labeling Error', 'Delivery Issue', 'Other'] },

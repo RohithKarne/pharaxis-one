@@ -38,8 +38,11 @@ const {
 const geoip = require('geoip-lite');
 const { getDisplayRole, hasGlobalAdminScope } = require('../utils/adminScope');
 const { sessionCacheInvalidate } = require('../middleware/auth');
+const { logger } = require('../services/logger');
 
 const SALT_ROUNDS = Math.max(10, parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10) || 12);
+// Compared against when an email has no account, so sign-in costs the same (M-3).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(require('crypto').randomBytes(24).toString('hex'), SALT_ROUNDS);
 
 // M-01: After a password change/reset, invalidate all of the user's existing
 // JWT sessions so previously-issued tokens can no longer be used. Sessions are
@@ -103,6 +106,13 @@ async function logLoginAudit({ userId, userName, role, status, failReason, authE
         metadata ? JSON.stringify(metadata) : null,
       ]
     );
+  } catch (err) {
+    // Same rule as the shared audit writer (C-09): a lost sign-in row never
+    // blocks the sign-in, but it is never silent either.
+    logger.error({ err: err.message, authEvent, status, userId: userId || null }, 'logLoginAudit failed to persist sign-in row');
+    return;
+  }
+  try {
     if (status === 'failed' && authEvent === 'password_login_failed') {
       await emitPlatformAdminAlert('failed_login_spike', {
         severity: 'high',
@@ -137,6 +147,26 @@ function attachAuthCookie(res, token, maxAgeMs = 8 * 60 * 60 * 1000) {
     maxAge: maxAgeMs,
   });
   return token;
+}
+
+// A remembered device is kept per person in an httpOnly cookie, so each person
+// on a shared browser is remembered separately and page scripts cannot read the
+// token (M-96). It was one localStorage key per browser, returned in the login
+// response: the last person to tick "remember" replaced everyone else.
+const { readCookie: readRequestCookie } = require('../middleware/auth');
+
+function trustedDeviceCookieName(userId) {
+  return `mims_tdv_${Number(userId)}`;
+}
+
+function attachTrustedDeviceCookie(res, userId, rawToken, rememberDays) {
+  res.cookie(trustedDeviceCookieName(userId), rawToken, {
+    httpOnly: true,
+    path: '/api/auth',
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: Number(rememberDays || 7) * 24 * 60 * 60 * 1000,
+  });
 }
 
 function issueTwoFactorToken(payload) {
@@ -383,18 +413,11 @@ function parsePositiveInt(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+// JWT bearer if sent, else the httpOnly cookie (same rule as middleware/auth; T15).
 function extractOptionalAuthToken(req) {
-  const authHeader = req?.headers?.authorization || '';
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (token && token !== 'null' && token !== 'undefined') return token;
-  }
-  const cookieHeader = req?.headers?.cookie || '';
-  const cookie = cookieHeader
-    .split(';')
-    .map((part) => part.trim())
-    .find((part) => part.startsWith('mims_token='));
-  return cookie ? decodeURIComponent(cookie.slice('mims_token='.length)) : null;
+  if (!req?.headers) return null;
+  const { readBearer, readCookie } = require('../middleware/auth');
+  return readBearer(req) || readCookie(req, 'mims_token');
 }
 
 function decodeOptionalAuthToken(req) {
@@ -436,10 +459,15 @@ async function resolveRegularLoginContext(user, requestedOrgId = null) {
   };
 }
 
+// T15 / 360 walk M-9: the session token is never put in a response body. It
+// travels only in the httpOnly mims_token cookie (attachAuthCookie), which page
+// scripts cannot read — a body copy let any script on the page (an XSS, a
+// compromised dependency) read the session and use it elsewhere. `token` stays
+// a parameter so the callers that set the cookie are unchanged.
+// eslint-disable-next-line no-unused-vars
 function buildLoginResponse({ user, token, modules, orgId, siteId, orgName, siteName, allOrgs, sessionTimeout, roleForOrg, extra = {} }) {
   return {
     message: 'Login successful.',
-    token,
     user: {
       id: user.id,
       name: user.name,
@@ -992,7 +1020,10 @@ const authController = {
           metadata: { ...auditMeta, reason: !user ? 'not_found' : !user.is_active ? 'inactive' : 'disabled' },
           req,
         });
-        return res.status(200).json({ outcome: 'denied', error: genericError });
+        // M-2: answer exactly as for an ordinary password account, so this step
+        // does not reveal which emails have accounts. The password step then
+        // fails with the same "Invalid email or password." as a wrong password.
+        return res.status(200).json({ outcome: 'local_password', webauthnAvailable: false });
       }
 
       // Touch ID / passkey is a parallel fast-path available regardless of
@@ -1013,13 +1044,13 @@ const authController = {
           metadata: { ...auditMeta, reason: 'no_org_access' },
           req,
         });
-        return res.status(200).json({ outcome: 'denied', error: genericError });
+        return res.status(200).json({ outcome: 'local_password', webauthnAvailable: false }); // M-2, as above
       }
 
       if (isPlatformAdminUser && profiles.length === 0) {
         await logLoginAudit({
           userId: user.id,
-          role: 'admin',
+          role: 'platform_admin',
           status: 'pending',
           authEvent: 'login_start_platform_admin_password',
           metadata: auditMeta,
@@ -1238,7 +1269,7 @@ const authController = {
         await logLoginAudit({
           userId: user.id,
           userName: user.email,
-          role: 'admin',
+          role: 'platform_admin',
           status: 'success',
           authEvent: `sso_${providerKey}_login_success`,
           req,
@@ -1306,7 +1337,7 @@ const authController = {
 
   async login(req, res) {
     try {
-      const { email, password, rememberedDeviceToken } = req.body;
+      const { email, password } = req.body;
       if (!email || !password) {
         return res.status(400).json({ error: 'Email and password are required.' });
       }
@@ -1330,33 +1361,16 @@ const authController = {
       }
 
       const user = await userModel.findByEmail(identity);
+      // M-2 / M-3: the password is checked first — against a stand-in hash when
+      // the email has no account — so the answer and the time it takes are the
+      // same for an unknown email as for a wrong password. Nothing about the
+      // account (deactivated, no organisation) is said until the password is right.
+      const passwordMatch = await bcrypt.compare(String(password), user?.password || DUMMY_PASSWORD_HASH);
       if (!user) {
         await logLoginAudit({ userName: email, status: 'failed', failReason: 'User not found', authEvent: 'password_login_failed', req });
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
-      if (!user.is_active) {
-        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Account deactivated', authEvent: 'password_login_failed', req });
-        return res.status(403).json({ error: 'Your account has been deactivated. Contact your administrator.' });
-      }
 
-      let requestedOrgId = null;
-      let loginOptions = null;
-      if (!hasGlobalAdminScope(user)) {
-        requestedOrgId = await resolvePasswordOrgIdForUser(user, parsePositiveInt(req.body?.org_id));
-        if (!requestedOrgId) {
-          await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'No org assigned', authEvent: 'password_login_failed', req });
-          return res.status(200).json({ noOrgAccess: true });
-        }
-        loginOptions = await getPublicLoginOptions(requestedOrgId);
-        if (!loginOptions) {
-          return res.status(403).json({ error: 'Selected organisation is inactive or unavailable.' });
-        }
-        if (!loginOptions.local_login_allowed) {
-          return res.status(403).json({ error: 'This organisation requires SSO sign-in. Use Google or Microsoft sign-in instead.' });
-        }
-      }
-
-      const passwordMatch = await bcrypt.compare(password, user.password);
       if (!passwordMatch) {
         await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Wrong password', authEvent: 'password_login_failed', req });
 
@@ -1390,6 +1404,28 @@ const authController = {
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
 
+      if (!user.is_active) {
+        await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'Account deactivated', authEvent: 'password_login_failed', req });
+        return res.status(403).json({ error: 'Your account has been deactivated. Contact your administrator.' });
+      }
+
+      let requestedOrgId = null;
+      let loginOptions = null;
+      if (!hasGlobalAdminScope(user)) {
+        requestedOrgId = await resolvePasswordOrgIdForUser(user, parsePositiveInt(req.body?.org_id));
+        if (!requestedOrgId) {
+          await logLoginAudit({ userId: user.id, userName: user.email, role: user.role, status: 'failed', failReason: 'No org assigned', authEvent: 'password_login_failed', req });
+          return res.status(200).json({ noOrgAccess: true });
+        }
+        loginOptions = await getPublicLoginOptions(requestedOrgId);
+        if (!loginOptions) {
+          return res.status(403).json({ error: 'Selected organisation is inactive or unavailable.' });
+        }
+        if (!loginOptions.local_login_allowed) {
+          return res.status(403).json({ error: 'This organisation requires SSO sign-in. Use Google or Microsoft sign-in instead.' });
+        }
+      }
+
       // Successful password match — reset failed login counter
       await pool.execute(
         `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE email = ?`,
@@ -1418,13 +1454,14 @@ const authController = {
       const privileges = await resolveUserRuntimePrivileges(user);
 
       if (user.password_reset_required) {
+        // Ten minutes, the same as its cookie: the token and its session row expire with it.
         const resetToken = issueToken({
           userId: user.id,
           email: user.email,
           role: user.role,
           passwordResetRequired: true,
           platformAdmin: privileges.platformAdmin,
-        });
+        }, '10m');
         attachAuthCookie(res, resetToken, 10 * 60 * 1000);
         // Every other sign-in path records the session; without this the reset
         // screen's first request is rejected as SESSION_REVOKED and the user is
@@ -1432,7 +1469,6 @@ const authController = {
         await trackSessionToken(user.id, resetToken);
         return res.status(200).json({
           passwordResetRequired: true,
-          token: resetToken,
           user: toRuntimeUser(user, privileges),
         });
       }
@@ -1452,10 +1488,9 @@ const authController = {
         const config = await getSystemConfig();
         const sessionTimeout = getPlatformAdminSessionTimeout(config);
         attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
-        await logLoginAudit({ userId: user.id, userName: user.email, role: 'admin', status: 'success', authEvent: 'login_success', req });
+        await logLoginAudit({ userId: user.id, userName: user.email, role: 'platform_admin', status: 'success', authEvent: 'login_success', req });
         return res.status(200).json({
           message: 'Login successful.',
-          token,
           user: toRuntimeUser(user, privileges),
           modules,
           orgId: platformContext.orgId,
@@ -1491,14 +1526,18 @@ const authController = {
         return res.status(423).json({ error: '2FA is locked after 3 failed attempts. Contact your platform admin for reset.' });
       }
 
-      if (settings?.is_enabled && await isTrustedDevice(user.id, context.orgId, rememberedDeviceToken)) {
+      if (settings?.is_enabled && await isTrustedDevice(user.id, context.orgId, readRequestCookie(req, trustedDeviceCookieName(user.id)))) {
         return finalizeRegularLogin({ res, req, user, context, authEvent: '2fa_trusted_device_bypass' });
       }
 
       const challengeToken = issueTwoFactorToken(makeTwoFactorPayload(
         user,
         context,
-        settings?.is_enabled ? 'verify' : 'setup_optional'
+        // 360 walk M-13 (decision Rohith, 2026-09-29): this branch runs only when
+        // the organisation has 2FA switched on, so a person without it must set it
+        // up now — 'setup_required' cannot be skipped. It was 'setup_optional',
+        // so "2FA on" meant anyone could skip it at every sign-in, for ever.
+        settings?.is_enabled ? 'verify' : 'setup_required'
       ));
 
       await logLoginAudit({
@@ -1513,6 +1552,7 @@ const authController = {
       return res.status(200).json({
         twoFactorRequired: !!settings?.is_enabled,
         twoFactorSetupAvailable: !settings?.is_enabled,
+        twoFactorSetupRequired: !settings?.is_enabled,
         challengeToken,
         availableMethods: context.twoFactorMethods,
         maskedEmail: maskEmail(user.email),
@@ -1742,6 +1782,7 @@ const authController = {
       const trustedDeviceToken = rememberDevice
         ? await createTrustedDevice(pending.userId, pending.orgId, pending.rememberDays ?? 7, req.headers['user-agent'])
         : null;
+      if (trustedDeviceToken) attachTrustedDeviceCookie(res, pending.userId, trustedDeviceToken, pending.rememberDays ?? 7);
 
       const context = {
         orgId: pending.orgId,
@@ -1789,7 +1830,6 @@ const authController = {
         allOrgs: pending.allOrgs || [],
         sessionTimeout: pending.sessionTimeout ?? 30,
         extra: {
-          rememberedDeviceToken: trustedDeviceToken,
           twoFactorSetupCompleted: setupCompleted,
           backupCodes: generatedBackupCodes,
         },
@@ -1806,7 +1846,8 @@ const authController = {
     const user = await userModel.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
     const runtimePrivileges = await resolveUserRuntimePrivileges(user);
-    if (runtimePrivileges.platformAdmin && !hasGlobalAdminScope(req.user)) {
+    // Never upgrade a forced password-change session into a full one here.
+    if (runtimePrivileges.platformAdmin && !hasGlobalAdminScope(req.user) && !req.user.passwordResetRequired) {
       const platformContext = await resolvePlatformAdminContext(user, req.user.orgId);
       const token = issueToken({
         userId: user.id,
@@ -1822,7 +1863,6 @@ const authController = {
       attachAuthCookie(res, token, sessionTimeout * 60 * 1000);
       return res.status(200).json({
         user: toRuntimeUser(user, { platformAdmin: true }),
-        token,
         modules: await getUserModules(user.id),
         allOrgs: platformContext.allOrgs,
         orgId: platformContext.orgId,
@@ -1838,7 +1878,6 @@ const authController = {
       const config = await getSystemConfig();
       return res.status(200).json({
         user: toRuntimeUser(user, { platformAdmin: true }),
-        token: req.user.token,
         modules,
         allOrgs: platformContext.allOrgs,
         orgId: platformContext.orgId,
@@ -1861,7 +1900,6 @@ const authController = {
     const current = allOrgs.find(o => Number(o.orgId) === Number(req.user.orgId)) || allOrgs[0] || null;
     return res.status(200).json({
       user,
-      token: req.user.token,
       modules,
       allOrgs,
       orgId: current?.orgId ?? null,
@@ -1924,7 +1962,7 @@ const authController = {
       await logLoginAudit({
         userId: req.user.userId,
         userName: req.user.email,
-        role: roleForOrg,
+        role: hasGlobalAdminScope(req.user) ? 'platform_admin' : roleForOrg,
         status: 'success',
         authEvent: 'org_switch',
         metadata: { fromOrgId: req.user.orgId, toOrgId: Number(orgId) },
@@ -1933,7 +1971,6 @@ const authController = {
 
       return res.status(200).json({
         message: 'Org switched.',
-        token,
         orgId: Number(orgId),
         siteId,
         orgName: access.org_name,
@@ -1998,38 +2035,46 @@ const authController = {
     // L-02: Do NOT reveal whether an account exists / is eligible. Every non-error
     // path returns the same generic response. The actual email-send stays gated on
     // the user being eligible, but that decision is invisible to the caller.
+    // Platform administrators never get a code, so the one message says so for
+    // everyone rather than implying a code went to every existing account.
     const GENERIC_RESPONSE = {
-      message: 'If an account exists for this email, a verification code has been sent.',
+      message: 'If this email belongs to an account that can reset its password by email, a verification code has been sent. Platform administrators cannot reset by email: ask another platform administrator to reset your password.',
       expiresInMinutes: OTP_EXPIRY_MINUTES,
     };
     try {
       const { email } = req.body || {};
       if (!email) return res.status(400).json({ error: 'Email is required.' });
 
-      const user = await findUserByLoginIdentifier(email);
-      // Silently no-op (but return the generic response) for any ineligible case:
-      // no such user, global-admin scope, malformed email, inactive, or no org.
-      if (
-        user &&
-        !hasGlobalAdminScope(user) &&
-        String(user.email || '').includes('@') &&
-        user.is_active
-      ) {
-        const orgId = await getLatestActiveOrgIdForUser(user.id);
-        if (orgId) {
-          await createEmailChallenge(user, orgId, 'password_reset_email');
-          await logLoginAudit({
-            userId: user.id,
-            userName: user.email,
-            role: user.role,
-            status: 'success',
-            authEvent: 'forgot_password_code_sent',
-            metadata: { orgId },
-          });
+      // M-3: answer before any account-specific work. Sending the code took
+      // ~5 s and only happened for a real account, so the response time said
+      // whether the account exists. The work continues after the reply; a
+      // failure is logged.
+      res.json(GENERIC_RESPONSE);
+      (async () => {
+        const user = await findUserByLoginIdentifier(email);
+        // Silently no-op for any ineligible case: no such user, global-admin
+        // scope, malformed email, inactive, or no org.
+        if (
+          user &&
+          !hasGlobalAdminScope(user) &&
+          String(user.email || '').includes('@') &&
+          user.is_active
+        ) {
+          const orgId = await getLatestActiveOrgIdForUser(user.id);
+          if (orgId) {
+            await createEmailChallenge(user, orgId, 'password_reset_email');
+            await logLoginAudit({
+              userId: user.id,
+              userName: user.email,
+              role: user.role,
+              status: 'success',
+              authEvent: 'forgot_password_code_sent',
+              metadata: { orgId },
+            });
+          }
         }
-      }
-
-      return res.json(GENERIC_RESPONSE);
+      })().catch((err) => console.error('sendForgotPasswordCode background error:', err));
+      return undefined;
     } catch (err) {
       console.error('sendForgotPasswordCode error:', err);
       // Return the generic response even on internal failure so timing/behaviour
@@ -2046,7 +2091,8 @@ const authController = {
       }
       const user = await findUserByLoginIdentifier(email);
       if (!user || hasGlobalAdminScope(user) || !String(user.email || '').includes('@')) {
-        return res.status(404).json({ error: 'No eligible user found for this email.' });
+        // Same answer as a wrong code (L-02 / M-2) — "no eligible user" said the account did not exist.
+        return res.status(401).json({ error: 'Invalid verification code.' });
       }
 
       const verified = await verifyEmailChallengeWithoutOrg(user.id, 'password_reset_email', String(code).trim());

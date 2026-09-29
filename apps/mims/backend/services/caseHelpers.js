@@ -85,6 +85,23 @@ function isValidDateOnly(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+// A DATE column read back through JSON arrives as '2026-09-22T00:00:00.000Z';
+// STRICT mode rejects that on write. Express middleware: turn exact UTC-midnight
+// stamps in the body back into 'YYYY-MM-DD' so a section saved once saves again.
+const UTC_MIDNIGHT_STAMP = /^\d{4}-\d{2}-\d{2}T00:00:00(?:\.000)?Z$/;
+function normalizeDateOnlyBody(req, _res, next) {
+  const walk = (value) => {
+    if (Array.isArray(value)) return value.map(walk);
+    if (value && typeof value === 'object') {
+      for (const key of Object.keys(value)) value[key] = walk(value[key]);
+      return value;
+    }
+    return typeof value === 'string' && UTC_MIDNIGHT_STAMP.test(value) ? value.slice(0, 10) : value;
+  };
+  if (req.body && typeof req.body === 'object') walk(req.body);
+  next();
+}
+
 function parseIntSafe(value, fallback) {
   const n = parseInt(value, 10);
   return Number.isFinite(n) ? n : fallback;
@@ -384,7 +401,9 @@ async function assertActivePicklistValue(orgId, fieldType, value, asOfDate, labe
   if (value === null || value === undefined || String(value).trim() === '') return null;
   const row = await findActivePicklistEntry(orgId, fieldType, value, asOfDate);
   if (!row) {
-    throw new Error(`${label || fieldType} must be an active governed value.`);
+    const err = new Error(`${label || fieldType} must be an active governed value.`);
+    err.status = 400; // the caller sent a value outside the org's list — not a server fault
+    throw err;
   }
   return row;
 }
@@ -572,7 +591,7 @@ async function getPcTransmissionRow(caseId, transmissionId) {
 
 async function getCasePrimaryProductContext(caseId) {
   const [[row]] = await pool.execute(
-    `SELECT c.product_id AS case_product_id, c.org_id,
+    `SELECT c.org_id,
             mi.product_id AS mi_product_id,
             ae.product_id AS ae_product_id,
             pc.product_id AS pc_product_id
@@ -589,7 +608,7 @@ async function getCasePrimaryProductContext(caseId) {
   );
   if (!row) return { productId: null, orgId: null };
   return {
-    productId: row.case_product_id || row.mi_product_id || row.ae_product_id || row.pc_product_id || null,
+    productId: row.mi_product_id || row.ae_product_id || row.pc_product_id || null,
     orgId:     row.org_id || null,
   };
 }
@@ -624,6 +643,7 @@ module.exports = {
   applyMergeFields,
   toDateOnlyOrNull,
   isValidDateOnly,
+  normalizeDateOnlyBody,
   parseIntSafe,
   clamp,
   hasOwn,

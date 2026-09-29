@@ -15,6 +15,7 @@ const { hasGlobalAdminScope } = require('../utils/adminScope');
 // ─── ORG ISOLATION HELPERS ───────────────────────────────────────────────────
 
 const verifyCaseScoped = require('../services/caseHelpers').verifyCaseOrg;
+const { MI_CORE_FIELDS, missingRequiredCore } = require('../services/requiredFields');
 
 // WP2: enforce the activity-scope capability when a privilegeKey is supplied (write
 // paths). The previous local version IGNORED the 3rd arg, so 'case.update' writes
@@ -117,11 +118,23 @@ router.put('/cases/mi/:miId', authenticate, async (req, res) => {
     if (!await verifyMiOrg(req.params.miId, req)) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    const [[currentMi]] = await pool.execute('SELECT status FROM case_mi WHERE id = ?', [req.params.miId]);
+    const [[currentMi]] = await pool.execute(
+      `SELECT mi.*, c.org_id AS case_org_id FROM case_mi mi JOIN cases c ON c.id = mi.case_id WHERE mi.id = ?`,
+      [req.params.miId]
+    );
     if (!currentMi) return res.status(404).json({ error: 'MI tab not found' });
     if (isTerminalMiStatus(currentMi.status)) {
       return res.status(409).json({ error: 'This MI response is closed and cannot be modified.' });
     }
+
+    // Admin-required MI fields (Customize Forms) must be filled once this save
+    // lands — the update below keeps a stored value when a field is omitted.
+    const effective = { ...currentMi };
+    for (const key of Object.values(MI_CORE_FIELDS)) {
+      if (req.body[key] !== undefined && req.body[key] !== null) effective[key] = req.body[key];
+    }
+    const missing = await missingRequiredCore(currentMi.case_org_id, effective, MI_CORE_FIELDS);
+    if (missing.length) return res.status(400).json({ error: `Required: ${missing.join(', ')}.`, missing });
     const {
       mi_category, subcategory, product_id,
       question_summary, detailed_question,

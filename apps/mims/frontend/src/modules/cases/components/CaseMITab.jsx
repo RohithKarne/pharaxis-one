@@ -8,6 +8,7 @@ import { httpFetch } from '../../../shared/api/httpFetch.js'
 import DynamicFieldsSection from './DynamicFieldsSection'
 import { useCaseFieldContext } from '../../../shared/components/WiredField'
 import MiApprovalPanel from '../../../shared/components/MiApprovalPanel'  // Sprint 2 #16 + #17
+import { useAuth } from '../../../shared/context/AuthContext'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 
@@ -20,6 +21,13 @@ function formatProductOption(product) {
     .filter(Boolean)
   if (groupNames.length) parts.push(`Groups: ${groupNames.join(', ')}`)
   return parts.filter(Boolean).join(' - ')
+}
+
+// delivery_metadata is a JSON column: an object from the server, or text.
+function parseJsonObject(value) {
+  if (!value) return {}
+  if (typeof value === 'object') return value
+  try { return JSON.parse(value) || {} } catch { return {} }
 }
 
 function parseJsonList(value) {
@@ -56,10 +64,24 @@ function emptyMiRespForm(tab = null) {
 export default function CaseMITab({
   id, token, headers, setSavedMsg, onCountChange,
   formConfig, getPicklistOptions, dynFieldValues, setDynFieldValues, dynFieldSaving, dynFieldErrors,
-  saveDynFields, caseType,
+  saveDynFields, caseType, registerSectionSave, coreField,
   view = 'full',
 }) {
   const ctx = useCaseFieldContext()
+  // Admin settings (Customize Forms) for this panel's own fields — label,
+  // required, hidden — via formConfig.core; migration 108 links the rows.
+  const miField = (key, fallback) => (coreField ? coreField(key, fallback) : { label: fallback, required: false, hidden: false })
+  const miLabel = (key, fallback) => { const f = miField(key, fallback); return f.required ? `${f.label} *` : f.label }
+  const miHide = (key) => (miField(key, '').hidden ? { display: 'none' } : undefined)
+  // Approve and Send follow the letter permissions the server checks (M-86).
+  // Read the resolved privilege list: hasCapability says yes to everything for
+  // a user in no security group ("unrestricted"), whatever their role (M-93).
+  const { securityAccess, hasCapability, user } = useAuth()
+  const letterPrivs = securityAccess?.privileges
+  const canLetter = (key) => (Array.isArray(letterPrivs) ? letterPrivs.includes(key) : hasCapability(key))
+  const canApproveLetters = canLetter('case.letter.approve')
+  const canSendLetters = canLetter('case.letter.send')
+  const canAmendLetters = canLetter('case.letter.supersede')
   // B8 — Draft storage MUST be scoped by both case and MI tab id, otherwise a
   // draft started against MI tab #1 leaks into MI tab #2 on the same case.
   // Key is computed below once activeMiTab is known.
@@ -92,7 +114,7 @@ export default function CaseMITab({
   useEffect(() => {
     if (!miRespModal) return
     try {
-      const stored = localStorage.getItem(miDraftStorageKey)
+      const stored = sessionStorage.getItem(miDraftStorageKey)
       if (!stored) return
       const parsed = JSON.parse(stored)
       if (parsed && typeof parsed === 'object' &&
@@ -105,7 +127,7 @@ export default function CaseMITab({
 
   useEffect(() => {
     if (!miRespModal) return
-    try { localStorage.setItem(miDraftStorageKey, JSON.stringify(miRespForm)) } catch { /* no-op */ }
+    try { sessionStorage.setItem(miDraftStorageKey, JSON.stringify(miRespForm)) } catch { /* no-op */ }
   }, [miDraftStorageKey, miRespForm, miRespModal])
 
   function toMiForm(tab) {
@@ -128,7 +150,7 @@ export default function CaseMITab({
     const activeId = miTabs[activeMiTab]?.id
     if (!activeId) return
     try {
-      const raw = localStorage.getItem(`mims_case_${id}_mi_form_${activeId}`)
+      const raw = sessionStorage.getItem(`mims_case_${id}_mi_form_${activeId}`)
       if (!raw) return
       const parsed = JSON.parse(raw)
       if (parsed && typeof parsed === 'object') {
@@ -139,11 +161,14 @@ export default function CaseMITab({
     }
   }, [activeMiTab, id, miTabs])
 
-  useEffect(() => {
+  // Only what the person types is a draft; loading, switching or saving an MI never writes one.
+  function editMiForm(update) {
+    const next = update(miForm)
+    setMiForm(next)
     const activeId = miTabs[activeMiTab]?.id
     if (!activeId) return
-    try { localStorage.setItem(`mims_case_${id}_mi_form_${activeId}`, JSON.stringify(miForm)) } catch { /* no-op */ }
-  }, [activeMiTab, id, miForm, miTabs])
+    try { sessionStorage.setItem(`mims_case_${id}_mi_form_${activeId}`, JSON.stringify(next)) } catch { /* no-op */ }
+  }
 
   async function loadMI() {
     try {
@@ -222,18 +247,34 @@ export default function CaseMITab({
     } catch (err) { toast.error(err.message) }
   }
 
+  // Returns true when saved, false when it failed (the error is already shown).
   async function saveMI() {
     const tab = miTabs[activeMiTab]
-    if (!tab) return
+    if (!tab) return false
     try {
       const res  = await httpFetch(`${API}/cases/mi/${tab.id}`, { method: 'PUT', headers, body: JSON.stringify(miForm) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setMiTabs(prev => prev.map((t, i) => i === activeMiTab ? data : t))
-      localStorage.removeItem(`mims_case_${id}_mi_form_${tab.id}`)
+      sessionStorage.removeItem(`mims_case_${id}_mi_form_${tab.id}`)
       setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 2000)
-    } catch (err) { toast.error(err.message) }
+      return true
+    } catch (err) { toast.error(err.message); return false }
   }
+
+  // Let the page's Save Case save this MI too when it has unsaved edits.
+  useEffect(() => {
+    const tab = miTabs[activeMiTab]
+    if (!registerSectionSave || !tab) return undefined
+    return registerSectionSave('mi', {
+      label: `MI ${activeMiTab + 1}`,
+      isDirty: () => {
+        const saved = toMiForm(tab)
+        return Object.keys({ ...saved, ...miForm }).some(k => String(miForm[k] ?? '') !== String(saved[k] ?? ''))
+      },
+      save: saveMI,
+    })
+  })
 
   async function deleteMITab() {
     const tab = miTabs[activeMiTab]
@@ -393,7 +434,7 @@ export default function CaseMITab({
       setBuilderContext(null)
       setBuilderPreview(null)
       setMiRespForm(emptyMiRespForm())
-      localStorage.removeItem(miDraftStorageKey)
+      sessionStorage.removeItem(miDraftStorageKey)
       setSavedMsg(responseStatus === 'DRAFT' ? 'MI response draft saved' : 'MI response recorded')
       setTimeout(() => setSavedMsg(''), 2200)
     } catch (err) { toast.error(err.message) }
@@ -475,7 +516,16 @@ export default function CaseMITab({
   const bundles = builderContext?.bundles || []
   const chosenTemplate = selectedTemplate()
   const miCategoryOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Category & Product', 'MI Category') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
-  const miSubcategoryOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Category & Product', 'MI Subcategory') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
+  // Subcategories follow the chosen category (T19 / M-19, migration 119): a linked
+  // subcategory shows only under its category; an unlinked one ("General Query",
+  // "Other") under every category. A saved value that no longer fits stays
+  // listed so it is not silently dropped.
+  const miCategoryId = (getPicklistOptions?.('MI — Category & Product', 'MI Category') || [])
+    .find(option => option.value === miForm.mi_category)?.id
+  const miSubcategoryList = (getPicklistOptions?.('MI — Category & Product', 'MI Subcategory') || [])
+    .filter(option => !option.parent_value_id || !miCategoryId || String(option.parent_value_id) === String(miCategoryId)
+      || option.value === miForm.subcategory)
+  const miSubcategoryOptions = [{ value: '', label: '— Select —' }, ...miSubcategoryList.map(option => ({ value: option.value, label: option.label || option.value }))]
   const miStatusOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Response', 'MI Status') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
   const responseChannelOptions = [{ value: '', label: '— Select —' }, ...(getPicklistOptions?.('MI — Response', 'Response Channel') || []).map(option => ({ value: option.value, label: option.label || option.value }))]
 
@@ -522,61 +572,61 @@ export default function CaseMITab({
               </div>
             )}
             <div className="cf-form-grid">
-              <div className="cf-form-field">
-                <label>MI Category</label>
-                <select value={miForm.mi_category || ''} onChange={e => setMiForm(p => ({ ...p, mi_category: e.target.value }))}>
+              <div className="cf-form-field" style={miHide('mi_category')}>
+                <label>{miLabel('mi_category', 'MI Category')}</label>
+                <select value={miForm.mi_category || ''} onChange={e => editMiForm(p => ({ ...p, mi_category: e.target.value }))}>
                   {miCategoryOptions.map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
-              <div className="cf-form-field">
-                <label>Subcategory</label>
-                <select value={miForm.subcategory || ''} onChange={e => setMiForm(p => ({ ...p, subcategory: e.target.value }))}>
+              <div className="cf-form-field" style={miHide('mi_subcategory')}>
+                <label>{miLabel('mi_subcategory', 'Subcategory')}</label>
+                <select value={miForm.subcategory || ''} onChange={e => editMiForm(p => ({ ...p, subcategory: e.target.value }))}>
                   {miSubcategoryOptions.map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
-              <div className="cf-form-field">
-                <label>Response Required By</label>
-                <input type="date" value={miForm.response_required_by || ''} onChange={e => setMiForm(p => ({ ...p, response_required_by: e.target.value }))} />
+              <div className="cf-form-field" style={miHide('mi_response_required_by')}>
+                <label>{miLabel('mi_response_required_by', 'Response Required By')}</label>
+                <input type="date" value={miForm.response_required_by || ''} onChange={e => editMiForm(p => ({ ...p, response_required_by: e.target.value }))} />
               </div>
-              <div className="cf-form-field">
-                <label>Response Date</label>
-                <input type="date" value={miForm.response_date || ''} onChange={e => setMiForm(p => ({ ...p, response_date: e.target.value }))} />
+              <div className="cf-form-field" style={miHide('mi_response_date')}>
+                <label>{miLabel('mi_response_date', 'Response Date')}</label>
+                <input type="date" value={miForm.response_date || ''} onChange={e => editMiForm(p => ({ ...p, response_date: e.target.value }))} />
               </div>
-              <div className="cf-form-field">
-                <label>Response Channel</label>
-                <select value={miForm.response_channel || ''} onChange={e => setMiForm(p => ({ ...p, response_channel: e.target.value }))}>
+              <div className="cf-form-field" style={miHide('mi_response_channel')}>
+                <label>{miLabel('mi_response_channel', 'Response Channel')}</label>
+                <select value={miForm.response_channel || ''} onChange={e => editMiForm(p => ({ ...p, response_channel: e.target.value }))}>
                   {responseChannelOptions.map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
-              <div className="cf-form-field">
-                <label>Product</label>
-                <select value={miForm.product_id || ''} onChange={e => setMiForm(p => ({ ...p, product_id: e.target.value || null }))}>
+              <div className="cf-form-field" style={miHide('mi_product')}>
+                <label>{miLabel('mi_product', 'Product')}</label>
+                <select value={miForm.product_id || ''} onChange={e => editMiForm(p => ({ ...p, product_id: e.target.value || null }))}>
                   <option value="">- None -</option>
                   {miProducts.map(p => <option key={p.id} value={p.id}>{formatProductOption(p)}</option>)}
                 </select>
               </div>
-              <div className="cf-form-field">
-                <label>MI Status</label>
-                <select value={miForm.status || 'Open'} onChange={e => setMiForm(p => ({ ...p, status: e.target.value }))}>
+              <div className="cf-form-field" style={miHide('mi_status')}>
+                <label>{miLabel('mi_status', 'MI Status')}</label>
+                <select value={miForm.status || 'Open'} onChange={e => editMiForm(p => ({ ...p, status: e.target.value }))}>
                   {(miStatusOptions.length > 1 ? miStatusOptions : [{ value: 'Open', label: 'Open' }, { value: 'In Progress', label: 'In Progress' }, { value: 'Pending Information', label: 'Pending Information' }, { value: 'Answered', label: 'Answered' }, { value: 'Closed', label: 'Closed' }]).map(option => <option key={option.value || 'blank'} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
             </div>
-            <div className="cf-form-field cf-form-field--full">
-              <label>Question Summary</label>
-              <textarea rows={2} value={miForm.question_summary || ''} onChange={e => setMiForm(p => ({ ...p, question_summary: e.target.value }))} />
+            <div className="cf-form-field cf-form-field--full" style={miHide('mi_question_summary')}>
+              <label>{miLabel('mi_question_summary', 'Question Summary')}</label>
+              <textarea rows={2} value={miForm.question_summary || ''} onChange={e => editMiForm(p => ({ ...p, question_summary: e.target.value }))} />
             </div>
-            <div className="cf-form-field cf-form-field--full">
-              <label>Detailed Question</label>
-              <textarea rows={4} value={miForm.detailed_question || ''} onChange={e => setMiForm(p => ({ ...p, detailed_question: e.target.value }))} />
+            <div className="cf-form-field cf-form-field--full" style={miHide('mi_detailed_question')}>
+              <label>{miLabel('mi_detailed_question', 'Detailed Question')}</label>
+              <textarea rows={4} value={miForm.detailed_question || ''} onChange={e => editMiForm(p => ({ ...p, detailed_question: e.target.value }))} />
             </div>
-            <div className="cf-form-field cf-form-field--full">
-              <label>Response Provided</label>
-              <textarea rows={4} value={miForm.response_provided || ''} onChange={e => setMiForm(p => ({ ...p, response_provided: e.target.value }))} />
+            <div className="cf-form-field cf-form-field--full" style={miHide('mi_response_provided')}>
+              <label>{miLabel('mi_response_provided', 'Response Provided')}</label>
+              <textarea rows={4} value={miForm.response_provided || ''} onChange={e => editMiForm(p => ({ ...p, response_provided: e.target.value }))} />
             </div>
-            <div className="cf-form-field cf-form-field--full">
-              <label>Literature Reference</label>
-              <textarea rows={3} value={miForm.literature_reference || ''} onChange={e => setMiForm(p => ({ ...p, literature_reference: e.target.value }))} />
+            <div className="cf-form-field cf-form-field--full" style={miHide('mi_literature_reference')}>
+              <label>{miLabel('mi_literature_reference', 'Literature Reference')}</label>
+              <textarea rows={3} value={miForm.literature_reference || ''} onChange={e => editMiForm(p => ({ ...p, literature_reference: e.target.value }))} />
             </div>
             <div className="cf-form-field cf-form-field--full">
               <label>Linked Documents</label>
@@ -604,6 +654,7 @@ export default function CaseMITab({
           const isVoided = st === 'VOIDED'
           const isSent = st === 'SENT'
           const selectedDocs = parseJsonList(r.selected_documents)
+          const delivery = parseJsonObject(r.delivery_metadata)
           const bodyHtml = r.response_body_html || ''
           return (
             <div key={r.id} className={`cf-response-card${isVoided ? ' cf-response-voided' : ''}`}>
@@ -635,8 +686,13 @@ export default function CaseMITab({
                     <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => advanceMiStatus(r.id, 'READY')}>Submit for Review</button>
                     <button className="cf-mi-trans-btn cf-mi-trans-discard" onClick={() => discardMiResponse(r.id)}>Discard Draft</button>
                   </>}
-                  {st === 'READY'    && <button className="cf-mi-trans-btn cf-mi-trans-approve" onClick={() => advanceMiStatus(r.id, 'APPROVED')}>Approve (e-sign required)</button>}
-                  {st === 'APPROVED' && <button className="cf-mi-trans-btn cf-mi-trans-send"    onClick={() => advanceMiStatus(r.id, 'SENT')}>Send Response (e-sign required)</button>}
+                  {st === 'READY' && canApproveLetters && !r.two_signers_required && Number(r.author_id) !== Number(user?.id ?? user?.userId) && <button className="cf-mi-trans-btn cf-mi-trans-approve" onClick={() => advanceMiStatus(r.id, 'APPROVED')}>Approve (e-sign required)</button>}
+                  {st === 'APPROVED' && canSendLetters && <button className="cf-mi-trans-btn cf-mi-trans-send"    onClick={() => advanceMiStatus(r.id, 'SENT')}>Send Response (e-sign required)</button>}
+                </div>
+              )}
+              {isSent && delivery.status === 'failed' && (
+                <div className="cf-inline-note" style={{ marginTop: 8, color: '#b91c1c', borderColor: '#f5c6c6', background: '#fdecea' }}>
+                  Not delivered{delivery.to ? ` to ${delivery.to}` : ''}: {delivery.error || 'the email could not be sent.'}
                 </div>
               )}
               {isSent && (
@@ -644,7 +700,7 @@ export default function CaseMITab({
                   <span className="cf-mi-final-badge">Sent - Record Immutable</span>
                   {r.superseded_by_id
                     ? <span className="cf-mi-final-badge">Superseded</span>
-                    : <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => amendSentResponse(r.id)}>Amend (new version)</button>}
+                    : canAmendLetters && <button className="cf-mi-trans-btn cf-mi-trans-submit" onClick={() => amendSentResponse(r.id)}>Amend (new version)</button>}
                 </div>
               )}
               {isVoided && <div className="cf-mi-voided-label">Discarded</div>}
@@ -813,7 +869,7 @@ export default function CaseMITab({
             </div>
             <div className="cf-corr-compose-body">
               <div className="cf-esign-notice">
-                <span>This action requires your electronic signature per 21 CFR Part 11. Your identity will be recorded against this approval/send action.</span>
+                <span>This action requires your electronic signature. Your identity will be recorded against this approval/send action.</span>
               </div>
               <div className="cf-esign-fields">
                 <div className="cf-form-field">

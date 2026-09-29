@@ -13,14 +13,12 @@ const { validate, schemas } = require('../../middleware/validate');
 const { hasGlobalAdminScope } = require('../../utils/adminScope');
 const accessService = require('../../services/accessConfigurationService');
 const { findSodConflicts, hasBlockingSodConflict, describeSodConflict } = require('../../services/sodEvaluator');
+const { logAudit } = require('../../utils/auditLog');
 
+// O-6: goes through the shared writer, which logs a failed write instead of
+// discarding it. Outside a transaction it does not block the admin action.
 async function audit(userId, userName, action, entity, entityId, details) {
-  try {
-    await pool.execute(
-      'INSERT INTO audit_logs (user_id, user_name, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, userName, action, entity, entityId, JSON.stringify(details)]
-    );
-  } catch (_) {}
+  await logAudit(userId, userName, action, entity, entityId, details);
 }
 
 function parsePrivileges(value) {
@@ -534,33 +532,6 @@ router.post('/security-groups/:id/clone', authenticate, requireRole('admin', 'pl
     }
     console.error('POST /security-groups/:id/clone error:', err);
     res.status(500).json({ error: err.message });
-  }
-});
-
-// PUT /api/admin/users/:id — update user (role, is_active)
-router.put('/users/:id', authenticate, requireRole('admin', 'platform_admin'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { role, is_active } = req.body;
-    const [[existing]] = await pool.execute('SELECT id, email, role FROM users WHERE id = ?', [id]);
-    if (!existing) return res.status(404).json({ error: 'User not found.' });
-
-    const validRoles = ['admin', 'agent', 'reviewer', 'content_manager', 'platform_admin'];
-    // H-02: only a global (platform) admin may assign the platform_admin role.
-    if (role === 'platform_admin' && !hasGlobalAdminScope(req.user)) {
-      return res.status(403).json({ error: 'You are not permitted to assign the platform_admin role.' });
-    }
-    const newRole = role && validRoles.includes(role) ? role : existing.role;
-
-    await pool.execute(
-      'UPDATE users SET role = ?, is_active = ?, updated_at = NOW() WHERE id = ?',
-      [newRole, is_active !== undefined ? (is_active ? 1 : 0) : 1, id]
-    );
-    await audit(req.user.userId, req.user.email, 'UPDATE', 'user', Number(id), { role: newRole, is_active });
-    res.json({ message: 'User updated.' });
-  } catch (err) {
-    console.error('PUT /users/:id error:', err);
-    res.status(500).json({ error: 'Server error.' });
   }
 });
 
