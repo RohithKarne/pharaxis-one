@@ -1376,9 +1376,10 @@ export default function InboxPage() {
                           }}>
                           <option value="">Select queue</option>
                           {queueOptions.map(queue => <option key={queue} value={queue}>{queue}</option>)}
+                          {/* "Safety" and "Quality" were added here beside the real "Safety
+                              Intake" / "Quality Complaints" queues — near-duplicates that split
+                              work across two names (M-28). */}
                           {!queueOptions.includes('Medical Information') && <option value="Medical Information">Medical Information</option>}
-                          {!queueOptions.includes('Safety') && <option value="Safety">Safety</option>}
-                          {!queueOptions.includes('Quality') && <option value="Quality">Quality</option>}
                           {!queueOptions.includes('Regulatory') && <option value="Regulatory">Regulatory</option>}
                         </select>
                       </div>
