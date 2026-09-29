@@ -51,11 +51,24 @@ browser now remembers when the choice was made and asks again after 12 months. V
 the browser: 13 months → asked again, 11 months → not asked, an old flag with no date →
 asked once more.
 
+## Second case, same day — the demo sketch
+
+On 28th Sep, answering Narayana Reddy and Rohith about the 12th October viewing, engineering
+drew the ten-minute story as "doctor asks on CP Portal → case opens in MIMS → **answer approved
+in MIMS** → answer arrives back on CP Portal". It was drawn from memory. The answer is in fact
+written and approved **in the CP Portal admin panel** by a reviewer and sent from there (CPPM-14);
+MIMS plays no part in that step. Found on 29th Sep while reading CPPM-14's closing note before
+walking it. Same pattern, same rule: the sketch described how the product works without
+reading how the product works. The demo story itself still stands — the step is simply in a
+different application.
+
 ---
 
 **References**
 
 - The claim: CPPM-29 pre-build overview, chat, 28th Sep 2026; Rohith's approval the same day.
+- The demo sketch: chat, 28th Sep 2026; CPPM-14's closing comment (23rd Sep) describes where the
+  answer is approved.
 - Banner decides from the browser flag only for anonymous visitors:
   `apps/cp-portal/frontend/src/portal/components/ConsentBanner.jsx`, the "Anonymous user —
   only localStorage" branch (before this change).
