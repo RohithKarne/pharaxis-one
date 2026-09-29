@@ -100,7 +100,10 @@ export default function CasesPage() {
         const u = await uRes.json()
         const s = await sRes.json()
         if (Array.isArray(u)) setBulkUsers(u.filter(x => x.is_active !== false))
-        if (Array.isArray(s)) setBulkStatuses(s.filter(x => x.is_active !== false))
+        // The endpoint answers { states: [...] }; reading only a bare array left
+        // "Change Status" with no choices (item 7, 2026-09-29).
+        const states = Array.isArray(s) ? s : (Array.isArray(s?.states) ? s.states : [])
+        setBulkStatuses(states.filter(x => x.is_active !== false))
       }).catch(err => console.error('Bulk load error:', err))
       .finally(() => setBulkLoading(false))
     }
