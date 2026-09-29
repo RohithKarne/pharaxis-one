@@ -63,9 +63,11 @@ function buildFocusCards({ user, summary, sessions, canSeeObservability }) {
     },
     {
       id: 'response_work',
-      title: 'Response work',
-      value: Number(summary.mi_stats.pending_responses || 0),
-      body: 'Track draft and ready responses without searching through the full queue.',
+      title: 'My response work',
+      // Beside "My queue" this must be personal: responses on my cases or written
+      // by me. The org-wide count read as mine (M-11).
+      value: Number(summary.mi_stats.my_pending_responses || 0),
+      body: 'Draft and ready responses on your cases, or written by you.',
       actionLabel: 'Open response log',
       actionTo: '/response-log',
       tone: 'warning',
@@ -101,6 +103,7 @@ export default function DashboardPage() {
     },
     mi_stats: {
       pending_responses: 0,
+      my_pending_responses: 0,
       pending_approval: 0,
       sent_today: 0,
       sla_breached: 0,
