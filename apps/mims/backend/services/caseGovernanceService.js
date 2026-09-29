@@ -30,6 +30,59 @@ function calculateAeDueDate(priority, requestedDate) {
   return shiftDateOnly(days);
 }
 
+// T14 / 360 walk M-45 — the minimum clock for handing an AE case to PV, from the
+// case itself (decision Rohith, 2026-09-29, on Vasu's review): fatal or
+// life-threatening AND from a clinical trial → 7 days; any seriousness → 15
+// days; otherwise 30 days — counted from the awareness date. A handoff used to
+// default to "Routine (30 days)" from today even for a serious, reportable case.
+// Seriousness is read from the latest AE version's events and from the intake.
+const AE_CLOCK_DAYS = { '7-day-expedited': 7, '15-day-expedited': 15, standard: 30 };
+
+async function computeAeHandoffClock(caseId) {
+  const [[version]] = await pool.execute(
+    'SELECT id FROM case_ae_versions WHERE case_id = ? ORDER BY version_number DESC, id DESC LIMIT 1',
+    [caseId]
+  );
+  const [[general]] = version
+    ? await pool.execute('SELECT report_type, date_of_awareness FROM case_ae_general WHERE version_id = ? LIMIT 1', [version.id])
+    : [[null]];
+  const [[events]] = version
+    ? await pool.execute(
+      `SELECT MAX(is_serious OR is_death OR is_life_threatening OR is_hospitalization OR is_disability
+                  OR is_congenital_anomaly OR is_other_medically_important) AS serious,
+              MAX(is_death OR is_life_threatening) AS fatal_or_lt
+         FROM case_ae_events WHERE version_id = ?`,
+      [version.id])
+    : [[null]];
+  const [[intake]] = await pool.execute(
+    `SELECT MAX(is_serious OR is_death OR is_life_threatening OR is_hospitalization OR is_prolonged_hospitalization
+                OR is_disability OR is_congenital_anomaly OR is_other_medically_important) AS serious,
+            MAX(is_death OR is_life_threatening) AS fatal_or_lt
+       FROM case_ae_intake WHERE case_id = ?`,
+    [caseId]
+  );
+  const serious = Boolean(Number(events?.serious) || Number(intake?.serious));
+  const fatalOrLifeThreatening = Boolean(Number(events?.fatal_or_lt) || Number(intake?.fatal_or_lt));
+  const clinicalTrial = /clinical trial|study/i.test(String(general?.report_type || ''));
+  const priority = fatalOrLifeThreatening && clinicalTrial ? '7-day-expedited' : serious ? '15-day-expedited' : 'standard';
+  const reason = priority === '7-day-expedited'
+    ? 'fatal or life-threatening, from a clinical trial'
+    : priority === '15-day-expedited' ? 'serious' : 'not serious';
+  const awareness = general?.date_of_awareness ? new Date(general.date_of_awareness) : null;
+  const start = awareness && !Number.isNaN(awareness.getTime()) ? awareness : new Date();
+  return {
+    priority,
+    reason,
+    from: awareness && !Number.isNaN(awareness.getTime()) ? 'awareness date' : 'today (no awareness date)',
+    dueDate: shiftDateOnly(AE_CLOCK_DAYS[priority], start),
+  };
+}
+
+// The stricter of two AE handoff priorities (fewer days wins).
+function stricterAePriority(a, b) {
+  return (AE_CLOCK_DAYS[a] ?? 30) <= (AE_CLOCK_DAYS[b] ?? 30) ? a : b;
+}
+
 function calculatePcDueDate(priority, requestedDate) {
   if (requestedDate) return requestedDate;
   const days = priority === 'urgent' ? 5 : priority === 'high' ? 10 : 30;
@@ -286,6 +339,9 @@ async function refreshTransmissionSlaAlerts() {
 
 module.exports = {
   calculateAeDueDate,
+  computeAeHandoffClock,
+  stricterAePriority,
+  AE_CLOCK_DAYS,
   calculatePcDueDate,
   computeTransmissionSlaStatus,
   findDuplicateCandidates,

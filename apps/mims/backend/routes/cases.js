@@ -30,6 +30,8 @@ const { resolveDefaultWorkflowStateId } = require('../services/orgBootstrapServi
 const changeControl = require('../services/changeControlService');
 const {
   calculateAeDueDate,
+  computeAeHandoffClock,
+  stricterAePriority,
   calculatePcDueDate,
   computeTransmissionSlaStatus,
   findDuplicateCandidates,
@@ -2613,16 +2615,24 @@ router.post('/cases/:id/ae-transmissions', authenticate, async (req, res) => {
   try {
     if (!(await verifyCaseOrg(req.params.id, req))) return res.status(403).json({ error: 'Access denied' });
     const assignedTo = Number(req.body?.assigned_to || req.body?.assigned_to_id || 0);
-    const priority = normalizeAeTransmissionPriority(req.body?.priority || 'standard');
+    const requestedPriority = normalizeAeTransmissionPriority(req.body?.priority || 'standard');
     const due_date = req.body?.due_date || null;
     const narrative = req.body?.narrative || null;
     if (!assignedTo) return res.status(400).json({ error: 'assigned_to is required.' });
+    // T14: the case sets the minimum clock (serious → 15 days, fatal or
+    // life-threatening in a clinical trial → 7 days, from the awareness date);
+    // a person may choose a stricter one, not a looser one.
+    const clock = await computeAeHandoffClock(req.params.id);
+    const priority = stricterAePriority(requestedPriority, clock.priority);
 
     const [[assignee]] = await pool.execute('SELECT name, email FROM users WHERE id = ? AND is_active = 1', [assignedTo]);
     if (!assignee) return res.status(404).json({ error: 'Assignee user not found.' });
 
-    // Auto-calculate due_date if not provided (7-day = 7d, 15-day = 15d, standard = 30d)
-    const dueDate = calculateAeDueDate(priority, due_date || null);
+    // Due date: the case's clock (from the awareness date) when the case sets the
+    // priority; otherwise the requested priority counted from today. An explicit
+    // due_date may only bring it earlier.
+    const computed = priority === clock.priority ? clock.dueDate : calculateAeDueDate(priority, null);
+    const dueDate = due_date && String(due_date) < computed ? String(due_date) : computed;
     const slaStatus = computeTransmissionSlaStatus(dueDate, 'Pending');
     const productGroup = await resolveTransmissionGroupSnapshot(req.params.id);
 
