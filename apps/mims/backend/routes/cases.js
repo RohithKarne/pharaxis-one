@@ -37,6 +37,7 @@ const {
 } = require('../services/caseGovernanceService');
 const { resolveProductGroups } = require('../services/productGroupService');
 const { evaluateRule } = require('../../shared/services/ruleEvaluator');
+const { missingRequiredAdditional } = require('../services/requiredFields');
 const { recalculateAll: recalculateHaClocks } = require('../services/haClockService');
 const { hasGlobalAdminScope, isAdminUser } = require('../utils/adminScope');
 
@@ -632,7 +633,7 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
               max_length, default_value, is_sensitive, masking_pattern, unmask_roles,
               case_type_scope, display_tab, core_key
        FROM field_setup
-       WHERE (org_id = ? OR org_id IS NULL) AND is_hidden = 0 AND is_disabled = 0
+       WHERE (org_id = ? OR org_id IS NULL)
          AND section_name != '__customize_placeholder__'
          AND (case_type_scope = 'shared' OR case_type_scope = ?)
        ORDER BY section_name, sort_order, id`,
@@ -657,7 +658,11 @@ router.get('/cases/form-config', authenticate, async (req, res) => {
         fieldsByKey.set(key, row);
       }
     }
-    const fields = [...fieldsByKey.values()].sort((a, b) =>
+    // Hidden / disabled is applied AFTER the org's row has won. Filtering first
+    // dropped the org's hidden row and let the platform default through, so a
+    // field the admin hid still showed (Refund Approved, disabled for org 1
+    // since 2026-05-16, was drawn in the additional block — 360 walk).
+    const fields = [...fieldsByKey.values()].filter(f => !f.is_hidden && !f.is_disabled).sort((a, b) =>
       a.section_name.localeCompare(b.section_name) ||
       (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
       a.id - b.id
@@ -2002,6 +2007,18 @@ router.post('/cases/:id/validate', authenticate, async (req, res) => {
         if (!valid) errors.push({ field: rule.field_name, section: rule.section_name, message: action.message || `${rule.field_name} is invalid.` });
       }
     }
+    // The admin's "required" (Customize Forms) on the additional fields — until
+    // now only drawn as a *, never checked (360 walk M-37). Panel fields are
+    // checked by their own section saves. Values by field id when the screen sends
+    // them: names repeat across AE sections (Dose, Start Date…), so a name-keyed
+    // payload can hide one field's blank behind another's value.
+    const byId = req.body?.values_by_id && typeof req.body.values_by_id === 'object' ? req.body.values_by_id : null;
+    const missing = await missingRequiredAdditional(owned.org_id, owned.case_type,
+      f => (byId ? byId[f.id] : formData[f.field_name]));
+    for (const m of missing) {
+      if (errors.some(e => e.field === m.field)) continue;
+      errors.push({ field: byId ? m.id : m.field, section: m.section, message: `${m.label} is required.` });
+    }
     res.json({ valid: errors.length === 0, errors });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2833,9 +2850,28 @@ router.get('/cases/:id/dynamic-fields', authenticate, async (req, res) => {
 // POST /api/cases/:id/dynamic-fields — bulk upsert dynamic field values
 router.post('/cases/:id/dynamic-fields', authenticate, requireScopedCapability('case.update'), async (req, res) => {
   try {
-    if (!(await verifyCaseOrg(req.params.id, req, 'case.update'))) return res.status(403).json({ error: 'Access denied' });
+    const owned = await verifyCaseOrg(req.params.id, req, 'case.update');
+    if (!owned) return res.status(403).json({ error: 'Access denied' });
     const { fields } = req.body; // [{field_id, field_value}]
-    if (!Array.isArray(fields) || !fields.length) return res.status(400).json({ error: 'fields array required.' });
+    if (!Array.isArray(fields)) return res.status(400).json({ error: 'fields array required.' });
+
+    // Enforce the admin's "required" on the record as it will be after this save:
+    // what is stored, with what was just sent on top (360 walk M-37).
+    const [stored] = await pool.execute(
+      'SELECT field_id, field_value FROM case_dynamic_field_values WHERE case_id = ?', [req.params.id]
+    );
+    const effective = new Map(stored.map(r => [Number(r.field_id), r.field_value]));
+    for (const f of fields) {
+      const fieldId = Number(f.field_id || f.field_definition_id || 0);
+      if (fieldId) effective.set(fieldId, Object.prototype.hasOwnProperty.call(f, 'field_value') ? f.field_value : f.value);
+    }
+    const missing = await missingRequiredAdditional(owned.org_id, owned.case_type, f => effective.get(Number(f.id)));
+    if (missing.length) {
+      return res.status(400).json({ error: `Required: ${missing.map(m => m.label).join(', ')}.`, missing });
+    }
+    // Nothing typed is not an error (M-38 — was a raw "fields array required.").
+    if (!fields.length) return res.json({ message: 'Nothing to save.' });
+
     for (const f of fields) {
       const fieldId = Number(f.field_id || f.field_definition_id || 0);
       if (!fieldId) continue;

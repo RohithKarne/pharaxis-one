@@ -126,4 +126,46 @@ function enforcePanelRequired(scope, versionsTable) {
   };
 }
 
-module.exports = { CONTACT_FIELDS, MI_CORE_FIELDS, missingRequiredFields, missingRequiredCore, enforcePanelRequired };
+// The "additional fields (admin-configured)" a case shows — the same selection
+// as /cases/form-config + DynamicFieldsSection: the org's row wins over the
+// platform default, then hidden / disabled / panel (core_key) fields drop out,
+// and only visible sections on the info step or the case type's own tab remain.
+// Returns the admin-required ones whose value (valueOf(field)) is empty.
+async function missingRequiredAdditional(orgId, caseType, valueOf) {
+  const type = String(caseType || '').toUpperCase();
+  const typeLc = type.toLowerCase();
+  const [[sections], [rows]] = await Promise.all([
+    pool.execute(
+      'SELECT section_name FROM case_form_definition WHERE org_id = ? AND case_type = ? AND is_visible = 1',
+      [orgId, type]
+    ),
+    pool.execute(
+      `SELECT id, org_id, section_name, field_name, custom_label, is_required, is_hidden, is_disabled,
+              core_key, display_tab
+         FROM field_setup
+        WHERE (org_id = ? OR org_id IS NULL)
+          AND (case_type_scope = 'shared' OR case_type_scope = ?)`,
+      [orgId, typeLc]
+    ),
+  ]);
+  const visibleSections = new Set(sections.map(s => s.section_name));
+  const byKey = new Map();
+  for (const row of rows) {
+    const key = `${row.section_name}::${String(row.field_name).trim().toLowerCase()}`;
+    const existing = byKey.get(key);
+    if (!existing || (existing.org_id === null && row.org_id !== null)) byKey.set(key, row);
+  }
+  const missing = [];
+  for (const f of byKey.values()) {
+    if (!f.is_required || f.is_hidden || f.is_disabled || f.core_key) continue;
+    if (!visibleSections.has(f.section_name)) continue;
+    if (f.display_tab && f.display_tab !== 'info' && f.display_tab !== typeLc) continue;
+    const value = valueOf(f);
+    if (value === undefined || value === null || String(value).trim() === '') {
+      missing.push({ id: f.id, field: f.field_name, section: f.section_name, label: f.custom_label || f.field_name });
+    }
+  }
+  return missing;
+}
+
+module.exports = { CONTACT_FIELDS, MI_CORE_FIELDS, missingRequiredFields, missingRequiredCore, enforcePanelRequired, missingRequiredAdditional };
