@@ -10,7 +10,7 @@ function createExceptionId() {
 // 'mi_category'" shown to a user). Routes pass err.message straight through in
 // hundreds of places, so it is replaced here, once. The original text is still
 // written to the exception log below, under the same exception id.
-const DB_ERROR = /^(Data too long for column|Out of range value for column|Incorrect \w+ value|Duplicate entry|Unknown column|Table '[^']*' doesn't exist|Cannot (add or update a child|delete or update a parent) row|Column '[^']*' cannot be null|Field '[^']*' doesn't have a default value|You have an error in your SQL syntax|Incorrect arguments to mysqld_stmt_execute|Bind parameters must not contain undefined|ER_[A-Z_]+|connect ECONNREFUSED)/;
+const DB_ERROR = /^(Data too long for column|Data truncated for column|Out of range value for column|Incorrect \w+ value|Duplicate entry|Unknown column|Table '[^']*' doesn't exist|Cannot (add or update a child|delete or update a parent) row|Column '[^']*' cannot be null|Field '[^']*' doesn't have a default value|You have an error in your SQL syntax|Incorrect arguments to mysqld_stmt_execute|Bind parameters must not contain undefined|ER_[A-Z_]+|connect ECONNREFUSED)/;
 
 function friendlyDbError(message, exceptionId) {
   const column = /column '([^']+)'/.exec(message)?.[1];
@@ -18,7 +18,7 @@ function friendlyDbError(message, exceptionId) {
   if (/^Data too long for column/.test(message)) {
     return { status: 400, error: `The value for "${label}" is too long.` };
   }
-  if (/^(Out of range value for column|Incorrect \w+ value)/.test(message)) {
+  if (/^(Data truncated for column|Out of range value for column|Incorrect \w+ value)/.test(message)) {
     return { status: 400, error: label ? `The value for "${label}" is not valid.` : 'One of the values is not valid.' };
   }
   if (/^Duplicate entry/.test(message)) {
