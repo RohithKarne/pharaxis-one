@@ -7,7 +7,11 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../../database/db');
 const { authenticateAdmin, requireClientAccess } = require('../../middleware/auth');
+const { auditWrites } = require('../../utils/audit');
 const log = require('../../utils/logger');
+
+// CPPM-10: every write below leaves a who-did-what record, including any added later.
+router.use('/:clientId', auditWrites('feedback'));
 
 // GET /api/admin/feedback/:clientId — paginated feedback list with avg rating
 router.get('/:clientId', authenticateAdmin, requireClientAccess, async (req, res) => {

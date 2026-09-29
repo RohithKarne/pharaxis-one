@@ -20,6 +20,7 @@ const { buildOpenApiYaml } = require('../services/api-platform/openapiSpec');
 const multer = require('multer');
 const storage = require('../services/fileStorageService');
 const { validateUpload } = require('../middleware/uploadValidation');
+const { writeCaseAudit } = require('../services/caseHelpers');
 
 const router = express.Router();
 
@@ -121,6 +122,69 @@ router.get('/api/v1/cases/:id', scopeGuard('cases:read'), async (req, res) => {
   );
   if (!row) return res.status(404).json({ error: 'Case not found.' });
   res.json(row);
+});
+
+// CPPM-11: remove the reporter's identity from a case, keeping the case itself.
+// The source portal calls this when a person exercises their right to erasure:
+// the safety record is retained (pharmacovigilance legal obligation) and only
+// the identifying reporter fields are blanked. reporter_type, country and
+// specialty stay — they are case content, not identity — and nothing else on
+// the case (patient, AE/PC detail, attachments, workflow) is touched.
+// Org-scoped by the API key exactly like the routes above, and idempotent: a
+// repeat call on an already-redacted case succeeds and changes nothing.
+router.post('/api/v1/cases/:id/redact-reporter', scopeGuard('cases:write'), async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const [[c]] = await conn.execute(
+      'SELECT id FROM cases WHERE id = ? AND org_id = ? AND is_deleted = 0 LIMIT 1',
+      [req.params.id, req.apiClient.org_id]
+    );
+    if (!c) return res.status(404).json({ error: 'Case not found.' });
+
+    await conn.beginTransaction();
+    // Whether any identity is still there, so a repeat call logs no second removal.
+    const [[{ present }]] = await conn.execute(
+      `SELECT (SELECT COUNT(*) FROM case_reporter WHERE case_id = ?
+                 AND COALESCE(first_name, last_name, email, phone, organisation) IS NOT NULL)
+            + (SELECT COUNT(*) FROM case_contacts WHERE case_id = ? AND contact_role = 'reporter'
+                 AND COALESCE(first_name, last_name, email, phone, address, institution) IS NOT NULL) AS present`,
+      [c.id, c.id]
+    );
+    // Intake records the reporter twice: case_reporter (the intake record) and
+    // case_contacts (what the case screen shows). Both carry the identity, so
+    // both are blanked or the identity survives on screen.
+    const [rep] = await conn.execute(
+      `UPDATE case_reporter
+          SET first_name = NULL, last_name = NULL, email = NULL, phone = NULL, organisation = NULL
+        WHERE case_id = ?`,
+      [c.id]
+    );
+    const [con] = await conn.execute(
+      `UPDATE case_contacts
+          SET first_name = NULL, last_name = NULL, email = NULL, phone = NULL, address = NULL, institution = NULL
+        WHERE case_id = ? AND contact_role = 'reporter'`,
+      [c.id]
+    );
+    // Part 11: the removal goes into the case's own history, in this transaction —
+    // writeCaseAudit re-throws inside one, so no audit row means no redaction. The
+    // actor is the API client, not a person (user_id 0). The erased values are
+    // deliberately not kept as old_value: that would undo the erasure (Vasu, CCO).
+    if (present > 0) {
+      await writeCaseAudit(c.id, 0, `API client: ${req.apiClient.name} (#${req.apiClient.id})`,
+        'REPORTER_IDENTITY_REDACTED', 'reporter_identity', null,
+        "removed on the source portal's erasure request", conn);
+    }
+    await conn.commit();
+    // Counts are rows MATCHED (the pool runs with FOUND_ROWS), so they are the
+    // same on a repeat call — the caller reads them as "a reporter row exists",
+    // never as "something changed this time".
+    res.json({ id: c.id, redacted: true, reporter_rows: rep.affectedRows, contact_rows: con.affectedRows });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    res.status(500).json({ error: 'Failed to redact the reporter identity.' });
+  } finally {
+    conn.release();
+  }
 });
 
 // 'YYYY-MM-DD', a real calendar date, not in the future (one day of slack for

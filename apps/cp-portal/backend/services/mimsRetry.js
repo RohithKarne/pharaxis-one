@@ -63,6 +63,11 @@ async function retryOnce() {
     await syncToIntegration(s.client_id, s.id, s.submission_type)
       .catch(err => log.error('mims.retry.sync_crashed', { err, submission_id: s.id }));
   }
+
+  // CPPM-11: same sweep drives the erasure redactions that MIMS has not taken yet.
+  const { retryDueRedactions } = require('./mimsRedaction');
+  await retryDueRedactions().catch(err => log.error('mims.retry.redaction_tick_failed', { err }));
+
   return retried;
 }
 

@@ -187,6 +187,7 @@ router.delete('/:clientId/slots/:slotId', authenticateAdmin, async (req, res) =>
     if (!slot) return res.status(404).json({ error: 'Slot not found.' });
     if (slot.is_booked) return res.status(409).json({ error: 'Cannot delete a booked slot.' });
     await pool.execute('DELETE FROM cp_msl_slots WHERE id = ? AND client_id = ?', [req.params.slotId, req.params.clientId]);
+    await audit(req.admin, req.params.clientId, 'DELETE', 'msl_slot', Number(req.params.slotId), {});
     res.json({ ok: true });
   } catch (err) {
     log.error('admin.msls.error', { err, route: 'DELETE /:clientId/slots/:slotId', path: req.path, request_id: req.requestId || null });

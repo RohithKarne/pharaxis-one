@@ -13,9 +13,11 @@ const { authenticatePortal, requirePortalAuth } = require('../../middleware/auth
 const { assertSafeOutboundUrl, safeFetch } = require('../../utils/networkGuard');
 const { getAuthHeaders, invalidateAuth } = require('../../services/mimsAuth');
 const { validateUploads } = require('../../utils/fileValidation');
+const { scanFile, downloadRefusal } = require('../../utils/virusScan');
 const { queueEmail } = require('../../utils/emailOutbox');
 const { validateAnswer, isFlagged, AE_SCREEN_KEY, AE_SCREEN_DETAIL_KEY } = require('../../services/aeScreening');
 const { systemAudit } = require('../../utils/audit');
+const { recordStatusEvent, publicTimeline } = require('../../utils/submissionStatus');
 const log = require('../../utils/logger');
 const { loadFormFields, missingRequired } = require('../../services/formFields');
 
@@ -47,7 +49,7 @@ const submissionUpload = multer({
   limits: { fileSize: ATT_MAX_SIZE, files: ATT_MAX_FILES },
   fileFilter: (req, file, cb) => {
     if (ATT_ALLOWED.includes(file.mimetype)) cb(null, true);
-    else cb(new Error('File type not allowed. Use PDF, JPG, PNG, DOC, or DOCX.'));
+    else cb(new Error('File type not allowed. Use PDF, JPG, PNG or DOCX.'));
   },
 }).array('attachments', ATT_MAX_FILES);
 
@@ -86,6 +88,23 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
       const failure = validateUploads(req.files, ATT_ALLOWED);
       if (failure) return res.status(400).json({ error: failure });
     }
+
+    // CPPM-39: scan each file against ClamAV's list of known viruses. A report is never
+    // lost because of a file: a virus is deleted and the report still goes through; a file
+    // that cannot be scanned right now is kept but held ('pending') until the background
+    // job has scanned it. Only 'clean' files can be downloaded or forwarded to MIMS.
+    const blockedFiles = [];
+    for (const f of req.files || []) {
+      const result = await scanFile(f.path);
+      if (result.status === 'infected') {
+        try { fs.unlinkSync(f.path); } catch { /* already gone */ }
+        blockedFiles.push({ file: f.originalname, virus: result.virus });
+        f.blocked = true;
+      }
+      f.scanStatus = result.status === 'clean' ? 'clean' : 'pending';
+      f.scanDetail = result.status === 'error' ? String(result.error).slice(0, 255) : null;
+    }
+    if (req.files) req.files = req.files.filter(f => !f.blocked);
 
     const [[client]] = await pool.execute('SELECT * FROM cp_clients WHERE code = ? AND is_active = 1', [clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
@@ -143,6 +162,9 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     // A1: audit the inquiry lifecycle. 'submitted' is the first entry.
     systemAudit('portal', client.id, 'SUBMITTED', 'submission', submissionId, { type: formType });
 
+    // CPPM-4: the first entry in the history shown back to the person — "Received".
+    await recordStatusEvent({ submissionId, clientId: client.id, status: 'submitted', source: 'portal' });
+
     // PD-2: the submitter said someone became unwell — raise a review task for
     // the client's safety team. Deliberately non-fatal: a failure here must never
     // cost the visitor their submission or their reference number. It is logged
@@ -165,12 +187,22 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
     if (req.files && req.files.length > 0) {
       for (const f of req.files) {
         await pool.execute(
-          `INSERT INTO cp_submission_attachments (submission_id, client_id, file_name, file_path, file_size, mime_type)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO cp_submission_attachments
+             (submission_id, client_id, file_name, file_path, file_size, mime_type, scan_status, scan_detail, scanned_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${f.scanStatus === 'clean' ? 'NOW()' : 'NULL'})`,
           [submissionId, client.id, f.originalname.slice(0, 255),
-           `/uploads/private/submissions/${clientCode}/${f.filename}`, f.size, f.mimetype]
+           `/uploads/private/submissions/${clientCode}/${f.filename}`, f.size, f.mimetype,
+           f.scanStatus, f.scanDetail]
         );
+        if (f.scanStatus === 'pending') {
+          systemAudit('portal', client.id, 'ATTACHMENT_HELD', 'submission', submissionId,
+            { file: f.originalname, reason: f.scanDetail });
+        }
       }
+    }
+    // CPPM-39: a file with a known virus was deleted before it was stored.
+    for (const b of blockedFiles) {
+      systemAudit('portal', client.id, 'ATTACHMENT_BLOCKED_VIRUS', 'submission', submissionId, b);
     }
 
     // Auto-sync to integrated system if configured
@@ -203,6 +235,8 @@ router.post('/:clientCode/:formType', authenticatePortal, handleUpload, async (r
       id: submissionId,
       message: 'Submission received. Thank you.',
       reference: `CP-${String(submissionId).padStart(6, '0')}`,
+      // CPPM-39: files removed because they contained a known virus, so the person knows.
+      ...(blockedFiles.length ? { attachments_blocked: blockedFiles.map(b => b.file) } : {}),
     });
   } catch (err) {
     log.error('portal.submit.error', { err, route: 'POST /:clientCode/:formType', path: req.path, request_id: req.requestId || null });
@@ -216,12 +250,37 @@ router.get('/:clientCode/submissions', authenticatePortal, async (req, res) => {
     if (!req.portalUser) return res.status(401).json({ error: 'Login required to view submissions.' });
     const [[client]] = await pool.execute('SELECT id FROM cp_clients WHERE code = ? AND is_active = 1', [req.params.clientCode]);
     if (!client) return res.status(404).json({ error: 'Portal not found.' });
+    // CPPM-14: a sent answer travels with the request. Only 'sent' — a draft or an
+    // unapproved answer must never reach the person who asked.
     const [rows] = await pool.execute(`
-      SELECT id, submission_type, status, external_ref, submitted_at, updated_at
-      FROM cp_submissions WHERE client_id = ? AND user_id = ? ORDER BY submitted_at DESC
+      SELECT s.id, s.submission_type, s.status, s.external_ref, s.submitted_at, s.updated_at,
+             a.body AS answer, a.sent_at AS answered_at
+      FROM cp_submissions s
+      LEFT JOIN cp_submission_answers a ON a.submission_id = s.id AND a.status = 'sent'
+      WHERE s.client_id = ? AND s.user_id = ? ORDER BY s.submitted_at DESC
     `, [client.id, req.portalUser.userId]);
+    // CPPM-4: the history behind each status. Read back with the same client_id
+    // and user_id the list was built from, so a person can only ever see the
+    // history of their own submissions.
+    const byId = new Map(rows.map(r => [r.id, []]));
+    if (rows.length) {
+      const ph = rows.map(() => '?').join(',');
+      const [events] = await pool.execute(
+        `SELECT e.submission_id, e.status, e.created_at
+           FROM cp_submission_status_events e
+           JOIN cp_submissions s ON s.id = e.submission_id
+          WHERE e.submission_id IN (${ph}) AND s.client_id = ? AND s.user_id = ?
+          ORDER BY e.id ASC`,
+        [...rows.map(r => r.id), client.id, req.portalUser.userId]
+      );
+      events.forEach(e => byId.get(e.submission_id)?.push(e));
+    }
     // Surface the user-facing case reference (matches the confirmation email/response).
-    const submissions = rows.map(r => ({ ...r, reference: `CP-${String(r.id).padStart(6, '0')}` }));
+    const submissions = rows.map(r => ({
+      ...r,
+      reference: `CP-${String(r.id).padStart(6, '0')}`,
+      timeline: publicTimeline(byId.get(r.id) || []),
+    }));
     res.json({ submissions });
   } catch (err) {
     log.error('portal.submit.error', { err, route: 'GET /:clientCode/submissions', path: req.path, request_id: req.requestId || null });
@@ -330,10 +389,13 @@ function buildMimsPayload(formType, formData, submissionId, submittedAt) {
 
 // C1: push a submission's stored attachments onto the linked MIMS case. Each file
 // is independent — a failure on one is audited and skipped, never fatal to the sync.
-async function forwardAttachments(integration, mimsCaseId, submissionId, headers) {
+// CPPM-39: only files ClamAV has cleared are forwarded; a held file goes later, on its
+// own, when the background scan releases it (forwardReleasedAttachment below).
+async function forwardAttachments(integration, mimsCaseId, submissionId, headers, onlyAttachmentId = null) {
   const [atts] = await pool.execute(
-    'SELECT id, file_name, file_path, mime_type FROM cp_submission_attachments WHERE submission_id = ?',
-    [submissionId]
+    `SELECT id, file_name, file_path, mime_type FROM cp_submission_attachments
+      WHERE submission_id = ? AND scan_status = 'clean'${onlyAttachmentId ? ' AND id = ?' : ''}`,
+    onlyAttachmentId ? [submissionId, onlyAttachmentId] : [submissionId]
   );
   if (!atts.length) return;
   // Multipart: carry only the auth header — fetch sets the multipart Content-Type + boundary.
@@ -405,12 +467,14 @@ async function syncToIntegration(clientId, submissionId, formType) {
     const reason = `Could not prepare the MIMS case: ${err.message}`.slice(0, 1000);
     log.error('portal.sync.prepare_failed', { err, client_id: clientId, submission_id: submissionId });
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_attempts=sync_attempts+1, sync_error=? WHERE id=?`, [reason, submissionId]);
+    await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: reason, source: 'mims-sync' });
     systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: reason, stage: 'prepare' });
     return;
   }
 
   try {
     await pool.execute(`UPDATE cp_submissions SET status='pending_sync', sync_attempts=sync_attempts+1 WHERE id=?`, [submissionId]);
+    await recordStatusEvent({ submissionId, clientId, status: 'pending_sync', source: 'mims-sync' });
     const safeBaseUrl = await assertSafeOutboundUrl(integration.api_base_url);
 
     const buildHeaders = async () => {
@@ -440,15 +504,18 @@ async function syncToIntegration(clientId, submissionId, formType) {
       const mimsCaseId = data.case_id || data.id || null;
       await pool.execute(`UPDATE cp_submissions SET status='synced', external_ref=?, synced_at=NOW(), sync_error=null WHERE id=?`,
         [mimsCaseId, submissionId]);
+      await recordStatusEvent({ submissionId, clientId, status: 'synced', source: 'mims-sync' });
       systemAudit('MIMS integration', clientId, 'SYNCED', 'submission', submissionId, { mims_case_id: mimsCaseId });
       // C1: forward any attachments onto the MIMS case (non-fatal per file).
       if (mimsCaseId) await forwardAttachments(integration, mimsCaseId, submissionId, headers);
     } else {
       await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [`HTTP ${r.status}`, submissionId]);
+      await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: `HTTP ${r.status}`, source: 'mims-sync' });
       systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: `HTTP ${r.status}` });
     }
   } catch (err) {
     await pool.execute(`UPDATE cp_submissions SET status='failed_sync', sync_error=? WHERE id=?`, [err.message, submissionId]);
+    await recordStatusEvent({ submissionId, clientId, status: 'failed_sync', note: err.message, source: 'mims-sync' });
     systemAudit('MIMS integration', clientId, 'SYNC_FAILED', 'submission', submissionId, { error: err.message });
   }
 }
@@ -457,13 +524,15 @@ async function syncToIntegration(clientId, submissionId, formType) {
 router.get('/:clientCode/attachments/:attachmentId', authenticatePortal, requirePortalAuth, async (req, res) => {
   try {
     const [[att]] = await pool.execute(
-      `SELECT a.file_name, a.file_path, a.mime_type
+      `SELECT a.file_name, a.file_path, a.mime_type, a.scan_status
        FROM cp_submission_attachments a
        JOIN cp_submissions s ON s.id = a.submission_id
        JOIN cp_clients c ON c.id = a.client_id
        WHERE a.id = ? AND c.code = ? AND s.user_id = ?`,
       [req.params.attachmentId, req.params.clientCode, req.portalUser.userId]);
     if (!att) return res.status(404).json({ error: 'Attachment not found.' });
+    const refusal = downloadRefusal(att.scan_status); // CPPM-39
+    if (refusal) return res.status(refusal.status).json({ error: refusal.error });
     streamAttachment(res, att, req.query.disposition === 'inline');
   } catch (err) {
     log.error('portal.submit.error', { err, route: 'GET /:clientCode/attachments/:attachmentId', path: req.path, request_id: req.requestId || null });
@@ -471,7 +540,26 @@ router.get('/:clientCode/attachments/:attachmentId', authenticatePortal, require
   }
 });
 
+// CPPM-39: a held file the background scan has just cleared. If its report already
+// reached MIMS, send this one file to the case now; if not, the sync will take it,
+// because it is 'clean' by the time the sync reads the attachments.
+async function forwardReleasedAttachment(attachmentId) {
+  const [[row]] = await pool.execute(
+    `SELECT a.submission_id, s.client_id, s.external_ref
+       FROM cp_submission_attachments a JOIN cp_submissions s ON s.id = a.submission_id
+      WHERE a.id = ? AND a.scan_status = 'clean' AND s.status = 'synced' AND s.external_ref IS NOT NULL`,
+    [attachmentId]);
+  if (!row) return;
+  const [[integration]] = await pool.execute(
+    'SELECT * FROM cp_integration_config WHERE client_id = ? AND is_active = 1 LIMIT 1', [row.client_id]);
+  if (!integration) return;
+  const headers = { ...(await getAuthHeaders(integration)) };
+  if (integration.extra_headers) Object.assign(headers, JSON.parse(integration.extra_headers));
+  await forwardAttachments(integration, row.external_ref, row.submission_id, headers, attachmentId);
+}
+
 module.exports = router;
 // R1: exposed so the retry poller can re-drive a failed sync without duplicating logic.
 module.exports.syncToIntegration = syncToIntegration;
+module.exports.forwardReleasedAttachment = forwardReleasedAttachment;
 module.exports.toDateOnly = toDateOnly;
