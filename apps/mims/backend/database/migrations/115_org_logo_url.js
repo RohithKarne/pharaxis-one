@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Migration 109 — organisations.logo_url
+ * Migration 115 — organisations.logo_url
  *
  * The org logo upload (POST /api/admin/platform/orgs/:orgId/logo) writes
  * organisations.logo_url and GET /api/auth/org-logo reads it, but no migration
