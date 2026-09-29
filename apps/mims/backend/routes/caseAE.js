@@ -135,6 +135,49 @@ router.post('/cases/:id/ae/versions', authenticate, async (req, res) => {
       [req.params.id, nextNum, req.user.userId]
     );
 
+    // The first version starts from what was captured at intake — the reaction,
+    // its seriousness and the suspect drug — instead of blank, so the agent does
+    // not type it again (M-108). Same mapping as the API intake path.
+    if (!latest) {
+      const [[intake]] = await conn.execute(
+        `SELECT suspect_drug_name, batch_lot_number, reaction_description, reaction_onset_date, outcome,
+                is_serious, is_death, is_life_threatening, is_hospitalization, is_disability,
+                is_congenital_anomaly, is_other_medically_important
+           FROM case_ae_intake WHERE case_id = ? ORDER BY id DESC LIMIT 1`,
+        [req.params.id]
+      );
+      if (intake) {
+        await conn.execute(
+          `INSERT INTO case_ae_general (version_id, ae_status, date_of_onset) VALUES (?, 'Open', ?)`,
+          [result.insertId, intake.reaction_onset_date || null]
+        );
+        // case_ae_events.outcome is an enum; intake holds free text ("Not Recovered").
+        const OUTCOMES = new Set(['recovered', 'recovering', 'not_recovered', 'recovered_with_sequelae', 'fatal', 'unknown']);
+        const outcomeKey = String(intake.outcome || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+        const outcome = OUTCOMES.has(outcomeKey) ? outcomeKey : 'unknown';
+        const serious = ['is_serious', 'is_death', 'is_life_threatening', 'is_hospitalization', 'is_disability',
+          'is_congenital_anomaly', 'is_other_medically_important'].some((k) => Number(intake[k]) === 1);
+        if (intake.reaction_description || serious) {
+          await conn.execute(
+            `INSERT INTO case_ae_events
+               (version_id, event_description, outcome, start_date,
+                is_serious, is_death, is_life_threatening, is_hospitalization,
+                is_disability, is_congenital_anomaly, is_other_medically_important)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [result.insertId, intake.reaction_description || null, outcome, intake.reaction_onset_date || null,
+             serious ? 1 : 0, intake.is_death ? 1 : 0, intake.is_life_threatening ? 1 : 0, intake.is_hospitalization ? 1 : 0,
+             intake.is_disability ? 1 : 0, intake.is_congenital_anomaly ? 1 : 0, intake.is_other_medically_important ? 1 : 0]
+          );
+        }
+        if (intake.suspect_drug_name || intake.batch_lot_number) {
+          await conn.execute(
+            `INSERT INTO case_ae_product_info (version_id, product_name, batch_lot_number, is_suspect) VALUES (?, ?, ?, 1)`,
+            [result.insertId, intake.suspect_drug_name || null, intake.batch_lot_number || null]
+          );
+        }
+      }
+    }
+
     await conn.commit();
 
     const [[newVersion]] = await pool.execute(

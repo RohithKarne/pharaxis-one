@@ -99,6 +99,31 @@ router.post('/cases/:id/pc/versions', authenticate, async (req, res) => {
       [req.params.id, nextNum, req.user.userId]
     );
 
+    // The first version starts from what was captured at intake — description,
+    // category, received date, product, lot and expiry — instead of blank, so
+    // the agent does not type it again (M-108).
+    if (!latest) {
+      const [[intake]] = await conn.execute(
+        `SELECT i.product_name, i.batch_lot_number, i.expiry_date, i.complaint_category, i.complaint_description,
+                c.date_received
+           FROM case_pc_intake i JOIN cases c ON c.id = i.case_id
+          WHERE i.case_id = ? ORDER BY i.id DESC LIMIT 1`,
+        [req.params.id]
+      );
+      if (intake) {
+        await conn.execute(
+          `INSERT INTO case_pc_general (version_id, complaint_description, pc_category, date_received) VALUES (?, ?, ?, ?)`,
+          [result.insertId, intake.complaint_description || null, intake.complaint_category || null, intake.date_received || null]
+        );
+        if (intake.product_name || intake.batch_lot_number) {
+          await conn.execute(
+            `INSERT INTO case_pc_product_info (version_id, product_name, lot_number, expiry_date) VALUES (?, ?, ?, ?)`,
+            [result.insertId, intake.product_name || null, intake.batch_lot_number || null, intake.expiry_date || null]
+          );
+        }
+      }
+    }
+
     // "Copy from PC" — copy complaint_description from previous version's general tab only
     if (latest) {
       const [[prevGeneral]] = await conn.execute(
