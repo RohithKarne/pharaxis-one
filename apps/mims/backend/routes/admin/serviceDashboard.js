@@ -53,12 +53,12 @@ router.get('/service-dashboard', authenticate, requireRole('admin', 'platform_ad
       if (row.job_name) cronStatsMap[row.job_name] = row
     }
 
-    // DPPR last run from dppr_execution_log
+    // DPPR last run from dppr_execution_log (its timestamp column is executed_at)
     const [[dpprStats]] = await pool.execute(`
       SELECT
-        MAX(created_at)                                                     AS last_run_date,
-        MAX(CASE WHEN status = 'success' THEN created_at ELSE NULL END)    AS last_successful_run_date,
-        SUBSTRING_INDEX(GROUP_CONCAT(status ORDER BY created_at DESC SEPARATOR ','), ',', 1) AS last_run_status
+        MAX(executed_at)                                                    AS last_run_date,
+        MAX(CASE WHEN status = 'success' THEN executed_at ELSE NULL END)   AS last_successful_run_date,
+        SUBSTRING_INDEX(GROUP_CONCAT(status ORDER BY executed_at DESC SEPARATOR ','), ',', 1) AS last_run_status
       FROM dppr_execution_log
     `).catch(() => [[null]])
 

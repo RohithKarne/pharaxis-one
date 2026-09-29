@@ -144,13 +144,16 @@ function _chainHash(prev, payload) {
 async function _verifyPassword({ userId, password }) {
   if (!password) return false;
   try {
+    // users.password holds the bcrypt hash (as in changeControlService). The
+    // query read `password_hash`, which does not exist, so every e-signature
+    // failed as "wrong password" (T16 schema-drift sweep, 2026-09-29).
     const [[row]] = await pool.execute(
-      `SELECT password_hash FROM users WHERE id = ? LIMIT 1`,
+      `SELECT password FROM users WHERE id = ? LIMIT 1`,
       [userId]
     );
-    if (!row?.password_hash) return false;
+    if (!row?.password) return false;
     const bcrypt = require('bcrypt'); // already a project dep
-    return await bcrypt.compare(password, row.password_hash);
+    return await bcrypt.compare(String(password), row.password);
   } catch (err) {
     logger.warn({ err: err.message }, 'esign password verify failed');
     return false;
